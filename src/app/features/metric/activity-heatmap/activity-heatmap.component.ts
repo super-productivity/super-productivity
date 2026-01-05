@@ -10,7 +10,7 @@ import { WorklogService } from '../../worklog/worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../time-tracking/task-archive.service';
-import { combineLatest, defer, from, Subject } from 'rxjs';
+import { combineLatest, defer, from } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
@@ -64,7 +64,6 @@ export class ActivityHeatmapComponent {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _snackService = inject(SnackService);
   private readonly _shareService = inject(ShareService);
-  private readonly _periodChange$ = new Subject<void>();
   private readonly _dateAdapter = inject(DateAdapter);
   availableYears = signal<number[]>([]);
   selectedYear = signal<number>(new Date().getFullYear());
