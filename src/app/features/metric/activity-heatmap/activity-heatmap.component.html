@@ -20,22 +20,24 @@
   </div>
 
   @if (heatmapData(); as data) {
-    <div class="select-menu">
-      <mat-form-field
-        appearance="outline"
-        subscriptSizing="dynamic"
-      >
-        <mat-label>Year</mat-label>
-        <mat-select
-          [value]="selectedYear()"
-          (selectionChange)="onYearChange($event.value)"
+    @if (availableYears().length > 1) {
+      <div class="select-menu">
+        <mat-form-field
+          appearance="outline"
+          subscriptSizing="dynamic"
         >
-          @for (year of availableYears(); track year) {
-            <mat-option [value]="year">{{ year }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    </div>
+          <mat-label>Year</mat-label>
+          <mat-select
+            [value]="selectedYear()"
+            (selectionChange)="onYearChange($event.value)"
+          >
+            @for (year of availableYears(); track year) {
+              <mat-option [value]="year">{{ year }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    }
     <div class="heatmap-container">
       <div class="heatmap-grid">
         <div class="day-labels">
