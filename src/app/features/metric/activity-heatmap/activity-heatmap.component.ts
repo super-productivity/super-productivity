@@ -447,6 +447,31 @@ export class ActivityHeatmapComponent {
     return `${minutes}m`;
   }
 
+  private _extractAvailableYears(tasks: Task[]): number[] {
+    const yearsSet = new Set<number>();
+    const currentYear = new Date().getFullYear();
+    tasks.forEach((task) => {
+      if (task.timeSpentOnDay) {
+        Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+          const timeSpent = task.timeSpentOnDay[dateStr];
+          if (timeSpent > 0) {
+            // dateStr is in ISO format YYYY-MM-DD, so extract the
+            // first four characters to get the year
+            const year = parseInt(dateStr.substring(0, 4), 10);
+            // Validate and collect year
+            if (!isNaN(year) && year <= currentYear) {
+              yearsSet.add(year);
+            }
+          }
+        });
+      }
+    });
+    // Sort years in descending order, i.e. latest years
+    // come first so that they will be displayed first in the
+    // select menu
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }
+
   async shareHeatmap(): Promise<void> {
     const data = this.heatmapData();
     if (!data) {
