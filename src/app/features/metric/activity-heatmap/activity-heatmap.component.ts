@@ -60,7 +60,8 @@ export class ActivityHeatmapComponent {
   private readonly _shareService = inject(ShareService);
   private readonly _periodChange$ = new Subject<void>();
   private readonly _dateAdapter = inject(DateAdapter);
-
+  availableYears = signal<number[]>([]);
+  selectedYear = signal<number>(new Date().getFullYear());
   T: typeof T = T;
   weeks: WeekData[] = [];
   isSharing = signal(false);
@@ -68,6 +69,10 @@ export class ActivityHeatmapComponent {
     this._workContextService.activeWorkContextTitle$,
     { initialValue: '' },
   );
+
+  onYearChange(year: number): void {
+    this.selectedYear.set(year);
+  }
 
   // Day labels adjusted for first day of week
   readonly dayLabels = computed(() => {

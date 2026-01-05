@@ -20,21 +20,22 @@
   </div>
 
   @if (heatmapData(); as data) {
-    <!-- <div class="select-menu">
+    <div class="select-menu">
       <mat-form-field
         appearance="outline"
         subscriptSizing="dynamic"
       >
-        <mat-label>Date Range</mat-label>
+        <mat-label>Year</mat-label>
         <mat-select
-          [value]="getSelectedPeriod()"
-          (selectionChange)="onPeriodChange($event.value)"
+          [value]="selectedYear()"
+          (selectionChange)="onYearChange($event.value)"
         >
-          <mat-option value="currentYear">Current Year</mat-option>
-          <mat-option value="last365">Last 365 days</mat-option>
+          @for (year of availableYears(); track year) {
+            <mat-option [value]="year">{{ year }}</mat-option>
+          }
         </mat-select>
       </mat-form-field>
-    </div> -->
+    </div>
     <div class="heatmap-container">
       <div class="heatmap-grid">
         <div class="day-labels">
