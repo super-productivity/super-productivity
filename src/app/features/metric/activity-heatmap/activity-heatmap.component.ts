@@ -5,13 +5,13 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../../worklog/worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../time-tracking/task-archive.service';
 import { combineLatest, defer, from, Subject } from 'rxjs';
-import { first, map, startWith, switchMap } from 'rxjs/operators';
+import { first, map, switchMap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -91,14 +91,17 @@ export class ActivityHeatmapComponent {
   private readonly _rawHeatmapData = toSignal(
     combineLatest([
       this._workContextService.activeWorkContext$,
-      this._periodChange$.pipe(startWith(null)), // Start with initial emission
+      toObservable(this.selectedYear), // Changes in selected year will trigger recalculation
     ]).pipe(
-      switchMap(([context]) => {
+      switchMap(([context, selectedYear]) => {
         // Special case: TODAY tag shows ALL data from all tasks
         if (context.id === TODAY_TAG.id) {
           // Use defer to ensure the Promise is created fresh each time
           return defer(() => from(this._loadAllTasks())).pipe(
-            map((tasks) => this._buildHeatmapDataFromTasks(tasks)),
+            map((tasks) => {
+              this.availableYears.set(this._extractAvailableYears(tasks));
+              return this._buildHeatmapDataForGivenYear(tasks, selectedYear);
+            }),
           );
         }
 
@@ -180,13 +183,13 @@ export class ActivityHeatmapComponent {
     tasks.forEach((task) => {
       if (task.timeSpentOnDay) {
         Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+          const dateYear = parseInt(dateStr.substring(0, 4), 10);
+          if (dateYear !== year) return;
           const timeSpent = task.timeSpentOnDay[dateStr];
           const dayData = dayMap.get(dateStr);
-
           if (dayData && timeSpent > 0) {
             dayData.timeSpent += timeSpent;
             maxTime = Math.max(maxTime, dayData.timeSpent);
-
             // Track unique tasks per day
             if (!taskCountPerDay.has(dateStr)) {
               taskCountPerDay.set(dateStr, new Set());
