@@ -98,7 +98,14 @@ export class ActivityHeatmapComponent {
           // Use defer to ensure the Promise is created fresh each time
           return defer(() => from(this._loadAllTasks())).pipe(
             map((tasks) => {
-              this.availableYears.set(this._extractAvailableYears(tasks));
+              const yearsWithData = this._extractAvailableYears(tasks);
+              this.availableYears.set(yearsWithData);
+              // Set selectedYear to the most recent year with data
+              // if current year has no data
+              if (yearsWithData.length > 0 && !yearsWithData.includes(selectedYear)) {
+                this.selectedYear.set(yearsWithData[0]);
+                return this._buildHeatmapDataForGivenYear(tasks, yearsWithData[0]);
+              }
               return this._buildHeatmapDataForGivenYear(tasks, selectedYear);
             }),
           );
