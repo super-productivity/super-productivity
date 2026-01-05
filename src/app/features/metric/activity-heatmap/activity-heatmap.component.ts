@@ -33,6 +33,12 @@ interface DayData {
   level: number; // 0-4 for color intensity
 }
 
+interface YearlyActivityData {
+  dayMap: Map<string, DayData>;
+  startDate: Date;
+  endDate: Date;
+}
+
 interface WeekData {
   days: (DayData | null)[];
 }
@@ -145,19 +151,17 @@ export class ActivityHeatmapComponent {
     return allTasks;
   }
 
-  private _buildHeatmapDataFromTasks(tasks: Task[]): {
-    dayMap: Map<string, DayData>;
-    startDate: Date;
-    endDate: Date;
-  } | null {
+  private _buildHeatmapDataForGivenYear(
+    tasks: Task[],
+    year: number,
+  ): YearlyActivityData | null {
     const dayMap = new Map<string, DayData>();
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const startDate = new Date(currentYear, 0, 1);
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
 
-    // Initialize all days in the current year
+    // Initialize all days in the specified year
     const currentDate = new Date(startDate);
-    while (currentDate <= now) {
+    while (currentDate <= endDate) {
       const dateStr = this._getDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
@@ -169,11 +173,10 @@ export class ActivityHeatmapComponent {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Extract time spent data from all tasks
+    // Extract time spent data for the specific year
     let maxTasks = 0;
     let maxTime = 0;
     const taskCountPerDay = new Map<string, Set<string>>();
-
     tasks.forEach((task) => {
       if (task.timeSpentOnDay) {
         Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
@@ -203,8 +206,7 @@ export class ActivityHeatmapComponent {
       }
     });
 
-    // Calculate levels (0-4) based on activity
-    // Prioritize time spent (80%) over task count (20%)
+    // Calculate activity levels
     dayMap.forEach((day) => {
       if (day.taskCount === 0 && day.timeSpent === 0) {
         day.level = 0;
@@ -213,7 +215,6 @@ export class ActivityHeatmapComponent {
         const timeRatio = maxTime > 0 ? day.timeSpent / maxTime : 0;
         // eslint-disable-next-line no-mixed-operators
         const combinedRatio = timeRatio * 0.8 + taskRatio * 0.2;
-
         if (combinedRatio > 0.75) {
           day.level = 4;
         } else if (combinedRatio > 0.5) {
@@ -225,12 +226,7 @@ export class ActivityHeatmapComponent {
         }
       }
     });
-
-    return {
-      dayMap,
-      startDate,
-      endDate: now,
-    };
+    return { dayMap, startDate, endDate };
   }
 
   private _buildHeatmapData(worklog: any): {
