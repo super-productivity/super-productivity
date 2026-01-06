@@ -621,7 +621,8 @@
         "TIME_FRAME_2_WEEKS": "2 weeks",
         "TIME_FRAME_LABEL": "Time frame",
         "TIME_FRAME_MAX": "Max",
-        "TIME_SPENT": "Time Spent"
+        "TIME_SPENT": "Time Spent",
+        "YEAR": "Year"
       },
       "EVAL_FORM": {
         "ADD_NOTE_FOR_TOMORROW": "Add Note for tomorrow",
