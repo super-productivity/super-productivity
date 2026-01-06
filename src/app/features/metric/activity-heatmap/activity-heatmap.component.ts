@@ -11,7 +11,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../time-tracking/task-archive.service';
 import { combineLatest, defer, from } from 'rxjs';
-import { first, map, switchMap } from 'rxjs/operators';
+import { first, map, switchMap, tap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -97,16 +97,18 @@ export class ActivityHeatmapComponent {
         if (context.id === TODAY_TAG.id) {
           // Use defer to ensure the Promise is created fresh each time
           return defer(() => from(this._loadAllTasks())).pipe(
-            map((tasks) => {
+            tap((tasks) => {
               const yearsWithData = this._extractAvailableYears(tasks);
               this.availableYears.set(yearsWithData);
               // Set selectedYear to the most recent year with data
               // if current year has no data
               if (yearsWithData.length > 0 && !yearsWithData.includes(selectedYear)) {
                 this.selectedYear.set(yearsWithData[0]);
-                return this._buildHeatmapDataForGivenYear(tasks, yearsWithData[0]);
               }
-              return this._buildHeatmapDataForGivenYear(tasks, selectedYear);
+            }),
+            map((tasks) => {
+              const currentlySelectedYear = this.selectedYear();
+              return this._buildHeatmapDataForGivenYear(tasks, currentlySelectedYear);
             }),
           );
         }
