@@ -727,6 +727,9 @@ END:VCALENDAR`;
 
   describe('constructor', () => {
     it('should load skipped events from localStorage on init', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const skippedIds = ['event-1', 'event-2'];
       const today = new Date().toISOString().split('T')[0];
 
@@ -754,9 +757,15 @@ END:VCALENDAR`;
 
       const newService = TestBed.inject(CalendarIntegrationService);
       expect(newService.skippedEventIds$.getValue()).toEqual(skippedIds);
+
+      // Clean up after test
+      localStorage.clear();
     });
 
     it('should not load skipped events from different day', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const skippedIds = ['event-1', 'event-2'];
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
@@ -784,9 +793,15 @@ END:VCALENDAR`;
 
       const newService = TestBed.inject(CalendarIntegrationService);
       expect(newService.skippedEventIds$.getValue()).toEqual([]);
+
+      // Clean up after test
+      localStorage.clear();
     });
 
     it('should handle invalid JSON in localStorage gracefully', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const today = new Date().toISOString().split('T')[0];
 
       localStorage.setItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY', 'invalid json');
@@ -809,6 +824,9 @@ END:VCALENDAR`;
       });
 
       expect(() => TestBed.inject(CalendarIntegrationService)).not.toThrow();
+
+      // Clean up after test
+      localStorage.clear();
     });
   });
 
