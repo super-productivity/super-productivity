@@ -88,6 +88,7 @@
     "removeWOFF1": "node ./tools/remove-woff.js",
     "serveProd": "ng serve --configuration production",
     "start": "npm run electron:build && cross-env NODE_ENV=DEV electron .",
+    "startDebug": "npm run electron:build && cross-env NODE_ENV=DEV electron --remote-debugging-port=9223 .",
     "startFrontend": "npm run env && ng serve",
     "startFrontend:e2e": "npm run env && ng serve --port=4242",
     "startFrontend:prod": "npm run env && ng serve --configuration production",
