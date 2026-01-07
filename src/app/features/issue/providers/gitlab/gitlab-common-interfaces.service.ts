@@ -124,27 +124,14 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
 
     const wasUpdated = lastRemoteUpdate > (task.issueLastUpdated || 0);
     const forceUpdate = cfg?.isForceUpdate || false;
-    this.logger.normal('wasUpdated check:', {
-      lastRemoteUpdate,
-      taskIssueLastUpdated: task.issueLastUpdated,
-      wasUpdated,
-      forceUpdate,
-    });
 
     if (wasUpdated || forceUpdate) {
       const taskData = this.getAddTaskData(issue, cfg);
-      this.logger.normal(
-        'GitLab update - cfg.isImportGitLabLabels:',
-        cfg?.isImportGitLabLabels,
-      );
-      this.logger.normal('GitLab update - issue.labels:', issue.labels);
-      this.logger.normal('GitLab update - taskData.tagIds:', taskData.tagIds);
-      this.logger.normal('GitLab update - existing task.tagIds:', task.tagIds);
+
       const newTagIds = cfg?.isImportGitLabLabels ? taskData.tagIds || [] : [];
-      // Merge and deduplicate tag IDs
       const existingTagIds = task.tagIds || [];
       const mergedTagIds = [...new Set([...existingTagIds, ...newTagIds])];
-      this.logger.normal('GitLab update - merged tagIds:', mergedTagIds);
+      // this.logger.normal('GitLab update - merged tagIds:', mergedTagIds);
       return {
         taskChanges: {
           ...taskData,
@@ -162,7 +149,6 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
   async getFreshDataForIssueTasks(
     tasks: Task[],
   ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: GitlabIssue }[]> {
-    this.logger.normal('getFreshDataForIssueTasks called with', tasks.length, 'tasks');
     const issueProviderId =
       tasks && tasks[0].issueProviderId ? tasks[0].issueProviderId : 0;
     if (!issueProviderId) {
@@ -170,10 +156,6 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
     }
 
     const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
-    this.logger.normal(
-      'GitLab batch update - cfg.isImportGitLabLabels:',
-      cfg?.isImportGitLabLabels,
-    );
 
     const updatedIssues: {
       task: Task;
@@ -202,23 +184,12 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
         const lastRemoteUpdate = updates[updates.length - 1];
         const wasUpdated = lastRemoteUpdate > (task.issueLastUpdated || 0);
         const forceUpdate = cfg?.isForceUpdate || false;
-        this.logger.normal(
-          'Batch update check for task:',
-          task.title,
-          'wasUpdated:',
-          wasUpdated,
-          'forceUpdate:',
-          forceUpdate,
-        );
         if (wasUpdated || forceUpdate) {
           const taskData = this.getAddTaskData(issue, cfg);
-          this.logger.normal('Batch update - issue.labels:', issue.labels);
-          this.logger.normal('Batch update - taskData.tagIds:', taskData.tagIds);
           const newTagIds = cfg?.isImportGitLabLabels ? taskData.tagIds || [] : [];
           // Merge and deduplicate tag IDs
           const existingTagIds = task.tagIds || [];
           const mergedTagIds = [...new Set([...existingTagIds, ...newTagIds])];
-          this.logger.normal('Batch update - merged tagIds:', mergedTagIds);
           updatedIssues.push({
             task,
             taskChanges: {
@@ -236,16 +207,10 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
   }
 
   getAddTaskData(issue: GitlabIssue, cfg?: GitlabCfg): Partial<Task> & { title: string } {
-    this.logger.normal(
-      'getAddTaskData called with labels:',
-      issue.labels,
-      'cfg.isImportGitLabLabels:',
-      cfg?.isImportGitLabLabels,
-    );
     const tagIds = cfg?.isImportGitLabLabels
       ? this._createTagsFromLabels(issue.labels)
       : [];
-    this.logger.normal('getAddTaskData returning tagIds:', tagIds);
+    // this.logger.normal('getAddTaskData returning tagIds:', tagIds);
 
     return {
       title: this._formatIssueTitle(issue),
