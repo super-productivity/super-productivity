@@ -64,7 +64,7 @@
   --z-banner: 11;
   --z-main-header: 12;
   --z-celebrate: 102;
-  --z-backdrop: 1;
+  --z-backdrop: 222;
   // NOTE needs to be below the z-index of cdk-overlay which is 1000
   --z-add-task-bar: 999;
   --z-search-bar: 999;
@@ -268,7 +268,7 @@ body {
   --divider-color: rgba(0, 0, 0, 0.12);
 
   // Backdrop
-  --c-backdrop: var(--c-light-60);
+  --c-backdrop: var(--c-dark-60);
 
   // Note colors
   --standard-note-bg: #ffffff;
