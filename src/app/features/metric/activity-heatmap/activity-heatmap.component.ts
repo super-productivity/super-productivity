@@ -115,7 +115,23 @@ export class ActivityHeatmapComponent {
 
         // Normal case: use context-filtered worklog
         return this._worklogService.worklog$.pipe(
-          map((worklog) => this._buildHeatmapData(worklog)),
+          tap((worklog) => {
+            // Extract years from worklog and populate availableYears
+            const yearsWithData = this._extractAvailableYearsFromWorklog(worklog);
+            this.availableYears.set(yearsWithData);
+            // Set selectedYear to the most recent year with data if current year
+            // has no data
+            if (
+              yearsWithData.length > 0 &&
+              !yearsWithData.includes(this.selectedYear())
+            ) {
+              this.selectedYear.set(yearsWithData[0]);
+            }
+          }),
+          map((worklog) => {
+            const currentlySelectedYear = this.selectedYear();
+            return this._buildHeatmapDataFromWorklog(worklog, currentlySelectedYear);
+          }),
         );
       }),
     ),
