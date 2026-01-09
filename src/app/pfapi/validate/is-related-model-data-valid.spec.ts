@@ -347,7 +347,8 @@ describe('isRelatedModelDataValid', () => {
       };
 
       expect(() => isRelatedModelDataValid(invalidData as any)).toThrowError(
-        'Missing reminder missing-reminder-id from task not existing',
+        'Reminder ID "missing-reminder-id" on task "" of type "undefined" was not found.',
+        // 'Missing reminder missing-reminder-id from task not existing',
       );
     });
   });

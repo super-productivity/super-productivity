@@ -16,6 +16,8 @@ export const DEFAULT_GITLAB_CFG: GitlabCfg = {
   scope: 'all',
   filter: null,
   isEnableTimeTracking: false,
+  isImportGitLabLabels: false,
+  isForceUpdate: false,
 };
 
 // NOTE: we need a high limit because git has low usage limits :(

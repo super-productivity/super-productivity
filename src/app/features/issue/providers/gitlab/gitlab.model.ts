@@ -8,4 +8,6 @@ export interface GitlabCfg extends BaseIssueProviderCfg {
   scope: string | null;
   filter: string | null;
   isEnableTimeTracking: boolean;
+  isImportGitLabLabels: boolean;
+  isForceUpdate: boolean;
 }

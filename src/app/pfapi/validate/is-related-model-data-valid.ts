@@ -282,7 +282,8 @@ const validateSubTasks = (
             `Inconsistent Task State: Missing sub task data in archive ${subId}`,
             { task, d },
           );
-          return false;
+          // if we get here, the user dismissed the error so let's move on as if nothing happened.
+          return true;
         }
       }
     }
@@ -353,11 +354,15 @@ const validateReminders = (d: AppDataCompleteNew): boolean => {
   for (const tid of d.task.ids) {
     const task = d.task.entities[tid];
     if (task && task.reminderId && !reminderIds.has(task.reminderId)) {
-      _validityError(`Missing reminder ${task.reminderId} from task not existing`, {
-        task,
-        d,
-      });
-      return false;
+      _validityError(
+        `Reminder ID "${task.reminderId}" on task "${task.title}" of type "${task.issueType}" was not found.`,
+        {
+          task,
+          d,
+        },
+      );
+      // if we get here, the user dismissed the error so let's move on as if nothing happened.
+      return true;
     }
   }
 

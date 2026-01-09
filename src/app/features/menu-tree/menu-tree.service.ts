@@ -133,6 +133,15 @@ export class MenuTreeService {
     });
   }
 
+  createTagFolderIfNotExists(name: string, parentFolderId?: string | null): void {
+    const currentTree = this.tagTree();
+    const existingFolder = this._findFolderByName(currentTree, name);
+
+    if (!existingFolder) {
+      this.createTagFolder(name, parentFolderId);
+    }
+  }
+
   deleteFolderFromProject(folderId: string): void {
     this._store.dispatch(deleteFolder({ folderId, treeType: MenuTreeKind.PROJECT }));
   }
@@ -167,6 +176,18 @@ export class MenuTreeService {
       }
     }
     return null;
+  }
+
+  moveTagToFolder(tagId: string, folderName: string): void {
+    const currentTree = this.tagTree();
+    const gitlabFolder = this._findFolderByName(currentTree, folderName);
+
+    if (!gitlabFolder) {
+      return;
+    }
+
+    const newTree = this._moveTagToFolder(currentTree, tagId, gitlabFolder.id);
+    this.setTagTree(newTree);
   }
 
   private _buildViewTree<T extends { id: string }>(options: {
@@ -333,6 +354,85 @@ export class MenuTreeService {
       }
     }
     return null;
+  }
+
+  private _findFolderByName(
+    tree: MenuTreeTreeNode[],
+    name: string,
+  ): MenuTreeFolderNode | null {
+    for (const node of tree) {
+      if (node.k === MenuTreeKind.FOLDER && node.name === name) {
+        return node;
+      }
+      if (node.k === MenuTreeKind.FOLDER) {
+        const found = this._findFolderByName(node.children, name);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }
+
+  private _moveTagToFolder(
+    tree: MenuTreeTreeNode[],
+    tagId: string,
+    folderId: string,
+  ): MenuTreeTreeNode[] {
+    // Remove tag from current position
+    const withoutTag = this._removeTagFromTree(tree, tagId);
+    // Add tag to folder
+    return this._addTagToFolder(withoutTag, tagId, folderId);
+  }
+
+  private _removeTagFromTree(
+    tree: MenuTreeTreeNode[],
+    tagId: string,
+  ): MenuTreeTreeNode[] {
+    return tree
+      .filter((node) => {
+        if (node.k === MenuTreeKind.TAG && node.id === tagId) {
+          return false;
+        }
+        if (node.k === MenuTreeKind.FOLDER) {
+          return {
+            ...node,
+            children: this._removeTagFromTree(node.children, tagId),
+          };
+        }
+        return true;
+      })
+      .map((node) => {
+        if (node.k === MenuTreeKind.FOLDER) {
+          return {
+            ...node,
+            children: this._removeTagFromTree(node.children, tagId),
+          };
+        }
+        return node;
+      });
+  }
+
+  private _addTagToFolder(
+    tree: MenuTreeTreeNode[],
+    tagId: string,
+    folderId: string,
+  ): MenuTreeTreeNode[] {
+    return tree.map((node) => {
+      if (node.k === MenuTreeKind.FOLDER && node.id === folderId) {
+        return {
+          ...node,
+          children: [...node.children, { k: MenuTreeKind.TAG, id: tagId }],
+        };
+      }
+      if (node.k === MenuTreeKind.FOLDER) {
+        return {
+          ...node,
+          children: this._addTagToFolder(node.children, tagId, folderId),
+        };
+      }
+      return node;
+    });
   }
 
   private _createFolderId(): string {

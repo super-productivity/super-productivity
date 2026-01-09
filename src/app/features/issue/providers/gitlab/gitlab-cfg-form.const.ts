@@ -94,6 +94,31 @@ export const GITLAB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGitlab>[]
       },
       ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
       {
+        key: 'isImportGitLabLabels',
+        type: 'checkbox',
+        defaultValue: false,
+        expressions: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          // 'props.disabled': '!model.defaultProjectId',
+        },
+        props: {
+          // label: T.F.CALDAV.FORM.IS_AUTO_IMPORT_ISSUES,
+          label: 'Auto import labels',
+          description:
+            'Enabling this will automatically import GitLab labels for each imported issue, creating corresponding tags in Super Productivity and adding them to the imported task.',
+        },
+      },
+      {
+        key: 'isForceUpdate',
+        type: 'toggle',
+        defaultValue: false,
+        props: {
+          label: 'Force update tasks (Debug)',
+          description:
+            "Forces task updates even when GitLab issues haven't changed. Useful for testing tag import functionality.",
+        },
+      },
+      {
         key: 'filterUsername',
         type: 'input',
         templateOptions: {

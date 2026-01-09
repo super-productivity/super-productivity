@@ -16,6 +16,7 @@ import {
 import { SnackService } from '../../core/snack/snack.service';
 import { take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -727,8 +728,12 @@ END:VCALENDAR`;
 
   describe('constructor', () => {
     it('should load skipped events from localStorage on init', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const skippedIds = ['event-1', 'event-2'];
-      const today = new Date().toISOString().split('T')[0];
+      // Use the same date format as the service
+      const today = getDbDateStr();
 
       localStorage.setItem(
         'SUP_CALENDER_EVENTS_SKIPPED_TODAY',
@@ -754,9 +759,15 @@ END:VCALENDAR`;
 
       const newService = TestBed.inject(CalendarIntegrationService);
       expect(newService.skippedEventIds$.getValue()).toEqual(skippedIds);
+
+      // Clean up after test
+      localStorage.clear();
     });
 
     it('should not load skipped events from different day', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const skippedIds = ['event-1', 'event-2'];
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
@@ -784,9 +795,15 @@ END:VCALENDAR`;
 
       const newService = TestBed.inject(CalendarIntegrationService);
       expect(newService.skippedEventIds$.getValue()).toEqual([]);
+
+      // Clean up after test
+      localStorage.clear();
     });
 
     it('should handle invalid JSON in localStorage gracefully', () => {
+      // Clean up localStorage first
+      localStorage.clear();
+
       const today = new Date().toISOString().split('T')[0];
 
       localStorage.setItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY', 'invalid json');
@@ -809,6 +826,9 @@ END:VCALENDAR`;
       });
 
       expect(() => TestBed.inject(CalendarIntegrationService)).not.toThrow();
+
+      // Clean up after test
+      localStorage.clear();
     });
   });
 
