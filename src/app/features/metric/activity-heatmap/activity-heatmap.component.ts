@@ -240,7 +240,10 @@ export class ActivityHeatmapComponent {
     return { dayMap, startDate, endDate };
   }
 
-  private _buildHeatmapData(worklog: any): {
+  private _buildHeatmapDataFromWorklog(
+    worklog: any,
+    year: number,
+  ): {
     dayMap: Map<string, DayData>;
     startDate: Date;
     endDate: Date;
@@ -248,67 +251,56 @@ export class ActivityHeatmapComponent {
     if (!worklog) {
       return null;
     }
-
+    // Day map contains properties for each day of the year, regardless
+    // whether that day has any logged work or not
     const dayMap = new Map<string, DayData>();
-    const now = new Date();
-    const oneYearAgo = new Date(now);
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
 
-    // Initialize all days in the past year
-    const currentDate = new Date(oneYearAgo);
-    while (currentDate <= now) {
-      const dateStr = this._getDateStr(currentDate);
+    // Initialize all days in the specified year
+    const curDate = new Date(startDate);
+    while (curDate <= endDate) {
+      const dateStr = this._getDateStr(curDate);
       dayMap.set(dateStr, {
-        date: new Date(currentDate),
+        date: new Date(curDate),
         dateStr,
         taskCount: 0,
         timeSpent: 0,
         level: 0,
       });
-      currentDate.setDate(currentDate.getDate() + 1);
+      curDate.setDate(curDate.getDate() + 1);
     }
 
-    // Extract data from worklog
+    // Extract data from worklog for the specified year
     let maxTasks = 0;
     let maxTime = 0;
-
-    Object.keys(worklog).forEach((yearKeyIN) => {
-      const yearKey = +yearKeyIN;
-      const year = worklog[yearKey];
-
-      if (year && year.ent) {
-        Object.keys(year.ent).forEach((monthKeyIN) => {
-          const monthKey = +monthKeyIN;
-          const month = year.ent[monthKey];
-
-          if (month && month.ent) {
-            Object.keys(month.ent).forEach((dayKeyIN) => {
-              const dayKey = +dayKeyIN;
-              const day = month.ent[dayKey];
-
-              if (day) {
-                const dateStr = day.dateStr;
-                const existing = dayMap.get(dateStr);
-
-                if (existing) {
-                  const taskCount = day.logEntries.length;
-                  const timeSpent = day.timeSpent;
-
-                  existing.taskCount = taskCount;
-                  existing.timeSpent = timeSpent;
-
-                  maxTasks = Math.max(maxTasks, taskCount);
-                  maxTime = Math.max(maxTime, timeSpent);
-                }
+    const yearData = worklog[year];
+    if (yearData && yearData.ent) {
+      Object.keys(yearData.ent).forEach((monthKey) => {
+        const month = +monthKey;
+        const monthData = yearData.ent[month];
+        if (monthData && monthData.ent) {
+          Object.keys(monthData.ent).forEach((dayKey) => {
+            const day = +dayKey;
+            const dayData = monthData.ent[day];
+            if (day) {
+              const dateStr = dayData.dateStr;
+              const existing = dayMap.get(dateStr);
+              if (existing) {
+                const taskCount = dayData.logEntries.length;
+                const timeSpent = dayData.timeSpent;
+                existing.taskCount = taskCount;
+                existing.timeSpent = timeSpent;
+                maxTasks = Math.max(maxTasks, taskCount);
+                maxTime = Math.max(maxTime, timeSpent);
               }
-            });
-          }
-        });
-      }
-    });
+            }
+          });
+        }
+      });
+    }
 
-    // Calculate levels (0-4) based on activity
-    // Prioritize time spent (80%) over task count (20%)
+    // Calculate levels
     dayMap.forEach((day) => {
       if (day.taskCount === 0 && day.timeSpent === 0) {
         day.level = 0;
@@ -329,11 +321,10 @@ export class ActivityHeatmapComponent {
         }
       }
     });
-
     return {
       dayMap,
-      startDate: oneYearAgo,
-      endDate: now,
+      startDate,
+      endDate,
     };
   }
 
