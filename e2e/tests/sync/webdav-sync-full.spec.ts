@@ -98,6 +98,11 @@ test.describe('WebDAV Sync Full Flow', () => {
     await pageA.locator('task').first().click({ button: 'right' });
     await pageA.locator('.mat-mdc-menu-content button.color-warn').click();
 
+    // Handle the confirmation dialog (isConfirmBeforeTaskDelete defaults to true)
+    const confirmBtn = pageA.locator('[e2e="confirmBtn"]');
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await confirmBtn.click();
+
     // Wait for deletion to be reflected in UI
     await expect(pageA.locator('task')).toHaveCount(1, { timeout: 10000 }); // Should be 1 left
 
