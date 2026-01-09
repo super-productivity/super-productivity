@@ -484,6 +484,23 @@ export class ActivityHeatmapComponent {
     return Array.from(yearsSet).sort((a, b) => b - a);
   }
 
+  private _extractAvailableYearsFromWorklog(worklog: any): number[] {
+    if (!worklog) return [];
+    const yearSet = new Set<number>();
+    const curYear = new Date().getFullYear();
+    Object.keys(worklog).forEach((key) => {
+      const year = parseInt(key, 10);
+      if (!isNaN(year) && year <= curYear) {
+        // Check if this year has any data
+        const yearData = worklog[year];
+        if (yearData && yearData.ent && Object.keys(yearData.ent).length > 0) {
+          yearSet.add(year);
+        }
+      }
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
+  }
+
   async shareHeatmap(): Promise<void> {
     const data = this.heatmapData();
     if (!data) {
