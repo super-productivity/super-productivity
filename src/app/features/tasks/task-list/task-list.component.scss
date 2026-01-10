@@ -19,6 +19,11 @@
   }
 }
 
+:host(.isSubTaskList) {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .done-task-box {
   text-align: center;
   display: flex;

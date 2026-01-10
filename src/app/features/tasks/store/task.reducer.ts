@@ -2,6 +2,8 @@ import {
   __updateMultipleTaskSimple,
   addReminderIdToTask,
   addSubTask,
+  convertSubtaskToTask,
+  makeTaskSubtaskOfAnother,
   moveSubTask,
   moveSubTaskDown,
   moveSubTaskToBottom,
@@ -629,5 +631,98 @@ export const taskReducer = createReducer<TaskState>(
       },
       state,
     );
+  }),
+
+  // DRAG & DROP SUBTASK OPERATIONS
+  // --------------------------------
+  on(makeTaskSubtaskOfAnother, (state, { taskId, newParentId, newOrderedIds = [] }) => {
+    let newState = state;
+    const task = getTaskById(taskId, state);
+    const newParent = getTaskById(newParentId, state);
+
+    if (!task || !newParent) {
+      return state;
+    }
+
+    if (task.parentId) {
+      const oldParent = getTaskById(task.parentId, state);
+      if (oldParent) {
+        newState = taskAdapter.updateOne(
+          {
+            id: oldParent.id,
+            changes: {
+              subTaskIds: oldParent.subTaskIds.filter((id) => id !== taskId),
+            },
+          },
+          newState,
+        );
+        newState = reCalcTimesForParentIfParent(oldParent.id, newState);
+      }
+    }
+
+    const updatedSubTaskIds =
+      newOrderedIds.length > 0
+        ? newParent.subTaskIds.includes(taskId)
+          ? newParent.subTaskIds
+          : [...newParent.subTaskIds, taskId]
+        : newParent.subTaskIds.includes(taskId)
+          ? newParent.subTaskIds
+          : [...newParent.subTaskIds, taskId];
+
+    newState = taskAdapter.updateOne(
+      {
+        id: newParent.id,
+        changes: {
+          subTaskIds: updatedSubTaskIds,
+        },
+      },
+      newState,
+    );
+    newState = reCalcTimesForParentIfParent(newParent.id, newState);
+
+    newState = taskAdapter.updateOne(
+      {
+        id: taskId,
+        changes: {
+          parentId: newParent.id,
+        },
+      },
+      newState,
+    );
+
+    return newState;
+  }),
+
+  on(convertSubtaskToTask, (state, { taskId, parentId }) => {
+    let newState = state;
+    const task = getTaskById(taskId, state);
+    const parent = getTaskById(parentId, state);
+
+    if (!task || !parent) {
+      return state;
+    }
+
+    newState = taskAdapter.updateOne(
+      {
+        id: parentId,
+        changes: {
+          subTaskIds: parent.subTaskIds.filter((id) => id !== taskId),
+        },
+      },
+      newState,
+    );
+    newState = reCalcTimesForParentIfParent(parentId, newState);
+
+    newState = taskAdapter.updateOne(
+      {
+        id: taskId,
+        changes: {
+          parentId: undefined,
+        },
+      },
+      newState,
+    );
+
+    return newState;
   }),
 );

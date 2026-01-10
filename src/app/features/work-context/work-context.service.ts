@@ -386,7 +386,7 @@ export class WorkContextService {
   ]).pipe(
     map(([tasks, isTodayList]) =>
       (isTodayList ? this._filterFutureScheduledTasksForToday(tasks) : tasks).filter(
-        (task) => task && !task.isDone,
+        (task) => task && !task.isDone && !task.parentId,
       ),
     ),
   );
@@ -395,7 +395,7 @@ export class WorkContextService {
     switchMap((isToday) =>
       isToday ? this._store$.select(selectAllTasksWithSubTasks) : this.mainListTasks$,
     ),
-    map((tasks) => tasks.filter((task) => task && task.isDone)),
+    map((tasks) => tasks.filter((task) => task && task.isDone && !task.parentId)),
   );
 
   constructor() {

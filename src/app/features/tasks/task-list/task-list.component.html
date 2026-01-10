@@ -40,6 +40,7 @@
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"
       (cdkDragStarted)="onDragStarted(task, $event)"
+      (cdkDragMoved)="onDragMoved($event, task)"
       (cdkDragEnded)="onDragEnded()"
     >
     </task>

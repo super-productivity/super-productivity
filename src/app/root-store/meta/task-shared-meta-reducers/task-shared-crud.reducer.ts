@@ -351,6 +351,14 @@ const handleDeleteTask = (
 
   const taskIdsToRemove = [task.id, ...(task.subTaskIds || [])];
 
+  if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
+    const project = getProject(state, task.projectId);
+    updatedState = updateProject(updatedState, task.projectId, {
+      taskIds: removeTasksFromList(project.taskIds, taskIdsToRemove),
+      backlogTaskIds: removeTasksFromList(project.backlogTaskIds, taskIdsToRemove),
+    });
+  }
+
   const tagUpdates = affectedTagIds.map(
     (tagId): Update<Tag> => ({
       id: tagId,

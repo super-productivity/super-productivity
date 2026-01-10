@@ -13,6 +13,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
 import { TaskService } from '../task.service';
 import { EMPTY, forkJoin, of, Subscription } from 'rxjs';
 import {
@@ -81,6 +82,9 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
+import { CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
+import { TaskDragDropService } from '../task-drag-drop.service';
+import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
 
 @Component({
   selector: 'task',
@@ -121,6 +125,8 @@ import { TaskFocusService } from '../task-focus.service';
     ShortPlannedAtPipe,
     TagToggleMenuListComponent,
     PanDirective,
+    CdkDropList,
+    AsyncPipe,
   ],
 })
 export class TaskComponent implements OnDestroy, AfterViewInit {
@@ -134,10 +140,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _taskDragDropService = inject(TaskDragDropService);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  readonly dropListService = inject(DropListService);
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -1135,6 +1143,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       return {} as KeyboardConfig;
     }
     return (this._configService.cfg()?.keyboard as KeyboardConfig) || {};
+  }
+
+  onDropConvertToTask(event: CdkDragDrop<any>): void {
+    const draggedTask = event.item.data as TaskWithSubTasks;
+    const currentTask = this.task();
+
+    if (draggedTask.parentId === currentTask.id) {
+      this._taskDragDropService.makeIndependentTask(draggedTask.id, draggedTask.parentId);
+    }
   }
 
   protected readonly ICAL_TYPE = ICAL_TYPE;

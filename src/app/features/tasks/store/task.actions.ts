@@ -132,3 +132,20 @@ export const addNewTagsFromShortSyntax = createAction(
     newTitles: string[];
   }>(),
 );
+
+export const makeTaskSubtaskOfAnother = createAction(
+  '[Task] Make task subtask of another',
+  props<{
+    taskId: string;
+    newParentId: string;
+    newOrderedIds?: string[];
+  }>(),
+);
+
+export const convertSubtaskToTask = createAction(
+  '[Task] Convert subtask to task',
+  props<{
+    taskId: string;
+    parentId: string;
+  }>(),
+);
