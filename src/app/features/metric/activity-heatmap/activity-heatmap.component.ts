@@ -42,6 +42,11 @@ interface YearlyActivityData {
 interface WeekData {
   days: (DayData | null)[];
 }
+import {
+  DayData,
+  WeekData,
+  HeatmapComponent,
+} from '../../../ui/heatmap/heatmap.component';
 
 @Component({
   selector: 'activity-heatmap',
@@ -49,6 +54,7 @@ interface WeekData {
   styleUrls: ['./activity-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    HeatmapComponent,
     TranslatePipe,
     MatFormFieldModule,
     MatIconButton,

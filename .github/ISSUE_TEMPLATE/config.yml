@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask a question
-    url: https://github.com/johannesjo/super-productivity/discussions/categories/q-a
+    url: https://github.com/super-productivity/super-productivity/discussions/categories/q-a
     about: Please ask and answer questions here.
   - name: Submit an idea
-    url: https://github.com/johannesjo/super-productivity/discussions/categories/ideas
+    url: https://github.com/super-productivity/super-productivity/discussions/categories/ideas
     about: Got an non fleshed out improvement idea you want to discuss? Post it here!

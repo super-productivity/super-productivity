@@ -39,16 +39,17 @@ test.describe('App Features - Time Tracking', () => {
     // Navigate to main view
     await page.goto('/#/tag/TODAY');
     // Play button in main button bar should not be present when feature is disabled
-    expect(mainPlayButton).not.toBeAttached();
+    await expect(mainPlayButton).not.toBeAttached();
     // Play button in the task hover menu should not be visible
     await firstTask.hover();
-    expect(taskPlayButton).not.toBeAttached();
+    await expect(taskPlayButton).not.toBeAttached();
     // select task and send PlayPause shortcut, ensure tracking is not started
     await firstTaskHandle.click();
-    expect(firstTask).toBeFocused();
-    page.keyboard.press('Y');
-    await page.waitForTimeout(200);
-    expect(firstTask).not.toContainClass('isCurrent');
+    await expect(firstTask).toBeFocused();
+    await page.keyboard.press('Y');
+    // With feature disabled, pressing Y should NOT start tracking (no isCurrent class)
+    // Use a short timeout since we're testing that nothing happens
+    await expect(firstTask).not.toHaveClass(/isCurrent/, { timeout: 1000 });
 
     // Re-enable the feature
     await page.goto('/#/config');
@@ -68,9 +69,9 @@ test.describe('App Features - Time Tracking', () => {
     await expect(taskPlayButton).toBeAttached();
     // select task and send PlayPause shortcut, ensure tracking is started
     await firstTaskHandle.click();
-    expect(firstTask).toBeFocused();
-    page.keyboard.press('Y');
-    await page.waitForTimeout(200);
-    expect(firstTask).toContainClass('isCurrent');
+    await expect(firstTask).toBeFocused();
+    await page.keyboard.press('Y');
+    // With feature enabled, pressing Y should start tracking (adds isCurrent class)
+    await expect(firstTask).toHaveClass(/isCurrent/);
   });
 });

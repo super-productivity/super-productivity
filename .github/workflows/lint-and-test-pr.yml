@@ -29,7 +29,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -48,12 +48,23 @@ jobs:
 
       - run: npm run env # Generate env.generated.ts from environment variables
       - run: npm run lint
+      - run: npm run int:test # Validate i18n JSON files
       - run: npm run test
+      - name: Start WebDAV Server
+        run: |
+          docker compose up -d webdav
+
+          # Wait for WebDAV server to be ready
+          chmod +x ./scripts/wait-for-webdav.sh
+          ./scripts/wait-for-webdav.sh
       - run: npm run e2e
+      - name: Print WebDAV logs on failure
+        if: ${{ failure() }}
+        run: docker compose logs webdav
 
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: e2eResults
           path: .tmp/e2e-test-results/**/*.*

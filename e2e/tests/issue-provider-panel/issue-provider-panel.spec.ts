@@ -15,8 +15,11 @@ test.describe('Issue Provider Panel', () => {
     await page.click('mat-tab-group .mat-mdc-tab:last-child');
     await page.waitForSelector('issue-provider-setup-overview', { state: 'visible' });
 
-    // Wait for the setup overview to be fully loaded
-    await page.waitForTimeout(1000);
+    // Wait for buttons to be ready
+    await page
+      .locator('issue-provider-setup-overview button')
+      .first()
+      .waitFor({ state: 'visible', timeout: 5000 });
 
     // Get all buttons in the issue provider setup overview
     const setupButtons = page.locator('issue-provider-setup-overview button');

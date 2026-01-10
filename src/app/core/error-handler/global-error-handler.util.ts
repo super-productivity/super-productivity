@@ -6,6 +6,7 @@ import { download, downloadLogs } from '../../util/download';
 import { privacyExport } from '../../imex/file-imex/privacy-export';
 import { getAppVersionStr } from '../../util/get-app-version-str';
 import { Log } from '../log';
+import { getErrorTxt } from '../../util/get-error-text';
 
 let isWasErrorAlertCreated = false;
 
@@ -79,7 +80,7 @@ export const logAdvancedStacktrace = (
       Log.log(githubIssueLinks);
 
       if (githubIssueLinks) {
-        const errEscaped = _cleanHtml(origErr as string);
+        const errEscaped = _cleanHtml(getErrorTxt(origErr));
         Array.from(githubIssueLinks).forEach((el) =>
           el.setAttribute('href', getGithubErrorUrl(errEscaped, stack, origErr)),
         );

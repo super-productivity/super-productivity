@@ -8,21 +8,25 @@ on:
     types:
       - opened
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   welcome:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/first-interaction@v3
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           issue_message: |
             Hello there ${{ github.actor }}! 👋
 
             Thank you and congratulations 🎉 for opening your very first issue in this project! 💖
 
-            In case you want to claim this issue, please comment down below! We will try to get back to you as soon as we can. 👀
+            In case you want to work on this issue, please comment down below! We will try to get back to you as soon as we can. 👀
 
-            For more open ended discussions and/or specific questions, please visit the [discussions page](https://github.com/johannesjo/super-productivity/discussions). 💖
+            For more open ended discussions and/or specific questions, please visit the [discussions page](https://github.com/super-productivity/super-productivity/discussions). 💖
 
           pr_message: |
             Hello there ${{ github.actor }}! 👋

@@ -6,7 +6,7 @@ describe('getRelevantEventsForCalendarIntegrationFromIcal', () => {
   const endTimestamp = new Date('2025-12-31T23:59:59Z').getTime();
 
   describe('non-recurring events', () => {
-    it('should import event with dtend', () => {
+    it('should import event with dtend', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -18,7 +18,7 @@ SUMMARY:Test Event with End
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -30,7 +30,7 @@ END:VCALENDAR`;
       expect(events[0].duration).toBe(3600000); // 1 hour in ms
     });
 
-    it('should import event without dtend (zero duration)', () => {
+    it('should import event without dtend (zero duration)', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -41,7 +41,7 @@ SUMMARY:Test Event without End
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -55,7 +55,7 @@ END:VCALENDAR`;
   });
 
   describe('recurring events', () => {
-    it('should import recurring event with dtend', () => {
+    it('should import recurring event with dtend', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -68,7 +68,7 @@ SUMMARY:Weekly Meeting with End
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -82,7 +82,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should import recurring event with DURATION instead of dtend', () => {
+    it('should import recurring event with DURATION instead of dtend', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -95,7 +95,7 @@ SUMMARY:Daily Task with Duration
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -109,7 +109,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should import recurring event without dtend or DURATION (zero duration)', () => {
+    it('should import recurring event without dtend or DURATION (zero duration)', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -121,7 +121,7 @@ SUMMARY:Daily Reminder without Duration
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -135,7 +135,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should handle recurring event with very short duration', () => {
+    it('should handle recurring event with very short duration', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -148,7 +148,7 @@ SUMMARY:15 Minute Standup
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -162,7 +162,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should keep descriptions for recurring events', () => {
+    it('should keep descriptions for recurring events', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -176,7 +176,7 @@ DESCRIPTION:Recurring description text
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -192,7 +192,7 @@ END:VCALENDAR`;
   });
 
   describe('mixed event types', () => {
-    it('should import mix of recurring and non-recurring events', () => {
+    it('should import mix of recurring and non-recurring events', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -211,7 +211,7 @@ SUMMARY:Recurring Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -232,7 +232,7 @@ END:VCALENDAR`;
   });
 
   describe('error handling', () => {
-    it('should handle events outside the time range', () => {
+    it('should handle events outside the time range', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -244,7 +244,7 @@ SUMMARY:Past Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -254,7 +254,7 @@ END:VCALENDAR`;
       expect(events.length).toBe(0);
     });
 
-    it('should continue processing even if one event fails', () => {
+    it('should continue processing even if one event fails', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -272,7 +272,7 @@ SUMMARY:Bad Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -286,7 +286,7 @@ END:VCALENDAR`;
   });
 
   describe('edge cases', () => {
-    it('should handle all-day events and set isAllDay flag', () => {
+    it('should handle all-day events and set isAllDay flag', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -298,7 +298,7 @@ SUMMARY:All Day Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -310,7 +310,7 @@ END:VCALENDAR`;
       expect(events[0].isAllDay).toBe(true);
     });
 
-    it('should NOT set isAllDay flag for timed events', () => {
+    it('should NOT set isAllDay flag for timed events', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -322,7 +322,7 @@ SUMMARY:Timed Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -334,7 +334,7 @@ END:VCALENDAR`;
       expect(events[0].isAllDay).toBeUndefined();
     });
 
-    it('should handle recurring event with UNTIL', () => {
+    it('should handle recurring event with UNTIL', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -347,7 +347,7 @@ SUMMARY:Daily Until Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -361,7 +361,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should handle recurring all-day event without end time and set isAllDay flag', () => {
+    it('should handle recurring all-day event without end time and set isAllDay flag', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -373,7 +373,7 @@ SUMMARY:Recurring All Day No End
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -388,7 +388,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should gracefully skip event with null dtstart', () => {
+    it('should gracefully skip event with null dtstart', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -399,7 +399,7 @@ DESCRIPTION:This event has no DTSTART
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -411,7 +411,7 @@ END:VCALENDAR`;
       expect(events.length).toBe(0);
     });
 
-    it('should handle mix of valid and invalid events gracefully', () => {
+    it('should handle mix of valid and invalid events gracefully', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -433,7 +433,7 @@ SUMMARY:Another Valid Event
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -449,7 +449,7 @@ END:VCALENDAR`;
   });
 
   describe('RECURRENCE-ID handling (modified recurring events)', () => {
-    it('should not create duplicate when recurring event has one modified instance', () => {
+    it('should not create duplicate when recurring event has one modified instance', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -469,7 +469,7 @@ SUMMARY:Daily Meeting (Moved)
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -491,7 +491,7 @@ END:VCALENDAR`;
       expect(unmodifiedEvents.length).toBe(2);
     });
 
-    it('should handle multiple modified instances in recurring event', () => {
+    it('should handle multiple modified instances in recurring event', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -518,7 +518,7 @@ SUMMARY:Standup (Early & Short)
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -543,7 +543,7 @@ END:VCALENDAR`;
       expect(unmodifiedEvents.length).toBe(3);
     });
 
-    it('should handle cancelled instance in recurring event', () => {
+    it('should handle cancelled instance in recurring event', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -564,7 +564,7 @@ STATUS:CANCELLED
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -580,7 +580,7 @@ END:VCALENDAR`;
       expect(eventOnCancelledDate).toBeUndefined();
     });
 
-    it('should handle all-day recurring event with DATE-based RECURRENCE-ID', () => {
+    it('should handle all-day recurring event with DATE-based RECURRENCE-ID', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -598,7 +598,7 @@ SUMMARY:All Day Event (Modified)
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -615,7 +615,7 @@ END:VCALENDAR`;
       expect(unmodifiedEvents.length).toBe(2);
     });
 
-    it('should handle recurring event without exceptions (no regression)', () => {
+    it('should handle recurring event without exceptions (no regression)', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -628,7 +628,7 @@ SUMMARY:Regular Recurring
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -642,7 +642,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should handle exception outside time range gracefully', () => {
+    it('should handle exception outside time range gracefully', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -662,7 +662,7 @@ SUMMARY:Event Series (Old Modified)
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -676,7 +676,7 @@ END:VCALENDAR`;
       });
     });
 
-    it('should include modified instances that are in range when master recurring series is out of range', () => {
+    it('should include modified instances that are in range when master recurring series is out of range', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -698,7 +698,7 @@ END:VCALENDAR`;
 
       const laterStart = new Date('2025-01-10T00:00:00Z').getTime();
       const laterEnd = new Date('2025-02-01T00:00:00Z').getTime();
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         laterStart,
@@ -713,7 +713,7 @@ END:VCALENDAR`;
       expect(events[0].legacyIds).toEqual(['orphan@test']);
     });
 
-    it('should not include cancelled orphan exception events', () => {
+    it('should not include cancelled orphan exception events', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -736,7 +736,7 @@ END:VCALENDAR`;
 
       const laterStart = new Date('2025-01-10T00:00:00Z').getTime();
       const laterEnd = new Date('2025-02-01T00:00:00Z').getTime();
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         laterStart,
@@ -746,7 +746,7 @@ END:VCALENDAR`;
       expect(events.length).toBe(0);
     });
 
-    it('should generate unique IDs for modified instances', () => {
+    it('should generate unique IDs for modified instances', async () => {
       const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -773,7 +773,7 @@ SUMMARY:Standup (Early)
 END:VEVENT
 END:VCALENDAR`;
 
-      const events = getRelevantEventsForCalendarIntegrationFromIcal(
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
         icalData,
         calProviderId,
         startTimestamp,
@@ -791,6 +791,102 @@ END:VCALENDAR`;
       modifiedEvents.forEach((ev) => {
         expect(ev.legacyIds).toEqual(['unique@test']);
       });
+    });
+  });
+
+  describe('timezone edge cases (Office 365 compatibility)', () => {
+    it('should handle iCal with timezone reference but malformed VTIMEZONE gracefully', async () => {
+      // This reproduces the issue from GitHub #5722 where Office 365 calendars
+      // can cause "Cannot read properties of null (reading 'parent')" errors
+      // in ICAL.helpers.updateTimezones()
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Microsoft Corporation//Outlook 16.0 MIMEDIR//EN
+METHOD:PUBLISH
+X-WR-TIMEZONE:Europe/London
+BEGIN:VTIMEZONE
+TZID:Europe/London
+BEGIN:STANDARD
+DTSTART:16010101T020000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0000
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:16010101T010000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3
+TZOFFSETFROM:+0000
+TZOFFSETTO:+0100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:office365-event@microsoft.com
+DTSTART;TZID=Europe/London:20250115T100000
+DTEND;TZID=Europe/London:20250115T110000
+SUMMARY:Office 365 Meeting
+END:VEVENT
+END:VCALENDAR`;
+
+      // Should not throw an error
+      const events = await getRelevantEventsForCalendarIntegrationFromIcal(
+        icalData,
+        calProviderId,
+        startTimestamp,
+        endTimestamp,
+      );
+      expect(events.length).toBe(1);
+      expect(events[0].title).toBe('Office 365 Meeting');
+    });
+
+    it('should handle iCal with TZID reference to unknown timezone gracefully', async () => {
+      // Some Office 365 calendars reference timezones that may not be in the
+      // ical.js TimezoneService, which can cause updateTimezones to fail
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Microsoft Corporation//Outlook 16.0 MIMEDIR//EN
+BEGIN:VEVENT
+UID:unknown-tz-event@microsoft.com
+DTSTART;TZID=Custom/Unknown_Timezone:20250115T100000
+DTEND;TZID=Custom/Unknown_Timezone:20250115T110000
+SUMMARY:Event with Unknown Timezone
+END:VEVENT
+END:VCALENDAR`;
+
+      // Should not throw, should handle gracefully
+      expect(() => {
+        getRelevantEventsForCalendarIntegrationFromIcal(
+          icalData,
+          calProviderId,
+          startTimestamp,
+          endTimestamp,
+        );
+      }).not.toThrow();
+    });
+
+    it('should handle iCal with empty VTIMEZONE component gracefully', async () => {
+      // Edge case: VTIMEZONE exists but has no subcomponents
+      const icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VTIMEZONE
+TZID:Empty/Timezone
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:empty-tz-event@test.com
+DTSTART;TZID=Empty/Timezone:20250115T100000
+DTEND;TZID=Empty/Timezone:20250115T110000
+SUMMARY:Event with Empty Timezone
+END:VEVENT
+END:VCALENDAR`;
+
+      expect(() => {
+        getRelevantEventsForCalendarIntegrationFromIcal(
+          icalData,
+          calProviderId,
+          startTimestamp,
+          endTimestamp,
+        );
+      }).not.toThrow();
     });
   });
 });

@@ -55,8 +55,8 @@ const envEntries = Array.from(allEnvKeys)
   .map((key) => {
     const value = env[key];
     if (value !== undefined) {
-      // Escape quotes in values
-      const escapedValue = value.replace(/'/g, "\\'");
+      // Escape backslashes first, then quotes
+      const escapedValue = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       return `  ${key}: '${escapedValue}',`;
     } else if (REQUIRED_ENV_KEYS.includes(key)) {
       throw new Error(`Required env key ${key} not found`);

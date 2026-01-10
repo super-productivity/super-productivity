@@ -51,13 +51,14 @@ test.describe('App Features', () => {
       // Go to settings page
       await page.goto('/#/config');
 
-      // expand "App Features"
+      // expand "App Features" and wait for switch to be visible
       await appFeaturesSection.click();
+      await expect(featureSwitch).toBeVisible();
 
       // Ensure feature is enabled (all features are enabled by default)
       await expect(featureSwitch).toBeChecked();
 
-      // Click switch to disable
+      // Click switch to disable and wait for state change
       await featureSwitch.click();
       await expect(featureSwitch).not.toBeChecked();
 
@@ -70,10 +71,11 @@ test.describe('App Features', () => {
       // Re-enable the feature
       await page.goto('/#/config');
 
-      // expand "App Features"
+      // expand "App Features" and wait for switch to be visible and interactable
       await appFeaturesSection.click();
+      await expect(featureSwitch).toBeVisible();
 
-      // click toggle button to enable
+      // Click toggle button to enable and verify state change
       await featureSwitch.click();
       await expect(featureSwitch).toBeChecked();
 

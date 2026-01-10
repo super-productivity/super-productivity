@@ -109,14 +109,14 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
           )
         : issue.comments;
 
-    // TODO: we also need to handle the case when the user himself updated the issue, to also update the issue...
-    const updates: number[] = [
-      ...commentsByOthers.map((comment) => new Date(comment.created_at).getTime()),
-      issueUpdate,
-    ].sort();
-    const lastRemoteUpdate = updates[updates.length - 1];
+    const commentUpdates: number[] = commentsByOthers
+      .map((comment) => new Date(comment.created_at).getTime())
+      .sort();
+    const newestCommentUpdate = commentUpdates[commentUpdates.length - 1];
 
-    const wasUpdated = lastRemoteUpdate > (task.issueLastUpdated || 0);
+    const wasUpdated =
+      (newestCommentUpdate && newestCommentUpdate > (task.issueLastUpdated || 0)) ||
+      issueUpdate > (task.issueLastUpdated || 0);
 
     if (wasUpdated) {
       return {
@@ -134,53 +134,27 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
   async getFreshDataForIssueTasks(
     tasks: Task[],
   ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: GitlabIssue }[]> {
-    const issueProviderId =
-      tasks && tasks[0].issueProviderId ? tasks[0].issueProviderId : 0;
-    if (!issueProviderId) {
-      throw new Error('No issueProviderId');
-    }
-
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
-
-    const updatedIssues: {
-      task: Task;
-      taskChanges: Partial<Task>;
-      issue: GitlabIssue;
-    }[] = [];
-
-    for (const task of tasks) {
-      if (!task.issueId) {
-        continue;
-      }
-      const issue = await this._gitlabApiService.getById$(task.issueId, cfg).toPromise();
-      if (issue) {
-        const issueUpdate: number = new Date(issue.updated_at).getTime();
-        const commentsByOthers =
-          cfg.filterUsername && cfg.filterUsername.length > 1
-            ? issue.comments.filter(
-                (comment) => comment.author.username !== cfg.filterUsername,
-              )
-            : issue.comments;
-
-        const updates: number[] = [
-          ...commentsByOthers.map((comment) => new Date(comment.created_at).getTime()),
-          issueUpdate,
-        ].sort();
-        const lastRemoteUpdate = updates[updates.length - 1];
-        const wasUpdated = lastRemoteUpdate > (task.issueLastUpdated || 0);
-        if (wasUpdated) {
-          updatedIssues.push({
+    return Promise.all(
+      tasks.map((task) =>
+        this.getFreshDataForIssueTask(task).then((refreshDataForTask) => ({
+          task,
+          refreshDataForTask,
+        })),
+      ),
+    ).then((items) => {
+      return items
+        .filter(({ refreshDataForTask }) => !!refreshDataForTask)
+        .map(({ refreshDataForTask, task }) => {
+          if (!refreshDataForTask) {
+            throw new Error('No refresh data for task js error');
+          }
+          return {
             task,
-            taskChanges: {
-              ...this.getAddTaskData(issue),
-              issueWasUpdated: true,
-            },
-            issue,
-          });
-        }
-      }
-    }
-    return updatedIssues;
+            taskChanges: refreshDataForTask.taskChanges,
+            issue: refreshDataForTask.issue,
+          };
+        });
+    });
   }
 
   getAddTaskData(issue: GitlabIssue): Partial<Task> & { title: string } {

@@ -174,7 +174,7 @@
           @if (customized.grouped) {
             @for (group of customized.grouped | keyvalue; track group.key) {
               <collapsible
-                [title]="group.key"
+                [title]="group.key | scheduledDateGroup"
                 [isIconBefore]="true"
                 [isExpanded]="true"
               >

@@ -11,9 +11,6 @@ export const getNextRepeatOccurrence = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
 ): Date | null => {
-  if (!taskRepeatCfg.startDate) {
-    throw new Error('Repeat startDate needs to be defined');
-  }
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     throw new Error('Invalid repeatEvery value given');
   }

@@ -41,6 +41,7 @@
       <!--  -->
       <button
         [matTooltip]="'Add checklist item'"
+        (mousedown)="$event.preventDefault()"
         (click)="toggleChecklistMode($event)"
         mat-icon-button
       >
@@ -49,6 +50,7 @@
     }
     <button
       [matTooltip]="'Open in fullscreen'"
+      (mousedown)="$event.preventDefault()"
       (click)="openFullScreen()"
       mat-icon-button
     >

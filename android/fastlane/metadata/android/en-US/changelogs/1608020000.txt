@@ -1,0 +1,23 @@
+
+### Bug Fixes
+
+* **calendar:** add periodic refresh for planner and scheduler views (77c4c33), closes #4474
+* **db:** add missing _afterReady guard to loadAll method (270eca3), closes #5734
+* **focus-mode:** sync time tracking with Pomodoro breaks and manual end (55fc855), closes #5875
+* **i18n:** add missing translate pipe to play button tooltip (abfff27), closes #5874
+* **pomodoro:** allow manual session end to start break early (291d3e8), closes #5876
+* **sync:** show skip button immediately when offline (ccd4846), closes #5877
+* **tasks:** handle undefined tasks in reminder effect (4497aed), closes #5873
+* **test:** reset selector overrides to prevent test pollution
+### Features
+
+* **android:** add alarm sound and vibration to task reminders (b7cbef2), closes #5603
+* **e2e:** streamline e2e test development with improved infrastructure
+* **effects:** consolidate task update actions in PluginHooksEffects
+* **sync:** add skip button to loading screen when waiting for sync (12e68cd), closes #5868
+
+
+### Performance Improvements
+
+* **e2e:** optimize wait utilities and addTask method for faster test execution
+* **e2e:** remove ineffective waits to speed up test runs

@@ -47,17 +47,17 @@ interface TimeframeOption {
 const TIMEFRAME_OPTIONS: ReadonlyArray<TimeframeOption> = [
   {
     id: 'twoWeeks',
-    labelKey: 'F.METRIC.CMP.TIME_FRAME_2_WEEKS',
+    labelKey: T.F.METRIC.CMP.TIME_FRAME_2_WEEKS,
     limit: 14,
   },
   {
     id: 'oneMonth',
-    labelKey: 'F.METRIC.CMP.TIME_FRAME_1_MONTH',
+    labelKey: T.F.METRIC.CMP.TIME_FRAME_1_MONTH,
     limit: 30,
   },
   {
     id: 'max',
-    labelKey: 'F.METRIC.CMP.TIME_FRAME_MAX',
+    labelKey: T.F.METRIC.CMP.TIME_FRAME_MAX,
     limit: null,
   },
 ];
@@ -98,6 +98,7 @@ export class LazyChartComponent implements OnDestroy {
   readonly isModuleLoaded = signal(false);
   readonly isSharing = signal(false);
   readonly timeframeOptions = TIMEFRAME_OPTIONS;
+  readonly T = T;
 
   readonly selectedTimeframe = signal<LazyChartTimeframe>('max');
   private readonly activeTimeframe = computed<LazyChartTimeframe>(() =>

@@ -38,6 +38,44 @@ export interface AndroidInterface {
 
   triggerGetShareData?(): void;
 
+  // Foreground service methods for background time tracking
+  startTrackingService?(taskId: string, taskTitle: string, timeSpentMs: number): void;
+  stopTrackingService?(): void;
+  updateTrackingService?(timeSpentMs: number): void;
+  getTrackingElapsed?(): string;
+
+  // Foreground service methods for focus mode timer
+  startFocusModeService?(
+    title: string,
+    durationMs: number,
+    remainingMs: number,
+    isBreak: boolean,
+    isPaused: boolean,
+    taskTitle: string | null,
+  ): void;
+  stopFocusModeService?(): void;
+  updateFocusModeService?(
+    title: string,
+    remainingMs: number,
+    isPaused: boolean,
+    isBreak: boolean,
+    taskTitle: string | null,
+  ): void;
+
+  // Native reminder scheduling (snooze handled entirely in background)
+  scheduleNativeReminder?(
+    notificationId: number,
+    reminderId: string,
+    relatedId: string,
+    title: string,
+    reminderType: string,
+    triggerAtMs: number,
+  ): void;
+  cancelNativeReminder?(notificationId: number): void;
+
+  // Widget task queue - get queued tasks from home screen widget
+  getWidgetTaskQueue?(): string | null;
+
   // added here only
   onResume$: Subject<void>;
   onPause$: Subject<void>;
@@ -50,9 +88,18 @@ export interface AndroidInterface {
     path: string;
   }>;
 
-  // onPauseCurrentTask$: Subject<void>;
-  // onMarkCurrentTaskAsDone$: Subject<void>;
-  // onAddNewTask$: Subject<void>;
+  // Notification action callbacks
+  onPauseTracking$: Subject<void>;
+  onMarkTaskDone$: Subject<void>;
+
+  // Focus mode notification action callbacks
+  onFocusPause$: Subject<void>;
+  onFocusResume$: Subject<void>;
+  onFocusSkip$: Subject<void>;
+  onFocusComplete$: Subject<void>;
+
+  // Focus mode timer completion (native service detected timer reached 0)
+  onFocusModeTimerComplete$: Subject<boolean>; // boolean indicates isBreak
 }
 
 // setInterval(() => {
@@ -68,9 +115,13 @@ if (IS_ANDROID_WEB_VIEW) {
 
   androidInterface.onResume$ = new Subject();
   androidInterface.onPause$ = new Subject();
-  // androidInterface.onPauseCurrentTask$ = new Subject();
-  // androidInterface.onMarkCurrentTaskAsDone$ = new Subject();
-  // androidInterface.onAddNewTask$ = new Subject();
+  androidInterface.onPauseTracking$ = new Subject();
+  androidInterface.onMarkTaskDone$ = new Subject();
+  androidInterface.onFocusPause$ = new Subject();
+  androidInterface.onFocusResume$ = new Subject();
+  androidInterface.onFocusSkip$ = new Subject();
+  androidInterface.onFocusComplete$ = new Subject();
+  androidInterface.onFocusModeTimerComplete$ = new Subject();
   androidInterface.onShareWithAttachment$ = new ReplaySubject(1);
   androidInterface.isKeyboardShown$ = new BehaviorSubject(false);
 

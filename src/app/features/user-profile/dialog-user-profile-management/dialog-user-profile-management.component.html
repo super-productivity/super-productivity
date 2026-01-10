@@ -1,17 +1,17 @@
-<h2 mat-dialog-title>{{ 'USER_PROFILES.DIALOG_TITLE' | translate }}</h2>
+<h2 mat-dialog-title>{{ T.USER_PROFILES.DIALOG_TITLE | translate }}</h2>
 
 <mat-dialog-content>
   <!-- Create New Profile -->
   <div class="create-profile-section">
-    <h3>{{ 'USER_PROFILES.CREATE_NEW_PROFILE' | translate }}</h3>
+    <h3>{{ T.USER_PROFILES.CREATE_NEW_PROFILE | translate }}</h3>
     <div class="create-profile-form">
       <mat-form-field class="profile-name-input">
-        <mat-label>{{ 'USER_PROFILES.PROFILE_NAME' | translate }}</mat-label>
+        <mat-label>{{ T.USER_PROFILES.PROFILE_NAME | translate }}</mat-label>
         <input
           matInput
           [(ngModel)]="newProfileName"
           (keydown.enter)="createProfile()"
-          [placeholder]="'USER_PROFILES.PROFILE_NAME_PLACEHOLDER' | translate"
+          [placeholder]="T.USER_PROFILES.PROFILE_NAME_PLACEHOLDER | translate"
         />
       </mat-form-field>
       <button
@@ -21,14 +21,14 @@
         [disabled]="!newProfileName() || isCreating()"
       >
         <mat-icon>add</mat-icon>
-        {{ 'USER_PROFILES.CREATE' | translate }}
+        {{ T.USER_PROFILES.CREATE | translate }}
       </button>
     </div>
   </div>
 
   <!-- Existing Profiles -->
   <div class="profiles-list-section">
-    <h3>{{ 'USER_PROFILES.EXISTING_PROFILES' | translate }}</h3>
+    <h3>{{ T.USER_PROFILES.EXISTING_PROFILES | translate }}</h3>
     <div class="profiles-list">
       @for (profile of profileService.profiles(); track profile.id) {
         <div
@@ -49,14 +49,14 @@
               <button
                 mat-icon-button
                 (click)="saveEdit(profile.id)"
-                [matTooltip]="'USER_PROFILES.SAVE' | translate"
+                [matTooltip]="T.USER_PROFILES.SAVE | translate"
               >
                 <mat-icon>check</mat-icon>
               </button>
               <button
                 mat-icon-button
                 (click)="cancelEdit()"
-                [matTooltip]="'USER_PROFILES.CANCEL' | translate"
+                [matTooltip]="T.USER_PROFILES.CANCEL | translate"
               >
                 <mat-icon>close</mat-icon>
               </button>
@@ -68,12 +68,12 @@
                 <strong>{{ profile.name }}</strong>
                 @if (profile.id === profileService.activeProfile()?.id) {
                   <span class="active-badge">{{
-                    'USER_PROFILES.ACTIVE' | translate
+                    T.USER_PROFILES.ACTIVE | translate
                   }}</span>
                 }
               </div>
               <div class="profile-meta">
-                {{ 'USER_PROFILES.CREATED' | translate }}
+                {{ T.USER_PROFILES.CREATED | translate }}
                 {{ profile.createdAt | date: 'medium' }}
               </div>
             </div>
@@ -81,7 +81,7 @@
               <button
                 mat-icon-button
                 (click)="startEdit(profile)"
-                [matTooltip]="'USER_PROFILES.RENAME' | translate"
+                [matTooltip]="T.USER_PROFILES.RENAME | translate"
                 [disabled]="profileService.profiles().length === 1"
               >
                 <mat-icon>edit</mat-icon>
@@ -89,14 +89,14 @@
               <button
                 mat-icon-button
                 (click)="exportProfile(profile)"
-                [matTooltip]="'USER_PROFILES.EXPORT_PROFILE' | translate"
+                [matTooltip]="T.USER_PROFILES.EXPORT_PROFILE | translate"
               >
                 <mat-icon>download</mat-icon>
               </button>
               <button
                 mat-icon-button
                 (click)="deleteProfile(profile)"
-                [matTooltip]="'USER_PROFILES.DELETE_PROFILE' | translate"
+                [matTooltip]="T.USER_PROFILES.DELETE_PROFILE | translate"
                 [disabled]="
                   profile.id === profileService.activeProfile()?.id ||
                   profileService.profiles().length === 1
@@ -118,6 +118,6 @@
     mat-button
     (click)="close()"
   >
-    {{ 'USER_PROFILES.CLOSE' | translate }}
+    {{ T.USER_PROFILES.CLOSE | translate }}
   </button>
 </mat-dialog-actions>

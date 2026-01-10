@@ -1,7 +1,6 @@
-// @ts-ignore
-import ICAL from 'ical.js';
 import { CalendarIntegrationEvent } from '../../calendar-integration/calendar-integration.model';
 import { Log } from '../../../core/log';
+import { loadIcalModule } from './ical-lazy-loader';
 
 // NOTE: this sucks and is slow, but writing a new ical parser would be very hard... :(
 
@@ -87,14 +86,16 @@ const buildExceptionMap = (vevents: any[]): ExceptionMap => {
   return exceptionMap;
 };
 
-export const getRelevantEventsForCalendarIntegrationFromIcal = (
+export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   icalData: string,
   calProviderId: string,
   startTimestamp: number,
   endTimestamp: number,
-): CalendarIntegrationEvent[] => {
+): Promise<CalendarIntegrationEvent[]> => {
+  const ICAL = await loadIcalModule();
   let calendarIntegrationEvents: CalendarIntegrationEvent[] = [];
   const allPossibleFutureEvents = getAllPossibleEventsAfterStartFromIcal(
+    ICAL,
     icalData,
     new Date(startTimestamp),
   );
@@ -331,7 +332,7 @@ const convertVEventToCalendarIntegrationEvent = (
   const start = vevent.getFirstPropertyValue('dtstart').toJSDate().getTime();
   // NOTE: if dtend is missing, it defaults to dtstart; @see #1814 and RFC 2455
   // detailed comment in #1814:
-  // https://github.com/johannesjo/super-productivity/issues/1814#issuecomment-1008132824
+  // https://github.com/super-productivity/super-productivity/issues/1814#issuecomment-1008132824
   const duration = calculateEventDuration(vevent, start);
   const isAllDay = isAllDayEvent(vevent);
 
@@ -347,7 +348,12 @@ const convertVEventToCalendarIntegrationEvent = (
   };
 };
 
-const getAllPossibleEventsAfterStartFromIcal = (icalData: string, start: Date): any[] => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getAllPossibleEventsAfterStartFromIcal = (
+  ICAL: any,
+  icalData: string,
+  start: Date,
+): any[] => {
   const c = ICAL.parse(icalData);
   const comp = new ICAL.Component(c);
   const tzAdded: string[] = [];
@@ -364,7 +370,19 @@ const getAllPossibleEventsAfterStartFromIcal = (icalData: string, start: Date): 
       }
     }
   }
-  const vevents = ICAL.helpers.updateTimezones(comp).getAllSubcomponents('vevent');
+  // Wrap updateTimezones in try-catch to handle edge cases in some Office 365 calendars
+  // that can cause "Cannot read properties of null (reading 'parent')" errors.
+  // See: https://github.com/super-productivity/super-productivity/issues/5722
+  let vevents: any[];
+  try {
+    vevents = ICAL.helpers.updateTimezones(comp).getAllSubcomponents('vevent');
+  } catch (error) {
+    Log.warn(
+      'Failed to update timezones for calendar, falling back to raw component:',
+      error,
+    );
+    vevents = comp.getAllSubcomponents('vevent');
+  }
 
   const allPossibleFutureEvents = vevents.filter((ve: any) => {
     try {

@@ -33,6 +33,7 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../features/work-context/store/work-context-meta.actions';
+import { PlannerActions } from '../features/planner/store/planner.actions';
 
 @Injectable()
 export class PluginHooksEffects {
@@ -82,23 +83,56 @@ export class PluginHooksEffects {
   taskUpdate$ = createEffect(
     () =>
       this.actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        switchMap((action) =>
-          this.store.pipe(
-            select(selectTaskById, { id: action.task.id as string }),
+        ofType(
+          TaskSharedActions.updateTask,
+          TaskSharedActions.scheduleTaskWithTime,
+          TaskSharedActions.reScheduleTaskWithTime,
+          TaskSharedActions.unscheduleTask,
+          PlannerActions.planTaskForDay,
+          PlannerActions.transferTask,
+        ),
+        switchMap((action) => {
+          // Extract task ID and changes based on action type
+          let taskId: string;
+          let changes: Partial<Task>;
+
+          if (action.type === TaskSharedActions.updateTask.type) {
+            taskId = action.task.id as string;
+            changes = action.task.changes;
+          } else if (
+            action.type === TaskSharedActions.scheduleTaskWithTime.type ||
+            action.type === TaskSharedActions.reScheduleTaskWithTime.type
+          ) {
+            taskId = action.task.id;
+            changes = { dueWithTime: action.dueWithTime, dueDay: undefined };
+          } else if (action.type === TaskSharedActions.unscheduleTask.type) {
+            taskId = action.id;
+            changes = { dueWithTime: undefined, reminderId: undefined };
+          } else if (action.type === PlannerActions.planTaskForDay.type) {
+            taskId = action.task.id;
+            changes = { dueDay: action.day, dueWithTime: undefined };
+          } else if (action.type === PlannerActions.transferTask.type) {
+            taskId = action.task.id;
+            changes = { dueDay: action.newDay as string };
+          } else {
+            return EMPTY;
+          }
+
+          return this.store.pipe(
+            select(selectTaskById, { id: taskId }),
             take(1),
             tap((task: Task | undefined) => {
               if (task) {
                 this.pluginService.dispatchHook(PluginHooks.TASK_UPDATE, {
                   taskId: task.id,
                   task,
-                  changes: action.task.changes,
+                  changes,
                 });
               }
             }),
             map(() => EMPTY),
-          ),
-        ),
+          );
+        }),
       ),
     { dispatch: false },
   );

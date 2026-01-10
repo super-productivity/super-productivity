@@ -34,7 +34,10 @@ test.describe('Enable Plugin Test', () => {
 
     // Navigate to plugin settings
     await page.click(SETTINGS_BTN);
-    await page.waitForTimeout(1000);
+    await page
+      .locator('.page-settings')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     await page.evaluate(() => {
       const configPage = document.querySelector('.page-settings');
@@ -70,10 +73,12 @@ test.describe('Enable Plugin Test', () => {
       }
     });
 
-    await page.waitForTimeout(1000);
-    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 5000 });
-
-    await page.waitForTimeout(2000);
+    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 10000 });
+    // Wait for plugin cards to be loaded
+    await page
+      .locator('plugin-management mat-card')
+      .first()
+      .waitFor({ state: 'attached', timeout: 10000 });
 
     // Check if plugin-management has any content
     await page.evaluate(() => {
@@ -94,8 +99,6 @@ test.describe('Enable Plugin Test', () => {
         ),
       };
     });
-
-    await page.waitForTimeout(1000);
 
     // Try to find and enable the API Test Plugin (which exists by default)
     const enableResult = await page.evaluate(() => {
@@ -128,7 +131,25 @@ test.describe('Enable Plugin Test', () => {
     // console.log('Plugin enablement result:', enableResult);
     expect(enableResult.foundApiTestPlugin).toBe(true);
 
-    await page.waitForTimeout(3000); // Wait for plugin to initialize
+    // Wait for toggle state to change to enabled
+    if (enableResult.toggleClicked) {
+      await page.waitForFunction(
+        () => {
+          const cards = Array.from(
+            document.querySelectorAll('plugin-management mat-card'),
+          );
+          const apiTestCard = cards.find((card) => {
+            const title = card.querySelector('mat-card-title')?.textContent || '';
+            return title.includes('API Test Plugin');
+          });
+          const toggle = apiTestCard?.querySelector(
+            'mat-slide-toggle button[role="switch"]',
+          ) as HTMLButtonElement;
+          return toggle?.getAttribute('aria-checked') === 'true';
+        },
+        { timeout: 10000 },
+      );
+    }
 
     // Now check if plugin menu has buttons
     await page.evaluate(() => {

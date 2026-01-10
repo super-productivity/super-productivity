@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "확인 후 조치 방법을 결정하세요.",
-      "SYNC_CONFLICT_TITLE": "동기화 충돌이 발생했습니다."
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "앱이 백그라운드에서 실행되어 동기화를 허용하는 경우 활성화된 경우",
-      "NO_ACTIVE_TASKS": "활성 작업 없음",
-      "SYNCING": "동기화"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "무시",
@@ -17,8 +6,6 @@
       "MSG": "PWA로 Super Productivity를 설치하시겠습니까?"
     },
     "B_OFFLINE": "인터넷 연결이 끊어졌습니다. 문제 제공자 데이터 동기화 및 요청이 작동하지 않습니다.",
-    "UPDATE_MAIN_MODEL": "슈퍼 생산성이 대폭 업데이트되었습니다! 데이터에 대한 일부 마이그레이션이 필요합니다. 이로 인해 데이터가 이전 버전의 앱과 호환되지 않습니다.",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "선택된 모델 업데이트가 없습니다. 모델 업그레이드를 수행하지 않으려면 마지막 버전으로 다운그레이드해야합니다.",
     "UPDATE_WEB_APP": "새 버전을 사용할 수 있습니다. 새 버전을 로드하시겠습니까?"
   },
   "BL": {
@@ -32,11 +19,7 @@
     "RESTORE_STRAY_BACKUP": "마지막 동기화 중에 오류가 발생했을 수 있습니다. 마지막 백업을 복원 하시겠습니까?"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "나중에 오늘",
-    "NEXT_WEEK": "다음 주",
-    "PLACEHOLDER": "날짜를 선택하십시오",
-    "PRESS_ENTER_AGAIN": "Enter를 다시 눌러 저장하십시오.",
-    "TOMORROW": "내일"
+    "PRESS_ENTER_AGAIN": "Enter를 다시 눌러 저장하십시오."
   },
   "F": {
     "ATTACHMENT": {
@@ -44,7 +27,6 @@
         "ADD_ATTACHMENT": "첨부 파일 추가",
         "EDIT_ATTACHMENT": "첨부 파일 편집",
         "LABELS": {
-          "FILE": "파일 경로",
           "IMG": "이미지",
           "LINK": "URL"
         },
@@ -60,7 +42,6 @@
       "DEFAULT": {
         "DONE": "수행",
         "EISENHAUER_MATRIX": "아이젠하우어 매트릭스",
-        "IMPORTANT": "중요하다",
         "IN_PROGRESS": "진행 중",
         "KANBAN": "칸반",
         "NOT_URGENT_IMPORTANT": "긴급하지 않고 중요하지 않습니다.",
@@ -97,9 +78,6 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트 용 CalDav 설정"
-      },
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "문제를 필터링 할 카테고리 (없으면 비워 둡니다)",
         "CALDAV_PASSWORD": "CalDav 비밀번호",
@@ -109,28 +87,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "작업 완료시 CalDav 할 일을 자동으로 완료"
       },
       "FORM_SECTION": {
-        "HELP": "<p>여기에서 일일 계획 보기의 작업 생성 패널에서 특정 프로젝트에 대해 완료되지 않은 CalDav 할 일을 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안 사항으로 나열되며 할 일에 대한 링크와 이에 대한 추가 정보를 제공합니다.</p> <p>또한 완료되지 않은 모든 할 일을 작업 백로그에 자동으로 추가하고 동기화할 수 있습니다.</p><p>모바일 및 웹의 nextcloud에서 작동하도록 하려면 nextcloud 앱 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>를 통해 \"https://app.super-productivity.com\"을 허용 목록에 추가해야 할 수 있습니다.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "담당자",
-        "AT": "에",
-        "ATTACHMENTS": "첨부 파일",
-        "CHANGED": "변경",
-        "COMMENTS": "코멘트",
-        "COMPONENTS": "구성 요소",
-        "DESCRIPTION": "기술",
-        "LABELS": "카테고리",
-        "LIST_OF_CHANGES": "변경 사항 목록",
-        "MARK_AS_CHECKED": "체크 된대로 업데이트 표시",
-        "ON": "에",
-        "RELATED": "관련",
-        "STATUS": "상태",
-        "STORY_POINTS": "스토리 포인트",
-        "SUB_TASKS": "하위",
-        "SUMMARY": "개요",
-        "WORKLOG": "작업 로그",
-        "WRITE_A_COMMENT": "덧글 써"
+        "HELP": "<p>여기에서 일일 계획 보기의 작업 생성 패널에서 특정 프로젝트에 대해 완료되지 않은 CalDav 할 일을 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안 사항으로 나열되며 할 일에 대한 링크와 이에 대한 추가 정보를 제공합니다.</p> <p>또한 완료되지 않은 모든 할 일을 작업 백로그에 자동으로 추가하고 동기화할 수 있습니다.</p><p>모바일 및 웹의 nextcloud에서 작동하도록 하려면 nextcloud 앱 <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>를 통해 \"https://app.super-productivity.com\"을 허용 목록에 추가해야 할 수 있습니다.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav : 캘린더 \"{{calendarName}}\"을 (를) 찾을 수 없음",
@@ -141,7 +98,6 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "작업으로 추가",
-        "FOCUS_TASK": "집중 작업",
         "TXT": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 이벤트가 마감됨)",
         "TXT_PAST": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!",
@@ -175,10 +131,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox : 인증 코드에서 액세스 토큰을 생성 할 수 없습니다",
-        "ACCESS_TOKEN_GENERATED": "Dropbox : 인증 코드에서 생성 된 액세스 토큰",
-        "AUTH_ERROR": "보관 용 계정 : 잘못된 액세스 토큰 제공",
-        "AUTH_ERROR_ACTION": "토큰 변경",
         "OFFLINE": "보관 용 계정 : 오프라인 상태이므로 동기화 할 수 없습니다",
         "SYNC_ERROR": "보관 용 계정 : 동기화 중 오류",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: PKCE 챌린지를 생성할 수 없습니다."
@@ -195,39 +147,25 @@
         "TO_FOCUS_OVERLAY": "오버레이에 초점을 맞추려면"
       },
       "BACK_TO_PLANNING": "계획으로 돌아가기",
-      "CONGRATS": "이 세션을 완료해 주셔서 축하드립니다!",
-      "CONTINUE_FOCUS_SESSION": "포커스 세션 계속하기",
       "COUNTDOWN": "카운트다운",
       "FINISH_TASK_AND_SELECT_NEXT": "작업 완료 후 다음 선택",
       "FLOWTIME": "플로우 타임",
-      "FOR_TASK": "작업용",
       "GET_READY": "집중 세션을 준비하세요!",
-      "GO_TO_PROCRASTINATION": "미루는 일이 있을 때 도움 받기",
       "GOGOGO": "가자, 가자, 가자!!!",
-      "NEXT": "다음",
       "ON": "켜짐",
       "OPEN_ISSUE_IN_BROWSER": "브라우저에서 열린 이슈",
-      "POMODORO_BACK": "뒤로",
-      "POMODORO_DISABLE": "포모도로 비활성화",
-      "POMODORO_INFO": "포커스 세션은 포모도로 타이머가 활성화된 상태에서 함께 사용할 수 없습니다.",
       "PREP_GET_MENTALLY_READY": "집중력과 생산성을 높이기 위한 정신적 준비",
       "PREP_SIT_UPRIGHT": "똑바로 앉거나 서기",
       "PREP_STRETCH": "가벼운 스트레칭하기",
-      "SELECT_ANOTHER_TASK": "다른 작업 선택",
       "SELECT_TASK": "집중할 작업 선택",
       "SESSION_COMPLETED": "포커스 세션 완료!",
-      "SET_FOCUS_SESSION_DURATION": "포커스 세션 기간 설정",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "작업 노트 및 첨부 파일 표시/숨기기",
       "START_FOCUS_SESSION": "포커스 세션 시작",
       "START_NEXT_FOCUS_SESSION": "다음 포커스 세션 시작",
       "WORKED_FOR": "근무처"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트용 Gitea 설정"
-      },
       "FORM": {
-        "FILTER_USER": "사용자 아이디(예: 직접 변경 사항을 필터링하기 위해)",
         "HOST": "호스트(예: https://try.gitea.io)",
         "REPO_FULL_NAME": "사용자 이름 또는 조직 이름/프로젝트",
         "REPO_FULL_NAME_DESCRIPTION": "브라우저에서 프로젝트를 볼 때 URL의 일부로 찾을 수 있습니다.",
@@ -238,12 +176,10 @@
         "TOKEN": "액세스 토큰"
       },
       "FORM_SECTION": {
-        "HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대해 열려 있는 Gitea 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p> <p>또한 열려 있는 모든 이슈를 자동으로 추가하고 가져올 수 있습니다.</p><p>사용량 제한을 통과하고 액세스하려면 액세스 토큰을 제공할 수 있습니다.",
-        "TITLE": "Gitea"
+        "HELP": "<p>여기에서 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대해 열려 있는 Gitea 이슈를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이슈는 제안 사항으로 나열되며 이슈에 대한 링크와 자세한 정보를 제공합니다.</p> <p>또한 열려 있는 모든 이슈를 자동으로 추가하고 가져올 수 있습니다.</p><p>사용량 제한을 통과하고 액세스하려면 액세스 토큰을 제공할 수 있습니다."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "담당자",
-        "AT": "에서",
         "DESCRIPTION": "설명",
         "LABELS": "레이블",
         "MARK_AS_CHECKED": "업데이트 확인됨으로 표시",
@@ -251,15 +187,9 @@
         "STATUS": "상태",
         "SUMMARY": "요약",
         "WRITE_A_COMMENT": "댓글 작성"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: 알 수 없는 오류 {{statusCode}} {{errorMsg}}. API 속도 제한이 초과되었나요?"
       }
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트를 위한 GitHub 설정"
-      },
       "FORM": {
         "FILTER_USER": "사용자 이름 (예 : 혼자서 변경 사항을 필터링)",
         "INVALID_TOKEN_MESSAGE": "유효한 GitHub 토큰이 아닙니다. \"ghp_\"로 시작해야 합니다.",
@@ -268,8 +198,7 @@
         "TOKEN": "액세스 토큰"
       },
       "FORM_SECTION": {
-        "HELP": "<p>여기서는 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대한 열린 GitHub 문제를 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안으로 나열 되며 문제에 대 한 링크 뿐만 아니라 그것에 대 한 자세한 정보를 제공 합니다.</p> <p>또한 자동으로 추가하고 작업 백로그에 열려있는 모든 문제를 동기화 할 수 있습니다.</p>",
-        "TITLE": "Github"
+        "HELP": "<p>여기서는 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대한 열린 GitHub 문제를 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안으로 나열 되며 문제에 대 한 링크 뿐만 아니라 그것에 대 한 자세한 정보를 제공 합니다.</p> <p>또한 자동으로 추가하고 작업 백로그에 열려있는 모든 문제를 동기화 할 수 있습니다.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "담당자",
@@ -290,9 +219,6 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트를위한 GitLab 설정"
-      },
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "미리 채워진 기간에는 지난 날짜의 추적되지 않은 데이터가 포함되어 있습니다.",
         "T_ALREADY_TRACKED": "이미 추적 중",
@@ -321,8 +247,7 @@
         "TOKEN": "액세스 토큰"
       },
       "FORM_SECTION": {
-        "HELP": "<p> 일별 계획보기의 작업 생성 패널에서 특정 프로젝트에 대해 열린 GitLab (온라인 버전 또는 자체 호스팅 인스턴스) 문제를 나열하도록 SuperProductivity를 구성 할 수 있습니다. 제안으로 표시되며 문제에 대한 자세한 정보뿐만 아니라 문제에 대한 링크를 제공합니다. </p> <p> 또한 열려있는 모든 문제를 작업 백 로그에 자동으로 추가하고 동기화 할 수 있습니다. </p>",
-        "TITLE": "GitLab"
+        "HELP": "<p> 일별 계획보기의 작업 생성 패널에서 특정 프로젝트에 대해 열린 GitLab (온라인 버전 또는 자체 호스팅 인스턴스) 문제를 나열하도록 SuperProductivity를 구성 할 수 있습니다. 제안으로 표시되며 문제에 대한 자세한 정보뿐만 아니라 문제에 대한 링크를 제공합니다. </p> <p> 또한 열려있는 모든 문제를 작업 백 로그에 자동으로 추가하고 동기화 할 수 있습니다. </p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "담당자",
@@ -354,20 +279,14 @@
         "ATTACHMENTS": "첨부 파일",
         "AUTHOR": "저자",
         "CATEGORY": "범주",
-        "CHANGED": "변경",
-        "COMMENTS": "코멘트",
         "COMPONENTS": "구성 요소",
         "DESCRIPTION": "묘사",
-        "DONE_RATIO": "완료 비율",
         "DUE_DATE": "마감일",
         "LABELS": "레이블",
         "LAST_COMMENT": "마지막 코멘트",
-        "LIST_OF_CHANGES": "변경 사항 목록",
         "LOAD_ALL_COMMENTS": "모든 {{nr}} 댓글 불러오기",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "설명 &모든 의견 불러오기",
         "LOCATION": "위치",
         "MARK_AS_CHECKED": "업데이트를 선택된 것으로 표시",
-        "ON": "에",
         "PRIORITY": "우선권",
         "RELATED": "관련",
         "START": "시작하다",
@@ -378,8 +297,7 @@
         "TIME_SPENT": "소요 시간",
         "TYPE": "형",
         "VERSION": "버전",
-        "WORKLOG": "작업 로그",
-        "WRITE_A_COMMENT": "덧글 써"
+        "WORKLOG": "작업 로그"
       },
       "S": {
         "ERR_GENERIC": "{{issueProviderName}} 오류입니다: {{errTxt}}",
@@ -387,13 +305,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: 제대로 구성되지 않음",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: 백로그에 {{nr}} 개의 새 {{issuesStr}} 가져오기",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: {{issueStr}} \"{{issueTitle}}\"을(를) 백로그로 가져왔습니다.",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\"이(가) 삭제되었거나 닫힌 것 같습니다.",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: 업데이트 필요 없음",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: {{nr}} {{issuesStr}}에 대한 업데이트된 데이터",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: \"{{issueTitle}}\"에 대한 업데이트된 데이터",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: \"{{issueTitle}}\"에 대한 업데이트된 데이터",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: 누락된 {{issueStr}} 데이터가 있는 작업을 찾았습니다. 다시 로드 중.",
-        "NEW_COMMENT": "{{issueProviderName}}: \"{{issueTitle}}\"에 대한 새 댓글",
         "POLLING_BACKLOG": "{{issueProviderName}}: 새 {{issuesStr}}에 대한 폴링",
         "POLLING_CHANGES": "{{issueProviderName}}: {{issuesStr}}에 대한 폴링 변경 사항"
       }
@@ -430,8 +344,7 @@
         "CURRENT_ASSIGNEE": "현재 담당자 :",
         "CURRENT_STATUS": "현재 상태:",
         "TASK_NAME": "작업 이름:",
-        "TITLE": "Jira : 업데이트 상태",
-        "UPDATE_STATUS": "업데이트 상태"
+        "TITLE": "Jira : 업데이트 상태"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -466,8 +379,7 @@
         "HOST": "호스트 (예 : http://my-host.de:1234)",
         "PASSWORD": "토큰 / 비밀번호",
         "USE_PAT": "비밀번호 대신 개인 액세스 토큰 사용",
-        "USER_NAME": "이메일 / 사용자 이름",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (데스크톱 앱만 해당)"
+        "USER_NAME": "이메일 / 사용자 이름"
       },
       "FORM_SECTION": {
         "ADV_CFG": "고급 구성",
@@ -509,23 +421,12 @@
         "EXTENSION_NOT_LOADED": "Super Productivity Extension이로드되지 않았습니다. 페이지를 새로 고침하면 도움이 될 수 있습니다.",
         "INSUFFICIENT_SETTINGS": "Jira에 대한 설정이 충분하지 않음",
         "INVALID_RESPONSE": "Jira: 응답에 잘못된 데이터가 포함되어 있습니다.",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira : \"{{issueText}}\"이 (가) 이미 업데이트되었습니다.",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira : \"{{issueText}}\"에 대한 데이터가 업데이트되었습니다.",
-        "MISSING_ISSUE_DATA": "Jira : 누락 된 문제 데이터가있는 작업이 발견되었습니다. 다시로드 중입니다.",
         "NO_AUTO_IMPORT_JQL": "Jira : 자동 가져 오기에 대해 정의 된 검색어가 없습니다.",
         "NO_VALID_TRANSITION": "Jira : 유효한 전환이 설정되지 않았습니다.",
         "TIMED_OUT": "Jira : 요청 시간이 초과되었습니다.",
         "TRANSITION": "Jira : \"{{issueKey}}\"문제를 \"{{name}}\"(으)로 설정하십시오.",
         "TRANSITION_SUCCESS": "Jira : {{issueKey}} 문제를 <strong>{{chosenTransition}}</strong>(으)로 설정하십시오.",
-        "TRANSITIONS_LOADED": "Jira : 전환이로드되었습니다. 아래 선택을 사용하여 지정하십시오",
-        "UNABLE_TO_REASSIGN": "Jira : 사용자 이름을 지정하지 않았기 때문에 자신에게 티켓을 재 할당 할 수 없습니다. 설정을 방문하십시오."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "신임장",
-        "DONE": "이제 끝났어.",
-        "LOGIN_SUCCESS": "성공적 로그인!",
-        "TEST_CREDENTIALS": "자격증 명 테스트",
-        "WELCOME_USER": "환영합니다,  {{user}}!"
+        "TRANSITIONS_LOADED": "Jira : 전환이로드되었습니다. 아래 선택을 사용하여 지정하십시오"
       }
     },
     "MARKDOWN_PASTE": {
@@ -537,9 +438,6 @@
       "DIALOG_TITLE": "붙여 넣은 마크 다운 목록이 감지되었습니다!"
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "내가 해냈어!"
-      },
       "CMP": {
         "AVG_BREAKS_PER_DAY": "평균 하루에 휴식",
         "AVG_TASKS_PER_DAY_WORKED": "평균 일일 작업 수",
@@ -549,7 +447,6 @@
         "COUNTING_SUBTASKS": "(하위 작업 수 계산)",
         "DAYS_WORKED": "근무일",
         "GLOBAL_METRICS": "글로벌 지표",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "시간 경과에 따른 기분과 생산성",
         "NO_ADDITIONAL_DATA_YET": "추가로 수집 된 데이터가 없습니다. 일일 요약 '평가'패널에있는 양식을 사용하십시오.",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "시간 경과에 따른 클릭 카운터",
         "SIMPLE_COUNTERS": "간단한 카운터",
@@ -559,33 +456,14 @@
         "TIME_SPENT": "지출 된 시간"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "내일 메모 추가",
-        "DISABLE_REPEAT_EVERY_DAY": "매일 반복 사용 안함",
-        "ENABLE_REPEAT_EVERY_DAY": "매일 반복",
-        "HELP_H1": "왜 내가 신경 써야하니?",
-        "HELP_LINK_TXT": "통계 섹션으로 이동",
-        "HELP_P1": "조금 자기 평가 시간! 여기에 귀하의 답변이 저장되어 메트릭 섹션에서 어떻게 작업하는지에 대한 통계를 제공합니다. 또한 내일을위한 제안은 다음날 작업 목록 위에 나타납니다.",
-        "HELP_P2": "이는 정확한 측정 항목을 계산하거나 작업에 대한 사용자의 감각을 향상시키는 것보다 효율적이기는하지만 효율적인 작업이되도록하기위한 것입니다. 매일의 일상 생활에서 고통 점을 평가하는 것은 도움이 될뿐만 아니라 당신을 도울 요인을 찾는 것입니다. 그것에 대해 조금 체계적으로 다루기 만하면 이들에 대해 더 잘 이해하고 가능한 한 향상시키는 데 도움이되기를 바랍니다.",
-        "IMPROVEMENTS": "무엇이 당신의 생산성을 향상 시켰습니까?",
-        "IMPROVEMENTS_TOMORROW": "내일 개선하기 위해 당신은 무엇을 할 수 있습니까?",
-        "MOOD": "기분 어때?",
-        "MOOD_HINT": "1 : 끔찍 - 10 : 훌륭함",
         "NOTES": "내일위한주의 사항",
-        "OBSTRUCTIONS": "당신의 생산성을 방해 한 것은 무엇입니까?",
-        "PRODUCTIVITY": "얼마나 효율적으로 일 했습니까?",
-        "PRODUCTIVITY_HINT": "1 : 시작조차하지 마라 - 10 : 매우 효율적이다."
+        "PRODUCTIVITY": "얼마나 효율적으로 일 했습니까?"
       },
       "FOCUS_SESSION_DIALOG": {
         "ADD_BTN": "더하다"
-      },
-      "S": {
-        "SAVE_METRIC": "측정 항목이 성공적으로 저장되었습니다."
       }
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "메모로 저장할 텍스트를 입력하십시오 ..."
-      },
       "D_FULLSCREEN": {
         "VIEW_PARSED": "구문 분석된(편집 불가) 마크다운으로 보기",
         "VIEW_SPLIT": "분할 보기에서 구문 분석된 마크다운과 구문 분석되지 않은 마크다운 보기",
@@ -617,9 +495,6 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "이슈를 선택하여 사용 가능한 전환을 로드합니다.",
         "TRANSITION": "전환 처리"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트용 OpenProject 설정"
-      },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "활동",
         "CURRENTLY_LOGGED": "현재 기록 된 시간 :",
@@ -636,8 +511,7 @@
         "CURRENT_STATUS": "현재 상태:",
         "PERCENTAGE_DONE": "진행 상황:",
         "TASK_NAME": "작업 이름:",
-        "TITLE": "오픈프로젝트: 업데이트 상태",
-        "UPDATE_STATUS": "업데이트 상태"
+        "TITLE": "오픈프로젝트: 업데이트 상태"
       },
       "FORM": {
         "FILTER_USER": "사용자 이름 (예 : 혼자서 변경 사항을 필터링)",
@@ -654,8 +528,7 @@
         "TOKEN": "액세스 토큰"
       },
       "FORM_SECTION": {
-        "HELP": "<p>여기에서 열려 있는 OpenProject 작업 패키지를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이것이 브라우저에서 작동하려면 app.super-productivity.com</p>에서 액세스를 허용하도록 OpenProject 서버에 대해 CORS를 구성해야 합니다.",
-        "TITLE": "오픈프로젝트"
+        "HELP": "<p>여기에서 열려 있는 OpenProject 작업 패키지를 나열하도록 SuperProductivity를 구성할 수 있습니다. 이것이 브라우저에서 작동하려면 app.super-productivity.com</p>에서 액세스를 허용하도록 OpenProject 서버에 대해 CORS를 구성해야 합니다."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "담당자",
@@ -683,9 +556,7 @@
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "ADD_TO_TODAY": "오늘에 추가",
-          "RE_PLAN_ALL": "모두 일정 변경",
-          "TITLE": "오늘에 계획된 작업 추가"
+          "RE_PLAN_ALL": "모두 일정 변경"
         }
       },
       "EDIT_REPEATED_TASK": "반복 작업 편집 '{{taskName}}'",
@@ -697,83 +568,15 @@
         "REMOVED_PLAN_DATE": "작업 '{{taskTitle}}' 의 계획 날짜를 제거했습니다.",
         "TASK_ALREADY_PLANNED": "작업이 이미 {{date}}에 대해 계획되어 있습니다.",
         "TASK_PLANNED_FOR": " <strong>{{date}}</strong>{{extra}}에 대한 작업이 계획되었습니다."
-      },
-      "TASK_DRAWER": "작업 서랍"
+      }
     },
     "POMODORO": {
-      "BACK_TO_WORK": "다시 일!",
-      "BREAK_IS_DONE": "너의 휴식은 끝났어!",
-      "ENJOY_YOURSELF": "자신을 즐기고, 스스로 움직여서 다시 들어가십시오.",
-      "FINISH_SESSION_X": " <strong>{{nr}}</strong>세션을 성공적으로 마쳤습니다!",
-      "NOTIFICATION": {
-        "BREAK_TIME": "포모도로: 휴식 시간 {{nr}}!",
-        "BREAK_X_START": "Pomodoro : 휴식 {{nr}} 시작!",
-        "NO_TASKS": "Pomodoro 타이머가 시작되기 전에 작업을 추가해야 합니다.",
-        "SESSION_X_START": "Pomodoro : 세션 {{nr}} 이 시작되었습니다."
-      },
-      "S": {
-        "RESET": "첫 번째 포모도로 세션으로 재설정",
-        "SESSION_SKIP": "현재 포모도로 세션 끝으로 건너뛰기",
-        "SESSION_X_START": "Pomodoro : 세션 {{nr}} 이 시작되었습니다."
-      },
-      "SKIP_BREAK": "휴식 시간 건너 뛰기",
-      "START_BREAK": "휴식 시작"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "다시 일!",
-      "COMP": {
-        "INTRO": "연민을 보여주는 것은 언제나 좋은 생각입니다. 그것은 자기 가치 감을 향상시키고, 긍정적 인 감정을 키우며, 지연을 극복하는 데 도움을 줄 수 있습니다. 조금 연습 해보십시오.",
-        "L1": "조금 앉아서 스트레칭을하고 싶다면, 조금이라도 진정하십시오.",
-        "L2": "발생하는 생각과 느낌을 경청하십시오.",
-        "L3": "친구에게 응답 할 수있는 방식으로 자신에게 응답하고 있습니까?",
-        "L4": "대답이 '아니오'인 경우 친구의 상황을 상상해보십시오. 당신이 그들에게 뭐라고 말하겠습니까? 당신이 그들을 위해 무엇을 할 것입니까?",
-        "OUTRO": "더 많은 연습 <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">은</a> 또는 <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>에 있습니다.",
-        "TITLE": "자기 동정"
-      },
-      "CUR": {
-        "INTRO": "지연은 흥미 롭, 안 그래? 그것을하는 것이 이치에 맞지 않습니다. 장기적으로는 관심이 없습니다. 그러나 여전히 모든 사람들이 그것을합니다. 즐기고 탐험 해보세요!",
-        "L1": "어떤 감정이 당신의 유혹을 이끌어 내고 있습니까?",
-        "L2": "당신의 몸에서 그들을 어디에서 느낄 수 있습니까?",
-        "L3": "그들이 당신에게 무엇을 생각 나게 하죠?",
-        "L4": "당신이 그것을 관찰 할 때 미루는 생각은 어떻게됩니까? 그것이 강화됩니까? 소산? 다른 감정이 발생합니까?",
-        "L5": "당신이 그들에 대한 인식을 계속해서 쉬면서 몸의 감각은 어떻게 움직입니까?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "또 다른 매우 효과적인 방법은 미루고 싶은 충동을 유발하는 요인을 기록하는 것입니다. 예를 들어 저는 개인적으로 브라우저 창이 뜨면 Reddit이나 즐겨 찾는 뉴스 사이트로 빠르게 이동하고 싶은 충동을 자주 느낍니다. 간단한 빈 텍스트 문서에 충동을 유발하는 요인을 적기 시작한 후, 이 패턴이 얼마나 뿌리 깊은지 알게 되었고 다양한 대응책을 실험해보는 데 도움이 되었습니다.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "미루게 만드는 트리거를 적어보세요.",
-        "TITLE": "호기심"
-      },
-      "H1": "여유를 가져요!",
-      "INTRO": {
-        "AVOIDING": "작업 피하기",
-        "FEAR": "실패에 대한 두려움",
-        "STRESSED": "일을 완수하지 못해서 스트레스",
-        "TITLE": "소개"
-      },
-      "P1": "우선 긴장을 풀어 라! 모두가 한 번씩 그렇게합니다. 그리고 네가해야 할 일을하지 않는다면, 적어도 그것을 즐겨라! 그런 다음 아래 섹션에서 유용한 정보를 확인하십시오.",
-      "P2": "기억하십시오 : 지연은 시간 관리 문제가 아닌 감정 조절 문제입니다.",
-      "REFRAME": {
-        "INTRO": "그 임무에도 불구하고 무엇이 긍정적인지를 생각해보십시오.",
-        "TITLE": "재구성",
-        "TL1": "그것에 대해 흥미로운 것은 무엇입니까?",
-        "TL2": "당신이 그것을 완성한다면 무엇을 얻을 것입니까?",
-        "TL3": "당신이 그것을 완성한다면 어떻게 느낄 것인가?"
-      },
-      "SPLIT_UP": {
-        "INTRO": "가능한 한 많은 작은 덩어리로 작업을 분할하십시오.",
-        "OUTRO": "끝난? 그런 다음 그것에 대해 생각해보십시오. - 엄격하게 이론적 인 것은 무엇입니까? - 당신이 작업에 착수하기 시작한 경우</i> 당신이 <i>할 첫 번째 일은 무엇입니까? 생각 해봐...",
-        "TITLE": "그것을 나눠 라!"
-      }
+      "BREAK_IS_DONE": "너의 휴식은 끝났어!"
     },
     "PROJECT": {
       "D_CREATE": {
         "CREATE": "프로젝트 만들기",
-        "EDIT": "프로젝트 수정",
-        "SETUP_CALDAV": "Caldav 통합 설정",
-        "SETUP_GIT": "GitHub 통합 설치",
-        "SETUP_GITEA_PROJECT": "Gitea 통합 설정",
-        "SETUP_GITLAB": "GitLab 통합 설치",
-        "SETUP_JIRA": "Jira 통합 설정",
-        "SETUP_OPEN_PROJECT": "OpenProject 통합 설정",
-        "SETUP_REDMINE_PROJECT": "레드마인 통합 설정"
+        "EDIT": "프로젝트 수정"
       },
       "D_DELETE": {
         "MSG": "프로젝트 \"{{title}}\"을 삭제하시겠습니까?"
@@ -785,7 +588,6 @@
         "TITLE": "기본 설정"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "시스템이 글로벌 암 모드를 지원하면 사용되지 않습니다.",
         "HELP": "프로젝트의 테마 설정.",
         "L_BACKGROUND_IMAGE_DARK": "배경 이미지 URL (어두운 테마)",
         "L_BACKGROUND_IMAGE_LIGHT": "배경 이미지 URL (밝은 테마)",
@@ -797,18 +599,13 @@
         "L_HUE_WARN": "경고 색상 배경에 어두운 텍스트에 대한 임계 값",
         "L_IS_AUTO_CONTRAST": "최고의 가독성을위한 자동 텍스트 색상 설정",
         "L_IS_DISABLE_BACKGROUND_TINT": "컬러 배경 그라디언트 비활성화",
-        "L_IS_REDUCED_THEME": "축소 된 UI 사용 (작업 주위의 상자 없음)",
         "L_THEME_COLOR": "테마 색",
-        "L_TITLE": "제목",
         "TITLE": "테마"
       },
       "S": {
         "ARCHIVED": "보관 된 프로젝트",
         "CREATED": "생성 된 프로젝트 <strong>{{title}}</strong>. 왼쪽 상단의 메뉴에서 선택할 수 있습니다.",
         "DELETED": "삭제 된 프로젝트",
-        "E_EXISTS": "프로젝트 \"{{title}}\"이 (가) 이미 있습니다.",
-        "E_INVALID_FILE": "프로젝트 파일의 데이터가 잘못되었습니다.",
-        "ISSUE_PROVIDER_UPDATED": " <strong>{{issueProviderKey}}</strong>에 대한 업데이트 된 프로젝트 설정",
         "UNARCHIVED": "아카이브되지 않은 프로젝트",
         "UPDATED": "프로젝트 설정 업데이트"
       }
@@ -824,9 +621,6 @@
       "WEEK_TITLE": " {{nr}} 주({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "프로젝트용 레드마인 설정"
-      },
       "FORM": {
         "API_KEY": "API 액세스 키",
         "HOST": "호스트(예: https://redmine.org)",
@@ -847,14 +641,10 @@
         "MARK_AS_CHECKED": "업데이트를 체크된 것으로 표시",
         "PRIORITY": "우선순위",
         "STATUS": "상태"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: 알 수 없는 오류 {{statusCode}} {{errorMsg}}."
       }
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
-        "HIDE": "숨기기",
         "START_NOW": "지금 시작하기",
         "TXT": "<strong>{{title}}</strong> 가 <strong>{{start}}</strong>에서 시작합니다!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> 는 <strong>에서 시작 {{start}}</strong>!<br> (및 {{nrOfOtherBanners}} 개의 다른 작업 마감일)"
@@ -863,29 +653,19 @@
       "S_REMINDER_ERR": "알림 인터페이스 오류"
     },
     "SCHEDULE": {
-      "CONTINUED": "계속되는",
       "D_INITIAL": {
         "TEXT": "<p>타임 라인의 개념은 시간이 지남에 따라 계획된 작업이 어떻게 진행되는지에 대한 더 나은 그림을 제공하는 것입니다. 작업에서 자동으로 생성되며 두 가지 다른 항목을 구분합니다. <strong>예정된 작업</strong>은 계획된 시간에 표시되고 <strong>일반 작업</strong> 은 이러한 고정 이벤트를 중심으로 진행됩니다. 모든 작업은 할당 한 예상 시간을 고려합니다.</p><p>이 외에도 작업 시작 및 종료 시간을 제공 할 수 있습니다. 구성된 경우 일반 작업은 이러한 외부에 표시되지 않습니다. 타임 라인에는 향후 30 일만 포함됩니다.</p>",
         "TITLE": "타임 라인"
       },
       "END": "작업 종료",
-      "LUNCH_BREAK": "점심 휴식",
-      "MONTH": "달",
-      "NO_TASKS": "현재 작업이 없습니다. 상단 표시 줄의 + 버튼을 통해 몇 가지 작업을 추가하세요.",
-      "NOW": "지금",
       "PLAN_END_DAY": "하루 일과 종료 시 계획",
       "PLAN_START_DAY": "하루 시작 시 계획 세우기",
-      "START": "작업 시작",
-      "TASK_PROJECTION_INFO": "예약된 반복 작업의 미래 예측",
-      "WEEK": "주"
+      "START": "작업 시작"
     },
     "SEARCH_BAR": {
       "INFO": "보관된 작업을 검색하려면 목록 아이콘을 클릭하십시오.",
-      "INFO_ARCHIVED": "일반 작업을 검색하려면 아카이브 아이콘을 클릭하십시오.",
       "NO_RESULTS": "검색어와 일치하는 작업을 찾을 수 없습니다.",
-      "PLACEHOLDER": "작업 또는 작업 설명 검색",
-      "PLACEHOLDER_ARCHIVED": "보관된 작업 검색",
-      "TOO_MANY_RESULTS": "결과가 너무 많습니다. 검색 범위를 좁히십시오."
+      "PLACEHOLDER": "작업 또는 작업 설명 검색"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -904,7 +684,6 @@
         "L_COUNTDOWN_DURATION": "카운트다운 기간",
         "L_DAILY_GOAL": "성공적인 연승을 위한 일일 목표",
         "L_ICON": "아이콘",
-        "L_ICON_ON": "전환시 아이콘",
         "L_IS_ENABLED": "사용",
         "L_TITLE": "제목",
         "L_TRACK_STREAKS": "트랙 스트라이크",
@@ -922,18 +701,10 @@
     },
     "SYNC": {
       "A": {
-        "ARCHIVE_ONLY_UPLOADED": "데이터가 일부만 업로드되었습니다. 나중에 다시 시도하세요! 그렇지 않으면 데이터를 다른 장치에 동기화할 수 없습니다.",
-        "POSSIBLE_LEGACY_DATA": "슈퍼 생산성은 이제 하나의 파일이 아닌 두 개의 개별 파일을 사용하여 동기화를 개선하여 데이터 전송을 훨씬 더 적게 할 수 있습니다. 슈퍼 생산성의 모든 인스턴스를 업데이트하고 데이터가 가장 최신인 앱 인스턴스에서 먼저 데이터를 동기화하는 것이 좋습니다. 로컬 장치의 데이터인 경우에는 이 경고를 무시하고 다음 대화 상자를 확인하여 업로드를 진행하세요.",
         "REMOTE_MODEL_VERSION_NEWER": "원격 모델 버전이 로컬 버전보다 최신 버전입니다. 로컬 앱을 최신 버전으로 업데이트하세요!"
       },
       "C": {
-        "EMPTY_SYNC": "빈 데이터 개체를 동기화하려고합니다. 이것이 (거의) 처녀 앱의 첫 번째 동기화입니까?",
-        "FORCE_UPLOAD": "그래도 로컬 데이터를 업로드 하시겠습니까?",
-        "FORCE_UPLOAD_AFTER_ERROR": "로컬 데이터를 업로드하는 동안 오류가 발생했습니다. 강제로 업데이트 하시겠습니까?",
-        "MIGRATE_LEGACY": "가져오는 동안 기존 데이터가 감지되었습니다. 마이그레이션을 시도하시겠습니까?",
-        "NO_REMOTE_DATA": "원격 데이터가 없습니다. 원격에 로컬을 업로드 하시겠습니까?",
-        "TRY_LOAD_REMOTE_AGAIN": "원격에서 데이터를 다시로드 하시겠습니까?",
-        "UNABLE_TO_LOAD_REMOTE_DATA": "원격에서 데이터를 로드할 수 없습니다. 원격 데이터를 로컬 데이터로 덮어쓰기를 시도하시겠습니까? 이 과정에서 모든 원격 데이터가 손실됩니다."
+        "FORCE_UPLOAD": "그래도 로컬 데이터를 업로드 하시겠습니까?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "다음 링크를 열고 제공된 인증 코드를 아래 입력 필드에 복사하십시오.",
@@ -942,8 +713,6 @@
         "TITLE": "로그인 : {{provider}}"
       },
       "D_CONFLICT": {
-        "LAMPORT_CLOCK": "개정판",
-        "LAST_CHANGE": "마지막 변경:",
         "LAST_SYNC": "마지막 동기화 :",
         "LOCAL": "로컬",
         "LOCAL_REMOTE": "로컬-> 원격",
@@ -968,10 +737,6 @@
         "BTN_FORCE_UPLOAD": "로컬 업로드 강제",
         "P1": "원격 동기화 데이터가 일관성이 없습니다!",
         "P2": "영향을 받는 모델:",
-        "P3": "2가지 옵션이 있습니다.",
-        "P4": "1. 다른 장치로 이동하여 전체 동기화를 시도하십시오.",
-        "P5": "2. 원격 데이터를 로컬 데이터로 덮어씁니다. 모든 원격 변경 사항이 손실됩니다!",
-        "P6": "덮어쓰는 데이터의 백업을 만드는 것이 좋습니다!!",
         "T1": "마지막 동기화가 완료되지 않았습니다!",
         "T2": "마지막 동기화 중에 아카이브 데이터가 제대로 업로드되지 않았습니다:",
         "T3": "두 가지 옵션이 있습니다:",
@@ -983,19 +748,7 @@
         "SAVE_AND_ENABLE": "Save & Enable Sync",
         "TITLE": "동기화 구성"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "동기화 비활성화",
-        "PERM_FILE": "권한 부여",
-        "TEXT": "<p>로컬 동기화에 대한 파일 권한이 해지되었습니다.</p>",
-        "TITLE": "동기화: 로컬 파일 권한이 거부됨"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "액세스 토큰 (인증 코드에서 생성)"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "파일 이름 동기화"
-        },
         "L_ENABLE_COMPRESSION": "압축 사용(데이터 전송 속도 향상)",
         "L_ENABLE_ENCRYPTION": "종단 간 암호화 사용(실험 중) - 동기화 공급자가 데이터에 액세스할 수 없도록 설정합니다.",
         "L_ENABLE_SYNCING": "동기화 활성화",
@@ -1004,7 +757,6 @@
         "L_SYNC_INTERVAL": "동기화 간격",
         "L_SYNC_PROVIDER": "동기화 제공자",
         "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "파일 액세스 권한 필요",
           "L_SYNC_FOLDER_PATH": "폴더 경로 동기화"
         },
         "TITLE": "동기화",
@@ -1018,22 +770,13 @@
       },
       "S": {
         "ALREADY_IN_SYNC": "이미 동기화 중",
-        "ALREADY_IN_SYNC_NO_LOCAL_CHANGES": "로컬 변경 사항 없음 - 이미 동기화 중",
         "BTN_CONFIGURE": "구성",
         "BTN_FORCE_OVERWRITE": "강제 덮어쓰기",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "원격 데이터가 현재 작성 중입니다.",
-        "ERROR_FALLBACK_TO_BACKUP": "데이터를 가져 오는 중에 문제가 발생했습니다. 로컬 백업으로 되돌아갑니다.",
-        "ERROR_INVALID_DATA": "동기화하는 동안 오류가 발생했습니다. 유효하지 않은 데이터",
-        "ERROR_NO_REV": "원격 파일에 유효한 수정본이 없습니다.",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "동기화하는 동안 오류가 발생했습니다. 원격 데이터를 읽을 수 없습니다. 암호화를 사용 설정했는데 로컬 비밀번호가 원격 데이터를 암호화하는 데 사용된 비밀번호와 일치하지 않나요?",
-        "IMPORTING": "데이터 가져 오기",
         "INCOMPLETE_CFG": "동기화 인증에 실패했습니다. 구성을 확인하십시오!",
-        "INITIAL_SYNC_ERROR": "초기 동기화 실패",
         "SUCCESS_DOWNLOAD": "원격에서 동기화된 데이터",
-        "SUCCESS_IMPORT": "가져온 데이터",
         "SUCCESS_VIA_BUTTON": "데이터가 성공적으로 동기화되었습니다.",
-        "UNKNOWN_ERROR": "동기화하는 동안 알 수없는 오류가 발생했습니다. 콘솔을 확인하십시오.",
-        "UPLOAD_ERROR": "알 수없는 업로드 오류 (설정이 맞습니까?) : {{err}}"
+        "UNKNOWN_ERROR": "동기화하는 동안 알 수없는 오류가 발생했습니다. 콘솔을 확인하십시오."
       },
       "SAFETY_BACKUP": {
         "BTN_DELETE": "삭제하다"
@@ -1041,8 +784,7 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "태그 생성",
-        "EDIT": "태그 편집"
+        "CREATE": "태그 생성"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "태그 \"{{tagName}}\"을 (를) 정말로 삭제 하시겠습니까? 모든 작업에서 제거됩니다. 이 취소 할 수 없습니다."
@@ -1073,17 +815,7 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "기존 작업 \"{{taskTitle}}\"추가",
-        "ADD_ISSUE_TASK": " {{issueType}}의{{issueNr}} 호 추가",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "백로그 하단에 작업 추가",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "목록 맨 아래에 작업 추가",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "백로그 맨 위에 작업 추가",
-        "ADD_TASK_TO_TOP_OF_TODAY": "목록 맨 위에 작업 추가",
-        "CREATE_TASK": "새 할 일 만들기",
-        "EXAMPLE": "예 : \"일부 작업 제목 + projectName #some-tag #some-other-tag 10m / 3h\"",
-        "START": "시작하려면 한 번 더 입력하십시오.",
         "TODAY": "오늘",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "백로그/오늘의 목록에 작업 추가 토글하기'",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "목록 상단 및 하단에 작업 추가 토글",
         "TOMORROW": "내일"
       },
       "ADDITIONAL_INFO": {
@@ -1091,11 +823,9 @@
         "ADD_SUB_TASK": "하위 작업 추가",
         "ATTACHMENTS": "첨부 파일 {{nr}}",
         "DUE": "예정된 날짜",
-        "FROM_PARENT": "(부모님)",
         "LOCAL_ATTACHMENTS": "로컬 첨부 파일",
         "NOTES": "노트",
         "PARENT": "부모의",
-        "REMINDER": "조언",
         "REPEAT": "반복",
         "SCHEDULE_TASK": "작업 예약",
         "SUB_TASKS": "하위 작업 ({{nr}})",
@@ -1115,11 +845,8 @@
         "DELETE_REPEAT_INSTANCE": "반복되는 작업 인스턴스 삭제",
         "DROP_ATTACHMENT": "'{{title}}'에 연결하려면 여기로 드래그하십시오.",
         "EDIT_SCHEDULED": "알림 수정",
-        "EDIT_TAGS": "태그 편집",
-        "EDIT_TASK_TITLE": "제목 수정",
         "FOCUS_SESSION": "포커스 세션 시작",
         "MARK_DONE": "완료로 표시",
-        "MARK_UNDONE": "실행 취소로 표시",
         "MOVE_TO_BACKLOG": "백 로그로 이동",
         "MOVE_TO_OTHER_PROJECT": "다른 프로젝트로 이동",
         "MOVE_TO_REGULAR": "오늘의 목록으로 이동",
@@ -1128,9 +855,7 @@
         "OPEN_ISSUE": "새 브라우저 탭에서 문제 열기",
         "OPEN_TIME": "시간 예측 / 소요 시간 추가",
         "REMOVE_FROM_MY_DAY": "내 날에서 제거",
-        "REPEAT_EDIT": "반복 작업 구성 편집",
         "SCHEDULE": "작업 예약",
-        "SHOW_UPDATES": "업데이트 표시",
         "TOGGLE_ATTACHMENTS": "첨부 파일 표시 / 숨기기",
         "TOGGLE_DETAIL_PANEL": "추가 정보 표시 / 숨기기",
         "TOGGLE_DONE": "완료 / 실행 취소로 표시",
@@ -1157,24 +882,17 @@
         "DONE": "끝난",
         "DUE_TASK": "마감일",
         "DUE_TASKS": "마감일",
-        "FOR_CURRENT": "작업이 완료되었습니다. 그것에 착수하고 싶니?",
-        "FOR_OTHER": "작업이 완료되었습니다. 그것에 착수하고 싶니?",
-        "FROM_PROJECT": "프로젝트에서",
-        "FROM_TAG": "태그에서 : \"{{title}}\"",
         "RESCHEDULE_EDIT": "편집(일정 재조정)",
         "RESCHEDULE_UNTIL_TOMORROW": "내일까지",
         "SNOOZE": "다시 알림",
         "SNOOZE_ALL": "모두 다시 알림",
         "START": "작업 시작",
-        "SWITCH_CONTEXT_START": "상황 전환 및 시작",
         "UNSCHEDULE": "비정기",
         "UNSCHEDULE_ALL": "모두 일정 해제"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "예약 될 때까지 작업을 백 로그로 이동하십시오.",
         "QA_NEXT_MONTH": "다음 달 일정",
         "QA_NEXT_WEEK": "다음 주 일정",
-        "QA_REMOVE_TODAY": "오늘부터 작업 제거",
         "QA_TODAY": "오늘 예약하기",
         "QA_TOMORROW": "내일 일정",
         "REMIND_AT": "에 알림",
@@ -1210,19 +928,16 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "반복 가능한 작업의 경우 짧은 구문을 통해 프로젝트를 할당할 수 없습니다!",
         "CREATED_FOR_PROJECT": "작업 \"{{taskTitle}}\"를 프로젝트 \"{{projectTitle}}\"로 이동했습니다.",
-        "CREATED_FOR_PROJECT_ACTION": "프로젝트로 이동",
         "DELETED": "\"{{title}}\"작업을 삭제했습니다.",
         "FOUND_MOVE_FROM_BACKLOG": "기존 작업 <strong>{{title}}</strong> 을 (를) 현재 작업 목록으로 이동했습니다.",
         "FOUND_MOVE_FROM_OTHER_LIST": " <strong>{{contextTitle}}</strong> 의 작업 <strong>{{title}}</strong> 을 (를) 현재 목록에 추가했습니다.",
         "FOUND_RESTORE_FROM_ARCHIVE": "아카이브의 문제와 관련된 복원 된 작업 <strong>{{title}}</strong> ",
-        "LAST_TAG_DELETION_WARNING": "프로젝트가 아닌 작업의 마지막 태그를 제거하려고합니다. 이것은 허용되지 않습니다!",
         "MOVED_TO_ARCHIVE": " {{nr}} 작업을 보관으로 이동했습니다.",
         "MOVED_TO_PROJECT": "작업 \"{{taskTitle}}\"를 프로젝트 \"{{projectTitle}}\"로 이동했습니다.",
-        "MOVED_TO_PROJECT_ACTION": "프로젝트로 이동",
         "REMINDER_ADDED": "예약 된 작업 \"{{title}}\"",
         "REMINDER_DELETED": "할 일 목록 삭제",
         "REMINDER_UPDATED": "\"{{title}}\"작업에 대한 알림이 업데이트되었습니다.",
-        "TASK_CREATED": "\"{{title}}\"작업 생성"
+        "TASK_CREATED": "\"{{taskTitle}}\"작업 생성"
       },
       "SELECT_OR_CREATE": "작업 선택 또는 생성",
       "SUMMARY_TABLE": {
@@ -1286,7 +1001,6 @@
         "C_YEAR": "연도",
         "DEFAULT_ESTIMATE": "기본 견적",
         "FRIDAY": "금요일",
-        "IS_ADD_TO_BOTTOM": "작업을 목록의 맨 아래로 이동",
         "MONDAY": "월요일",
         "NOTES": "기본 노트",
         "ORDER": "주문",
@@ -1321,6 +1035,7 @@
         "FILTER_BY": "필터링 기준",
         "FILTER_DEFAULT": "필터 없음",
         "FILTER_ESTIMATED_TIME": "예상 시간",
+        "FILTER_NOT_SPECIFIED": "지정되지 않음",
         "FILTER_PROJECT": "프로젝트",
         "FILTER_SCHEDULED_DATE": "예정일",
         "FILTER_TAG": "태그",
@@ -1331,14 +1046,12 @@
         "GROUP_SCHEDULED_DATE": "예정일",
         "GROUP_TAG": "태그",
         "RESET_ALL": "모두 재설정",
-        "SCHEDULED_DEFAULT": "모든 날짜",
         "SCHEDULED_NEXT_MONTH": "다음 달",
         "SCHEDULED_NEXT_WEEK": "다음 주",
         "SCHEDULED_THIS_MONTH": "이달",
         "SCHEDULED_THIS_WEEK": "이번 주",
         "SCHEDULED_TODAY": "오늘",
         "SCHEDULED_TOMORROW": "내일",
-        "SORT_BY": "정렬 기준",
         "SORT_CREATION_DATE": "생성 날짜",
         "SORT_DEFAULT": "기본값",
         "SORT_NAME": "이름",
@@ -1347,9 +1060,7 @@
         "TIME_2HOUR": "> 2 시간",
         "TIME_10MIN": "> 10분",
         "TIME_30MIN": "> 30분",
-        "TIME_DEFAULT": "모든 기간",
-        "TIME_SPENT": "소요 시간",
-        "TITLE": "작업 보기 사용자 지정"
+        "TIME_SPENT": "소요 시간"
       }
     },
     "TIME_TRACKING": {
@@ -1379,7 +1090,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em></em> 생성 및 추적",
-        "IDLE_FOR": "당신은 유휴 상태였습니다.",
         "NOTIFICATION_TITLE": "시간을 추적하세요!",
         "TASK": "태스크",
         "TRACK_TO": "추적 대상 :",
@@ -1391,7 +1101,6 @@
         "DAYS_WORKED": "일한 날짜 :",
         "MONTH_WORKED": "월 근무일 :",
         "REPEATING_TASK": "반복 과제",
-        "RESTORE_TASK_FROM_ARCHIVE": "아카이브에서 작업 복원",
         "TASKS": "할 일 목록",
         "TOTAL_TIME": "총 소요 시간 :",
         "WEEK_NR": "주 {{nr}}",
@@ -1483,26 +1192,20 @@
     "HIDE": "숨기기",
     "ICON_INP_DESCRIPTION": "모든 utf-8 이모티콘도 지원됩니다!",
     "INBOX_PROJECT_TITLE": "받은 편지함",
-    "LOGIN": "로그인",
-    "LOGOUT": "로그 아웃",
     "MINUTES": "{{m}} 분",
     "MOVE_BACKWARD": "뒤로 이동",
     "MOVE_FORWARD": "앞으로 나아가기",
-    "NEXT": "다음",
     "NO_CON": "현재 오프라인 상태입니다. 인터넷에 다시 연결하십시오.",
     "NONE": "없음",
     "OK": "승인",
     "OVERDUE": "기한이 지난",
-    "PREVIOUS": "이전",
     "REMOVE": "삭제",
-    "RESET": "초기화",
     "SAVE": "저장",
     "SUBMIT": "제출하기",
     "TITLE": "제목",
     "TODAY_TAG_TITLE": "오늘",
     "TRACKING_INTERVAL_DESCRIPTION": "이 간격을 밀리초 단위로 사용하여 시간을 추적합니다. 디스크 쓰기를 줄이려면 이 값을 변경할 수 있습니다. 이슈 #2355를 참조하세요.",
     "UNDO": "취소",
-    "UPDATE": "최신 정보",
     "WITHOUT_PROJECT": "프로젝트없이",
     "YESTERDAY": "어제"
   },
@@ -1516,9 +1219,7 @@
     "CALENDARS": {
       "BROWSER_WARNING": "교차 출처 제한 <b>으로 인해 브라우저 버전의 Super Productivity에서는 작동하지 않을 수 있습니다.<br /> 이 기능을 사용하려면 데스크톱 버전</a> 을 <a href=\"https://super-productivity.com/download/\">다운로드하세요!</b>",
       "CAL_PATH": "ICal 소스의 URL",
-      "CAL_PROVIDERS": "캘린더 공급자(실험적 및 선택 사항)",
       "CHECK_UPDATES": "X마다 원격 업데이트 확인",
-      "DEFAULT_PROJECT": "추가된 캘린더 작업의 기본 프로젝트",
       "HELP": "캘린더를 통합하여 알림을 받고 Super Productivity 내에서 작업으로 추가할 수 있습니다. 통합은 iCal 형식을 사용하여 작동합니다. 이 기능을 사용하려면 인터넷이나 파일 시스템을 통해 캘린더에 액세스할 수 있어야 합니다.",
       "SHOW_BANNER_THRESHOLD": "이벤트 전에 알림 X 표시(비활성화하면 비어 있음)"
     },
@@ -1528,7 +1229,6 @@
     },
     "FOCUS_MODE": {
       "HELP": "집중 모드에서는 방해 요소가 없는 화면을 열어 현재 작업에 집중할 수 있도록 도와줍니다.",
-      "L_ALWAYS_OPEN_FOCUS_MODE": "추적 시 항상 초점 모드 열기",
       "L_SKIP_PREPARATION_SCREEN": "준비 화면 건너뛰기(스트레칭 등)",
       "TITLE": "초점 모드"
     },
@@ -1580,7 +1280,6 @@
       "TASK_MOVE_TO_PROJECT": "프로젝트 메뉴로 이동 작업 열기",
       "TASK_OPEN_CONTEXT_MENU": "작업 상황에 맞는 메뉴 열기",
       "TASK_OPEN_ESTIMATION_DIALOG": "견적 / 소요 시간 수정",
-      "TASK_PLAN_FORDAY": "하루 계획",
       "TASK_SCHEDULE": "작업 예약",
       "TASK_SHORTCUTS": "할 일 목록",
       "TASK_SHORTCUTS_INFO": "다음 바로 가기가 현재 선택된 작업 (탭 또는 마우스를 통해 선택)에 적용됩니다.",
@@ -1588,7 +1287,6 @@
       "TASK_TOGGLE_DONE": "완료 여부 토글",
       "TITLE": "키보드 단축키",
       "TOGGLE_BACKLOG": "작업 백 로그 표시 / 숨기기",
-      "TOGGLE_BOOKMARKS": "북마크 바 표시 / 숨기기",
       "TOGGLE_ISSUE_PANEL": "이슈 패널 표시/숨기기",
       "TOGGLE_PLAY": "작업 시작 / 중지",
       "TOGGLE_SIDE_NAV": "사이드 내비게이션 표시 및 초점 / 숨기기",
@@ -1637,15 +1335,11 @@
       "IS_DARK_MODE": "다크 모드",
       "IS_DISABLE_ANIMATIONS": "모든 애니메이션 비활성화",
       "IS_DISABLE_CELEBRATION": "일일 요약에서 축하 비활성화",
-      "USER_PROFILES": "사용자 프로필 활성화 (베타)",
-      "USER_PROFILES_HINT": "각각 별도의 설정, 작업 및 동기화 구성을 가진 다른 사용자 프로필을 생성하고 전환할 수 있습니다. 활성화되면 프로필 관리 버튼이 오른쪽 상단에 나타납니다. 참고: 이 기능을 비활성화하면 UI가 숨겨지지만 프로필 데이터는 유지됩니다 (베타 기능, 보증 없음. 백업이 있는지 확인하십시오).",
-      "IS_HIDE_NAV": "기본 헤더가 올라갈 때까지 탐색을 숨 깁니다 (데스크톱 만 해당).",
       "IS_MINIMIZE_TO_TRAY": "트레이로 최소화 (데스크탑만 해당)",
       "IS_SHOW_TIP_LONGER": "앱 시작 시 생산성 팁 표시좀 더 오래",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "트레이/상태 메뉴에 현재 카운트다운 표시(데스크톱 Mac만 해당)",
       "IS_TRAY_SHOW_CURRENT_TASK": "트레이 / 상태 메뉴에 현재 작업 표시 (데스크톱 전용)",
       "IS_TURN_OFF_MARKDOWN": "노트에 대한 마크 다운 파싱 끄기",
-      "IS_USE_MINIMAL_SIDE_NAV": "최소한의 탐색 모음 사용(아이콘만 표시)",
       "START_OF_NEXT_DAY": "다음 날 시작 시간",
       "START_OF_NEXT_DAY_HINT": "다음 날을 계산하려는 시점(시간 단위)부터 시작됩니다. 기본값은 0인 자정입니다.",
       "TASK_NOTES_TPL": "작업 설명 템플릿",
@@ -1655,16 +1349,7 @@
       "BREAK_DURATION": "짧은 휴식 시간",
       "CYCLES_BEFORE_LONGER_BREAK": "X 작업 세션 후에 더 긴 휴식을 시작하십시오.",
       "DURATION": "작업 세션의 지속 기간",
-      "HELP": "<p>포모도로 타이머는 몇 가지 설정을 통해 구성 할 수 있습니다. 모든 작업 세션의 지속 시간, 정상 휴식 기간, 긴 휴식 시간이 시작되기 전에 실행할 작업 세션 수 및이 긴 휴식 기간.</p> <p>당신은 당신의 pomodoro 휴식 시간 동안 산만을 표시하고 싶다면 설정할 수 있습니다.</p> <p>\"Pomodoro break on pomodoro break\"설정은 작업에 소요되는 작업 시간으로 휴식 시간을 추적합니다. </p> <p>활성 작업이 없을 때 pomodoro 세션을 일시 중지하면 작업을 일시 중지 할 때 pomodoro 세션도 일시 중지됩니다.</p>",
-      "IS_ENABLED": "포모도로 타이머 사용",
-      "IS_MANUAL_CONTINUE": "수동으로 다음 pomodoro 세션 시작 확인",
-      "IS_MANUAL_CONTINUE_BREAK": "다음 휴식 시간 시작 수동 확인",
-      "IS_PLAY_SOUND": "세션이 끝나면 소리를냅니다.",
-      "IS_PLAY_SOUND_AFTER_BREAK": "휴식이 끝나면 소리를 내십시오.",
-      "IS_PLAY_TICK": "매초마다 틱 소리 재생",
-      "IS_STOP_TRACKING_ON_BREAK": "휴식 시간에 작업 중지 시간 추적",
-      "LONGER_BREAK_DURATION": "긴 휴식 시간",
-      "TITLE": "포모도로 타이머"
+      "LONGER_BREAK_DURATION": "긴 휴식 시간"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "실제 알림 앞에 배너 X 표시",
@@ -1680,9 +1365,7 @@
       "L_WORK_END": "근무일 종료",
       "L_WORK_START": "근무일 시작",
       "LUNCH_BREAK_START_END_DESCRIPTION": "예: 13:00",
-      "MONTH": "달",
       "TITLE": "타임 라인",
-      "WEEK": "주",
       "WORK_START_END_DESCRIPTION": "예 : 17:00"
     },
     "SHORT_SYNTAX": {
@@ -1760,14 +1443,12 @@
   },
   "GLOBAL_SNACK": {
     "COPY_TO_CLIPPBOARD": "클립 보드에 복사 됨",
-    "ERR_COMPRESSION": "압축 인터페이스 오류",
     "FILE_DOWNLOADED": "{{fileName}} 다운로드됨",
     "FILE_DOWNLOADED_BTN": "폴더 열기",
     "NAVIGATE_TO_TASK_ERR": "작업에 집중할 수 없습니다. 삭제하셨나요?",
     "PERSISTENCE_DISALLOWED": "데이터는 영구적으로 유지되지 않습니다. 이로 인해 데이터가 손실 될 수 있습니다 !!",
     "PERSISTENCE_ERROR": "데이터 유지 요청 시 오류: {{err}}",
-    "RUNNING_X": "\"{{str}}\"실행 중.",
-    "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "{{keyCombo}} 을 눌렀지만 북마크 열기 바로 가기는 프로젝트 컨텍스트에서만 사용할 수 있습니다."
+    "RUNNING_X": "\"{{str}}\"실행 중."
   },
   "GPB": {
     "ASSETS": "자산로드 중 ...",
@@ -1804,24 +1485,14 @@
       "SYNC": "방법: 동기화 구성"
     },
     "METRICS": "측정 항목",
-    "NO_PROJECT_INFO": "사용 가능한 프로젝트가 없습니다. \"프로젝트 만들기\" 버튼을 클릭하여 새 프로젝트를 만들 수 있습니다.",
-    "NO_TAG_INFO": "현재 태그가 없습니다. 작업을 추가하거나 편집할 때 `#yourTagName`을 입력하여 태그를 추가할 수 있습니다.",
-    "NOTES": "노트",
-    "NOTES_PANEL_INFO": "메모는 일정 및 일반 작업 목록 보기에서만 표시할 수 있습니다.",
     "PLANNER": "플래너",
-    "PROCRASTINATE": "미루다",
     "PROJECT_MENU": "프로젝트 메뉴",
-    "PROJECT_SETTINGS": "프로젝트 설정",
     "PROJECTS": "프로젝트",
     "QUICK_HISTORY": "빠른 기록",
     "SCHEDULE": "일정",
     "SEARCH": "검색",
     "SETTINGS": "설정",
-    "SHOW_SEARCH_BAR": "검색창 표시",
     "TAGS": "태그",
-    "TASK_LIST": "작업 목록",
-    "TASKS": "할 일 목록",
-    "TOGGLE_SHOW_BOOKMARKS": "북마크 표시 / 숨기기",
     "TOGGLE_SHOW_ISSUE_PANEL": "이슈 패널 표시/숨기기",
     "TOGGLE_SHOW_NOTES": "프로젝트 노트 표시 / 숨기기",
     "TOGGLE_TRACK_TIME": "추적 시작 / 중지 시간",
@@ -1882,14 +1553,12 @@
   },
   "PS": {
     "GLOBAL_SETTINGS": "전체 설정",
-    "ISSUE_INTEGRATION": "이슈 통합",
     "PRIVACY_POLICY": "개인 정책",
     "PRODUCTIVITY_HELPER": "생산성 도우미",
     "PROJECT_SETTINGS": "프로젝트 별 설정",
     "PROVIDE_FEEDBACK": "피드백을 제공하다",
     "SYNC_EXPORT": "동기화 및 내보내기",
-    "TAG_SETTINGS": "태그 별 설정",
-    "TOGGLE_DARK_MODE": "어두운 모드 전환"
+    "TAG_SETTINGS": "태그 별 설정"
   },
   "SCHEDULE": {
     "NEXT": "다음",
@@ -1898,26 +1567,7 @@
     "NO_SCHEDULED_TITLE": "하루 동안 예약된 작업",
     "REPEATED_TASKS": "반복 작업",
     "SCHEDULED_TASKS": "예약된 작업",
-    "SCHEDULED_TASKS_WITH_TIME": "미리 알림이 있는 예약된 작업",
-    "START_TASK": "지금 작업을 시작하고 알림 제거"
-  },
-  "THEMES": {
-    "amber": "호박색",
-    "blue": "푸른",
-    "blue-grey": "청회색",
-    "cyan": "시안 색",
-    "deep-orange": "진한 오렌지",
-    "deep-purple": "딥 퍼플",
-    "green": "녹색",
-    "indigo": "남빛",
-    "light-blue": "하늘색",
-    "light-green": "연한 초록색",
-    "lime": "라임",
-    "pink": "담홍색",
-    "purple": "자주색",
-    "SELECT_THEME": "주제 선택",
-    "teal": "물오리",
-    "yellow": "노랑"
+    "SCHEDULED_TASKS_WITH_TIME": "미리 알림이 있는 예약된 작업"
   },
   "USER_PROFILES": {
     "ACTIVE": "활성",
@@ -1931,21 +1581,18 @@
     "EXISTING_PROFILES": "기존 프로필",
     "EXPORT_PROFILE": "프로필 내보내기",
     "MANAGE_PROFILES": "프로필 관리...",
-    "OPEN_PROFILES_FOLDER": "프로필 폴더 열기",
     "PROFILE_NAME": "프로필 이름",
     "PROFILE_NAME_PLACEHOLDER": "예: 직장, 개인",
     "RENAME": "이름 변경",
     "SAVE": "저장"
   },
   "V": {
-    "E_1TO10": "1에서 10 사이의 값을 입력하십시오.",
     "E_DATETIME": "입력 된 값은 datetime이 아닙니다!",
     "E_DURATION": "유효한 기간을 입력하세요(예: 1시간).",
     "E_MAX": " {{val}}보다 크지 않아야합니다.",
     "E_MAX_LENGTH": "최대 {{val}} 자 여야합니다.",
     "E_MIN": " {{val}}보다 작아야합니다.",
     "E_MIN_LENGTH": "최소 {{val}} 자 이상이어야합니다.",
-    "E_PATTERN": "잘못된 입력",
     "E_REQUIRED": "이 입력란은 필수 항목입니다."
   },
   "WW": {
@@ -1956,10 +1603,7 @@
     "DONE_TASKS_IN_ARCHIVE": "현재 여기에는 완료된 작업이 없지만 이미 보관된 작업이 있습니다.",
     "ESTIMATE_REMAINING": "예상 남은 시간 :",
     "FINISH_DAY": "피니시 데이",
-    "FINISH_DAY_FOR_PROJECT": "이 프로젝트의 마감일",
-    "FINISH_DAY_FOR_TAG": "이 태그의 마감일",
     "FINISH_DAY_TOOLTIP": "하루를 평가하고, 완료된 모든 작업을 아카이브로 옮기거나(선택 사항) 다음 날을 계획하세요.",
-    "HELP_PROCRASTINATION": "내가 미루는 걸 도와주세요!",
     "MOVE_DONE_TO_ARCHIVE": "보관으로 이동 완료",
     "NO_DONE_TASKS": "현재 완료된 작업이 없습니다",
     "NO_PLANNED_TASK_ALL_DONE": "모든 작업 완료",

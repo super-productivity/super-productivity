@@ -1,0 +1,31 @@
+
+### Bug Fixes
+
+* add retry for rate limiting
+* **android:** make schedule dialog scrollable on small screens (#5741)
+* **docker:** use Debian-based nginx for ARM64 QEMU compatibility
+* **electron:** use includes() instead of in operator for hostname check
+* **focus-mode:** add start button in banner after session completes (#5737)
+* **focus-mode:** fix pomodoro long break timing and add ticking sound option (#5753)
+* **focus-mode:** hide dismiss button in banner-only mode (#5737)
+* **focus-mode:** preserve existing notes when opening notes panel (#5752)
+* **focus-mode:** show start button when break time is up in banner mode
+* **i18n:** use correct variable in TASK_CREATED translation (#5743)
+* **linear:** show status name property
+* remove deprecated toPromise calls
+* **repeat:** schedule tasks for correct day and remove from Today when needed (#5594)
+* **sync:** show user-friendly error for Flatpak/Snap permission issues (196f84b), closes #4078
+* update workspace selection api key
+### Features
+
+* **2356:** add clickup support
+* Add generic subtask support for issue providers, implement for ClickUp
+* **android:** add background time tracking via foreground service
+* **android:** add better notifications and permanent notification for focus mode
+* **focus-mode:** add icon buttons for banner and sync session with tracking (#5753)
+* **focus-mode:** add new settings and fix pomodoro dialog (#5753)
+* **focus-mode:** add task existence check before resuming tracking (#5737)
+* **focus-mode:** sync duration when Pomodoro settings change (#5753)
+* Introduce typia for ClickUp API runtime type validation, refactor ClickUp models, and simplify task title display.
+* refactor ClickUp error logging to use IssueLog
+* update ClickUp issue content comments

@@ -1,6 +1,9 @@
 package com.superproductivity.superproductivity
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
@@ -10,9 +13,12 @@ import android.view.View
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.addCallback
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
+import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
@@ -33,6 +39,16 @@ class CapacitorMainActivity : BridgeActivity() {
 
     private val storageHelper =
         SimpleStorageHelper(this) // for scoped storage permission management on Android 10+
+
+    private val timerCompleteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == FocusModeForegroundService.ACTION_TIMER_COMPLETE) {
+                val isBreak = intent.getBooleanExtra(FocusModeForegroundService.EXTRA_IS_BREAK, false)
+                Log.d("SP_FOCUS", "Timer complete broadcast received, isBreak=$isBreak")
+                callJSInterfaceFunctionIfExists("next", "onFocusModeTimerComplete$", isBreak.toString())
+            }
+        }
+    }
 
     override fun load() {
         val result = WebViewCompatibilityChecker.evaluate(this)
@@ -123,7 +139,12 @@ class CapacitorMainActivity : BridgeActivity() {
             }
         }
 
-        
+        // Register broadcast receiver for focus mode timer completion
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            timerCompleteReceiver,
+            IntentFilter(FocusModeForegroundService.ACTION_TIMER_COMPLETE)
+        )
+
         // Handle initial intent (cold start)
         handleIntent(intent)
     }
@@ -144,6 +165,43 @@ class CapacitorMainActivity : BridgeActivity() {
 
     private fun handleIntent(intent: Intent) {
         Log.d("SP_SHARE", "handleIntent action: ${intent.action} type: ${intent.type}")
+
+        // Handle tracking notification actions
+        when (intent.action) {
+            TrackingForegroundService.ACTION_PAUSE -> {
+                Log.d("SP_TRACKING", "Pause action received from notification")
+                callJSInterfaceFunctionIfExists("next", "onPauseTracking$")
+                return
+            }
+            TrackingForegroundService.ACTION_DONE -> {
+                Log.d("SP_TRACKING", "Done action received from notification")
+                callJSInterfaceFunctionIfExists("next", "onMarkTaskDone$")
+                return
+            }
+            // Handle focus mode notification actions
+            FocusModeForegroundService.ACTION_PAUSE -> {
+                Log.d("SP_FOCUS", "Pause action received from focus mode notification")
+                callJSInterfaceFunctionIfExists("next", "onFocusPause$")
+                return
+            }
+            FocusModeForegroundService.ACTION_RESUME -> {
+                Log.d("SP_FOCUS", "Resume action received from focus mode notification")
+                callJSInterfaceFunctionIfExists("next", "onFocusResume$")
+                return
+            }
+            FocusModeForegroundService.ACTION_SKIP -> {
+                Log.d("SP_FOCUS", "Skip action received from focus mode notification")
+                callJSInterfaceFunctionIfExists("next", "onFocusSkip$")
+                return
+            }
+            FocusModeForegroundService.ACTION_COMPLETE -> {
+                Log.d("SP_FOCUS", "Complete action received from focus mode notification")
+                callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
+                return
+            }
+        }
+
+        // Handle share intent
         if (Intent.ACTION_SEND == intent.action && intent.type != null) {
             if (intent.type?.startsWith("text/") == true) {
                 val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -212,6 +270,11 @@ class CapacitorMainActivity : BridgeActivity() {
         javaScriptInterface.callJavaScriptFunction("if($fullObjectPath && $fnFullName)$fnFullName($fnParam)")
     }
 
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(timerCompleteReceiver)
+    }
 
     companion object {
         const val WINDOW_INTERFACE_PROPERTY: String = "SUPAndroid"

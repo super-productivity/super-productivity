@@ -323,6 +323,116 @@ export const getCITimeoutMultiplier = (): number => {
 };
 
 /**
+ * Disable a plugin with robust verification
+ */
+export const disablePluginWithVerification = async (
+  page: Page,
+  pluginName: string,
+  timeout: number = 10000,
+): Promise<boolean> => {
+  const startTime = Date.now();
+
+  // First, verify the plugin card exists and is enabled
+  const pluginCardResult = await page
+    .waitForFunction(
+      (name) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const targetCard = cards.find((card) => {
+          const title = card.querySelector('mat-card-title')?.textContent || '';
+          return title.includes(name);
+        });
+        return !!targetCard;
+      },
+      pluginName,
+      { timeout: timeout / 2 },
+    )
+    .catch(() => null);
+
+  if (!pluginCardResult) {
+    console.error(`[Plugin Test] Plugin card not found for: ${pluginName}`);
+    return false;
+  }
+
+  // Check current state and click to disable if needed
+  const disableResult = await page.evaluate((name) => {
+    const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+    const targetCard = cards.find((card) => {
+      const title = card.querySelector('mat-card-title')?.textContent || '';
+      return title.includes(name);
+    });
+
+    if (!targetCard) {
+      return {
+        success: false,
+        error: 'Card not found',
+        wasEnabled: false,
+        clicked: false,
+      };
+    }
+
+    const toggle = targetCard.querySelector(
+      'mat-slide-toggle button[role="switch"]',
+    ) as HTMLButtonElement;
+
+    if (!toggle) {
+      return {
+        success: false,
+        error: 'Toggle not found',
+        wasEnabled: false,
+        clicked: false,
+      };
+    }
+
+    const wasEnabled = toggle.getAttribute('aria-checked') === 'true';
+    if (wasEnabled) {
+      toggle.click();
+      return { success: true, wasEnabled, clicked: true };
+    }
+
+    // Already disabled
+    return { success: true, wasEnabled: false, clicked: false };
+  }, pluginName);
+
+  if (!disableResult.success) {
+    console.error(`[Plugin Test] Failed to disable plugin: ${disableResult.error}`);
+    return false;
+  }
+
+  // If already disabled, no need to wait
+  if (!disableResult.clicked) {
+    return true;
+  }
+
+  // Wait for the toggle state to update to disabled
+  const remainingTimeout = Math.max(5000, timeout - (Date.now() - startTime));
+  try {
+    await page.waitForFunction(
+      (name) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const targetCard = cards.find((card) => {
+          const title = card.querySelector('mat-card-title')?.textContent || '';
+          return title.includes(name);
+        });
+
+        const toggle = targetCard?.querySelector(
+          'mat-slide-toggle button[role="switch"]',
+        ) as HTMLButtonElement;
+
+        return toggle?.getAttribute('aria-checked') === 'false';
+      },
+      pluginName,
+      { timeout: remainingTimeout },
+    );
+    return true;
+  } catch (error) {
+    console.error(
+      `[Plugin Test] Timeout waiting for plugin to disable: ${error.message}`,
+    );
+    return false;
+  }
+};
+
+/**
  * Robust element clicking with multiple selector fallbacks
  */
 export const robustClick = async (

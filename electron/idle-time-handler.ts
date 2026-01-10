@@ -63,7 +63,7 @@ export class IdleTimeHandler {
       gnomeShellSession,
     };
 
-    log.info('Environment detection:', environment);
+    log.debug('Environment detection:', environment);
     return environment;
   }
 
@@ -138,22 +138,22 @@ export class IdleTimeHandler {
   }
 
   private async _determineWorkingMethod(): Promise<IdleDetectionMethod> {
-    log.info('Determining idle detection method...');
+    log.debug('Determining idle detection method...');
 
     if (!this._environment.isWayland) {
-      log.info('Using powerMonitor for non-Wayland session');
+      log.debug('Using powerMonitor for non-Wayland session');
       return 'powerMonitor';
     }
 
     for (const candidate of this._buildWaylandCandidates()) {
-      log.info(`Testing ${candidate.name}...`);
+      log.debug(`Testing ${candidate.name}...`);
       try {
         const works = await candidate.test();
         if (works) {
           log.info(`Selected ${candidate.name} for idle detection`);
           return candidate.name;
         }
-        log.info(`${candidate.name} test failed`);
+        log.debug(`${candidate.name} test failed`);
       } catch (error) {
         log.warn(`${candidate.name} test error`, error);
       }
@@ -177,7 +177,7 @@ export class IdleTimeHandler {
             return idleTime !== null;
           } catch (error) {
             if (this._environment.isSnap) {
-              log.info('GNOME DBus test failed in snap environment', error);
+              log.debug('GNOME DBus test failed in snap environment', error);
             }
             return false;
           }
@@ -198,7 +198,7 @@ export class IdleTimeHandler {
     });
 
     if (this._environment.isSnap) {
-      log.info('Skipping loginctl in snap environment');
+      log.debug('Skipping loginctl in snap environment');
     } else {
       candidates.push({
         name: 'loginctl',

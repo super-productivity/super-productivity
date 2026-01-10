@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "請檢查並決定該怎麼做。",
-      "SYNC_CONFLICT_TITLE": "發生同步衝突"
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "如果開啟，應用程式將會在背景運行以允許同步",
-      "NO_ACTIVE_TASKS": "沒有活動任務",
-      "SYNCING": "正在同步中"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "忽略",
@@ -20,14 +9,11 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "更改背景"
     },
-    "UPDATE_MAIN_MODEL": "Super Productivity 有了重大更新！您的資料需要進行一些遷移。請注意，這會使您的資料與該應用的舊版本不相容。",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "未選擇模型更新。請注意，如果您不想執行模型升級，則必須降級到上一版本。",
     "UPDATE_WEB_APP": "有新版本可用。下載新版本？"
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "顯示問題面板",
-    "SHOW_NOTES": "顯示項目說明",
-    "SHOW_TASK_VIEW_CUSTOMIZER_PANEL": "顯示篩選器/分組/排序面板"
+    "SHOW_NOTES": "顯示項目說明"
   },
   "BL": {
     "NO_TASKS": "目前您的待辦事項中沒有任務"
@@ -40,11 +26,7 @@
     "RESTORE_STRAY_BACKUP": "在上次同步期間，可能有一些錯誤。您要還原上一個備份嗎？"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "今天稍晚",
-    "NEXT_WEEK": "下周",
-    "PLACEHOLDER": "請選擇一個日期",
-    "PRESS_ENTER_AGAIN": "再次按 Enter 以儲存",
-    "TOMORROW": "明天"
+    "PRESS_ENTER_AGAIN": "再次按 Enter 以儲存"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "TITLE": "從 Unsplash 選擇背景圖片",
@@ -59,7 +41,6 @@
         "ADD_ATTACHMENT": "添加附件",
         "EDIT_ATTACHMENT": "編輯附件",
         "LABELS": {
-          "FILE": "檔案路徑",
           "IMG": "圖片",
           "LINK": "網址"
         },
@@ -75,7 +56,6 @@
       "DEFAULT": {
         "DONE": "完畢",
         "EISENHAUER_MATRIX": "艾森豪威爾矩陣",
-        "IMPORTANT": "重要的",
         "IN_PROGRESS": "進行中",
         "KANBAN": "Kanban",
         "NOT_URGENT_IMPORTANT": "不緊急且不重要",
@@ -112,9 +92,7 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup CalDav for Project"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Category to filter issues for (leave empty for none)",
         "CALDAV_PASSWORD": "Your CalDav password",
@@ -124,28 +102,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "Automatically complete CalDav todos on task completion"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud in the webapp, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "ATTACHMENTS": "Attachments",
-        "CHANGED": "changed",
-        "COMMENTS": "Comments",
-        "COMPONENTS": "Components",
-        "DESCRIPTION": "Description",
-        "LABELS": "Categories",
-        "LIST_OF_CHANGES": "List of changes",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "ON": "on",
-        "RELATED": "Related",
-        "STATUS": "Status",
-        "STORY_POINTS": "Story Points",
-        "SUB_TASKS": "Subtasks",
-        "SUMMARY": "Summary",
-        "WORKLOG": "Worklog",
-        "WRITE_A_COMMENT": "Write a comment"
+        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud in the webapp, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Calendar \"{{calendarName}}\" not found",
@@ -156,7 +113,6 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Add as Task",
-        "FOCUS_TASK": "Focus Task",
         "TXT": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other events are due)",
         "TXT_PAST": "<strong>{{title}}</strong> started at <strong>{{start}}</strong>!",
@@ -194,10 +150,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox：無法從身份驗證代碼生成存取權杖",
-        "ACCESS_TOKEN_GENERATED": "Dropbox：根據驗證碼生成的存取權杖",
-        "AUTH_ERROR": "Dropbox：提供了無效的存取權杖",
-        "AUTH_ERROR_ACTION": "更改權杖",
         "OFFLINE": "Dropbox：已離線，無法同步",
         "SYNC_ERROR": "Dropbox：同步時發生錯誤",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox：無法產生 PKCE 挑戰。"
@@ -217,33 +169,24 @@
         "TO_FOCUS_OVERLAY": "To Focus Overlay"
       },
       "BACK_TO_PLANNING": "Back to Planning",
-      "CONGRATS": "Congrats for completing this session!",
       "COUNTDOWN": "Countdown",
       "COUNTDOWN_HINT": "Focus until the clock hits zero",
       "FINISH_TASK_AND_SELECT_NEXT": "Finish task and select next",
       "FLOWTIME": "Flowtime",
       "FLOWTIME_HINT": "Flexible pacing without strict timers",
-      "FOR_TASK": "for task",
       "GET_READY": "Get ready for your focus session!",
-      "GO_TO_PROCRASTINATION": "Get help, when procrastinating",
       "GOGOGO": "Go, go, go!!!",
-      "NEXT": "Next",
       "ON": "on",
       "OPEN_ISSUE_IN_BROWSER": "Open issue in Browser",
       "POMODORO": "Pomodoro",
       "POMODORO_HINT": "Structured sprints with planned breaks",
-      "POMODORO_BACK": "Back",
-      "POMODORO_DISABLE": "Disable Pomodoro",
-      "POMODORO_INFO": "Focus sessions cannot be used together with the pomodoro timer enabled.",
       "PREP_GET_MENTALLY_READY": "Get mentally ready to be focused and productive",
       "PREP_SIT_UPRIGHT": "Sit (or stand) upright",
       "PREP_STRETCH": "Do some mild stretching",
-      "SELECT_ANOTHER_TASK": "Select another Task",
       "SELECT_TASK": "Select Task to focus on",
       "SELECT_MODE": "Choose your focus mode",
       "SESSION_COMPLETED": "Focus Session Completed!",
       "POMODORO_SESSION_COMPLETED": "Pomodoro Session Completed!",
-      "SET_FOCUS_SESSION_DURATION": "Set Focus Session Duration",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Show/hide task notes and attachments",
       "START_FOCUS_SESSION": "Start Focus Session",
       "START_NEXT_FOCUS_SESSION": "Start next Focus Session",
@@ -252,20 +195,14 @@
       "SKIP_BREAK": "Skip Break",
       "CONTINUE_TO_NEXT_SESSION": "Continue to next Session",
       "FOCUS_TIME_TOOLTIP": "Focus time",
-      "CURRENT_SESSION_TIME_TOOLTIP": "Current session time",
-      "COMPLETE_SESSION": "Complete Session",
-      "CONTINUE_SESSION": "Continue Session",
       "LONG_BREAK": "Long Break",
       "SHORT_BREAK": "Short Break",
       "LONG_BREAK_TITLE": "Long Break - Cycle {{cycle}}",
       "SHORT_BREAK_TITLE": "Short Break - Cycle {{cycle}}"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup Gitea for Project"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
-        "FILTER_USER": "Username (e.g. to filter out changes by yourself)",
         "HOST": "Host (e.g.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Username or Organization name/project",
         "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
@@ -276,12 +213,10 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and import all open issues.</p><p>To get by usage limits and to access you can provide a an access token.",
-        "TITLE": "Gitea"
+        "HELP": "<p>Here you can configure SuperProductivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and import all open issues.</p><p>To get by usage limits and to access you can provide a an access token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
-        "AT": "at",
         "DESCRIPTION": "Description",
         "LABELS": "Labels",
         "MARK_AS_CHECKED": "Mark updates as checked",
@@ -290,14 +225,10 @@
         "SUMMARY": "紀要",
         "WRITE_A_COMMENT": "寫評論"
       },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: Unknown error {{statusCode}} {{errorMsg}}. Api Rate limit exceeded?"
-      }
+      "S": {}
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup GitHub for Project"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "FILTER_USER": "Username (e.g. to filter out changes by yourself)",
         "INVALID_TOKEN_MESSAGE": "Not a valid GitHub token. It must start with \"ghp_\".",
@@ -306,8 +237,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p><p>To get by usage limits and to access you can provide a an access token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>More info about its scopes can be found here</a>.",
-        "TITLE": "GitHub"
+        "HELP": "<p>Here you can configure SuperProductivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p><p>To get by usage limits and to access you can provide a an access token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>More info about its scopes can be found here</a>."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "受讓人",
@@ -328,9 +258,7 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup GitLab for Project"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
         "T_ALREADY_TRACKED": "已追蹤",
@@ -370,8 +298,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p>",
-        "TITLE": "GitLab"
+        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "代理人",
@@ -403,20 +330,14 @@
         "ATTACHMENTS": "Attachments",
         "AUTHOR": "Author",
         "CATEGORY": "Category",
-        "CHANGED": "changed",
-        "COMMENTS": "Comments",
         "COMPONENTS": "Components",
         "DESCRIPTION": "Description",
-        "DONE_RATIO": "Done Ratio",
         "DUE_DATE": "Due Date",
         "LABELS": "Labels",
         "LAST_COMMENT": "Last comment",
-        "LIST_OF_CHANGES": "List of changes",
         "LOAD_ALL_COMMENTS": "Load all {{nr}} comments",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Load description & all comments",
         "LOCATION": "Location",
         "MARK_AS_CHECKED": "Mark updates as checked",
-        "ON": "on",
         "PRIORITY": "Priority",
         "RELATED": "Related",
         "START": "Start",
@@ -427,8 +348,7 @@
         "TIME_SPENT": "Time Spent",
         "TYPE": "Type",
         "VERSION": "Version",
-        "WORKLOG": "Worklog",
-        "WRITE_A_COMMENT": "Write a comment"
+        "WORKLOG": "Worklog"
       },
       "S": {
         "ERR_GENERIC": "{{issueProviderName}} Error: {{errTxt}}",
@@ -436,13 +356,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Not properly configured",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Imported {{nr}} new {{issuesStr}}",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Imported {{issueStr}} \"{{issueTitle}}\"",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\" seems to be deleted or closed",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}：無需更新",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Updated data for {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: Tasks with missing {{issueStr}} data found. Reloading.",
-        "NEW_COMMENT": "{{issueProviderName}}: New comment for \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}"
       }
@@ -476,8 +392,7 @@
         "CURRENT_ASSIGNEE": "Current Assignee:",
         "CURRENT_STATUS": "目前狀態：",
         "TASK_NAME": "任務名稱：",
-        "TITLE": "Jira：更新狀態",
-        "UPDATE_STATUS": "更新狀態"
+        "TITLE": "Jira：更新狀態"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -512,8 +427,7 @@
         "HOST": "Host (e.g.: http://my-host.de:1234)",
         "PASSWORD": "令牌/密碼",
         "USE_PAT": "Use Personal Access Token instead (LEGACY)",
-        "USER_NAME": "Email / Username",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)"
+        "USER_NAME": "Email / Username"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Advanced Config",
@@ -555,23 +469,12 @@
         "EXTENSION_NOT_LOADED": "Super Productivity Extension not loaded. Reloading the page might help",
         "INSUFFICIENT_SETTINGS": "Insufficient Settings provided for Jira",
         "INVALID_RESPONSE": "Jira: Response contained invalid data",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira: \"{{issueText}}\" already up to date",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira: Updated data for \"{{issueText}}\"",
-        "MISSING_ISSUE_DATA": "Jira: Tasks with missing issue data found. Reloading.",
         "NO_AUTO_IMPORT_JQL": "Jira: No search query defined for auto import",
         "NO_VALID_TRANSITION": "Jira: No valid transition configured",
         "TIMED_OUT": "Jira: Request timed out",
         "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them",
-        "UNABLE_TO_REASSIGN": "Jira: Unable to reassign ticket to yourself, because you didn't specify a username. Please visit the settings."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "Credentials",
-        "DONE": "You are now done.",
-        "LOGIN_SUCCESS": "Login successful!",
-        "TEST_CREDENTIALS": "Test Credentials",
-        "WELCOME_USER": "Welcome {{user}}!"
+        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
       }
     },
     "MARKDOWN_PASTE": {
@@ -583,9 +486,7 @@
       "DIALOG_TITLE": "Pasted Markdown List detected!"
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "已完成！"
-      },
+      "BANNER": {},
       "CMP": {
         "AVG_BREAKS_PER_DAY": "平均休息次數",
         "AVG_TASKS_PER_DAY_WORKED": "平均完成任務數",
@@ -596,7 +497,6 @@
         "DAYS_WORKED": "持續天數",
         "GLOBAL_METRICS": "Global Metrics",
         "IMPROVEMENT_SELECTION_COUNT": "選擇積極因數的次數",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "情緒和效率的時間變化",
         "NO_ADDITIONAL_DATA_YET": "尚未收集其他資料，完成每日任務後通過添加\"評估\"來執行此操作。",
         "OBSTRUCTION_SELECTION_COUNT": "選擇消極因數的次數",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Click Counters over time",
@@ -607,30 +507,13 @@
         "TIME_SPENT": "花費時間"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "為明天添加建議",
-        "DISABLE_REPEAT_EVERY_DAY": "停用每日重複",
-        "ENABLE_REPEAT_EVERY_DAY": "每天重複",
-        "HELP_H1": "我為什麼要在乎？",
-        "HELP_LINK_TXT": "轉到指標部分",
-        "HELP_P1": "花時間進行自我評估！此處的答案已儲存，併為您提供有關如何在指標部分工作的一些統計資料。此外，對明天的建議將在第二天出現在您的任務列表上方。",
-        "HELP_P2": "這不僅僅是為了計算精確的指標，或是提高效率，而是為了改善您對工作的看法。評估日常生活中的自己的不足可能會對進步有所幫助。對它的清晰認識有助於更好地掌握這些並改善你的能力。",
-        "IMPROVEMENTS": "什麼提高了你的效率生產力？",
-        "IMPROVEMENTS_TOMORROW": "你能做些什麼來讓明天更高效？",
-        "MOOD": "你覺得怎麼樣？",
-        "MOOD_HINT": "1：太可怕了 - 10：太棒了",
         "NOTES": "明天的注意事項",
-        "OBSTRUCTIONS": "是什麼阻礙了你的生產力？",
-        "PRODUCTIVITY": "你的工作效率如何？",
-        "PRODUCTIVITY_HINT": "1：幾乎未開始工作 - 10：非常有效率"
+        "PRODUCTIVITY": "你的工作效率如何？"
       },
-      "S": {
-        "SAVE_METRIC": "評估已儲存"
-      }
+      "S": {}
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "請輸入提醒的內容..."
-      },
+      "D_ADD": {},
       "D_FULLSCREEN": {
         "VIEW_PARSED": "View as parsed (non editable) markdown",
         "VIEW_SPLIT": "View parsed and unparsed markdown in split view",
@@ -661,9 +544,7 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "Select issue to load available transitions",
         "TRANSITION": "Transition Handling"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup OpenProject for Project"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Activity",
         "CURRENTLY_LOGGED": "Currently logged time: ",
@@ -689,8 +570,7 @@
         "SCOPE_CREATED": "Created by me"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open OpenProject work packages. Please Note that for this to work in the browser you need to probably configure CORS for your OpenProject server, to allow access from app.super-productivity.com</p>",
-        "TITLE": "OpenProject"
+        "HELP": "<p>Here you can configure SuperProductivity to list open OpenProject work packages. Please Note that for this to work in the browser you need to probably configure CORS for your OpenProject server, to allow access from app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -718,9 +598,7 @@
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "ADD_TO_TODAY": "添加到今天",
-          "RE_PLAN_ALL": "Reschedule all",
-          "TITLE": "將計劃任務添加到今天"
+          "RE_PLAN_ALL": "Reschedule all"
         }
       },
       "EDIT_REPEATED_TASK": "Edit repeated task '{{taskName}}'",
@@ -732,83 +610,15 @@
         "REMOVED_PLAN_DATE": "已移除任務 '{{taskTitle}}' 的計劃日期",
         "TASK_ALREADY_PLANNED": "Task is already planned for {{date}}",
         "TASK_PLANNED_FOR": "任務計劃於 {{date}}"
-      },
-      "TASK_DRAWER": "Task Drawer"
+      }
     },
     "POMODORO": {
-      "BACK_TO_WORK": "繼續加油！",
-      "BREAK_IS_DONE": "休息已完成！",
-      "ENJOY_YOURSELF": "放鬆一會再繼續吧！",
-      "FINISH_SESSION_X": "您已成功完成會話 {{nr}}！",
-      "NOTIFICATION": {
-        "BREAK_TIME": "Pomodoro: Time for break {{nr}}!",
-        "BREAK_X_START": "番茄鐘：休息 {{nr}} 開始了！",
-        "NO_TASKS": "You need to add tasks before the Pomodoro timer can start.",
-        "SESSION_X_START": "番茄鐘：會話 {{nr}} 開始了！"
-      },
-      "S": {
-        "RESET": "Reset to first Pomodoro Session",
-        "SESSION_SKIP": "Skip to end of current Pomodoro Session",
-        "SESSION_X_START": "番茄鐘：會話 {{nr}} 開始了！"
-      },
-      "SKIP_BREAK": "跳過休息",
-      "START_BREAK": "Start break"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "Back to work!",
-      "COMP": {
-        "INTRO": "People with high procrastination levels usually have low self-compassion. So practice it! It improves your feeling of self-worth, fosters positive emotions and can help you overcome procrastination, of course. Try a little exercise:",
-        "L1": "Sit down for bit and stretch yourself, if you like, calm down a little bit",
-        "L2": "Try to listen to the thoughts and feelings that arise",
-        "L3": "Are you responding to yourself in a way that you would respond to a friend?",
-        "L4": "If the answer is no, imagine your friend in your situation. What you would say to them? What you would do for them?",
-        "OUTRO": "More exercises <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">can be found here</a> or on <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>.",
-        "TITLE": "Self Compassion"
-      },
-      "CUR": {
-        "INTRO": "Isn't procrastination interesting? It doesn't seem to make any sense to do it, since it is not in your long term interest at all. But still everybody does. It helps a lot explore und gain a better understanding on how it works for you personally! Some basic questions to ask yourself could be:",
-        "L1": "What feelings are eliciting your temptation to procrastinate?",
-        "L2": "Where do you feel them in your body?",
-        "L3": "What do they remind you of?",
-        "L4": "What happens to the thought of procrastinating as you observe it? Does it intensify? Dissipate? Cause other emotions to arise?",
-        "L5": "How are the sensations in your body shifting as you continue to rest your awareness on them?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "Another very effective method is to record, what triggered your urge to procrastinate. For example I personally often have the urge to quickly jump to reddit or my favorite news site whenever my browser window comes into focus. Since I started writing down my triggers in a simple empty text document, I became aware of how ingrained this pattern was and it helped me to experiment with different counter measures.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "Writing down your procrastination triggers",
-        "TITLE": "Curiosity"
-      },
-      "H1": "Cut yourself some slack!",
-      "INTRO": {
-        "AVOIDING": "逃避任務",
-        "FEAR": "害怕失敗",
-        "STRESSED": "因無法完成任務而感到壓力",
-        "TITLE": "簡介"
-      },
-      "P1": "First of all: Relax! Everybody does procrastinate once in a while. And if you're not doing what you should, you should at least enjoy it!",
-      "P2": "Remember: <b>Procrastination is an emotion regulation problem, not a time management problem.</b> This means beating yourself up is not the solution, it is part of the problem. Let that sink in and then check the other tabs here for some further help.",
-      "REFRAME": {
-        "INTRO": "Think about what might be positive about the task despite its flaws.",
-        "TITLE": "Reframing",
-        "TL1": "What might be interesting about it?",
-        "TL2": "What is to gain if you complete it?",
-        "TL3": "How will you feel about it if you complete it?"
-      },
-      "SPLIT_UP": {
-        "INTRO": "Split up the task into as many small chunks as you can.",
-        "OUTRO": "Done? Then think about it. What would be – strictly theoretical – the first thing you would do <i>if</i> you were to start working on the task? Just think about it...",
-        "TITLE": "Split it up!"
-      }
+      "BREAK_IS_DONE": "休息已完成！"
     },
     "PROJECT": {
       "D_CREATE": {
         "CREATE": "建立項目",
-        "EDIT": "編輯項目",
-        "SETUP_CALDAV": "Setup Caldav Integration",
-        "SETUP_GIT": "關聯 GitHub",
-        "SETUP_GITEA_PROJECT": "Setup Gitea Integration",
-        "SETUP_GITLAB": "關聯 GitLab",
-        "SETUP_JIRA": "關聯 Jira",
-        "SETUP_OPEN_PROJECT": "Setup OpenProject Integration",
-        "SETUP_REDMINE_PROJECT": "Setup Redmine Integration"
+        "EDIT": "編輯項目"
       },
       "D_DELETE": {
         "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
@@ -820,7 +630,6 @@
         "TITLE": "基本設置"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "如果系統支持全域深色模式，則不會使用。",
         "HELP": "項目主題設置。",
         "L_BACKGROUND_IMAGE_DARK": "背景圖片網址（深色主題）",
         "L_BACKGROUND_IMAGE_LIGHT": "背景圖片網址（淺色主題）",
@@ -832,18 +641,13 @@
         "L_HUE_WARN": "警告顏色背景上的黑深色文字的閾值",
         "L_IS_AUTO_CONTRAST": "自動設置文本顏色以獲得最佳可讀性",
         "L_IS_DISABLE_BACKGROUND_TINT": "停用彩色背景漸變",
-        "L_IS_REDUCED_THEME": "使用縮減的UI（任務周圍沒有框）",
         "L_THEME_COLOR": "主題色",
-        "L_TITLE": "標題",
         "TITLE": "主題"
       },
       "S": {
         "ARCHIVED": "存檔項目",
         "CREATED": "建立項目 <strong>{{title}}</strong>。您可以從左上角的菜單中選擇它。",
         "DELETED": "刪除項目",
-        "E_EXISTS": "項目\"{{title}}\"已存在",
-        "E_INVALID_FILE": "項目檔案的資料無效",
-        "ISSUE_PROVIDER_UPDATED": "更新了 <strong>{{issueProviderKey}}</strong>的項目設置",
         "UNARCHIVED": "未歸檔的項目",
         "UPDATED": "更新了項目設置"
       }
@@ -891,9 +695,7 @@
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Setup Redmine for Project"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "API_KEY": "API access key",
         "HOST": "Host (e.g.: https://redmine.org)",
@@ -915,13 +717,10 @@
         "PRIORITY": "Priority",
         "STATUS": "Status"
       },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: Unknown error {{statusCode}} {{errorMsg}}."
-      }
+      "S": {}
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
-        "HIDE": "隱藏",
         "START_NOW": "立即開始",
         "TXT": "<strong>{{title}}</strong> 將於 <strong>{{start}}</strong> 開始！",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> 將於 <strong>{{start}}</strong> 開始！<br> （以及另外 {{nrOfOtherBanners}} 個任務到期）"
@@ -930,31 +729,21 @@
       "S_REMINDER_ERR": "提醒介面發生錯誤"
     },
     "SCHEDULE": {
-      "CONTINUED": "continued",
       "D_INITIAL": {
         "TEXT": "<p>The Schedule should provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended) regular tasks will never show up outside of these boundaries.</p>",
         "TITLE": "時間軸"
       },
       "END": "Work End",
-      "LUNCH_BREAK": "午休",
-      "MONTH": "Month",
-      "NO_TASKS": "Currently there are no tasks. Please add some tasks via the + Button in the top bar.",
-      "NOW": "Now",
       "INSERT_BEFORE": "Before",
       "PLAN_END_DAY": "End of {{date}}",
       "PLAN_START_DAY": "Start of {{date}}",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
-      "START": "Work Start",
-      "TASK_PROJECTION_INFO": "Future projection of a scheduled repeatable task",
-      "WEEK": "Week"
+      "START": "Work Start"
     },
     "SEARCH_BAR": {
       "INFO": "Start typing to search for tasks",
-      "INFO_ARCHIVED": "Click on the archive icon to search for normal tasks",
       "NO_RESULTS": "No tasks found matching your search",
-      "PLACEHOLDER": "Search for task or task description",
-      "PLACEHOLDER_ARCHIVED": "Search for archived tasks",
-      "TOO_MANY_RESULTS": "Too many results, please narrow your search"
+      "PLACEHOLDER": "Search for task or task description"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -973,7 +762,6 @@
         "L_COUNTDOWN_DURATION": "Countdown duration",
         "L_DAILY_GOAL": "Daily goal for successful streak",
         "L_ICON": "圖標",
-        "L_ICON_ON": "切換後的圖標",
         "L_IS_ENABLED": "啟用",
         "L_TITLE": "標題",
         "L_TRACK_STREAKS": "Track Streaks",
@@ -991,19 +779,11 @@
     },
     "SYNC": {
       "A": {
-        "ARCHIVE_ONLY_UPLOADED": "您的數據僅部分上傳。請稍後再試！否則，您將無法將數據同步到其他設備。",
-        "POSSIBLE_LEGACY_DATA": "Super Productivity 現在使用兩個獨立的文件而不是單個文件來改進同步，這樣可以減少數據傳輸量。建議更新所有 Super Productivity 實例，並首先從數據最新的應用實例同步數據。如果這是您本地設備中的數據，則請忽略此警告，並通過確認下一個對話框來繼續上傳。",
         "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
       },
       "BTN_SYNC_NOW": "Sync Now",
       "C": {
-        "EMPTY_SYNC": "您正在嘗試同步一個空的資料對象。這是您（幾乎）原始應用程式的第一次同步嗎？",
-        "FORCE_UPLOAD": "仍要上傳本地資料嗎？",
-        "FORCE_UPLOAD_AFTER_ERROR": "上傳本地資料時發生錯誤。嘗試強制更新？",
-        "MIGRATE_LEGACY": "Legacy data detected while importing, do you want to try to migrate it?",
-        "NO_REMOTE_DATA": "找不到遠端資料。本地上傳到遠端嗎？",
-        "TRY_LOAD_REMOTE_AGAIN": "嘗試再次從遠端重新載入資料？",
-        "UNABLE_TO_LOAD_REMOTE_DATA": "無法從遠端加載數據。您想嘗試用本地數據覆蓋遠端數據嗎？此過程將導致所有遠端數據丟失。"
+        "FORCE_UPLOAD": "仍要上傳本地資料嗎？"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
@@ -1013,8 +793,6 @@
       },
       "D_CONFLICT": {
         "COMPARISON_RESULT": "Comparison Result",
-        "LAMPORT_CLOCK": "Revision",
-        "LAST_CHANGE": "最後一次變更：",
         "LAST_SYNC": "上次同步：",
         "LAST_SYNCED": "Last Synced",
         "LAST_WRITE": "Last Write",
@@ -1054,10 +832,6 @@
         "BTN_FORCE_UPLOAD": "Force Upload Local",
         "P1": "The remote sync data is incoherent!",
         "P2": "Affected model:",
-        "P3": "You have 2 Options:",
-        "P4": "1. Go to your other device and attempt do a complete sync there.",
-        "P5": "2. Overwrite the remote data with your local data. All remote changes will be lost!",
-        "P6": "Creating a backup of the data you overwrite is recommended!!!",
         "T1": "Last sync was incomplete!",
         "T2": "Your archive data was not properly uploaded during last sync:",
         "T3": "You have 2 Options:",
@@ -1069,19 +843,9 @@
         "SAVE_AND_ENABLE": "Save & Enable Sync",
         "TITLE": "Configure Sync"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Disable sync",
-        "PERM_FILE": "Give permission",
-        "TEXT": "<p>Your file permission for local syncing has been revoked.</p>",
-        "TITLE": "Sync: Local file permission denied"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "存取權杖（從身份驗證代碼生成）"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "同步檔案名"
-        },
+        "DROPBOX": {},
+        "GOOGLE": {},
         "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",
         "L_ENABLE_SYNCING": "啟用同步",
@@ -1090,7 +854,6 @@
         "L_SYNC_INTERVAL": "同步間隔",
         "L_SYNC_PROVIDER": "同步提供者",
         "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
         "TITLE": "同步",
@@ -1105,26 +868,16 @@
       },
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
-        "ALREADY_IN_SYNC_NO_LOCAL_CHANGES": "No local changes – Already in sync",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
         "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis might be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
-        "ERROR_FALLBACK_TO_BACKUP": "匯入資料時發生錯誤了。回到本地備份。",
-        "ERROR_INVALID_DATA": "同步時發生錯誤。無效資料",
-        "ERROR_NO_REV": "No valid rev for remote file",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
-        "IMPORTING": "匯入資料",
         "INCOMPLETE_CFG": "Authentication for sync failed. Please check your Config!",
-        "INITIAL_SYNC_ERROR": "Initial Sync failed",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
-        "SUCCESS_IMPORT": "資料已匯入",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
-        "UNKNOWN_ERROR": "同步時發生未知錯誤：{{err}}",
-        "UPLOAD_ERROR": "未知的上傳錯誤（設置正確嗎？）： {{err}}"
+        "UNKNOWN_ERROR": "同步時發生未知錯誤：{{err}}"
       },
       "SAFETY_BACKUP": {
-        "TITLE": "Sync Safety Backups",
         "DESCRIPTION": "Automatic backups are created before downloading data from remote during sync operations. Backups are organized in 4 smart slots: 2 most recent, 1 first from today, and 1 first from a day before today.",
         "BTN_CREATE_MANUAL": "Create Manual Backup",
         "BTN_REFRESH": "Refresh",
@@ -1144,11 +897,6 @@
         "REASON_MANUAL": "Manual backup",
         "REASON_BEFORE_UPDATE": "Automatic backup before sync",
         "LAST_CHANGE_PREFIX": "Last change:",
-        "RESTORE_CONFIRM_TITLE": "Restore Backup",
-        "RESTORE_CONFIRM_MSG": "Are you sure you want to restore the backup from {{timestamp}}?\n\nThis will COMPLETELY REPLACE all your current data!\n\nReason: {{reason}}\n\nClick OK to proceed or Cancel to abort.",
-        "BACKUP_NOT_FOUND": "Backup with ID {{backupId}} not found",
-        "RESTORE_FAILED": "Failed to restore backup: {{error}}",
-        "INVALID_ID_ERROR": "Invalid backup ID generated",
         "CREATED_SUCCESS": "Manual backup created successfully",
         "RESTORED_SUCCESS": "Backup restored successfully",
         "DELETED_SUCCESS": "Backup deleted successfully",
@@ -1160,8 +908,7 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "建立標籤",
-        "EDIT": "編輯標籤"
+        "CREATE": "建立標籤"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "您是否真的要刪除標籤 \"{{tagName}}\"？它將從所有任務中刪除。這不能被撤消。"
@@ -1187,16 +934,6 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "添加現有任務\"{{taskTitle}}\"",
-        "ADD_ISSUE_TASK": "從 {{issueType}}添加問題#{{issueNr}} ",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "Add task to bottom of backlog",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "Add task to bottom of list",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "Add task to top of backlog",
-        "ADD_TASK_TO_TOP_OF_TODAY": "Add task to top of list",
-        "CREATE_TASK": "建立新任務",
-        "EXAMPLE": "示例：\"某些任務標題+ projectName #一些標籤 #一些其他標籤10m/3h\"",
-        "START": "再次按回車鍵開始",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "切換將任務添加到待辦/今天列表",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "切換將任務添加到列表的頂部或底部",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00",
         "TOOLTIP_ADD_TASK": "Add task",
@@ -1213,8 +950,6 @@
         "TOOLTIP_CLEAR_DATE": "Clear date",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
         "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
-        "NO_DATE": "No Date",
-        "NO_TIME": "No Time",
         "TODAY": "Today",
         "TOMORROW": "Tomorrow",
         "CREATE_NEW_TAGS": "Create new tags"
@@ -1224,11 +959,9 @@
         "ADD_SUB_TASK": "添加子任務",
         "ATTACHMENTS": "附件 {{nr}}",
         "DUE": "计划时间",
-        "FROM_PARENT": "（來自父任務）",
         "LOCAL_ATTACHMENTS": "本地附件",
         "NOTES": "筆記",
         "PARENT": "親",
-        "REMINDER": "提醒",
         "REPEAT": "重複",
         "SCHEDULE_TASK": "安排任務",
         "SUB_TASKS": "子任務（{{nr}}）",
@@ -1249,11 +982,8 @@
         "DROP_ATTACHMENT": "放在此處以附加到\"{{title}}\"",
         "DUPLICATE": "Duplicate",
         "EDIT_SCHEDULED": "編輯提醒",
-        "EDIT_TAGS": "編輯標籤",
-        "EDIT_TASK_TITLE": "Edit title",
         "FOCUS_SESSION": "Start Focus Session",
         "MARK_DONE": "標記為已完成",
-        "MARK_UNDONE": "標記為未完成",
         "MOVE_TO_BACKLOG": "轉到待辦事項",
         "MOVE_TO_OTHER_PROJECT": "轉到其他項目",
         "MOVE_TO_REGULAR": "轉到今天的列表",
@@ -1262,9 +992,7 @@
         "OPEN_ISSUE": "在新的瀏覽器選項卡中打開 Issue ",
         "OPEN_TIME": "估計時間/增加花費的已用時間",
         "REMOVE_FROM_MY_DAY": "從我的一天中刪除",
-        "REPEAT_EDIT": "編輯重複任務",
         "SCHEDULE": "安排任務",
-        "SHOW_UPDATES": "顯示更新",
         "TOGGLE_ATTACHMENTS": "顯示/隱藏附件",
         "TOGGLE_DETAIL_PANEL": "顯示/隱藏其他資訊",
         "TOGGLE_DONE": "標記為已完成/未完成",
@@ -1291,26 +1019,19 @@
         "DONE": "完成",
         "DUE_TASK": "到期任務",
         "DUE_TASKS": "到期任務",
-        "FOR_CURRENT": "任務到期了，你想開始工作嗎？",
-        "FOR_OTHER": "任務到期了。你想開始工作嗎？",
-        "FROM_PROJECT": "來自項目",
-        "FROM_TAG": "來自標籤：\"{{title}}\"",
         "RESCHEDULE_EDIT": "Edit (Re-schedule)",
         "RESCHEDULE_UNTIL_TOMORROW": "明天重新開始",
         "SNOOZE": "暫停",
         "SNOOZE_ALL": "全部暫停",
         "START": "開始任務",
-        "SWITCH_CONTEXT_START": "切換內容上下文並開始",
         "UNSCHEDULE": "Unschedule",
         "UNSCHEDULE_ALL": "Unschedule all",
         "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Today)",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "在計劃時間到來後將任務移至待辦事項",
         "QA_NEXT_MONTH": "Schedule next Month",
         "QA_NEXT_WEEK": "Schedule next Week",
-        "QA_REMOVE_TODAY": "Remove task from today",
         "QA_TODAY": "Schedule Today",
         "QA_TOMORROW": "Schedule Tomorrow",
         "REMIND_AT": "提醒時間",
@@ -1346,19 +1067,16 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign project via short syntax for repeatable tasks!",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
-        "CREATED_FOR_PROJECT_ACTION": "Go to Project",
         "DELETED": "已刪除任務\"{{title}}\"",
         "FOUND_MOVE_FROM_BACKLOG": "將任務<strong>{{title}}</strong>移至今日任務列表",
         "FOUND_MOVE_FROM_OTHER_LIST": "已將任務<strong>{{title}}</strong>從<strong>{{contextTitle}}</strong>添加到當前列表",
         "FOUND_RESTORE_FROM_ARCHIVE": "已恢復的任務<strong>{{title}}</strong>與存檔 Issue 相關",
-        "LAST_TAG_DELETION_WARNING": "您正在嘗試刪除非項目任務的最後一個標籤。這是不允許的！",
         "MOVED_TO_ARCHIVE": "Moved {{nr}} tasks to archive",
         "MOVED_TO_PROJECT": "Moved task \"{{taskTitle}}\" to project \"{{projectTitle}}\"",
-        "MOVED_TO_PROJECT_ACTION": "Go to Project",
         "REMINDER_ADDED": "已計劃任務\"{{title}}\"",
         "REMINDER_DELETED": "已刪除任務提醒",
         "REMINDER_UPDATED": "更新了任務\"{{title}}\"的提醒",
-        "TASK_CREATED": "已建立任務\"{{title}}\""
+        "TASK_CREATED": "已建立任務\"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "選擇或建立任務",
       "SUMMARY_TABLE": {
@@ -1426,7 +1144,6 @@
         "C_YEAR": "Year",
         "DEFAULT_ESTIMATE": "預設預估用時",
         "FRIDAY": "星期️五",
-        "IS_ADD_TO_BOTTOM": "將任務移到列表底部",
         "MONDAY": "星期一",
         "NOTES": "Default notes",
         "ORDER": "Order",
@@ -1477,14 +1194,12 @@
         "GROUP_SCHEDULED_DATE": "Scheduled Date",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Reset All",
-        "SCHEDULED_DEFAULT": "Any Date",
         "SCHEDULED_NEXT_MONTH": "Next Month",
         "SCHEDULED_NEXT_WEEK": "Next Week",
         "SCHEDULED_THIS_MONTH": "This Month",
         "SCHEDULED_THIS_WEEK": "This Week",
         "SCHEDULED_TODAY": "Today",
         "SCHEDULED_TOMORROW": "Tomorrow",
-        "SORT_BY": "Sort By",
         "SORT_CREATION_DATE": "Creation Date",
         "SORT_DEFAULT": "Default",
         "SORT_NAME": "Name",
@@ -1493,9 +1208,8 @@
         "TIME_2HOUR": "> 2 Hours",
         "TIME_10MIN": "> 10 Minutes",
         "TIME_30MIN": "> 30 Minutes",
-        "TIME_DEFAULT": "Any Duration",
-        "TIME_SPENT": "Time Spent",
-        "TITLE": "Customize Task View"
+        "FILTER_NOT_SPECIFIED": "未指定",
+        "TIME_SPENT": "Time Spent"
       }
     },
     "TIME_TRACKING": {
@@ -1528,7 +1242,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>建立</em>並追蹤到",
-        "IDLE_FOR": "你一直閑著：",
         "NOTIFICATION_TITLE": "Track your time!",
         "TASK": "任務",
         "TRACK_TO": "追蹤到：",
@@ -1540,7 +1253,6 @@
         "DAYS_WORKED": "工作日：",
         "MONTH_WORKED": "工作月份：",
         "REPEATING_TASK": "重複任務",
-        "RESTORE_TASK_FROM_ARCHIVE": "從存檔還原任務",
         "TASKS": "任務",
         "TOTAL_TIME": "總花費時間：",
         "WEEK_NR": "{{nr}}周 ",

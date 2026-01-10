@@ -38,7 +38,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -74,7 +74,7 @@ jobs:
       # APK is now signed automatically by Gradle using signingConfig
 
       - name: 'Upload APK files'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: sup-android-release
           path: android/app/build/outputs/apk/**/*.apk

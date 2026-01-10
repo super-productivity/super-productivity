@@ -20,17 +20,18 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "更改背景"
     },
+    "SKIP_SYNC_WAIT": "立即使用，无需等待同步",
     "UPDATE_MAIN_MODEL": "超级生产力已进行重大更新！您的数据需要一些迁移。请注意，这会使您的数据与应用的旧版本不兼容。",
     "UPDATE_MAIN_MODEL_NO_UPDATE": "未选择模型更新。请注意，如果您不想执行模型升级，则必须降级到上一个版本。",
     "UPDATE_WEB_APP": "有新版本可用。加载新版本？"
+  },
+  "BL": {
+    "NO_TASKS": "您的待办事项列表中当前没有任务"
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "显示问题看板",
     "SHOW_NOTES": "显示项目备注",
     "SHOW_TASK_VIEW_CUSTOMIZER_PANEL": "显示筛选/分组/排序看板"
-  },
-  "BL": {
-    "NO_TASKS": "您的待办事项列表中当前没有任务"
   },
   "CONFIRM": {
     "AUTO_FIX": "您的数据似乎已损坏（“{{validityError}}”）。您想尝试自动修复吗？这可能会导致部分数据丢失。",
@@ -47,11 +48,16 @@
     "TOMORROW": "明天"
   },
   "DIALOG_UNSPLASH_PICKER": {
-    "TITLE": "从 Unsplash 选择背景图片",
+    "BY": "由",
+    "NO_RESULTS": "没有找到图片。尝试不同的搜索词。",
     "SEARCH_LABEL": "搜索图片",
     "SEARCH_PLACEHOLDER": "例如，自然、山脉、抽象",
-    "NO_RESULTS": "没有找到图片。尝试不同的搜索词。",
-    "BY": "由"
+    "TITLE": "从 Unsplash 选择背景图片"
+  },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "通过 GitHub Sponsors 捐赠",
+    "INTRO_1": "Super Productivity 完全由社区资助。没有追踪、没有广告、也没有数据收集——您的任务数据仅存于本地设备。",
+    "INTRO_2": "如果您认同这种方式，并希望项目持续健康地发展，您的自愿性捐赠我们将非常感激。"
   },
   "F": {
     "ATTACHMENT": {
@@ -156,6 +162,7 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "添加为任务",
+        "FOCUS_TASK": "专注任务",
         "SHOW_TASK": "显示任务",
         "TXT": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他事件到期）",
@@ -203,38 +210,47 @@
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: 无法生成 PKCE 挑战。"
       }
     },
-    "ISSUE_PANEL": {
-      "CALENDAR_AGENDA": {
-        "OFFLINE_BANNER_MSG": "显示的是日历的缓存结果，数据可能不是最新。"
-      }
-    },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
         "FINISH_DAY_BEFORE_EXIT": "您的今日列表中有 {{nr}} 个已完成的任务尚未移动到归档。您真的想不完成一天的工作就退出吗？"
       }
     },
     "FOCUS_MODE": {
+      "ADD_TIME_MINUTE": "增加一分钟",
       "B": {
-        "SESSION_RUNNING": "专注会话正在进行",
-        "POMODORO_SESSION_RUNNING": "番茄会话 #{{cycleNr}} 正在进行",
         "BREAK_RUNNING": "休息正在进行",
+        "END_BREAK": "休息结束",
+        "END_SESSION": "结束会话",
+        "PAUSE": "暂停",
         "POMODORO_BREAK_RUNNING": "休息 #{{cycleNr}} 正在进行",
+        "POMODORO_SESSION_RUNNING": "番茄会话 #{{cycleNr}} 正在进行",
+        "RESUME": "恢复",
+        "SESSION_RUNNING": "专注会话正在进行",
+        "START": "开始",
         "TO_FOCUS_OVERLAY": "到专注覆盖"
       },
-      "ADD_TIME_MINUTE": "增加一分钟",
       "BACK_TO_PLANNING": "返回规划",
+      "BREAK_RELAX_MSG": "花点时间放松一下",
       "CLICK_TO_EDIT_DURATION": "点击编辑时长",
       "COMPLETE_FOCUS_SESSION": "完成专注会话",
+      "COMPLETE_SESSION": "完成会话",
       "CONGRATS": "恭喜完成此会话！",
+      "CONTINUE_FOCUS_SESSION": "继续专注任务",
+      "CONTINUE_SESSION": "继续会话",
+      "CONTINUE_TO_NEXT_SESSION": "继续下一个会话",
       "COUNTDOWN": "倒计时",
       "COUNTDOWN_HINT": "专注直到时钟归零",
+      "CURRENT_SESSION_TIME_TOOLTIP": "当前会话时间",
       "FINISH_TASK_AND_SELECT_NEXT": "完成任务并选择下一个",
-      "FLOWTIME": "Flowtime",
+      "FLOWTIME": "流程时间",
       "FLOWTIME_HINT": "无严格计时器的灵活节奏",
+      "FOCUS_TIME_TOOLTIP": "专注时间",
       "FOR_TASK": "对于任务",
       "GET_READY": "为您的专注会话做好准备！",
       "GO_TO_PROCRASTINATION": "拖延时获取帮助",
-      "GOGOGO": "开始，开始，开始！！！",
+      "GOGOGO": "冲，冲，冲！！！",
+      "LONG_BREAK": "长休息",
+      "LONG_BREAK_TITLE": "长休息 - 第 {{cycle}} 轮",
       "NEXT": "下一个",
       "ON": "在",
       "OPEN_ISSUE_IN_BROWSER": "在浏览器中打开问题",
@@ -243,37 +259,28 @@
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "暂停追踪当前任务",
       "POMODORO": "番茄",
       "POMODORO_HINT": "有计划休息的结构化冲刺",
-      "POMODORO_BACK": "返回",
-      "POMODORO_DISABLE": "禁用番茄",
-      "POMODORO_INFO": "专注会话不能与启用的番茄计时器一起使用。",
+      "POMODORO_SESSION_COMPLETED": "番茄会话已完成！",
+      "POMODORO_SETTINGS": "番茄时钟设置",
       "PREP_GET_MENTALLY_READY": "在心理上做好准备，保持专注和高效",
       "PREP_SIT_UPRIGHT": "坐直（或站立）",
       "PREP_STRETCH": "做一些轻度拉伸",
       "REMOVE_TIME_MINUTE": "减少一分钟",
       "RESUME_SESSION": "恢复会话",
       "SELECT_ANOTHER_TASK": "选择另一个任务",
+      "SELECT_MODE": "选择您的专注模式",
       "SELECT_TASK": "选择要专注的任务",
       "SELECT_TASK_TO_FOCUS": "选择要专注的任务",
-      "SELECT_MODE": "选择您的专注模式",
       "SESSION_COMPLETED": "专注会话已完成！",
-      "POMODORO_SESSION_COMPLETED": "番茄会话已完成！",
       "SET_FOCUS_SESSION_DURATION": "设置专注会话持续时间",
+      "SHORT_BREAK": "短休息",
+      "SHORT_BREAK_TITLE": "短休息 - 第 {{cycle}} 轮",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "显示/隐藏任务备注和附件",
-      "SWITCH_TASK": "切换任务",
+      "SKIP_BREAK": "跳过休息",
+      "START_BREAK": "开始休息",
       "START_FOCUS_SESSION": "开始专注会话",
       "START_NEXT_FOCUS_SESSION": "开始下一个专注会话",
-      "WORKED_FOR": "您工作了",
-      "BREAK_RELAX_MSG": "花点时间放松一下",
-      "SKIP_BREAK": "跳过休息",
-      "CONTINUE_TO_NEXT_SESSION": "继续下一个会话",
-      "FOCUS_TIME_TOOLTIP": "专注时间",
-      "CURRENT_SESSION_TIME_TOOLTIP": "当前会话时间",
-      "COMPLETE_SESSION": "完成会话",
-      "CONTINUE_SESSION": "继续会话",
-      "LONG_BREAK": "长休息",
-      "SHORT_BREAK": "短休息",
-      "LONG_BREAK_TITLE": "长休息 - 周期 {{cycle}}",
-      "SHORT_BREAK_TITLE": "短休息 - 周期 {{cycle}}"
+      "SWITCH_TASK": "切换任务",
+      "WORKED_FOR": "您工作了"
     },
     "GITEA": {
       "DIALOG_INITIAL": {
@@ -453,7 +460,7 @@
     },
     "ISSUE_PANEL": {
       "CALENDAR_AGENDA": {
-        "OFFLINE_BANNER_MSG": "显示的是缓存的日历结果，数据可能已过期。"
+        "OFFLINE_BANNER_MSG": "正在显示缓存中的日历结果。请注意，数据可能已过时。"
       }
     },
     "JIRA": {
@@ -625,18 +632,31 @@
       },
       "EVAL_FORM": {
         "ADD_NOTE_FOR_TOMORROW": "为明天添加备注",
-        "FOCUS_WORK_TIME": "专注工作时间",
-        "IMPACT_OF_WORK": "您如何评价您今天的工作所产生的影响？",
-        "IMPACT_OF_WORK_HINT": "1：没有实质进展 — 4：显著影响",
-        "PRODUCTIVITY_SCORE": "生产力评分",
-        "PRODUCTIVITY_SCORE_TOOLTIP": "65% 影响力（1-4分）• 30% 专注度（以4小时为目标）• 5% 总工作时间（最多10小时）",
-        "SUSTAINABILITY_SCORE": "可持续性评分",
-        "SUSTAINABILITY_SCORE_TOOLTIP": "45% 精力水平 • 40% 合理工作时间（10小时为0分）• 15% 专注平衡（最佳为4小时）",
-        "ENERGY_LEVEL": "您的精力如何？",
-        "ENERGY_LEVEL_HINT": "😫 筋疲力尽 — 😐 还行 — 😊 很好",
-        "TOTAL_WORK_TIME": "今天总工作时间",
         "DAILY_STATE": "每日状态",
         "DAILY_STATE_TOOLTIP": "基于两项评分的四象限系统（≥50为高分）：深度专注（高/高）、过度驱动（高/低）、恢复调整（低/高）、漂移状态（低/低）",
+        "DISABLE_REPEAT_EVERY_DAY": "",
+        "ENABLE_REPEAT_EVERY_DAY": "允许每天重复",
+        "ENERGY_LEVEL": "您的精力如何？",
+        "ENERGY_LEVEL_HINT": "😫 筋疲力尽 — 😐 还行 — 😊 很好",
+        "FOCUS_WORK_TIME": "专注工作时间",
+        "HELP_H1": "",
+        "HELP_LINK_TXT": "",
+        "HELP_P1": "",
+        "HELP_P2": "",
+        "IMPACT_OF_WORK": "您如何评价您今天的工作所产生的影响？",
+        "IMPACT_OF_WORK_HINT": "1：没有实质进展 — 4：显著影响",
+        "IMPROVEMENTS": "",
+        "IMPROVEMENTS_TOMORROW": "",
+        "MOOD": "",
+        "MOOD_HINT": "",
+        "NOTES": "",
+        "OBSTRUCTIONS": "",
+        "PRODUCTIVITY": "",
+        "PRODUCTIVITY_HINT": "",
+        "PRODUCTIVITY_SCORE": "生产力评分",
+        "PRODUCTIVITY_SCORE_TOOLTIP": "65% 影响力（1-4分）• 30% 专注度（以4小时为目标）• 5% 总工作时间（最多10小时）",
+        "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7天生产力分解",
+        "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "7天可持续性分解",
         "STATE_DEEP_FLOW_HEADLINE": "深度专注：专注力强，节奏可持续。",
         "STATE_DEEP_FLOW_HINT": "您正处于最佳状态——反思是什么促成了这种理想组合。",
         "STATE_OVERDRIVE_HEADLINE": "过度驱动：高产但代价不小。",
@@ -649,11 +669,9 @@
         "STATE_STEADY_HINT": "平衡不错。您在保持动力的同时没有过度用力——继续滋养这种节奏的关键。",
         "STATE_IMPACT_MISMATCH_HEADLINE": "影响力不足：专注投入，但收效甚微。",
         "STATE_IMPACT_MISMATCH_HINT": "您投入了专注——现在将其导向更高影响力的工作，您会看到不同。",
-        "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7天生产力分解",
-        "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "7天可持续性分解"
-      },
-      "S": {
-        "SAVE_METRIC": "指标已成功保存"
+        "SUSTAINABILITY_SCORE": "可持续性评分",
+        "SUSTAINABILITY_SCORE_TOOLTIP": "45% 精力水平 • 40% 合理工作时间（10小时为0分）• 15% 专注平衡（最佳为4小时）",
+        "TOTAL_WORK_TIME": "今天总工作时间"
       },
       "FOCUS_SESSION_DIALOG": {
         "TITLE": "专注会话",
@@ -681,6 +699,9 @@
         "REMINDER_CREATED": "已设置明天的反思提醒",
         "REMINDER_ERROR": "无法设置提醒",
         "REMINDER_NEEDS_TEXT": "请先写下反思内容，再设置提醒"
+      },
+      "S": {
+        "SAVE_METRIC": "指标已成功保存"
       }
     },
     "NOTE": {
@@ -688,6 +709,23 @@
         "NOTE_LABEL": "输入一些文本保存为备注（您可以使用 Markdown）..."
       },
       "D_FULLSCREEN": {
+        "TOOLBAR": {
+          "BOLD": "粗体",
+          "BULLET_LIST": "无序列表",
+          "CODE_BLOCK": "代码块",
+          "HEADING_1": "标题 1",
+          "HEADING_2": "标题 2",
+          "HEADING_3": "标题 3",
+          "INLINE_CODE": "行内代码",
+          "INSERT_IMAGE": "插入图片",
+          "INSERT_LINK": "插入链接",
+          "INSERT_TABLE": "插入表格",
+          "ITALIC": "斜体",
+          "NUMBERED_LIST": "有序列表",
+          "QUOTE": "引用",
+          "STRIKETHROUGH": "删除线",
+          "TASK_LIST": "任务列表"
+        },
         "VIEW_PARSED": "查看解析后的（不可编辑）Markdown",
         "VIEW_SPLIT": "在拆分视图中查看解析和未解析的 Markdown",
         "VIEW_TEXT_ONLY": "查看未解析的文本"
@@ -802,23 +840,7 @@
       "TASK_DRAWER": "任务抽屉"
     },
     "POMODORO": {
-      "BACK_TO_WORK": "回去工作！",
-      "BREAK_IS_DONE": "专注休息结束！",
-      "ENJOY_YOURSELF": "尽情享受，让自己动起来，回来：",
-      "FINISH_SESSION_X": "您成功完成了会话 <strong>{{nr}}</strong>！",
-      "NOTIFICATION": {
-        "BREAK_TIME": "番茄: 休息时间 {{nr}} 到！",
-        "BREAK_X_START": "番茄: 休息 {{nr}} 开始！",
-        "NO_TASKS": "您需要先添加任务，然后才能启动番茄计时器。",
-        "SESSION_X_START": "番茄: 会话 {{nr}} 开始！"
-      },
-      "S": {
-        "RESET": "重置到第一个番茄会话",
-        "SESSION_SKIP": "跳到当前番茄会话的结束",
-        "SESSION_X_START": "番茄: 会话 {{nr}} 开始！"
-      },
-      "SKIP_BREAK": "跳过休息",
-      "START_BREAK": "开始休息"
+      "BREAK_IS_DONE": "专注休息结束！"
     },
     "PROCRASTINATION": {
       "BACK_TO_WORK": "回去工作！",
@@ -829,7 +851,7 @@
         "L3": "您是否以回应朋友的方式回应自己？",
         "L4": "如果答案是否定的，想象您的朋友处于您的境地。您会对他们说什么？您会为他们做什么？",
         "OUTRO": "更多练习 <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion \" target=\"_blank\">可以在此处找到</a> 或在 <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8 \">谷歌</a> 上。",
-        "TITLE": "自我怜悯"
+        "TITLE": "自我关怀"
       },
       "CUR": {
         "INTRO": "拖延不是很有趣吗？它似乎没有任何意义，因为它根本不符合您的长期利益。但仍然每个人都这样做。探索并更好地了解它如何为您个人工作是非常有帮助的！一些基本问题可以问自己：",
@@ -844,7 +866,7 @@
       },
       "H1": "放自己一马！",
       "INTRO": {
-        "AVOIDING": "避免任务",
+        "AVOIDING": "逃避任务",
         "FEAR": "害怕失败",
         "STRESSED": "因未完成事情而感到压力",
         "TITLE": "介绍"
@@ -921,6 +943,7 @@
       }
     },
     "PROJECT_FOLDER": {
+      "CONFIRM_DELETE": "确定要删除文件夹“{{title}}”吗？该文件夹内的所有项目将被移至根目录级别。",
       "DIALOG": {
         "CREATE_TITLE": "创建文件夹",
         "EDIT_TITLE": "编辑文件夹",
@@ -932,10 +955,9 @@
       },
       "SELECT": {
         "LABEL": "文件夹",
-        "PLACEHOLDER": "选择文件夹",
-        "NO_PARENT": "无文件夹（根级别）"
+        "NO_PARENT": "无文件夹（根级别）",
+        "PLACEHOLDER": "选择文件夹"
       },
-      "CONFIRM_DELETE": "您确定要删除文件夹 \"{{title}}\" 吗？此文件夹中的所有项目都将移动到根级别。",
       "TOOLTIP_CREATE": "创建项目文件夹",
       "TOOLTIP_VISIBILITY": "显示/隐藏项目"
     },
@@ -986,6 +1008,40 @@
       },
       "S_ACTIVE_TASK_DUE": "您当前正在处理的任务现已到期！<br/> （{{title}}）",
       "S_REMINDER_ERR": "提醒界面的错误"
+    },
+    "SAFETY_BACKUP": {
+      "BACKUP_NOT_FOUND": "",
+      "BTN_CLEAR_ALL": "",
+      "BTN_CREATE_MANUAL": "",
+      "BTN_DELETE": "",
+      "BTN_REFRESH": "",
+      "BTN_RESTORE": "",
+      "CLEAR_FAILED": "",
+      "CLEARED_SUCCESS": "",
+      "CREATE_FAILED": "",
+      "CREATED_SUCCESS": "",
+      "DELETE_FAILED": "",
+      "DELETED_SUCCESS": "",
+      "DESCRIPTION": "",
+      "INVALID_ID_ERROR": "",
+      "LAST_CHANGE_PREFIX": "",
+      "LOADING": "",
+      "NO_BACKUPS": "",
+      "REASON_BEFORE_UPDATE": "",
+      "REASON_MANUAL": "",
+      "RESTORE_CONFIRM_MSG": "",
+      "RESTORE_CONFIRM_TITLE": "",
+      "RESTORE_FAILED": "",
+      "RESTORED_SUCCESS": "",
+      "SLOT_BEFORE_TODAY": "",
+      "SLOT_RECENT": "",
+      "SLOT_TODAY": "",
+      "TITLE": "",
+      "TOOLTIP_CLEAR_ALL": "",
+      "TOOLTIP_CREATE_MANUAL": "",
+      "TOOLTIP_DELETE": "",
+      "TOOLTIP_REFRESH": "",
+      "TOOLTIP_RESTORE": ""
     },
     "SCHEDULE": {
       "CONTINUED": "继续",
@@ -1154,11 +1210,16 @@
         "TITLE": "同步",
         "WEB_DAV": {
           "CORS_INFO": "<strong>使其在浏览器中工作：</strong> 要使其在浏览器中工作，您需要将超级生产力加入 WebDAV 服务器的跨域资源共享请求白名单。这可能会带来负面的安全影响！对于 nextcloud，请 <a href='https://github.com/nextcloud/server/issues/3131 '>参考此线程以获取更多信息</a>。一种在移动设备上实现此目的的方法是通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword<a> 将 \"https://app.super-productivity.com \" 加入白名单。使用风险自负！</p>",
+          "D_SYNC_FOLDER_PATH": "同步文件在WebDAV服务器根目录下的相对存储路径（例如，'/super-productivity' 或 '/'）。请注意，这不是您服务器内部的文件目录路径。",
           "INFO": "WebDAV 实现差异很大。众所周知，Super Productivity 与 Nextcloud 配合良好，<strong>但它可能不适用于您的提供者</strong>。",
           "L_BASE_URL": "基本 URL",
           "L_PASSWORD": "密码",
           "L_SYNC_FOLDER_PATH": "同步文件夹路径",
-          "L_USER_NAME": "用户名"
+          "L_TEST_CONNECTION": "测试链接",
+          "L_USER_NAME": "用户名",
+          "S_FILL_ALL_FIELDS": "请先填入所有的 WebDAV 字段",
+          "S_TEST_FAIL": "连接测试失败：{{error}} - 目标URL：{{url}}",
+          "S_TEST_SUCCESS": "连接测试成功！目标URL：{{url}}"
         }
       },
       "S": {
@@ -1168,6 +1229,9 @@
         "BTN_FORCE_OVERWRITE": "强制覆盖",
         "ERROR_CORS": "WebDAV 同步错误: 网络请求失败。\n\n这可能是一个跨域资源共享问题。请确保：\n• 您的 WebDAV 服务器允许跨源请求\n• 服务器 URL 正确且可访问\n• 您有有效的互联网连接",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "远程数据当前正在写入",
+        "ERROR_PERMISSION": "文件访问被拒绝。如果正在使用 Flatpak/Snap ，请通过 Flatseal 授予文件系统权限，或者使用 ~/.var/app/ 目录内的路径。",
+        "ERROR_PERMISSION_FLATPAK": "文件访问被拒绝。请通过Flatseal授予文件系统权限，或使用路径 ~/.var/app/ 内的目录。",
+        "ERROR_PERMISSION_SNAP": "文件访问被拒绝。请运行命令 'snap connect super-productivity:home'，或使用路径 ~/snap/super-productivity/common/ 内的目录。",
         "ERROR_FALLBACK_TO_BACKUP": "导入数据时出错。回退到本地备份。",
         "ERROR_INVALID_DATA": "同步时出错。数据无效",
         "ERROR_NO_REV": "远程文件没有有效的修订",
@@ -1400,6 +1464,11 @@
         "SCHEDULE": "计划",
         "UNSCHEDULE": "移除"
       },
+      "D_SELECT_DATE_AND_TIME": {
+        "DATE": "日期",
+        "TIME": "时间",
+        "TITLE": "选择日期和时间"
+      },
       "D_TIME": {
         "ADD_FOR_OTHER_DAY": "为其他天添加花费时间",
         "DELETE_FOR": "删除当天的条目",
@@ -1414,11 +1483,6 @@
         "HELP": "示例：<br> 30m => 30 分钟<br> 2h => 2 小时<br> 2h 30m => 2 小时 30 分钟<br> 1.5h => 1 小时 30 分钟<br> 03:15 => 3 小时 15 分钟",
         "TINE_SPENT": "花费时间",
         "TITLE": "为当天添加"
-      },
-      "D_SELECT_DATE_AND_TIME": {
-        "DATE": "日期",
-        "TIME": "时间",
-        "TITLE": "选择日期和时间"
       },
       "N": {
         "ESTIMATE_EXCEEDED": "超出时间估计！",
@@ -1440,6 +1504,7 @@
         "REMINDER_ADDED": "已安排 <strong>{{title}}</strong> 于 <strong>{{date}}</strong>",
         "REMINDER_DELETED": "已删除任务提醒",
         "REMINDER_UPDATED": "已更新任务“{{title}}”的提醒",
+        "TASK_ALREADY_EXISTS": "任务 <strong>{{title}}</strong> 已经存在",
         "TASK_CREATED": "已创建任务“{{taskTitle}}”"
       },
       "SELECT_OR_CREATE": "选择或创建任务",
@@ -1482,14 +1547,14 @@
         "MSG": "移除重复配置会将此任务的所有先前实例转换为普通任务。您确定要继续吗？",
         "OK": "完全移除"
       },
-      "D_DELETE_INSTANCE": {
-        "MSG": "移除 {{date}} 的重复任务实例？这将阻止任务仅在此日期创建。",
-        "OK": "移除实例"
-      },
       "D_CONFIRM_UPDATE_INSTANCES": {
         "CANCEL": "仅未来任务",
         "MSG": "此重复任务有 {{tasksNr}} 个实例。您是想用新的默认值更新所有实例，还是仅更新未来任务？",
         "OK": "更新所有实例"
+      },
+      "D_DELETE_INSTANCE": {
+        "MSG": "移除 {{date}} 的重复任务实例？这将阻止任务仅在此日期创建。",
+        "OK": "移除实例"
       },
       "D_EDIT": {
         "ADD": "添加重复任务配置",
@@ -1554,6 +1619,7 @@
         "FILTER_BY": "筛选方式",
         "FILTER_DEFAULT": "无筛选",
         "FILTER_ESTIMATED_TIME": "预计时间",
+        "FILTER_NOT_SPECIFIED": "未指定",
         "FILTER_PROJECT": "项目",
         "FILTER_SCHEDULED_DATE": "计划日期",
         "FILTER_TAG": "标签",
@@ -1564,24 +1630,23 @@
         "GROUP_SCHEDULED_DATE": "计划日期",
         "GROUP_TAG": "标签",
         "RESET_ALL": "重置全部",
-        "SCHEDULED_DEFAULT": "任意日期",
         "SCHEDULED_NEXT_MONTH": "下个月",
         "SCHEDULED_NEXT_WEEK": "下周",
         "SCHEDULED_THIS_MONTH": "本月",
         "SCHEDULED_THIS_WEEK": "本周",
         "SCHEDULED_TODAY": "今天",
         "SCHEDULED_TOMORROW": "明天",
-        "SORT_TEMPORARY": "排序 （临时）",
+        "SORT_BY": "",
         "SORT_CREATION_DATE": "创建日期",
         "SORT_DEFAULT": "默认",
         "SORT_NAME": "名称",
         "SORT_PERMANENT": "排序 （永久）",
         "SORT_SCHEDULED_DATE": "计划日期",
+        "SORT_TEMPORARY": "排序 (临时)",
         "TIME_1HOUR": "> 1 小时",
         "TIME_2HOUR": "> 2 小时",
         "TIME_10MIN": "> 10 分钟",
         "TIME_30MIN": "> 30 分钟",
-        "TIME_DEFAULT": "任意持续时间",
         "TIME_SPENT": "花费时间",
         "TITLE": "自定义任务视图"
       }
@@ -1715,6 +1780,7 @@
     "DISMISS": "忽略",
     "DO_IT": "做吧！",
     "DONT_SHOW_AGAIN": "不再显示",
+    "DUPLICATE": "重复",
     "DURATION_DESCRIPTION": "例如 \"5h 23m\"，结果为 5 小时 23 分钟",
     "EDIT": "编辑",
     "ENABLED": "启用",
@@ -1747,6 +1813,22 @@
     "YESTERDAY": "昨天"
   },
   "GCF": {
+    "APP_FEATURES": {
+      "BOARDS": "看板",
+      "DONATE_PAGE": "捐赠页面",
+      "FOCUS_MODE": "专注模式",
+      "HELP": "在用户界面中全局启用或禁用特定的应用功能。",
+      "ISSUES_PANEL": "问题面板",
+      "PLANNER": "规划表",
+      "PROJECT_NOTES": "项目笔记",
+      "SCHEDULE": "日程",
+      "SCHEDULE_DAY_PANEL": "日程面板",
+      "SYNC_BUTTON": "同步按钮",
+      "TIME_TRACKING": "秒表式时间追踪",
+      "TITLE": "应用功能",
+      "USER_PROFILES": "用户配置文件 (实验性)",
+      "USER_PROFILES_HINT": "允许您创建和切换不同的用户配置文件，每个配置文件拥有独立的设置、任务和同步配置。启用后，配置文件管理按钮将出现在右上角。注意：禁用此功能将隐藏相关界面，但会保留您的配置文件数据。(此为实验性功能，不作保证。请确保您已备份数据。)"
+    },
     "AUTO_BACKUPS": {
       "HELP": "自动将所有数据保存到您的应用文件夹，以防出现问题。",
       "LABEL_IS_ENABLED": "启用自动备份",
@@ -1769,7 +1851,12 @@
     "FOCUS_MODE": {
       "HELP": "专注模式打开一个无干扰的屏幕，以帮助您专注于当前任务。",
       "L_ALWAYS_OPEN_FOCUS_MODE": "始终在跟踪时打开专注模式",
-      "L_SKIP_PREPARATION_SCREEN": "跳过准备屏幕（拉伸等）",
+      "L_IS_PLAY_TICK": "专注时播放滴答声",
+      "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
+      "L_PAUSE_TRACKING_DURING_BREAK": "休息期间暂停任务跟踪",
+      "L_SKIP_PREPARATION_SCREEN": "跳过准备界面（火箭动画）",
+      "L_START_IN_BACKGROUND": "仅以横幅开始专注时段（无覆盖层）",
+      "L_SYNC_SESSION_WITH_TRACKING": "将专注会话与时间追踪同步",
       "TITLE": "专注模式"
     },
     "IDLE": {
@@ -1847,6 +1934,7 @@
       "EN": "English",
       "ES": "Español",
       "FA": "فارسی",
+      "FI": "Suomi",
       "FR": "français",
       "HR": "Hrvatski",
       "ID": "Indonesian",
@@ -1861,26 +1949,27 @@
       "PT_BR": "Português (Brazil)",
       "RU": "Русский",
       "SK": "Slovak",
+      "SV": "Svenska",
+      "TIME_LOCALE": "时间格式区域",
+      "TIME_LOCALE_AUTO": "系统默认",
+      "TIME_LOCALE_DE_DE": "德语：24小时制，日.月.年",
+      "TIME_LOCALE_DESCRIPTION": "注意：这些选项现在无法改变时间输入格式（12/24 小时），因为它由您的操作系统控制",
+      "TIME_LOCALE_EN_US": "美式英语：12小时制（上午/下午），月/日/年",
+      "TIME_LOCALE_EN_GB": "英式英语：24小时制，日/月/年",
+      "TIME_LOCALE_ES_ES": "西班牙语：24小时制，日/月/年",
+      "TIME_LOCALE_FR_FR": "法语：24小时制，日/月/年",
+      "TIME_LOCALE_IT_IT": "意大利语：24小时制，日/月/年",
+      "TIME_LOCALE_JA_JP": "日语：24小时制，年/月/日",
+      "TIME_LOCALE_KO_KR": "韩语：12小时制（上午/下午），年. 月. 日",
+      "TIME_LOCALE_PT_BR": "巴西葡萄牙语：24小时制，日/月/年",
+      "TIME_LOCALE_RU_RU": "俄语：24小时制，日.月.年",
+      "TIME_LOCALE_TR_TR": "土耳其语：24小时制，日.月.年",
+      "TIME_LOCALE_ZH_CN": "简体中文：24小时制，年/月/日",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)",
-      "TIME_LOCALE": "时间格式区域",
-      "TIME_LOCALE_DESCRIPTION": "注意：这些选项现在无法改变时间输入格式（12/24 小时），因为它由您的操作系统控制",
-      "TIME_LOCALE_AUTO": "系统默认",
-      "TIME_LOCALE_EN_US": "美式英语：12小时制（上午/下午），月/日/年",
-      "TIME_LOCALE_EN_GB": "英式英语：24小时制，日/月/年",
-      "TIME_LOCALE_TR_TR": "土耳其语：24小时制，日.月.年",
-      "TIME_LOCALE_DE_DE": "德语：24小时制，日.月.年",
-      "TIME_LOCALE_FR_FR": "法语：24小时制，日/月/年",
-      "TIME_LOCALE_ES_ES": "西班牙语：24小时制，日/月/年",
-      "TIME_LOCALE_IT_IT": "意大利语：24小时制，日/月/年",
-      "TIME_LOCALE_PT_BR": "巴西葡萄牙语：24小时制，日/月/年",
-      "TIME_LOCALE_RU_RU": "俄语：24小时制，日.月.年",
-      "TIME_LOCALE_ZH_CN": "简体中文：24小时制，年/月/日",
-      "TIME_LOCALE_JA_JP": "日语：24小时制，年/月/日",
-      "TIME_LOCALE_KO_KR": "韩语：12小时制（上午/下午），年. 月. 日"
+      "ZH_TW": "中文(繁體)"
     },
     "MISC": {
       "DARK_MODE": "深色模式",
@@ -1899,7 +1988,6 @@
       "IS_DARK_MODE": "深色模式",
       "IS_DISABLE_ANIMATIONS": "禁用所有动画",
       "IS_DISABLE_CELEBRATION": "在每日摘要中禁用庆祝",
-      
       "IS_HIDE_NAV": "隐藏导航栏，直到鼠标悬停在标题栏上（仅限桌面端）",
       "IS_MINIMIZE_TO_TRAY": "最小化到托盘（仅限桌面）",
       "IS_OVERLAY_INDICATOR_ENABLED": "启用覆盖指示器窗口（桌面 Linux/Gnome）",
@@ -1907,38 +1995,44 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "在托盘/状态菜单中显示当前倒计时（仅限桌面 Mac）",
       "IS_TRAY_SHOW_CURRENT_TASK": "在托盘/状态菜单中显示当前任务（仅限桌面 Mac/Windows）",
       "IS_TURN_OFF_MARKDOWN": "关闭任务描述的 Markdown 解析",
-      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
-      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "使用自定义标题栏（仅限Windows/Linux）",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "需要重启方可生效",
+      "IS_USE_MINIMAL_SIDE_NAV": "",
       "START_OF_NEXT_DAY": "下一天的开始时间",
       "START_OF_NEXT_DAY_HINT": "从何时（小时）开始计算下一天已经开始。默认是午夜，即 0。",
       "TASK_NOTES_TPL": "任务描述模板",
       "THEME": "主题",
       "THEME_EXPERIMENTAL": "主题（实验性）",
-      "THEME_SELECT_LABEL": "选择主题"
-      "TITLE": "更多设置"
+      "THEME_SELECT_LABEL": "选择主题",
+      "TITLE": "更多设置",
+      "USER_PROFILES": "",
+      "USER_PROFILES_HINT": ""
+    },
+    "PAST": {
+      "A_DAY": "",
+      "A_MINUTE": "",
+      "A_MONTH": "",
+      "A_YEAR": "",
+      "AN_HOUR": "",
+      "DAYS": "",
+      "FEW_SECONDS": "",
+      "HOURS": "",
+      "MINUTES": "",
+      "MONTHS": "",
+      "YEARS": ""
     },
     "POMODORO": {
       "BREAK_DURATION": "短休息持续时间",
       "CYCLES_BEFORE_LONGER_BREAK": "在 X 个工作会话后开始更长的休息",
       "DURATION": "工作会话持续时间",
-      "HELP": "<p>可以通过几个设置配置番茄计时器。每个工作会话的持续时间、正常休息的持续时间、开始更长休息之前运行的工作会话数以及这个更长休息的持续时间。</p> <p>您还可以设置是否希望在番茄休息期间显示分心。</p> <p>设置 \"在番茄休息时暂停时间跟踪\" 还会将您的休息时间跟踪为任务的工作时间。</p> <p>启用 \"没有活跃任务时暂停番茄会话\" 还会在您暂停任务时暂停番茄会话。</p>",
-      "IS_ENABLED": "启用番茄计时器",
-      "IS_MANUAL_CONTINUE": "手动确认开始下一个番茄会话",
-      "IS_MANUAL_CONTINUE_BREAK": "手动确认开始下一个休息",
-      "IS_PLAY_SOUND": "会话结束时播放声音",
-      "IS_PLAY_SOUND_AFTER_BREAK": "休息结束时播放声音",
-      "IS_DISABLE_AUTO_START_AFTER_BREAK": "禁用休息后自动开始会话",
-      "IS_PLAY_TICK": "每秒播放滴答声",
-      "IS_STOP_TRACKING_ON_BREAK": "在休息时停止任务的时间跟踪",
-      "LONGER_BREAK_DURATION": "更长休息持续时间",
-      "TITLE": "番茄计时器（旧版）"
+      "LONGER_BREAK_DURATION": "更长休息持续时间"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "在实际提醒前 X 显示横幅",
-      "IS_COUNTDOWN_BANNER_ENABLED": "提醒到期前显示倒计时横幅",
       "DEFAULT_TASK_REMIND_OPTION": "创建任务时默认选中的提醒方式",
-      "TITLE": "提醒",
-      "DISABLE_REMINDERS": "禁用所有提醒"
+      "DISABLE_REMINDERS": "禁用所有提醒",
+      "IS_COUNTDOWN_BANNER_ENABLED": "提醒到期前显示倒计时横幅",
+      "TITLE": "提醒"
     },
     "SCHEDULE": {
       "HELP": "计划功能应为您快速概览计划任务如何随时间展开。您可以在左侧菜单 <a href='#/schedule'>'计划'</a> 下找到它。",
@@ -1998,22 +2092,21 @@
       "L_TRACKING_REMINDER_MIN_TIME": "在显示跟踪提醒横幅前等待的时间",
       "TITLE": "时间跟踪"
     },
-    "APP_FEATURES": {
-      "HELP": "启用或禁用整个界面中的特定应用功能。",
-      "TITLE": "应用功能",
-      "TIME_TRACKING": "秒表时间追踪",
-      "FOCUS_MODE": "专注模式",
-      "SCHEDULE": "日程",
-      "PLANNER": "规划器",
-      "BOARDS": "看板",
-      "SCHEDULE_DAY_PANEL": "日程日面板",
-      "ISSUES_PANEL": "问题面板",
-      "PROJECT_NOTES": "项目笔记",
-      "SYNC_BUTTON": "同步按钮",
-      "DONATE_PAGE": "捐赠页面",
-      "USER_PROFILES": "用户配置文件（实验性）",
-      "USER_PROFILES_HINT": "允许您创建并切换不同的用户配置文件，每个配置文件拥有独立的设置、任务和同步配置。启用后，配置文件管理按钮将出现在右上角。注意：关闭此功能会隐藏界面，但您的配置文件数据将被保留（实验性功能，无法保证稳定性，请务必提前备份）。"
+    "TIMELINE": {
+      "CAL_PROVIDERS": "",
+      "CAL_PROVIDERS_ADD": "",
+      "CAL_PROVIDERS_INFO": "",
+      "HELP": "",
+      "L_CAL_PATH": "",
+      "L_IS_WORK_START_END_ENABLED": "",
+      "L_WORK_END": "",
+      "L_WORK_START": "",
+      "TITLE": "",
+      "WORK_START_END_DESCRIPTION": ""
     }
+  },
+  "GLOBAL": {
+    "COPY_SUFFIX": " (复制)"
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
@@ -2047,23 +2140,20 @@
     "COPY_TO_CLIPPBOARD": "已复制到剪贴板",
     "DUPLICATE_PROJECT_ERROR": "该项目无法克隆",
     "DUPLICATE_PROJECT_SUCCESS": "项目克隆成功",
-    "NO_TASKS_TO_COPY": "没有要复制的任务",
-    "SHARE_UNAVAILABLE_FALLBACK": "已复制到剪贴板。",
-    "SHARE_FAILED_FALLBACK": "共享失败。改为复制到剪贴板。",
-    "SHARE_FAILED": "共享失败。请手动复制。",
     "ERR_COMPRESSION": "压缩接口错误",
     "FILE_DOWNLOADED": "{{fileName}} 已下载",
     "FILE_DOWNLOADED_BTN": "打开文件夹",
     "NAVIGATE_TO_TASK_ERR": "无法聚焦到任务。您是否删除了它？",
+    "NO_TASKS_TO_COPY": "没有要复制的任务",
+    "NO_TASKS_TO_UNPLAN": "没有任务需要取消",
     "PERSISTENCE_DISALLOWED": "数据将不会永久保留。请注意，这可能导致数据丢失！！",
     "PERSISTENCE_ERROR": "请求持久化数据时出错：{{err}}",
     "RUNNING_X": "正在运行 \"{{str}}\"。",
+    "SHARE_UNAVAILABLE_FALLBACK": "已复制到剪贴板。",
+    "SHARE_FAILED_FALLBACK": "共享失败。改为复制到剪贴板。",
+    "SHARE_FAILED": "共享失败。请手动复制。",
     "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "按下了 {{keyCombo}}，但在项目上下文中才可使用打开书签快捷键。",
-    "UNPLANNED_TODAY_TASKS": "取消今日所有的任务",
-    "NO_TASKS_TO_UNPLAN": "没有任务需要取消"
-  },
-  "GLOBAL": {
-    "COPY_SUFFIX": " (copy)"
+    "UNPLANNED_TODAY_TASKS": "取消今日所有的任务"
   },
   "GPB": {
     "ASSETS": "正在加载资源...",
@@ -2105,6 +2195,7 @@
     "METRICS": "指标",
     "NO_PROJECT_INFO": "没有可用项目。您可以通过点击 \"创建项目\" 按钮创建新项目。",
     "NO_TAG_INFO": "当前没有标签。您可以通过在添加或编辑任务时输入 `#yourTagName` 来添加标签。",
+    "NO_TASKS_TO_TRACK": "请先添加任务以开始时间追踪",
     "NOTES": "备注",
     "NOTES_PANEL_INFO": "只能从计划和常规任务列表视图中显示备注。",
     "PLANNER": "规划表",
@@ -2143,6 +2234,7 @@
       "SINGULAR": "已有 {{count}} 个已完成的父任务被归档",
       "PLURAL": "已有 {{count}} 个已完成的父任务被归档"
     },
+    "BACK": "",
     "BREAK_LABEL": "休息（数量/时间）",
     "CELEBRATE": "花一点时间来 <i>庆祝！</i>",
     "CLEAR_ALL_CONTINUE": "清除所有已完成并继续",

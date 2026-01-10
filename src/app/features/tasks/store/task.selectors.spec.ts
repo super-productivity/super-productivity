@@ -388,6 +388,88 @@ describe('Task Selectors', () => {
       expect(result[0]).toBe('ISSUE-123');
     });
 
+    it('should select all calendar issue tasks', () => {
+      const result = fromSelectors.selectAllCalendarIssueTasks(mockState);
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('task8');
+      expect(result[0].issueType).toBe('ICAL');
+    });
+
+    it('should select all calendar issue tasks from multiple projects', () => {
+      // Create a state with multiple calendar tasks across different projects
+      const multiCalendarTasks: { [id: string]: Task } = {
+        ...mockTasks,
+        calTask1: {
+          id: 'calTask1',
+          title: 'Calendar Task 1',
+          created: Date.now(),
+          isDone: false,
+          subTaskIds: [],
+          tagIds: [],
+          projectId: 'project1',
+          timeSpentOnDay: {},
+          issueId: 'CAL-001',
+          issueType: 'ICAL',
+          issueProviderId: 'cal-provider-1',
+          timeEstimate: 3600000,
+          timeSpent: 0,
+          attachments: [],
+        },
+        calTask2: {
+          id: 'calTask2',
+          title: 'Calendar Task 2',
+          created: Date.now(),
+          isDone: false,
+          subTaskIds: [],
+          tagIds: [],
+          projectId: 'project2', // Different project
+          timeSpentOnDay: {},
+          issueId: 'CAL-002',
+          issueType: 'ICAL',
+          issueProviderId: 'cal-provider-1',
+          timeEstimate: 1800000,
+          timeSpent: 0,
+          attachments: [],
+        },
+        calTask3: {
+          id: 'calTask3',
+          title: 'Calendar Task 3',
+          created: Date.now(),
+          isDone: false,
+          subTaskIds: [],
+          tagIds: [],
+          projectId: 'project3', // Third project (hidden)
+          timeSpentOnDay: {},
+          issueId: 'CAL-003',
+          issueType: 'ICAL',
+          issueProviderId: 'cal-provider-2', // Different provider
+          timeEstimate: 7200000,
+          timeSpent: 0,
+          attachments: [],
+        },
+      };
+
+      const multiCalendarState = {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: Object.keys(multiCalendarTasks),
+          entities: multiCalendarTasks,
+        },
+      };
+
+      const result = fromSelectors.selectAllCalendarIssueTasks(multiCalendarState);
+      // Should return all 4 ICAL tasks (task8 + 3 new ones)
+      expect(result.length).toBe(4);
+      // All should have issueType ICAL
+      expect(result.every((t) => t.issueType === 'ICAL')).toBe(true);
+      // Should include tasks from all projects
+      const projectIds = result.map((t) => t.projectId);
+      expect(projectIds).toContain('project1');
+      expect(projectIds).toContain('project2');
+      expect(projectIds).toContain('project3');
+    });
+
     it('should select tasks worked on or done for a day', () => {
       const result = fromSelectors.selectTasksWorkedOnOrDoneFlat(mockState, {
         day: today,

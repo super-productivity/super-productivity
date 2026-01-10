@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { IssueServiceInterface } from '../../issue-service-interface';
 import {
@@ -9,12 +9,14 @@ import {
   SearchResultItem,
 } from '../../issue.model';
 import { CalendarIntegrationService } from '../../../calendar-integration/calendar-integration.service';
-import { map, switchMap } from 'rxjs/operators';
+import { first, map, switchMap } from 'rxjs/operators';
+import { matchesAnyCalendarEventId } from '../../../calendar-integration/get-calendar-event-id-candidates';
 import { IssueProviderService } from '../../issue-provider.service';
 import { CalendarProviderCfg, ICalIssueReduced } from './calendar.model';
 import { HttpClient } from '@angular/common/http';
 import { ICAL_TYPE } from '../../issue.const';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
+import { CALENDAR_POLL_INTERVAL } from './calendar.const';
 
 @Injectable({
   providedIn: 'root',
@@ -28,8 +30,7 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     return cfg.isEnabled && cfg.icalUrl?.length > 0;
   }
 
-  // We currently don't support polling for calendar events
-  pollInterval: number = 0;
+  pollInterval: number = CALENDAR_POLL_INTERVAL;
 
   issueLink(issueId: number, issueProviderId: string): Promise<string> {
     return Promise.resolve('NONE');
@@ -65,9 +66,12 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     };
   }
 
-  searchIssues(query: string, issueProviderId: string): Promise<SearchResultItem[]> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(
+  async searchIssues(
+    query: string,
+    issueProviderId: string,
+  ): Promise<SearchResultItem[]> {
+    const result = await firstValueFrom(
+      this._getCfgOnce$(issueProviderId).pipe(
         switchMap((cfg) =>
           this._calendarIntegrationService.requestEventsForSchedule$(cfg, true),
         ),
@@ -82,9 +86,9 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
               issueData: calEvent,
             })),
         ),
-      )
-      .toPromise()
-      .then((result) => result ?? []);
+      ),
+    );
+    return result ?? [];
   }
 
   async getFreshDataForIssueTask(task: Task): Promise<{
@@ -92,7 +96,13 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     issue: IssueData;
     issueTitle: string;
   } | null> {
-    return null;
+    const results = await this.getFreshDataForIssueTasks([task]);
+    if (!results.length) return null;
+    return {
+      taskChanges: results[0].taskChanges,
+      issue: results[0].issue,
+      issueTitle: (results[0].issue as unknown as ICalIssueReduced).title,
+    };
   }
 
   async getFreshDataForIssueTasks(tasks: Task[]): Promise<
@@ -102,7 +112,56 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
       issue: IssueData;
     }[]
   > {
-    return [];
+    // Group tasks by provider to minimize fetches
+    const tasksByProvider = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!task.issueProviderId || !task.issueId) continue;
+      const existing = tasksByProvider.get(task.issueProviderId) || [];
+      existing.push(task);
+      tasksByProvider.set(task.issueProviderId, existing);
+    }
+
+    const results: {
+      task: Readonly<Task>;
+      taskChanges: Partial<Readonly<Task>>;
+      issue: IssueData;
+    }[] = [];
+
+    for (const [providerId, providerTasks] of tasksByProvider) {
+      const cfg = await firstValueFrom(this._getCfgOnce$(providerId).pipe(first()));
+      if (!cfg) continue;
+
+      const events = await firstValueFrom(
+        this._calendarIntegrationService
+          .requestEventsForSchedule$(cfg, false)
+          .pipe(first()),
+      );
+      if (!events?.length) continue;
+
+      for (const task of providerTasks) {
+        const matchingEvent = events.find((ev) =>
+          matchesAnyCalendarEventId(ev, [task.issueId as string]),
+        );
+        if (!matchingEvent) continue;
+
+        const taskData = this.getAddTaskData(matchingEvent);
+        const hasChanges =
+          taskData.dueWithTime !== task.dueWithTime ||
+          taskData.dueDay !== task.dueDay ||
+          taskData.title !== task.title ||
+          taskData.timeEstimate !== task.timeEstimate;
+
+        if (hasChanges) {
+          results.push({
+            task,
+            taskChanges: { ...taskData, issueWasUpdated: true },
+            issue: matchingEvent as unknown as IssueData,
+          });
+        }
+      }
+    }
+
+    return results;
   }
 
   async getNewIssuesToAddToBacklog(

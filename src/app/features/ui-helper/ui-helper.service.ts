@@ -54,6 +54,29 @@ export class UiHelperService {
     }
   }
 
+  /**
+   * Focus app after a delay to prevent accidental input.
+   * Used for "surprise" focus scenarios (tracking reminder, idle, take-a-break)
+   * where user might still be typing in another app.
+   */
+  focusAppAfterNotification(): void {
+    if (!IS_ELECTRON) {
+      return;
+    }
+
+    const FOCUS_DELAY_MS = 1500;
+
+    setTimeout(() => {
+      window.ea.showOrFocus();
+      // Blur after focus to prevent any task input from receiving keystrokes
+      setTimeout(() => {
+        if (document.activeElement && document.activeElement !== document.body) {
+          (document.activeElement as HTMLElement).blur();
+        }
+      }, 100);
+    }, FOCUS_DELAY_MS);
+  }
+
   private _zoomFactorMinMax(zoomFactor: number): number {
     zoomFactor = Math.min(Math.max(zoomFactor, 0.1), 4);
     zoomFactor = Math.round(zoomFactor * 1000) / 1000;

@@ -82,12 +82,28 @@
     font-size: 24px;
   }
 
-  @media (max-height: 250px) {
+  @media (max-width: 333px) {
     font-size: 18px;
+  }
+}
+
+.parent-title {
+  text-align: center;
+  margin-bottom: 6px;
+  opacity: 0.8;
+  font-size: 15px;
+  line-height: 1.2;
+  max-width: 90%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (max-width: 499px) {
+    font-size: 12px;
   }
 
   @media (max-width: 333px) {
-    font-size: 18px;
+    font-size: 10px;
   }
 }
 

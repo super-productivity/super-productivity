@@ -6,7 +6,7 @@ I am not an Android developer, so help would be very welcome!!
 
 ## New Connectivity-Free Mode is Here!
 
-_This feature was added on October 7, 2024. See [Pull Request #57](https://github.com/johannesjo/super-productivity-android/pull/57)._
+_This feature was added on October 7, 2024. See [Pull Request #57](https://github.com/super-productivity/super-productivity-android/pull/57)._
 
 You can now use the core features of the app without an internet connection, offering a smoother and more reliable experience. We've made several key updates to enhance usability:
 

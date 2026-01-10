@@ -225,19 +225,37 @@ export class WebdavApi {
             uploadError.response.status === WebDavHttpStatus.CONFLICT)
         ) {
           PFLog.debug(
-            `${WebdavApi.L}.upload() got 409, attempting to create parent directory`,
+            `${WebdavApi.L}.upload() got 409 Conflict for ${fullPath}. ` +
+              `This often indicates the sync folder path is misconfigured. ` +
+              `Attempting to create parent directory...`,
           );
 
           // Try to create parent directory
           await this._ensureParentDirectory(fullPath);
 
           // Retry the upload
-          response = await this._makeRequest({
-            url: fullPath,
-            method: WebDavHttpMethod.PUT,
-            body: data,
-            headers,
-          });
+          try {
+            response = await this._makeRequest({
+              url: fullPath,
+              method: WebDavHttpMethod.PUT,
+              body: data,
+              headers,
+            });
+          } catch (retryError) {
+            // If retry also fails with 409, log a helpful error message
+            if (
+              retryError instanceof HttpNotOkAPIError &&
+              retryError.response &&
+              retryError.response.status === WebDavHttpStatus.CONFLICT
+            ) {
+              PFLog.err(
+                `${WebdavApi.L}.upload() 409 Conflict persists for ${fullPath} after creating parent directory. ` +
+                  `Verify your syncFolderPath is relative to the WebDAV server root, ` +
+                  `not your server's internal directory path.`,
+              );
+            }
+            throw retryError;
+          }
         } else {
           throw uploadError;
         }
@@ -326,6 +344,49 @@ export class WebdavApi {
     } catch (e) {
       PFLog.error(`${WebdavApi.L}.remove() error`, { path, error: e });
       throw e;
+    }
+  }
+
+  async testConnection(
+    cfg: WebdavPrivateCfg,
+  ): Promise<{ success: boolean; error?: string; fullUrl: string }> {
+    const fullPath = this._buildFullPath(cfg.baseUrl, cfg.syncFolderPath);
+    PFLog.verbose(`${WebdavApi.L}.testConnection() testing ${fullPath}`);
+
+    try {
+      // Build authorization header
+      const auth = btoa(`${cfg.userName}:${cfg.password}`);
+      const headers = {
+        [WebDavHttpHeader.AUTHORIZATION]: `Basic ${auth}`,
+        [WebDavHttpHeader.CONTENT_TYPE]: 'application/xml; charset=utf-8',
+        [WebDavHttpHeader.DEPTH]: '0',
+      };
+
+      // Try PROPFIND on the sync folder path
+      const response = await this.httpAdapter.request({
+        url: fullPath,
+        method: WebDavHttpMethod.PROPFIND,
+        headers,
+        body: WebdavXmlParser.PROPFIND_XML,
+      });
+
+      if (
+        response.status === WebDavHttpStatus.MULTI_STATUS ||
+        response.status === WebDavHttpStatus.OK
+      ) {
+        PFLog.verbose(`${WebdavApi.L}.testConnection() success for ${fullPath}`);
+        return { success: true, fullUrl: fullPath };
+      }
+
+      return {
+        success: false,
+        error: `Unexpected status ${response.status}`,
+        fullUrl: fullPath,
+      };
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+      PFLog.warn(`${WebdavApi.L}.testConnection() failed for ${fullPath}`, e);
+      return { success: false, error: errorMessage, fullUrl: fullPath };
     }
   }
 
@@ -428,7 +489,7 @@ export class WebdavApi {
       // We need to robustly handle various combinations of encoded/unencoded baseUrls and paths,
       // especially for providers like Mailbox.org that include spaces in the user's path.
       // We also want to avoid double-encoding if the path is already encoded.
-      // See: https://github.com/johannesjo/super-productivity/issues/5508
+      // See: https://github.com/super-productivity/super-productivity/issues/5508
       let url: URL;
       try {
         url = new URL(baseUrl);

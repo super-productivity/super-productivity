@@ -5,10 +5,10 @@
   "version": "2.0.0",
   "description": "Sync markdown files with SuperProductivity projects",
   "author": "SuperProductivity",
-  "homepage": "https://github.com/johannesjo/super-productivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
   "repository": {
     "type": "git",
-    "url": "https://github.com/johannesjo/super-productivity.git"
+    "url": "https://github.com/super-productivity/super-productivity.git"
   },
   "minSupVersion": "10.0.0",
   "permissions": [

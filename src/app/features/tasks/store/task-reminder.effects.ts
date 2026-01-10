@@ -14,6 +14,9 @@ import { flattenTasks } from './task.selectors';
 import { Store } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { androidInterface } from '../../android/android-interface';
+import { generateNotificationId } from '../../android/android-notification-id.util';
 
 @Injectable()
 export class TaskReminderEffects {
@@ -129,6 +132,21 @@ export class TaskReminderEffects {
         ofType(TaskSharedActions.deleteTask),
         tap(({ task }) => {
           const deletedTaskIds = [task.id, ...task.subTaskIds];
+
+          // On Android, immediately cancel native reminders to prevent notifications
+          // for deleted tasks. This is necessary because the reactive cancellation
+          // via reminders$ observable can fail when the app is backgrounded.
+          if (IS_ANDROID_WEB_VIEW) {
+            deletedTaskIds.forEach((id) => {
+              try {
+                const notificationId = generateNotificationId(id);
+                androidInterface.cancelNativeReminder?.(notificationId);
+              } catch (e) {
+                console.error('Failed to cancel native reminder:', e);
+              }
+            });
+          }
+
           deletedTaskIds.forEach((id) => {
             this._reminderService.removeReminderByRelatedIdIfSet(id);
           });
@@ -146,7 +164,18 @@ export class TaskReminderEffects {
           if (!flatTasks.length) {
             return;
           }
+
           flatTasks.forEach((t) => {
+            // On Android, immediately cancel native reminder
+            if (IS_ANDROID_WEB_VIEW) {
+              try {
+                const notificationId = generateNotificationId(t.id);
+                androidInterface.cancelNativeReminder?.(notificationId);
+              } catch (e) {
+                console.error('Failed to cancel native reminder:', e);
+              }
+            }
+
             if (t.reminderId) {
               this._reminderService.removeReminder(t.reminderId);
             }
@@ -160,6 +189,18 @@ export class TaskReminderEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteTasks),
         tap(({ taskIds }) => {
+          // On Android, immediately cancel native reminders
+          if (IS_ANDROID_WEB_VIEW) {
+            taskIds.forEach((id) => {
+              try {
+                const notificationId = generateNotificationId(id);
+                androidInterface.cancelNativeReminder?.(notificationId);
+              } catch (e) {
+                console.error('Failed to cancel native reminder:', e);
+              }
+            });
+          }
+
           this._reminderService.removeRemindersByRelatedIds(taskIds);
         }),
       ),
@@ -174,6 +215,18 @@ export class TaskReminderEffects {
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         tap((task) => {
           if (task.reminderId) {
+            // On Android, immediately cancel native reminder to prevent notifications
+            // for done tasks. This is necessary because the reactive cancellation
+            // via reminders$ observable can have a delay.
+            if (IS_ANDROID_WEB_VIEW) {
+              try {
+                const notificationId = generateNotificationId(task.id);
+                androidInterface.cancelNativeReminder?.(notificationId);
+              } catch (e) {
+                console.error('Failed to cancel native reminder:', e);
+              }
+            }
+
             // TODO refactor to map with dispatch
             this._store.dispatch(
               TaskSharedActions.unscheduleTask({
@@ -219,6 +272,17 @@ export class TaskReminderEffects {
           }
         }),
         tap(({ id, reminderId }) => {
+          // On Android, immediately cancel native reminder to prevent alarm from firing
+          // after reminder is removed. This is necessary because the reactive cancellation
+          // via reminders$ observable can fail when the app is backgrounded.
+          if (IS_ANDROID_WEB_VIEW) {
+            try {
+              const notificationId = generateNotificationId(id);
+              androidInterface.cancelNativeReminder?.(notificationId);
+            } catch (e) {
+              console.error('Failed to cancel native reminder:', e);
+            }
+          }
           this._reminderService.removeReminder(reminderId as string);
         }),
       ),
@@ -231,7 +295,7 @@ export class TaskReminderEffects {
       concatMap(({ taskIds }) => this._taskService.getByIdsLive$(taskIds).pipe(first())),
       mergeMap((tasks) =>
         tasks
-          .filter((task) => !!task.reminderId)
+          .filter((task) => !!task?.reminderId)
           .map((task) =>
             removeReminderFromTask({
               id: task.id,

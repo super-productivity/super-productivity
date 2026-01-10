@@ -36,6 +36,7 @@ import { SimpleCounter } from '../../simple-counter/simple-counter.model';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatFabButton, MatIconButton, MatMiniFabButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-markdown.component';
@@ -64,6 +65,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
 import { ANI_STANDARD_TIMING } from '../../../ui/animations/animation.const';
 import { FocusModeTaskSelectorComponent } from '../focus-mode-task-selector/focus-mode-task-selector.component';
+import { DialogPomodoroSettingsComponent } from '../dialog-pomodoro-settings/dialog-pomodoro-settings.component';
 
 @Component({
   selector: 'focus-mode-main',
@@ -112,6 +114,7 @@ export class FocusModeMainComponent {
   private readonly _issueService = inject(IssueService);
   private readonly _store = inject(Store);
   private readonly _focusModeStorage = inject(FocusModeStorageService);
+  private readonly _matDialog = inject(MatDialog);
 
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly taskService = inject(TaskService);
@@ -127,6 +130,22 @@ export class FocusModeMainComponent {
   mainState = this.focusModeService.mainState;
   currentTask = toSignal(this.taskService.currentTask$);
 
+  readonly parentTask = toSignal(
+    this.taskService.currentTask$.pipe(
+      switchMap((t) =>
+        t && t.parentId ? this.taskService.getByIdLive$(t.parentId) : of(null),
+      ),
+    ),
+  );
+
+  readonly parentTaskTitle = computed(() => {
+    const parent = this.parentTask();
+    if (!parent) {
+      return null;
+    }
+    return parent.title;
+  });
+
   private readonly _isPreparation = computed(
     () => this.mainState() === FocusMainUIState.Preparation,
   );
@@ -141,6 +160,9 @@ export class FocusModeMainComponent {
   isTaskSelectorOpen = signal(false);
 
   isShowModeSelector = computed(() => this._isPreparation());
+  isShowPomodoroSettings = computed(
+    () => this._isPreparation() && this.mode() === FocusModeMode.Pomodoro,
+  );
   isShowSimpleCounters = computed(() => this._isInProgress());
   isShowPauseButton = computed(() => this._isInProgress());
   isShowCompleteSessionButton = computed(() => this._isInProgress());
@@ -340,7 +362,8 @@ export class FocusModeMainComponent {
   }
 
   pauseSession(): void {
-    this._store.dispatch(pauseFocusSession());
+    const currentTaskId = this.taskService.currentTaskId();
+    this._store.dispatch(pauseFocusSession({ pausedTaskId: currentTaskId }));
   }
 
   resumeSession(): void {
@@ -352,6 +375,10 @@ export class FocusModeMainComponent {
       return;
     }
     this._store.dispatch(setFocusModeMode({ mode: mode as FocusModeMode }));
+  }
+
+  openPomodoroSettings(): void {
+    this._matDialog.open(DialogPomodoroSettingsComponent);
   }
 
   onDurationChange(duration: number): void {

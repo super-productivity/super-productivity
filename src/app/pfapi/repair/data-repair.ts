@@ -69,6 +69,7 @@ export const dataRepair = (
   dataOut = _removeDuplicatesFromArchive(dataOut);
   dataOut = _removeMissingReminderIds(dataOut);
   dataOut = _fixTaskRepeatMissingWeekday(dataOut);
+  dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut);
   dataOut = _createInboxProjectIfNecessary(dataOut);
   dataOut = _fixOrphanedNotes(dataOut);
   dataOut = _removeNonExistentProjectIdsFromTasks(dataOut);
@@ -92,6 +93,33 @@ const _fixTaskRepeatMissingWeekday = (data: AppDataCompleteNew): AppDataComplete
       cfg.friday = cfg.friday ?? false;
       cfg.saturday = cfg.saturday ?? false;
       cfg.sunday = cfg.sunday ?? false;
+    });
+  }
+  return data;
+};
+
+// Fix for issue #5802: repeat configs with date-dependent quickSetting but missing startDate
+const _fixTaskRepeatCfgInvalidQuickSetting = (
+  data: AppDataCompleteNew,
+): AppDataCompleteNew => {
+  if (data.taskRepeatCfg && data.taskRepeatCfg.entities) {
+    const quickSettingsRequiringStartDate = [
+      'WEEKLY_CURRENT_WEEKDAY',
+      'YEARLY_CURRENT_DATE',
+      'MONTHLY_CURRENT_DATE',
+    ];
+    Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
+      const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
+      if (
+        cfg.quickSetting &&
+        quickSettingsRequiringStartDate.includes(cfg.quickSetting) &&
+        !cfg.startDate
+      ) {
+        PFLog.log(
+          `Fixing repeat config ${cfg.id}: ${cfg.quickSetting} with missing startDate -> CUSTOM`,
+        );
+        cfg.quickSetting = 'CUSTOM';
+      }
     });
   }
   return data;

@@ -29,7 +29,7 @@ export const autoFixTypiaErrors = (
       } else if (keys[0] === 'globalConfig') {
         const defaultValue = getValueByPath(DEFAULT_GLOBAL_CONFIG, keys.slice(1));
         setValueByPath(data, keys, defaultValue);
-        alert(
+        PFLog.warn(
           `Warning: ${path} had an invalid value and was set to default: ${defaultValue}`,
         );
       } else if (error.expected.includes('undefined') && value === null) {
@@ -85,6 +85,27 @@ export const autoFixTypiaErrors = (
         const orderValue = orderIndex >= 0 ? orderIndex : 0;
         setValueByPath(data, keys, orderValue);
         PFLog.err(`Fixed: ${path} from null to ${orderValue} for taskRepeatCfg order`);
+      } else if (
+        keys[0] === 'metric' &&
+        keys[1] === 'entities' &&
+        keys.length === 4 &&
+        ['obstructions', 'improvements', 'improvementsTomorrow'].includes(
+          keys[3] as string,
+        ) &&
+        error.expected.includes('Array<string>')
+      ) {
+        // Fix deprecated metric array fields (obstructions, improvements, improvementsTomorrow)
+        // These fields are marked "TODO remove" and will be removed in future
+        setValueByPath(data, keys, []);
+        PFLog.err(`Fixed: ${path} to empty array for deprecated metric field`);
+      } else if (
+        keys[0] === 'improvement' &&
+        keys[1] === 'hiddenImprovementBannerItems' &&
+        error.expected.includes('Array<string>')
+      ) {
+        // Fix improvement.hiddenImprovementBannerItems (deprecated)
+        setValueByPath(data, keys, []);
+        PFLog.err(`Fixed: ${path} to empty array for deprecated improvement field`);
       }
     }
   });
@@ -117,7 +138,11 @@ const parsePath = (path: string): (string | number)[] => {
   return keys;
 };
 
-const getValueByPath = <T, R = any>(obj: T, path: (string | number)[]): R | undefined =>
+const getValueByPath = <T, R = unknown>(
+  obj: T,
+  path: (string | number)[],
+): R | undefined =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   path.reduce<any>((acc, key) => acc?.[key], obj);
 
 const setValueByPath = <T extends object>(

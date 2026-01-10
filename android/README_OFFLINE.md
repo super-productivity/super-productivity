@@ -17,7 +17,7 @@ For users performing a **new installation**, setting `LAUNCH_MODE` to `2` ensure
 To set up the project, clone the `super-productivity` repository instead of directly cloning the `super-productivity-android` repository. This ensures that all submodules, including the Android project, are properly initialized.
 
 ```bash
-git clone https://github.com/johannesjo/super-productivity.git
+git clone https://github.com/super-productivity/super-productivity.git
 cd super-productivity
 git submodule init
 git submodule update

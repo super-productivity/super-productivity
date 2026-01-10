@@ -79,7 +79,7 @@ export class BannerService {
     //     action: {
     //       label: 'Report',
     //       fn: () =>
-    //         window.open('https://github.com/johannesjo/super-productivity/issues/new'),
+    //         window.open('https://github.com/super-productivity/super-productivity/issues/new'),
     //     },
     //     action2: {
     //       label: 'Reload App',

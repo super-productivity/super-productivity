@@ -5,7 +5,7 @@ describe('getRelevantEventsForCalendarIntegrationFromIcal - EXDATE Support', () 
   const startTimestamp = new Date('2025-01-01T00:00:00Z').getTime();
   const endTimestamp = new Date('2025-01-10T23:59:59Z').getTime();
 
-  it('should exclude date specified in EXDATE', () => {
+  it('should exclude date specified in EXDATE', async () => {
     const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -19,7 +19,7 @@ SUMMARY:Daily with EXDATE
 END:VEVENT
 END:VCALENDAR`;
 
-    const events = getRelevantEventsForCalendarIntegrationFromIcal(
+    const events = await getRelevantEventsForCalendarIntegrationFromIcal(
       icalData,
       calProviderId,
       startTimestamp,
@@ -35,7 +35,7 @@ END:VCALENDAR`;
     expect(eventDates).toEqual(['2025-01-01', '2025-01-03']);
   });
 
-  it('should exclude multiple dates specified in multiple EXDATE properties', () => {
+  it('should exclude multiple dates specified in multiple EXDATE properties', async () => {
     const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -50,7 +50,7 @@ SUMMARY:Daily with Multiple EXDATEs
 END:VEVENT
 END:VCALENDAR`;
 
-    const events = getRelevantEventsForCalendarIntegrationFromIcal(
+    const events = await getRelevantEventsForCalendarIntegrationFromIcal(
       icalData,
       calProviderId,
       startTimestamp,
@@ -67,7 +67,7 @@ END:VCALENDAR`;
     expect(eventDates).toEqual(['2025-01-01', '2025-01-03', '2025-01-05']);
   });
 
-  it('should exclude multiple dates specified in a single EXDATE property (comma separated)', () => {
+  it('should exclude multiple dates specified in a single EXDATE property (comma separated)', async () => {
     const icalData = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Test//Test//EN
@@ -81,7 +81,7 @@ SUMMARY:Daily with Comma Separated EXDATE
 END:VEVENT
 END:VCALENDAR`;
 
-    const events = getRelevantEventsForCalendarIntegrationFromIcal(
+    const events = await getRelevantEventsForCalendarIntegrationFromIcal(
       icalData,
       calProviderId,
       startTimestamp,

@@ -3,13 +3,13 @@
     @if (enableTimeframeSelector()) {
       <div class="timeframe-selector">
         <span class="timeframe-label">
-          {{ 'F.METRIC.CMP.TIME_FRAME_LABEL' | translate }}
+          {{ T.F.METRIC.CMP.TIME_FRAME_LABEL | translate }}
         </span>
         <mat-radio-group
           class="timeframe-radios"
           [value]="selectedTimeframe()"
           (change)="onTimeframeRadioChange($event)"
-          [attr.aria-label]="'F.METRIC.CMP.TIME_FRAME_LABEL' | translate"
+          [attr.aria-label]="T.F.METRIC.CMP.TIME_FRAME_LABEL | translate"
         >
           @for (option of timeframeOptions; track option.id) {
             <mat-radio-button [value]="option.id">
@@ -26,7 +26,7 @@
       type="button"
       (click)="shareChart()"
       [disabled]="!isModuleLoaded() || isSharing()"
-      [matTooltip]="'Share Chart' | translate"
+      [matTooltip]="T.G.SHARE | translate"
     >
       @if (isSharing()) {
         <mat-icon>hourglass_empty</mat-icon>

@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "Mohon periksa dan lakukan apa yang harus dilakukan.",
-      "SYNC_CONFLICT_TITLE": "Konflik sinkronasi terjadi"
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "Aplikasi berjalan di latar belakang untuk memungkinkan sinkronasi jika diaktifkan",
-      "NO_ACTIVE_TASKS": "Tidak ada tugas yang aktif",
-      "SYNCING": "Menyinkronkan"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "Abaikan",
@@ -20,8 +9,7 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Ubah Latar Belakang"
     },
-    "UPDATE_MAIN_MODEL": "Super Productivity mendapatkan pembaruan! Diperlukan beberapa migrasi untuk data Anda. Ingat, bahwa ini membuat data Anda tidak kompatibel dengan versi yang lama.",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "Tidak ada pembaruan model yang dipilih. Catat! Bahwa Anda juga harus menurunkan versi ke versi terakhir, jika tidak ingin melakukan peningkatan model.",
+    "SKIP_SYNC_WAIT": "Lewati menunggu sinkronisasi",
     "UPDATE_WEB_APP": "Versi baru tersedia. Muat Versi Terbaru?"
   },
   "BL": {
@@ -29,8 +17,7 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Tampilkan Panel Masalah",
-    "SHOW_NOTES": "Tampilkan Catatan Proyek",
-    "SHOW_TASK_VIEW_CUSTOMIZER_PANEL": "Tampilkan Panel Filter/Grup/Sortir"
+    "SHOW_NOTES": "Tampilkan Catatan Proyek"
   },
   "CONFIRM": {
     "AUTO_FIX": "Apa Anda ingin memperbaikinya secara otomatis? Ini dapat mengakibatkan hilangnya sebagian data.",
@@ -40,11 +27,7 @@
     "RESTORE_STRAY_BACKUP": "Selama sinkronisasi terakhir mungkin ada beberapa kesalahan. Apakah Anda ingin memulihkan cadangan terakhir?"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "Nanti hari ini",
-    "NEXT_WEEK": "Minggu depan",
-    "PLACEHOLDER": "Pilih tanggal",
-    "PRESS_ENTER_AGAIN": "Tekan enter lagi untuk menyimpan",
-    "TOMORROW": "Besok"
+    "PRESS_ENTER_AGAIN": "Tekan enter lagi untuk menyimpan"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "Oleh",
@@ -53,13 +36,17 @@
     "SEARCH_PLACEHOLDER": "misalnya, alam, gunung, abstrak",
     "TITLE": "Pilih Gambar Latar dari Unsplash"
   },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "Donasi melalui GitHub Sponsors",
+    "INTRO_1": "Super Productivity sepenuhnya didanai oleh komunitas. Tidak ada pelacakan, iklan, atau pengumpulan data — tugas Anda tetap di perangkat Anda.",
+    "INTRO_2": "Jika Anda menghargai pendekatan ini dan ingin menjaga proyek tetap sehat dan berkembang, donasi sukarela sangat dihargai."
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Tambah lampiran",
         "EDIT_ATTACHMENT": "Ubah lampiran",
         "LABELS": {
-          "FILE": "Jalur file",
           "IMG": "Gambar",
           "LINK": "Url"
         },
@@ -75,7 +62,6 @@
       "DEFAULT": {
         "DONE": "Selesai",
         "EISENHAUER_MATRIX": "Matriks Eisenhower",
-        "IMPORTANT": "Penting",
         "IN_PROGRESS": "Sedang berlangsung",
         "KANBAN": "Kanban",
         "NOT_URGENT_IMPORTANT": "Tidak Mendesak & Penting",
@@ -112,9 +98,6 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur Caldav untuk proyek"
-      },
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Kategori untuk memfilter masalah (biarkan kosong jika tidak ada)",
         "CALDAV_PASSWORD": "Password Caldav Anda",
@@ -124,28 +107,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "Selesaikan tugas CalDav secara otomatis saat menyelesaikan tugas"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar tugas CalDav yang belum selesai untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan terdaftar sebagai saran dan akan memberikan tautan ke todo serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua tugas yang belum selesai ke backlog tugas Anda</p><p>Agar berfungsi untuk nextcloud di aplikasi web, Anda mungkin perlu memasukkannya ke daftar putih (whitelist) \"https://app.super-productivity.com\" melalui aplikasi Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Penanggung jawab",
-        "AT": "di",
-        "ATTACHMENTS": "Lampiran",
-        "CHANGED": "diubah",
-        "COMMENTS": "Komentar",
-        "COMPONENTS": "Komponen",
-        "DESCRIPTION": "Deskripsi",
-        "LABELS": "Kategori",
-        "LIST_OF_CHANGES": "Daftar perubahan",
-        "MARK_AS_CHECKED": "Tandai pembaruan sebagai dicentang",
-        "ON": "pada",
-        "RELATED": "Terkait",
-        "STATUS": "Status",
-        "STORY_POINTS": "Poin Cerita",
-        "SUB_TASKS": "Subtugas",
-        "SUMMARY": "Ringkasan",
-        "WORKLOG": "Catatan kerja",
-        "WRITE_A_COMMENT": "Tulis Komentar"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar tugas CalDav yang belum selesai untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan terdaftar sebagai saran dan akan memberikan tautan ke todo serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua tugas yang belum selesai ke backlog tugas Anda</p><p>Agar berfungsi untuk nextcloud di aplikasi web, Anda mungkin perlu memasukkannya ke daftar putih (whitelist) \"https://app.super-productivity.com\" melalui aplikasi Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kalender \"{{calendarName}}\" tidak ditemukan",
@@ -156,7 +118,6 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Tambahkan sebagai Tugas",
-        "FOCUS_TASK": "Tugas Fokus",
         "SHOW_TASK": "Tampilkan Tugas",
         "TXT": "<strong>{{title}}</strong> dimulai dari <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> dimulai dari <strong>{{start}}</strong>!<br> (dan {{nrOfOtherBanners}} acara lainnya yang jatuh tempo)",
@@ -195,10 +156,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox: Tidak dapat menghasilkan Token Akses dari Kode Auth",
-        "ACCESS_TOKEN_GENERATED": "Dropbox: Akses Token dihasilkan dari Kode Auth",
-        "AUTH_ERROR": "Dropbox: Token akses yang diberikan tidak valid",
-        "AUTH_ERROR_ACTION": "Ubah Token",
         "OFFLINE": "Dropbox: Tidak dapat menyinkron, karena offline",
         "SYNC_ERROR": "Dropbox: Error saat menyinkronkan",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Tidak dapat membuat tantangan PKCE."
@@ -213,71 +170,60 @@
       "ADD_TIME_MINUTE": "Tambah 1 menit",
       "B": {
         "BREAK_RUNNING": "Istirahat sedang berjalan",
+        "END_SESSION": "Akhiri sesi",
+        "PAUSE": "Jeda",
         "POMODORO_BREAK_RUNNING": "Istirahat #{{cycleNr}} sedang berjalan",
         "POMODORO_SESSION_RUNNING": "Sesi Pomodoro #{{cycleNr}} sedang berjalan",
+        "RESUME": "Lanjutkan",
         "SESSION_RUNNING": "Sesi Fokus sedang berjalan",
+        "START": "Mulai",
         "TO_FOCUS_OVERLAY": "Untuk Overlay Fokus"
       },
       "BACK_TO_PLANNING": "Kembali ke Perencanaan",
       "BREAK_RELAX_MSG": "Luangkan waktu untuk bersantai",
       "CLICK_TO_EDIT_DURATION": "Klik untuk mengubah durasi",
       "COMPLETE_FOCUS_SESSION": "Selesaikan sesi fokus",
-      "COMPLETE_SESSION": "Selesaikan Sesi",
-      "CONGRATS": "Selamat karena telah menyelesaikan sesi ini!",
-      "CONTINUE_FOCUS_SESSION": "Lanjutkan Sesi Fokus",
-      "CONTINUE_SESSION": "Lanjutkan Sesi",
       "CONTINUE_TO_NEXT_SESSION": "Lanjutkan ke Sesi berikutnya",
       "COUNTDOWN": "Hitung mundur",
       "COUNTDOWN_HINT": "Fokus sampai jam mencapai nol",
-      "CURRENT_SESSION_TIME_TOOLTIP": "Waktu sesi saat ini",
       "FINISH_TASK_AND_SELECT_NEXT": "Selesaikan tugas dan pilih berikutnya",
       "FLOWTIME": "Waktu Aliran",
       "FLOWTIME_HINT": "Pengaturan fleksibel tanpa timer ketat",
       "FOCUS_TIME_TOOLTIP": "Waktu fokus",
-      "FOR_TASK": "untuk tugas",
       "GET_READY": "Bersiaplah untuk sesi fokus Anda!",
-      "GO_TO_PROCRASTINATION": "Dapatkan bantuan, ketika menunda-nunda",
       "GOGOGO": "Ayo, ayo, ayo !!!",
       "LONG_BREAK": "Istirahat Panjang",
       "LONG_BREAK_TITLE": "Istirahat Panjang - Siklus {{cycle}}",
-      "NEXT": "Berikutnya",
       "ON": "pada",
       "OPEN_ISSUE_IN_BROWSER": "Masalah terbuka di Browser",
       "PAUSE_SESSION": "Jeda sesi",
       "PAUSE_TRACKING": "Jeda pelacakan",
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Jeda pelacakan untuk tugas saat ini",
       "POMODORO": "Pomodoro",
-      "POMODORO_BACK": "Kembali",
-      "POMODORO_DISABLE": "Nonaktifkan Pomodoro",
       "POMODORO_HINT": "Sprint terstruktur dengan istirahat terencana",
-      "POMODORO_INFO": "Sesi fokus tidak dapat digunakan bersamaan dengan pengatur waktu pomodoro yang diaktifkan.",
       "POMODORO_SESSION_COMPLETED": "Sesi Pomodoro Selesai!",
+      "POMODORO_SETTINGS": "Pengaturan Pomodoro",
       "PREP_GET_MENTALLY_READY": "Bersiaplah secara mental untuk fokus dan produktif",
       "PREP_SIT_UPRIGHT": "Duduk (atau berdiri) dengan tegak",
       "PREP_STRETCH": "Lakukan peregangan ringan",
       "REMOVE_TIME_MINUTE": "Kurangi 1 menit",
       "RESUME_SESSION": "Lanjutkan Sesi",
-      "SELECT_ANOTHER_TASK": "Pilih Tugas lain",
       "SELECT_MODE": "Pilih mode fokus Anda",
       "SELECT_TASK": "Pilih Tugas yang akan difokuskan",
       "SELECT_TASK_TO_FOCUS": "Pilih Tugas untuk Difokuskan",
       "SESSION_COMPLETED": "Sesi Fokus Selesai!",
-      "SET_FOCUS_SESSION_DURATION": "Mengatur Durasi Sesi Fokus",
       "SHORT_BREAK": "Istirahat Singkat",
       "SHORT_BREAK_TITLE": "Istirahat Singkat - Siklus {{cycle}}",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Menampilkan/menyembunyikan catatan tugas dan lampiran",
       "SKIP_BREAK": "Lewati Istirahat",
+      "START_BREAK": "Mulai Istirahat",
       "START_FOCUS_SESSION": "Mulai Sesi Fokus",
       "START_NEXT_FOCUS_SESSION": "Mulai Sesi Fokus berikutnya",
       "SWITCH_TASK": "Ganti tugas",
       "WORKED_FOR": "Anda bekerja untuk"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur Gitea untuk Proyek"
-      },
       "FORM": {
-        "FILTER_USER": "Nama pengguna (misalnya untuk memfilter perubahan sendiri)",
         "HOST": "Host (contoh: https://try.gitea.io)",
         "REPO_FULL_NAME": "Nama pengguna atau nama/proyek Organisasi",
         "REPO_FULL_NAME_DESCRIPTION": "Dapat ditemukan sebagai bagian dari url, saat melihat proyek di Browser.",
@@ -288,12 +234,10 @@
         "TOKEN": "Akses Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open Gitea issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua open issues ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses.</p>",
-        "TITLE": "Gitea"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open Gitea issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua open issues ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Penerima tugas",
-        "AT": "pada",
         "DESCRIPTION": "Deskripsi",
         "LABELS": "Label",
         "MARK_AS_CHECKED": "Tandai pembaruan sebagai dicentang",
@@ -301,15 +245,9 @@
         "STATUS": "Status",
         "SUMMARY": "Ringkasan",
         "WRITE_A_COMMENT": "Tulis komentar"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: Error tidak diketahui {{statusCode}} {{errorMsg}}. Batas Tarif API terlampaui?"
       }
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur Github untuk Proyek"
-      },
       "FORM": {
         "FILTER_USER": "Nama pengguna (misalnya untuk memfilter perubahan sendiri)",
         "INVALID_TOKEN_MESSAGE": "Bukan token GitHub yang valid. Harus dimulai dengan \"ghp_\".",
@@ -318,8 +256,7 @@
         "TOKEN": "Akses Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitHub issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Info lebih lanjut tentang cakupannya dapat ditemukan di sini</a>.",
-        "TITLE": "GitHub"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitHub issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Info lebih lanjut tentang cakupannya dapat ditemukan di sini</a>."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Penerima tugas",
@@ -340,9 +277,6 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur Gitlab untuk Proyek"
-      },
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Durasi yang telah diisi sebelumnya berisi data yang tidak terlacak dari hari-hari sebelumnya.",
         "T_ALREADY_TRACKED": "Sudah Dilacak",
@@ -371,8 +305,7 @@
         "TOKEN": "Akses Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitLab issues (baik versi online atau instance yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>",
-        "TITLE": "GitLab"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitLab issues (baik versi online atau instance yang dihosting sendiri) untuk proyek tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Penerima tugas",
@@ -404,20 +337,14 @@
         "ATTACHMENTS": "Lampiran",
         "AUTHOR": "Penulis",
         "CATEGORY": "Kategori",
-        "CHANGED": "diubah",
-        "COMMENTS": "Komentar",
         "COMPONENTS": "Komponen",
         "DESCRIPTION": "Deskripsi",
-        "DONE_RATIO": "Rasio Selesai",
         "DUE_DATE": "Tanggal Jatuh Tempo",
         "LABELS": "Label",
         "LAST_COMMENT": "Komentar terakhir",
-        "LIST_OF_CHANGES": "Daftar perubahan",
         "LOAD_ALL_COMMENTS": "Muat semua {{nr}} komentar",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Muat deskripsi & semua komentar",
         "LOCATION": "Lokasi",
         "MARK_AS_CHECKED": "Tandai pembaruan sebagai diperiksa",
-        "ON": "pada",
         "PRIORITY": "Prioritas",
         "RELATED": "Terkait",
         "START": "Mulai",
@@ -428,8 +355,7 @@
         "TIME_SPENT": "Waktu yang dihabiskan",
         "TYPE": "Tipe",
         "VERSION": "Versi",
-        "WORKLOG": "Catatan kerja",
-        "WRITE_A_COMMENT": "Tulis Komentar"
+        "WORKLOG": "Catatan kerja"
       },
       "S": {
         "ERR_GENERIC": "{{issueProviderName}} Kesalahan: {{errTxt}}",
@@ -437,13 +363,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Tidak dikonfigurasi dengan benar",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Impor {{nr}} {{issuesStr}} baru ke backlog",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Impor {{issueStr}} \"{{issueTitle}}\" ke backlog",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\" sepertinya dihapus atau ditutup",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Tidak ada pembaruan yang dibutuhkan",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Data terupdate untuk {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Data terupdate untuk {{issueTitle}}\"",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: Data terupdate untuk \"{{issueTitle}}\"",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: Tugas dengan data {{issueStr}} yang hilang ditemukan. Memuat ulang.",
-        "NEW_COMMENT": "{{issueProviderName}}: Komentar baru untuk \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling untuk {{issuesStr}} baru",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling untuk {{issuesStr}}"
       }
@@ -485,8 +407,7 @@
         "CURRENT_ASSIGNEE": "Penerima Tugas saat ini:",
         "CURRENT_STATUS": "Status terkini:",
         "TASK_NAME": "Nama tugas:",
-        "TITLE": "Jira: Perbarui status",
-        "UPDATE_STATUS": "Memperbarui status"
+        "TITLE": "Jira: Perbarui status"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -521,8 +442,7 @@
         "HOST": "Host (contoh: http://my-host.de:1234)",
         "PASSWORD": "Token / Kata sandi",
         "USE_PAT": "Gunakan Token Akses Pribadi daripada kata sandi",
-        "USER_NAME": "Email / Nama pengguna",
-        "WONKY_COOKIE_MODE": "Otentikasi Fallback Cookie Wonky (khusus aplikasi desktop)"
+        "USER_NAME": "Email / Nama pengguna"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Konfigurasi Lanjutan",
@@ -564,23 +484,12 @@
         "EXTENSION_NOT_LOADED": "Ekstensi Produktivitas Super tidak dimuat. Memuat ulang halaman mungkin membantu",
         "INSUFFICIENT_SETTINGS": "Pengaturan tidak memadai disediakan untuk Jira",
         "INVALID_RESPONSE": "Jira: Respons berisi data yang tidak valid",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira: \"{{issueText}}\" sudah up to date",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira: Memperbarui data untuk \"{{issueText}}\"",
-        "MISSING_ISSUE_DATA": "Jira: Tugas dengan data masalah yang hilang ditemukan. Memuat ulang.",
         "NO_AUTO_IMPORT_JQL": "Jira: Tidak ada kueri pencarian yang ditentukan untuk impor otomatis",
         "NO_VALID_TRANSITION": "Jira: Tidak ada transisi yang valid yang dikonfigurasi",
         "TIMED_OUT": "Jira: Waktu permintaan habis",
         "TRANSITION": "Jira: Atur issue \"{{issueKey}}\" untuk \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Atur issue {{issueKey}} ke <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transisi dimuat. Gunakan pilihan di bawah ini untuk menetapkannya",
-        "UNABLE_TO_REASSIGN": "Jira: Tidak dapat menetapkan ulang tiket untuk Anda sendiri, karena Anda tidak menentukan nama pengguna. Silakan kunjungi pengaturan."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "Kredensial",
-        "DONE": "Anda sekarang selesai.",
-        "LOGIN_SUCCESS": "Login berhasil!",
-        "TEST_CREDENTIALS": "Tes Kredensial",
-        "WELCOME_USER": "Selamat datang {{user}}!"
+        "TRANSITIONS_LOADED": "Jira: Transisi dimuat. Gunakan pilihan di bawah ini untuk menetapkannya"
       }
     },
     "MARKDOWN_PASTE": {
@@ -592,9 +501,6 @@
       "DIALOG_TITLE": "Daftar Markdown yang disalin terdeteksi!"
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "Saya melakukannya!"
-      },
       "CMP": {
         "ACTIVITY_HEATMAP": "Peta Panas Aktivitas",
         "AVG_BREAKS_PER_DAY": "Rata-rata istirahat per hari",
@@ -606,7 +512,6 @@
         "DAYS_WORKED": "Hari bekerja",
         "FOCUS_SESSION_TRENDS": "Sesi fokus dari waktu ke waktu",
         "GLOBAL_METRICS": "Metrik Global",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "Suasana hati dan produktivitas dari waktu ke waktu",
         "NO_ADDITIONAL_DATA_YET": "Belum ada data tambahan yang dikumpulkan. Gunakan formulir di panel \"Evaluation\" ringkasan harian untuk melakukannya.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Produktivitas & Keberlanjutan dari waktu ke waktu",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Klik Penghitung dari waktu ke waktu",
@@ -621,28 +526,15 @@
         "TIME_SPENT": "Waktu yang Dihabiskan"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "Tambahkan Catatan untuk besok",
         "DAILY_STATE": "Status Harian",
         "DAILY_STATE_TOOLTIP": "Sistem kuadran berdasarkan kedua skor (\u00026550 adalah tinggi): Aliran Dalam (tinggi/tinggi), Overdrive (tinggi/rendah), Pemulihan (rendah/tinggi), Mengambang (rendah/rendah)",
-        "DISABLE_REPEAT_EVERY_DAY": "Nonaktifkan pengulangan setiap hari",
-        "ENABLE_REPEAT_EVERY_DAY": "Ulangi setiap hari",
         "ENERGY_LEVEL": "Bagaimana energi Anda?",
         "ENERGY_LEVEL_HINT": "\u001f62b Lelah \u000210 OK \u0001f60a Baik",
         "FOCUS_WORK_TIME": "Waktu kerja fokus",
-        "HELP_H1": "Mengapa saya harus peduli?",
-        "HELP_LINK_TXT": "Buka bagian metrik",
-        "HELP_P1": "Saatnya untuk sedikit evaluasi diri! Jawaban Anda di sini disimpan dan memberi Anda sedikit statistik tentang cara Anda bekerja di bagian metrik. Selanjutnya saran untuk besok akan muncul di atas daftar tugas Anda pada hari berikutnya.",
-        "HELP_P2": "Ini dimaksudkan agar tidak terlalu banyak menghitung metrik yang tepat atau menjadi mesin seperti efisien dalam semua yang Anda lakukan daripada tentang meningkatkan perasaan Anda tentang pekerjaan Anda. Akan sangat membantu untuk mengevaluasi titik nyeri dalam rutinitas harian Anda, serta menemukan faktor-faktor yang membantu Anda. Menjadi sedikit sistematis tentang hal itu mudah-mudahan membantu untuk mendapatkan pegangan yang lebih baik pada ini dan untuk meningkatkan apa yang Anda bisa.",
         "IMPACT_OF_WORK": "Bagaimana Anda menilai dampak pekerjaan Anda hari ini?",
         "IMPACT_OF_WORK_HINT": "1: Tidak ada kemajuan berarti \u000214: Dampak signifikan",
-        "IMPROVEMENTS": "Apa yang meningkatkan produktivitas Anda?",
-        "IMPROVEMENTS_TOMORROW": "Apa yang dapat Anda lakukan untuk meningkatkan hari esok?",
-        "MOOD": "Bagaimana yang kamu rasakan?",
-        "MOOD_HINT": "1: Buruk sekali – 10: Baik sekali",
         "NOTES": "Catatan untuk besok",
-        "OBSTRUCTIONS": "Apa yang menghambat produktivitas Anda?",
         "PRODUCTIVITY": "Seberapa efisien Anda bekerja?",
-        "PRODUCTIVITY_HINT": "1: Bahkan belum dimulai – 10: Sangat efisien",
         "PRODUCTIVITY_SCORE": "Skor Produktivitas",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65% Dampak (skala 1-4) \u00022 30% Fokus menuju target 4 jam \u00022 5% total kerja (dibatasi 10 jam)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "Rincian Produktivitas 7 Hari",
@@ -683,22 +575,28 @@
         "PLACEHOLDER_3": "Di mana fokus tergelincir - dan bagaimana Anda bisa melindunginya?",
         "PLACEHOLDER_4": "Tugas mana yang memberi Anda energi? Mana yang mengurasnya?",
         "PLACEHOLDER_5": "Satu hal untuk diulang. Satu hal untuk diubah.",
-        "REMIND_LABEL": "Ingatkan saya tentang ini besok",
-        "REMINDER_CREATED": "Pengingat refleksi dijadwalkan untuk besok",
-        "REMINDER_ERROR": "Tidak dapat menjadwalkan pengingat",
-        "REMINDER_NEEDS_TEXT": "Tulis refleksi sebelum meminta pengingat",
-        "REMINDER_TASK_TITLE": "Kunjungi kembali catatan refleksi",
         "TITLE": "Catatan Refleksi"
-      },
-      "S": {
-        "SAVE_METRIC": "Metrik berhasil disimpan"
       }
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "Masukkan beberapa teks untuk disimpan sebagai catatan (Anda dapat menggunakan Markdown)..."
-      },
       "D_FULLSCREEN": {
+        "TOOLBAR": {
+          "BOLD": "Tebal",
+          "BULLET_LIST": "Daftar berpoin",
+          "CODE_BLOCK": "Blok kode",
+          "HEADING_1": "Judul 1",
+          "HEADING_2": "Judul 2",
+          "HEADING_3": "Judul 3",
+          "INLINE_CODE": "Kode inline",
+          "INSERT_IMAGE": "Sisipkan gambar",
+          "INSERT_LINK": "Sisipkan tautan",
+          "INSERT_TABLE": "Sisipkan tabel",
+          "ITALIC": "Miring",
+          "NUMBERED_LIST": "Daftar bernomor",
+          "QUOTE": "Kutipan",
+          "STRIKETHROUGH": "Coret",
+          "TASK_LIST": "Daftar Tugas"
+        },
         "VIEW_PARSED": "Lihat sebagai Markdown yang diuraikan (tidak dapat diedit)",
         "VIEW_SPLIT": "Lihat Markdown yang diuraikan dan tidak diuraikan dalam tampilan terpisah",
         "VIEW_TEXT_ONLY": "Lihat sebagai teks yang belum diurai"
@@ -729,9 +627,6 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "Pilih masalah untuk memuat transisi yang tersedia",
         "TRANSITION": "Penanganan Transisi"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur OpenProject untuk Proyek"
-      },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Aktifitas",
         "CURRENTLY_LOGGED": "Waktu login saat ini: ",
@@ -748,8 +643,7 @@
         "CURRENT_STATUS": "Status terkini:",
         "PERCENTAGE_DONE": "Proses:",
         "TASK_NAME": "Nama tugas:",
-        "TITLE": "OpenProject: Perbarui Status",
-        "UPDATE_STATUS": "Memperbarui status"
+        "TITLE": "OpenProject: Perbarui Status"
       },
       "FORM": {
         "FILTER_USER": "Nama pengguna (misalnya untuk memfilter perubahan sendiri)",
@@ -766,8 +660,7 @@
         "TOKEN": "Akses Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar work packages OpenProject yang terbuka. Harap Perhatikan bahwa agar ini berfungsi di browser, Anda mungkin perlu mengonfigurasi CORS untuk server OpenProject Anda, untuk mengizinkan akses dari app.super-productivity.com</p>",
-        "TITLE": "OpenProject"
+        "HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar work packages OpenProject yang terbuka. Harap Perhatikan bahwa agar ini berfungsi di browser, Anda mungkin perlu mengonfigurasi CORS untuk server OpenProject Anda, untuk mengizinkan akses dari app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Penerima tugas",
@@ -795,9 +688,7 @@
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "ADD_TO_TODAY": "Tambahkan ke Hari Ini",
-          "RE_PLAN_ALL": "Menjadwal ulang semua",
-          "TITLE": "Menambahkan tugas yang direncanakan ke Hari Ini"
+          "RE_PLAN_ALL": "Menjadwal ulang semua"
         }
       },
       "EDIT_REPEATED_TASK": "Mengedit tugas berulang '{{taskName}}'",
@@ -809,83 +700,21 @@
         "REMOVED_PLAN_DATE": "Tanggal rencana yang dihapus untuk tugas '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Tugas sudah direncanakan untuk {{date}}",
         "TASK_PLANNED_FOR": "Tugas yang direncanakan untuk <strong>{{date}}</strong>{{extra}}"
-      },
-      "TASK_DRAWER": "Laci Tugas"
-    },
-    "POMODORO": {
-      "BACK_TO_WORK": "Kembali bekerja!",
-      "BREAK_IS_DONE": "Istirahat Anda selesai!",
-      "ENJOY_YOURSELF": "Nikmati diri Anda sendiri, buat diri Anda bergerak, kembali dalam:",
-      "FINISH_SESSION_X": "Anda berhasil menyelesaikan sesi <strong>{{nr}}</strong>!",
-      "NOTIFICATION": {
-        "BREAK_TIME": "Pomodoro: Waktunya istirahat {{nr}}!",
-        "BREAK_X_START": "Pomodoro: Istirahat {{nr}} dimulai!",
-        "NO_TASKS": "Anda perlu menambahkan tugas sebelum timer Pomodoro dapat dimulai.",
-        "SESSION_X_START": "Pomodoro: Sesi {{nr}} dimulai!"
-      },
-      "S": {
-        "RESET": "Akhiri sesi Pomodoro",
-        "SESSION_SKIP": "Lewatkan sesi Pomodoro",
-        "SESSION_X_START": "Pomodoro: Sesi {{nr}} dimulai!"
-      },
-      "SKIP_BREAK": "Lewatkan istirahat",
-      "START_BREAK": "Mulai istirahat"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "Kembali bekerja!",
-      "COMP": {
-        "INTRO": "Orang dengan tingkat prokrastinasi yang tinggi biasanya memiliki self-compassion yang rendah. Jadi praktekkan! Ini meningkatkan perasaan harga diri Anda, menumbuhkan emosi positif dan tentu saja dapat membantu Anda mengatasi penundaan. Cobalah sedikit latihan:",
-        "L1": "Duduklah sebentar dan regangkan dirimu, jika kamu suka, tenanglah sedikit",
-        "L2": "Coba dengarkan pikiran dan perasaan yang muncul",
-        "L3": "Apakah Anda menanggapi diri sendiri dengan cara yang Anda akan menanggapi seorang teman?",
-        "L4": "Jika jawabannya tidak, bayangkan teman Anda dalam situasi Anda. Apa yang akan Anda katakan kepada mereka? Apa yang akan Anda lakukan untuk mereka?",
-        "OUTRO": "Latihan <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">bisa ditemukan di sini</a> atau di <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>.",
-        "TITLE": "Self Compassion"
-      },
-      "CUR": {
-        "INTRO": "Menunda-nunda itu menarik, bukan? Tidak masuk akal untuk melakukannya. Sama sekali tidak untuk kepentingan jangka panjang Anda. Tapi tetap saja semua orang melakukannya. Nikmati dan jelajahi!",
-        "L1": "Perasaan apa yang memunculkan godaan Anda untuk menunda-nunda?",
-        "L2": "Di mana Anda merasakannya di dalam diri Anda?",
-        "L3": "Apa yang mereka ingatkan Anda?",
-        "L4": "Apa yang terjadi pada pikiran untuk menunda-nunda saat Anda mengamatinya? Apakah itu mengintensifkan? Menghilang? Menyebabkan emosi lain muncul?",
-        "L5": "Bagaimana sensasi dalam tubuh Anda bergeser saat Anda terus mengistirahatkan kesadaran Anda pada mereka?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "Metode lain yang sangat efektif adalah dengan mencatat, apa yang memicu keinginan Anda untuk menunda-nunda. Sebagai contoh, saya pribadi sering merasa terdorong untuk segera membuka reddit atau situs berita favorit saya setiap kali jendela browser saya terfokus. Sejak saya mulai menuliskan pemicu saya dalam sebuah dokumen teks kosong sederhana, saya menjadi sadar betapa mendarah dagingnya pola ini dan membantu saya untuk bereksperimen dengan berbagai tindakan pencegahan.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "Menuliskan pemicu penundaan Anda",
-        "TITLE": "Rasa ingin tahu"
-      },
-      "H1": "Kurangi sedikit kelonggaran Anda!",
-      "INTRO": {
-        "AVOIDING": "Menghindari tugas",
-        "FEAR": "Takut gagal",
-        "STRESSED": "Tertekan karena tidak menyelesaikan sesuatu",
-        "TITLE": "Pengantar"
-      },
-      "P1": "Pertama-tama santai! Semua orang melakukannya sesekali. Dan jika Anda tidak melakukan apa yang seharusnya Anda lakukan, setidaknya Anda harus menikmatinya! Kemudian periksa tab lain untuk beberapa metode bermanfaat.",
-      "P2": "Ingat: Penundaan adalah masalah pengaturan emosi, bukan masalah manajemen waktu.",
-      "REFRAME": {
-        "INTRO": "Pikirkan tentang apa yang mungkin positif tentang tugas itu terlepas dari kekurangannya.",
-        "TITLE": "Membingkai ulang",
-        "TL1": "Apa yang mungkin menarik tentang itu?",
-        "TL2": "Apa yang didapat jika Anda menyelesaikannya?",
-        "TL3": "Bagaimana perasaan Anda jika Anda menyelesaikannya??"
-      },
-      "SPLIT_UP": {
-        "INTRO": "Bagi tugas menjadi bagian-bagian kecil sebanyak yang Anda bisa.",
-        "OUTRO": "Selesai? Kemudian pikirkanlah. Apa yang akan – benar-benar teoretis – hal pertama yang akan Anda lakukan <i>jika</i> Anda mulai mengerjakan tugas tersebut? Pikirkan saja...",
-        "TITLE": "Pisahkan!"
       }
     },
+    "POMODORO": {
+      "BREAK_IS_DONE": "Istirahat Anda selesai!"
+    },
     "PROJECT": {
+      "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
+        "CANCEL": "Batal",
+        "MSG": "Proyek ini cukup besar dan mungkin memerlukan waktu untuk diduplikasi. Apakah Anda ingin melanjutkan?",
+        "OK": "Duplikasi Saja",
+        "TITLE": "Duplikasi Proyek?"
+      },
       "D_CREATE": {
         "CREATE": "Buat Proyek",
-        "EDIT": "Ubah Proyek",
-        "SETUP_CALDAV": "Atur Integrasi Caldav",
-        "SETUP_GIT": "Atur Integrasi GitHub",
-        "SETUP_GITEA_PROJECT": "Atur Integrasi Gitea",
-        "SETUP_GITLAB": "Atur Integrasi Gitlab",
-        "SETUP_JIRA": "Atur Integrasi Jira",
-        "SETUP_OPEN_PROJECT": "Atur Integrasi OpenProject",
-        "SETUP_REDMINE_PROJECT": "Atur Integrasi Redmine"
+        "EDIT": "Ubah Proyek"
       },
       "D_DELETE": {
         "MSG": "Apakah Anda yakin ingin menghapus proyek \"{{title}}\"?"
@@ -897,7 +726,6 @@
         "TITLE": "Pengaturan dasar"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "Tidak akan digunakan jika sistem mendukung mode gelap global.",
         "HELP": "Pengaturan tema untuk proyek Anda.",
         "L_BACKGROUND_IMAGE_DARK": "Url Gambar Latar Belakang (Tema Terang)",
         "L_BACKGROUND_IMAGE_LIGHT": "Url Gambar Latar Belakang (Tema Gelap)",
@@ -909,18 +737,13 @@
         "L_HUE_WARN": "Ambang batas untuk teks gelap pada latar belakang warna peringatan",
         "L_IS_AUTO_CONTRAST": "Atur warna teks secara otomatis untuk keterbacaan terbaik",
         "L_IS_DISABLE_BACKGROUND_TINT": "Nonaktifkan gradien latar belakang berwarna",
-        "L_IS_REDUCED_THEME": "Gunakan UI yang diperkecil (tidak ada kotak di sekitar tugas)",
         "L_THEME_COLOR": "Tema Warna",
-        "L_TITLE": "Judul",
         "TITLE": "Tema"
       },
       "S": {
         "ARCHIVED": "Proyek yang Diarsipkan",
         "CREATED": "Membuat proyek <strong>{{title}}</strong>. Anda dapat memilihnya dari menu di kiri atas.",
         "DELETED": "Proyek yang Dihapus",
-        "E_EXISTS": "Proyek \"{{title}}\" sudah ada",
-        "E_INVALID_FILE": "Data tidak valid untuk file proyek",
-        "ISSUE_PROVIDER_UPDATED": "Memperbarui pengaturan proyek untuk <strong>{{issueProviderKey}}</strong>",
         "UNARCHIVED": "Proyek yang tidak diarsipkan",
         "UPDATED": "Memperbarui pengaturan proyek."
       }
@@ -950,9 +773,6 @@
       "WEEK_TITLE": "Minggu {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Atur Redmine untuk Proyek"
-      },
       "FORM": {
         "API_KEY": "Akses kunci API",
         "HOST": "Host (contoh.: https://redmine.org)",
@@ -973,9 +793,6 @@
         "MARK_AS_CHECKED": "Tandai pembaruan sebagai dicentang",
         "PRIORITY": "Prioritas",
         "STATUS": "Status"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: Error tidak diketahui {{statusCode}} {{errorMsg}}."
       }
     },
     "REFLECTION_NOTE": {
@@ -984,7 +801,6 @@
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
-        "HIDE": "Sembunyikan",
         "START_NOW": "Mulai sekarang",
         "TXT": "<strong>{{title}}<\\/strong> dimulai pada <strong>{{start}}<\\/strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> dimulai dari <strong>{{start}}</strong>!<br> (dan {{nrOfOtherBanners}} tugas-tugas lain yang harus diselesaikan)"
@@ -993,31 +809,21 @@
       "S_REMINDER_ERR": "Kesalahan untuk antarmuka pengingat"
     },
     "SCHEDULE": {
-      "CONTINUED": "lanjutan",
       "D_INITIAL": {
         "TEXT": "<p>Ide Schedule adalah untuk memberikan gambaran yang lebih baik tentang bagaimana tugas yang direncanakan seseorang bermain dari waktu ke waktu. Ini dibuat secara otomatis dari Tugas Anda dan membedakan dua hal yang berbeda: <strong>Tugas Terjadwal</strong>, yang ditampilkan pada waktu yang direncanakan dan <strong>Tugas Biasa</strong> yang harus mengalir di sekitar peristiwa tetap tersebut. Semua tugas mempertimbangkan perkiraan waktu yang telah Anda tetapkan untuk mereka.</p><p>Selain itu, Anda juga dapat memberikan waktu mulai dan selesai pekerjaan. Jika dikonfigurasi, tugas rutin tidak akan pernah muncul di luar ini. Harap dicatat bahwa schedule hanya mencakup 30 hari mendatang.</p>",
         "TITLE": "Linimasa"
       },
       "END": "Pekerjaan selesai",
       "INSERT_BEFORE": "Sebelum",
-      "LUNCH_BREAK": "Istirahat makan siang",
-      "MONTH": "Bulan",
-      "NO_TASKS": "Saat ini tidak ada tugas. Silakan tambahkan beberapa tugas melalui Tombol + di bilah atas.",
-      "NOW": "Sekarang",
       "PLAN_END_DAY": "Rencanakan di akhir hari",
       "PLAN_START_DAY": "Rencanakan di awal hari",
       "SHIFT_KEY_INFO": "Tahan Shift untuk mengalihkan mode perencanaan hari",
-      "START": "Pekerjaan dimulai",
-      "TASK_PROJECTION_INFO": "Proyeksi masa depan dari tugas berulang yang dijadwalkan",
-      "WEEK": "Minggu"
+      "START": "Pekerjaan dimulai"
     },
     "SEARCH_BAR": {
       "INFO": "Klik ikon daftar untuk mencari tugas yang diarsipkan",
-      "INFO_ARCHIVED": "Klik ikon arsip untuk mencari tugas normal",
       "NO_RESULTS": "Tidak ada tugas yang ditemukan sesuai pencarian Anda",
-      "PLACEHOLDER": "Cari tugas atau deskripsi tugas",
-      "PLACEHOLDER_ARCHIVED": "Cari tugas yang diarsipkan",
-      "TOO_MANY_RESULTS": "Terlalu banyak hasil, harap persempit pencarian Anda"
+      "PLACEHOLDER": "Cari tugas atau deskripsi tugas"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -1036,7 +842,6 @@
         "L_COUNTDOWN_DURATION": "Durasi hitung mundur",
         "L_DAILY_GOAL": "Target harian untuk meraih kesuksesan beruntun",
         "L_ICON": "Ikon",
-        "L_ICON_ON": "Ikon saat diaktifkan",
         "L_IS_ENABLED": "Diaktifkan",
         "L_TITLE": "Judul",
         "L_TRACK_STREAKS": "Lacak Jejak",
@@ -1054,19 +859,11 @@
     },
     "SYNC": {
       "A": {
-        "ARCHIVE_ONLY_UPLOADED": "Data Anda hanya diunggah sebagian. Silakan coba lagi nanti! Jika tidak, Anda tidak akan dapat menyinkronkan data Anda ke perangkat lain.",
-        "POSSIBLE_LEGACY_DATA": "Super Productivity telah meningkatkan sinkronisasi dengan menggunakan dua file terpisah daripada satu file, sehingga memungkinkan transfer data yang lebih sedikit. Disarankan untuk memperbarui semua contoh Super Productivity dan pertama-tama menyinkronkan data dari contoh aplikasi yang datanya paling baru. Jika ini adalah data dari perangkat lokal Anda, abaikan peringatan ini dan lanjutkan untuk mengunggahnya dengan mengonfirmasi dialog berikutnya.",
         "REMOTE_MODEL_VERSION_NEWER": "Versi model jarak jauh lebih baru dari versi lokal. Perbarui aplikasi lokal Anda ke versi terbaru!"
       },
       "BTN_SYNC_NOW": "Sinkronkan Sekarang",
       "C": {
-        "EMPTY_SYNC": "Anda mencoba menyinkronkan objek data kosong. Jika Anda mencoba menyiapkan sinkronisasi dari instance aplikasi baru, cukup tekan OK untuk memuat data dari server. Jika tidak, silakan periksa data Anda.",
-        "FORCE_UPLOAD": "Tetap unggah data lokal?",
-        "FORCE_UPLOAD_AFTER_ERROR": "Terjadi kesalahan saat mengunggah data lokal Anda. Coba paksa pembaruan?",
-        "MIGRATE_LEGACY": "Data lama terdeteksi saat mengimpor, apakah Anda ingin mencoba memigrasikannya?",
-        "NO_REMOTE_DATA": "Tidak ada data jarak jauh yang ditemukan. Unggah lokal ke Remote?",
-        "TRY_LOAD_REMOTE_AGAIN": "Coba muat ulang data dari jarak jauh lagi?",
-        "UNABLE_TO_LOAD_REMOTE_DATA": "Tidak dapat memuat data dari remote. Apakah Anda ingin mencoba menimpa data jarak jauh dengan data lokal Anda? Semua data jarak jauh akan hilang dalam proses tersebut."
+        "FORCE_UPLOAD": "Tetap unggah data lokal?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Silakan buka tautan berikut dan salin kode auth yang disediakan di sana ke bidang input di bawah ini.",
@@ -1080,8 +877,6 @@
         "CHANGES_SINCE_LAST_SYNC": "Perubahan sejak sinkronisasi terakhir",
         "COMPARISON_RESULT": "Hasil Perbandingan",
         "DATE": "Tanggal",
-        "LAMPORT_CLOCK": "Revisi",
-        "LAST_CHANGE": "Perubahan Terakhir:",
         "LAST_SYNC": "Sinkronasi Terakhir",
         "LAST_SYNCED": "Terakhir disinkronkan",
         "LAST_WRITE": "Terakhir Ditulis",
@@ -1117,10 +912,6 @@
         "BTN_FORCE_UPLOAD": "Paksa Unggah Lokal",
         "P1": "Data sinkronisasi jarak jauh tidak koheren!",
         "P2": "Model yang terpengaruh:",
-        "P3": "Anda memiliki 2 Opsi:",
-        "P4": "1. Buka perangkat Anda yang lain dan coba lakukan sinkronisasi lengkap di sana.",
-        "P5": "2. Timpa data jarak jauh dengan data lokal Anda. Semua perubahan jarak jauh akan hilang!",
-        "P6": "Disarankan untuk membuat cadangan data yang Anda timpa!!",
         "T1": "Sinkronisasi terakhir tidak lengkap!",
         "T2": "Data arsip Anda tidak diunggah dengan benar selama sinkronisasi terakhir:",
         "T3": "Anda memiliki 2 Opsi:",
@@ -1132,19 +923,7 @@
         "SAVE_AND_ENABLE": "Simpan & Aktifkan Sinkronisasi",
         "TITLE": "Konfigurasi Sinkronisasi"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Nonaktifkan sinkronisasi",
-        "PERM_FILE": "Berikan izin",
-        "TEXT": "<p>Izin file Anda untuk sinkronisasi lokal telah dicabut.</p>",
-        "TITLE": "Sinkronisasi: Izin file lokal ditolak"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "Token Akses (dihasilkan dari Kode Auth)"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "Sinkronisasi Nama File"
-        },
         "L_ENABLE_COMPRESSION": "Aktifkan Kompresi (transfer data lebih cepat)",
         "L_ENABLE_ENCRYPTION": "Aktifkan enkripsi ujung ke ujung (eksperimental) - Membuat data Anda tidak dapat diakses oleh penyedia sinkronisasi Anda",
         "L_ENABLE_SYNCING": "Aktifkan Sinkronasi",
@@ -1153,41 +932,38 @@
         "L_SYNC_INTERVAL": "Interval Sinkronisasi",
         "L_SYNC_PROVIDER": "Penyedia Sinkronisasi",
         "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Memerlukan izin akses file",
           "L_SYNC_FOLDER_PATH": "Jalur folder sinkronisasi"
         },
         "TITLE": "Sinkronisasi",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Membuatnya berfungsi di browser:</strong> Agar ini berfungsi di browser, Anda perlu memasukkan Super Productivity untuk permintaan CORS ke whitelist untuk instans Nextcloud Anda. Ini dapat memiliki implikasi keamanan negatif! Silahkan <a href='https://github.com/nextcloud/server/issues/3131'>lihat utas ini untuk informasi lebih lanjut</a>. Salah satu pendekatan untuk membuat ini berfungsi di seluler adalah memasukkannya ke whitelist \"https://app.super-productivity.com\" lewat nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Gunakan dengan risiko Anda sendiri!</p>",
+          "D_SYNC_FOLDER_PATH": "Jalur relatif terhadap root server WebDAV tempat file sinkronisasi akan disimpan (misalnya, ' /super-productivity' atau '/'). Ini BUKAN jalur direktori internal server Anda.",
           "INFO": "Implementasi WebDAV sangat bervariasi sayangnya. Super Productivity dikenal bekerja dengan baik dengan Nextcloud, <strong>tetapi mungkin tidak bekerja dengan penyedia Anda</strong>.",
           "L_BASE_URL": "Url Dasar",
           "L_PASSWORD": "Kata Sandi",
           "L_SYNC_FOLDER_PATH": "Jalur folder sinkronisasi",
-          "L_USER_NAME": "Nama Pengguna"
+          "L_TEST_CONNECTION": "Uji koneksi",
+          "L_USER_NAME": "Nama Pengguna",
+          "S_FILL_ALL_FIELDS": "Harap isi semua kolom WebDAV terlebih dahulu",
+          "S_TEST_FAIL": "Uji koneksi gagal: {{error}} - URL target: {{url}}",
+          "S_TEST_SUCCESS": "Uji koneksi berhasil! URL target: {{url}}"
         }
       },
       "S": {
         "ALREADY_IN_SYNC": "Sudah disinkronkan",
-        "ALREADY_IN_SYNC_NO_LOCAL_CHANGES": "Tidak ada perubahan lokal - Sudah disinkronkan",
         "BTN_CONFIGURE": "Mengkonfigurasi",
         "BTN_FORCE_OVERWRITE": "Paksa Timpa",
         "ERROR_CORS": "Kesalahan Sinkronisasi WebDAV: Permintaan jaringan gagal.\n\nIni mungkin masalah CORS. Harap pastikan:\n Server WebDAV Anda mengizinkan permintaan Cross-Origin\n URL server benar dan dapat diakses\n Anda memiliki koneksi internet yang berfungsi",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Data Jarak Jauh saat ini sedang ditulis",
-        "ERROR_FALLBACK_TO_BACKUP": "Terjadi masalah saat mengimpor data. Kembali ke cadangan lokal.",
-        "ERROR_INVALID_DATA": "Kesalahan saat menyinkronkan. Data tidak valid",
-        "ERROR_NO_REV": "Tidak ada rev yang valid untuk file jarak jauh",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Kesalahan saat menyinkronkan. Tidak dapat membaca data jarak jauh. Mungkin Anda mengaktifkan enkripsi dan kata sandi lokal Anda tidak cocok dengan kata sandi yang digunakan untuk mengenkripsi data jarak jauh?",
-        "IMPORTING": "Mengimpor data",
+        "ERROR_PERMISSION": "Akses file ditolak. Harap periksa izin sistem file Anda.",
+        "ERROR_PERMISSION_FLATPAK": "Akses file ditolak. Berikan izin sistem file melalui Flatseal atau gunakan jalur di dalam ~/ .var/app/",
+        "ERROR_PERMISSION_SNAP": "Akses file ditolak. Jalankan 'snap connect super-productivity:home' atau gunakan jalur di dalam ~\\/snap\\/super-productivity\\/common\\/",
         "INCOMPLETE_CFG": "Otentikasi untuk sinkronisasi gagal. Silakan periksa Konfigurasi Anda!",
-        "INITIAL_SYNC_ERROR": "Sinkronisasi Awal gagal",
         "SUCCESS_DOWNLOAD": "Data yang disinkronkan dari jarak jauh",
-        "SUCCESS_IMPORT": "Data diimpor",
         "SUCCESS_VIA_BUTTON": "Data berhasil disinkronkan",
-        "UNKNOWN_ERROR": "Error Sinkronasi Tidak Diketahui: {{err}}",
-        "UPLOAD_ERROR": "Kesalahan Unggah Tidak Dikenal (Pengaturan benar?): {{err}}"
+        "UNKNOWN_ERROR": "Error Sinkronasi Tidak Diketahui: {{err}}"
       },
       "SAFETY_BACKUP": {
-        "BACKUP_NOT_FOUND": "Cadangan dengan ID {{backupId}} tidak ditemukan",
         "BTN_CLEAR_ALL": "Bersihkan Semua",
         "BTN_CREATE_MANUAL": "Buat Cadangan Manual",
         "BTN_DELETE": "Hapus",
@@ -1200,20 +976,15 @@
         "DELETE_FAILED": "Gagal menghapus cadangan",
         "DELETED_SUCCESS": "Cadangan berhasil dihapus",
         "DESCRIPTION": "Cadangan otomatis dibuat sebelum mengunduh data dari jarak jauh selama operasi sinkronisasi. Cadangan diatur dalam 4 slot pintar: 2 yang paling baru, 1 pertama dari hari ini, dan 1 pertama dari hari sebelum hari ini.",
-        "INVALID_ID_ERROR": "ID cadangan yang dihasilkan tidak valid",
         "LAST_CHANGE_PREFIX": "Perubahan terakhir:",
         "LOADING": "Memuat...",
         "NO_BACKUPS": "Belum ada cadangan keamanan yang tersedia. Cadangan dibuat secara otomatis sebelum operasi sinkronisasi.",
         "REASON_BEFORE_UPDATE": "Cadangan otomatis sebelum sinkronisasi",
         "REASON_MANUAL": "Cadangan manual",
-        "RESTORE_CONFIRM_MSG": "Apakah Anda yakin ingin mengembalikan cadangan dari {{timestamp}}?\n\nIni akan MENGGANTIKAN SEMUA data Anda saat ini!\n\nAlasan: {{reason}}\n\nKlik OK untuk melanjutkan atau Batal untuk membatalkan.",
-        "RESTORE_CONFIRM_TITLE": "Pulihkan Cadangan",
-        "RESTORE_FAILED": "Gagal mengembalikan cadangan: {{error}}",
         "RESTORED_SUCCESS": "Cadangan berhasil dipulihkan",
         "SLOT_BEFORE_TODAY": "Cadangan pertama sebelum hari ini",
         "SLOT_RECENT": "Cadangan terbaru",
         "SLOT_TODAY": "Cadangan pertama hari ini",
-        "TITLE": "Sinkronkan Cadangan Keamanan",
         "TOOLTIP_CLEAR_ALL": "Hapus semua cadangan keamanan",
         "TOOLTIP_CREATE_MANUAL": "Buat cadangan manual dari semua data Anda",
         "TOOLTIP_DELETE": "Hapus cadangan ini",
@@ -1223,8 +994,7 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Buat Tag",
-        "EDIT": "Ubah Tag"
+        "CREATE": "Buat Tag"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "Apakah Anda benar-benar ingin menghapus tag \"{{tagName}}\"? Ini akan dihapus dari semua tugas dan tidak dapat dibatalkan."
@@ -1268,26 +1038,14 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Tambahkan tugas yang ada \"{{taskTitle}}\"",
-        "ADD_ISSUE_TASK": "Tambahkan issue #{{issueNr}} dari {{issueType}}",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "Tambahkan tugas ke bagian bawah backlog",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "Tambahkan tugas ke bagian bawah daftar",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "Tambahkan tugas ke atas backlog",
-        "ADD_TASK_TO_TOP_OF_TODAY": "Tambahkan tugas ke daftar teratas",
         "CREATE_NEW_TAGS": "Buat tag baru",
-        "CREATE_TASK": "Buat tugas baru",
         "DUE_BUTTON": "Jatuh Tempo",
         "ESTIMATE_BUTTON": "Perkiraan",
-        "EXAMPLE": "Contoh: \"Beberapa judul tugas +namaProyek #tag #tag 10m/3h\"",
-        "NO_DATE": "Tidak ada tanggal",
-        "NO_TIME": "Tidak ada waktu",
         "PLACEHOLDER_CREATE": "Judul tugas #tag @16:00",
         "PLACEHOLDER_SEARCH": "Tambahkan tugas atau masalah yang sudah ada...",
         "SEARCH_INFO_TEXT": "Cari dan tambahkan masalah dan tugas dari arsip dan proyek lain",
-        "START": "Tekan enter sekali lagi untuk memulai",
         "TAGS_BUTTON": "Tag",
         "TODAY": "Hari ini",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Beralih menambahkan tugas ke daftar pekerjaan yang belum selesai/daftar hari ini'",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Beralih menambahkan tugas ke bagian atas & bawah daftar",
         "TOMORROW": "Besok",
         "TOOLTIP_ADD_TASK": "Tambahkan Tugas",
         "TOOLTIP_ADD_TO_BACKLOG": "Tambahkan ke backlog",
@@ -1305,11 +1063,9 @@
         "ADD_SUB_TASK": "Tambah subtugas",
         "ATTACHMENTS": "Lampiran ({{nr}})",
         "DUE": "Dijadwalkan pada",
-        "FROM_PARENT": "(dari Induk)",
         "LOCAL_ATTACHMENTS": "Lampiran Lokal",
         "NOTES": "Deskripsi",
         "PARENT": "Induk",
-        "REMINDER": "Pengingat",
         "REPEAT": "Ulangi",
         "SCHEDULE_TASK": "Jadwal tugas",
         "SUB_TASKS": "Subtugas ({{nr}})",
@@ -1330,11 +1086,8 @@
         "DROP_ATTACHMENT": "Drop di sini untuk melampirkan ke \"{{title}}\"",
         "DUPLICATE": "Duplikat",
         "EDIT_SCHEDULED": "Ubah pengingat",
-        "EDIT_TAGS": "Ubah tag",
-        "EDIT_TASK_TITLE": "Edit judul",
         "FOCUS_SESSION": "Mulai Sesi Fokus",
         "MARK_DONE": "Tandai selesai",
-        "MARK_UNDONE": "Tandai belum selesai",
         "MOVE_TO_BACKLOG": "Pindah ke backlog",
         "MOVE_TO_OTHER_PROJECT": "Pindah ke Proyek lain",
         "MOVE_TO_REGULAR": "Pindah ke daftar hari ini",
@@ -1343,9 +1096,7 @@
         "OPEN_ISSUE": "Buka di browser",
         "OPEN_TIME": "Pelacakan Waktu",
         "REMOVE_FROM_MY_DAY": "Hapus dari Hari-ku",
-        "REPEAT_EDIT": "Edit konfigurasi tugas berulang",
         "SCHEDULE": "Jadwalkan tugas",
-        "SHOW_UPDATES": "Tampilkan pembaruan",
         "TOGGLE_ATTACHMENTS": "Tampilkan/Sembunyikan lampiran",
         "TOGGLE_DETAIL_PANEL": "Tampilkan/Sembunyikan info tambahan",
         "TOGGLE_DONE": "Tandai sebagai selesai/diurungkan",
@@ -1374,24 +1125,17 @@
         "DONE": "Selesai",
         "DUE_TASK": "Tugas yang harus diselesaikan",
         "DUE_TASKS": "Tugas-tugas yang harus diselesaikan",
-        "FOR_CURRENT": "Tugas jatuh tempo. Apakah Anda ingin mulai mengerjakannya?",
-        "FOR_OTHER": "Tugas jatuh tempo. Apakah Anda ingin mulai mengerjakannya?",
-        "FROM_PROJECT": "Dari Proyek: \"{{title}}\"",
-        "FROM_TAG": "Dari Tag: \"{{title}}\"",
         "RESCHEDULE_EDIT": "Ubah (jadwalkan ulang)",
         "RESCHEDULE_UNTIL_TOMORROW": "Jadwal ulang untuk besok",
         "SNOOZE": "Tunda",
         "SNOOZE_ALL": "Tunda semua",
         "START": "Mulai",
-        "SWITCH_CONTEXT_START": "Beralih Konteks & Mulai",
         "UNSCHEDULE": "Batalkan jadwal",
         "UNSCHEDULE_ALL": "Batalkan jadwal semua"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "Pindahkan tugas ke backlog hingga dijadwalkan",
         "QA_NEXT_MONTH": "Jadwal Bulan Depan",
         "QA_NEXT_WEEK": "Jadwal minggu depan",
-        "QA_REMOVE_TODAY": "Hapus tugas dari hari ini",
         "QA_TODAY": "Jadwalkan Hari Ini",
         "QA_TOMORROW": "Jadwalkan Besok",
         "REMIND_AT": "Ingatkan di",
@@ -1432,20 +1176,18 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Tidak dapat menetapkan proyek melalui sintaks pendek untuk tugas yang dapat diulang!",
         "CREATED_FOR_PROJECT": "Pindahkan tugas \"{{taskTitle}}\" ke proyek \"{{projectTitle}}\"",
-        "CREATED_FOR_PROJECT_ACTION": "Pergi ke Proyek",
         "DELETED": "Tugas \"{{title}}\" dihapus",
         "FOUND_MOVE_FROM_BACKLOG": "Memindahkan tugas <strong>{{title}}</strong> dari backlog ke daftar tugas hari ini",
         "FOUND_MOVE_FROM_OTHER_LIST": "Menambahkan tugas <strong>{{title}}</strong> dari <strong>{{contextTitle}}</strong> ke daftar terbaru",
         "FOUND_RESTORE_FROM_ARCHIVE": "Memulihkan tugas <strong>{{title}}</strong> yang terkait dengan masalah dari arsip",
         "GO_TO_TASK": "Pergi ke Tugas",
-        "LAST_TAG_DELETION_WARNING": "Anda mencoba menghapus tag terakhir dari tugas non-proyek. Ini tidak diperbolehkan!",
         "MOVED_TO_ARCHIVE": "Memindahkan tugas {{nr}} ke arsip",
         "MOVED_TO_PROJECT": "Pindahkan tugas \"{{taskTitle}}\" ke proyek \"{{projectTitle}}\"",
-        "MOVED_TO_PROJECT_ACTION": "Pergi ke Proyek",
         "REMINDER_ADDED": "Tugas \"{{title}}\" terjadwal",
         "REMINDER_DELETED": "Pengingat yang dihapus untuk tugas",
         "REMINDER_UPDATED": "Pengingat yang diperbarui untuk tugas \"{{title}}\"",
-        "TASK_CREATED": "tugas yang dibuat \"{{title}}\""
+        "TASK_ALREADY_EXISTS": "Tugas <strong>{{title}}<\\/strong> sudah ada",
+        "TASK_CREATED": "tugas yang dibuat \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Pilih atau buat tugas",
       "SUMMARY_TABLE": {
@@ -1517,7 +1259,6 @@
         "FRIDAY": "Jumat",
         "INHERIT_SUBTASKS": "Warisi subtugas",
         "INHERIT_SUBTASKS_DESCRIPTION": "Saat diaktifkan, subtugas dari instance tugas terbaru akan dibuat ulang dengan tugas berulang",
-        "IS_ADD_TO_BOTTOM": "Pindahkan tugas ke bawah daftar",
         "MONDAY": "Senin",
         "NOTES": "Catatan default",
         "ORDER": "Urutan",
@@ -1535,11 +1276,7 @@
         "REMOVE_INSTANCE": "Hapus hari ini",
         "REPEAT_CYCLE": "Ulangi siklus",
         "REPEAT_EVERY": "Ulangi setiap",
-        "REPEAT_FROM_COMPLETION_DATE": "Ulangi, saat selesai",
-        "REPEAT_FROM_COMPLETION_DATE_DESCRIPTION": "Tugas berikutnya dibuat dari tanggal penyelesaian Anda, bukan dari tanggal mulai. (misalnya, 'Setiap 7 hari' = 7 hari setelah penyelesaian)",
         "SATURDAY": "Sabtu",
-        "SCHEDULE_TYPE_FIXED": "Jadwal tetap (misalnya, setiap Senin, tanggal 1 bulan)",
-        "SCHEDULE_TYPE_FLEXIBLE": "Setelah penyelesaian (misalnya, 7 hari setelah saya selesai)",
         "SCHEDULE_TYPE_LABEL": "Jenis jadwal",
         "START_DATE": "Mulai tanggal",
         "START_TIME": "Waktu mulai yang dijadwalkan",
@@ -1559,6 +1296,7 @@
         "FILTER_BY": "Saring Berdasarkan",
         "FILTER_DEFAULT": "Tidak Ada Filter",
         "FILTER_ESTIMATED_TIME": "Waktu Perkiraan",
+        "FILTER_NOT_SPECIFIED": "Tidak ditentukan",
         "FILTER_PROJECT": "Proyek",
         "FILTER_SCHEDULED_DATE": "Tanggal Terjadwal",
         "FILTER_TAG": "Tag",
@@ -1569,14 +1307,12 @@
         "GROUP_SCHEDULED_DATE": "Tanggal Terjadwal",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Reset Semua",
-        "SCHEDULED_DEFAULT": "Tanggal Apa Saja",
         "SCHEDULED_NEXT_MONTH": "Bulan Depan",
         "SCHEDULED_NEXT_WEEK": "Minggu Depan",
         "SCHEDULED_THIS_MONTH": "Bulan ini",
         "SCHEDULED_THIS_WEEK": "Minggu ini",
         "SCHEDULED_TODAY": "Hari ini",
         "SCHEDULED_TOMORROW": "Besok",
-        "SORT_BY": "Urutkan berdasarkan",
         "SORT_CREATION_DATE": "Tanggal pembuatan",
         "SORT_DEFAULT": "Default",
         "SORT_NAME": "Nama",
@@ -1587,9 +1323,7 @@
         "TIME_2HOUR": "> 2 Jam",
         "TIME_10MIN": "> 10 Menit",
         "TIME_30MIN": "> 30 Menit",
-        "TIME_DEFAULT": "Durasi Apa Saja",
-        "TIME_SPENT": "Waktu yang dihabiskan",
-        "TITLE": "Sesuaikan Tampilan Tugas"
+        "TIME_SPENT": "Waktu yang dihabiskan"
       }
     },
     "TIME_TRACKING": {
@@ -1622,7 +1356,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Buat</em> dan lacak untuk",
-        "IDLE_FOR": "Anda telah menganggur selama:",
         "NOTIFICATION_TITLE": "Lacak waktu Anda!",
         "TASK": "Tugas",
         "TRACK_TO": "Lacak ke",
@@ -1634,7 +1367,6 @@
         "DAYS_WORKED": "Hari, bekerja:",
         "MONTH_WORKED": "Hari, bekerja:",
         "REPEATING_TASK": "Mengulangi tugas",
-        "RESTORE_TASK_FROM_ARCHIVE": "Kembalikan Tugas Dari Arsip",
         "TASKS": "Tugas-tugas",
         "TOTAL_TIME": "Total waktu yang dihabiskan:",
         "WEEK_NR": "Minggu {{nr}}",
@@ -1720,7 +1452,7 @@
     "DELETE": "Hapus",
     "DISMISS": "Abaikan",
     "DO_IT": "Lakukan!",
-    "DONT_SHOW_AGAIN": "Jangan tampilkan lagi",
+    "DUPLICATE": "Duplikat",
     "DURATION_DESCRIPTION": "contoh. \"5h 23m\" yang menghasilkan 5 hours 23 minutes (satuan dalam bahasa Inggris)",
     "EDIT": "Ubah",
     "ENABLED": "Aktifkan",
@@ -1729,30 +1461,40 @@
     "HIDE": "Sembunyikan",
     "ICON_INP_DESCRIPTION": "Semua emoji utf-8 juga didukung!",
     "INBOX_PROJECT_TITLE": "Kotak masuk",
-    "LOGIN": "Login",
-    "LOGOUT": "Keluar",
     "MINUTES": "{{m}} menit",
     "MOVE_BACKWARD": "Pindah Mundur",
     "MOVE_FORWARD": "Pindah Maju",
-    "NEXT": "Selanjutnya",
     "NO_CON": "Anda sedang offline. Harap sambungkan kembali ke internet.",
     "NONE": "Tidak ada",
     "OK": "Oke",
     "OVERDUE": "Terlambat",
-    "PREVIOUS": "Sebelumnya",
     "REMOVE": "Hapus",
-    "RESET": "Atur ulang",
     "SAVE": "Simpan",
     "SUBMIT": "Kirim",
     "TITLE": "Judul",
     "TODAY_TAG_TITLE": "Hari ini",
     "TRACKING_INTERVAL_DESCRIPTION": "Lacak waktu menggunakan interval ini dalam milidetik. Anda mungkin ingin mengubahnya untuk mengurangi penulisan disk. Lihat masalah #2355.",
     "UNDO": "Batalkan",
-    "UPDATE": "Perbarui",
     "WITHOUT_PROJECT": "Tanpa Proyek",
     "YESTERDAY": "Kemarin"
   },
   "GCF": {
+    "APP_FEATURES": {
+      "BOARDS": "Papan",
+      "DONATE_PAGE": "Halaman Donasi",
+      "FOCUS_MODE": "Mode Fokus",
+      "HELP": "Aktifkan atau nonaktifkan fitur aplikasi tertentu di seluruh UI.",
+      "ISSUES_PANEL": "Panel Masalah",
+      "PLANNER": "Perencana",
+      "PROJECT_NOTES": "Catatan Proyek",
+      "SCHEDULE": "Jadwal",
+      "SCHEDULE_DAY_PANEL": "Panel Hari Jadwal",
+      "SYNC_BUTTON": "Tombol Sinkronisasi",
+      "TIME_TRACKING": "Pelacakan Waktu Stopwatch",
+      "TITLE": "Fitur Aplikasi",
+      "USER_PROFILES": "Profil pengguna (Eksperimental)",
+      "USER_PROFILES_HINT": "Memungkinkan Anda membuat dan beralih antara profil pengguna yang berbeda, masing-masing dengan pengaturan, tugas, dan konfigurasi sinkronisasi terpisah. Tombol manajemen profil akan muncul di sudut kanan atas saat diaktifkan. Catatan: Menonaktifkan fitur ini akan menyembunyikan UI tetapi mempertahankan data profil Anda (Fitur eksperimental, tidak ada jaminan. Pastikan untuk memiliki cadangan)."
+    },
     "AUTO_BACKUPS": {
       "HELP": "Simpan otomatis semua data ke folder aplikasi Anda agar siap jika terjadi kesalahan.",
       "LABEL_IS_ENABLED": "Aktifkan pencadangan otomatis",
@@ -1762,9 +1504,7 @@
     "CALENDARS": {
       "BROWSER_WARNING": "Karena pembatasan asal silang <b>, ini kemungkinan TIDAK akan berfungsi dengan Super Productivity versi Browser.<br /> Silakan <a href=\"https://super-productivity.com/download/\">unduh versi desktop</a> untuk menggunakan fitur ini!</b>",
       "CAL_PATH": "Url sumber iCal",
-      "CAL_PROVIDERS": "Penyedia kalender (eksperimental dan opsional)",
       "CHECK_UPDATES": "Periksa pembaruan jarak jauh setiap X",
-      "DEFAULT_PROJECT": "Proyek Default untuk tugas kalender yang ditambahkan",
       "HELP": "Anda dapat mengintegrasikan kalender untuk diingatkan dan menambahkannya sebagai tugas dalam Super Productivity. Integrasi ini bekerja dengan menggunakan format iCal. Agar dapat berfungsi, kalender Anda harus dapat diakses melalui internet atau sistem file.",
       "SHOW_BANNER_THRESHOLD": "Tampilkan pemberitahuan X sebelum acara (kosong untuk dinonaktifkan)"
     },
@@ -1774,8 +1514,12 @@
     },
     "FOCUS_MODE": {
       "HELP": "Mode Fokus membuka layar bebas gangguan untuk membantu Anda fokus pada tugas Anda saat ini.",
-      "L_ALWAYS_OPEN_FOCUS_MODE": "Selalu buka mode fokus, ketika melacak",
+      "L_IS_PLAY_TICK": "Putar suara detak selama sesi fokus",
+      "L_MANUAL_BREAK_START": "Mulai istirahat secara manual (Pomodoro)",
+      "L_PAUSE_TRACKING_DURING_BREAK": "Jeda pelacakan tugas selama istirahat",
       "L_SKIP_PREPARATION_SCREEN": "Lewati layar persiapan (peregangan, dll.)",
+      "L_START_IN_BACKGROUND": "Mulai sesi fokus hanya dengan banner (tanpa overlay)",
+      "L_SYNC_SESSION_WITH_TRACKING": "Sinkronkan sesi fokus dengan pelacakan waktu",
       "TITLE": "Mode Fokus"
     },
     "IDLE": {
@@ -1828,7 +1572,6 @@
       "TASK_MOVE_TO_PROJECT": "Buka pindahkan tugas ke menu proyek",
       "TASK_OPEN_CONTEXT_MENU": "Buka menu konteks tugas",
       "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimasi / waktu yang dihabiskan",
-      "TASK_PLAN_FORDAY": "Rencanakan hari ini",
       "TASK_SCHEDULE": "Jadwal Tugas",
       "TASK_SHORTCUTS": "Tugas-tugas",
       "TASK_SHORTCUTS_INFO": "Pintasan berikut berlaku untuk tugas yang saat ini dipilih (dipilih melalui tab atau mouse).",
@@ -1836,7 +1579,6 @@
       "TASK_TOGGLE_DONE": "Beralih Selesai",
       "TITLE": "Pintasan Keyboard",
       "TOGGLE_BACKLOG": "Tampilkan/Sembunyikan Backlog",
-      "TOGGLE_BOOKMARKS": "Tampilkan/Sembunyikan Bar Bookmark",
       "TOGGLE_ISSUE_PANEL": "Tampilkan/Sembunyikan Panel Masalah",
       "TOGGLE_PLAY": "Mulai/Berhenti Tugas",
       "TOGGLE_SIDE_NAV": "Tampilkan & Fokus/Sembunyikan Sidenav",
@@ -1853,6 +1595,7 @@
       "EN": "Bahasa Inggris",
       "ES": "Español",
       "FA": "فارسی",
+      "FI": "Suomi",
       "FR": "français",
       "HR": "Hrvatski",
       "ID": "Bahasa Indonesia",
@@ -1864,8 +1607,10 @@
       "NL": "Belanda",
       "PL": "Polandia",
       "PT": "Português",
+      "PT_BR": "Portugis (Brasil)",
       "RU": "Rusia",
       "SK": "Slowakia",
+      "SV": "Svenska",
       "TIME_LOCALE": "Format waktu lokal",
       "TIME_LOCALE_AUTO": "Default sistem",
       "TIME_LOCALE_DE_DE": "Jerman - 24 jam",
@@ -1894,6 +1639,7 @@
       "DARK_MODE_LIGHT": "Terang",
       "DARK_MODE_SYSTEM": "Sistem",
       "DEFAULT_PROJECT": "Proyek default untuk digunakan untuk tugas jika tidak ada yang ditentukan",
+      "DEFAULT_START_PAGE": "Halaman mulai default",
       "FIRST_DAY_OF_WEEK": "Hari pertama dalam seminggu",
       "HELP": "<p><strong>Tidak melihat Pemberitahuan Desktop?</strong> Untuk windows, Anda mungkin ingin memeriksa Sistem > Pemberitahuan & tindakan dan memeriksa apakah pemberitahuan yang diperlukan telah diaktifkan.</p>",
       "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Tambahkan tag hari ini secara otomatis untuk mengerjakan tugas",
@@ -1903,16 +1649,14 @@
       "IS_DARK_MODE": "Mode Gelap",
       "IS_DISABLE_ANIMATIONS": "Nonaktifkan semua animasi",
       "IS_DISABLE_CELEBRATION": "Nonaktifkan perayaan di ringkasan harian",
-      "USER_PROFILES": "Aktifkan profil pengguna (Beta)",
-      "USER_PROFILES_HINT": "Memungkinkan Anda membuat dan beralih antara profil pengguna yang berbeda, masing-masing dengan pengaturan, tugas, dan konfigurasi sinkronisasi terpisah. Tombol manajemen profil akan muncul di sudut kanan atas saat diaktifkan. Catatan: Menonaktifkan fitur ini akan menyembunyikan UI tetapi mempertahankan data profil Anda (fitur Beta, tidak ada jaminan. Pastikan untuk memiliki cadangan).",
-      "IS_HIDE_NAV": "Sembunyikan navigasi hingga header utama diarahkan (khusus desktop)",
       "IS_MINIMIZE_TO_TRAY": "Minimalkan ke baki (hanya desktop)",
       "IS_OVERLAY_INDICATOR_ENABLED": "Aktifkan jendela indikator overlay (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Tampilkan tip produktivitas saat aplikasi mulai sedikit lebih lama",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Tampilkan hitung mundur saat ini di tray / menu status (desktop mac saja)",
       "IS_TRAY_SHOW_CURRENT_TASK": "Tampilkan tugas saat ini di menu baki / status (khusus desktop mac/windows)",
       "IS_TURN_OFF_MARKDOWN": "Matikan penguraian penurunan harga untuk catatan tugas",
-      "IS_USE_MINIMAL_SIDE_NAV": "Gunakan bilah navigasi minimal (hanya menampilkan ikon)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Gunakan bilah judul khusus (hanya Windows\\/Linux)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Memerlukan restart untuk berlaku",
       "START_OF_NEXT_DAY": "Waktu mulai hari berikutnya",
       "START_OF_NEXT_DAY_HINT": "dari kapan (dalam jam) Anda ingin menghitung hari berikutnya telah dimulai. defaultnya adalah tengah malam yaitu 0.",
       "TASK_NOTES_TPL": "Templat deskripsi tugas",
@@ -1925,21 +1669,12 @@
       "BREAK_DURATION": "Durasi istirahat pendek",
       "CYCLES_BEFORE_LONGER_BREAK": "Mulai istirahat lebih lama setelah X sesi kerja",
       "DURATION": "Durasi sesi kerja",
-      "HELP": "<p>Pengatur waktu pomodoro dapat dikonfigurasi melalui beberapa pengaturan. Durasi setiap sesi kerja, durasi istirahat normal, jumlah sesi kerja yang harus dijalankan sebelum istirahat yang lebih panjang dimulai dan durasi istirahat yang lebih panjang ini.</p> <p>Anda juga dapat mengatur jika ingin menampilkan gangguan Anda selama istirahat pomodoro.</p> <p>Menyetel \"Jeda pelacakan waktu saat istirahat pomodoro\" juga akan melacak waktu istirahat Anda sebagai waktu kerja yang dihabiskan untuk suatu tugas. </p> <p>Mengaktifkan \"Jeda sesi pomodoro saat tidak ada tugas aktif\" juga akan menjeda sesi pomodoro, saat Anda menjeda tugas.</p>",
-      "IS_DISABLE_AUTO_START_AFTER_BREAK": "Nonaktifkan mulai otomatis sesi setelah istirahat",
-      "IS_ENABLED": "Aktifkan pengatur waktu pomodoro",
-      "IS_MANUAL_CONTINUE": "Konfirmasi secara manual memulai sesi pomodoro berikutnya",
-      "IS_MANUAL_CONTINUE_BREAK": "Konfirmasikan secara manual mulai istirahat berikutnya",
-      "IS_PLAY_SOUND": "Putar suara saat sesi selesai",
-      "IS_PLAY_SOUND_AFTER_BREAK": "Putar suara saat istirahat selesai",
-      "IS_PLAY_TICK": "Putar suara centang setiap detik",
-      "IS_STOP_TRACKING_ON_BREAK": "Hentikan pelacakan waktu untuk tugas saat istirahat",
-      "LONGER_BREAK_DURATION": "Durasi istirahat lebih lama",
-      "TITLE": "Timer Pomodoro"
+      "LONGER_BREAK_DURATION": "Durasi istirahat lebih lama"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Tampilkan spanduk X sebelum pengingat yang sebenarnya",
       "DEFAULT_TASK_REMIND_OPTION": "Opsi pengingat default dipilih saat membuat tugas",
+      "DISABLE_REMINDERS": "Nonaktifkan semua pengingat",
       "IS_COUNTDOWN_BANNER_ENABLED": "Tampilkan spanduk hitung mundur sebelum pengingat jatuh tempo",
       "TITLE": "Pengingat"
     },
@@ -1952,9 +1687,7 @@
       "L_WORK_END": "Hari Kerja Berakhir",
       "L_WORK_START": "Mulai Hari Kerja",
       "LUNCH_BREAK_START_END_DESCRIPTION": "misalnya 13:00",
-      "MONTH": "Bulan",
       "TITLE": "Linimasa",
-      "WEEK": "Minggu",
       "WORK_START_END_DESCRIPTION": "contoh. 17:00"
     },
     "SHORT_SYNTAX": {
@@ -2002,6 +1735,9 @@
       "TITLE": "Pelacakan waktu"
     }
   },
+  "GLOBAL": {
+    "COPY_SUFFIX": " (salin)"
+  },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
       "A_DAY": "dalam sehari",
@@ -2032,7 +1768,8 @@
   },
   "GLOBAL_SNACK": {
     "COPY_TO_CLIPPBOARD": "Disalin ke papan klip",
-    "ERR_COMPRESSION": "Kesalahan untuk antarmuka kompresi",
+    "DUPLICATE_PROJECT_ERROR": "Proyek tidak dapat diduplikasi",
+    "DUPLICATE_PROJECT_SUCCESS": "Proyek berhasil diduplikasi",
     "FILE_DOWNLOADED": "{{fileName}} diunduh",
     "FILE_DOWNLOADED_BTN": "Buka folder",
     "NAVIGATE_TO_TASK_ERR": "Tidak dapat fokus pada tugas. Apakah Anda menghapusnya?",
@@ -2044,7 +1781,6 @@
     "SHARE_FAILED": "Berbagi gagal. Silakan salin secara manual.",
     "SHARE_FAILED_FALLBACK": "Berbagi gagal. Disalin ke clipboard sebagai gantinya.",
     "SHARE_UNAVAILABLE_FALLBACK": "Disalin ke clipboard.",
-    "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "{{keyCombo}} ditekan, tetapi pintasan bookmark terbuka hanya tersedia saat dalam konteks proyek.",
     "UNPLANNED_TODAY_TASKS": "Batalkan perencanaan semua tugas dari Hari Ini"
   },
   "GPB": {
@@ -2069,6 +1805,8 @@
     "CREATE_TAG": "Buat Tag",
     "DELETE_PROJECT": "Menghapus Proyek",
     "DELETE_TAG": "Hapus Tag",
+    "DONATE": "Dukung kami",
+    "DUPLICATE_PROJECT": "Duplikat",
     "ENTER_FOCUS_MODE": "Masukkan Mode Fokus",
     "GO_TO_TASK_LIST": "Buka daftar tugas",
     "HELP": "Bantuan",
@@ -2083,26 +1821,17 @@
       "SYNC": "Howto: Mengonfigurasi Sinkronisasi"
     },
     "METRICS": "Metrik",
-    "NO_PROJECT_INFO": "Tidak ada proyek yang tersedia. Anda dapat membuat proyek baru dengan mengklik tombol \"Buat Proyek\".",
-    "NO_TAG_INFO": "Saat ini tidak ada tag. Anda dapat menambahkan tag dengan memasukkan `#namaTag Anda` saat menambahkan atau mengedit tugas.",
-    "NOTES": "Catatan",
-    "NOTES_PANEL_INFO": "Catatan hanya dapat ditampilkan dari garis waktu dan tampilan daftar tugas biasa.",
+    "NO_TASKS_TO_TRACK": "Tambahkan tugas terlebih dahulu untuk mulai melacak waktu",
     "PLANNER": "Perencana",
-    "PROCRASTINATE": "Menunda",
     "PROJECT_MENU": "Menu Proyek",
-    "PROJECT_SETTINGS": "Pengaturan Proyek",
     "PROJECTS": "Proyek",
     "QUICK_HISTORY": "Riwayat Cepat",
     "SCHEDULE": "Jadwal",
     "SEARCH": "Cari",
     "SETTINGS": "Pengaturan",
     "SHARE_TASK_LIST_MARKDOWN": "Bagikan Daftar Tugas",
-    "SHOW_SEARCH_BAR": "Tampilkan Bilah Pencarian",
     "SIDE_PANEL_MENU": "Menu Panel Samping",
     "TAGS": "Tag-tag",
-    "TASK_LIST": "Task List",
-    "TASKS": "Tugas-tugas",
-    "TOGGLE_SHOW_BOOKMARKS": "Tampilkan/Sembunyikan Bookmark",
     "TOGGLE_SHOW_ISSUE_PANEL": "Tampilkan/Sembunyikan Panel Masalah",
     "TOGGLE_SHOW_NOTES": "Tampilkan/Sembunyikan Catatan Proyek",
     "TOGGLE_TRACK_TIME": "Mulai/Hentikan waktu pelacakan",
@@ -2131,6 +1860,7 @@
       "MSG": "Keluar dari aplikasi?",
       "OK": "Keluar"
     },
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "Anda dapat menggunakan ruang ini untuk menuliskan ritual akhir hari Anda sendiri, yang ingin Anda ingatkan.",
     "ESTIMATE_TOTAL": "Total perkiraan:",
     "EVALUATE_DAY": "Mengevaluasi",
     "EXPORT_TASK_LIST": "Ekspor Daftar Tugas",
@@ -2172,9 +1902,7 @@
     "CONFIGURATION": "Konfigurasi",
     "CONFIGURE": "Konfigurasikan",
     "CONFIRM_REMOVE": "Apakah Anda yakin ingin menghapus plugin \"{{name}}\"?",
-    "DISABLED": "Dinonaktifkan",
     "ELECTRON_API_NOT_AVAILABLE": "API Electron tidak tersedia",
-    "ENABLED": "Diaktifkan",
     "ERROR": "Kesalahan",
     "ERROR_LOADING_PLUGIN": "Kesalahan memuat plugin",
     "EXPERIMENTAL_WARNING": "Sistem plugin masih dalam tahap eksperimental dan harus digunakan dengan sangat hati-hati.",
@@ -2192,7 +1920,6 @@
     "GRANT_PERMISSION": "Berikan Izin",
     "HOOKS": "Hooks",
     "ID": "ID:",
-    "INDEX_HTML_NOT_LOADED": "Plugin index.html tidak dimuat",
     "INSTALL_PLUGIN": "Pasang Plugin",
     "INSTALL_WARNING": "Sebelum memasang plugin, pastikan Anda mempercayai sumbernya dan memahami izin yang diminta.",
     "INSTALLING": "Memasang...",
@@ -2206,16 +1933,6 @@
     "MIN_VERSION": "Versi Min.:",
     "NO_ADDITIONAL_INFO": "Tidak ada informasi tambahan tersedia",
     "NO_CONTENT_PROVIDED": "Tidak ada konten yang disediakan",
-    "NO_PLUGIN_CONTEXT_ACTION": "Plugin tidak memiliki izin untuk melakukan tindakan",
-    "NO_PLUGIN_CONTEXT_HEADER_BUTTON": "Plugin tidak memiliki izin untuk menambahkan tombol header",
-    "NO_PLUGIN_CONTEXT_LOADING": "Plugin tidak memiliki konteks untuk memuat data",
-    "NO_PLUGIN_CONTEXT_MENU_ENTRY": "Plugin tidak memiliki izin untuk menambahkan entri menu",
-    "NO_PLUGIN_CONTEXT_NODE": "Plugin tidak memiliki izin untuk menjalankan kode Node.js",
-    "NO_PLUGIN_CONTEXT_PERSISTENCE": "Plugin tidak memiliki izin untuk menyimpan data",
-    "NO_PLUGIN_CONTEXT_SHORTCUT": "Plugin tidak memiliki izin untuk mendaftarkan pintasan",
-    "NO_PLUGIN_CONTEXT_SIDE_PANEL": "Plugin tidak memiliki izin untuk menambahkan tombol panel samping",
-    "NO_PLUGIN_CONTEXT_SYNC": "Plugin tidak memiliki izin untuk menggunakan sinkronisasi",
-    "NO_PLUGIN_ID_PROVIDED_FOR_HTML": "ID plugin tidak disediakan untuk konten HTML",
     "NO_PLUGIN_MANIFEST_NODE": "Manifest plugin tidak menyertakan modul Node.js",
     "NODE_EXECUTION_REQUIRED": "Plugin ini memerlukan eksekusi Node.js yang hanya tersedia di aplikasi desktop.",
     "NODE_ONLY_DESKTOP": "Eksekusi Node.js hanya tersedia di aplikasi desktop",
@@ -2225,11 +1942,7 @@
     "PERMISSIONS": "Izin",
     "PLEASE_SELECT_ZIP_FILE": "Silakan pilih file ZIP",
     "PLUGIN_DIALOG_TITLE": "Pesan Plugin",
-    "PLUGIN_DOES_NOT_SUPPORT_IFRAME": "Plugin ini tidak mendukung antarmuka iframe",
-    "PLUGIN_ID_NOT_PROVIDED": "ID Plugin tidak disediakan",
     "PLUGIN_JS_NOT_FOUND": "File JavaScript plugin (plugin.js) tidak ditemukan dalam file ZIP",
-    "PLUGIN_NOT_FOUND": "Plugin tidak ditemukan",
-    "PLUGIN_SYSTEM_FAILED_INIT": "Sistem plugin gagal diinisialisasi",
     "PROJECT_DOES_NOT_EXIST": "Proyek tidak ada",
     "PROJECT_NOT_FOUND": "Proyek '{{contextId}}' tidak ditemukan",
     "RECOMMENDATION": "Hanya instal plugin dari sumber terpercaya dan tinjau kode mereka jika memungkinkan. Selalu cadangkan data Anda sebelum menginstal plugin baru.",
@@ -2254,7 +1967,6 @@
     "UNABLE_TO_PERSIST_DATA": "Tidak dapat menyimpan data ke penyimpanan plugin",
     "UNKNOWN_ERROR": "Terjadi kesalahan yang tidak diketahui",
     "UPLOAD_PLUGIN_INSTRUCTION": "Unggah file ZIP plugin untuk menginstalnya:",
-    "USER_DECLINED_NODE_PERMISSION": "Pengguna menolak izin eksekusi Node.js",
     "VALIDATION_FAILED": "Validasi gagal"
   },
   "PM": {
@@ -2262,17 +1974,14 @@
   },
   "PS": {
     "GLOBAL_SETTINGS": "Pengaturan global",
-    "ISSUE_INTEGRATION": "Issue Integrasion",
     "NO_PLUGINS_INSTALLED": "Tidak ada plugin yang terpasang saat ini",
     "PLUGINS": "Plugin",
     "PRIVACY_POLICY": "Kebijakan pribadi",
     "PRODUCTIVITY_HELPER": "Pembantu Produktivitas",
     "PROJECT_SETTINGS": "Pengaturan Khusus Proyek",
     "PROVIDE_FEEDBACK": "Berikan umpan balik",
-    "RELOAD": "Muat ulang",
     "SYNC_EXPORT": "Sinkron & Ekspor",
-    "TAG_SETTINGS": "Pengaturan Khusus Tag",
-    "TOGGLE_DARK_MODE": "Alihkan Mode Gelap"
+    "TAG_SETTINGS": "Pengaturan Khusus Tag"
   },
   "SCHEDULE": {
     "LAST": "Terakhir:",
@@ -2282,26 +1991,7 @@
     "NO_SCHEDULED_TITLE": "Tugas Terjadwal untuk Hari Ini",
     "REPEATED_TASKS": "Tugas berulang",
     "SCHEDULED_TASKS": "Tugas yang dijadwalkan",
-    "SCHEDULED_TASKS_WITH_TIME": "Tugas terjadwal dengan pengingat",
-    "START_TASK": "Mulai tugas dan hapus pengingat"
-  },
-  "THEMES": {
-    "amber": "amber",
-    "blue": "biru",
-    "blue-grey": "biru-abu-abu",
-    "cyan": "cyan",
-    "deep-orange": "oranye tua",
-    "deep-purple": "ungu tua",
-    "green": "hijau",
-    "indigo": "nila",
-    "light-blue": "biru terang",
-    "light-green": "hijau terang",
-    "lime": "jeruk nipis",
-    "pink": "merah muda",
-    "purple": "ungu",
-    "SELECT_THEME": "Pilih Tema",
-    "teal": "teal",
-    "yellow": "kuning"
+    "SCHEDULED_TASKS_WITH_TIME": "Tugas terjadwal dengan pengingat"
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktif",
@@ -2315,21 +2005,18 @@
     "EXISTING_PROFILES": "Profil yang ada",
     "EXPORT_PROFILE": "Ekspor profil",
     "MANAGE_PROFILES": "Kelola profil...",
-    "OPEN_PROFILES_FOLDER": "Buka folder profil",
     "PROFILE_NAME": "Nama profil",
     "PROFILE_NAME_PLACEHOLDER": "mis. Kerja, Pribadi",
     "RENAME": "Ganti nama",
     "SAVE": "Simpan"
   },
   "V": {
-    "E_1TO10": "Silakan masukkan nilai antara 1 dan 10",
     "E_DATETIME": "Nilai yang dimasukkan bukan waktu tanggal!",
     "E_DURATION": "Silakan masukkan durasi yang valid (misalnya 1 jam)",
     "E_MAX": "Tidak boleh lebih besar dari {{val}}",
     "E_MAX_LENGTH": "Panjang maksimal {{val}} karakter",
     "E_MIN": "Harus lebih kecil dari {{val}}",
     "E_MIN_LENGTH": "Panjangnya minimal {{val}} karakter",
-    "E_PATTERN": "Masukan tidak valid",
     "E_REQUIRED": "Bagian ini diperlukan"
   },
   "WW": {
@@ -2340,10 +2027,7 @@
     "DONE_TASKS_IN_ARCHIVE": "Saat ini tidak ada tugas yang selesai di sini, tetapi ada beberapa yang sudah diarsipkan.",
     "ESTIMATE_REMAINING": "Perkiraan tersisa:",
     "FINISH_DAY": "Selesai Hari",
-    "FINISH_DAY_FOR_PROJECT": "Hari Selesai untuk Proyek ini",
-    "FINISH_DAY_FOR_TAG": "Hari Selesai untuk Tag ini",
     "FINISH_DAY_TOOLTIP": "Evaluasi hari Anda, pindahkan semua tugas yang sudah selesai ke arsip (opsional) dan/atau rencanakan hari berikutnya.",
-    "HELP_PROCRASTINATION": "Bantu saya menunda-nunda!",
     "LATER_TODAY": "Nanti Hari Ini",
     "MOVE_DONE_TO_ARCHIVE": "Pemindahan dilakukan ke arsip",
     "NO_DONE_TASKS": "Saat ini tidak ada tugas yang dilakukan",

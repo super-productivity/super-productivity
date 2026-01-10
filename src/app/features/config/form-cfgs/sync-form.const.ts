@@ -139,6 +139,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           templateOptions: {
             required: true,
             label: T.F.SYNC.FORM.WEB_DAV.L_SYNC_FOLDER_PATH,
+            description: T.F.SYNC.FORM.WEB_DAV.D_SYNC_FOLDER_PATH,
           },
         },
       ],

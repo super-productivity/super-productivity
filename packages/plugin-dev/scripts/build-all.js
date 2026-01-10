@@ -18,6 +18,7 @@ const colors = {
 };
 
 function log(message, color = '') {
+  if (process.argv.includes('--silent')) return;
   console.log(`${color}${message}${colors.reset}`);
 }
 

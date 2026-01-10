@@ -19,7 +19,7 @@ describe('Encryption', () => {
     } catch (e) {
       // Success
     }
-  });
+  }, 10000); // 10s timeout for expensive Argon2id operations
 
   describe('Legacy Compatibility', () => {
     // Helper to simulate legacy encryption (PBKDF2)

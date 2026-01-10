@@ -9,7 +9,7 @@
       class="width100"
       [hideRequiredMarker]="true"
     >
-      <mat-label>{{ 'GCF.SOUND.VOLUME' | translate }}</mat-label>
+      <mat-label>{{ T.GCF.SOUND.VOLUME | translate }}</mat-label>
       <mat-slider
         class="width100"
         [min]="0"
@@ -26,7 +26,7 @@
       </mat-slider>
     </mat-form-field>
     <mat-form-field class="width100">
-      <mat-label>{{ 'GCF.SOUND.DONE_SOUND' | translate }}</mat-label>
+      <mat-label>{{ T.GCF.SOUND.DONE_SOUND | translate }}</mat-label>
       <mat-select formControlName="doneSound">
         @for (sound of soundOpts; track sound) {
           <mat-option [value]="sound.value">{{ sound.label }}</mat-option>
@@ -42,11 +42,11 @@
         matInput
         [checked]="this.config?.isIncreaseDoneSoundPitch"
         formControlName="isIncreaseDoneSoundPitch"
-        >{{ 'GCF.SOUND.IS_INCREASE_DONE_PITCH' | translate }}</mat-slide-toggle
+        >{{ T.GCF.SOUND.IS_INCREASE_DONE_PITCH | translate }}</mat-slide-toggle
       >
     </mat-form-field>
     <mat-form-field class="width100">
-      <mat-label>{{ 'GCF.SOUND.BREAK_REMINDER_SOUND' | translate }}</mat-label>
+      <mat-label>{{ T.GCF.SOUND.BREAK_REMINDER_SOUND | translate }}</mat-label>
       <mat-select formControlName="breakReminderSound">
         @for (sound of soundOpts; track sound) {
           <mat-option [value]="sound.value">{{ sound.label }}</mat-option>
@@ -54,7 +54,7 @@
       </mat-select>
     </mat-form-field>
     <mat-form-field class="width100">
-      <mat-label>{{ 'GCF.SOUND.TRACK_TIME_SOUND' | translate }}</mat-label>
+      <mat-label>{{ T.GCF.SOUND.TRACK_TIME_SOUND | translate }}</mat-label>
       <mat-select formControlName="trackTimeSound">
         @for (sound of soundOpts; track sound) {
           <mat-option [value]="sound.value">{{ sound.label }}</mat-option>

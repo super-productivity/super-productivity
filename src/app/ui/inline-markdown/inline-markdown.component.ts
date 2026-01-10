@@ -14,17 +14,17 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { fadeInAnimation } from '../animations/fade.ani';
+import { FormsModule } from '@angular/forms';
+import { MatIconButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
+import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 import { MarkdownComponent } from 'ngx-markdown';
 import { IS_ELECTRON } from '../../app.constants';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { MatDialog } from '@angular/material/dialog';
-import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
-import { FormsModule } from '@angular/forms';
-import { MatIconButton } from '@angular/material/button';
-import { MatTooltip } from '@angular/material/tooltip';
-import { MatIcon } from '@angular/material/icon';
+import { fadeInAnimation } from '../animations/fade.ani';
+import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -197,22 +197,31 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   openFullScreen(): void {
-    this._matDialog
-      .open(DialogFullscreenMarkdownComponent, {
-        minWidth: '100vw',
-        height: '100vh',
-        restoreFocus: true,
-        data: {
-          content: this.modelCopy(),
-        },
-      })
-      .afterClosed()
-      .subscribe((res) => {
-        if (typeof res === 'string') {
-          this.modelCopy.set(res);
-          this.changed.emit(res);
-        }
-      });
+    const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
+      minWidth: '100vw',
+      height: '100vh',
+      restoreFocus: true,
+      data: {
+        content: this.modelCopy(),
+      },
+    });
+
+    let lastEmittedContent: string | null = null;
+
+    // Subscribe to live auto-save updates from fullscreen dialog
+    dialogRef.componentInstance.contentChanged.subscribe((content: string) => {
+      lastEmittedContent = content;
+      this.modelCopy.set(content);
+      this.changed.emit(content);
+    });
+
+    dialogRef.afterClosed().subscribe((res) => {
+      // Only emit if content differs from last auto-saved content
+      if (typeof res === 'string' && res !== lastEmittedContent) {
+        this.modelCopy.set(res);
+        this.changed.emit(res);
+      }
+    });
   }
 
   resizeParsedToFit(): void {

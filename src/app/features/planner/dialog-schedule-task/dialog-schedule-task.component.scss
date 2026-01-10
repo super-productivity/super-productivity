@@ -59,9 +59,12 @@
 }
 
 .form-ctrl-wrapper {
-  margin: 0 16px;
-  margin-top: 16px;
-  //border-top: 1px solid var(--separator-color);
+  margin: 16px 16px 0;
+}
+
+mat-dialog-content {
+  position: relative;
+  padding: 0 !important;
 }
 
 .press-enter-msg {

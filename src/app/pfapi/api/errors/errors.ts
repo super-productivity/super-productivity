@@ -2,15 +2,66 @@ import { IValidation } from 'typia';
 import { AllModelData } from '../pfapi.model';
 import { PFLog } from '../../../core/log';
 
+/**
+ * Extracts a meaningful error message from various error shapes.
+ * Handles Error objects with nested cause, zlib error codes, and plain strings.
+ * This is important because some browser APIs (like DecompressionStream) throw
+ * errors with empty messages but contain the real error in the 'cause' property.
+ */
+export const extractErrorMessage = (err: unknown): string | null => {
+  if (typeof err === 'string' && err.length > 0) {
+    return err;
+  }
+
+  if (err instanceof Error) {
+    // Check for nested cause first (e.g., DecompressionStream errors)
+    const cause = (err as Error & { cause?: unknown }).cause;
+    if (cause instanceof Error && cause.message) {
+      return cause.message;
+    }
+
+    // Check for error code (e.g., zlib errors like Z_DATA_ERROR)
+    const code = (err as Error & { code?: string }).code;
+    if (typeof code === 'string' && code.length > 0) {
+      // Make zlib error codes more readable
+      if (code.startsWith('Z_')) {
+        return `Compression error: ${code.replace('Z_', '').replace(/_/g, ' ').toLowerCase()}`;
+      }
+      return code;
+    }
+
+    // Use the error's own message if available
+    if (err.message && err.message.length > 0) {
+      return err.message;
+    }
+  }
+
+  // For objects with message property
+  if (
+    err !== null &&
+    typeof err === 'object' &&
+    'message' in err &&
+    typeof (err as { message: unknown }).message === 'string'
+  ) {
+    const msg = (err as { message: string }).message;
+    if (msg.length > 0) {
+      return msg;
+    }
+  }
+
+  return null;
+};
+
 class AdditionalLogErrorBase<T = unknown[]> extends Error {
   additionalLog: T;
 
-  // TODO improve typing here
   constructor(...additional: unknown[]) {
-    super(typeof additional[0] === 'string' ? additional[0] : new.target.name);
+    // Extract meaningful message from first argument, fall back to class name
+    const extractedMessage = extractErrorMessage(additional[0]);
+    // Use hardcoded class name pattern to avoid minification issues
+    super(extractedMessage ?? 'Unknown error');
 
     if (additional.length > 0) {
-      // PFLog.critical( this.name, ...additional);
       PFLog.log(this.name, ...additional);
       try {
         PFLog.log('additional error log: ' + JSON.stringify(additional));
@@ -143,9 +194,17 @@ export class HttpNotOkAPIError extends AdditionalLogErrorBase {
     }
 
     // Strip script and style tags with their content
-    const cleanBody = body
-      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, '')
-      .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, '');
+    // Apply repeatedly to handle nested/crafted inputs like <scri<script>pt>
+    let cleanBody = body;
+    let previousBody: string;
+    do {
+      previousBody = cleanBody;
+      cleanBody = cleanBody
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gim, '')
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gim, '')
+        .replace(/<script\b/gim, '')
+        .replace(/<style\b/gim, '');
+    } while (cleanBody !== previousBody);
 
     // Strip HTML tags for plain text
     const withoutTags = cleanBody
@@ -249,6 +308,42 @@ export class DecompressError extends AdditionalLogErrorBase {
   override name = 'DecompressError';
 }
 
+export class JsonParseError extends Error {
+  override name = 'JsonParseError';
+  position?: number;
+  dataSample?: string;
+
+  constructor(originalError: unknown, dataStr?: string) {
+    // Extract position from SyntaxError message (e.g., "...at position 80999")
+    const positionMatch =
+      originalError instanceof Error
+        ? originalError.message.match(/position\s+(\d+)/i)
+        : null;
+    const position = positionMatch ? parseInt(positionMatch[1], 10) : undefined;
+
+    // Create human-readable message
+    const positionInfo = position !== undefined ? ` at position ${position}` : '';
+    const message = `Failed to parse JSON data${positionInfo}. The sync data may be corrupted or incomplete.`;
+
+    super(message);
+    this.position = position;
+
+    // Extract a sample of the data around the error position for debugging
+    if (dataStr && position !== undefined) {
+      const start = Math.max(0, position - 50);
+      const end = Math.min(dataStr.length, position + 50);
+      this.dataSample = `...${dataStr.substring(start, end)}...`;
+    }
+
+    PFLog.err('JsonParseError:', {
+      message: this.message,
+      position: this.position,
+      dataSample: this.dataSample,
+      originalError,
+    });
+  }
+}
+
 // --------------MODEL AND DB ERRORS--------------
 export class ClientIdNotFoundError extends Error {
   override name = 'ClientIdNotFoundError';
@@ -332,7 +427,8 @@ export class DataValidationFailedError extends Error {
   additionalLog?: string;
 
   constructor(validationResult: IValidation<AllModelData<any>>) {
-    super('DataValidationFailedError');
+    const errorSummary = DataValidationFailedError._buildErrorSummary(validationResult);
+    super(errorSummary);
     PFLog.log('validation result: ', validationResult);
 
     try {
@@ -345,6 +441,25 @@ export class DataValidationFailedError extends Error {
     } catch (e) {
       PFLog.err('Failed to stringify validation errors:', e);
     }
+  }
+
+  private static _buildErrorSummary(
+    validationResult: IValidation<AllModelData<any>>,
+  ): string {
+    try {
+      if ('errors' in validationResult && Array.isArray(validationResult.errors)) {
+        const errors = validationResult.errors as IValidation.IError[];
+        const paths = errors
+          .slice(0, 3)
+          .map((e) => e.path)
+          .join(', ');
+        const suffix = errors.length > 3 ? ` (+${errors.length - 3} more)` : '';
+        return `Validation failed at: ${paths}${suffix}`;
+      }
+    } catch {
+      // Fall through to default message
+    }
+    return 'Data validation failed';
   }
 }
 

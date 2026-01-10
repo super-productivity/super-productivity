@@ -154,13 +154,13 @@ describe('FocusModeReducer', () => {
         },
       };
 
-      const action = a.pauseFocusSession();
+      const action = a.pauseFocusSession({ pausedTaskId: null });
       const result = focusModeReducer(runningState, action);
 
       expect(result.timer.isRunning).toBe(false);
     });
 
-    it('should not pause non-work sessions', () => {
+    it('should pause break sessions', () => {
       const breakState = {
         ...initialState,
         timer: {
@@ -172,10 +172,48 @@ describe('FocusModeReducer', () => {
         },
       };
 
-      const action = a.pauseFocusSession();
+      const action = a.pauseFocusSession({ pausedTaskId: null });
       const result = focusModeReducer(breakState, action);
 
-      expect(result.timer.isRunning).toBe(true);
+      expect(result.timer.isRunning).toBe(false);
+    });
+
+    it('should not pause sessions with no purpose (idle)', () => {
+      const idleState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: null,
+          elapsed: 0,
+          duration: 0,
+          purpose: null,
+        },
+      };
+
+      const action = a.pauseFocusSession({ pausedTaskId: null });
+      const result = focusModeReducer(idleState, action);
+
+      expect(result).toBe(idleState);
+    });
+
+    it('should store pausedTaskId when provided', () => {
+      const runningState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now(),
+          elapsed: 0,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+        pausedTaskId: null,
+      };
+
+      const action = a.pauseFocusSession({ pausedTaskId: 'task-123' });
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.pausedTaskId).toBe('task-123');
     });
 
     it('should unpause focus session', () => {
@@ -194,6 +232,42 @@ describe('FocusModeReducer', () => {
       const result = focusModeReducer(pausedState, action);
 
       expect(result.timer.isRunning).toBe(true);
+    });
+
+    it('should unpause break session', () => {
+      const pausedBreakState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: Date.now() - 60000,
+          elapsed: 60000,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+      };
+
+      const action = a.unPauseFocusSession();
+      const result = focusModeReducer(pausedBreakState, action);
+
+      expect(result.timer.isRunning).toBe(true);
+    });
+
+    it('should not unpause sessions with no purpose (idle)', () => {
+      const idleState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: null,
+          elapsed: 0,
+          duration: 0,
+          purpose: null,
+        },
+      };
+
+      const action = a.unPauseFocusSession();
+      const result = focusModeReducer(idleState, action);
+
+      expect(result).toBe(idleState);
     });
 
     it('should complete focus session', () => {
@@ -280,7 +354,7 @@ describe('FocusModeReducer', () => {
         currentScreen: FocusScreen.Break,
       };
 
-      const action = a.skipBreak();
+      const action = a.skipBreak({ pausedTaskId: null });
       const result = focusModeReducer(breakState, action);
 
       expect(result.currentScreen).toBe(FocusScreen.Main);
@@ -302,7 +376,7 @@ describe('FocusModeReducer', () => {
         currentScreen: FocusScreen.Break,
       };
 
-      const action = a.completeBreak();
+      const action = a.completeBreak({ pausedTaskId: null });
       const result = focusModeReducer(breakState, action);
 
       expect(result.currentScreen).toBe(FocusScreen.Main);

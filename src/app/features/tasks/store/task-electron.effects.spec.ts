@@ -5,7 +5,6 @@ import { TaskElectronEffects } from './task-electron.effects';
 import { TaskService } from '../task.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { PomodoroService } from '../../pomodoro/pomodoro.service';
 import { FocusModeService } from '../../focus-mode/focus-mode.service';
 import { tap } from 'rxjs/operators';
 
@@ -19,10 +18,6 @@ describe('TaskElectronEffects', () => {
     const taskServiceSpy = jasmine.createSpyObj('TaskService', ['add']);
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg$: of({}),
-    });
-    const pomodoroServiceSpy = jasmine.createSpyObj('PomodoroService', [], {
-      isEnabled$: of(false),
-      currentSessionTime$: of(0),
     });
     const focusModeServiceSpy = jasmine.createSpyObj('FocusModeService', [], {
       currentSessionTime$: of(0),
@@ -65,7 +60,6 @@ describe('TaskElectronEffects', () => {
         provideMockStore(),
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
-        { provide: PomodoroService, useValue: pomodoroServiceSpy },
         { provide: FocusModeService, useValue: focusModeServiceSpy },
       ],
     });

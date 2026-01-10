@@ -1,7 +1,7 @@
 services:
   # Super Productivity app
   app:
-    image: johannesjo/super-productivity:latest
+    image: super-productivity/super-productivity:latest
     ports:
       - '8080:80'
     environment:
@@ -20,10 +20,13 @@ services:
       - '2345:2345'
     volumes:
       - ./webdav.yaml:/config.yml:ro
-      - ${WEBDAV_DATA_DIR:-./data}:/data
+      - webdav_data:/data
     healthcheck:
       test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:2345/']
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  webdav_data:

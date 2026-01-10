@@ -73,13 +73,13 @@ export const selectPomodoroConfig = createSelector(
   selectConfigFeatureState,
   (cfg): PomodoroConfig => cfg.pomodoro,
 );
-export const selectIsPomodoroEnabled = createSelector(
-  selectConfigFeatureState,
-  (cfg): boolean => !!cfg.pomodoro.isEnabled,
-);
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg.reminder,
+);
+export const selectIsFocusModeEnabled = createSelector(
+  selectConfigFeatureState,
+  (cfg): boolean => cfg.appFeatures.isFocusModeEnabled,
 );
 
 export const initialGlobalConfigState: GlobalConfigState = {

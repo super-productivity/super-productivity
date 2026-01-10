@@ -75,6 +75,11 @@ describe('DialogScheduleTaskComponent', () => {
           initialState: {
             [CONFIG_FEATURE_NAME]: {
               sync: {},
+              localization: {
+                lng: undefined,
+                dateTimeLocale: undefined,
+                firstDayOfWeek: 0,
+              },
             } as any,
           },
         }),
@@ -286,6 +291,111 @@ describe('DialogScheduleTaskComponent', () => {
         }),
       );
       expect(dialogRefSpy.close).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('ngAfterViewInit - dueWithTime initialization (issue #5515)', () => {
+    it('should initialize selectedDate from dueWithTime without timezone corruption', async () => {
+      // Create a task scheduled for 2:45 PM today
+      const scheduledTime = new Date();
+      scheduledTime.setHours(14, 45, 0, 0);
+      const dueWithTime = scheduledTime.getTime();
+
+      const mockTask = {
+        id: 'taskWithDueTime',
+        title: 'Scheduled Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: Date.now(),
+        subTaskIds: [],
+        dueWithTime,
+        reminderId: null,
+      } as unknown as TaskCopy;
+
+      component.data = { task: mockTask };
+      component.task = mockTask;
+      fixture.detectChanges();
+
+      await component.ngAfterViewInit();
+
+      // The selectedDate should preserve the original date without timezone shift
+      const selectedDate = component.selectedDate as Date;
+      expect(selectedDate.getDate()).toBe(scheduledTime.getDate());
+      expect(selectedDate.getMonth()).toBe(scheduledTime.getMonth());
+      expect(selectedDate.getFullYear()).toBe(scheduledTime.getFullYear());
+    });
+
+    it('should initialize selectedTime correctly from dueWithTime', async () => {
+      // Create a task scheduled for 2:45 PM
+      const scheduledTime = new Date();
+      scheduledTime.setHours(14, 45, 0, 0);
+      const dueWithTime = scheduledTime.getTime();
+
+      const mockTask = {
+        id: 'taskWithDueTime',
+        title: 'Scheduled Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: Date.now(),
+        subTaskIds: [],
+        dueWithTime,
+        reminderId: null,
+      } as unknown as TaskCopy;
+
+      component.data = { task: mockTask };
+      component.task = mockTask;
+      fixture.detectChanges();
+
+      await component.ngAfterViewInit();
+
+      // The selectedTime should be "14:45"
+      expect(component.selectedTime).toBe('14:45');
+    });
+
+    it('should preserve exact timestamp when dialog is opened and closed', async () => {
+      // This tests that opening the dialog doesn't corrupt the dueWithTime
+      const originalDueWithTime = new Date(2025, 5, 15, 14, 45, 0).getTime();
+
+      const mockTask = {
+        id: 'taskPreserveTime',
+        title: 'Preserve Time Task',
+        tagIds: [] as string[],
+        projectId: 'DEFAULT',
+        timeSpentOnDay: {},
+        attachments: [],
+        timeEstimate: 0,
+        timeSpent: 0,
+        isDone: false,
+        created: Date.now(),
+        subTaskIds: [],
+        dueWithTime: originalDueWithTime,
+        reminderId: null,
+      } as unknown as TaskCopy;
+
+      component.data = { task: mockTask };
+      component.task = mockTask;
+      fixture.detectChanges();
+
+      await component.ngAfterViewInit();
+
+      // Verify the displayed date/time matches the original
+      const selectedDate = component.selectedDate as Date;
+      const originalDate = new Date(originalDueWithTime);
+
+      expect(selectedDate.getFullYear()).toBe(originalDate.getFullYear());
+      expect(selectedDate.getMonth()).toBe(originalDate.getMonth());
+      expect(selectedDate.getDate()).toBe(originalDate.getDate());
+      expect(component.selectedTime).toBe('14:45');
     });
   });
 });

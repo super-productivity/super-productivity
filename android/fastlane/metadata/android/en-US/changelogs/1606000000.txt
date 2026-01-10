@@ -1,0 +1,17 @@
+
+### Bug Fixes
+
+* change filtering by tag/project logic to handle empty inputs
+* **e2e:** WebDAV sync tests connection and timeout issues
+* **electron:** improve window controls overlay for Windows/Linux (#5713)
+* **i18n-sv:** fix json structure
+* **i18n:** incorrect json structure
+* **repeat:** add error handling for undefined startDate and more tests (fixes #5594)
+* **repeat:** calculate correct target day based on repeat pattern when adding repeat config (fixes #5594)
+* **repeat:** correct test expectations for getNewestPossibleDueDate behavior
+* **repeat:** correct WEEKLY Friday test to expect fallback due to ISO week boundary
+### Features
+
+* add linear support
+* **filtering:** allow filtering by empty time
+* use HttpClient for requests

@@ -15,6 +15,26 @@
 
     .mat-mdc-tab {
       min-width: 40px !important;
+
+      /* The context menu is attached to the div in the tab-label, which is essentially only the title text;
+         To be able to open the context menu via right-click on the hole tab-label, we modify the default material
+         design to have zero padding and let the inner div define the tab shape. The inner spans which normally 
+         define the text-alignment are "deactivated" by defining display: contents. */
+      padding: 0px;
+
+      span.mdc-tab__content {
+        display: contents;
+
+        span.mdc-tab__text-label {
+          display: contents;
+
+          div {
+            padding: 0px 24px;
+            display: flex;
+            align-items: center;
+          }
+        }
+      }
     }
 
     .mat-tab-label:last-child {

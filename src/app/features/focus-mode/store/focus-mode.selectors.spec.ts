@@ -27,6 +27,7 @@ describe('FocusModeSelectors', () => {
     mode: FocusModeMode.Pomodoro,
     currentCycle: 1,
     lastCompletedDuration: 0,
+    pausedTaskId: null,
     ...overrides,
   });
 

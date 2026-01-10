@@ -26,6 +26,7 @@ import {
   matchesAnyCalendarEventId,
   shareCalendarEventId,
 } from '../get-calendar-event-id-candidates';
+import { getEffectiveCheckInterval } from '../../issue/providers/calendar/calendar.const';
 
 const CHECK_TO_SHOW_INTERVAL = 60 * 1000;
 
@@ -62,8 +63,7 @@ export class CalendarIntegrationEffects {
 
           return forkJoin(
             activatedProviders.map((calProvider) =>
-              timer(0, calProvider.checkUpdatesEvery).pipe(
-                // timer(0, 10000).pipe(
+              timer(0, getEffectiveCheckInterval(calProvider)).pipe(
                 // tap(() => Log.log('REQUEST CALENDAR', calProvider)),
                 switchMap(() =>
                   this._calendarIntegrationService.requestEvents$(calProvider),

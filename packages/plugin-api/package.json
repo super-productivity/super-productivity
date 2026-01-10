@@ -24,13 +24,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johannesjo/super-productivity.git",
+    "url": "git+https://github.com/super-productivity/super-productivity.git",
     "directory": "packages/plugin-api"
   },
   "bugs": {
-    "url": "https://github.com/johannesjo/super-productivity/issues"
+    "url": "https://github.com/super-productivity/super-productivity/issues"
   },
-  "homepage": "https://github.com/johannesjo/super-productivity#readme",
+  "homepage": "https://github.com/super-productivity/super-productivity#readme",
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",

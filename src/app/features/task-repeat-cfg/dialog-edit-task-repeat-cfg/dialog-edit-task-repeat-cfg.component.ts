@@ -48,6 +48,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
 
 // TASK_REPEAT_CFG_FORM_CFG
 @Component({
@@ -65,6 +66,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
     MatDialogActions,
     MatButton,
     MatIcon,
+    RepeatTaskHeatmapComponent,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -88,10 +90,19 @@ export class DialogEditTaskRepeatCfgComponent {
   repeatCfg = signal<Omit<TaskRepeatCfgCopy, 'id'> | TaskRepeatCfg>(
     this._initializeRepeatCfg(),
   );
+  isLoading = signal<boolean>(false);
   isEdit = computed(() => {
     if (this._data.repeatCfg) return true;
     if (this._data.task?.repeatCfgId) return true;
     return false;
+  });
+
+  repeatCfgId = computed(() => {
+    const cfg = this.repeatCfg();
+    if ('id' in cfg && cfg.id) {
+      return cfg.id;
+    }
+    return this._data.repeatCfg?.id || this._data.task?.repeatCfgId || null;
   });
 
   TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS = signal<FormlyFieldConfig[]>([]);
@@ -126,12 +137,14 @@ export class DialogEditTaskRepeatCfgComponent {
     // Set up effect to load task repeat config if editing
     effect(() => {
       if (this.isEdit() && this._data.task?.repeatCfgId) {
+        this.isLoading.set(true);
         this._taskRepeatCfgService
           .getTaskRepeatCfgById$(this._data.task.repeatCfgId)
           .pipe(first())
           .subscribe((cfg) => {
             this._setRepeatCfgInitiallyForEditOnly(cfg);
             this._checkCanRemoveInstance();
+            this.isLoading.set(false);
           });
       }
       this._checkCanRemoveInstance();
@@ -240,8 +253,13 @@ export class DialogEditTaskRepeatCfgComponent {
 
     // workaround for formly not always updating hidden fields correctly (in time??)
     if (currentRepeatCfg.quickSetting !== 'CUSTOM') {
+      // Pass startDate to use correct weekday for WEEKLY_CURRENT_WEEKDAY (fixes #5806)
+      const referenceDate = currentRepeatCfg.startDate
+        ? dateStrToUtcDate(currentRepeatCfg.startDate)
+        : undefined;
       const updatesForQuickSetting = getQuickSettingUpdates(
         currentRepeatCfg.quickSetting,
+        referenceDate,
       );
       if (updatesForQuickSetting) {
         this.repeatCfg.update((cfg) => ({ ...cfg, ...updatesForQuickSetting }));
@@ -358,7 +376,8 @@ export class DialogEditTaskRepeatCfgComponent {
 
     if (processedCfg.quickSetting === 'WEEKLY_CURRENT_WEEKDAY') {
       if (!processedCfg.startDate) {
-        throw new Error('Invalid repeat cfg');
+        // Gracefully fall back to CUSTOM when data is incomplete
+        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
       }
       if (new Date(processedCfg.startDate).getDay() !== new Date().getDay()) {
         processedCfg = { ...processedCfg, quickSetting: 'CUSTOM' };
@@ -366,7 +385,8 @@ export class DialogEditTaskRepeatCfgComponent {
     }
     if (processedCfg.quickSetting === 'YEARLY_CURRENT_DATE') {
       if (!processedCfg.startDate) {
-        throw new Error('Invalid repeat cfg');
+        // Gracefully fall back to CUSTOM when data is incomplete
+        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
       }
       if (
         new Date(processedCfg.startDate).getDate() !== new Date().getDate() ||
@@ -377,7 +397,8 @@ export class DialogEditTaskRepeatCfgComponent {
     }
     if (processedCfg.quickSetting === 'MONTHLY_CURRENT_DATE') {
       if (!processedCfg.startDate) {
-        throw new Error('Invalid repeat cfg');
+        // Gracefully fall back to CUSTOM when data is incomplete
+        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
       }
       if (new Date(processedCfg.startDate).getDate() !== new Date().getDate()) {
         processedCfg = { ...processedCfg, quickSetting: 'CUSTOM' };

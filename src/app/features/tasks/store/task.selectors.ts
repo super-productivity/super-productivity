@@ -415,6 +415,11 @@ export const selectAllCalendarTaskEventIds = createSelector(
     tasks.filter((task) => task.issueType === 'ICAL').map((t) => t.issueId as string),
 );
 
+export const selectAllCalendarIssueTasks = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => tasks.filter((task) => task.issueType === 'ICAL'),
+);
+
 export const selectTasksWorkedOnOrDoneFlat = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { day: string }) => {

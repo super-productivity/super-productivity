@@ -24,8 +24,8 @@ test.describe('Daily Summary', () => {
     const taskName = 'test task hohoho 1h/1h';
     await workViewPage.addTask(taskName);
 
-    // Wait a moment for task to be saved
-    await page.waitForTimeout(500);
+    // Wait for task to appear
+    await expect(page.locator('task')).toHaveCount(1, { timeout: 5000 });
 
     // Navigate to daily summary
     await page.goto('/#/tag/TODAY/daily-summary');

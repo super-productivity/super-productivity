@@ -366,6 +366,31 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (this._isTaskDeleteTriggered) {
       return;
     }
+
+    const isConfirmBeforeTaskDelete =
+      this._configService.cfg()?.misc?.isConfirmBeforeTaskDelete ?? true;
+
+    if (isConfirmBeforeTaskDelete) {
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            okTxt: T.F.TASK.D_CONFIRM_DELETE.OK,
+            message: T.F.TASK.D_CONFIRM_DELETE.MSG,
+            translateParams: { title: this.task().title },
+          },
+        })
+        .afterClosed()
+        .subscribe((isConfirm) => {
+          if (isConfirm) {
+            this._performDelete(isClick);
+          }
+        });
+    } else {
+      this._performDelete(isClick);
+    }
+  }
+
+  private _performDelete(isClick: boolean): void {
     // NOTE: in case we want the focus behaviour on click we could use:
     // this.focusSelf();
     if (!isClick) {

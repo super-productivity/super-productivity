@@ -36,12 +36,12 @@ COPY . .
 RUN UNSPLASH_KEY=$UNSPLASH_KEY UNSPLASH_CLIENT_ID=$UNSPLASH_CLIENT_ID npm run env && npm run lint && npm run buildFrontend:prodWeb
 
 # Production stage
-FROM nginx:1-alpine
+FROM nginx:1
 
 ENV PORT=80
 
 # Install runtime dependencies
-RUN apk add --no-cache jq
+RUN apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*
 
 # Copy built app and configs
 COPY --from=build /app/dist/browser /usr/share/nginx/html

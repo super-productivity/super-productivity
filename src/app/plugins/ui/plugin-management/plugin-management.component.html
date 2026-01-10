@@ -1,21 +1,21 @@
 <mat-card class="info-card">
   <mat-card-header>
     <mat-card-title
-      >⚠️️️{{ 'PLUGINS.EXPERIMENTAL_WARNING_TITLE' | translate }}️️ ⚠️️️
+      >⚠️️️{{ T.PLUGINS.EXPERIMENTAL_WARNING_TITLE | translate }}️️ ⚠️️️
     </mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <div class="warning-content">
-      <p>{{ 'PLUGINS.SECURITY_WARNING' | translate }}</p>
+      <p>{{ T.PLUGINS.SECURITY_WARNING | translate }}</p>
       <ul>
-        <li>{{ 'PLUGINS.RISK_DATA_ACCESS' | translate }}</li>
-        <li>{{ 'PLUGINS.RISK_MALICIOUS_CODE' | translate }}</li>
-        <li>{{ 'PLUGINS.RISK_SYSTEM_ACCESS' | translate }}</li>
-        <li>{{ 'PLUGINS.RISK_PERFORMANCE' | translate }}</li>
+        <li>{{ T.PLUGINS.RISK_DATA_ACCESS | translate }}</li>
+        <li>{{ T.PLUGINS.RISK_MALICIOUS_CODE | translate }}</li>
+        <li>{{ T.PLUGINS.RISK_SYSTEM_ACCESS | translate }}</li>
+        <li>{{ T.PLUGINS.RISK_PERFORMANCE | translate }}</li>
       </ul>
       <p class="recommendation">
         <mat-icon>security</mat-icon>
-        {{ 'PLUGINS.RECOMMENDATION' | translate }}
+        {{ T.PLUGINS.RECOMMENDATION | translate }}
       </p>
     </div>
   </mat-card-content>
@@ -32,14 +32,14 @@
 
 <mat-card>
   <mat-card-header>
-    <mat-card-title>{{ 'PLUGINS.INSTALL_PLUGIN' | translate }}</mat-card-title>
+    <mat-card-title>{{ T.PLUGINS.INSTALL_PLUGIN | translate }}</mat-card-title>
   </mat-card-header>
   <mat-card-content>
     <div class="install-warning">
       <mat-icon>info</mat-icon>
-      <span>{{ 'PLUGINS.INSTALL_WARNING' | translate }}</span>
+      <span>{{ T.PLUGINS.INSTALL_WARNING | translate }}</span>
     </div>
-    <p>{{ 'PLUGINS.UPLOAD_PLUGIN_INSTRUCTION' | translate }}</p>
+    <p>{{ T.PLUGINS.UPLOAD_PLUGIN_INSTRUCTION | translate }}</p>
     <input
       #fileInput
       type="file"
@@ -56,8 +56,8 @@
       <mat-icon>upload</mat-icon>
       {{
         isUploading()
-          ? ('PLUGINS.INSTALLING' | translate)
-          : ('PLUGINS.CHOOSE_PLUGIN_FILE' | translate)
+          ? (T.PLUGINS.INSTALLING | translate)
+          : (T.PLUGINS.CHOOSE_PLUGIN_FILE | translate)
       }}
     </button>
     @if (uploadError()) {
@@ -74,7 +74,7 @@
         [disabled]="isUploading()"
       >
         <mat-icon>delete_sweep</mat-icon>
-        {{ 'PLUGINS.CLEAR_PLUGIN_CACHE' | translate }}
+        {{ T.PLUGINS.CLEAR_PLUGIN_CACHE | translate }}
       </button>
     </div>
   </mat-card-content>
@@ -116,7 +116,7 @@
           [disabled]="!canEnablePlugin(plugin) || isPluginLoading(plugin)"
           (change)="onPluginToggle(plugin, $event)"
           [attr.aria-label]="
-            'PLUGINS.TOGGLE_PLUGIN' | translate: { pluginName: plugin.manifest.name }
+            T.PLUGINS.TOGGLE_PLUGIN | translate: { pluginName: plugin.manifest.name }
           "
         >
         </mat-slide-toggle>
@@ -142,12 +142,12 @@
 
       <table>
         <tr>
-          <th>{{ 'PLUGINS.ID' | translate }}</th>
+          <th>{{ T.PLUGINS.ID | translate }}</th>
           <td>{{ plugin.manifest.id }}</td>
         </tr>
         @if (plugin.manifest.minSupVersion) {
           <tr>
-            <th>{{ 'PLUGINS.MIN_VERSION' | translate }}</th>
+            <th>{{ T.PLUGINS.MIN_VERSION | translate }}</th>
             <td>{{ plugin.manifest.minSupVersion }}</td>
           </tr>
         }
@@ -160,7 +160,7 @@
         <collapsible [title]="getPermissionsHooksTitle(plugin)">
           @if (plugin.manifest.permissions && plugin.manifest.permissions.length > 0) {
             <div class="plugin-info-section">
-              <div class="label">{{ 'PLUGINS.PERMISSIONS' | translate }}:</div>
+              <div class="label">{{ T.PLUGINS.PERMISSIONS | translate }}:</div>
               <mat-chip-set>
                 @for (permission of plugin.manifest.permissions; track permission) {
                   <mat-chip>{{ permission }}</mat-chip>
@@ -170,7 +170,7 @@
           }
           @if (plugin.manifest.hooks && plugin.manifest.hooks.length > 0) {
             <div class="plugin-info-section">
-              <div class="label">{{ 'PLUGINS.HOOKS' | translate }}:</div>
+              <div class="label">{{ T.PLUGINS.HOOKS | translate }}:</div>
               <mat-chip-set>
                 @for (hook of plugin.manifest.hooks; track hook) {
                   <mat-chip>{{ hook }}</mat-chip>
@@ -191,7 +191,7 @@
           [disabled]="isUploading()"
         >
           <mat-icon>delete</mat-icon>
-          {{ 'PLUGINS.REMOVE' | translate }}
+          {{ T.PLUGINS.REMOVE | translate }}
         </button>
       </mat-card-actions>
     }
@@ -232,7 +232,7 @@
 
     <div style="margin-top: 16px; text-align: center">
       <a
-        href="https://github.com/johannesjo/super-productivity/blob/master/src/assets/community-plugins.json"
+        href="https://github.com/super-productivity/super-productivity/blob/master/src/assets/community-plugins.json"
         target="_blank"
         mat-button
         color="primary"

@@ -62,6 +62,7 @@ import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
+import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
 
 @Component({
   selector: 'work-view',
@@ -92,6 +93,7 @@ import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component
     CollapsibleComponent,
     CommonModule,
     FinishDayBtnComponent,
+    ScheduledDateGroupPipe,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {

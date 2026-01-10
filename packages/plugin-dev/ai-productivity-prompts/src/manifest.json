@@ -6,10 +6,10 @@
   "minSupVersion": "13.0.0",
   "description": "AI-powered productivity prompts to help you plan your day, week, and overcome challenges",
   "author": "Super Productivity Community",
-  "homepage": "https://github.com/johannesjo/super-productivity",
+  "homepage": "https://github.com/super-productivity/super-productivity",
   "repository": {
     "type": "git",
-    "url": "https://github.com/johannesjo/super-productivity.git"
+    "url": "https://github.com/super-productivity/super-productivity.git"
   },
   "hooks": ["currentTaskChange"],
   "permissions": ["showSnack", "openDialog", "addTask", "showIndexHtmlAsView"],

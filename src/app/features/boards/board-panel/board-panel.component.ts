@@ -39,7 +39,7 @@ import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { first, take } from 'rxjs/operators';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { selectUnarchivedVisibleProjects } from '../../project/store/project.selectors';
+import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 
 @Component({
   selector: 'board-panel',
@@ -75,7 +75,9 @@ export class BoardPanelComponent {
     initialValue: [],
   });
 
-  allProjects$ = this.store.select(selectUnarchivedVisibleProjects);
+  // Use selectUnarchivedProjects (not selectUnarchivedVisibleProjects) to include
+  // hidden projects and INBOX, ensuring backlog filtering works for all tasks
+  allProjects$ = this.store.select(selectUnarchivedProjects);
   allProjects = toSignal(this.allProjects$, {
     initialValue: [],
   });

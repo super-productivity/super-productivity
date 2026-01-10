@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, OnDestroy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { SS } from '../../../core/persistence/storage-keys.const';
 import { T } from '../../../t.const';
 import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
@@ -32,10 +32,7 @@ import { SnackService } from '../../../core/snack/snack.service';
     TranslatePipe,
   ],
 })
-export class DialogAddNoteComponent
-  extends DialogFullscreenMarkdownComponent
-  implements OnDestroy
-{
+export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
   // override _matDialogRef: MatDialogRef<DialogAddNoteComponent> =
   //   inject<MatDialogRef<DialogAddNoteComponent>>(MatDialogRef);
   private _noteService = inject(NoteService);

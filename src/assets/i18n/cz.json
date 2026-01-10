@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "Zkontrolujte a rozhodněte se, co udělat.",
-      "SYNC_CONFLICT_TITLE": "Došlo k synchronizačnímu konfliktu"
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "Aplikace běží na pozadí pro povolení synchronizace, pokud je povolena",
-      "NO_ACTIVE_TASKS": "Žádné aktivní úkoly",
-      "SYNCING": "Probíhá synchronizace"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "Ignorovat",
@@ -17,8 +6,6 @@
       "MSG": "Chcete nainstalovat Super Produktivitu jako PWA?"
     },
     "B_OFFLINE": "Jste odpojeni od internetu. Synchronizace a požadavky na data poskytovatele problémů nebudou fungovat.",
-    "UPDATE_MAIN_MODEL": "Super Produktivita byla aktualizována! Pro vaše data jsou vyžadovány některé migrace. Všimněte si, že to činí vaše data nekompatibilní s předchozími verzemi aplikace.",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "Nebyla vybrána žádná aktualizace modelu. Všimněte si, že buď musíte downgradovat na poslední verzi, nebo provést aktualizaci modelu.",
     "UPDATE_WEB_APP": "K dispozici je nová verze. Načíst novou verzi?"
   },
   "BL": {
@@ -32,11 +19,7 @@
     "RESTORE_STRAY_BACKUP": "Během poslední synchronizace mohla nastat chyba. Chcete obnovit poslední zálohu?"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "Později dnes",
-    "NEXT_WEEK": "Příští týden",
-    "PLACEHOLDER": "Vyberte prosím datum",
-    "PRESS_ENTER_AGAIN": "Stiskněte enter znovu pro uložení",
-    "TOMORROW": "Zítra"
+    "PRESS_ENTER_AGAIN": "Stiskněte enter znovu pro uložení"
   },
   "F": {
     "ATTACHMENT": {
@@ -44,7 +27,6 @@
         "ADD_ATTACHMENT": "Přidat přílohu",
         "EDIT_ATTACHMENT": "Upravit přílohu",
         "LABELS": {
-          "FILE": "Cesta k souboru",
           "IMG": "Obrázek",
           "LINK": "URL"
         },
@@ -57,9 +39,7 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavení CalDav pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Kategorie pro filtrování úkolů (nechte prázdné pro žádné)",
         "CALDAV_PASSWORD": "Vaše heslo CalDav",
@@ -69,15 +49,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "Automaticky dokončovat úkoly CalDav při dokončení úkolu"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby v seznamu úkolů pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení zobrazoval neukončené úkoly CalDav. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a synchronizovat všechny neukončené úkoly do vašeho backlogu úkolů.</p><p>Aby to fungovalo v Nextcloud ve webové aplikaci, možná budete muset přidat „https://app.super-productivity.com“ na bílý seznam pomocí aplikace Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "DESCRIPTION": "Popis",
-        "LABELS": "Kategorie",
-        "MARK_AS_CHECKED": "Označit aktualizace jako kontrolované",
-        "STATUS": "Stav",
-        "SUMMARY": "Souhrn"
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby v seznamu úkolů pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení zobrazoval neukončené úkoly CalDav. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a synchronizovat všechny neukončené úkoly do vašeho backlogu úkolů.</p><p>Aby to fungovalo v Nextcloud ve webové aplikaci, možná budete muset přidat „https://app.super-productivity.com“ na bílý seznam pomocí aplikace Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kalendář „{{calendarName}}“ nebyl nalezen",
@@ -101,10 +73,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox: Nelze vygenerovat přístupový token z ověřovacího kódu",
-        "ACCESS_TOKEN_GENERATED": "Dropbox: Přístupový token vygenerován z ověřovacího kódu",
-        "AUTH_ERROR": "Dropbox: Poskytnut neplatný přístupový token",
-        "AUTH_ERROR_ACTION": "Změnit token",
         "OFFLINE": "Dropbox: Nelze synchronizovat, protože je offline",
         "SYNC_ERROR": "Dropbox: Chyba při synchronizaci"
       }
@@ -116,35 +84,23 @@
     },
     "FOCUS_MODE": {
       "BACK_TO_PLANNING": "Zpět na plánování",
-      "CONGRATS": "Gratulujeme k dokončení této relace!",
-      "CONTINUE_FOCUS_SESSION": "Pokračovat v režimu zaměření",
       "FINISH_TASK_AND_SELECT_NEXT": "Dokončit úkol a vybrat další",
       "GET_READY": "Připravte se na svou relaci zaměření!!!",
-      "GO_TO_PROCRASTINATION": "Získejte pomoc, když odkládáte",
       "GOGOGO": "Jděte, jděte, jděte!!!",
-      "NEXT": "Další",
       "ON": "zapnuto",
       "OPEN_ISSUE_IN_BROWSER": "Otevřít problém v prohlížeči",
-      "POMODORO_BACK": "Zpět",
-      "POMODORO_DISABLE": "Deaktivovat Pomodoro",
-      "POMODORO_INFO": "Relace zaměření nelze používat současně s aktivovaným časovačem Pomodoro.",
       "PREP_GET_MENTALLY_READY": "Připravte se mentálně na zaměření a produktivitu",
       "PREP_SIT_UPRIGHT": "Sedět (nebo stát) vzpřímeně",
       "PREP_STRETCH": "Zahřejte se lehkým protažením",
-      "SELECT_ANOTHER_TASK": "Vyberte jiný úkol",
       "SELECT_TASK": "Vyberte úkol, na který se zaměříte",
-      "SET_FOCUS_SESSION_DURATION": "Nastavit délku relace zaměření",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Zobrazit/skrýt poznámky a přílohy k úkolu",
       "START_FOCUS_SESSION": "Spustit relaci zaměření",
       "START_NEXT_FOCUS_SESSION": "Spustit další relaci zaměření",
       "WORKED_FOR": "Pracovali jste"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavit Gitea pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
-        "FILTER_USER": "Uživatelské jméno (např. pro filtrování změn od vás)",
         "HOST": "Hostitel (např.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Uživatelské jméno nebo název organizace/projektu",
         "REPO_FULL_NAME_DESCRIPTION": "Lze nalézt jako část adresy URL při prohlížení projektu v prohlížeči.",
@@ -155,12 +111,10 @@
         "TOKEN": "Přístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Gitea pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a importovat všechny otevřené problémy.</p><p>Pro překročení omezení a přístup můžete poskytnout přístupový token.",
-        "TITLE": "Gitea"
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Gitea pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a importovat všechny otevřené problémy.</p><p>Pro překročení omezení a přístup můžete poskytnout přístupový token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Přiřazený",
-        "AT": "u",
         "DESCRIPTION": "Popis",
         "LABELS": "Štítky",
         "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
@@ -169,14 +123,10 @@
         "SUMMARY": "Shrnutí",
         "WRITE_A_COMMENT": "Napsat komentář"
       },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: Neznámá chyba {{statusCode}} {{errorMsg}}. Byl překročen limit volání API?"
-      }
+      "S": {}
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavit GitHub pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "FILTER_USER": "Uživatelské jméno (např. pro filtrování změn od vás)",
         "IS_ASSIGNEE_FILTER": "Filtrovat úkoly přiřazené mně",
@@ -184,8 +134,7 @@
         "TOKEN": "Přístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy GitHubu pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p><p>Pro překročení omezení použití a k přístupu můžete poskytnout přístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Více informací o jeho rozsahu naleznete zde</a>.",
-        "TITLE": "GitHub"
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy GitHubu pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p><p>Pro překročení omezení použití a k přístupu můžete poskytnout přístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Více informací o jeho rozsahu naleznete zde</a>."
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Popis",
@@ -197,9 +146,7 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavení GitLab pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Předvyplněná doba obsahuje nezaznamenaná data z minulých dní.",
         "T_ALREADY_TRACKED": "Již sledováno",
@@ -227,8 +174,7 @@
         "TOKEN": "Přístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Zde můžete konfigurovat SuperProductivity pro zobrazení otevřených úkolů GitLabu (buď online verze nebo self-hosted instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené úkoly.</p>",
-        "TITLE": "GitLab"
+        "HELP": "<p>Zde můžete konfigurovat SuperProductivity pro zobrazení otevřených úkolů GitLabu (buď online verze nebo self-hosted instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené úkoly.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Přiřazeno",
@@ -255,13 +201,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Není správně nakonfigurováno",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Importováno {{nr}} nových {{issuesStr}}",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Importován {{issueStr}} \"{{issueTitle}}\"",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\" zdá se, že byl smazán nebo uzavřen",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Aktualizace není nutná",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Aktualizována data pro {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Aktualizována data pro \"{{issueTitle}}\"",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: Aktualizována data pro \"{{issueTitle}}\"",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: Úkoly s chybějícími daty {{issueStr}} byly nalezeny. Obnovuji.",
-        "NEW_COMMENT": "{{issueProviderName}}: Nový komentář k \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Sledování nových {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Sledování změn v {{issuesStr}}"
       }
@@ -298,8 +240,7 @@
         "CURRENT_ASSIGNEE": "Aktuálně přiřazeno:",
         "CURRENT_STATUS": "Aktuální stav:",
         "TASK_NAME": "Název úkolu:",
-        "TITLE": "Jira: Aktualizovat stav",
-        "UPDATE_STATUS": "Aktualizovat stav"
+        "TITLE": "Jira: Aktualizovat stav"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -334,8 +275,7 @@
         "HOST": "Hostitel (např.: http://muj-host.de:1234)",
         "PASSWORD": "Token / Heslo",
         "USE_PAT": "Použít osobní přístupový token místo hesla",
-        "USER_NAME": "E-mail / Uživatelské jméno",
-        "WONKY_COOKIE_MODE": "Režim náhrady autentizace Wonky Cookie (pouze desktopová aplikace)"
+        "USER_NAME": "E-mail / Uživatelské jméno"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Pokročilá konfigurace",
@@ -377,29 +317,16 @@
         "EXTENSION_NOT_LOADED": "Rozšíření Super Productivity není načteno. Obnovení stránky by mohlo pomoci",
         "INSUFFICIENT_SETTINGS": "Nedostatečná nastavení pro Jiru",
         "INVALID_RESPONSE": "Jira: Odpověď obsahovala neplatná data",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira: „{{issueText}}“ je již aktuální",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira: Aktualizována data pro „{{issueText}}“",
-        "MISSING_ISSUE_DATA": "Jira: Úkoly s chybějícími údaji o problému nalezeny. Obnovení.",
         "NO_AUTO_IMPORT_JQL": "Jira: Není definován žádný dotaz pro automatický import",
         "NO_VALID_TRANSITION": "Jira: Není nastaven platný přechod",
         "TIMED_OUT": "Jira: Časový limit žádosti vypršel",
         "TRANSITION": "Jira: Nastavit úkol „{{issueKey}}“ na „{{name}}“",
         "TRANSITION_SUCCESS": "Jira: Nastavit úkol {{issueKey}} na <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Přechody načteny. Použijte níže uvedená pole pro jejich přiřazení",
-        "UNABLE_TO_REASSIGN": "Jira: Nelze znovu přiřadit lístek vám, protože jste neuvedli uživatelské jméno. Prosím, navštivte nastavení."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "Přihlašovací údaje",
-        "DONE": "Jste nyní hotovi.",
-        "LOGIN_SUCCESS": "Přihlášení bylo úspěšné!",
-        "TEST_CREDENTIALS": "Otestovat přihlašovací údaje",
-        "WELCOME_USER": "Vítejte, {{user}}!"
+        "TRANSITIONS_LOADED": "Jira: Přechody načteny. Použijte níže uvedená pole pro jejich přiřazení"
       }
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "Zvládl jsem to!"
-      },
+      "BANNER": {},
       "CMP": {
         "AVG_BREAKS_PER_DAY": "Průměrný počet přestávek za den",
         "AVG_TASKS_PER_DAY_WORKED": "Průměrný počet úkolů za den práce",
@@ -409,7 +336,6 @@
         "COUNTING_SUBTASKS": "(počítání podúkolů)",
         "DAYS_WORKED": "Odpracované dny",
         "GLOBAL_METRICS": "Celosvětová měřítka",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "Nálada a produktivita v čase",
         "NO_ADDITIONAL_DATA_YET": "Zatím nebyla shromážděna žádná další data. Použijte formulář na panelu „Hodnocení“ denního souhrnu k tomu.",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Počítadla kliknutí v čase",
         "SIMPLE_COUNTERS": "Jednoduchá počítadla",
@@ -419,30 +345,13 @@
         "TIME_SPENT": "Strávený čas"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "Přidat poznámku na zítra",
-        "DISABLE_REPEAT_EVERY_DAY": "Vypnout opakování každý den",
-        "ENABLE_REPEAT_EVERY_DAY": "Opakovat každý den",
-        "HELP_H1": "Proč bych měl/a dbát?",
-        "HELP_LINK_TXT": "Přejít na sekci metrik",
-        "HELP_P1": "Čas na malé zhodnocení sebe sama! Vaše odpovědi jsou zde uloženy a poskytnou vám trochu statistiky o tom, jak pracujete, v sekci metrik. Navíc se návrhy na zítřek zobrazí nad seznamem vašich úkolů následující den.",
-        "HELP_P2": "Mělo by jít méně o výpočty přesných metrik nebo o to, stát se strojem účinným ve všem, co děláte, než o to, jak zlepšit svůj pocit z práce. Může být užitečné zhodnotit bolestivé body ve vaší každodenní rutině, stejně jako najít faktory, které vám pomáhají. Snad nám malé systematické přístupy pomohou lépe porozumět a zlepšit to, co můžeme.",
-        "IMPROVEMENTS": "Co zlepšilo vaši produktivitu?",
-        "IMPROVEMENTS_TOMORROW": "Co byste mohli udělat pro zlepšení zítra?",
-        "MOOD": "Jak se cítíte?",
-        "MOOD_HINT": "1: Hrozně – 10: Skvěle",
         "NOTES": "Poznámky na zítra",
-        "OBSTRUCTIONS": "Co bránilo vaší produktivitě?",
-        "PRODUCTIVITY": "Jak efektivně jste pracoval/a?",
-        "PRODUCTIVITY_HINT": "1: Ještě jsem nezačal/a – 10: Nenápadně efektivní"
+        "PRODUCTIVITY": "Jak efektivně jste pracoval/a?"
       },
-      "S": {
-        "SAVE_METRIC": "Metrika byla úspěšně uložena"
-      }
+      "S": {}
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "Zadejte text pro uložení jako poznámku (můžete použít markdown)..."
-      },
+      "D_ADD": {},
       "D_FULLSCREEN": {
         "VIEW_PARSED": "Zobrazit jako parsovaný (neupravitelný) markdown",
         "VIEW_SPLIT": "Zobrazit rozdělený pohled pro parsovaný a neparsovaný markdown",
@@ -471,9 +380,7 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "Vyberte úkol pro načtení dostupných přechodů",
         "TRANSITION": "Řízení přechodu"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavení OpenProject pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Aktivita",
         "CURRENTLY_LOGGED": "Aktuálně zaznamenaný čas: ",
@@ -490,8 +397,7 @@
         "CURRENT_STATUS": "Současný stav:",
         "PERCENTAGE_DONE": "Postup:",
         "TASK_NAME": "Název úkolu:",
-        "TITLE": "OpenProject: Aktualizovat stav",
-        "UPDATE_STATUS": "Aktualizovat stav"
+        "TITLE": "OpenProject: Aktualizovat stav"
       },
       "FORM": {
         "FILTER_USER": "Uživatelské jméno (např. k filtrování změn od vás)",
@@ -508,8 +414,7 @@
         "TOKEN": "Přístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity k zobrazení otevřených pracovních balíčků OpenProject. Upozorňujeme, že pro toto fungování v prohlížeči pravděpodobně musíte nakonfigurovat CORS pro váš server OpenProject, aby umožnil přístup z app.super-productivity.com</p>",
-        "TITLE": "OpenProject"
+        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity k zobrazení otevřených pracovních balíčků OpenProject. Upozorňujeme, že pro toto fungování v prohlížeči pravděpodobně musíte nakonfigurovat CORS pro váš server OpenProject, aby umožnil přístup z app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Přiřazený",
@@ -535,79 +440,12 @@
       }
     },
     "POMODORO": {
-      "BACK_TO_WORK": "Zpět do práce!",
-      "BREAK_IS_DONE": "Vaše přestávka skončila!",
-      "ENJOY_YOURSELF": "Užijte si to, rozpohybuje se, vraťte se za:",
-      "FINISH_SESSION_X": "Úspěšně jste dokončili sezení <strong>{{nr}}</strong>!",
-      "NOTIFICATION": {
-        "BREAK_TIME": "Pomodoro: Čas na přestávku {{nr}}!",
-        "BREAK_X_START": "Pomodoro: Přestávka {{nr}} začala!",
-        "NO_TASKS": "Musíte přidat úkoly, než může začít časovač Pomodoro.",
-        "SESSION_X_START": "Pomodoro: Sezení {{nr}} začalo!"
-      },
-      "S": {
-        "RESET": "Resetovat na první sezení Pomodoro",
-        "SESSION_SKIP": "Přeskočit na konec aktuálního sezení Pomodoro",
-        "SESSION_X_START": "Pomodoro: Sezení {{nr}} začalo!"
-      },
-      "SKIP_BREAK": "Přeskočit přestávku",
-      "START_BREAK": "Začít přestávku"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "Zpět do práce!",
-      "COMP": {
-        "INTRO": "Lidé s vysokou mírou odkládání obvykle mají nízkou sebeúctu. Takže ji praktikujte! Zlepšuje váš pocit vlastní hodnoty, podporuje pozitivní emoce a může vám pomoci překonat odkládání, samozřejmě. Vyzkoušejte malý cvičební program:",
-        "L1": "Posaďte se na chvíli a protáhněte se, pokud chcete, trochu se uklidněte",
-        "L2": "Zkuste poslouchat myšlenky a pocity, které vznikají",
-        "L3": "Reagujete na sebe tak, jak byste reagovali na přítele?",
-        "L4": "Pokud je odpověď ne, představte si svého přítele ve své situaci. Co byste jim řekli? Co byste pro ně udělali?",
-        "OUTRO": "Další cvičení <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">najdete zde</a> nebo na <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>.",
-        "TITLE": "Sebelítost"
-      },
-      "CUR": {
-        "INTRO": "Není odkládání zajímavé? Nezdá se, že by mělo smysl to dělat, protože to vůbec není ve vašem dlouhodobém zájmu. Ale přesto to dělá každý. Pomáhá hodně zkoumat a lépe porozumět, jak to pro vás osobně funguje! Několik základních otázek, které byste si měli položit, může být:",
-        "L1": "Jaké pocity vyvolává vaše pokušení odkládat?",
-        "L2": "Kde je ve vašem těle cítíte?",
-        "L3": "Na co vás připomínají?",
-        "L4": "Co se děje s myšlenkou na odkládání, když ji pozorujete? Zesiluje se? Zaniká? Vyvolává další emoce?",
-        "L5": "Jak se mění pocity ve vašem těle, když na ně pokračujete v pozorování?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "Další velmi účinnou metodou je zaznamenat, co spustilo vaši touhu odkládat. Například já osobně často pociťuji touhu rychle přejít na reddit nebo svou oblíbenou zpravodajskou stránku, kdykoliv se můj prohlížeč dostane do popředí. Od té doby, co jsem začal zaznamenávat své spouštěče v jednoduchém prázdném textovém dokumentu, uvědomil jsem si, jak pevně zakořeněný byl tento vzor, a pomohl mi experimentovat s různými opatřeními.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "Zapsání spouštěčů vašeho odkládání",
-        "TITLE": "Zvědavost"
-      },
-      "H1": "Dejte si pokoj!",
-      "INTRO": {
-        "AVOIDING": "Vyhnout se úkolu",
-        "FEAR": "Strach ze selhání",
-        "STRESSED": "Stresovaný z toho, že se nedaří věci dokončit",
-        "TITLE": "Úvod"
-      },
-      "P1": "Za prvé: uklidněte se! Každý odkládá občas. A pokud neděláte to, co byste měli, měli byste to aspoň užít!",
-      "P2": "Pamatujte: <b>Odkládání je problém s regulací emocí, ne problém s řízením času.</b> To znamená, že sebitloukání není řešením, je to součást problému. Nechte si to zapadnout a pak se podívejte na další karty zde pro další pomoc.",
-      "REFRAME": {
-        "INTRO": "Přemýšlejte o tom, co by mohlo být pozitivního na úkolu navzdory jeho nedostatkům.",
-        "TITLE": "Přeformulování",
-        "TL1": "Co by na tom mohlo být zajímavé?",
-        "TL2": "Co získáte, pokud to dokončíte?",
-        "TL3": "Jak se budete k tomu cítit, pokud to dokončíte?"
-      },
-      "SPLIT_UP": {
-        "INTRO": "Rozdělte úkol na co nejvíce malých částí, jak jen to půjde.",
-        "OUTRO": "Hotovo? Pak o tom přemýšlejte. Jak by to bylo – striktně teoreticky – první věc, kterou byste udělali <i>pokud</i> byste začali pracovat na úkolu? Jen o tom přemýšlejte...",
-        "TITLE": "Rozdělte to!"
-      }
+      "BREAK_IS_DONE": "Vaše přestávka skončila!"
     },
     "PROJECT": {
       "D_CREATE": {
         "CREATE": "Vytvořit projekt",
-        "EDIT": "Upravit projekt",
-        "SETUP_CALDAV": "Nastavit integrovanou integraci",
-        "SETUP_GIT": "Nastavit GitHub integraci",
-        "SETUP_GITEA_PROJECT": "Nastavit integraci Gitea",
-        "SETUP_GITLAB": "Nastavit GitLab integraci",
-        "SETUP_JIRA": "Nastavit Jira integraci",
-        "SETUP_OPEN_PROJECT": "Nastavit integraci OpenProject",
-        "SETUP_REDMINE_PROJECT": "Nastavit integraci Redmine"
+        "EDIT": "Upravit projekt"
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "Povolit projektový backlog",
@@ -616,7 +454,6 @@
         "TITLE": "Základní nastavení"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "Nebude použito, pokud systém podporuje globální tmavý režim.",
         "HELP": "Nastavení tématu pro váš projekt.",
         "L_BACKGROUND_IMAGE_DARK": "Adresa URL obrázku pozadí (tmavé téma)",
         "L_BACKGROUND_IMAGE_LIGHT": "Adresa URL obrázku pozadí (světlé téma)",
@@ -628,18 +465,13 @@
         "L_HUE_WARN": "Práh pro tmavý text na pozadí varovné barvy",
         "L_IS_AUTO_CONTRAST": "Automaticky nastavit barvy textu pro nejlepší čitelnost",
         "L_IS_DISABLE_BACKGROUND_TINT": "Vypnout barevný pozadí",
-        "L_IS_REDUCED_THEME": "Použít zjednodušené uživatelské rozhraní (bez rámečků kolem úkolů)",
         "L_THEME_COLOR": "Barva tématu",
-        "L_TITLE": "Název",
         "TITLE": "Téma"
       },
       "S": {
         "ARCHIVED": "Archivovaný projekt",
         "CREATED": "Projekt <strong>{{title}}</strong> byl vytvořen. Můžete jej vybrat z menu vlevo nahoře.",
         "DELETED": "Odstraněný projekt",
-        "E_EXISTS": "Projekt „{{title}}“ již existuje",
-        "E_INVALID_FILE": "Neplatná data pro projektový soubor",
-        "ISSUE_PROVIDER_UPDATED": "Aktualizovány nastavení projektu pro <strong>{{issueProviderKey}}</strong>",
         "UNARCHIVED": "Obnovený projekt",
         "UPDATED": "Aktualizovány nastavení projektu"
       }
@@ -650,9 +482,7 @@
       "WEEK_TITLE": "Týden {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavit Redmine pro projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "API_KEY": "API klíč přístupu",
         "HOST": "Hostitel (např.: https://redmine.org)",
@@ -672,32 +502,22 @@
         "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
         "PRIORITY": "Priorita"
       },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: Neznámá chyba {{statusCode}} {{errorMsg}}."
-      }
+      "S": {}
     },
     "REMINDER": {
       "S_REMINDER_ERR": "Chyba rozhraní pro upomínky"
     },
     "SCHEDULE": {
-      "CONTINUED": "pokračovalo",
       "D_INITIAL": {
         "TEXT": "<p>Myšlenkou časové osy je poskytnout lepší přehled o tom, jak se plánované úkoly vyvíjejí v čase. Automaticky vychází z vašich úkolů a rozlišuje dvě různé věci: <strong>naplánované úkoly</strong>, které jsou zobrazeny v jejich plánovaný čas, a <strong>běžné úkoly</strong>, které by se měly pohybovat kolem těchto pevných událostí. Všechny úkoly zohledňují časové odhady, které jim přiřadíte.</p><p>Kromě toho můžete zadat čas začátku a konce práce. Pokud jsou nakonfigurovány, běžné úkoly se nikdy nezobrazí mimo tyto časy. Všimněte si, že časová osa zahrnuje pouze příštích 30 dnů.</p>",
         "TITLE": "Časová osa"
       },
       "END": "Konec práce",
-      "LUNCH_BREAK": "Obední přestávka",
-      "NO_TASKS": "Momentálně zde nejsou žádné úkoly. Přidejte nějaké úkoly pomocí tlačítka + v horní liště.",
-      "NOW": "Nyní",
-      "START": "Začátek práce",
-      "TASK_PROJECTION_INFO": "Budoucí projekce naplánovaného opakovatelného úkolu"
+      "START": "Začátek práce"
     },
     "SEARCH_BAR": {
       "INFO": "Klikněte na ikonu seznamu pro vyhledávání archivovaných úkolů",
-      "INFO_ARCHIVED": "Klikněte na ikonu archivu pro vyhledávání běžných úkolů",
-      "PLACEHOLDER": "Hledejte úkol nebo popis úkolu",
-      "PLACEHOLDER_ARCHIVED": "Hledejte archivované úkoly",
-      "TOO_MANY_RESULTS": "Příliš mnoho výsledků, prosím, zúžte své hledání"
+      "PLACEHOLDER": "Hledejte úkol nebo popis úkolu"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -711,7 +531,6 @@
         "ADD_NEW": "Přidat jednoduchý čítač",
         "HELP": "Zde můžete konfigurovat jednoduchá tlačítka, která se objeví v pravém horním rohu. Mohou to být buď časovače nebo jednoduchý čítač, který se zvyšuje stisknutím.",
         "L_ICON": "Ikona",
-        "L_ICON_ON": "Ikona při přepnutí",
         "L_IS_ENABLED": "Povoleno",
         "L_TITLE": "Název",
         "L_TYPE": "Typ",
@@ -722,12 +541,7 @@
     },
     "SYNC": {
       "C": {
-        "EMPTY_SYNC": "Zkoušíte synchronizovat prázdný datový objekt. Pokud se snažíte nastavit synchronizaci z nové instance aplikace, stačí stisknout OK pro načtení dat ze serveru. Jinak zkontrolujte svá data.",
-        "FORCE_UPLOAD": "Přesto nahrát lokální data?",
-        "FORCE_UPLOAD_AFTER_ERROR": "Při nahrávání vašich lokálních dat došlo k chybě. Chcete provést nucenou aktualizaci?",
-        "MIGRATE_LEGACY": "Detekována stará data při importu. Chcete je zkusit převést?",
-        "NO_REMOTE_DATA": "Nebyla nalezena žádná vzdálená data. Nahrát lokální na vzdálený server?",
-        "TRY_LOAD_REMOTE_AGAIN": "Zkusit znovu načíst data ze vzdáleného serveru?"
+        "FORCE_UPLOAD": "Přesto nahrát lokální data?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Otevřete prosím následující odkaz a zkopírujte autentifikační kód do pole níže.",
@@ -736,7 +550,6 @@
         "TITLE": "Přihlášení: {{provider}}"
       },
       "D_CONFLICT": {
-        "LAST_CHANGE": "Poslední změna:",
         "LAST_SYNC": "Poslední synchronizace:",
         "LOCAL": "Místní",
         "LOCAL_REMOTE": "Místní -> Vzdálené",
@@ -746,26 +559,14 @@
         "USE_LOCAL": "Ponechat lokální",
         "USE_REMOTE": "Ponechat vzdálené"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Zakázat synchronizaci",
-        "PERM_FILE": "Udělit oprávnění",
-        "TEXT": "<p>Bylo vám odebráno oprávnění k místní synchronizaci souborů.</p>",
-        "TITLE": "Synchronizace: Odmítnutí oprávnění k souboru"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "Přístupový token (vygenerován z autentifikačního kódu)"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "Název souboru pro synchronizaci"
-        },
+        "DROPBOX": {},
+        "GOOGLE": {},
         "L_ENABLE_COMPRESSION": "Povolit kompresi (rychlejší přenos dat)",
         "L_ENABLE_SYNCING": "Povolit synchronizaci",
         "L_SYNC_INTERVAL": "Interval synchronizace",
         "L_SYNC_PROVIDER": "Poskytovatel synchronizace",
-        "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Vyžaduje oprávnění k přístupu k souboru"
-        },
+        "LOCAL_FILE": {},
         "TITLE": "Synchronizace",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Jak to funguje v prohlížeči:</strong> Aby to fungovalo v prohlížeči, musíte povolit Super Productivity pro CORS požadavky pro vaši instanci Nextcloud. To může mít negativní bezpečnostní dopady! Podívejte se na <a href='https://github.com/nextcloud/server/issues/3131'>tuto diskuzi pro více informací</a>. Jeden z přístupů k tomu, aby to fungovalo na mobilu, je povolení \"https://app.super-productivity.com\" prostřednictvím aplikace Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Používejte na vlastní nebezpečí!</p>",
@@ -775,21 +576,14 @@
         }
       },
       "S": {
-        "ERROR_FALLBACK_TO_BACKUP": "Při importu dat došlo k chybě. Vracíme se k lokální záloze.",
-        "ERROR_INVALID_DATA": "Chyba při synchronizaci. Neplatná data",
-        "IMPORTING": "Importují se data",
         "INCOMPLETE_CFG": "Ověření selhalo. Zkontrolujte svou konfiguraci!",
-        "INITIAL_SYNC_ERROR": "Počáteční synchronizace selhala",
-        "SUCCESS_IMPORT": "Data byla importována",
         "SUCCESS_VIA_BUTTON": "Data úspěšně synchronizována",
-        "UNKNOWN_ERROR": "Neznámá chyba synchronizace: {{err}}",
-        "UPLOAD_ERROR": "Neznámá chyba při nahrávání (jsou nastavení správná?): {{err}}"
+        "UNKNOWN_ERROR": "Neznámá chyba synchronizace: {{err}}"
       }
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Vytvořit značku",
-        "EDIT": "Upravit značku"
+        "CREATE": "Vytvořit značku"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "Opravdu chcete smazat značku \"{{tagName}}\"? Bude odstraněna ze všech úkolů. Nelze vrátit zpět."
@@ -811,27 +605,15 @@
     },
     "TASK": {
       "ADD_TASK_BAR": {
-        "ADD_EXISTING_TASK": "Přidat existující úkol „{{taskTitle}}“",
-        "ADD_ISSUE_TASK": "Přidat problém č. {{issueNr}} z {{issueType}}",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "Přidat úkol na konec zásobníku",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "Přidat úkol na konec seznamu",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "Přidat úkol na začátek zásobníku",
-        "ADD_TASK_TO_TOP_OF_TODAY": "Přidat úkol na začátek seznamu",
-        "CREATE_TASK": "Vytvořit nový úkol",
-        "EXAMPLE": "Příklad: „Nějaký název úkolu @pá 16:00 +název projektu #nějaká značka #další značka 10m/3h“",
-        "START": "Stiskněte Enter ještě jednou k zahájení",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Přepnout přidání úkolu do zásobníku / seznamu na dnešek'",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Přepnout přidání úkolu na začátek a konec seznamu"
+        "ADD_EXISTING_TASK": "Přidat existující úkol „{{taskTitle}}“"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Přidat přílohu",
         "ADD_SUB_TASK": "Přidat podúkol",
         "ATTACHMENTS": "Přílohy ({{nr}})",
-        "FROM_PARENT": "(od rodiče)",
         "LOCAL_ATTACHMENTS": "Místní přílohy",
         "NOTES": "Popis",
         "PARENT": "Rodič",
-        "REMINDER": "Připomenutí",
         "REPEAT": "Opakovat",
         "SCHEDULE_TASK": "Naplánovat úkol",
         "SUB_TASKS": "Podúkoly ({{nr}})",
@@ -850,9 +632,7 @@
         "DELETE_REPEAT_INSTANCE": "Smazat opakující se instanci úkolu",
         "DROP_ATTACHMENT": "Přetáhněte sem pro připojení k „{{title}}“",
         "EDIT_SCHEDULED": "Upravit připomenutí",
-        "EDIT_TAGS": "Upravit značky",
         "MARK_DONE": "Označit jako hotové",
-        "MARK_UNDONE": "Označit jako nehotové",
         "MOVE_TO_BACKLOG": "Přesunout do zásobníku",
         "MOVE_TO_OTHER_PROJECT": "Přesunout do jiného projektu",
         "MOVE_TO_REGULAR": "Přesunout na seznam dnešních úkolů",
@@ -860,9 +640,7 @@
         "OPEN_ISSUE": "Otevřít v prohlížeči",
         "OPEN_TIME": "Sledování času",
         "REMOVE_FROM_MY_DAY": "Odebrat z mého dne",
-        "REPEAT_EDIT": "Upravit opakující se konfiguraci úkolu",
         "SCHEDULE": "Naplánovat úkol",
-        "SHOW_UPDATES": "Zobrazit aktualizace",
         "TOGGLE_ATTACHMENTS": "Zobrazit/Skrýt přílohy",
         "TOGGLE_DETAIL_PANEL": "Zobrazit/Skrýt další informace",
         "TOGGLE_DONE": "Označit jako hotové/nehotoé",
@@ -879,19 +657,13 @@
         "DONE": "Hotovo",
         "DUE_TASK": "Úkol k dokončení",
         "DUE_TASKS": "Plánované úkoly",
-        "FOR_CURRENT": "Úkol má termín dokončení. Chcete na něm začít pracovat?",
-        "FOR_OTHER": "Úkol má termín dokončení. Chcete na něm začít pracovat?",
-        "FROM_PROJECT": "Z projektu: „{{title}}“",
-        "FROM_TAG": "Značky: „{{title}}“",
         "RESCHEDULE_EDIT": "Upravit (znovu naplánovat)",
         "RESCHEDULE_UNTIL_TOMORROW": "Znovu naplánovat na zítřek",
         "SNOOZE": "Odložit",
         "SNOOZE_ALL": "Odložit vše",
-        "START": "Začít",
-        "SWITCH_CONTEXT_START": "Změnit kontext a začít"
+        "START": "Začít"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "Přesunout úkol do zásobníku do doby naplánování",
         "REMIND_AT": "Připomenout v",
         "RO_1H": "1 hodinu před začátkem",
         "RO_5M": "5 minut před začátkem",
@@ -928,11 +700,10 @@
         "FOUND_MOVE_FROM_BACKLOG": "Přesunut úkol <strong>{{title}}</strong> ze zásobníku do seznamu úkolů na dnešek",
         "FOUND_MOVE_FROM_OTHER_LIST": "Přidán úkol <strong>{{title}}</strong> z <strong>{{contextTitle}}</strong> do aktuálního seznamu",
         "FOUND_RESTORE_FROM_ARCHIVE": "Obnoven úkol <strong>{{title}}</strong> související s problémem ze archivu",
-        "LAST_TAG_DELETION_WARNING": "Snažíte se odebrat poslední značku u úkolu, který není projektový. To není povoleno!",
         "REMINDER_ADDED": "Naplánován úkol „{{title}}“",
         "REMINDER_DELETED": "Smazáno připomenutí k úkolu",
         "REMINDER_UPDATED": "Aktualizováno připomenutí k úkolu „{{title}}“",
-        "TASK_CREATED": "Vytvořen úkol „{{title}}“"
+        "TASK_CREATED": "Vytvořen úkol „{{taskTitle}}“"
       },
       "SELECT_OR_CREATE": "Vyberte nebo vytvořte úkol",
       "SUMMARY_TABLE": {
@@ -996,7 +767,6 @@
         "C_YEAR": "Rok",
         "DEFAULT_ESTIMATE": "Výchozí odhad",
         "FRIDAY": "Pátek",
-        "IS_ADD_TO_BOTTOM": "Přesunout úkol na konec seznamu",
         "MONDAY": "Pondělí",
         "NOTES": "Výchozí poznámky",
         "ORDER": "Pořadí",
@@ -1049,7 +819,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Vytvořit</em> a sledovat k",
-        "IDLE_FOR": "Byli jste nečinní po dobu:",
         "TASK": "Úkol",
         "TRACK_TO": "Sledovat k:",
         "UNTRACKED_TIME": "Nesledovaný čas:"
@@ -1060,7 +829,6 @@
         "DAYS_WORKED": "Odpracované dny:",
         "MONTH_WORKED": "Pracovaný měsíc:",
         "REPEATING_TASK": "Opakovatelný úkol",
-        "RESTORE_TASK_FROM_ARCHIVE": "Obnovit úkol z archivu",
         "TASKS": "Úkoly",
         "TOTAL_TIME": "Celkově strávený čas:",
         "WEEK_NR": "Týden {{nr}}",
@@ -1144,22 +912,16 @@
     "ENABLED": "Povoleno",
     "EXAMPLE_VAL": "klikněte pro úpravu",
     "EXTENSION_INFO": "Prosím, <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> stáhněte rozšíření pro Chrome</a> pro umožnění komunikace s rozhraním Jira Api a zacházením s nečinným časem. Upozornění, tato funkce nefunguje na mobilních zařízeních.",
-    "LOGIN": "Přihlásit",
-    "LOGOUT": "Odhlásit",
     "MINUTES": "{{m}} minut",
-    "NEXT": "Další",
     "NO_CON": "Momentálně jste offline. Připojte se prosím k internetu.",
     "NONE": "Žádné",
     "OK": "Ok",
-    "PREVIOUS": "Předchozí",
     "REMOVE": "Odebrat",
-    "RESET": "Obnovit",
     "SAVE": "Uložit",
     "SUBMIT": "Odeslat",
     "TITLE": "Název",
     "TODAY_TAG_TITLE": "Dnes",
     "UNDO": "Vrátit",
-    "UPDATE": "Aktualizovat",
     "WITHOUT_PROJECT": "Bez projektu",
     "YESTERDAY": "Včera"
   },
@@ -1176,7 +938,6 @@
     },
     "FOCUS_MODE": {
       "HELP": "Režim zaměření otevírá obrazovku bez rušení, abyste se mohli soustředit na svůj aktuální úkol.",
-      "L_ALWAYS_OPEN_FOCUS_MODE": "Vždy otevřít režim zaměření při sledování",
       "L_SKIP_PREPARATION_SCREEN": "Přeskočit úvodní obrazovku (protahování atd.)",
       "TITLE": "Režim zaměření"
     },
@@ -1234,7 +995,6 @@
       "TASK_TOGGLE_DONE": "Přepnout stav hotovo",
       "TITLE": "Klávesové zkratky",
       "TOGGLE_BACKLOG": "Zobrazit/skrýt zásobník úkolů",
-      "TOGGLE_BOOKMARKS": "Zobrazit/skrýt panel záložek",
       "TOGGLE_PLAY": "Spustit/zastavit úkol",
       "TOGGLE_SIDE_NAV": "Zobrazit & zaměřit/skrýt boční navigaci",
       "ZOOM_DEFAULT": "Přiblížit výchozí (pouze pro desktop)",
@@ -1252,7 +1012,6 @@
       "IS_DARK_MODE": "Temný režim",
       "IS_DISABLE_ANIMATIONS": "Vypnout všechny animace",
       "IS_DISABLE_CELEBRATION": "Vypnout oslavy v denním přehledu",
-      "IS_HIDE_NAV": "Skrýt navigaci, dokud není nadpis záhlaví aktivován (pouze pro desktop)",
       "IS_MINIMIZE_TO_TRAY": "Minimalizovat do oznamovací oblasti (pouze pro desktop)",
       "IS_TRAY_SHOW_CURRENT_TASK": "Zobrazit aktuální úkol v oznamovací oblasti/menu stavu (pouze pro desktop Mac/Windows)",
       "IS_TURN_OFF_MARKDOWN": "Vypnout zpracování markdown pro poznámky k úkolům",
@@ -1265,16 +1024,7 @@
       "BREAK_DURATION": "Délka krátkých přestávek",
       "CYCLES_BEFORE_LONGER_BREAK": "Začít delší přestávku po X pracovních sezeních",
       "DURATION": "Délka pracovních sezení",
-      "HELP": "<p>Pomodoro časovač lze konfigurovat několika nastaveními. Délka každého pracovního sezení, délka běžných přestávek, počet pracovních sezení do delší přestávky a délka této delší přestávky.</p> <p>Můžete také nastavit, zda chcete zobrazit své rušení během pomodoro přestávek.</p> <p>Nastavení „Pozastavit sledování času během přestávky Pomodoro“ také sleduje vaše přestávky jako pracovní dobu strávenou na úkolu.</p> <p>Povolení „Pozastavit relaci Pomodoro, když není aktivní úkol“ také pozastaví relaci Pomodoro, když pozastavíte úkol.</p>",
-      "IS_ENABLED": "Povolit pomodoro časovač",
-      "IS_MANUAL_CONTINUE": "Ručně potvrdit začátek dalšího pomodoro sezení",
-      "IS_MANUAL_CONTINUE_BREAK": "Ručně potvrdit začátek další přestávky",
-      "IS_PLAY_SOUND": "Přehrát zvuk po skončení sezení",
-      "IS_PLAY_SOUND_AFTER_BREAK": "Přehrát zvuk po skončení přestávky",
-      "IS_PLAY_TICK": "Přehrát zvuk tikání každou sekundu",
-      "IS_STOP_TRACKING_ON_BREAK": "Přestat sledovat čas pro úkol během přestávky",
-      "LONGER_BREAK_DURATION": "Délka delší přestávky",
-      "TITLE": "Pomodoro časovač"
+      "LONGER_BREAK_DURATION": "Délka delší přestávky"
     },
     "SCHEDULE": {
       "HELP": "Funkce časové osy by vám měla poskytnout rychlý přehled o tom, jak se plánované úkoly vyvíjejí v čase. Najdete ji v levém bočním menu pod <a href='#/schedule'>‘Časová osa’</a>.",
@@ -1309,13 +1059,11 @@
   },
   "GLOBAL_SNACK": {
     "COPY_TO_CLIPPBOARD": "Zkopírováno do schránky",
-    "ERR_COMPRESSION": "Chyba rozhraní pro kompresi",
     "FILE_DOWNLOADED": "{{fileName}} staženo",
     "FILE_DOWNLOADED_BTN": "Otevřít složku",
     "PERSISTENCE_DISALLOWED": "Data nebudou trvale ukládána. Buďte si vědomi, že to může vést k ztrátě dat!!",
     "PERSISTENCE_ERROR": "Chyba při žádosti o trvalé ukládání dat: {{err}}",
-    "RUNNING_X": "Spouští se „{{str}}“.",
-    "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "{{keyCombo}} stisknuto, ale zkratka pro otevření záložek je k dispozici pouze v rámci projektového kontextu."
+    "RUNNING_X": "Spouští se „{{str}}“."
   },
   "GPB": {
     "ASSETS": "Načítání prostředků...",
@@ -1337,19 +1085,11 @@
     "GO_TO_TASK_LIST": "Přejít na seznam úkolů",
     "HELP": "Nápověda",
     "METRICS": "Metryky",
-    "NOTES": "Poznámky",
-    "NOTES_PANEL_INFO": "Poznámky lze zobrazit pouze z časové osy a standardního pohledu na seznam úkolů.",
-    "PROCRASTINATE": "Odkládat",
     "PROJECT_MENU": "Menu projektu",
-    "PROJECT_SETTINGS": "Nastavení projektu",
     "PROJECTS": "Projekty",
     "QUICK_HISTORY": "Rychlá historie",
     "SETTINGS": "Nastavení",
-    "SHOW_SEARCH_BAR": "Zobrazit vyhledávací lištu",
     "TAGS": "Štítky",
-    "TASK_LIST": "Seznam úkolů",
-    "TASKS": "Úkoly",
-    "TOGGLE_SHOW_BOOKMARKS": "Zobrazit/Skrýt záložky",
     "TOGGLE_SHOW_NOTES": "Zobrazit/Skrýt poznámky k projektu",
     "TOGGLE_TRACK_TIME": "Spustit/Zastavit sledování času",
     "TRIGGER_SYNC": "Spustit synchronizaci ručně",
@@ -1391,48 +1131,25 @@
   },
   "PS": {
     "GLOBAL_SETTINGS": "Celková nastavení",
-    "ISSUE_INTEGRATION": "Integrace s problémy",
     "PRIVACY_POLICY": "Zásady ochrany osobních údajů",
     "PRODUCTIVITY_HELPER": "Pomocník produktivity",
     "PROJECT_SETTINGS": "Nastavení specifické pro projekt",
     "PROVIDE_FEEDBACK": "Poskytnout zpětnou vazbu",
     "SYNC_EXPORT": "Synchronizace a export",
-    "TAG_SETTINGS": "Nastavení specifické pro štítek",
-    "TOGGLE_DARK_MODE": "Přepnout do tmavého režimu"
+    "TAG_SETTINGS": "Nastavení specifické pro štítek"
   },
   "SCHEDULE": {
     "NO_REPEATABLE_TASKS": "Momentálně nejsou žádné opakující se úkoly. Úkol můžete naplánovat v postranním panelu úkolu volbou „Opakovat úkol“. K otevření klikněte na nejpravější ikonu, která se zobrazí po najetí myší na úkol (nebo jednoduše na úkol klepněte na mobilu).",
     "NO_SCHEDULED": "Momentálně nejsou naplánovány žádné úkoly. Úkol můžete naplánovat v nabídce kontextového menu úkolu volbou „Naplánovat úkol“. K otevření použijte pravé tlačítko myši (nebo dlouhý stisk na mobilu) na úkolu.",
     "REPEATED_TASKS": "Opakující se úkoly",
-    "SCHEDULED_TASKS": "Naplánované úkoly",
-    "START_TASK": "Spustit úkol a odebrat připomínku"
-  },
-  "THEMES": {
-    "amber": "žlutá",
-    "blue": "modrá",
-    "blue-grey": "modro-šedá",
-    "cyan": "azurová",
-    "deep-orange": "hluboká oranžová",
-    "deep-purple": "hluboká fialová",
-    "green": "zelená",
-    "indigo": "indigová",
-    "light-blue": "světle modrá",
-    "light-green": "světle zelená",
-    "lime": "limetková",
-    "pink": "růžová",
-    "purple": "fialová",
-    "SELECT_THEME": "Vyberte téma",
-    "teal": "tyrkysová",
-    "yellow": "žlutá"
+    "SCHEDULED_TASKS": "Naplánované úkoly"
   },
   "V": {
-    "E_1TO10": "Zadejte prosím hodnotu mezi 1 a 10",
     "E_DATETIME": "Zadaná hodnota není datum a čas!",
     "E_MAX": "Nemělo by být větší než {{val}}",
     "E_MAX_LENGTH": "Mělo by být maximálně {{val}} znaků dlouhé",
     "E_MIN": "Mělo by být menší než {{val}}",
     "E_MIN_LENGTH": "Mělo by být minimálně {{val}} znaků dlouhé",
-    "E_PATTERN": "Neplatný vstup",
     "E_REQUIRED": "Toto pole je povinné"
   },
   "USER_PROFILES": {
@@ -1449,7 +1166,6 @@
     "RENAME": "Přejmenovat",
     "EXPORT_PROFILE": "Exportovat profil",
     "DELETE_PROFILE": "Smazat profil",
-    "OPEN_PROFILES_FOLDER": "Otevřít složku profilů",
     "CLOSE": "Zavřít",
     "MANAGE_PROFILES": "Spravovat profily..."
   },
@@ -1459,10 +1175,7 @@
     "ADD_SOME_TASKS": "Přidejte nějaké úkoly pro plánování svého dne!",
     "ESTIMATE_REMAINING": "Odhad zbývajícího času:",
     "FINISH_DAY": "Ukončit den",
-    "FINISH_DAY_FOR_PROJECT": "Ukončit den pro tento projekt",
-    "FINISH_DAY_FOR_TAG": "Ukončit den pro tento štítek",
     "FINISH_DAY_TOOLTIP": "Zhodnoťte svůj den, přesuňte všechny hotové úkoly do archivu (volitelně) a/nebo naplánujte svůj další den.",
-    "HELP_PROCRASTINATION": "Pomoc, prokrastinuji!",
     "NO_PLANNED_TASKS": "Žádné naplánované úkoly",
     "READY_TO_WORK": "Připraven k práci!",
     "RESET_BREAK_TIMER": "Resetovat bez přerušení časovače",

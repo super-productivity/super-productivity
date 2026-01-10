@@ -40,5 +40,12 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
         label: T.GCF.REMINDER.DISABLE_REMINDERS,
       },
     },
+    {
+      key: 'isFocusWindow',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.REMINDER.IS_FOCUS_WINDOW,
+      },
+    },
   ],
 };

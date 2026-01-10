@@ -31,7 +31,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -56,12 +56,24 @@ jobs:
       - name: Test Unit
         run: npm run test
 
+      - name: Start WebDAV Server
+        run: |
+          docker compose up -d webdav
+
+          # Wait for WebDAV server to be ready
+          chmod +x ./scripts/wait-for-webdav.sh
+          ./scripts/wait-for-webdav.sh
+
       - name: Test E2E
         run: npm run e2e
 
+      - name: Print WebDAV logs on failure
+        if: ${{ failure() }}
+        run: docker compose logs webdav
+
       - name: 'Upload E2E results on failure'
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: e2eResults
           path: .tmp/e2e-test-results/**/*.*
@@ -125,7 +137,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -164,7 +176,7 @@ jobs:
       #      - run: |
       #          echo Installed chromium version: ${{ steps.setup-chrome.outputs.chrome-version }}
       #          ${{ steps.setup-chrome.outputs.chrome-path }} --version
-      # Disabled because not working atm: https://github.com/johannesjo/super-productivity/actions/runs/5924016145/job/16060737982
+      # Disabled because not working atm: https://github.com/super-productivity/super-productivity/actions/runs/5924016145/job/16060737982
       #      - name: Test E2E
       #        run: npm run e2e
 
@@ -218,7 +230,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}

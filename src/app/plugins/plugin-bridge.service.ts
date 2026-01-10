@@ -54,7 +54,11 @@ import { TagCopy } from '../features/tag/tag.model';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
-import { SimpleCounter } from '../features/simple-counter/simple-counter.model';
+import {
+  SimpleCounter,
+  SimpleCounterType,
+} from '../features/simple-counter/simple-counter.model';
+import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
 import {
   upsertSimpleCounter,
   updateSimpleCounter,
@@ -1212,20 +1216,40 @@ export class PluginBridgeService implements OnDestroy {
       throw new Error('Invalid counter value: must be a non-negative number');
     }
     const today = new Date().toISOString().split('T')[0];
-    // Upsert the counter (creates if not exists)
-    this._store.dispatch(
-      upsertSimpleCounter({
-        simpleCounter: {
-          id: id,
-          //title: id,
-          //isEnabled: true,
-          //icon: null,
-          //type: 'ClickCounter',
-          countOnDay: { [today]: value },
-          //isOn: false,
-        } as SimpleCounter,
-      }),
-    );
+
+    // Check if counter already exists
+    const existingCounter = await this.getSimpleCounter(id);
+
+    if (existingCounter) {
+      // Update existing counter's countOnDay only
+      this._store.dispatch(
+        updateSimpleCounter({
+          simpleCounter: {
+            id,
+            changes: {
+              countOnDay: {
+                ...existingCounter.countOnDay,
+                [today]: value,
+              },
+            },
+          },
+        }),
+      );
+    } else {
+      // Create new counter with all mandatory fields
+      this._store.dispatch(
+        upsertSimpleCounter({
+          simpleCounter: {
+            ...EMPTY_SIMPLE_COUNTER,
+            id,
+            title: id,
+            isEnabled: true,
+            type: SimpleCounterType.ClickCounter,
+            countOnDay: { [today]: value },
+          },
+        }),
+      );
+    }
   }
 
   async incrementCounter(id: string, incrementBy = 1): Promise<number> {

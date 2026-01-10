@@ -29,6 +29,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   misc: {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
+    isConfirmBeforeTaskDelete: true,
     isAutMarkParentAsDone: false,
     isTurnOffMarkdown: false,
     isAutoAddWorkedOnToToday: true,
@@ -84,24 +85,17 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     voice: defaultVoice,
   },
   focusMode: {
-    isAlwaysUseFocusMode: false,
     isSkipPreparation: false,
+    isPlayTick: false,
+    isPauseTrackingDuringBreak: false,
+    isSyncSessionWithTracking: false,
+    isStartInBackground: false,
   },
   pomodoro: {
-    isEnabled: false,
     duration: 25 * minute,
     breakDuration: 5 * minute,
     longerBreakDuration: 15 * minute,
     cyclesBeforeLongerBreak: 4,
-    isStopTrackingOnBreak: true,
-    isStopTrackingOnLongBreak: true,
-    isDisableAutoStartAfterBreak: false,
-    isManualContinue: false,
-    isManualContinueBreak: false,
-    isPlaySound: true,
-    isPlaySoundAfterBreak: false,
-    // isGoToWorkView: false,
-    isPlayTick: false,
   },
   keyboard: {
     globalShowHide: 'Ctrl+Shift+X',
@@ -179,6 +173,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isCountdownBannerEnabled: true,
     countdownDuration: minute * 10,
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
+    isFocusWindow: false,
   },
   schedule: {
     isWorkStartEndEnabled: true,

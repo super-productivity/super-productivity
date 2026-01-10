@@ -55,7 +55,7 @@
   --mat-mini-fab-size: 48px;
   --mac-title-bar-padding: 20px;
   --card-border-radius: 4px;
-  --window-controls-width: 96px;
+  --window-controls-width: 140px; // Fallback for non-WCO contexts; main-header uses env() directly
 
   // Z-index layers
   --z-focus-mode-overlay: 101;

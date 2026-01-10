@@ -8,7 +8,7 @@ import { bannerAnimation } from './banner.ani';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
@@ -23,6 +23,7 @@ import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clo
     MatProgressBar,
     MatIcon,
     MatButton,
+    MatIconButton,
     AsyncPipe,
     TranslatePipe,
     MsToMinuteClockStringPipe,

@@ -28,7 +28,6 @@ import { NotifyService } from '../../core/notify/notify.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { Tick } from '../../core/global-tracking-interval/tick.model';
-import { PomodoroService } from '../pomodoro/pomodoro.service';
 import { Actions, ofType } from '@ngrx/effects';
 import { idleDialogResult, triggerResetBreakTimer } from '../idle/store/idle.actions';
 import { playSound } from '../../util/play-sound';
@@ -59,7 +58,6 @@ export class TakeABreakService {
   private _configService = inject(GlobalConfigService);
   private _workContextService = inject(WorkContextService);
   private _notifyService = inject(NotifyService);
-  private _pomodoroService = inject(PomodoroService);
   private _bannerService = inject(BannerService);
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _uiHelperService = inject(UiHelperService);
@@ -144,19 +142,11 @@ export class TakeABreakService {
     }),
   );
 
-  // NOTE to keep things simple we always reset the break timer when pomodoro is active for each pomodoro cycle
-  // (the features don't make much sense together anyway)
-  private _pomodoroTimerReset$: Observable<any> = this._pomodoroService.isEnabled$.pipe(
-    switchMap((isEnabled) => (isEnabled ? this._pomodoroService.currentCycle$ : EMPTY)),
-    distinctUntilChanged(),
-  );
-
   private _triggerManualReset$: Subject<number> = new Subject<number>();
 
   private _triggerReset$: Observable<number> = merge(
     this._triggerProgrammaticReset$,
     this._triggerManualReset$,
-    this._pomodoroTimerReset$,
   ).pipe(mapTo(0));
 
   timeWorkingWithoutABreak$: Observable<number> = merge(
@@ -294,7 +284,7 @@ export class TakeABreakService {
         this._triggerFullscreenBlocker$.next(true);
       }
       if (IS_ELECTRON && cfg.takeABreak.isFocusWindow) {
-        this._uiHelperService.focusApp();
+        this._uiHelperService.focusAppAfterNotification();
       }
 
       this._bannerService.open({

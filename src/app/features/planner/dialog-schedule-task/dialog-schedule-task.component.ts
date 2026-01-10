@@ -10,6 +10,7 @@ import {
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
+  MatDialogContent,
   MatDialogRef,
 } from '@angular/material/dialog';
 import {
@@ -71,6 +72,7 @@ const DEFAULT_TIME = '09:00';
     TranslatePipe,
     MatButton,
     MatDialogActions,
+    MatDialogContent,
     MatCalendar,
     MatInput,
     MatLabel,
@@ -99,6 +101,12 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
   private readonly _dateAdapter = inject(DateAdapter);
+
+  // Wait for localization config to be loaded before rendering calendar
+  // This ensures DateAdapter.getFirstDayOfWeek() returns the correct value
+  readonly isConfigReady = computed(
+    () => this._globalConfigService.localization() !== undefined,
+  );
 
   T: typeof T = T;
   minDate = new Date();
@@ -148,8 +156,9 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       }
 
       if (this.data.task.dueWithTime) {
-        const tzOffset = new Date().getTimezoneOffset() * 60 * 1000;
-        this.selectedDate = new Date(this.data.task.dueWithTime + tzOffset);
+        // dueWithTime is a UTC timestamp - Date constructor handles timezone conversion automatically
+        // Do NOT add timezone offset here as it would double-apply the conversion (fixes #5515)
+        this.selectedDate = new Date(this.data.task.dueWithTime);
         this.selectedTime = new Date(this.data.task.dueWithTime).toLocaleTimeString(
           'en-GB',
           {
@@ -474,6 +483,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
         break;
       case 4:
         const nextMonth = tDate;
+        nextMonth.setDate(1);
         nextMonth.setMonth(nextMonth.getMonth() + 1);
         this.selectedDate = nextMonth;
         break;

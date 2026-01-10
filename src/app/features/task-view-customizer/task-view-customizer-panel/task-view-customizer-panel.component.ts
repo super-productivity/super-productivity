@@ -13,6 +13,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import {
   DEFAULT_OPTIONS,
+  FILTER_COMMON,
   FILTER_OPTION_TYPE,
   FILTER_SCHEDULE,
   FILTER_TIME,
@@ -53,6 +54,7 @@ export class TaskViewCustomizerPanelComponent {
   readonly DEFAULT = DEFAULT_OPTIONS;
   readonly OPTIONS = OPTIONS;
   readonly PRESETS = PRESETS;
+  readonly FILTER_COMMON = FILTER_COMMON;
 
   onFilterSelect(filter: FilterOption): void {
     this.customizerService.setFilter(filter);

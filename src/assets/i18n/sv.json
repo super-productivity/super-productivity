@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "Vänligen kontrollera den och avgör vad du ska göra.",
-      "SYNC_CONFLICT_TITLE": "En synkroniseringskonflikt uppstod"
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "Appen kör i bakgrunden för att möjliggöra synkronisering om sådan är aktiverad",
-      "NO_ACTIVE_TASKS": "Inga aktiva uppgifter",
-      "SYNCING": "Synkronisering"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "Ignorera",
@@ -20,14 +9,11 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Ändra bakgrund"
     },
-    "UPDATE_MAIN_MODEL": "Super Productivity har fått en stor uppdatering! Vissa migreringar av dina data krävs. Observera att detta gör att dina data inte är kompatibla med äldre versioner av appen.",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "Ingen modelluppdatering vald. Observera att du antingen måste nedgradera till den senaste versionen, om du inte vill utföra modelluppgraderingen.",
     "UPDATE_WEB_APP": "Ny version tillgänglig. Ladda in ny version?"
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Visa Issue Panel",
-    "SHOW_NOTES": "Visa projektanteckningar",
-    "SHOW_TASK_VIEW_CUSTOMIZER_PANEL": "Visa filter/Grupp/Sortera panelen"
+    "SHOW_NOTES": "Visa projektanteckningar"
   },
   "BL": {
     "NO_TASKS": "Det finns för närvarande inga eftersläpande uppgifter"
@@ -40,11 +26,7 @@
     "RESTORE_STRAY_BACKUP": "Under den senaste synkroniseringen kan det ha uppstått ett fel. Vill du återställa från den senaste säkerhetskopian?"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "Senare idag",
-    "NEXT_WEEK": "Nästa vecka",
-    "PLACEHOLDER": "Välj ett datum",
-    "PRESS_ENTER_AGAIN": "Tryck på Enter igen för att spara",
-    "TOMORROW": "Imorgon"
+    "PRESS_ENTER_AGAIN": "Tryck på Enter igen för att spara"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "TITLE": "Välj bakgrundsbild från Unsplash",
@@ -59,7 +41,6 @@
         "ADD_ATTACHMENT": "Lägg till bilaga",
         "EDIT_ATTACHMENT": "Redigera bilaga",
         "LABELS": {
-          "FILE": "Filsökväg",
           "IMG": "Bild",
           "LINK": "URL"
         },
@@ -75,7 +56,6 @@
       "DEFAULT": {
         "DONE": "Klar",
         "EISENHAUER_MATRIX": "Eisenhower-matris",
-        "IMPORTANT": "Viktigt",
         "IN_PROGRESS": "Pågående",
         "KANBAN": "Kanban",
         "NOT_URGENT_IMPORTANT": "Ej brådskande & Viktiga",
@@ -112,9 +92,7 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera CalDav för projektet"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Kategori att filtrera frågor för (lämna tom för ingen)",
         "CALDAV_PASSWORD": "Ditt CalDav-lösenord",
@@ -124,28 +102,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "Slutför CalDav-uppgifter automatiskt när uppgiften är slutförd"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Mottagare",
-        "AT": "vid",
-        "ATTACHMENTS": "Bilagor",
-        "CHANGED": "ändrad",
-        "COMMENTS": "Kommentarer",
-        "COMPONENTS": "Komponenter",
-        "DESCRIPTION": "Beskrivning",
-        "LABELS": "Kategorier",
-        "LIST_OF_CHANGES": "Lista över ändringar",
-        "MARK_AS_CHECKED": "Markera uppdateringar som avbockade",
-        "ON": "på",
-        "RELATED": "Relaterad",
-        "STATUS": "Status",
-        "STORY_POINTS": "Berättelsepoäng",
-        "SUB_TASKS": "Deluppgifter",
-        "SUMMARY": "Sammanfattning",
-        "WORKLOG": "arbetsloggen",
-        "WRITE_A_COMMENT": "Skriv en kommentar"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity till att lista icke slutförda CalDav-uppgifter för ett specifikt projekt på panelen för uppgiftsskapande i den dagliga planeringsvyn. De kommer att listas som förslag och kommer att länka till uppgiften samt mer information om den.</p> <p>Dessutom kan du automatiskt lägga till och synkronisera alla icke slutförda uppgifter med din lista med eftersläpande uppgifter.</p><p>För att det ska fungera med Nextcloud i webbappen kan du behöva vitlista \"https://app.super-productivity.com\" via Nextcloud-appen <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kunde inte hitta kalendern \"{{calendarName}}\"",
@@ -156,7 +113,6 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Lägg till som uppgift",
-        "FOCUS_TASK": "Fokusuppgift",
         "TXT": "<strong>{{title}}</strong> börjar vid <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> börjar vid <strong>{{start}}</strong>!<br> (och {{nrOfOtherBanners}} andra evenemang är planerade)",
         "TXT_PAST": "<strong>{{title}}</strong> började vid <strong>{{start}}</strong>!",
@@ -194,10 +150,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox: Det går inte att generera åtkomsttoken från autentiseringskoden",
-        "ACCESS_TOKEN_GENERATED": "Dropbox: Åtkomsttoken genererad från autentiseringskod",
-        "AUTH_ERROR": "Dropbox: Ogiltig åtkomsttoken angiven",
-        "AUTH_ERROR_ACTION": "Ändra token",
         "OFFLINE": "Dropbox: Kan inte synkronisera, eftersom du är offline",
         "SYNC_ERROR": "Dropbox: Fel vid synkronisering",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Det går inte att generera PKCE-utmaning."
@@ -225,17 +177,13 @@
       "BACK_TO_PLANNING": "Tillbaka till Planering",
       "CLICK_TO_EDIT_DURATION": "Klicka för att redigera varaktighet",
       "COMPLETE_FOCUS_SESSION": "Fullständig fokusering",
-      "CONGRATS": "Grattis till att du har slutfört den här sessionen!",
       "COUNTDOWN": "Nedräkning",
       "COUNTDOWN_HINT": "Fokusera tills klockan slår noll",
       "FINISH_TASK_AND_SELECT_NEXT": "Slutför uppgiften och välj nästa",
       "FLOWTIME": "Flödestid",
       "FLOWTIME_HINT": "Flexibel takt utan strikta tidtagare",
-      "FOR_TASK": "för uppgift",
       "GET_READY": "Gör dig redo för din fokusering!",
-      "GO_TO_PROCRASTINATION": "Få hjälp när du skjuter upp saker",
       "GOGOGO": "Kör, kör, kör!!!",
-      "NEXT": "Nästa",
       "ON": "på",
       "OPEN_ISSUE_IN_BROWSER": "Öppet problem i webbläsaren",
       "PAUSE_SESSION": "Pausa session",
@@ -243,21 +191,16 @@
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Pausa spårning för aktuell uppgift",
       "POMODORO": "Pomodoro",
       "POMODORO_HINT": "Strukturerade sprintar med planerade pauser",
-      "POMODORO_BACK": "Tillbaka",
-      "POMODORO_DISABLE": "Inaktivera Pomodoro",
-      "POMODORO_INFO": "Fokus-sessioner kan inte användas tillsammans med pomodoro-timern aktiverad.",
       "PREP_GET_MENTALLY_READY": "Gör dig mentalt redo för att vara fokuserad och produktiv",
       "PREP_SIT_UPRIGHT": "Sitt (eller stå) upprätt",
       "PREP_STRETCH": "Gör lite mild stretching",
       "REMOVE_TIME_MINUTE": "Ta bort 1 minut",
       "RESUME_SESSION": "Återuppta session",
-      "SELECT_ANOTHER_TASK": "Välj en annan uppgift",
       "SELECT_TASK": "Välj uppgift att fokusera på",
       "SELECT_TASK_TO_FOCUS": "Select Task to Focus",
       "SELECT_MODE": "Välj ditt fokusläge",
       "SESSION_COMPLETED": "Fokus-sessionen avslutad!",
       "POMODORO_SESSION_COMPLETED": "Pomodoro-sessionen avslutad!",
-      "SET_FOCUS_SESSION_DURATION": "Ställ in fokuseringens varaktighet",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Visa/dölj uppgiftsanteckningar och bilagor",
       "START_FOCUS_SESSION": "Starta fokus-session",
       "START_NEXT_FOCUS_SESSION": "Starta nästa fokus-session",
@@ -267,20 +210,14 @@
       "SKIP_BREAK": "Hoppa över paus",
       "CONTINUE_TO_NEXT_SESSION": "Fortsätt till nästa session",
       "FOCUS_TIME_TOOLTIP": "Fokuseringstid",
-      "CURRENT_SESSION_TIME_TOOLTIP": "Aktuell sessionstid",
-      "COMPLETE_SESSION": "Avsluta session",
-      "CONTINUE_SESSION": "Fortsätt sessionen",
       "LONG_BREAK": "Lång paus",
       "SHORT_BREAK": "Kort paus",
       "LONG_BREAK_TITLE": "Lång paus - Cykel {{cycle}}",
       "SHORT_BREAK_TITLE": "Kort paus - Cykel {{cycle}}"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera Gitea för projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
-        "FILTER_USER": "Användarnamn (t.ex. för att filtrera ut ändringar du själv har gjort)",
         "HOST": "Värd (t.ex. https://try.gitea.io)",
         "REPO_FULL_NAME": "Användarnamn eller organisationsnamn/projekt",
         "REPO_FULL_NAME_DESCRIPTION": "Kan finnas som del av URL:en när projektet visas i webbläsaren",
@@ -291,12 +228,10 @@
         "TOKEN": "Åtkomsttoken"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Gitea-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt lägga till och importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken.",
-        "TITLE": "Gitea"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna Gitea-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt lägga till och importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottagare",
-        "AT": "vid",
         "DESCRIPTION": "Beskrivning",
         "LABELS": "Etiketter",
         "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
@@ -305,14 +240,10 @@
         "SUMMARY": "Sammanfattning",
         "WRITE_A_COMMENT": "Skriv en kommentar"
       },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: Okänd felkod {{statusCode}} {{errorMsg}}. Har API-gränsen överskridits?"
-      }
+      "S": {}
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera GitHub för projektet"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "FILTER_USER": "Användarnamn (t.ex. för att filtrera ut ändringar du själv har gjort)",
         "INVALID_TOKEN_MESSAGE": "Ogiltig GitHub-token. Den måste börja med \"ghp_\".",
@@ -321,8 +252,7 @@
         "TOKEN": "Åtkomsttoken"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna GitHub-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken. <a href=’https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps’>Mer information om dess omfattning finns här</a>.",
-        "TITLE": "GitHub"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna GitHub-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken. <a href=’https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps’>Mer information om dess omfattning finns här</a>."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottagare",
@@ -343,9 +273,7 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera GitLab för projektet"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Den förifyllda varaktigheten innehåller ospårade data från tidigare dagar.",
         "T_ALREADY_TRACKED": "Redan spårad",
@@ -374,8 +302,7 @@
         "TOKEN": "Åtkomsttoken"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att det listar öppna GitLab-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p>",
-        "TITLE": "GitLab"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att det listar öppna GitLab-ärenden (antingen onlineversionen eller en egenhostad instans) för ett specifikt projekt i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottagare",
@@ -407,20 +334,14 @@
         "ATTACHMENTS": "Bilagor",
         "AUTHOR": "Författare",
         "CATEGORY": "Kategori",
-        "CHANGED": "ändrad",
-        "COMMENTS": "Kommentarer",
         "COMPONENTS": "Komponenter",
         "DESCRIPTION": "Beskrivning",
-        "DONE_RATIO": "Gjort-kvot",
         "DUE_DATE": "Två datum",
         "LABELS": "Etiketter",
         "LAST_COMMENT": "Senaste kommentar",
-        "LIST_OF_CHANGES": "Förändringslista",
         "LOAD_ALL_COMMENTS": "Ladda alla {{nr}} kommentarer",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Lastbeskrivning och alla kommentarer",
         "LOCATION": "Plats",
         "MARK_AS_CHECKED": "Markera uppdateringar som kontrollerade",
-        "ON": "på",
         "PRIORITY": "Prioritet",
         "RELATED": "Relaterat",
         "START": "Start",
@@ -431,8 +352,7 @@
         "TIME_SPENT": "Tid som spenderats",
         "TYPE": "Typ",
         "VERSION": "Version",
-        "WORKLOG": "Arbetslogg",
-        "WRITE_A_COMMENT": "Skriv en kommentar"
+        "WORKLOG": "Arbetslogg"
       },
       "S": {
         "ERR_GENERIC": "{{issueProviderName}} Fel: {{errTxt}}",
@@ -440,13 +360,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Inte korrekt konfigurerad",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Importerade {{nr}} nya {{issuesStr}}",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Importerad {{issueStr}} \"{{issueTitle}}\"",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\" verkar vara raderad eller stängd",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Ingen uppdatering nödvändig",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Uppdaterade data för {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Uppdaterade data för \"{{issueTitle}}\"",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: Uppdaterade data för \"{{issueTitle}}\"",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: Uppgifter med saknad {{issueStr}}-data hittades. Laddar om.",
-        "NEW_COMMENT": "{{issueProviderName}}: Ny kommentar till \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Omröstning för ny {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Ändringar i omröstningen för {{issuesStr}}"
       }
@@ -483,8 +399,7 @@
         "CURRENT_ASSIGNEE": "Nuvarande uppdragstagare:",
         "CURRENT_STATUS": "Nuvarande status:",
         "TASK_NAME": "Uppgiftens namn:",
-        "TITLE": "Jira: Uppdatera status",
-        "UPDATE_STATUS": "Uppdatera status"
+        "TITLE": "Jira: Uppdatera status"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -519,8 +434,7 @@
         "HOST": "Värd (t.ex.: http://my-host.de:1234)",
         "PASSWORD": "Token / Lösenord",
         "USE_PAT": "Använd istället personlig åtkomsttoken (LEGACY)",
-        "USER_NAME": "E-post / användarnamn",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback-autentisering (endast desktop-app)"
+        "USER_NAME": "E-post / användarnamn"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Avancerad konfiguration",
@@ -562,23 +476,12 @@
         "EXTENSION_NOT_LOADED": "Super Productivity Tillägget har inte laddats. Det kan hjälpa att ladda om sidan.",
         "INSUFFICIENT_SETTINGS": "Otillräckliga inställningar för Jira",
         "INVALID_RESPONSE": "Jira: Svaret innehöll ogiltig data",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira: \"{{issueText}}\" redan uppdaterad",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira: Uppdaterade data för \"{{issueText}}\"",
-        "MISSING_ISSUE_DATA": "Jira: Uppgifter med saknade problemdata hittades. Laddar om.",
         "NO_AUTO_IMPORT_JQL": "Jira: Ingen sökfråga definierad för automatisk import",
         "NO_VALID_TRANSITION": "Jira: Ingen giltig övergång konfigurerad",
         "TIMED_OUT": "Jira: Begäran har gått ut",
         "TRANSITION": "Jira: Ställ in problem \"{{issueKey}}\" till \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Ställ in problem {{issueKey}} till <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Övergångar laddade. Använd valen nedan för att tilldela dem",
-        "UNABLE_TO_REASSIGN": "Jira: Det går inte att tilldela biljetten till dig själv eftersom du inte angav något användarnamn. Gå till inställningarna."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "Inloggningsuppgifter",
-        "DONE": "Du är klar nu.",
-        "LOGIN_SUCCESS": "Inloggning lyckades!",
-        "TEST_CREDENTIALS": "Testuppgifter",
-        "WELCOME_USER": "Välkommen {{user}}!"
+        "TRANSITIONS_LOADED": "Jira: Övergångar laddade. Använd valen nedan för att tilldela dem"
       }
     },
     "MARKDOWN_PASTE": {
@@ -590,9 +493,7 @@
       "DIALOG_TITLE": "Klistrad Markdown-lista upptäckt!"
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "Jag gjorde det!"
-      },
+      "BANNER": {},
       "CMP": {
         "ACTIVITY_HEATMAP": "Aktivitetsvärmekarta",
         "AVG_BREAKS_PER_DAY": "Genomsnittligt antal raster per dag",
@@ -604,7 +505,6 @@
         "DAYS_WORKED": "Arbetade dagar",
         "GLOBAL_METRICS": "Globala mått",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Produktivitet och hållbarhet över tid",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "Humör och produktivitet över tid",
         "FOCUS_SESSION_TRENDS": "Fokusmöten över tid",
         "NO_ADDITIONAL_DATA_YET": "Inga ytterligare uppgifter har samlats in ännu. Använd formuläret i panelen \"Utvärdering\" i den dagliga sammanfattningen för att göra detta.",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Klickräknare över tid",
@@ -619,7 +519,6 @@
         "TIME_FRAME_MAX": "Max"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "Lägg till anteckning för imorgon",
         "FOCUS_WORK_TIME": "Fokuserad arbetstid",
         "IMPACT_OF_WORK": "Hur bedömer du effekten av ditt arbete idag?",
         "IMPACT_OF_WORK_HINT": "1: Inga betydande framsteg – 4: Betydande inverkan",
@@ -647,9 +546,7 @@
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7-dagars produktivitetsanalys",
         "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "7-dagars hållbarhetsanalys"
       },
-      "S": {
-        "SAVE_METRIC": "Metrisk enhet sparad"
-      },
+      "S": {},
       "FOCUS_SESSION_DIALOG": {
         "TITLE": "Fokus-sessioner",
         "CHART_LABEL": "Fokuseringstid (min)",
@@ -668,20 +565,13 @@
         "PLACEHOLDER_3": "Var tappade du fokus – och hur kan du skydda det?",
         "PLACEHOLDER_4": "Vilken uppgift gav dig energi? Vilken tog energi från dig?",
         "PLACEHOLDER_5": "En sak att upprepa. En sak att ändra.",
-        "REMIND_LABEL": "Påminn mig om detta imorgon.",
         "HISTORY_BTN": "Visa tidigare reflektioner",
         "HISTORY_TITLE": "Reflektionshistorik",
-        "HISTORY_EMPTY": "Inga reflektioner sparade ännu. Skriv dagens anteckning för att starta en serie.",
-        "REMINDER_TASK_TITLE": "Återkom till reflektionsanteckningen",
-        "REMINDER_CREATED": "Reflektionspåminnelse planerad till imorgon",
-        "REMINDER_ERROR": "Det gick inte att schemalägga påminnelsen",
-        "REMINDER_NEEDS_TEXT": "Skriv en reflektion innan du ber om en påminnelse"
+        "HISTORY_EMPTY": "Inga reflektioner sparade ännu. Skriv dagens anteckning för att starta en serie."
       }
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "Ange text som ska sparas som anteckning (du kan använda markdown)..."
-      },
+      "D_ADD": {},
       "D_FULLSCREEN": {
         "VIEW_PARSED": "Visa som analyserad (ej redigerbar) markdown",
         "VIEW_SPLIT": "Visa analyserad och oanalyserad markdown i delad vy",
@@ -713,9 +603,7 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "Välj problem för att ladda tillgängliga övergångar",
         "TRANSITION": "Hantering av övergångar"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera OpenProjet för projektet"
-      },
+      "DIALOG_INITIAL": {},
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Aktivitet",
         "CURRENTLY_LOGGED": "För närvarande loggad tid: ",
@@ -732,8 +620,7 @@
         "CURRENT_STATUS": "Nuvarande status:",
         "PERCENTAGE_DONE": "Framsteg:",
         "TASK_NAME": "Uppgiftsnamn:",
-        "TITLE": "OpenProject: Uppdatera status",
-        "UPDATE_STATUS": "Uppdatera status"
+        "TITLE": "OpenProject: Uppdatera status"
       },
       "FORM": {
         "FILTER_USER": "Filtrera användarnamn",
@@ -750,8 +637,7 @@
         "TOKEN": "Åtkomsttoken"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna OpenProject-arbetspaket listas. Observera att för att detta ska fungera i webbläsaren måste du troligen konfigurera CORS för din OpenProject-server, för att tillåta åtkomst från app.super-productivity.com</p>",
-        "TITLE": "OpenProject"
+        "HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna OpenProject-arbetspaket listas. Observera att för att detta ska fungera i webbläsaren måste du troligen konfigurera CORS för din OpenProject-server, för att tillåta åtkomst från app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Mottagare",
@@ -779,9 +665,7 @@
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "ADD_TO_TODAY": "Lägg till idag",
-          "RE_PLAN_ALL": "Omplanera alla",
-          "TITLE": "Lägg till planerade uppgifter till Idag"
+          "RE_PLAN_ALL": "Omplanera alla"
         }
       },
       "EDIT_REPEATED_TASK": "Redigera den upprepade uppgiften '{{taskName}}'",
@@ -793,83 +677,15 @@
         "REMOVED_PLAN_DATE": "Tog bort planeringsdatum för uppgiften '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Uppgiften är redan planerad till {{date}}",
         "TASK_PLANNED_FOR": "Planerad uppgift för <strong>{{date}}</strong>{{extra}}"
-      },
-      "TASK_DRAWER": "Uppgiftslåda"
+      }
     },
     "POMODORO": {
-      "BACK_TO_WORK": "Tillbaka till arbetet!",
-      "BREAK_IS_DONE": "Fokuspausen är över!",
-      "ENJOY_YOURSELF": "Ha kul, rör på dig, kom tillbaka:",
-      "FINISH_SESSION_X": "Du har avslutat session <strong>{{nr}}</strong>!",
-      "NOTIFICATION": {
-        "BREAK_TIME": "Pomodoro: Dags för paus {{nr}}!",
-        "BREAK_X_START": "Pomodoro: Paus {{nr}} har börjat!",
-        "NO_TASKS": "Du måste lägga till uppgifter innan Pomodoro-timern kan starta.",
-        "SESSION_X_START": "Pomodoro: Session {{nr}} har startat!"
-      },
-      "S": {
-        "RESET": "Återställ till första Pomodoro-sessionen",
-        "SESSION_SKIP": "Hoppa till slutet av aktuell Pomodoro-session",
-        "SESSION_X_START": "Pomodoro: Session {{nr}} har startat!"
-      },
-      "SKIP_BREAK": "Hoppa över rasten",
-      "START_BREAK": "Börja rasten"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "Tillbaka till arbetet!",
-      "COMP": {
-        "INTRO": "Personer med hög grad av uppskjutande beteende har oftast låg självmedkänsla. Så öva på det! Det förbättrar din självkänsla, främjar positiva känslor och kan naturligtvis hjälpa dig att övervinna uppskjutande beteende. Prova en liten övning:",
-        "L1": "Sätt dig ner en stund och sträck på dig, om du vill, lugna ner dig lite.",
-        "L2": "Försök att lyssna på tankarna och känslorna som uppstår",
-        "L3": "Reagerar du på dig själv på samma sätt som du skulle reagera på en vän?",
-        "L4": "Om svaret är nej, föreställ dig din vän i din situation. Vad skulle du säga till dem? Vad skulle du göra för dem?",
-        "OUTRO": "Fler övningar <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">finns här</a> eller på <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>.",
-        "TITLE": "Självmedkänsla"
-      },
-      "CUR": {
-        "INTRO": "Är inte uppskjutande beteende intressant? Det verkar inte vara särskilt meningsfullt att göra det, eftersom det inte alls ligger i ditt långsiktiga intresse. Men ändå gör alla det. Det hjälper mycket att utforska och få en bättre förståelse för hur det fungerar för dig personligen! Några grundläggande frågor du kan ställa dig själv kan vara:",
-        "L1": "Vilka känslor väcker din frestelse att skjuta upp saker?",
-        "L2": "Var i kroppen känner du dem?",
-        "L3": "Vad påminner de dig om?",
-        "L4": "Vad händer med tanken på att skjuta upp saker när du observerar den? Intensifieras den? Försvinner den? Orsakar den andra känslor?",
-        "L5": "Hur förändras känslorna i din kropp när du fortsätter att fokusera din medvetenhet på dem?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "En annan mycket effektiv metod är att anteckna vad som utlöste din lust att skjuta upp saker. Personligen känner jag till exempel ofta en lust att snabbt hoppa över till reddit eller min favoritnyhetssajt så fort mitt webbläsarfönster kommer i fokus. Sedan jag började skriva ner mina utlösare i ett enkelt tomt textdokument har jag blivit medveten om hur djupt rotat detta mönster var, och det har hjälpt mig att experimentera med olika motåtgärder.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "Skriv ner vad som får dig att skjuta upp saker",
-        "TITLE": "Nyfikenhet"
-      },
-      "H1": "Var inte så sträng mot dig själv!",
-      "INTRO": {
-        "AVOIDING": "Att undvika uppgiften",
-        "FEAR": "Rädsla att misslyckas",
-        "STRESSED": "Stressad över att inte få saker gjorda",
-        "TITLE": "Introduktion"
-      },
-      "P1": "Först och främst: Slappna av! Alla skjuter upp saker ibland. Och om du inte gör det du borde, bör du åtminstone njuta av det!",
-      "P2": "Kom ihåg: <b>Att skjuta upp saker är ett problem med känslomässig reglering, inte ett problem med tidsplanering.</b> Det betyder att det inte hjälper att vara hård mot sig själv, det är en del av problemet. Låt det sjunka in och kolla sedan de andra flikarna här för mer hjälp.",
-      "REFRAME": {
-        "INTRO": "Tänk på vad som kan vara positivt med uppgiften trots dess brister.",
-        "TITLE": "Omformulering",
-        "TL1": "Vad kan vara intressant med det?",
-        "TL2": "Vad vinner du på att slutföra det?",
-        "TL3": "Hur kommer du att känna dig när du har slutfört det?"
-      },
-      "SPLIT_UP": {
-        "INTRO": "Dela upp uppgiften i så många små delar som möjligt.",
-        "OUTRO": "Klart? Fundera då på det. Vad skulle – rent teoretiskt – vara det första du skulle göra <i>om</i> du skulle börja arbeta med uppgiften? Fundera bara på det...",
-        "TITLE": "Dela upp den!"
-      }
+      "BREAK_IS_DONE": "Fokuspausen är över!"
     },
     "PROJECT": {
       "D_CREATE": {
         "CREATE": "Skapa projekt",
-        "EDIT": "Redigera projekt",
-        "SETUP_CALDAV": "Konfigurera CalDav-integrering",
-        "SETUP_GIT": "Konfigurera GitHub-integrering",
-        "SETUP_GITEA_PROJECT": "Konfigurera Gitea-integrering",
-        "SETUP_GITLAB": "Konfigurera GitLab-integrering",
-        "SETUP_JIRA": "Konfigurera Jira-integrering",
-        "SETUP_OPEN_PROJECT": "Konfigurera OpenProject-integrering",
-        "SETUP_REDMINE_PROJECT": "Konfigurera Redmine-integrering"
+        "EDIT": "Redigera projekt"
       },
       "D_DELETE": {
         "MSG": "Är du säker på att du vill radera projektet \"{{title}}\"?"
@@ -881,7 +697,6 @@
         "TITLE": "Grundläggande inställningar"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "Kommer ej användas om ditt system har stöd för globalt mörkt läge.",
         "HELP": "Temainställningar för ditt projekt.",
         "L_BACKGROUND_IMAGE_DARK": "URL för bakgrundsbild (mörkt tema)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL för bakgrundsbild (ljust tema)",
@@ -893,18 +708,13 @@
         "L_HUE_WARN": "Tröskelvärde för mörk text på varningstextfärgad bakgrund",
         "L_IS_AUTO_CONTRAST": "Ställ in textfärger automatiskt för bästa läsbarhet",
         "L_IS_DISABLE_BACKGROUND_TINT": "Inaktivera färgad bakgrundsfärg",
-        "L_IS_REDUCED_THEME": "Använd reducerad användargränssnitt (inga rutor runt uppgifterna)",
         "L_THEME_COLOR": "Temafärg",
-        "L_TITLE": "Titel",
         "TITLE": "Tema"
       },
       "S": {
         "ARCHIVED": "Arkiverat projekt",
         "CREATED": "Projektet <strong>{{title}}</strong> har skapats. Du kan välja det från menyn längst upp till vänster.",
         "DELETED": "Raderat projekt",
-        "E_EXISTS": "Projektet \"{{title}}\" existerar redan",
-        "E_INVALID_FILE": "Ogiltiga data för projektfil",
-        "ISSUE_PROVIDER_UPDATED": "Uppdaterade projektinställningar för <strong>{{issueProviderKey}}</strong>",
         "UNARCHIVED": "Icke arkiverat projekt",
         "UPDATED": "Uppdaterade projektinställningar"
       }
@@ -952,9 +762,7 @@
       "WEEK_TITLE": "Vecka {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Konfigurera Redmine för projekt"
-      },
+      "DIALOG_INITIAL": {},
       "FORM": {
         "API_KEY": "API-åtkomstnyckel",
         "HOST": "Värd (t.ex.: https://redmine.org)",
@@ -976,9 +784,7 @@
         "PRIORITY": "Prioritet",
         "STATUS": "Status"
       },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: Okänd felkod {{statusCode}} {{errorMsg}}."
-      }
+      "S": {}
     },
     "REFLECTION_NOTE": {
       "MSG": "Reflektionsanteckning: ({{date}}): {{content}}",
@@ -986,7 +792,6 @@
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
-        "HIDE": "Dölj",
         "START_NOW": "Börja nu",
         "TXT": "<strong>{{title}}</strong> börjar vid <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> börjar vid <strong>{{start}}</strong>!<br> (och {{nrOfOtherBanners}} andra uppgifter ska utföras)"
@@ -995,31 +800,21 @@
       "S_REMINDER_ERR": "Fel i påminnelsegränssnittet"
     },
     "SCHEDULE": {
-      "CONTINUED": "fortsatte",
       "D_INITIAL": {
         "TEXT": "<p>Schemat ska ge dig en bättre bild av hur dina planerade uppgifter fördelar sig över tiden. Det genereras automatiskt utifrån dina uppgifter och kräver endast <strong>tidsuppskattningar för att fungera</strong>.</p><p>Det finns två olika typer av uppgifter: <strong>schemalagda uppgifter</strong>, som visas vid sin planerade tidpunkt, och <strong>regelbundna uppgifter</strong>, som ska utföras runt dessa fasta händelser. </p><p>Om du anger en start- och sluttid för arbetet (rekommenderas) kommer regelbundna uppgifter aldrig att visas utanför dessa gränser.</p>",
         "TITLE": "Schema"
       },
       "END": "Arbetsavslutning",
-      "LUNCH_BREAK": "Lunchrast",
-      "MONTH": "Månad",
-      "NO_TASKS": "För närvarande finns det inga uppgifter. Lägg till några uppgifter via +-knappen i den övre fältet.",
-      "NOW": "Nu",
       "INSERT_BEFORE": "Före",
       "PLAN_END_DAY": "Planera vid dagens slut",
       "PLAN_START_DAY": "Planera i början av dagen",
       "SHIFT_KEY_INFO": "Håll Shift intryckt för att växla till dagplaneringsläge",
-      "START": "Arbetsstart",
-      "TASK_PROJECTION_INFO": "Framtidsprognos för en schemalagd upprepbar uppgift",
-      "WEEK": "Vecka"
+      "START": "Arbetsstart"
     },
     "SEARCH_BAR": {
       "INFO": "Börja skriva för att söka efter uppgifter",
-      "INFO_ARCHIVED": "Klicka på arkivikonen för att söka efter normala uppgifter.",
       "NO_RESULTS": "Inga uppgifter som matchar din sökning hittades",
-      "PLACEHOLDER": "Sök efter uppgift eller uppgiftsbeskrivning",
-      "PLACEHOLDER_ARCHIVED": "Sök efter arkiverade uppgifter",
-      "TOO_MANY_RESULTS": "För många resultat, begränsa din sökning"
+      "PLACEHOLDER": "Sök efter uppgift eller uppgiftsbeskrivning"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -1038,7 +833,6 @@
         "L_COUNTDOWN_DURATION": "Nedräkningstid",
         "L_DAILY_GOAL": "Dagligt mål för framgångsrik rad",
         "L_ICON": "Ikon",
-        "L_ICON_ON": "Ikon när den är aktiverad",
         "L_IS_ENABLED": "Aktiverad",
         "L_TITLE": "Titel",
         "L_TRACK_STREAKS": "Spåra sträckor",
@@ -1056,19 +850,11 @@
     },
     "SYNC": {
       "A": {
-        "ARCHIVE_ONLY_UPLOADED": "Dina data har endast laddats upp delvis. Försök igen senare! Annars kommer du inte att kunna synkronisera dina data till andra enheter.",
-        "POSSIBLE_LEGACY_DATA": "Super Productivity har förbättrat synkroniseringen genom att nu använda två separata filer istället för en enda, vilket minskar dataöverföringen avsevärt. Vi rekommenderar att du uppdaterar alla instanser av Super Productivity och först synkroniserar data från den appinstans där data är nyast. Om detta är data från din lokala enhet kan du ignorera denna varning och fortsätta med uppladdningen genom att bekräfta i nästa dialogruta.",
         "REMOTE_MODEL_VERSION_NEWER": "Den fjärranslutna modellversionen är nyare än den lokala. Uppdatera din lokala app till den senaste versionen!"
       },
       "BTN_SYNC_NOW": "Synkronisera nu",
       "C": {
-        "EMPTY_SYNC": "Du försöker synkronisera ett tomt dataobjekt. Om du försöker ställa in synkronisering från en ny appinstans trycker du bara på OK för att ladda data från servern. I annat fall kontrollerar du dina data.",
-        "FORCE_UPLOAD": "Om du tvingar fram en uppladdning av dina data kan det leda till dataförlust. Vill du fortsätta?",
-        "FORCE_UPLOAD_AFTER_ERROR": "Ett fel uppstod vid uppladdningen av dina lokala data. Vill du försöka tvinga fram uppdateringen?",
-        "MIGRATE_LEGACY": "Äldre data upptäcktes under importen. Vill du försöka migrera den?",
-        "NO_REMOTE_DATA": "Inga fjärrdata hittades. Ladda upp lokalt till fjärrserver?",
-        "TRY_LOAD_REMOTE_AGAIN": "Försök att ladda om data från fjärrservern igen?",
-        "UNABLE_TO_LOAD_REMOTE_DATA": "Det går inte att ladda data från fjärrservern. Vill du försöka skriva över fjärrdata med dina lokala data? All fjärrdata kommer att gå förlorad under processen."
+        "FORCE_UPLOAD": "Om du tvingar fram en uppladdning av dina data kan det leda till dataförlust. Vill du fortsätta?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Öppna följande länk och kopiera den autentiseringskod som anges där till inmatningsfältet nedan.",
@@ -1078,8 +864,6 @@
       },
       "D_CONFLICT": {
         "COMPARISON_RESULT": "Jämförelseresultat",
-        "LAMPORT_CLOCK": "Revidering",
-        "LAST_CHANGE": "Senaste ändring:",
         "LAST_SYNC": "Senaste synkronisering:",
         "LAST_SYNCED": "Senast synkroniserad",
         "LAST_WRITE": "Senaste skrivning",
@@ -1119,10 +903,6 @@
         "BTN_FORCE_UPLOAD": "Tvinga uppdatering av lokala filer",
         "P1": "Fjärrsynkroniseringsdata är inkonsekvent!",
         "P2": "Berörd modell:",
-        "P3": "Du har två alternativ:",
-        "P4": "1. Gå till din andra enhet och försök att göra en fullständig synkronisering där.",
-        "P5": "2. Skriv över fjärrdata med dina lokala data. Alla fjärrändringar kommer att gå förlorade!",
-        "P6": "Det rekommenderas att du skapar en säkerhetskopia av de data du skriver över!!!",
         "T1": "Senaste synkroniseringen var ofullständig!",
         "T2": "Dina arkivdata laddades inte upp korrekt under den senaste synkroniseringen:",
         "T3": "Du har två alternativ:",
@@ -1134,19 +914,9 @@
         "SAVE_AND_ENABLE": "Spara och aktivera synkronisering",
         "TITLE": "Konfigurera synkronisering"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Inaktivera synkronisering",
-        "PERM_FILE": "Ge tillstånd",
-        "TEXT": "<p>Din filbehörighet för lokal synkronisering har återkallats.</p>",
-        "TITLE": "Synkronisering: Lokal filbehörighet nekad"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "Åtkomsttoken (genererad från autentiseringskod)"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "Synkronisera filnamn"
-        },
+        "DROPBOX": {},
+        "GOOGLE": {},
         "L_ENABLE_COMPRESSION": "Aktivera komprimering (snabbare dataöverföring)",
         "L_ENABLE_ENCRYPTION": "Aktivera end-to-end-kryptering (experimentellt) – Gör dina data otillgängliga för din synkroniseringsleverantör",
         "L_ENABLE_SYNCING": "Aktivera synkronisering",
@@ -1155,7 +925,6 @@
         "L_SYNC_INTERVAL": "Synkroniseringsintervall",
         "L_SYNC_PROVIDER": "Synkroniseringsleverantör",
         "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Behöver behörighet för filåtkomst",
           "L_SYNC_FOLDER_PATH": "Sökväg till synkroniseringsmapp"
         },
         "TITLE": "Synkronisera",
@@ -1170,26 +939,16 @@
       },
       "S": {
         "ALREADY_IN_SYNC": "Redan synkroniserad",
-        "ALREADY_IN_SYNC_NO_LOCAL_CHANGES": "Inga lokala ändringar - redan synkroniserad",
         "BTN_CONFIGURE": "Konfigurera",
         "BTN_FORCE_OVERWRITE": "Tvinga överskrivning",
         "ERROR_CORS": "WebDAV Synkroniseringsfel: Nätverksbegäran misslyckades.\n\nDet kan vara ett CORS-problem. Kontrollera att:\n• Din WebDAV-server tillåter Cross-Origin-begäranden\n• Serveradressen är korrekt och tillgänglig\n• Du har en fungerande internetanslutning",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Fjärrdata skrivs för närvarande",
-        "ERROR_FALLBACK_TO_BACKUP": "Något gick fel under importen av datan. Återgår till lokal säkerhetskopia.",
-        "ERROR_INVALID_DATA": "Fel under synkronisering. Ogiltig data",
-        "ERROR_NO_REV": "Ingen giltig rev för fjärrfil",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Fel vid synkronisering. Det går inte att läsa fjärrdata. Kanske har du aktiverat kryptering och ditt lokala lösenord stämmer inte överens med det som används för att kryptera fjärrdata?",
-        "IMPORTING": "Importerar data",
         "INCOMPLETE_CFG": "Autentisering för synkronisering misslyckades. Kontrollera din konfiguration!",
-        "INITIAL_SYNC_ERROR": "Initial synkronisering misslyckades",
         "SUCCESS_DOWNLOAD": "Synkroniserade data från fjärrplats",
-        "SUCCESS_IMPORT": "Importerade data",
         "SUCCESS_VIA_BUTTON": "Data synkroniserad",
-        "UNKNOWN_ERROR": "Okänd synkroniseringsfel: {{err}}",
-        "UPLOAD_ERROR": "Okänd uppladdningsfel (inställningarna korrekta?): {{err}}"
+        "UNKNOWN_ERROR": "Okänd synkroniseringsfel: {{err}}"
       },
       "SAFETY_BACKUP": {
-        "TITLE": "Synkronisera säkerhetskopior",
         "DESCRIPTION": "Automatiska säkerhetskopior skapas innan data laddas ner från fjärrservern under synkroniseringsprocessen. Säkerhetskopiorna organiseras i fyra smarta fack: de två senaste, den första från idag och den första från dagen före idag.",
         "BTN_CREATE_MANUAL": "Skapa manuell säkerhetskopia",
         "BTN_REFRESH": "Uppdatera",
@@ -1209,11 +968,6 @@
         "REASON_MANUAL": "Manuell säkerhetskopiering",
         "REASON_BEFORE_UPDATE": "Automatisk säkerhetskopiering före synkronisering",
         "LAST_CHANGE_PREFIX": "Senaste ändring:",
-        "RESTORE_CONFIRM_TITLE": "Återställ säkerhetskopia",
-        "RESTORE_CONFIRM_MSG": "Är du säker på att du vill återställa säkerhetskopian från {{timestamp}}?\n\nDetta kommer att ERSÄTTA alla dina nuvarande data HELT!\n\nMotivering: {{reason}}\n\nKlicka på OK för att fortsätta eller Avbryt för att avbryta.",
-        "BACKUP_NOT_FOUND": "Säkerhetskopia med ID {{backupId}} hittades inte",
-        "RESTORE_FAILED": "Det gick inte att återställa säkerhetskopian: {{error}}",
-        "INVALID_ID_ERROR": "Ogiltigt säkerhetskopierings-ID genererat",
         "CREATED_SUCCESS": "Manuell säkerhetskopiering skapad",
         "RESTORED_SUCCESS": "Säkerhetskopian återställdes utan problem",
         "DELETED_SUCCESS": "Säkerhetskopiering raderad",
@@ -1225,8 +979,7 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Skapa tagg",
-        "EDIT": "Redigera tagg"
+        "CREATE": "Skapa tagg"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "Vill du verkligen ta bort taggen \"{{tagName}}\"? Den kommer att tas bort från alla uppgifter. Detta kan inte ångras."
@@ -1252,16 +1005,6 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Lägg till den existerande uppgiften \"{{taskTitle}}\"",
-        "ADD_ISSUE_TASK": "Lägg till problem #{{issueNr}} från {{issueType}}",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "Lägg till uppgift nederst i backloggen",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "Lägg till uppgift nederst i listan",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "Lägg till uppgift överst i backloggen",
-        "ADD_TASK_TO_TOP_OF_TODAY": "Lägg till uppgift överst i listan",
-        "CREATE_TASK": "Skapa ny uppgift",
-        "EXAMPLE": "Exempel: \"Någon uppgiftstitel @fre 16:00 +projektnamn #någon-tagg #någon-annan-tagg 10m/3h\"",
-        "START": "Tryck på Enter en gång till för att starta.",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Växla mellan att lägga till uppgift till backloggen/dagens lista",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Växla mellan att lägga till uppgift överst och längst ner i listan",
         "PLACEHOLDER_SEARCH": "Lägg till befintliga uppgifter eller problem...",
         "PLACEHOLDER_CREATE": "En uppgiftstitel #tagg @16:00",
         "TOOLTIP_ADD_TASK": "Lägg till uppgift",
@@ -1278,8 +1021,6 @@
         "TOOLTIP_CLEAR_DATE": "Rensa datum",
         "TOOLTIP_CLEAR_TAGS": "Rensa taggar",
         "TOOLTIP_CLEAR_ESTIMATE": "Tydlig uppskattning",
-        "NO_DATE": "Inget datum",
-        "NO_TIME": "Ingen tid",
         "TODAY": "Idag",
         "TOMORROW": "I morgon",
         "CREATE_NEW_TAGS": "Skapa nya taggar"
@@ -1289,11 +1030,9 @@
         "ADD_SUB_TASK": "Lägg till underuppgift",
         "ATTACHMENTS": "Bilagor ({{nr}})",
         "DUE": "Planerad vid",
-        "FROM_PARENT": "(från Förälder)",
         "LOCAL_ATTACHMENTS": "Lokala bilagor",
         "NOTES": "Beskrivning",
         "PARENT": "Förälder",
-        "REMINDER": "Påminnelse",
         "REPEAT": "Upprepa",
         "SCHEDULE_TASK": "Schemalägg uppgift",
         "SUB_TASKS": "Deluppgifter ({{nr}})",
@@ -1314,11 +1053,8 @@
         "DROP_ATTACHMENT": "Släpp här för att bifoga till \"{{title}}\"",
         "DUPLICATE": "Duplicera",
         "EDIT_SCHEDULED": "Planera om",
-        "EDIT_TAGS": "Redigera taggar",
-        "EDIT_TASK_TITLE": "Redigera titel",
         "FOCUS_SESSION": "Starta fokus-session",
         "MARK_DONE": "Markera som klar",
-        "MARK_UNDONE": "Markera som ogjort",
         "MOVE_TO_BACKLOG": "Flytta till backlog",
         "MOVE_TO_OTHER_PROJECT": "Flytta till projekt",
         "MOVE_TO_REGULAR": "Flytta till vanlig lista",
@@ -1327,9 +1063,7 @@
         "OPEN_ISSUE": "Öppna i webbläsare",
         "OPEN_TIME": "Tidsspårning",
         "REMOVE_FROM_MY_DAY": "Ta bort från idag",
-        "REPEAT_EDIT": "Redigera konfiguration för återkommande uppgifter",
         "SCHEDULE": "Planera uppgiften",
-        "SHOW_UPDATES": "Visa uppdateringar",
         "TOGGLE_ATTACHMENTS": "Visa/dölj bilagor",
         "TOGGLE_DETAIL_PANEL": "Visa/dölj ytterligare information",
         "TOGGLE_DONE": "Markera som klart/oklart",
@@ -1356,26 +1090,19 @@
         "DONE": "Klar",
         "DUE_TASK": "Påminnelse om planerad uppgift",
         "DUE_TASKS": "Påminnelse om planerade uppgifter",
-        "FOR_CURRENT": "Uppgiften är klar. Vill du börja arbeta med den?",
-        "FOR_OTHER": "Uppgiften är klar. Vill du börja arbeta med den?",
-        "FROM_PROJECT": "Från projektet: \"{{title}}\"",
-        "FROM_TAG": "Från Tagg: \"{{title}}\"",
         "RESCHEDULE_EDIT": "Redigera (Omplanera)",
         "RESCHEDULE_UNTIL_TOMORROW": "Boka om till imorgon",
         "SNOOZE": "Snooze",
         "SNOOZE_ALL": "Snooze alla",
         "START": "Start",
-        "SWITCH_CONTEXT_START": "Byt kontext och starta",
         "UNSCHEDULE": "Avboka",
         "UNSCHEDULE_ALL": "Avboka alla",
         "DISMISS_REMINDER_KEEP_TODAY": "Avvisa påminnelse (behåll i dag)",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Avvisa alla påminnelser (behåll i idag)"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "Flytta uppgiften till backloggen tills den är schemalagd",
         "QA_NEXT_MONTH": "Schema för nästa månad",
         "QA_NEXT_WEEK": "Schema för nästa vecka",
-        "QA_REMOVE_TODAY": "Ta bort uppgift från idag",
         "QA_TODAY": "Schema idag",
         "QA_TOMORROW": "Schema för imorgon",
         "REMIND_AT": "Påminn om vid",
@@ -1416,20 +1143,17 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Det går inte att tilldela projekt via kort syntax för upprepbara uppgifter!",
         "CREATED_FOR_PROJECT": "Skapade uppgift \"{{taskTitle}}\" för projektet \"{{projectTitle}}\"",
-        "CREATED_FOR_PROJECT_ACTION": "Gå till projekt",
         "DELETED": "Raderade uppgiften \"{{title}}\"",
         "FOUND_MOVE_FROM_BACKLOG": "Flyttade uppgiften <strong>{{title}}</strong> från backlog till dagens uppgiftslista",
         "FOUND_MOVE_FROM_OTHER_LIST": "Lagd till uppgift <strong>{{title}}</strong> från <strong>{{contextTitle}}</strong> till aktuell lista",
         "FOUND_RESTORE_FROM_ARCHIVE": "Återställd uppgift <strong>{{title}}</strong> relaterat till ärende från arkivet",
         "GO_TO_TASK": "Gå till uppgift",
-        "LAST_TAG_DELETION_WARNING": "Du försöker ta bort den sista taggen för en uppgift som inte hör till något projekt. Det är inte tillåtet!",
         "MOVED_TO_ARCHIVE": "Flyttade {{nr}} uppgifter till arkivet",
         "MOVED_TO_PROJECT": "Flyttade uppgiften \"{{taskTitle}}\" till projektet \"{{projectTitle}}\"",
-        "MOVED_TO_PROJECT_ACTION": "Gå till projekt",
         "REMINDER_ADDED": "Schemalagd <strong>{{title}}</strong> vid <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Raderade påminnelse för uppgift",
         "REMINDER_UPDATED": "Uppdaterade påminnelse för uppgiften \"{{title}}\"",
-        "TASK_CREATED": "Skapade uppgiften \"{{title}}\""
+        "TASK_CREATED": "Skapade uppgiften \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Välj eller skapa uppgift",
       "SUMMARY_TABLE": {
@@ -1497,7 +1221,6 @@
         "C_YEAR": "År",
         "DEFAULT_ESTIMATE": "Standarduppskattning",
         "FRIDAY": "fredag",
-        "IS_ADD_TO_BOTTOM": "Flytta uppgift till slutet av listan",
         "MONDAY": "måndag",
         "NOTES": "Standardanteckningar",
         "ORDER": "Ordning",
@@ -1524,11 +1247,7 @@
         "WEDNESDAY": "onsdag",
         "INHERIT_SUBTASKS": "Ärva deluppgifter",
         "INHERIT_SUBTASKS_DESCRIPTION": "När denna funktion är aktiverad kommer deluppgifter från den senaste uppgiftsinstansen att återskapas med den återkommande uppgiften.",
-        "REPEAT_FROM_COMPLETION_DATE": "Upprepa när du är klar",
-        "REPEAT_FROM_COMPLETION_DATE_DESCRIPTION": "Nästa uppgift skapas utifrån slutdatumet, inte startdatumet. (t.ex. 'Var sjunde dag' = 7 dagar efter slutdatumet)",
         "SCHEDULE_TYPE_LABEL": "Schematyp",
-        "SCHEDULE_TYPE_FIXED": "Fast schema (t.ex. varje måndag, den 1:a i månaden)",
-        "SCHEDULE_TYPE_FLEXIBLE": "Efter slutförande (t.ex. 7 dagar efter att jag är klar)",
         "REMOVE_INSTANCE": "Ta bort idag",
         "REMOVE_FOR_DATE": "Ta bort för {{date}}",
         "DISABLE_AUTO_UPDATE_SUBTASKS": "Inaktivera automatisk uppdatering av deluppgifter",
@@ -1553,7 +1272,6 @@
         "GROUP_SCHEDULED_DATE": "Planerat datum",
         "GROUP_TAG": "Tagg",
         "RESET_ALL": "Återställ alla",
-        "SCHEDULED_DEFAULT": "Valfritt datum",
         "SCHEDULED_NEXT_MONTH": "Nästa månad",
         "SCHEDULED_NEXT_WEEK": "Nästa vecka",
         "SCHEDULED_THIS_MONTH": "Denna månad",
@@ -1570,9 +1288,8 @@
         "TIME_2HOUR": "> 2 Timmar",
         "TIME_10MIN": "> 10 Minuter",
         "TIME_30MIN": "> 30 Minuter",
-        "TIME_DEFAULT": "Valfri varaktighet",
-        "TIME_SPENT": "Tid som spenderats",
-        "TITLE": "Anpassa uppgiftsvy"
+        "FILTER_NOT_SPECIFIED": "Inte specificerat",
+        "TIME_SPENT": "Tid som spenderats"
       }
     },
     "TIME_TRACKING": {
@@ -1605,7 +1322,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Skapa</em> och spåra till",
-        "IDLE_FOR": "Du har varit inaktiv i:",
         "NOTIFICATION_TITLE": "Spåra din tid!",
         "TASK": "Uppgift",
         "TRACK_TO": "Spåra till:",
@@ -1617,7 +1333,6 @@
         "DAYS_WORKED": "Arbetade dagar:",
         "MONTH_WORKED": "Arbetad månad:",
         "REPEATING_TASK": "Upprepande uppgift",
-        "RESTORE_TASK_FROM_ARCHIVE": "Återställ uppgift från arkiv",
         "TASKS": "Uppgifter",
         "TOTAL_TIME": "Total använd tid:",
         "WEEK_NR": "Vecka {{nr}}",
@@ -1703,7 +1418,6 @@
     "DELETE": "Radera",
     "DISMISS": "Avvisa",
     "DO_IT": "Gör det!",
-    "DONT_SHOW_AGAIN": "Visa inte igen",
     "DURATION_DESCRIPTION": "t.ex. \"5t 23m\", vilket ger 5 timmar och 23 minuter",
     "EDIT": "Redigera",
     "ENABLED": "Aktiverad",
@@ -1712,26 +1426,20 @@
     "HIDE": "Dölj",
     "ICON_INP_DESCRIPTION": "Alla utf-8-emojis stöds också!",
     "INBOX_PROJECT_TITLE": "Inkorgen",
-    "LOGIN": "Inloggning",
-    "LOGOUT": "Logga ut",
     "MINUTES": "{{m}} minuter",
     "MOVE_BACKWARD": "Flytta bakåt",
     "MOVE_FORWARD": "Gå vidare",
-    "NEXT": "Nästa",
     "NO_CON": "Du är för närvarande offline. Anslut till internet igen.",
     "NONE": "Ingen",
     "OK": "Okej",
     "OVERDUE": "Försenad",
-    "PREVIOUS": "Föregående",
     "REMOVE": "Ta bort",
-    "RESET": "Återställ",
     "SAVE": "Spara",
     "SUBMIT": "Skicka",
     "TITLE": "Titel",
     "TODAY_TAG_TITLE": "Idag",
     "TRACKING_INTERVAL_DESCRIPTION": "Spåra tiden med hjälp av detta intervall i millisekunder. Du kanske vill ändra detta för att minska skrivningarna på disken. Se problem #2355.",
     "UNDO": "Ångra",
-    "UPDATE": "Uppdatering",
     "WITHOUT_PROJECT": "Utan projekt",
     "YESTERDAY": "Igår"
   },
@@ -1745,9 +1453,7 @@
     "CALENDARS": {
       "BROWSER_WARNING": "På grund av begränsningar för korsreferenser <b>kommer detta sannolikt INTE att fungera med webbläsarversionen av Super Productivity.<br /> Vänligen <a href=\"https://super-productivity.com/download/\">ladda ner desktopversionen</a> för att kunna använda denna funktion!</b>",
       "CAL_PATH": "iCal-källans URL",
-      "CAL_PROVIDERS": "Kalenderleverantörer (experimentellt och valfritt)",
       "CHECK_UPDATES": "Kontrollera efter fjärruppdateringar var X:e gång",
-      "DEFAULT_PROJECT": "Standardprojekt för tillagda kalenderuppgifter",
       "HELP": "Du kan integrera kalendrar för att få påminnelser och lägga till dem som uppgifter i Super Productivity. Integrationen fungerar med hjälp av iCal-formatet. För att detta ska fungera måste dina kalendrar vara tillgängliga antingen via internet eller via filsystemet.",
       "SHOW_BANNER_THRESHOLD": "Visa en avisering X före händelsen (tomt för inaktiverat)"
     },
@@ -1757,7 +1463,6 @@
     },
     "FOCUS_MODE": {
       "HELP": "Fokusläge öppnar en skärm utan distraktioner som hjälper dig att fokusera på din aktuella uppgift.",
-      "L_ALWAYS_OPEN_FOCUS_MODE": "Alltid öppen fokusläge vid spårning",
       "L_SKIP_PREPARATION_SCREEN": "Hoppa över förberedelseskärmen (stretching etc.)",
       "TITLE": "Fokusläge"
     },
@@ -1810,7 +1515,6 @@
       "TASK_MOVE_TO_PROJECT": "Öppna flytta uppgift till projektmenyn",
       "TASK_OPEN_CONTEXT_MENU": "Öppna uppgiftskontextmenyn",
       "TASK_OPEN_ESTIMATION_DIALOG": "Redigera uppskattning/nedlagd tid",
-      "TASK_PLAN_FORDAY": "Plan för dagen",
       "TASK_SCHEDULE": "Schemalägg uppgift",
       "TASK_SHORTCUTS": "Uppgifter",
       "TASK_SHORTCUTS_INFO": "Följande genvägar gäller för den aktuella valda uppgiften (vald via tabbtangenten eller musen).",
@@ -1818,7 +1522,6 @@
       "TASK_TOGGLE_DONE": "Växla Klar",
       "TITLE": "Tangentbordsgenvägar",
       "TOGGLE_BACKLOG": "Visa/dölj uppgiftsbacklog",
-      "TOGGLE_BOOKMARKS": "Visa/dölj bokmärkesfältet",
       "TOGGLE_ISSUE_PANEL": "Visa/dölj problemspanelen",
       "TOGGLE_PLAY": "Starta/stoppa uppgift",
       "TOGGLE_SIDE_NAV": "Fokus Sidenav",
@@ -1882,7 +1585,6 @@
       "IS_DARK_MODE": "Mörkt läge",
       "IS_DISABLE_ANIMATIONS": "Inaktivera alla animationer",
       "IS_DISABLE_CELEBRATION": "Inaktivera firande i daglig sammanfattning",
-      "IS_HIDE_NAV": "Dölj navigering tills muspekaren hålls över huvudrubriken (endast på dator)",
       "IS_MINIMIZE_TO_TRAY": "Minimera till aktivitetsfältet (endast skrivbord)",
       "IS_SHOW_TIP_LONGER": "Visa produktivitetstips vid appstart lite längre",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Visa aktuell nedräkning i facket/statusmenyn (endast stationära Mac-datorer)",
@@ -1906,17 +1608,7 @@
       "BREAK_DURATION": "Varaktighet för korta raster",
       "CYCLES_BEFORE_LONGER_BREAK": "Börja längre paus efter X arbetspass",
       "DURATION": "Arbetstidens längd",
-      "HELP": "<p>Pomodoro-timern kan konfigureras via ett par inställningar. Varje arbetspassets längd, längden på normala pauser, antalet arbetspass som ska genomföras innan en längre paus påbörjas och längden på denna längre paus. </p> <p>Du kan också ställa in om du vill visa dina distraktioner under dina pomodoro-pauser. </p> <p>Om du ställer in \"Pausa tidsspårning under pomodoro-paus\" kommer även dina pauser att spåras som arbetstid som lagts på en uppgift. </p> <p>Om du aktiverar \"Pausa pomodoro-session när ingen aktiv uppgift finns\" kommer även pomodoro-sessionen att pausas när du pausar en uppgift.</p>",
-      "IS_ENABLED": "Aktivera pomodoro-timer",
-      "IS_MANUAL_CONTINUE": "Bekräfta manuellt att nästa pomodoro-session ska startas",
-      "IS_MANUAL_CONTINUE_BREAK": "Bekräfta manuellt att nästa paus ska börja",
-      "IS_PLAY_SOUND": "Spela upp ljud när sessionen är klar",
-      "IS_PLAY_SOUND_AFTER_BREAK": "Spela upp ljud när rasten är slut",
-      "IS_DISABLE_AUTO_START_AFTER_BREAK": "Inaktivera automatisk start av session efter paus",
-      "IS_PLAY_TICK": "Spela tickande ljud varje sekund",
-      "IS_STOP_TRACKING_ON_BREAK": "Stoppa tidrapporteringen för uppgiften under pausen",
-      "LONGER_BREAK_DURATION": "Varaktighet för längre raster",
-      "TITLE": "Pomodoro Timer (arv)"
+      "LONGER_BREAK_DURATION": "Varaktighet för längre raster"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Visa banner X före den faktiska påminnelsen",
@@ -1934,9 +1626,7 @@
       "L_WORK_START": "Arbetsdagens början",
       "LUNCH_BREAK_START_END_DESCRIPTION": "t.ex. 13:00",
       "TITLE": "Schema",
-      "WORK_START_END_DESCRIPTION": "t.ex. 17:00",
-      "WEEK": "Vecka",
-      "MONTH": "Månad"
+      "WORK_START_END_DESCRIPTION": "t.ex. 17:00"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Här kan du styra korta syntaxalternativ när du skapar en uppgift.</p>",
@@ -2017,14 +1707,12 @@
     "SHARE_UNAVAILABLE_FALLBACK": "Kopierat till urklipp.",
     "SHARE_FAILED_FALLBACK": "Delningen misslyckades. Kopierades istället till urklipp.",
     "SHARE_FAILED": "Delningen misslyckades. Kopiera manuellt.",
-    "ERR_COMPRESSION": "Fel för komprimeringsgränssnitt",
     "FILE_DOWNLOADED": "{{fileName}} nedladdad",
     "FILE_DOWNLOADED_BTN": "Öppna mapp",
     "NAVIGATE_TO_TASK_ERR": "Kunde inte koncentrera mig på uppgiften. Har du raderat den?",
     "PERSISTENCE_DISALLOWED": "Data kommer inte att sparas permanent. Tänk på att detta kan leda till dataförlust!!",
     "PERSISTENCE_ERROR": "Fel vid begäran om att spara data: {{err}}",
     "RUNNING_X": "Löpning \"{{str}}\".",
-    "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "{{keyCombo}} tryckt, men genvägen för att öppna bokmärken är endast tillgänglig i projektkontext.",
     "UNPLANNED_TODAY_TASKS": "Oplanerade alla uppgifter från idag",
     "NO_TASKS_TO_UNPLAN": "Inga uppgifter att avplanera"
   },
@@ -2063,25 +1751,15 @@
       "SYNC": "Hur man gör: Konfigurera synkronisering"
     },
     "METRICS": "Mätvärden",
-    "NO_PROJECT_INFO": "Inga projekt tillgängliga. Du kan skapa ett nytt projekt genom att klicka på knappen \"Skapa projekt\".",
-    "NO_TAG_INFO": "Det finns för närvarande inga taggar. Du kan lägga till taggar genom att ange `#dittTaggnamn` när du lägger till eller redigerar uppgifter.",
-    "NOTES": "Anmärkningar",
-    "NOTES_PANEL_INFO": "Anteckningar kan endast visas från schemat och den vanliga uppgiftslistan.",
     "PLANNER": "Planerare",
-    "PROCRASTINATE": "Fördröja",
     "PROJECT_MENU": "Projektmeny",
-    "PROJECT_SETTINGS": "Projektinställningar",
     "PROJECTS": "Projekt",
     "QUICK_HISTORY": "Kort historik",
     "SCHEDULE": "Schema",
     "SEARCH": "Sök",
     "SETTINGS": "Inställningar",
-    "SHOW_SEARCH_BAR": "Visa sökfält",
     "UNPLAN_ALL_TASKS": "Avplanera alla uppgifter",
     "TAGS": "Taggar",
-    "TASK_LIST": "Uppgiftslista",
-    "TASKS": "Uppgifter",
-    "TOGGLE_SHOW_BOOKMARKS": "Visa/dölj bokmärken",
     "TOGGLE_SHOW_ISSUE_PANEL": "Visa/dölj problemspanelen",
     "TOGGLE_SHOW_NOTES": "Visa/dölj projektanteckningar",
     "TOGGLE_TRACK_TIME": "Starta/stoppa spårningstiden",
@@ -2143,17 +1821,14 @@
   },
   "PS": {
     "GLOBAL_SETTINGS": "Globala inställningar",
-    "ISSUE_INTEGRATION": "Integrering av problem",
     "NO_PLUGINS_INSTALLED": "Inga plugins är för närvarande installerade",
     "PLUGINS": "Plugins",
     "PRIVACY_POLICY": "Sekretesspolicy",
     "PRODUCTIVITY_HELPER": "Produktivitetshjälp",
     "PROJECT_SETTINGS": "Projektspecifika inställningar",
     "PROVIDE_FEEDBACK": "Ge feedback",
-    "RELOAD": "Ladda om",
     "SYNC_EXPORT": "Synkronisera och exportera",
-    "TAG_SETTINGS": "Taggspecifika inställningar",
-    "TOGGLE_DARK_MODE": "Växla till mörkt läge"
+    "TAG_SETTINGS": "Taggspecifika inställningar"
   },
   "PLUGINS": {
     "INSTALL_PLUGIN": "Installera plugin",
@@ -2192,8 +1867,6 @@
     },
     "ERROR": "Fel",
     "LOADING_PLUGIN": "Laddar...",
-    "ENABLED": "Aktiverad",
-    "DISABLED": "Funktionshindrad",
     "PLEASE_SELECT_ZIP_FILE": "Välj en ZIP-fil",
     "FILE_TOO_LARGE": "Filen är för stor ({{fileSize}}MB). Maximal storlek är {{maxSize}}MB",
     "FAILED_TO_INSTALL": "Det gick inte att installera plugin-programmet",
@@ -2202,38 +1875,27 @@
     "FAILED_TO_REMOVE": "Det gick inte att ta bort plugin-programmet",
     "TYPE": "Typ: {{type}}",
     "NO_ADDITIONAL_INFO": "Ingen ytterligare information tillgänglig",
-    "NO_PLUGIN_ID_PROVIDED_FOR_HTML": "Inget plugin-ID angivet för HTML-innehåll",
     "PROJECT_NOT_FOUND": "Projektet '{{contextId}}' hittades inte",
     "TASKS_NOT_IN_PROJECT": "En eller flera uppgifter finns inte i projektet '{{contextId}}'",
     "PARENT_TASK_NOT_FOUND": "Övergripande uppgift hittades inte i sammanhanget '{{contextId}}'",
     "TASK_NOT_FOUND": "Uppgift med ID '{{taskId}}' hittades inte",
     "TASKS_NOT_SUBTASKS": "En eller flera uppgifter är inte underordnade uppgifter till '{{contextId}}'.",
-    "NO_PLUGIN_CONTEXT_PERSISTENCE": "Plugin har inte behörighet att lagra data",
     "UNABLE_TO_PERSIST_DATA": "Det går inte att spara data i plugin-lagringen.",
-    "NO_PLUGIN_CONTEXT_LOADING": "Plugin har inget sammanhang för datainläsning",
-    "NO_PLUGIN_CONTEXT_SYNC": "Plugin har inte behörighet att använda synkronisering",
-    "NO_PLUGIN_CONTEXT_HEADER_BUTTON": "Plugin har inte behörighet att lägga till rubrikknappar",
-    "NO_PLUGIN_CONTEXT_MENU_ENTRY": "Plugin har inte behörighet att lägga till menyposter",
     "MENU_ENTRY_LABEL_REQUIRED": "Menypostetikett krävs",
     "MENU_ENTRY_ONCLICK_REQUIRED": "Menypostens onClick-hanterare krävs",
     "MENU_ENTRY_ICON_STRING": "Menyikonet måste vara en sträng",
-    "NO_PLUGIN_CONTEXT_SIDE_PANEL": "Plugin har inte behörighet att lägga till knappar i sidopanelen",
     "SIDE_PANEL_LABEL_REQUIRED": "Etikett för knapp på sidopanelen krävs",
     "SIDE_PANEL_ONCLICK_REQUIRED": "Sidopanelens knapp onClick-hanterare krävs",
-    "NO_PLUGIN_CONTEXT_SHORTCUT": "Plugin har inte behörighet att registrera genvägar",
     "PROJECT_DOES_NOT_EXIST": "Projektet finns inte",
     "TAGS_DO_NOT_EXIST": "En eller flera taggar finns inte",
     "PARENT_TASK_DOES_NOT_EXIST": "Övergripande uppgift finns inte",
     "VALIDATION_FAILED": "Valideringen misslyckades",
-    "NO_PLUGIN_CONTEXT_ACTION": "Plugin har inte behörighet att utföra åtgärder",
     "ACTION_TYPE_NOT_ALLOWED": "Åtgärdstyp '{{type}}' är inte tillåten",
     "NODE_ONLY_DESKTOP": "Node.js-körning är endast tillgänglig i skrivbordsappen.",
-    "NO_PLUGIN_CONTEXT_NODE": "Plugin har inte behörighet att köra Node.js-kod",
     "NO_PLUGIN_MANIFEST_NODE": "Plugin-manifestet innehåller inte Node.js-modulen",
     "ELECTRON_API_NOT_AVAILABLE": "Electron-API är inte tillgängligt",
     "FAILED_TO_EXECUTE_SCRIPT": "Det gick inte att köra Node.js-skriptet",
     "ALREADY_INITIALIZED": "Plugin är redan initialiserat",
-    "USER_DECLINED_NODE_PERMISSION": "Användaren har avböjt behörighet att köra Node.js",
     "FAILED_TO_EXTRACT_ZIP": "Det gick inte att extrahera plugin-ZIP-filen",
     "MANIFEST_NOT_FOUND": "Plugin-manifest (manifest.json) hittades inte i ZIP-filen",
     "MANIFEST_TOO_LARGE": "Plugin-manifestet är för stort (max {{maxSize}}KB)",
@@ -2248,12 +1910,7 @@
     "GO_BACK": "Gå tillbaka",
     "FAILED_TO_LOAD": "Det gick inte att ladda plugin-programmet",
     "FAILED_TO_LOAD_CONFIG": "Det gick inte att ladda plugin-konfigurationen",
-    "FAILED_TO_SAVE_CONFIG": "Det gick inte att spara plugin-konfigurationen",
-    "PLUGIN_ID_NOT_PROVIDED": "Plugin-ID anges inte",
-    "PLUGIN_SYSTEM_FAILED_INIT": "Plugin-systemet kunde inte initialiseras",
-    "PLUGIN_NOT_FOUND": "Plugin hittades inte",
-    "PLUGIN_DOES_NOT_SUPPORT_IFRAME": "Detta plugin stöder inte iframe-gränssnitt.",
-    "INDEX_HTML_NOT_LOADED": "Plugin index.html laddas inte"
+    "FAILED_TO_SAVE_CONFIG": "Det gick inte att spara plugin-konfigurationen"
   },
   "SCHEDULE": {
     "LAST": "Sista:",
@@ -2263,36 +1920,15 @@
     "NO_SCHEDULED_TITLE": "Schemalagda uppgifter för dagen",
     "REPEATED_TASKS": "Upprepade uppgifter",
     "SCHEDULED_TASKS": "Schemalagda uppgifter",
-    "SCHEDULED_TASKS_WITH_TIME": "Schemalagda uppgifter med starttid",
-    "START_TASK": "Starta uppgift och ta bort påminnelse"
-  },
-  "THEMES": {
-    "amber": "bärnsten",
-    "blue": "blått",
-    "blue-grey": "blågrått",
-    "cyan": "cyan",
-    "deep-orange": "djup orange",
-    "deep-purple": "mörklila",
-    "green": "grönt",
-    "indigo": "indigo",
-    "light-blue": "ljusblått",
-    "light-green": "ljusgrönt",
-    "lime": "lime",
-    "pink": "rosa",
-    "purple": "lila",
-    "SELECT_THEME": "Välj färgtema",
-    "teal": "kricka",
-    "yellow": "gult"
+    "SCHEDULED_TASKS_WITH_TIME": "Schemalagda uppgifter med starttid"
   },
   "V": {
-    "E_1TO10": "Ange ett värde mellan 1 och 10",
     "E_DATETIME": "Det angivna värdet är inte ett datum och en tid!",
     "E_DURATION": "Ange en giltig varaktighet (t.ex. 1 t)",
     "E_MAX": "Bör inte vara större än {{val}}",
     "E_MAX_LENGTH": "Bör vara max {{val}} tecken långt",
     "E_MIN": "Bör inte vara mindre än {{val}}",
     "E_MIN_LENGTH": "Bör vara minst {{val}} tecken långt",
-    "E_PATTERN": "Ogiltig inmatning",
     "E_REQUIRED": "Detta fält är obligatoriskt"
   },
   "WW": {
@@ -2304,10 +1940,7 @@
     "ESTIMATE_REMAINING": "Uppskattad återstående tid:",
     "LATER_TODAY": "Senare idag",
     "FINISH_DAY": "Sista dagen",
-    "FINISH_DAY_FOR_PROJECT": "Slutdatum för detta projekt",
-    "FINISH_DAY_FOR_TAG": "Slutdag för denna tagg",
     "FINISH_DAY_TOOLTIP": "Utvärdera din dag, flytta alla avslutade uppgifter till arkivet (valfritt) och/eller planera din nästa dag.",
-    "HELP_PROCRASTINATION": "Hjälp, jag skjuter upp saker!",
     "MOVE_DONE_TO_ARCHIVE": "Flyttad till arkivet",
     "NO_DONE_TASKS": "Det finns för närvarande inga slutförda uppgifter.",
     "NO_PLANNED_TASK_ALL_DONE": "alla uppgifter utförda",

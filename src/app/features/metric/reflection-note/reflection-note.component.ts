@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -75,11 +76,15 @@ export class ReflectionNoteComponent {
     { initialValue: { id: '', ...DEFAULT_METRIC_FOR_DAY } as MetricCopy },
   );
 
-  readonly reflectionText = computed(() => {
+  private readonly _storedText = computed(() => {
     return this._metricForDay()?.reflections?.[0]?.text ?? '';
   });
 
+  // Local input text for textarea binding - prevents trimmed store value from overwriting user input
+  readonly inputText = signal('');
+
   private readonly _reflectionChanges$ = new Subject<string>();
+  private _lastUserInput = '';
 
   constructor() {
     this._reflectionChanges$
@@ -91,10 +96,28 @@ export class ReflectionNoteComponent {
     this._translate.onLangChange
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.placeholder.set(this._pickRandomPlaceholder()));
+
+    // Sync inputText from store only when:
+    // 1. Day changes (navigation)
+    // 2. External update that differs from user's input (e.g., sync)
+    effect(() => {
+      const storedText = this._storedText();
+      const userInputTrimmed = this._lastUserInput.trim();
+
+      // Only update if stored text differs from what user typed (after trim comparison)
+      // This prevents the store's trimmed value from overwriting user's trailing spaces
+      if (storedText !== userInputTrimmed) {
+        this.inputText.set(storedText);
+        this._lastUserInput = storedText;
+      }
+    });
   }
 
   onReflectionChange(value: string): void {
-    this._reflectionChanges$.next(value ?? '');
+    const v = value ?? '';
+    this._lastUserInput = v;
+    this.inputText.set(v);
+    this._reflectionChanges$.next(v);
   }
 
   async openHistory(): Promise<void> {

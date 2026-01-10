@@ -34,7 +34,10 @@ test.describe.serial('Plugin Structure Test', () => {
 
     // Navigate to plugin settings (implementing navigateToPluginSettings inline)
     await page.click(SETTINGS_BTN);
-    await page.waitForTimeout(1000);
+    await page
+      .locator('.page-settings')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     // Execute script to navigate to plugin section
     await page.evaluate(() => {
@@ -75,8 +78,7 @@ test.describe.serial('Plugin Structure Test', () => {
       }
     });
 
-    await page.waitForTimeout(1000);
-    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 10000 });
 
     // Check plugin card structure
     await page.evaluate(() => {

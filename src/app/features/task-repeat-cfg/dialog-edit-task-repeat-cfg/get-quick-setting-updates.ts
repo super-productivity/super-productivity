@@ -3,26 +3,31 @@ import {
   TASK_REPEAT_WEEKDAY_MAP,
   TaskRepeatCfg,
 } from '../task-repeat-cfg.model';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 
+/**
+ * Returns partial TaskRepeatCfg updates based on the quick setting.
+ * @param quickSetting The quick setting to apply
+ * @param referenceDate Optional date to use for weekday calculation (fixes #5806).
+ *                      If not provided, uses current date.
+ */
 export const getQuickSettingUpdates = (
   quickSetting: RepeatQuickSetting,
+  referenceDate?: Date,
 ): Partial<TaskRepeatCfg> | undefined => {
   switch (quickSetting) {
     case 'DAILY': {
       return {
         repeatCycle: 'DAILY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
       };
     }
 
     case 'WEEKLY_CURRENT_WEEKDAY': {
-      const todayWeekdayStr = TASK_REPEAT_WEEKDAY_MAP[new Date().getDay()];
+      const dateToUse = referenceDate || new Date();
+      const weekdayStr = TASK_REPEAT_WEEKDAY_MAP[dateToUse.getDay()];
       return {
         repeatCycle: 'WEEKLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
         monday: false,
         tuesday: false,
         wednesday: false,
@@ -30,7 +35,7 @@ export const getQuickSettingUpdates = (
         friday: false,
         saturday: false,
         sunday: false,
-        [todayWeekdayStr as keyof TaskRepeatCfg]: true,
+        [weekdayStr as keyof TaskRepeatCfg]: true,
       };
     }
 
@@ -38,7 +43,6 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'WEEKLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
         monday: true,
         tuesday: true,
         wednesday: true,
@@ -53,7 +57,6 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
       };
     }
 
@@ -61,7 +64,6 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'YEARLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
       };
     }
 

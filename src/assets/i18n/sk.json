@@ -1,15 +1,4 @@
 {
-  "ANDROID": {
-    "NOTIFICATIONS": {
-      "SYNC_CONFLICT_MSG": "Skontrolujte to a rozhodnite sa, čo máte robiť.",
-      "SYNC_CONFLICT_TITLE": "Vyskytol sa konflikt synchronizácie"
-    },
-    "PERMANENT_NOTIFICATION_MSGS": {
-      "INITIAL": "Aplikácia beží na pozadí, aby sa umožnila synchronizácia, ak je povolená",
-      "NO_ACTIVE_TASKS": "Žiadne aktívne úlohy",
-      "SYNCING": "Synchronizácia"
-    }
-  },
   "APP": {
     "B_INSTALL": {
       "IGNORE": "Ignorovať",
@@ -20,8 +9,7 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Zmeniť pozadie"
     },
-    "UPDATE_MAIN_MODEL": "Aplikácia Super Productivity získala významnú aktualizáciu! Je potrebné vykonať niektoré migrácie vašich údajov. Upozorňujeme, že vaše údaje sa tým stanú nekompatibilnými so staršími verziami aplikácie.",
-    "UPDATE_MAIN_MODEL_NO_UPDATE": "No model update chosen. Please note that you either have to downgrade to the last version, if you do not want to perform the model upgrade.",
+    "SKIP_SYNC_WAIT": "Preskočiť čakanie na synchronizáciu",
     "UPDATE_WEB_APP": "K dispozícii je nová verzia. Načítať novú verziu?"
   },
   "BL": {
@@ -29,8 +17,7 @@
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Zobraziť panel problémov",
-    "SHOW_NOTES": "Zobraziť poznámky k projektu",
-    "SHOW_TASK_VIEW_CUSTOMIZER_PANEL": "Zobraziť panel filtra/skupiny/triedenia"
+    "SHOW_NOTES": "Zobraziť poznámky k projektu"
   },
   "CONFIRM": {
     "AUTO_FIX": "Vaše údaje sú zrejme poškodené (\"{{validityError}}\"). Chcete sa pokúsiť o automatickú opravu? Mohlo by to viesť k čiastočnej strate údajov.",
@@ -40,11 +27,7 @@
     "RESTORE_STRAY_BACKUP": "Počas poslednej synchronizácie mohlo dôjsť k nejakej chybe. Chcete obnoviť poslednú zálohu?"
   },
   "DATETIME_SCHEDULE": {
-    "LATER_TODAY": "Later Today",
-    "NEXT_WEEK": "Budúci týždeň",
-    "PLACEHOLDER": "Prosím, vyberte dátum",
-    "PRESS_ENTER_AGAIN": "Opätovným stlačením enter uložíte",
-    "TOMORROW": "Zajtra"
+    "PRESS_ENTER_AGAIN": "Opätovným stlačením enter uložíte"
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "od",
@@ -53,13 +36,17 @@
     "SEARCH_PLACEHOLDER": "napr., príroda, hory, abstrakt",
     "TITLE": "Vybrať obrázok pozadia z Unsplash"
   },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "Darovať cez GitHub sponzorov",
+    "INTRO_1": "Super Productivity je financovaný výlučne komunitou. Neexistuje žiadne sledovanie, žiadne reklamy a žiadne zhromažďovanie údajov — vaše úlohy zostávajú na vašom zariadení.",
+    "INTRO_2": "Ak si vážite tento prístup a chcete, aby projekt zostal zdravý a vyvíjal sa, dobrovoľný príspevok je veľmi ocenený."
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
         "ADD_ATTACHMENT": "Pridať prílohu",
         "EDIT_ATTACHMENT": "Upraviť prílohu",
         "LABELS": {
-          "FILE": "Cesta k súboru",
           "IMG": "Obrázok",
           "LINK": "Odkaz"
         },
@@ -75,7 +62,6 @@
       "DEFAULT": {
         "DONE": "Hotovo",
         "EISENHAUER_MATRIX": "Eisenhowerova matica",
-        "IMPORTANT": "Dôležité",
         "IN_PROGRESS": "Prebieha",
         "KANBAN": "Kanban",
         "NOT_URGENT_IMPORTANT": "Nie je urgentné a dôležité",
@@ -112,9 +98,6 @@
       }
     },
     "CALDAV": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavenie aplikácie CalDav pre projekt"
-      },
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Kategória, pre ktorú chcete filtrovať problémy (nechajte prázdne pre žiadne)",
         "CALDAV_PASSWORD": "Vaše CalDav heslo",
@@ -124,28 +107,7 @@
         "IS_TRANSITION_ISSUES_ENABLED": "Automatické dokončenie úloh CalDav pri dokončení úlohy"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>",
-        "TITLE": "CalDav"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Priradený",
-        "AT": "Na",
-        "ATTACHMENTS": "Prílohy",
-        "CHANGED": "Zmenené",
-        "COMMENTS": "Komentáre",
-        "COMPONENTS": "Komponenty",
-        "DESCRIPTION": "Popis",
-        "LABELS": "Kategórie",
-        "LIST_OF_CHANGES": "Zoznam zmien",
-        "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
-        "ON": "Na",
-        "RELATED": "Súvisiace",
-        "STATUS": "Stav",
-        "STORY_POINTS": "Príbehové body",
-        "SUB_TASKS": "Podúlohy",
-        "SUMMARY": "Súhrn",
-        "WORKLOG": "Pracovný denník",
-        "WRITE_A_COMMENT": "Napísať komentár"
+        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud on mobile and web, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kalendár \"{{calendarName}}\" nebol nájdený",
@@ -156,7 +118,6 @@
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Pridať ako úlohu",
-        "FOCUS_TASK": "Úloha zamerania",
         "SHOW_TASK": "Zobraziť úlohu",
         "TXT": "<strong>{{title}}</strong> začína na <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> začína na <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} ďalšie udalosti sú splatné)",
@@ -195,10 +156,6 @@
     },
     "DROPBOX": {
       "S": {
-        "ACCESS_TOKEN_ERROR": "Dropbox: Nie je možné vygenerovať prístupový token z autorizačného kódu",
-        "ACCESS_TOKEN_GENERATED": "Dropbox: Prístupový token vygenerovaný z autentifikačného kódu",
-        "AUTH_ERROR": "Dropbox: Zadaný neplatný prístupový token",
-        "AUTH_ERROR_ACTION": "Zmeniť Token",
         "OFFLINE": "Dropbox: Nie je možné synchronizovať, pretože ste offline",
         "SYNC_ERROR": "Dropbox: Chyba počas synchronizácie",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Nie je možné vygenerovať výzvu PKCE."
@@ -213,71 +170,60 @@
       "ADD_TIME_MINUTE": "Pridať 1 minútu",
       "B": {
         "BREAK_RUNNING": "Prestávka prebieha",
+        "END_SESSION": "Ukončiť reláciu",
+        "PAUSE": "Pozastaviť",
         "POMODORO_BREAK_RUNNING": "Prestávka #{{cycleNr}} prebieha",
         "POMODORO_SESSION_RUNNING": "Pomodoro relácia #{{cycleNr}} prebieha",
+        "RESUME": "Pokračovať",
         "SESSION_RUNNING": "Relácia zamerania prebieha",
+        "START": "Začať",
         "TO_FOCUS_OVERLAY": "Na prekrytie zamerania"
       },
       "BACK_TO_PLANNING": "Späť na plánovanie",
       "BREAK_RELAX_MSG": "Vezmite si chvíľu na oddych",
       "CLICK_TO_EDIT_DURATION": "Kliknite pre úpravu trvania",
       "COMPLETE_FOCUS_SESSION": "Dokončiť reláciu zamerania",
-      "COMPLETE_SESSION": "Dokončiť reláciu",
-      "CONGRATS": "Gratulujeme k dokončeniu tejto relácie!",
-      "CONTINUE_FOCUS_SESSION": "Pokračovanie sústredenia",
-      "CONTINUE_SESSION": "Pokračovať v relácii",
       "CONTINUE_TO_NEXT_SESSION": "Pokračovať na ďalšiu reláciu",
       "COUNTDOWN": "Odpočítavanie",
       "COUNTDOWN_HINT": "Zamerať sa, kým hodiny nedosiahnu nulu",
-      "CURRENT_SESSION_TIME_TOOLTIP": "Aktuálny čas relácie",
       "FINISH_TASK_AND_SELECT_NEXT": "Ukončite úlohu a vyberte možnosť ďalšie",
       "FLOWTIME": "Flowtime",
       "FLOWTIME_HINT": "Flexibilné tempo bez prísnych časovačov",
       "FOCUS_TIME_TOOLTIP": "Čas zamerania",
-      "FOR_TASK": "pre úlohu",
       "GET_READY": "Pripravte sa na sústredenie!",
-      "GO_TO_PROCRASTINATION": "Pri odkladaní vyhľadajte pomoc",
       "GOGOGO": "Choď, choď, choď!!!",
       "LONG_BREAK": "Dlhá prestávka",
       "LONG_BREAK_TITLE": "Dlhá prestávka - cyklus {{cycle}}",
-      "NEXT": "Ďalšie",
       "ON": "na stránke .",
       "OPEN_ISSUE_IN_BROWSER": "Otvorenie problému v prehliadači",
       "PAUSE_SESSION": "Pozastaviť reláciu",
       "PAUSE_TRACKING": "Pozastaviť sledovanie",
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Pozastaviť sledovanie aktuálnej úlohy",
       "POMODORO": "Pomodoro",
-      "POMODORO_BACK": "Späť",
-      "POMODORO_DISABLE": "Zakázať Pomodoro",
       "POMODORO_HINT": "Štruktúrované sprinty s plánovanými prestávkami",
-      "POMODORO_INFO": "Relácie Focus nie je možné používať spolu so zapnutým časovačom pomodoro.",
       "POMODORO_SESSION_COMPLETED": "Pomodoro relácia dokončená!",
+      "POMODORO_SETTINGS": "Nastavenia Pomodoro",
       "PREP_GET_MENTALLY_READY": "Pripravte sa psychicky na sústredenie a produktivitu",
       "PREP_SIT_UPRIGHT": "Sedieť (alebo stáť) vzpriamene",
       "PREP_STRETCH": "Vykonajte mierny strečing",
       "REMOVE_TIME_MINUTE": "Odobrať 1 minútu",
       "RESUME_SESSION": "Pokračovať v relácii",
-      "SELECT_ANOTHER_TASK": "Výber inej úlohy",
       "SELECT_MODE": "Vyberte režim zamerania",
       "SELECT_TASK": "Vyberte úlohu, na ktorú sa chcete zamerať",
       "SELECT_TASK_TO_FOCUS": "Vyberte úlohu na zameranie",
       "SESSION_COMPLETED": "Relácia zamerania dokončená!",
-      "SET_FOCUS_SESSION_DURATION": "Nastavenie trvania relácie Focus",
       "SHORT_BREAK": "Krátka prestávka",
       "SHORT_BREAK_TITLE": "Krátka prestávka - cyklus {{cycle}}",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Zobrazenie/skrytie poznámok k úlohám a príloh",
       "SKIP_BREAK": "Preskočiť prestávku",
+      "START_BREAK": "Začať prestávku",
       "START_FOCUS_SESSION": "Začiatok Focus Session",
       "START_NEXT_FOCUS_SESSION": "Začatie ďalšieho Focus Session",
       "SWITCH_TASK": "Prepnúť úlohu",
       "WORKED_FOR": "Pracovali ste pre"
     },
     "GITEA": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavenie Gitea pre projekt"
-      },
       "FORM": {
-        "FILTER_USER": "Používateľské meno (napr. na odfiltrovanie vlastných zmien)",
         "HOST": "Hostiteľ (napr.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Používateľské meno alebo názov organizácie/projektu",
         "REPO_FULL_NAME_DESCRIPTION": "Možno ho nájsť ako súčasť url adresy pri zobrazení projektu v Prieskumníkovi.",
@@ -288,12 +234,10 @@
         "TOKEN": "Prístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Gitea pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky pridať a importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token.",
-        "TITLE": "Gitea"
+        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov Gitea pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky pridať a importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Príjemca",
-        "AT": "na adrese",
         "DESCRIPTION": "Popis",
         "LABELS": "Štítky",
         "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
@@ -301,15 +245,9 @@
         "STATUS": "Stav",
         "SUMMARY": "Zhrnutie",
         "WRITE_A_COMMENT": "Napíšte komentár"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Gitea: Neznáma chyba {{statusCode}} {{errorMsg}}. Api Rate limit prekročený?"
       }
     },
     "GITHUB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastaviť GitHub pre Projekt"
-      },
       "FORM": {
         "FILTER_USER": "Používateľské meno (napr. na odfiltrovanie vlastných zmien)",
         "INVALID_TOKEN_MESSAGE": "Nie je platný token GitHub. Musí začínať na \"ghp_\".",
@@ -318,8 +256,7 @@
         "TOKEN": "Prístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov GitHub pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Viac informácií o jeho rozsahu nájdete tu</a>.",
-        "TITLE": "GitHub"
+        "HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov GitHub pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Viac informácií o jeho rozsahu nájdete tu</a>."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Priradený",
@@ -340,9 +277,6 @@
       }
     },
     "GITLAB": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavenie aplikácie GitLab pre projekt"
-      },
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "Predvyplnené trvanie obsahuje nesledované údaje z minulých dní.",
         "T_ALREADY_TRACKED": "Už sledované",
@@ -371,8 +305,7 @@
         "TOKEN": "Prístupový token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>",
-        "TITLE": "GitLab"
+        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Príjemca",
@@ -404,20 +337,14 @@
         "ATTACHMENTS": "Prílohy",
         "AUTHOR": "Autor",
         "CATEGORY": "Kategória",
-        "CHANGED": "Zmenené",
-        "COMMENTS": "Komentáre",
         "COMPONENTS": "Komponenty",
         "DESCRIPTION": "Popis",
-        "DONE_RATIO": "Hotový pomer",
         "DUE_DATE": "Dátum splatnosti",
         "LABELS": "Štítky",
         "LAST_COMMENT": "Posledný komentár",
-        "LIST_OF_CHANGES": "Zoznam zmien",
         "LOAD_ALL_COMMENTS": "Načítajte všetky {{nr}} komentáre",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Načítajte popis a všetky komentáre",
         "LOCATION": "Poloha",
         "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
-        "ON": "Na",
         "PRIORITY": "Priorita",
         "RELATED": "Súvisiace",
         "START": "Začať",
@@ -428,8 +355,7 @@
         "TIME_SPENT": "Strávený čas",
         "TYPE": "Typ",
         "VERSION": "Verzia",
-        "WORKLOG": "Pracovný denník",
-        "WRITE_A_COMMENT": "Napísať komentár"
+        "WORKLOG": "Pracovný denník"
       },
       "S": {
         "ERR_GENERIC": "{{issueProviderName}} Chyba: {{errTxt}}",
@@ -437,13 +363,9 @@
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Nie je správne nakonfigurovaný",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Importované {{nr}} nové {{issuesStr}} k nevyriešeným úlohám",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Importovaný {{issueStr}} \"{{issueTitle}}\" k nevyriešeným úlohám",
-        "ISSUE_DELETED_OR_CLOSED": "{{issueProviderName}}: {{issueStrC}} \"{{issueTitle}}\" vyzerá byť vymazaný alebo zatvorený",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: Nie je potrebná žiadna aktualizácia",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Aktualizované údaje pre {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Aktualizované údaje pre \"{{issueTitle}}\"",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "{{issueProviderName}}: Aktualizované údaje pre \"{{issueTitle}}\"",
-        "MISSING_ISSUE_DATA": "{{issueProviderName}}: Tasks with missing {{issueStr}} data found. Reloading.",
-        "NEW_COMMENT": "{{issueProviderName}}: Nový komentár pre \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}"
       }
@@ -485,8 +407,7 @@
         "CURRENT_ASSIGNEE": "Aktuálny príjemca:",
         "CURRENT_STATUS": "Aktuálny stav:",
         "TASK_NAME": "Názov úlohy:",
-        "TITLE": "Jira: Aktualizovať Stav",
-        "UPDATE_STATUS": "Aktualizovať Stav"
+        "TITLE": "Jira: Aktualizovať Stav"
       },
       "DIALOG_WORKLOG": {
         "CHECKBOXES": {
@@ -521,8 +442,7 @@
         "HOST": "Hostiteľ (napr.: http://my-host.de:1234)",
         "PASSWORD": "Token / Heslo",
         "USE_PAT": "Používanie Osobného Prístupového Tokenu namiesto hesla",
-        "USER_NAME": "Email / používateľské meno",
-        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (iba aplikácia pre počítače)"
+        "USER_NAME": "Email / používateľské meno"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Rozšírená konfigurácia",
@@ -564,23 +484,12 @@
         "EXTENSION_NOT_LOADED": "Super Productivity Extension not loaded. Reloading the page might help",
         "INSUFFICIENT_SETTINGS": "Insufficient Settings provided for Jira",
         "INVALID_RESPONSE": "Jira: Response contained invalid data",
-        "ISSUE_NO_UPDATE_REQUIRED": "Jira: \"{{issueText}}\" already up to date",
-        "MANUAL_UPDATE_ISSUE_SUCCESS": "Jira: Updated data for \"{{issueText}}\"",
-        "MISSING_ISSUE_DATA": "Jira: Tasks with missing issue data found. Reloading.",
         "NO_AUTO_IMPORT_JQL": "Jira: No search query defined for auto import",
         "NO_VALID_TRANSITION": "Jira: No valid transition configured",
         "TIMED_OUT": "Jira: Request timed out",
         "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them",
-        "UNABLE_TO_REASSIGN": "Jira: Unable to reassign ticket to yourself, because you didn't specify a username. Please visit the settings."
-      },
-      "STEPPER": {
-        "CREDENTIALS": "Údaje",
-        "DONE": "Teraz ste skončili.",
-        "LOGIN_SUCCESS": "Prihlásenie bolo úspešné!",
-        "TEST_CREDENTIALS": "Skúšobné údaje",
-        "WELCOME_USER": "Vitajte {{user}}!"
+        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
       }
     },
     "MARKDOWN_PASTE": {
@@ -592,9 +501,6 @@
       "DIALOG_TITLE": "Zistený vložený zoznam Markdown!"
     },
     "METRIC": {
-      "BANNER": {
-        "CHECK": "Zvládol som to!"
-      },
       "CMP": {
         "ACTIVITY_HEATMAP": "Tepelná mapa aktivity",
         "AVG_BREAKS_PER_DAY": "Avg. breaks per day",
@@ -606,7 +512,6 @@
         "DAYS_WORKED": "Odpracované dni",
         "FOCUS_SESSION_TRENDS": "Relácie zamerania v čase",
         "GLOBAL_METRICS": "Globálne Metriky",
-        "MOOD_PRODUCTIVITY_OVER_TIME": "Nálada a produktivita v priebehu času",
         "NO_ADDITIONAL_DATA_YET": "Zatiaľ neboli zhromaždené žiadne ďalšie údaje. Use the form on the daily summary \"Evaluation\" panel to do so.",
         "PRODUCTIVITY_BREAKDOWN_OVER_TIME": "Produktivita a udržateľnosť v čase",
         "SIMPLE_CLICK_COUNTERS_OVER_TIME": "Počítadlá kliknutí v priebehu času",
@@ -621,28 +526,15 @@
         "TIME_SPENT": "Strávený čas"
       },
       "EVAL_FORM": {
-        "ADD_NOTE_FOR_TOMORROW": "Pridať poznámku na zajtra",
         "DAILY_STATE": "Denný stav",
         "DAILY_STATE_TOOLTIP": "Štvorcový systém založený na oboch skóre (\u000250 je vysoké): Hlboký tok (vysoké/vysoké), Preťaženie (vysoké/nízke), Obnova (nízke/vysoké), Odtiahnutie (nízke/nízke)",
-        "DISABLE_REPEAT_EVERY_DAY": "Zakázať opakovanie každý deň",
-        "ENABLE_REPEAT_EVERY_DAY": "Opakovať každý deň",
         "ENERGY_LEVEL": "Ako je na tom vaša energia?",
         "ENERGY_LEVEL_HINT": "\u001f62b Vyčerpaný \u0002013 \u001f610 V poriadku \u0002013 \u001f60a Dobrý",
         "FOCUS_WORK_TIME": "Čas na sústredenú prácu",
-        "HELP_H1": "Prečo by ma to malo zaujímať?",
-        "HELP_LINK_TXT": "Prejsť do sekcie metriky",
-        "HELP_P1": "Time for a little self evaluation! Your answers here are saved and provide you with a little bit of statistics on how you work in the metrics section. Furthermore the suggestions for tomorrow will appear above your task list the next day.",
-        "HELP_P2": "This is intended to be less about calculating exact metrics or becoming machine like efficient in all you do than it is about improving how you feel about your work. It can be helpful to evaluate pain points in your daily routine, as well as it is to find factors that help you out. Being just a little bit systematic about it hopefully helps to get a better grip on these and to improve what you can.",
         "IMPACT_OF_WORK": "Ako hodnotíte dopad svojej práce dnes?",
         "IMPACT_OF_WORK_HINT": "1: Žiadny významný pokrok \u0002013 4: Významný dopad",
-        "IMPROVEMENTS": "Čo zlepšilo vašu produktivitu?",
-        "IMPROVEMENTS_TOMORROW": "Čo by ste mohli urobiť, aby ste sa zajtra zlepšili?",
-        "MOOD": "Ako sa cítite?",
-        "MOOD_HINT": "1: Hrozne – 10: Skvelo",
         "NOTES": "Poznámky na zajtra",
-        "OBSTRUCTIONS": "Čo brzdilo vašu produktivitu?",
         "PRODUCTIVITY": "Ako efektívne ste pracovali?",
-        "PRODUCTIVITY_HINT": "1: Ešte som ani nezačal - 10: Nesmierne efektívne",
         "PRODUCTIVITY_SCORE": "Skóre produktivity",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65 % dopad (škála 1-4) \u000b 30 % zameranie na cieľ 4 h \u000b 5 % celková práca (obmedzená na 10 h)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "Rozpis produktivity za 7 dní",
@@ -683,22 +575,28 @@
         "PLACEHOLDER_3": "Kde sa stratilo sústredenie - a ako ho môžete ochrániť?",
         "PLACEHOLDER_4": "Ktorá úloha vám dodala energiu? Ktorá ju vyčerpala?",
         "PLACEHOLDER_5": "Jedna vec na opakovanie. Jedna vec na zmenu.",
-        "REMIND_LABEL": "Pripomeňte mi to zajtra",
-        "REMINDER_CREATED": "Pripomienka reflexie naplánovaná na zajtra",
-        "REMINDER_ERROR": "Nepodarilo sa naplánovať pripomienku",
-        "REMINDER_NEEDS_TEXT": "Napíšte reflexiu predtým, než požiadate o pripomienku",
-        "REMINDER_TASK_TITLE": "Znovu navštívte poznámku reflexie",
         "TITLE": "Poznámka reflexie"
-      },
-      "S": {
-        "SAVE_METRIC": "Metrika bola úspešne uložená"
       }
     },
     "NOTE": {
-      "D_ADD": {
-        "NOTE_LABEL": "Zadajte text, ktorý chcete uložiť ako poznámku (môžete použiť markdown)..."
-      },
       "D_FULLSCREEN": {
+        "TOOLBAR": {
+          "BOLD": "Tučné",
+          "BULLET_LIST": "Odrážkový zoznam",
+          "CODE_BLOCK": "Blok kódu",
+          "HEADING_1": "Nadpis 1",
+          "HEADING_2": "Nadpis 2",
+          "HEADING_3": "Nadpis 3",
+          "INLINE_CODE": "Inline kód",
+          "INSERT_IMAGE": "Vložiť obrázok",
+          "INSERT_LINK": "Vložiť odkaz",
+          "INSERT_TABLE": "Vložiť tabuľku",
+          "ITALIC": "Kurzíva",
+          "NUMBERED_LIST": "Číslovaný zoznam",
+          "QUOTE": "Čítať",
+          "STRIKETHROUGH": "Prečiarknuté",
+          "TASK_LIST": "Zoznam úloh"
+        },
         "VIEW_PARSED": "Zobrazenie ako sparsovaný (neupraviteľný) markdown",
         "VIEW_SPLIT": "Zobrazenie rozparsovaných a nerozparsovaných markdown v rozdelenom zobrazení",
         "VIEW_TEXT_ONLY": "Zobrazenie ako nesparsovaný text"
@@ -729,9 +627,6 @@
         "SELECT_ISSUE_FOR_TRANSITIONS": "Výberom problému načítate dostupné prechody",
         "TRANSITION": "Manipulácia s prechodom"
       },
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastaviť OpenProject pre Projekt"
-      },
       "DIALOG_TRACK_TIME": {
         "ACTIVITY": "Aktivita",
         "CURRENTLY_LOGGED": "Aktuálne zaznamenaný čas: ",
@@ -748,8 +643,7 @@
         "CURRENT_STATUS": "Súčasný stav:",
         "PERCENTAGE_DONE": "Pokrok:",
         "TASK_NAME": "Názov úlohy:",
-        "TITLE": "OpenProject: Aktualizovať stav",
-        "UPDATE_STATUS": "Stav aktualizácie"
+        "TITLE": "OpenProject: Aktualizovať stav"
       },
       "FORM": {
         "FILTER_USER": "Používateľské meno (napr. na odfiltrovanie vlastných zmien)",
@@ -766,8 +660,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open OpenProject work packages. Please Note that for this to work in the browser you need to probably configure CORS for your OpenProject server, to allow access from app.super-productivity.com</p>",
-        "TITLE": "OpenProject"
+        "HELP": "<p>Here you can configure SuperProductivity to list open OpenProject work packages. Please Note that for this to work in the browser you need to probably configure CORS for your OpenProject server, to allow access from app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Príjemca",
@@ -795,9 +688,7 @@
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "ADD_TO_TODAY": "Pridať do Dnes",
-          "RE_PLAN_ALL": "Zmeniť termín všetkých",
-          "TITLE": "Pridanie plánovaných úloh do položky Dnes"
+          "RE_PLAN_ALL": "Zmeniť termín všetkých"
         }
       },
       "EDIT_REPEATED_TASK": "Upraviť opakovanú úlohu '{{taskName}}'",
@@ -809,83 +700,21 @@
         "REMOVED_PLAN_DATE": "Odstránený dátum plánu pre úlohu '{{taskTitle}}'",
         "TASK_ALREADY_PLANNED": "Úloha je už naplánovaná na {{date}}",
         "TASK_PLANNED_FOR": "Úloha plánovaná pre <strong>{{date}}</strong>{{extra}}"
-      },
-      "TASK_DRAWER": "Zásuvka na úlohy"
-    },
-    "POMODORO": {
-      "BACK_TO_WORK": "Späť do práce!",
-      "BREAK_IS_DONE": "Vaša prestávka sa skončila!",
-      "ENJOY_YOURSELF": "Užite si to, rozhýbte sa a vráťte sa o:",
-      "FINISH_SESSION_X": "Úspešne ste dokončili reláciu <strong>{{nr}}</strong>!",
-      "NOTIFICATION": {
-        "BREAK_TIME": "Pomodoro: Čas na prestávku {{nr}}!",
-        "BREAK_X_START": "Pomodoro: Prestávka {{nr}} začala!",
-        "NO_TASKS": "Pred spustením časovača Pomodoro musíte pridať úlohy.",
-        "SESSION_X_START": "Pomodoro: Relácia {{nr}} začala!"
-      },
-      "S": {
-        "RESET": "Obnovenie prvej relácie Pomodoro",
-        "SESSION_SKIP": "Preskočiť na koniec aktuálnej relácie Pomodoro",
-        "SESSION_X_START": "Pomodoro: Relácia {{nr}} začala!"
-      },
-      "SKIP_BREAK": "Preskočiť prestávku",
-      "START_BREAK": "Začiatok prestávky"
-    },
-    "PROCRASTINATION": {
-      "BACK_TO_WORK": "Späť do práce!",
-      "COMP": {
-        "INTRO": "People with high procrastination levels usually have low self-compassion. So practice it! It improves your feeling of self-worth, fosters positive emotions and can help you overcome procrastination, of course. Try a little exercise:",
-        "L1": "Sit down for bit and stretch yourself, if you like, calm down a little bit",
-        "L2": "Try to listen to the thoughts and feelings that arise",
-        "L3": "Are you responding to yourself in a way that you would respond to a friend?",
-        "L4": "If the answer is no, imagine your friend in your situation. What you would say to them? What you would do for them?",
-        "OUTRO": "More exercises <a target=\"_blank\" href=\"https://drsoph.com/blog/2018/9/17/3-exercises-in-self-compassion\" target=\"_blank\">can be found here</a> or on <a target=\"_blank\" href=\"https://www.google.com/search?q=self+compassion+exercises&oq=self+compassion+excers&aqs=chrome.1.69i57j0l5.4303j0j7&sourceid=chrome&ie=UTF-8\" target=\"_blank\">google</a>.",
-        "TITLE": "Self Compassion"
-      },
-      "CUR": {
-        "INTRO": "Procrastination is interesting, isn't it? It doesn't make sense to do it. Not in your long term interest at all. But still everybody does it. Enjoy and explore!",
-        "L1": "What feelings are eliciting your temptation to procrastinate?",
-        "L2": "Where do you feel them in your body?",
-        "L3": "What do they remind you of?",
-        "L4": "What happens to the thought of procrastinating as you observe it? Does it intensify? Dissipate? Cause other emotions to arise?",
-        "L5": "How are the sensations in your body shifting as you continue to rest your awareness on them?",
-        "PROCRASTINATION_TRIGGERS_TEXT": "Ďalšou veľmi účinnou metódou je zaznamenávať si, čo vo vás vyvolalo nutkanie odkladať. Napríklad ja osobne mám často nutkanie rýchlo skočiť na reddit alebo na obľúbenú spravodajskú stránku, kedykoľvek sa okno môjho prehliadača zaostrí. Odkedy som si začal zapisovať svoje spúšťače do obyčajného prázdneho textového dokumentu, uvedomil som si, ako veľmi je tento vzorec zakorenený, a pomohlo mi to experimentovať s rôznymi protiopatreniami.",
-        "PROCRASTINATION_TRIGGERS_TITLE": "Zapisovanie spúšťačov prokrastinácie",
-        "TITLE": "Curiosity"
-      },
-      "H1": "Cut yourself some slack!",
-      "INTRO": {
-        "AVOIDING": "Vyhýbanie sa úlohe",
-        "FEAR": "Strach zo zlyhania",
-        "STRESSED": "Stres z toho, že sa vám nedarí robiť veci",
-        "TITLE": "Úvod"
-      },
-      "P1": "First of all relax! Everybody does it once in a while. And if you're not doing what you should, you should at least enjoy it! Then check out the sections below for something helpful.",
-      "P2": "Remember: Procrastination is an emotion regulation problem, not a time management problem.",
-      "REFRAME": {
-        "INTRO": "Think about what might be positive about the task despite its flaws.",
-        "TITLE": "Reframing",
-        "TL1": "What might be interesting about it?",
-        "TL2": "What is to gain if you complete it?",
-        "TL3": "How will you feel about it if you complete it?"
-      },
-      "SPLIT_UP": {
-        "INTRO": "Split up the task into as many small chunks as you can.",
-        "OUTRO": "Done? Then think about it. What would be – strictly theoretical – the first thing you would do <i>if</i> you were to start working on the task? Just think about it...",
-        "TITLE": "Split it up!"
       }
     },
+    "POMODORO": {
+      "BREAK_IS_DONE": "Vaša prestávka sa skončila!"
+    },
     "PROJECT": {
+      "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
+        "CANCEL": "Zrušiť",
+        "MSG": "Tento projekt je dosť veľký a môže trvať chvíľu, kým sa skopíruje. Chcete pokračovať?",
+        "OK": "Kopírovať aj tak",
+        "TITLE": "Kopírovať projekt?"
+      },
       "D_CREATE": {
         "CREATE": "Vytvoriť projekt",
-        "EDIT": "Upraviť projekt",
-        "SETUP_CALDAV": "Nastavenie integrácie Caldav",
-        "SETUP_GIT": "Setup GitHub Integration",
-        "SETUP_GITEA_PROJECT": "Nastavenie integrácie Gitea",
-        "SETUP_GITLAB": "Nastavenie integrácie GitHub",
-        "SETUP_JIRA": "Nastavenie integrácie Jira",
-        "SETUP_OPEN_PROJECT": "Nastavenie integrácie OpenProject",
-        "SETUP_REDMINE_PROJECT": "Nastavenie integrácie Redmine"
+        "EDIT": "Upraviť projekt"
       },
       "D_DELETE": {
         "MSG": "Určite chcete odstrániť projekt \"{{title}}\"?"
@@ -897,7 +726,6 @@
         "TITLE": "Základné nastavenia"
       },
       "FORM_THEME": {
-        "D_IS_DARK_THEME": "Nepoužije sa, ak systém podporuje globálny tmavý režim.",
         "HELP": "Nastavenia témy pre váš projekt.",
         "L_BACKGROUND_IMAGE_DARK": "URL adresa obrázku na pozadí (tmavý motív)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL adresa obrázku na pozadí (svetlý motív)",
@@ -909,18 +737,13 @@
         "L_HUE_WARN": "Prahová hodnota pre tmavý text na pozadí primárnej farby",
         "L_IS_AUTO_CONTRAST": "Automatické nastavenie farieb textu pre najlepšiu čitateľnosť",
         "L_IS_DISABLE_BACKGROUND_TINT": "Zakázať prechod farebného pozadia",
-        "L_IS_REDUCED_THEME": "Použiť zmenšené používateľské rozhranie (bez rámčekov okolo úloh)",
         "L_THEME_COLOR": "Farba motívu",
-        "L_TITLE": "Názov",
         "TITLE": "Téma"
       },
       "S": {
         "ARCHIVED": "Archivovaný projekt",
         "CREATED": "Vytvorený projekt <strong>{{title}}</strong>. Môžete si ho vybrať z ponuky vľavo hore.",
         "DELETED": "Zmazaný projekt",
-        "E_EXISTS": "Projekt \"{{title}}\" už existuje",
-        "E_INVALID_FILE": "Neplatné údaje pre súbor projektu",
-        "ISSUE_PROVIDER_UPDATED": "Aktualizované nastavenia projektu pre <strong>{{issueProviderKey}}</strong>",
         "UNARCHIVED": "Nearchivovaný projekt",
         "UPDATED": "Aktualizované nastavenia projektu"
       }
@@ -950,9 +773,6 @@
       "WEEK_TITLE": "Týždeň {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
-      "DIALOG_INITIAL": {
-        "TITLE": "Nastavenie Redmine pre projekt"
-      },
       "FORM": {
         "API_KEY": "Prístupový kľúč API",
         "HOST": "Hostiteľ (napr.: https://redmine.org)",
@@ -973,9 +793,6 @@
         "MARK_AS_CHECKED": "Označiť aktualizácie ako skontrolované",
         "PRIORITY": "Priorita",
         "STATUS": "Stav"
-      },
-      "S": {
-        "ERR_UNKNOWN": "Redmine: Neznáma chyba {{statusCode}} {{errorMsg}}."
       }
     },
     "REFLECTION_NOTE": {
@@ -984,7 +801,6 @@
     },
     "REMINDER": {
       "COUNTDOWN_BANNER": {
-        "HIDE": "Skryť",
         "START_NOW": "Začnite hneď teraz",
         "TXT": "<strong>{{title}}<\\/strong> začína o <strong>{{start}}<\\/strong>!",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> začína na <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} ďalšie úlohy sú splatné)"
@@ -993,31 +809,21 @@
       "S_REMINDER_ERR": "Chyba pre rozhranie pripomienok"
     },
     "SCHEDULE": {
-      "CONTINUED": "continued",
       "D_INITIAL": {
         "TEXT": "<p>The idea of the Schedule is to provide a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and distinguishes two different things: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong> which should flow around those fixed events. All tasks consider the time estimates you have assigned to them.</p><p>In addition to this you can also provide a work start and end time. If configured regular tasks will never show up outside of these. Please note that the schedule only includes the upcoming 30 days.</p>",
         "TITLE": "Časová os"
       },
       "END": "Ukončenie práce",
       "INSERT_BEFORE": "Pred",
-      "LUNCH_BREAK": "Obedová prestávka",
-      "MONTH": "Mesiac",
-      "NO_TASKS": "V súčasnosti nie sú k dispozícii žiadne úlohy. Prosím, pridajte nejaké úlohy pomocou tlačidla + v hornej lište.",
-      "NOW": "Teraz",
       "PLAN_END_DAY": "Plán na konci dňa",
       "PLAN_START_DAY": "Plán na začiatku dňa",
       "SHIFT_KEY_INFO": "Podržte Shift pre prepnutie režimu plánovania dňa",
-      "START": "Začiatok práce",
-      "TASK_PROJECTION_INFO": "Budúca projekcia naplánovanej opakovateľnej úlohy",
-      "WEEK": "Týždeň"
+      "START": "Začiatok práce"
     },
     "SEARCH_BAR": {
       "INFO": "Kliknutím na ikonu zoznamu vyhľadáte archivované úlohy",
-      "INFO_ARCHIVED": "Kliknutím na ikonu archívu vyhľadáte bežné úlohy",
       "NO_RESULTS": "Žiadne úlohy nenašli zodpovedajúce vášmu vyhľadávaniu",
-      "PLACEHOLDER": "Search for task or task description",
-      "PLACEHOLDER_ARCHIVED": "Vyhľadávanie úlohy alebo popis úlohy",
-      "TOO_MANY_RESULTS": "Príliš veľa výsledkov, prosím upresnite vyhľadávanie"
+      "PLACEHOLDER": "Search for task or task description"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -1036,7 +842,6 @@
         "L_COUNTDOWN_DURATION": "Trvanie odpočítavania",
         "L_DAILY_GOAL": "Denný cieľ pre úspešnú sériu",
         "L_ICON": "Ikona",
-        "L_ICON_ON": "Ikona pri prepnutí",
         "L_IS_ENABLED": "Povolené",
         "L_TITLE": "Názov",
         "L_TRACK_STREAKS": "Traťové pruhy",
@@ -1054,19 +859,11 @@
     },
     "SYNC": {
       "A": {
-        "ARCHIVE_ONLY_UPLOADED": "Vaše údaje boli nahrané len čiastočne. Skúste to prosím neskôr! V opačnom prípade nebudete môcť synchronizovať svoje údaje s inými zariadeniami.",
-        "POSSIBLE_LEGACY_DATA": "Aplikácia Super Productivity zlepšila synchronizáciu tým, že teraz používa dva samostatné súbory namiesto jedného, čo umožňuje oveľa menší prenos údajov. Odporúča sa aktualizovať všetky inštancie aplikácie Super Productivity a najprv synchronizovať údaje z inštancie aplikácie, v ktorej sú údaje najnovšie. Ak ide o údaje z vášho miestneho zariadenia, potom toto upozornenie ignorujte a pokračujte v ich odosielaní potvrdením ďalšieho dialógového okna.",
         "REMOTE_MODEL_VERSION_NEWER": "Verzia vzdialeného modelu je novšia ako lokálna. Aktualizujte svoju miestnu aplikáciu na najnovšiu verziu!"
       },
       "BTN_SYNC_NOW": "Synchronizovať teraz",
       "C": {
-        "EMPTY_SYNC": "Snažíte sa synchronizovať prázdny dátový objekt. Ak sa pokúšate nastaviť synchronizáciu z novej inštancie aplikácie, stačí stlačiť tlačidlo OK, aby ste načítali údaje zo servera. V opačnom prípade skontrolujte svoje údaje.",
-        "FORCE_UPLOAD": "Napriek tomu nahrať lokálne údaje?",
-        "FORCE_UPLOAD_AFTER_ERROR": "Pri nahrávaní miestnych údajov došlo k chybe. Chcete vynútiť aktualizáciu?",
-        "MIGRATE_LEGACY": "Pri importe boli zistené staršie údaje, chcete sa pokúsiť o ich migráciu?",
-        "NO_REMOTE_DATA": "Nenašli sa žiadne vzdialené údaje. Nahrať lokálne údaje na vzdialené?",
-        "TRY_LOAD_REMOTE_AGAIN": "Skúsiť znova načítať údaje zo vzdialeného zariadenia?",
-        "UNABLE_TO_LOAD_REMOTE_DATA": "Nie je možné načítať údaje zo vzdialeného zariadenia. Chcete sa pokúsiť prepísať vzdialené údaje svojimi miestnymi údajmi? Všetky vzdialené údaje sa pri tom stratia."
+        "FORCE_UPLOAD": "Napriek tomu nahrať lokálne údaje?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Otvorte nasledujúci odkaz a skopírujte poskytnutý autorizačný kód do vstupného poľa nižšie.",
@@ -1080,8 +877,6 @@
         "CHANGES_SINCE_LAST_SYNC": "Zmeny od poslednej synchronizácie",
         "COMPARISON_RESULT": "Výsledok porovnania",
         "DATE": "Dátum",
-        "LAMPORT_CLOCK": "Revízia",
-        "LAST_CHANGE": "Posledná zmena:",
         "LAST_SYNC": "Posledná synchronizácia:",
         "LAST_SYNCED": "Naposledy synchronizované",
         "LAST_WRITE": "Naposledy zapísané",
@@ -1117,10 +912,6 @@
         "BTN_FORCE_UPLOAD": "Vynútiť nahrávanie lokálne",
         "P1": "Údaje o synchronizácii na diaľku sú nekoherentné!",
         "P2": "Dotknutý model:",
-        "P3": "Máte 2 možnosti:",
-        "P4": "1. Prejdite do druhého zariadenia a pokúste sa tam vykonať úplnú synchronizáciu.",
-        "P5": "2. Prepíšte vzdialené údaje miestnymi údajmi. Všetky vzdialené zmeny budú stratené!",
-        "P6": "Odporúča sa vytvoriť zálohu údajov, ktoré prepíšete!!",
         "T1": "Posledná synchronizácia bola neúplná!",
         "T2": "Vaše archívne údaje neboli počas poslednej synchronizácie správne nahrané:",
         "T3": "Máte 2 možnosti:",
@@ -1132,19 +923,7 @@
         "SAVE_AND_ENABLE": "Uložiť a povoliť synchronizáciu",
         "TITLE": "Nastaviť synchronizáciu"
       },
-      "D_PERMISSION": {
-        "DISABLE_SYNC": "Zakázať synchronizáciu",
-        "PERM_FILE": "Dajte povolenie",
-        "TEXT": "<p>Vaše povolenie na synchronizáciu súborov bolo zrušené.</p>",
-        "TITLE": "Synchronizácia: Odmietnutie oprávnenia na lokálny súbor"
-      },
       "FORM": {
-        "DROPBOX": {
-          "L_ACCESS_TOKEN": "Prístupový token (vygenerovaný z autorizačného kódu)"
-        },
-        "GOOGLE": {
-          "L_SYNC_FILE_NAME": "Názov synchronizačného súboru"
-        },
         "L_ENABLE_COMPRESSION": "Povoliť kompresie (rýchlejší prenos údajov)",
         "L_ENABLE_ENCRYPTION": "Povolenie koncového šifrovania (experimentálne) - znemožnite poskytovateľovi synchronizácie prístup k vašim údajom",
         "L_ENABLE_SYNCING": "Povoliť synchronizáciu",
@@ -1153,41 +932,38 @@
         "L_SYNC_INTERVAL": "Interval synchronizácie",
         "L_SYNC_PROVIDER": "Poskytovateľ synchronizácie",
         "LOCAL_FILE": {
-          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Potrebuje oprávnenie na prístup k súboru",
           "L_SYNC_FOLDER_PATH": "Cesta k priečinku synchronizácie"
         },
         "TITLE": "Synchronizácia",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work on MOBILE and in the browser:</strong> To make this work for mobile or the browser you need to whitelist Super Productivity for CORS requests for your Nextcloud instance. This can have negative security implications! Please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
+          "D_SYNC_FOLDER_PATH": "Cesta relatívna k koreňu WebDAV servera, kde budú uložené synchronizačné súbory (napr. ' /super-productivity' alebo ' /'). Toto NIE je interná cesta vášho servera.",
           "INFO": "Implementácie WebDAV sa bohužiaľ veľmi líšia. Super Productivity je známy tým, že dobre funguje s Nextcloud, <strong>ale nemusí fungovať s vaším poskytovateľom</strong>.",
           "L_BASE_URL": "Základná URL adresa",
           "L_PASSWORD": "Heslo",
           "L_SYNC_FOLDER_PATH": "Cesta k priečinku synchronizácie",
-          "L_USER_NAME": "Používateľské meno"
+          "L_TEST_CONNECTION": "Otestovať pripojenie",
+          "L_USER_NAME": "Používateľské meno",
+          "S_FILL_ALL_FIELDS": "Najskôr vyplňte všetky polia WebDAV",
+          "S_TEST_FAIL": "Test pripojenia zlyhal: {{error}} - Cieľová URL: {{url}}",
+          "S_TEST_SUCCESS": "Test pripojenia úspešný! Cieľová URL: {{url}}"
         }
       },
       "S": {
         "ALREADY_IN_SYNC": "Už zosynchronizované",
-        "ALREADY_IN_SYNC_NO_LOCAL_CHANGES": "Žiadne miestne zmeny - Už je synchronizované",
         "BTN_CONFIGURE": "Konfigurovať",
         "BTN_FORCE_OVERWRITE": "Vynútiť prepísanie",
         "ERROR_CORS": "Chyba synchronizácie WebDAV: Sieťová požiadavka zlyhala.\n\nMôže to byť problém s CORS. Prosím, uistite sa:\n Vaše WebDAV server umožňuje požiadavky z rôznych zdrojov\n URL servera je správna a prístupná\n Máte funkčné internetové pripojenie",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Vzdialené dáta sa momentálne zapisujú",
-        "ERROR_FALLBACK_TO_BACKUP": "Pri importe údajov sa niečo pokazilo. Návrat k lokálnej zálohe.",
-        "ERROR_INVALID_DATA": "Chyba pri synchronizácii. Neplatné údaje",
-        "ERROR_NO_REV": "Žiadny platný rev pre vzdialený súbor",
-        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Chyba pri synchronizácii. Nie je možné načítať vzdialené údaje. Možno ste povolili šifrovanie a vaše miestne heslo sa nezhoduje s heslom použitým na šifrovanie vzdialených údajov?",
-        "IMPORTING": "Importovanie údajov",
+        "ERROR_PERMISSION": "Prístup k súboru zamietnutý. Skontrolujte, prosím, oprávnenia súborového systému.",
+        "ERROR_PERMISSION_FLATPAK": "Prístup k súboru zamietnutý. Udeľte oprávnenie k súborovému systému cez Flatseal alebo použite cestu v rámci ~\\/var\\/app\\/",
+        "ERROR_PERMISSION_SNAP": "Prístup k súboru zamietnutý. Spustite 'snap connect super-productivity:home' alebo použite cestu v rámci ~\\/snap\\/super-productivity\\/common\\/",
         "INCOMPLETE_CFG": "Overenie pre synchronizáciu zlyhalo. Prosím, skontrolujte svoju konfiguráciu!",
-        "INITIAL_SYNC_ERROR": "Počiatočná synchronizácia zlyhala",
         "SUCCESS_DOWNLOAD": "Synchronizované dáta zo vzdialeného",
-        "SUCCESS_IMPORT": "Údaje importované",
         "SUCCESS_VIA_BUTTON": "Údaje boli úspešne synchronizované",
-        "UNKNOWN_ERROR": "Neznáma chyba synchronizácie: {{err}}",
-        "UPLOAD_ERROR": "Neznáma chyba pri nahrávaní (sú nastavenia správne?): {{err}}"
+        "UNKNOWN_ERROR": "Neznáma chyba synchronizácie: {{err}}"
       },
       "SAFETY_BACKUP": {
-        "BACKUP_NOT_FOUND": "Záloha s ID {{backupId}} nebola nájdená",
         "BTN_CLEAR_ALL": "Vymazať všetko",
         "BTN_CREATE_MANUAL": "Vytvoriť manuálnu zálohu",
         "BTN_DELETE": "Odstrániť",
@@ -1200,20 +976,15 @@
         "DELETE_FAILED": "Nepodarilo sa vymazať zálohu",
         "DELETED_SUCCESS": "Záloha bola úspešne vymazaná",
         "DESCRIPTION": "Automatické zálohy sa vytvárajú pred sťahovaním dát z diaľky počas synchronizačných operácií. Zálohy sú organizované do 4 inteligentných slotov: 2 najnovšie, 1 prvá z dnešného dňa a 1 prvá z predchádzajúceho dňa.",
-        "INVALID_ID_ERROR": "Vygenerované neplatné ID zálohy",
         "LAST_CHANGE_PREFIX": "Posledná zmena:",
         "LOADING": "Načítavam...",
         "NO_BACKUPS": "Zatiaľ nie sú k dispozícii žiadne bezpečnostné zálohy. Zálohy sa vytvárajú automaticky pred synchronizačnými operáciami.",
         "REASON_BEFORE_UPDATE": "Automatická záloha pred synchronizáciou",
         "REASON_MANUAL": "Manuálna záloha",
-        "RESTORE_CONFIRM_MSG": "Ste si istí, že chcete obnoviť zálohu z {{timestamp}}?\n\nToto ÚPLNE NÁHRADÍ všetky vaše aktuálne údaje!\n\nDôvod: {{reason}}\n\nKliknite na OK pre pokračovanie alebo Zrušiť pre zrušenie.",
-        "RESTORE_CONFIRM_TITLE": "Obnoviť zálohu",
-        "RESTORE_FAILED": "Nepodarilo sa obnoviť zálohu: {{error}}",
         "RESTORED_SUCCESS": "Záloha bola úspešne obnovená",
         "SLOT_BEFORE_TODAY": "Prvá záloha pred dneškom",
         "SLOT_RECENT": "Nedávna záloha",
         "SLOT_TODAY": "Prvá dnešná záloha",
-        "TITLE": "Synchronizovať bezpečnostné zálohy",
         "TOOLTIP_CLEAR_ALL": "Vymazať všetky bezpečnostné zálohy",
         "TOOLTIP_CREATE_MANUAL": "Vytvoriť manuálnu zálohu všetkých vašich údajov",
         "TOOLTIP_DELETE": "Vymazať túto zálohu",
@@ -1223,8 +994,7 @@
     },
     "TAG": {
       "D_CREATE": {
-        "CREATE": "Vytvoriť štítok",
-        "EDIT": "Upraviť štítok"
+        "CREATE": "Vytvoriť štítok"
       },
       "D_DELETE": {
         "CONFIRM_MSG": "Naozaj chcete odstrániť značku \"{{tagName}}\"? Bude odstránená zo všetkých úloh. Toto nebude možné vrátiť späť."
@@ -1268,26 +1038,14 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Pridať existujúcu úlohu \"{{taskTitle}}\"",
-        "ADD_ISSUE_TASK": "Pridať problém #{{issueNr}} z {{issueType}}",
-        "ADD_TASK_TO_BOTTOM_OF_BACKLOG": "Pridať úlohu na koniec zoznamu nevybavených úloh",
-        "ADD_TASK_TO_BOTTOM_OF_TODAY": "Pridať úlohu na koniec zoznamu",
-        "ADD_TASK_TO_TOP_OF_BACKLOG": "Pridať úlohu na začiatok zoznamu nevybavených úloh",
-        "ADD_TASK_TO_TOP_OF_TODAY": "Pridať úlohu na začiatok zoznamu",
         "CREATE_NEW_TAGS": "Vytvoriť nové značky",
-        "CREATE_TASK": "Vytvoriť novú úlohu",
         "DUE_BUTTON": "Splatné",
         "ESTIMATE_BUTTON": "Odhad",
-        "EXAMPLE": "Príklad: \"Názov úlohy +názovProjektu #nejaký štítok #ďalší štítok 10m/3h\"",
-        "NO_DATE": "Bez dátumu",
-        "NO_TIME": "Bez času",
         "PLACEHOLDER_CREATE": "Názov úlohy #tag @16:00",
         "PLACEHOLDER_SEARCH": "Pridať existujúcu úlohu alebo problémy...",
         "SEARCH_INFO_TEXT": "Vyhľadať a pridať problémy a úlohy z archívu a iných projektov",
-        "START": "Pre začatie stlačte enter ešte raz",
         "TAGS_BUTTON": "Značky",
         "TODAY": "Dnes",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Prepnúť pridanie úlohy do nevybavených úloh / dnešného zoznamu'",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Prepínanie pridávania úloh na začiatok a koniec zoznamu",
         "TOMORROW": "Zajtra",
         "TOOLTIP_ADD_TASK": "Pridať úlohu",
         "TOOLTIP_ADD_TO_BACKLOG": "Pridať do backlogu",
@@ -1305,11 +1063,9 @@
         "ADD_SUB_TASK": "Pridať podúlohu",
         "ATTACHMENTS": "Prílohy ({{nr}})",
         "DUE": "Naplánované na",
-        "FROM_PARENT": "(od rodiča)",
         "LOCAL_ATTACHMENTS": "Lokálne prílohy",
         "NOTES": "Popis",
         "PARENT": "Rodič",
-        "REMINDER": "Pripomienka",
         "REPEAT": "Opakovať",
         "SCHEDULE_TASK": "Naplánovať úlohu",
         "SUB_TASKS": "Podúlohy ({{nr}})",
@@ -1330,11 +1086,8 @@
         "DROP_ATTACHMENT": "Vložte prílohu k \"{{title}}\"",
         "DUPLICATE": "Duplikovať",
         "EDIT_SCHEDULED": "Upraviť pripomienku",
-        "EDIT_TAGS": "Upraviť štítky",
-        "EDIT_TASK_TITLE": "Upraviť názov",
         "FOCUS_SESSION": "Začať sústredenú reláciu",
         "MARK_DONE": "Označiť ako hotové",
-        "MARK_UNDONE": "Označiť ako nedokončené",
         "MOVE_TO_BACKLOG": "Presunúť do zoznamu nevybavených úloh",
         "MOVE_TO_OTHER_PROJECT": "Presunúť do iného projektu",
         "MOVE_TO_REGULAR": "Presunúť do dnešného zoznamu",
@@ -1343,9 +1096,7 @@
         "OPEN_ISSUE": "Otvoriť v prehliadači",
         "OPEN_TIME": "Sledovanie času",
         "REMOVE_FROM_MY_DAY": "Odstrániť z Môjho dňa",
-        "REPEAT_EDIT": "Upravte konfiguráciu opakovanej úlohy",
         "SCHEDULE": "Naplánovať úlohu",
-        "SHOW_UPDATES": "Zobraziť aktualizácie",
         "TOGGLE_ATTACHMENTS": "Zobraziť/skryť prílohy",
         "TOGGLE_DETAIL_PANEL": "Zobraziť/skryť ďalšie informácie",
         "TOGGLE_DONE": "Označiť ako hotové/nedokončené",
@@ -1374,24 +1125,17 @@
         "DONE": "Hotové",
         "DUE_TASK": "Náležitá úloha",
         "DUE_TASKS": "Náležité úlohy",
-        "FOR_CURRENT": "Úloha je náležitá. Chcete na tom začať pracovať?",
-        "FOR_OTHER": "TÚloha je náležitá. Chcete na tom začať pracovať?",
-        "FROM_PROJECT": "Z projektu: \"{{title}}\"",
-        "FROM_TAG": "Zo štítku: \"{{title}}\"",
         "RESCHEDULE_EDIT": "Upraviť (znova naplánovať)",
         "RESCHEDULE_UNTIL_TOMORROW": "Zmena termínu na zajtra",
         "SNOOZE": "Odložiť",
         "SNOOZE_ALL": "Odložiť všetko",
         "START": "Začať",
-        "SWITCH_CONTEXT_START": "Prepnúť kontext a spustiť",
         "UNSCHEDULE": "Zrušiť plán",
         "UNSCHEDULE_ALL": "Zrušiť plán všetkých"
       },
       "D_SCHEDULE_TASK": {
-        "MOVE_TO_BACKLOG": "Presunúť úlohu do zoznamu nevybavených úloh, kým nebude naplánovaná",
         "QA_NEXT_MONTH": "Plán na ďalší mesiac",
         "QA_NEXT_WEEK": "Plán na budúci týždeň",
-        "QA_REMOVE_TODAY": "Odstrániť úlohu z dnešného dňa",
         "QA_TODAY": "Naplánovať dnes",
         "QA_TOMORROW": "Plán na zajtra",
         "REMIND_AT": "Pripomenúť",
@@ -1432,20 +1176,18 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign project via short syntax for repeatable tasks!",
         "CREATED_FOR_PROJECT": "Presunul úlohu \"{{taskTitle}}\" do projektu \"{{projectTitle}}\"",
-        "CREATED_FOR_PROJECT_ACTION": "Prejsť na projekt",
         "DELETED": "Deleted task \"{{title}}\"",
         "FOUND_MOVE_FROM_BACKLOG": "Moved task <strong>{{title}}</strong> from backlog to todays task list",
         "FOUND_MOVE_FROM_OTHER_LIST": "Added task <strong>{{title}}</strong> from <strong>{{contextTitle}}</strong> to current list",
         "FOUND_RESTORE_FROM_ARCHIVE": "Restored task <strong>{{title}}</strong> related to issue from archive",
         "GO_TO_TASK": "Prejsť na úlohu",
-        "LAST_TAG_DELETION_WARNING": "You're trying to remove the last tag of a non project task. This is not allowed!",
         "MOVED_TO_ARCHIVE": "Presunutie {{nr}} úloh do archívu",
         "MOVED_TO_PROJECT": "Presunul úlohu \"{{taskTitle}}\" do projektu \"{{projectTitle}}\"",
-        "MOVED_TO_PROJECT_ACTION": "Prejsť na projekt",
         "REMINDER_ADDED": "Scheduled task \"{{title}}\"",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
-        "TASK_CREATED": "Created task \"{{title}}\""
+        "TASK_ALREADY_EXISTS": "Úloha <strong>{{title}}<\\/strong> už existuje",
+        "TASK_CREATED": "Created task \"{{taskTitle}}\""
       },
       "SELECT_OR_CREATE": "Select or create task",
       "SUMMARY_TABLE": {
@@ -1517,7 +1259,6 @@
         "FRIDAY": "Piatok",
         "INHERIT_SUBTASKS": "Dediť podúlohy",
         "INHERIT_SUBTASKS_DESCRIPTION": "Keď je povolené, podúlohy z najnovšej inštancie úlohy budú znovu vytvorené s opakujúcou sa úlohou",
-        "IS_ADD_TO_BOTTOM": "Presnúť úlohu na koniec zoznamu",
         "MONDAY": "Pondelok",
         "NOTES": "Predvolené poznámky",
         "ORDER": "Zoradiť",
@@ -1535,11 +1276,7 @@
         "REMOVE_INSTANCE": "Odstrániť dnes",
         "REPEAT_CYCLE": "Opakovanie cyklu",
         "REPEAT_EVERY": "Opakuvať každý",
-        "REPEAT_FROM_COMPLETION_DATE": "Opakovať po dokončení",
-        "REPEAT_FROM_COMPLETION_DATE_DESCRIPTION": "Ďalšia úloha sa vytvorí z vášho dátumu dokončenia, nie z dátumu začiatku. (napr. 'Každých 7 dní' = 7 dní po dokončení)",
         "SATURDAY": "Sobota",
-        "SCHEDULE_TYPE_FIXED": "Pevný harmonogram (napr. každý pondelok, 1. deň v mesiaci)",
-        "SCHEDULE_TYPE_FLEXIBLE": "Po dokončení (napr. 7 dní po dokončení)",
         "SCHEDULE_TYPE_LABEL": "Typ harmonogramu",
         "START_DATE": "Dátum začatia",
         "START_TIME": "Plánovaný čas začiatku",
@@ -1559,6 +1296,7 @@
         "FILTER_BY": "Filtrovať podľa",
         "FILTER_DEFAULT": "Žiadne filtre",
         "FILTER_ESTIMATED_TIME": "Odhadovaný čas",
+        "FILTER_NOT_SPECIFIED": "Nešpecifikované",
         "FILTER_PROJECT": "Projekt",
         "FILTER_SCHEDULED_DATE": "Naplánovaný dátum",
         "FILTER_TAG": "Tag",
@@ -1569,14 +1307,12 @@
         "GROUP_SCHEDULED_DATE": "Naplánovaný dátum",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Resetovať všetko",
-        "SCHEDULED_DEFAULT": "Akýkoľvek dátum",
         "SCHEDULED_NEXT_MONTH": "Ďalší mesiac",
         "SCHEDULED_NEXT_WEEK": "Ďalší týždeň",
         "SCHEDULED_THIS_MONTH": "Tento mesiac",
         "SCHEDULED_THIS_WEEK": "Tento týždeň",
         "SCHEDULED_TODAY": "Dnes",
         "SCHEDULED_TOMORROW": "Zajtra",
-        "SORT_BY": "Triediť podľa",
         "SORT_CREATION_DATE": "Dátum vytvorenia",
         "SORT_DEFAULT": "Predvolené",
         "SORT_NAME": "Meno",
@@ -1587,9 +1323,7 @@
         "TIME_2HOUR": "> 2 hodiny",
         "TIME_10MIN": "> 10 minút",
         "TIME_30MIN": "> 30 minút",
-        "TIME_DEFAULT": "Akákoľvek doba",
-        "TIME_SPENT": "Strávený čas",
-        "TITLE": "Prispôsobiť zobrazenie úloh"
+        "TIME_SPENT": "Strávený čas"
       }
     },
     "TIME_TRACKING": {
@@ -1622,7 +1356,6 @@
       },
       "D_TRACKING_REMINDER": {
         "CREATE_AND_TRACK": "<em>Vytvoriť</em> a sledovať na",
-        "IDLE_FOR": "You have been idle for:",
         "NOTIFICATION_TITLE": "Sledujte svoj čas!",
         "TASK": "Úloha",
         "TRACK_TO": "Track to:",
@@ -1634,7 +1367,6 @@
         "DAYS_WORKED": "Days, worked:",
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Repeating task",
-        "RESTORE_TASK_FROM_ARCHIVE": "Restore Task From Archive",
         "TASKS": "Tasks",
         "TOTAL_TIME": "Time spent total:",
         "WEEK_NR": "Week {{nr}}",
@@ -1720,7 +1452,7 @@
     "DELETE": "Delete",
     "DISMISS": "Dismiss",
     "DO_IT": "Do it!",
-    "DONT_SHOW_AGAIN": "Už nezobrazovať",
+    "DUPLICATE": "Duplikovať",
     "DURATION_DESCRIPTION": "e.g. \"5h 6m\" which results in 5 hours in 6 minutes",
     "EDIT": "Edit",
     "ENABLED": "Enabled",
@@ -1729,30 +1461,40 @@
     "HIDE": "Skryť",
     "ICON_INP_DESCRIPTION": "Podporované sú aj všetky emotikony utf-8!",
     "INBOX_PROJECT_TITLE": "Doručená pošta",
-    "LOGIN": "Login",
-    "LOGOUT": "Logout",
     "MINUTES": "{{m}} minutes",
     "MOVE_BACKWARD": "Posunúť späť",
     "MOVE_FORWARD": "Posunúť dopredu",
-    "NEXT": "Next",
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
     "OVERDUE": "Oneskorené",
-    "PREVIOUS": "Previous",
     "REMOVE": "Remove",
-    "RESET": "Reset",
     "SAVE": "Save",
     "SUBMIT": "Odoslať",
     "TITLE": "Title",
     "TODAY_TAG_TITLE": "Today",
     "TRACKING_INTERVAL_DESCRIPTION": "Sledovanie času pomocou tohto intervalu v milisekundách. Možno ho budete chcieť zmeniť, aby ste znížili počet zápisov na disk. Pozri problém č. 2355.",
     "UNDO": "Undo",
-    "UPDATE": "Update",
     "WITHOUT_PROJECT": "Without Project",
     "YESTERDAY": "Yesterday"
   },
   "GCF": {
+    "APP_FEATURES": {
+      "BOARDS": "Tabule",
+      "DONATE_PAGE": "Stránka darovania",
+      "FOCUS_MODE": "Režim zamerania",
+      "HELP": "Povoľte alebo zakážte konkrétne funkcie aplikácie v celom používateľskom rozhraní.",
+      "ISSUES_PANEL": "Panel problémov",
+      "PLANNER": "Plánovač",
+      "PROJECT_NOTES": "Poznámky k projektu",
+      "SCHEDULE": "Harmonogram",
+      "SCHEDULE_DAY_PANEL": "Panel denného rozvrhu",
+      "SYNC_BUTTON": "Tlačidlo synchronizácie",
+      "TIME_TRACKING": "Časovač na sledovanie času",
+      "TITLE": "Funkcie aplikácie",
+      "USER_PROFILES": "Používateľské profily (experimentálne)",
+      "USER_PROFILES_HINT": "Umožňuje vytvárať a prepínať medzi rôznymi používateľskými profilmi, každý s vlastnými nastaveniami, úlohami a konfiguráciami synchronizácie. Tlačidlo správy profilu sa zobrazí v pravom hornom rohu po povolení. Poznámka: Zakázanie tejto funkcie skryje používateľské rozhranie, ale zachová údaje profilu (experimentálna funkcia, bez záruk. Uistite sa, že máte zálohu)."
+    },
     "AUTO_BACKUPS": {
       "HELP": "Auto save all data to your app folder in order to have it ready in case something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
@@ -1762,9 +1504,7 @@
     "CALENDARS": {
       "BROWSER_WARNING": "Vzhľadom na obmedzenia týkajúce sa rôznych pôvodov <b>to pravdepodobne nebude fungovať s verziou prehliadača Super Productivity.<br /> Ak chcete túto funkciu používať, stiahnite si prosím <a href=\"https://super-productivity.com/download/\">verziu pre počítače</a> !</b>",
       "CAL_PATH": "Url zdroja iCal",
-      "CAL_PROVIDERS": "Poskytovatelia kalendára (experimentálne a voliteľné)",
       "CHECK_UPDATES": "Kontrola vzdialených aktualizácií každých X",
-      "DEFAULT_PROJECT": "Predvolený projekt pre pridané úlohy kalendára",
       "HELP": "V aplikácii Super Productivity môžete integrovať kalendáre, ktoré vám budú pripomínať a pridávať ich ako úlohy. Integrácia funguje pomocou formátu iCal. Aby to fungovalo, musia byť vaše kalendáre prístupné buď cez internet, alebo prostredníctvom súborového systému.",
       "SHOW_BANNER_THRESHOLD": "Zobraziť upozornenie X pred udalosťou (prázdne pre vypnuté)"
     },
@@ -1774,8 +1514,12 @@
     },
     "FOCUS_MODE": {
       "HELP": "Režim sústredenia otvorí obrazovku bez rozptyľovania, aby vám pomohol sústrediť sa na aktuálnu úlohu.",
-      "L_ALWAYS_OPEN_FOCUS_MODE": "Vždy otvorený režim zaostrovania pri sledovaní",
+      "L_IS_PLAY_TICK": "Prehrať zvuk tikotu počas zameraných sedení",
+      "L_MANUAL_BREAK_START": "Manuálne spustiť prestávky (Pomodoro)",
+      "L_PAUSE_TRACKING_DURING_BREAK": "Pozastaviť sledovanie úloh počas prestávok",
       "L_SKIP_PREPARATION_SCREEN": "Vynechanie prípravnej obrazovky (naťahovanie atď.)",
+      "L_START_IN_BACKGROUND": "Spustiť fokusové sedenia iba s bannerom (bez prekrytia)",
+      "L_SYNC_SESSION_WITH_TRACKING": "Synchronizovať fokusové sedenie so sledovaním času",
       "TITLE": "Režim zaostrenia"
     },
     "IDLE": {
@@ -1828,7 +1572,6 @@
       "TASK_MOVE_TO_PROJECT": "Otvoriť ponuku presunúť úlohu do projektu",
       "TASK_OPEN_CONTEXT_MENU": "Otvoriť kontextové menu úlohy",
       "TASK_OPEN_ESTIMATION_DIALOG": "Upraviť odhad / strávený čas",
-      "TASK_PLAN_FORDAY": "Plán na deň",
       "TASK_SCHEDULE": "Naplánovať úlohu",
       "TASK_SHORTCUTS": "Úlohy",
       "TASK_SHORTCUTS_INFO": "Nasledujúce skratky sa vzťahujú na aktuálne vybranú úlohu (vybranú pomocou karty alebo myši).",
@@ -1836,7 +1579,6 @@
       "TASK_TOGGLE_DONE": "Prepnúť Hotové",
       "TITLE": "Klávesové skratky",
       "TOGGLE_BACKLOG": "Zobraziť/skryť zoznam nevybavených úloh",
-      "TOGGLE_BOOKMARKS": "Zobraziť/skryť panel záložiek",
       "TOGGLE_ISSUE_PANEL": "Zobraziť/skryť panel problémov",
       "TOGGLE_PLAY": "Spustiť/zastaviť úlohu",
       "TOGGLE_SIDE_NAV": "Zobraziť a zamerať/skryť bočnú navigáciu",
@@ -1853,6 +1595,7 @@
       "EN": "Angličtina",
       "ES": "Español",
       "FA": "فارسی",
+      "FI": "Suomi",
       "FR": "Français",
       "HR": "Hrvatski",
       "ID": "Indonézsky",
@@ -1864,8 +1607,10 @@
       "NL": "Nederlands",
       "PL": "Poľský",
       "PT": "Português",
+      "PT_BR": "Português (Brazília)",
       "RU": "Ruský",
       "SK": "Slovenská",
+      "SV": "Svenska",
       "TIME_LOCALE": "Formát času podľa lokality",
       "TIME_LOCALE_AUTO": "Predvolené systémové",
       "TIME_LOCALE_DE_DE": "Nemecký - 24-hodinový",
@@ -1894,6 +1639,7 @@
       "DARK_MODE_LIGHT": "Svetlý",
       "DARK_MODE_SYSTEM": "Systém",
       "DEFAULT_PROJECT": "Predvolený projekt, ktorý sa použije pre úlohy, ak nie je zadaný žiadny",
+      "DEFAULT_START_PAGE": "Predvolená úvodná stránka",
       "FIRST_DAY_OF_WEEK": "Prvý deň v týždni",
       "HELP": "<p><strong>Not seeing Desktop Notifications?</strong> For windows you might want to check System > Notifications & actions and check if the required notifications have been enabled.</p>",
       "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatically add today tag to worked on tasks",
@@ -1903,16 +1649,14 @@
       "IS_DARK_MODE": "Tmavý režim",
       "IS_DISABLE_ANIMATIONS": "Zakázať všetky animácie",
       "IS_DISABLE_CELEBRATION": "Zakázať oslavy v dennom zhrnutí",
-      "USER_PROFILES": "Povoliť používateľské profily (Beta)",
-      "USER_PROFILES_HINT": "Umožňuje vytvárať a prepínať medzi rôznymi používateľskými profilmi, každý s oddelenými nastaveniami, úlohami a konfiguráciami synchronizácie. Tlačidlo správy profilu sa zobrazí v pravom hornom rohu po povolení. Poznámka: Vypnutie tejto funkcie skryje používateľské rozhranie, ale zachová vaše údaje profilu (Beta funkcia, bez záruk. Uistite sa, že máte zálohu).",
-      "IS_HIDE_NAV": "Hide navigation until main header is hovered (desktop only)",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
       "IS_OVERLAY_INDICATOR_ENABLED": "Povoliť indikátor prekrytia okna (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Zobraziť tip na produktivitu pri spustení aplikácie o niečo dlhšie",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Zobraziť aktuálny odpočet v systémovej lište / stavovom menu (iba desktop mac)",
       "IS_TRAY_SHOW_CURRENT_TASK": "Show current task in the tray / status menu (desktop mac/windows only)",
       "IS_TURN_OFF_MARKDOWN": "Turn off markdown parsing for task notes",
-      "IS_USE_MINIMAL_SIDE_NAV": "Používajte minimálny navigačný panel (zobrazujte len ikony)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Použiť vlastný titulkový panel (len Windows/Linux)",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Vyžaduje reštart na prejavenie zmien",
       "START_OF_NEXT_DAY": "Čas začiatku nasledujúceho dňa",
       "START_OF_NEXT_DAY_HINT": "od kedy (v hodinách) chcete počítať, že začal ďalší deň. predvolená hodnota je polnoc, čo je 0.",
       "TASK_NOTES_TPL": "Task description template",
@@ -1925,21 +1669,12 @@
       "BREAK_DURATION": "Dĺžka krátkych prestávok",
       "CYCLES_BEFORE_LONGER_BREAK": "Začnite dlhšiu prestávku po X pracovných stretnutiach",
       "DURATION": "Trvanie pracovných stretnutí",
-      "HELP": "<p>The pomodoro timer can be configured via a couple of settings. The duration of every work session, the duration of normal breaks, the number of work sessions to run before a longer break is started and the duration of this longer break.</p> <p>You can also set if you want to display your distractions during your pomodoro breaks.</p> <p>Setting \"Pause time tracking on pomodoro break\" will also track your breaks as work time spent on a task. </p> <p>Enabling \"Pause pomodoro session when no active task\" will also pause the pomodoro session, when you pause a task.</p>",
-      "IS_DISABLE_AUTO_START_AFTER_BREAK": "Zakázať automatické spustenie relácie po prestávke",
-      "IS_ENABLED": "Zapnúť časovač pomodoro",
-      "IS_MANUAL_CONTINUE": "Manuálne potvrdiť spustenie ďalšej relácie pomodoro",
-      "IS_MANUAL_CONTINUE_BREAK": "Ručné potvrdenie začiatku ďalšej prestávky",
-      "IS_PLAY_SOUND": "Prehrať zvuk po dokončení relácie",
-      "IS_PLAY_SOUND_AFTER_BREAK": "Prehrať zvuk po skončení prestávky",
-      "IS_PLAY_TICK": "Prehrajte zvuk tikotu každú sekundu",
-      "IS_STOP_TRACKING_ON_BREAK": "Stop time tracking for task on break",
-      "LONGER_BREAK_DURATION": "Dĺžka dlhších prestávok",
-      "TITLE": "Časovač Pomodoro"
+      "LONGER_BREAK_DURATION": "Dĺžka dlhších prestávok"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Zobrazenie banneru X pred skutočnou pripomienkou",
       "DEFAULT_TASK_REMIND_OPTION": "Predvolená možnosť pripomenutia vybraná pri vytváraní úloh",
+      "DISABLE_REMINDERS": "Zakázať všetky pripomienky",
       "IS_COUNTDOWN_BANNER_ENABLED": "Zobrazenie bannera s odpočítavaním pred termínom pripomenutia",
       "TITLE": "Pripomienky"
     },
@@ -1952,9 +1687,7 @@
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",
       "LUNCH_BREAK_START_END_DESCRIPTION": "napr. 13:00",
-      "MONTH": "Mesiac",
       "TITLE": "Schedule",
-      "WEEK": "Týždeň",
       "WORK_START_END_DESCRIPTION": "e.g. 17:00"
     },
     "SHORT_SYNTAX": {
@@ -2002,6 +1735,9 @@
       "TITLE": "Sledovanie času"
     }
   },
+  "GLOBAL": {
+    "COPY_SUFFIX": " (kopírovať)"
+  },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
       "A_DAY": "za deň",
@@ -2032,7 +1768,8 @@
   },
   "GLOBAL_SNACK": {
     "COPY_TO_CLIPPBOARD": "Copied to clipboard",
-    "ERR_COMPRESSION": "Error for compression interface",
+    "DUPLICATE_PROJECT_ERROR": "Projekt sa nepodarilo duplikovať",
+    "DUPLICATE_PROJECT_SUCCESS": "Projekt bol úspešne duplikovaný",
     "FILE_DOWNLOADED": "{{fileName}} downloaded",
     "FILE_DOWNLOADED_BTN": "Open folder",
     "NAVIGATE_TO_TASK_ERR": "Nemohol sa sústrediť na úlohu. Vymazali ste ju?",
@@ -2044,7 +1781,6 @@
     "SHARE_FAILED": "Zdieľanie zlyhalo. Skopírujte manuálne.",
     "SHARE_FAILED_FALLBACK": "Zdieľanie zlyhalo. Namiesto toho skopírované do schránky.",
     "SHARE_UNAVAILABLE_FALLBACK": "Skopírované do schránky.",
-    "SHORTCUT_WARN_OPEN_BOOKMARKS_FROM_TAG": "{{keyCombo}} pressed, but open bookmarks shortcut is only available when in project context.",
     "UNPLANNED_TODAY_TASKS": "Zrušené plánovanie všetkých úloh z Dnes"
   },
   "GPB": {
@@ -2069,6 +1805,8 @@
     "CREATE_TAG": "Vytvoriť štítok",
     "DELETE_PROJECT": "Odstrániť projekt",
     "DELETE_TAG": "Odstrániť štítok",
+    "DONATE": "Podporte nás",
+    "DUPLICATE_PROJECT": "Duplikovať",
     "ENTER_FOCUS_MODE": "Vstúpiť do režimu zamerania",
     "GO_TO_TASK_LIST": "Prejsť do zoznamu úloh",
     "HELP": "Pomoc",
@@ -2083,26 +1821,17 @@
       "SYNC": "Ako na to: Konfigurácia synchronizácie"
     },
     "METRICS": "Metrika",
-    "NO_PROJECT_INFO": "Nie sú k dispozícii žiadne projekty. Nový projekt môžete vytvoriť kliknutím na tlačidlo \"Vytvoriť projekt\".",
-    "NO_TAG_INFO": "V súčasnosti nie sú k dispozícii žiadne značky. Značky môžete pridať zadaním `#yourTagName` pri pridávaní alebo úprave úloh.",
-    "NOTES": "Poznámky",
-    "NOTES_PANEL_INFO": "Poznámky je možné zobraziť len z časovej osi a bežného zobrazenia zoznamu úloh.",
+    "NO_TASKS_TO_TRACK": "Najprv pridajte úlohu na začatie sledovania času",
     "PLANNER": "Plánovač",
-    "PROCRASTINATE": "Prokrastinovať",
     "PROJECT_MENU": "Ponuka projektu",
-    "PROJECT_SETTINGS": "Nastavenia projektu",
     "PROJECTS": "Projekty",
     "QUICK_HISTORY": "Rýchla história",
     "SCHEDULE": "Plán",
     "SEARCH": "Hľadať",
     "SETTINGS": "Nastavenia",
     "SHARE_TASK_LIST_MARKDOWN": "Zdieľať zoznam úloh",
-    "SHOW_SEARCH_BAR": "Zobrazenie panela vyhľadávania",
     "SIDE_PANEL_MENU": "Bočný panel menu",
     "TAGS": "Štítky",
-    "TASK_LIST": "Zoznam úloh",
-    "TASKS": "Úlohy",
-    "TOGGLE_SHOW_BOOKMARKS": "Zobraziť/skryť záložky",
     "TOGGLE_SHOW_ISSUE_PANEL": "Zobraziť/skryť panel problémov",
     "TOGGLE_SHOW_NOTES": "Zobraziť/skryť Poznámky k projektu",
     "TOGGLE_TRACK_TIME": "Začať/pozastaviť sledovanie času",
@@ -2131,6 +1860,7 @@
       "MSG": "Exit the application?",
       "OK": "Exit"
     },
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "Tento priestor môžete použiť na zapísanie vlastných rituálov na konci dňa, na ktoré chcete byť upozornení.",
     "ESTIMATE_TOTAL": "Total estimate:",
     "EVALUATE_DAY": "Vyhodnoťte",
     "EXPORT_TASK_LIST": "Export Task List",
@@ -2172,9 +1902,7 @@
     "CONFIGURATION": "Konfigurácia",
     "CONFIGURE": "Konfigurovať",
     "CONFIRM_REMOVE": "Ste si istý, že chcete odstrániť plugin \"{{name}}\"?",
-    "DISABLED": "Zakázané",
     "ELECTRON_API_NOT_AVAILABLE": "Electron API nie je dostupné",
-    "ENABLED": "Povolené",
     "ERROR": "Chyba",
     "ERROR_LOADING_PLUGIN": "Chyba pri načítaní pluginu",
     "EXPERIMENTAL_WARNING": "Systém pluginov je v experimentálnej fáze a mal by sa používať s extrémnou opatrnosťou.",
@@ -2192,7 +1920,6 @@
     "GRANT_PERMISSION": "Udeľ povolenie",
     "HOOKS": "Háčiky",
     "ID": "ID:",
-    "INDEX_HTML_NOT_LOADED": "Plugin index.html nebol načítaný",
     "INSTALL_PLUGIN": "Inštalovať plugin",
     "INSTALL_WARNING": "Pred inštaláciou pluginu sa uistite, že dôverujete jeho zdroju a rozumiete požadovaným povoleniam.",
     "INSTALLING": "Inštalujem...",
@@ -2206,16 +1933,6 @@
     "MIN_VERSION": "Min. verzia:",
     "NO_ADDITIONAL_INFO": "Nie sú k dispozícii žiadne ďalšie informácie",
     "NO_CONTENT_PROVIDED": "Nebolo poskytnuté žiadne obsah",
-    "NO_PLUGIN_CONTEXT_ACTION": "Plugin nemá povolenie na vykonávanie akcií",
-    "NO_PLUGIN_CONTEXT_HEADER_BUTTON": "Plugin nemá povolenie na pridávanie tlačidiel v hlavičke",
-    "NO_PLUGIN_CONTEXT_LOADING": "Plugin nemá kontext na načítanie dát",
-    "NO_PLUGIN_CONTEXT_MENU_ENTRY": "Plugin nemá povolenie na pridávanie položiek menu",
-    "NO_PLUGIN_CONTEXT_NODE": "Plugin nemá povolenie na vykonávanie kódu Node.js",
-    "NO_PLUGIN_CONTEXT_PERSISTENCE": "Plugin nemá povolenie na ukladanie dát",
-    "NO_PLUGIN_CONTEXT_SHORTCUT": "Plugin nemá povolenie na registráciu klávesových skratiek",
-    "NO_PLUGIN_CONTEXT_SIDE_PANEL": "Plugin nemá povolenie na pridávanie tlačidiel do bočného panela",
-    "NO_PLUGIN_CONTEXT_SYNC": "Plugin nemá povolenie na používanie synchronizácie",
-    "NO_PLUGIN_ID_PROVIDED_FOR_HTML": "Pre HTML obsah nebol poskytnutý ID pluginu",
     "NO_PLUGIN_MANIFEST_NODE": "Manifest pluginu neobsahuje Node.js modul",
     "NODE_EXECUTION_REQUIRED": "Tento plugin vyžaduje spustenie Node.js, ktoré je dostupné iba v desktopovej aplikácii.",
     "NODE_ONLY_DESKTOP": "Spustenie Node.js je dostupné iba v desktopovej aplikácii",
@@ -2225,11 +1942,7 @@
     "PERMISSIONS": "Povolenia",
     "PLEASE_SELECT_ZIP_FILE": "Prosím, vyberte ZIP súbor",
     "PLUGIN_DIALOG_TITLE": "Správa pluginu",
-    "PLUGIN_DOES_NOT_SUPPORT_IFRAME": "Tento plugin nepodporuje rozhranie iframe",
-    "PLUGIN_ID_NOT_PROVIDED": "ID pluginu nebolo poskytnuté",
     "PLUGIN_JS_NOT_FOUND": "Súbor JavaScript pluginu (plugin.js) nebol nájdený v ZIP súbore",
-    "PLUGIN_NOT_FOUND": "Plugin nebol nájdený",
-    "PLUGIN_SYSTEM_FAILED_INIT": "Systém pluginov sa nepodarilo inicializovať",
     "PROJECT_DOES_NOT_EXIST": "Projekt neexistuje",
     "PROJECT_NOT_FOUND": "Projekt '{{contextId}}' nebol nájdený",
     "RECOMMENDATION": "Inštalujte iba pluginy z dôveryhodných zdrojov a ak je to možné, skontrolujte ich kód. Vždy si zálohujte dáta pred inštaláciou nových pluginov.",
@@ -2254,7 +1967,6 @@
     "UNABLE_TO_PERSIST_DATA": "Nie je možné uložiť údaje do úložiska pluginu",
     "UNKNOWN_ERROR": "Vyskytla sa neznáma chyba",
     "UPLOAD_PLUGIN_INSTRUCTION": "Nahrajte ZIP súbor pluginu na jeho inštaláciu:",
-    "USER_DECLINED_NODE_PERMISSION": "Používateľ odmietol povolenie na vykonávanie Node.js",
     "VALIDATION_FAILED": "Overenie zlyhalo"
   },
   "PM": {
@@ -2262,17 +1974,14 @@
   },
   "PS": {
     "GLOBAL_SETTINGS": "Global Settings",
-    "ISSUE_INTEGRATION": "Issue Integration",
     "NO_PLUGINS_INSTALLED": "Momentálne nie sú nainštalované žiadne pluginy",
     "PLUGINS": "Pluginy",
     "PRIVACY_POLICY": "Privacy Policy",
     "PRODUCTIVITY_HELPER": "Productivity Helper",
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "Provide Feedback",
-    "RELOAD": "Znova načítať",
     "SYNC_EXPORT": "Sync & Export",
-    "TAG_SETTINGS": "Tag Specific Settings",
-    "TOGGLE_DARK_MODE": "Prepínanie tmavého režimu"
+    "TAG_SETTINGS": "Tag Specific Settings"
   },
   "SCHEDULE": {
     "LAST": "Posledné:",
@@ -2282,26 +1991,7 @@
     "NO_SCHEDULED_TITLE": "Naplánované úlohy na deň",
     "REPEATED_TASKS": "Repeated tasks",
     "SCHEDULED_TASKS": "Scheduled tasks",
-    "SCHEDULED_TASKS_WITH_TIME": "Naplánované úlohy s pripomienkou",
-    "START_TASK": "Start task and remove reminder"
-  },
-  "THEMES": {
-    "amber": "jantárová",
-    "blue": "modrá",
-    "blue-grey": "blue-grey",
-    "cyan": "tyrkysová",
-    "deep-orange": "tmavooranžová",
-    "deep-purple": "tmavofialová",
-    "green": "zelená",
-    "indigo": "indigová",
-    "light-blue": "svetlomodrá",
-    "light-green": "svetlozelená",
-    "lime": "lime",
-    "pink": "ružová",
-    "purple": "fialová",
-    "SELECT_THEME": "Vyberte tému",
-    "teal": "teal",
-    "yellow": "žltá"
+    "SCHEDULED_TASKS_WITH_TIME": "Naplánované úlohy s pripomienkou"
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktívny",
@@ -2315,21 +2005,18 @@
     "EXISTING_PROFILES": "Existujúce profily",
     "EXPORT_PROFILE": "Exportovať profil",
     "MANAGE_PROFILES": "Spravovať profily...",
-    "OPEN_PROFILES_FOLDER": "Otvoriť priečinok profilov",
     "PROFILE_NAME": "Názov profilu",
     "PROFILE_NAME_PLACEHOLDER": "napr. Práca, Osobné",
     "RENAME": "Premenovať",
     "SAVE": "Uložiť"
   },
   "V": {
-    "E_1TO10": "Please enter a value between 1 and 10",
     "E_DATETIME": "The entered value is not a datetime!",
     "E_DURATION": "Zadajte platné trvanie (napr. 1 hodinu)",
     "E_MAX": "Should not be bigger than {{val}}",
     "E_MAX_LENGTH": "Should be max {{val}} characters long",
     "E_MIN": "Should be smaller than {{val}}",
     "E_MIN_LENGTH": "Should be at least {{val}} characters long",
-    "E_PATTERN": "Invalid input",
     "E_REQUIRED": "This field is required"
   },
   "WW": {
@@ -2340,10 +2027,7 @@
     "DONE_TASKS_IN_ARCHIVE": "Momentálne tu nie sú žiadne dokončené úlohy, ale niektoré sú už archivované.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
-    "FINISH_DAY_FOR_PROJECT": "Finish Day for this Project",
-    "FINISH_DAY_FOR_TAG": "Finish Day for this Tag",
     "FINISH_DAY_TOOLTIP": "Evaluate your day, move all done tasks to the archive (optionally) and/or plan your next day.",
-    "HELP_PROCRASTINATION": "Help I'm procrastinating!",
     "LATER_TODAY": "Neskôr dnes",
     "MOVE_DONE_TO_ARCHIVE": "Presunúť hotovo do archívu",
     "NO_DONE_TASKS": "Momentálne nie sú dokončené žiadne úlohy",

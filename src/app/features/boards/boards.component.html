@@ -8,7 +8,12 @@
   @for (board of boards(); track board.id; let i = $index) {
     <mat-tab>
       <ng-template mat-tab-label>
-        <span #tabLabel>{{ board.title | translate }}</span>
+        <div
+          [matContextMenuTriggerFor]="boardContextMenu"
+          [matContextMenuTriggerData]="{ boardCfg: board }"
+        >
+          {{ board.title | translate }}
+        </div>
       </ng-template>
       <ng-template matTabContent>
         <board
@@ -17,7 +22,6 @@
         ></board>
       </ng-template>
     </mat-tab>
-    <!-- Context menu will be handled outside the loop -->
   }
 
   <mat-tab>
@@ -39,19 +43,31 @@
   </mat-tab>
 </mat-tab-group>
 
-<!-- Simple context menu attached to the whole component -->
-<context-menu
-  [rightClickTriggerEl]="componentElement"
-  [allowedSelectors]="'.mat-mdc-tab-label, span'"
-  [contextMenu]="boardContextMenuTemplate"
-></context-menu>
-
-<ng-template #boardContextMenuTemplate>
-  <button
-    mat-menu-item
-    (click)="duplicateBoard()"
+<mat-menu #boardContextMenu>
+  <ng-template
+    matMenuContent
+    let-board="boardCfg"
   >
-    Duplicate Board
-  </button>
-  <!--  <button mat-menu-item>Rename</button>-->
-</ng-template>
+    <button
+      mat-menu-item
+      (click)="editBoard(board)"
+    >
+      <mat-icon>edit</mat-icon>
+      {{ T.G.EDIT | translate }}
+    </button>
+    <button
+      mat-menu-item
+      (click)="duplicateBoard(board)"
+    >
+      <mat-icon>file_copy</mat-icon>
+      {{ T.G.DUPLICATE | translate }}
+    </button>
+    <button
+      mat-menu-item
+      (click)="removeBoard(board)"
+    >
+      <mat-icon class="color-warn-i">delete_forever</mat-icon>
+      {{ T.G.DELETE | translate }}
+    </button>
+  </ng-template>
+</mat-menu>

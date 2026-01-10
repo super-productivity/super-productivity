@@ -13,17 +13,14 @@ import {
 import { fadeInAnimation } from '../../../ui/animations/fade.ani';
 import { warpAnimation, warpInAnimation } from '../../../ui/animations/warp.ani';
 import { T } from 'src/app/t.const';
-import { selectIsPomodoroEnabled } from '../../config/store/global-config.reducer';
 import { BannerComponent } from '../../../core/banner/banner/banner.component';
-import { MatButton, MatIconButton } from '@angular/material/button';
+import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { FocusModeMainComponent } from '../focus-mode-main/focus-mode-main.component';
 import { FocusModeSessionDoneComponent } from '../focus-mode-session-done/focus-mode-session-done.component';
 import { FocusModeBreakComponent } from '../focus-mode-break/focus-mode-break.component';
-import { TranslatePipe } from '@ngx-translate/core';
 import { BannerService } from '../../../core/banner/banner.service';
 import { BannerId } from '../../../core/banner/banner.model';
-import { toSignal } from '@angular/core/rxjs-interop';
 import { FocusModeService } from '../focus-mode.service';
 import { FocusScreen } from '../focus-mode.model';
 
@@ -40,8 +37,6 @@ import { FocusScreen } from '../focus-mode.model';
     FocusModeMainComponent,
     FocusModeSessionDoneComponent,
     FocusModeBreakComponent,
-    MatButton,
-    TranslatePipe,
   ],
 })
 export class FocusModeOverlayComponent implements OnDestroy {
@@ -55,10 +50,6 @@ export class FocusModeOverlayComponent implements OnDestroy {
   FocusScreen: typeof FocusScreen = FocusScreen;
   activePage = this.focusModeService.currentScreen;
   isSessionRunning = this.focusModeService.isSessionRunning;
-
-  isPomodoroEnabled = toSignal(this._store.select(selectIsPomodoroEnabled), {
-    initialValue: false,
-  });
 
   T: typeof T = T;
 
@@ -153,9 +144,5 @@ export class FocusModeOverlayComponent implements OnDestroy {
 
   cancelFocusSession(): void {
     this._store.dispatch(cancelFocusSession());
-  }
-
-  deactivatePomodoro(): void {
-    this._globalConfigService.updateSection('pomodoro', { isEnabled: false });
   }
 }

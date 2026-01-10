@@ -51,8 +51,8 @@ test.describe('App Features - Focus Mode', () => {
 
     // send shortcut for focus mode, ensure that focus overlay is not showing
     await page.keyboard.press('F');
-    await page.waitForTimeout(500);
-    expect(focusModeOverlay).not.toBeAttached();
+    // Verify overlay doesn't appear after a brief moment
+    await expect(focusModeOverlay).not.toBeAttached({ timeout: 1000 });
 
     // Re-enable the feature
     await page.goto('/#/config');

@@ -93,13 +93,15 @@ export class ValidProjectIdGuard {
 @Injectable({ providedIn: 'root' })
 export class DefaultStartPageGuard {
   private _globalConfigService = inject(GlobalConfigService);
+  private _dataInitStateService = inject(DataInitStateService);
   private _router = inject(Router);
 
   canActivate(
     next: ActivatedRouteSnapshot,
     state: RouterStateSnapshot,
   ): Observable<UrlTree> {
-    return this._globalConfigService.misc$.pipe(
+    return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      concatMap(() => this._globalConfigService.misc$),
       take(1),
       map((miscCfg) => {
         const TODAY = 0;

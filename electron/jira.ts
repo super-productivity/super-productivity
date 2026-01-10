@@ -23,11 +23,13 @@ export const sendJiraRequest = ({
   // log('--------------------------------------------------------------------');
   fetch(url, {
     ...requestInit,
-    // allow self signed certificates
+    // Allow self-signed certificates for self-hosted Jira instances.
+    // This is an intentional user-configurable setting (isAllowSelfSignedCertificate).
+    // CodeQL alert js/disabling-certificate-validation is expected here.
     ...(jiraCfg && jiraCfg.isAllowSelfSignedCertificate
       ? {
           agent: new Agent({
-            rejectUnauthorized: false,
+            rejectUnauthorized: false, // lgtm[js/disabling-certificate-validation]
           }),
         }
       : {}),

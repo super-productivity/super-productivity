@@ -1,0 +1,5 @@
+
+### Bug Fixes
+
+* **e2e:** handle task deletion confirmation dialog in WebDAV sync test
+* resolve build failures from missing translations and unused imports

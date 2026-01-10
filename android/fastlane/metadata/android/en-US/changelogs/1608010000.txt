@@ -1,0 +1,4 @@
+
+### Bug Fixes
+
+* **e2e:** improve WebDAV sync test reliability

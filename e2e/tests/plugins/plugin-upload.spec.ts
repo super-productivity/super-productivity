@@ -22,7 +22,10 @@ test.describe.serial('Plugin Upload', () => {
     test.setTimeout(process.env.CI ? 90000 : 60000);
     // Navigate to plugin management
     await page.click(SETTINGS_BTN);
-    await page.waitForTimeout(1000);
+    await page
+      .locator('.page-settings')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     await page.evaluate(() => {
       const configPage = document.querySelector('.page-settings');
@@ -48,8 +51,7 @@ test.describe.serial('Plugin Upload', () => {
       }
     });
 
-    await page.waitForTimeout(1000);
-    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('plugin-management')).toBeVisible({ timeout: 10000 });
 
     // Upload plugin ZIP file
     const testPluginPath = path.resolve(__dirname, '../../../src/assets/test-plugin.zip');
@@ -69,11 +71,19 @@ test.describe.serial('Plugin Upload', () => {
     });
 
     await page.locator(FILE_INPUT).setInputFiles(testPluginPath);
-    await page.waitForTimeout(3000); // Wait for file processing
+
+    // Wait for uploaded plugin to appear in list
+    await page.waitForFunction(
+      (pluginId) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        return cards.some((card) => card.textContent?.includes(pluginId));
+      },
+      TEST_PLUGIN_ID,
+      { timeout: 15000 },
+    );
 
     // Verify uploaded plugin appears in list (there are multiple cards, so check first)
     await expect(page.locator(PLUGIN_CARD).first()).toBeVisible();
-    await page.waitForTimeout(1000);
 
     const pluginExists = await page.evaluate((pluginName: string) => {
       const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
@@ -114,7 +124,23 @@ test.describe.serial('Plugin Upload', () => {
     }, TEST_PLUGIN_ID);
 
     expect(enableResult).toBeTruthy();
-    await page.waitForTimeout(2000); // Longer pause to ensure DOM update completes
+
+    // Wait for toggle state to change to enabled
+    await page.waitForFunction(
+      (pluginId) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
+        if (targetCard) {
+          const toggleButton = targetCard.querySelector(
+            'mat-slide-toggle button[role="switch"]',
+          ) as HTMLButtonElement;
+          return toggleButton?.getAttribute('aria-checked') === 'true';
+        }
+        return false;
+      },
+      TEST_PLUGIN_ID,
+      { timeout: 10000 },
+    );
 
     // Verify plugin is now enabled
     const enabledStatus = await page.evaluate((pluginId: string) => {
@@ -148,7 +174,23 @@ test.describe.serial('Plugin Upload', () => {
     }, TEST_PLUGIN_ID);
 
     expect(disableResult).toBeTruthy();
-    await page.waitForTimeout(1000);
+
+    // Wait for toggle state to change to disabled
+    await page.waitForFunction(
+      (pluginId) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
+        if (targetCard) {
+          const toggleButton = targetCard.querySelector(
+            'mat-slide-toggle button[role="switch"]',
+          ) as HTMLButtonElement;
+          return toggleButton?.getAttribute('aria-checked') === 'false';
+        }
+        return false;
+      },
+      TEST_PLUGIN_ID,
+      { timeout: 10000 },
+    );
 
     // Verify plugin is now disabled
     const disabledStatus = await page.evaluate((pluginId: string) => {
@@ -182,7 +224,23 @@ test.describe.serial('Plugin Upload', () => {
     }, TEST_PLUGIN_ID);
 
     expect(reEnableResult).toBeTruthy();
-    await page.waitForTimeout(1000);
+
+    // Wait for toggle state to change to enabled again
+    await page.waitForFunction(
+      (pluginId) => {
+        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        const targetCard = cards.find((card) => card.textContent?.includes(pluginId));
+        if (targetCard) {
+          const toggleButton = targetCard.querySelector(
+            'mat-slide-toggle button[role="switch"]',
+          ) as HTMLButtonElement;
+          return toggleButton?.getAttribute('aria-checked') === 'true';
+        }
+        return false;
+      },
+      TEST_PLUGIN_ID,
+      { timeout: 10000 },
+    );
 
     // Verify plugin is enabled again
     const reEnabledStatus = await page.evaluate((pluginId: string) => {
@@ -218,9 +276,15 @@ test.describe.serial('Plugin Upload', () => {
       return false;
     }, TEST_PLUGIN_ID);
 
-    await page.waitForTimeout(500);
-
-    await page.waitForTimeout(3000); // Longer pause for removal to complete
+    // Wait for plugin to be removed from the list
+    await page.waitForFunction(
+      (pluginId) => {
+        const items = Array.from(document.querySelectorAll('plugin-management mat-card'));
+        return !items.some((item) => item.textContent?.includes(pluginId));
+      },
+      TEST_PLUGIN_ID,
+      { timeout: 15000 },
+    );
 
     // Verify plugin is removed
     const removalResult = await page.evaluate((pluginId: string) => {

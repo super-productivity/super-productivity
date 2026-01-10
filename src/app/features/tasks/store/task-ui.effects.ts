@@ -76,14 +76,14 @@ export class TaskUiEffects {
                 ? T.F.TASK.S.CREATED_FOR_PROJECT
                 : T.F.TASK.S.TASK_CREATED,
             ico: 'add',
-            ...(task.projectId && !isTaskVisibleOnCurrentPage
-              ? {
-                  actionFn: () => {
-                    this._navigateToTaskService.navigate(task.id, false);
-                  },
-                  actionStr: T.F.TASK.S.GO_TO_TASK,
-                }
-              : {}),
+            actionStr: T.F.TASK.S.GO_TO_TASK,
+            actionFn: () => {
+              if (isTaskVisibleOnCurrentPage) {
+                this._taskService.setSelectedId(task.id);
+              } else {
+                this._navigateToTaskService.navigate(task.id, false);
+              }
+            },
           });
         }),
       ),

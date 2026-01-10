@@ -24,7 +24,11 @@
 }
 
 :host-context(.isObsidianStyleHeader.isElectron) {
-  padding-right: var(--window-controls-width); // Space for window controls
+  // Dynamic window controls width using Window Controls Overlay CSS env vars
+  // env(titlebar-area-width) = available width (viewport - controls)
+  // So: controls width = 100vw - titlebar-area-width
+  // Fallback calc ensures 140px when env vars unavailable
+  padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
 }
 
 :host-context(.isMac.isElectron),
@@ -102,107 +106,6 @@ button.isActive2 {
   :host-context([dir='rtl']) & {
     margin-left: 0;
     margin-right: auto;
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(0.7);
-  }
-  25%,
-  50% {
-    transform: scale(1);
-  }
-}
-
-.play-btn-wrapper {
-  position: relative;
-
-  .pulse-circle {
-    width: 48px;
-    height: 48px;
-    position: absolute;
-    inset: 0;
-    top: auto;
-    left: -4px;
-    border-radius: 50%;
-    margin: auto;
-    animation: pulse 2s infinite;
-    background: var(--c-accent);
-    opacity: 0.6;
-  }
-
-  .play-btn {
-    position: relative;
-    margin-left: 0;
-    // make sure it is above the label of our focus button
-    z-index: 4;
-
-    .circle-svg {
-      transform: rotate(-90deg);
-      position: absolute;
-      opacity: 0.15;
-      top: -8px;
-      right: -8px;
-      pointer-events: none;
-    }
-
-    .mat-icon {
-      position: relative;
-      z-index: 2;
-    }
-  }
-
-  .pomodoro-label {
-    position: absolute;
-    line-height: 1;
-    padding: 2px 4px 1px;
-    left: 50%;
-    transform: translateX(-50%);
-    box-shadow: var(--whiteframe-shadow-2dp);
-    font-weight: bold;
-    border-radius: 8px;
-    z-index: 4;
-    pointer-events: none;
-    bottom: calc(var(--s) * -0.25);
-    background: var(--bg-lighter);
-    color: var(--text-color-most-intense);
-  }
-
-  .pomodoro-controls {
-    transition: var(--transition-standard);
-    position: absolute;
-    top: 100%;
-    display: flex;
-    flex-direction: column;
-    left: 50%;
-    transform: translateX(-50%);
-    pointer-events: none;
-
-    &:after {
-      content: '';
-      position: absolute;
-      inset: calc(var(--s) * -1.25);
-    }
-  }
-
-  &:hover .pomodoro-controls {
-    pointer-events: all;
-
-    .pomodoro-btn {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  .pomodoro-btn {
-    @include btn-transition;
-    transform: translateY(-100%);
-
-    &:nth-child(2) {
-      transform: translateY(-200%);
-    }
   }
 }
 

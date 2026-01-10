@@ -112,6 +112,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   overdueThreshold = Date.now() - 30 * 60 * 1000; // 30 minutes
 
   private _subs: Subscription = new Subscription();
+  // Track dismissed reminder IDs to prevent stale data from worker re-triggering them
+  private _dismissedReminderIds = new Set<string>();
 
   constructor() {
     // this._matDialogRef.disableClose = true;
@@ -122,7 +124,13 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     );
     this._subs.add(
       this._reminderService.onRemindersActive$.subscribe((reminders) => {
-        this.reminders$.next(reminders);
+        // Filter out reminders that were already dismissed in this dialog session
+        const filtered = reminders.filter((r) => !this._dismissedReminderIds.has(r.id));
+        if (filtered.length > 0) {
+          this.reminders$.next(filtered);
+        } else {
+          this._close();
+        }
       }),
     );
     this._subs.add(
@@ -333,6 +341,8 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   }
 
   private _removeReminderFromList(reminderId: string): void {
+    // Track dismissed ID to prevent stale data from worker re-adding it
+    this._dismissedReminderIds.add(reminderId);
     const newReminders = this.reminders$
       .getValue()
       .filter((reminder) => reminder.id !== reminderId);

@@ -38,7 +38,7 @@ export class NotifyService {
 
     if (svcReg && svcReg.showNotification) {
       // service worker also seems to need to request permission...
-      // @see: https://github.com/johannesjo/super-productivity/issues/408
+      // @see: https://github.com/super-productivity/super-productivity/issues/408
       const per = await Notification.requestPermission();
       // not supported for basic notifications so we delete them
       if (per === 'granted') {

@@ -17,7 +17,7 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTab, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltip } from '@angular/material/tooltip';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { combineLatest, from, merge, Observable, Subject } from 'rxjs';
 import {
@@ -85,7 +85,6 @@ const MAGIC_YESTERDAY_MARGIN = 4 * 60 * 60 * 1000;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatAnchor,
-    RouterLink,
     MatIcon,
     InlineInputComponent,
     MatTabGroup,

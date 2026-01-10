@@ -10,8 +10,6 @@ test.describe('Drag Task to change project and labels', () => {
 
     // Wait for app to be ready
     await workViewPage.waitForTaskList();
-    // Additional wait for stability in parallel execution
-    await page.waitForTimeout(50);
   });
 
   test('should be able to move task to project by dragging to project link in magic-side-nav', async ({
@@ -54,32 +52,28 @@ test.describe('Drag Task to change project and labels', () => {
     // find drag handle of task
     const firstTask = page.locator('task').first();
     const dragHandle = firstTask.locator('.drag-handle');
+    const tagList = firstTask.locator('tag-list');
 
-    // Drag and drop to first project
+    // Drag and drop to first project - wait for tag to appear
     await dragHandle.dragTo(project1NavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).toContainText(
-      `${testPrefix}-TestProject 1`,
-    );
+    await expect(tagList).toContainText(`${testPrefix}-TestProject 1`, {
+      timeout: 5000,
+    });
 
-    // Drag and drop to second project
+    // Drag and drop to second project - wait for tag change
     await dragHandle.dragTo(project2NavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).not.toContainText(
-      `${testPrefix}-TestProject 1`,
-    );
-    await expect(firstTask.locator('tag-list')).toContainText(
-      `${testPrefix}-TestProject 2`,
-    );
+    await expect(tagList).not.toContainText(`${testPrefix}-TestProject 1`, {
+      timeout: 5000,
+    });
+    await expect(tagList).toContainText(`${testPrefix}-TestProject 2`);
 
-    // Drag and drop back to inbox
+    // Drag and drop back to inbox - wait for tag change
     const inboxNavItem = page.getByRole('menuitem').filter({ hasText: 'Inbox' });
     await dragHandle.dragTo(inboxNavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).not.toContainText(
-      `${testPrefix}-TestProject 2`,
-    );
-    await expect(firstTask.locator('tag-list')).toContainText('Inbox');
+    await expect(tagList).not.toContainText(`${testPrefix}-TestProject 2`, {
+      timeout: 5000,
+    });
+    await expect(tagList).toContainText('Inbox');
   });
 
   test('should be able to add and remove tags by dragging task to the tag link in magic-side-nav', async ({
@@ -132,22 +126,20 @@ test.describe('Drag Task to change project and labels', () => {
     // find drag handle of task
     const firstTask = page.locator('task').first();
     const dragHandle = firstTask.locator('.drag-handle');
+    const tagList = firstTask.locator('tag-list');
 
-    // Drag and drop to first tag
+    // Drag and drop to first tag - wait for tag to appear
     await dragHandle.dragTo(tag1NavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).toContainText(`${testPrefix}-Tag1`);
+    await expect(tagList).toContainText(`${testPrefix}-Tag1`, { timeout: 5000 });
 
-    // Drag and drop to second tag
+    // Drag and drop to second tag - wait for tag to appear
     await dragHandle.dragTo(tag2NavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).toContainText(`${testPrefix}-Tag1`);
-    await expect(firstTask.locator('tag-list')).toContainText(`${testPrefix}-Tag2`);
+    await expect(tagList).toContainText(`${testPrefix}-Tag1`);
+    await expect(tagList).toContainText(`${testPrefix}-Tag2`, { timeout: 5000 });
 
-    // Drag and drop again to first tag to remove it
+    // Drag and drop again to first tag to remove it - wait for tag to disappear
     await dragHandle.dragTo(tag1NavItem);
-    await page.waitForTimeout(500); // Wait for drag animation and state update
-    await expect(firstTask.locator('tag-list')).not.toContainText(`${testPrefix}-Tag1`);
-    await expect(firstTask.locator('tag-list')).toContainText(`${testPrefix}-Tag2`);
+    await expect(tagList).not.toContainText(`${testPrefix}-Tag1`, { timeout: 5000 });
+    await expect(tagList).toContainText(`${testPrefix}-Tag2`);
   });
 });

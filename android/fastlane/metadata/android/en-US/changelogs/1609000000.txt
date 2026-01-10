@@ -1,0 +1,41 @@
+
+### Bug Fixes
+
+* address code review issues from daily review
+* address PR review comments for markdown toolbar
+* **android:** cancel native notification when task marked done (0a01f2e), closes #5899
+* **android:** show notification with sound when focus mode timer completes in background (dfa6a94), closes hi#priority #5923
+* **boards:** respect backlog filter for tasks from hidden projects (9b1812d), closes #5902
+* **calendar:** poll all calendar tasks and prevent auto-move of existing tasks (c2b7627), closes #4474
+* **ci:** add issues write permission to autoresponse workflow (80389c5), closes #5904
+* **ci:** fix first-time contributor welcome action
+* **e2e:** use fill() for time input in task-detail tests
+* **focus-mode:** start break from banner when manual break start enabled (7838d34), closes #5889
+* **gitlab:** use consistent update detection logic across methods (93c3198), closes #5944
+* **heatmap:** use app theme class instead of prefers-color-scheme (159b289), closes #5883
+* **imex:** auto-fix deprecated metric/improvement array fields on import
+* **imex:** show validation error details on import failure
+* **planner:** respect first day of week setting in schedule dialog (2194cb9), closes #5935
+* **reminder:** cancel native Android alarm when removing reminder
+* **reminder:** invoke cfg signal correctly to access reminder config
+* **reminder:** prevent duplicate notifications from worker race condition (5f724ad), closes #5925
+* **sync:** show meaningful error messages instead of minified class names (89940e2), closes #5905
+
+
+### Features
+
+* **18n:** update translations
+* add markdown formatting toolbar to notes editor
+* **calendar:** implement polling for calendar task updates and enhance data retrieval logic (5ee3fb2), closes #4474
+* **i18n:** connect Finnish and Swedish translation files
+* integrate auto-save from master for toolbar actions
+* **reminder:** add option to disable window focus on reminder (6d1f5a7), closes #5922
+* **task-repeat:** add history heatmap to repeat config dialog
+* **tasks:** add confirmation dialog before task deletion (f395413), closes #5942
+* **tasks:** show focus session option in context menu on mobile
+* **work-view:** show day of week in scheduled date group headers (d475d88), closes #5941
+
+
+### Reverts
+
+* remove translation stubs from non-English language files

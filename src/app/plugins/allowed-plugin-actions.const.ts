@@ -4,13 +4,6 @@ import {
   toggleStart,
 } from '../features/tasks/store/task.actions';
 import {
-  finishPomodoroSession,
-  pausePomodoro,
-  skipPomodoroBreak,
-  startPomodoro,
-  stopPomodoro,
-} from '../features/pomodoro/store/pomodoro.actions';
-import {
   hideFocusOverlay,
   showFocusOverlay,
 } from '../features/focus-mode/store/focus-mode.actions';
@@ -57,13 +50,6 @@ export const ALLOWED_PLUGIN_ACTIONS = [
   setCurrentTask,
   setSelectedTask,
   // addSubTask,
-
-  // Pomodoro Timer
-  startPomodoro,
-  pausePomodoro,
-  stopPomodoro,
-  finishPomodoroSession,
-  skipPomodoroBreak,
 
   // Project Management
   // addProject,

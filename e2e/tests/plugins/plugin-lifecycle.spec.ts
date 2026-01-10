@@ -39,14 +39,11 @@ test.describe('Plugin Lifecycle', () => {
     const settingsBtn = page.locator(SETTINGS_BTN);
     await settingsBtn.waitFor({ state: 'visible' });
     await settingsBtn.click();
-    // Wait for navigation to settings page
-    await page.waitForTimeout(500); // Give time for navigation
     // Wait for settings page to be fully visible - use first() to avoid multiple matches
-    await page.locator('.page-settings').first().waitFor({ state: 'visible' });
-    await page.waitForTimeout(50); // Small delay for UI settling
-
-    // Wait for page to stabilize
-    await page.waitForTimeout(300);
+    await page
+      .locator('.page-settings')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     await page.evaluate(() => {
       const configPage = document.querySelector('.page-settings');
@@ -71,9 +68,6 @@ test.describe('Plugin Lifecycle', () => {
       }
     });
 
-    // Wait for expansion animation
-    await page.waitForTimeout(300);
-
     // Scroll plugin-management into view
     await page.evaluate(() => {
       const pluginMgmt = document.querySelector('plugin-management');
@@ -84,7 +78,6 @@ test.describe('Plugin Lifecycle', () => {
 
     // Wait for plugin management section to be attached
     await page.locator('plugin-management').waitFor({ state: 'attached', timeout: 5000 });
-    await page.waitForTimeout(50); // Small delay for UI settling
 
     // Enable the plugin
     const enableResult = await page.evaluate((pluginName: string) => {
@@ -117,15 +110,10 @@ test.describe('Plugin Lifecycle', () => {
 
     expect(enableResult.found).toBe(true);
 
-    // Wait for plugin to initialize
-    await page.waitForTimeout(100); // Small delay for plugin initialization
-
     // Go back to work view
     await page.goto('/#/tag/TODAY');
     // Wait for navigation and work view to be ready
-    await page.waitForTimeout(500); // Give time for navigation
-    await page.locator('.route-wrapper').waitFor({ state: 'visible' });
-    await page.waitForTimeout(50); // Small delay for UI settling
+    await page.locator('.route-wrapper').waitFor({ state: 'visible', timeout: 10000 });
 
     // Wait for task list to be visible
     await page.waitForSelector('task-list', { state: 'visible', timeout: 10000 });
@@ -135,7 +123,6 @@ test.describe('Plugin Lifecycle', () => {
     test.setTimeout(20000); // Increase timeout
     // Wait for magic-side-nav to be ready
     await page.locator(SIDENAV).waitFor({ state: 'visible' });
-    await page.waitForTimeout(50); // Small delay for plugins to initialize
 
     // Plugin doesn't show snack bar on load, check plugin nav item instead
     await expect(page.locator(API_TEST_PLUGIN_NAV_ITEM)).toBeVisible({ timeout: 10000 });
@@ -148,13 +135,10 @@ test.describe('Plugin Lifecycle', () => {
     // Click on the plugin nav item to navigate to plugin
     await expect(page.locator(API_TEST_PLUGIN_NAV_ITEM)).toBeVisible();
     await page.click(API_TEST_PLUGIN_NAV_ITEM);
-    // Wait for navigation to plugin page
-    await page.waitForTimeout(500); // Give time for navigation
-    await page.waitForTimeout(50); // Small delay for UI settling
 
     // Verify we navigated to the plugin page
-    await expect(page).toHaveURL(/\/plugins\/api-test-plugin\/index/);
-    await expect(page.locator('iframe')).toBeVisible();
+    await expect(page).toHaveURL(/\/plugins\/api-test-plugin\/index/, { timeout: 10000 });
+    await expect(page.locator('iframe')).toBeVisible({ timeout: 10000 });
 
     // Go back to work view
     await page.goto('/#/tag/TODAY');
@@ -165,14 +149,11 @@ test.describe('Plugin Lifecycle', () => {
 
     // Navigate to settings
     await page.click(SETTINGS_BTN);
-    // Wait for navigation to settings page
-    await page.waitForTimeout(500); // Give time for navigation
     // Wait for settings page to be visible - use first() to avoid multiple matches
-    await page.locator('.page-settings').first().waitFor({ state: 'visible' });
-    await page.waitForTimeout(200); // Small delay for UI settling
-
-    // Wait for page to stabilize
-    await page.waitForTimeout(300);
+    await page
+      .locator('.page-settings')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     // Expand plugin section
     await page.evaluate(() => {
@@ -190,9 +171,6 @@ test.describe('Plugin Lifecycle', () => {
       }
     });
 
-    // Wait for expansion animation
-    await page.waitForTimeout(300);
-
     // Scroll plugin-management into view
     await page.evaluate(() => {
       const pluginMgmt = document.querySelector('plugin-management');
@@ -205,7 +183,11 @@ test.describe('Plugin Lifecycle', () => {
     await page
       .locator('plugin-management')
       .waitFor({ state: 'attached', timeout: 10000 });
-    await page.waitForTimeout(500); // Give time for plugins to load
+    // Wait for plugin cards to be available
+    await page
+      .locator('plugin-management mat-card')
+      .first()
+      .waitFor({ state: 'attached', timeout: 10000 });
 
     // Check current state of the plugin and enable if needed
     const currentState = await page.evaluate((pluginName: string) => {
@@ -250,7 +232,6 @@ test.describe('Plugin Lifecycle', () => {
         'API Test Plugin',
         { timeout: 5000 },
       );
-      await page.waitForTimeout(1000); // Wait for plugin to fully initialize
     }
 
     // Now disable the plugin
@@ -290,14 +271,11 @@ test.describe('Plugin Lifecycle', () => {
       'API Test Plugin',
       { timeout: 5000 },
     );
-    await page.waitForTimeout(1000); // Wait for plugin to fully disable
 
     // Go back to work view
     await page.goto('/#/tag/TODAY');
     // Wait for navigation and work view to be ready
-    await page.waitForTimeout(500); // Give time for navigation
-    await page.locator('.route-wrapper').waitFor({ state: 'visible' });
-    await page.waitForTimeout(500); // Small delay for UI settling
+    await page.locator('.route-wrapper').waitFor({ state: 'visible', timeout: 10000 });
 
     // Check if the magic-side-nav exists and verify the API Test Plugin is not in it
     const sideNavExists = (await page.locator(SIDENAV).count()) > 0;

@@ -1,0 +1,13 @@
+
+### Bug Fixes
+
+* **e2e:** use format-agnostic time change in task-detail tests
+* **e2e:** use pressSequentially for time input in task-detail tests
+* **schedule:** start tracking selected task when pressing Y in schedule view (acedc67), closes #5884
+* **sync:** resolve 25-second initial sync timeout race condition (570a0b5), closes #5868 #5877
+* **tasks:** clear reminder when clicking "today" button on already-today tasks (2af57d2), closes #5872
+
+
+### Features
+
+* **e2e:** add Docker-based E2E test isolation

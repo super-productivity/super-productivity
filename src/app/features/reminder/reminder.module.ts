@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReminderService } from './reminder.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IS_ELECTRON } from '../../app.constants';
+import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import {
   concatMap,
   delay,
@@ -24,6 +25,7 @@ import { from, merge, of, timer, interval } from 'rxjs';
 import { TaskService } from '../tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from 'src/app/t.const';
+import { GlobalConfigService } from '../config/global-config.service';
 
 @NgModule({
   declarations: [],
@@ -39,6 +41,7 @@ export class ReminderModule {
   private readonly _layoutService = inject(LayoutService);
   private readonly _taskService = inject(TaskService);
   private readonly _syncTriggerService = inject(SyncTriggerService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
 
   constructor() {
     from(this._reminderService.init())
@@ -78,11 +81,16 @@ export class ReminderModule {
         ),
       )
       .subscribe((reminders: Reminder[]) => {
-        if (IS_ELECTRON) {
+        if (IS_ELECTRON && this._globalConfigService.cfg()?.reminder?.isFocusWindow) {
           this._uiHelperService.focusApp();
         }
 
         this._showNotification(reminders);
+
+        // Skip dialog on Android - native notifications handle reminders
+        if (IS_ANDROID_WEB_VIEW) {
+          return;
+        }
 
         const oldest = reminders[0];
         if (oldest.type === 'TASK') {
@@ -121,6 +129,11 @@ export class ReminderModule {
 
   @throttle(60000)
   private _showNotification(reminders: Reminder[]): void {
+    // Skip on Android - we use native notifications with snooze button instead
+    if (IS_ANDROID_WEB_VIEW) {
+      return;
+    }
+
     const isMultiple = reminders.length > 1;
     const title = isMultiple
       ? '"' +

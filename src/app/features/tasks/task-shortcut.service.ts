@@ -1,5 +1,6 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { TaskFocusService } from './task-focus.service';
+import { TaskService } from './task.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { checkKeyCombo } from '../../util/check-key-combo';
 import { Log } from '../../core/log';
@@ -35,6 +36,7 @@ type TaskComponentMethod = keyof TaskComponent;
 })
 export class TaskShortcutService {
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _taskService = inject(TaskService);
   private readonly _configService = inject(GlobalConfigService);
   readonly isTimeTrackingEnabled = computed(
     () => this._configService.cfg()?.appFeatures.isTimeTrackingEnabled,
@@ -47,26 +49,44 @@ export class TaskShortcutService {
    * @returns True if the shortcut was handled, false otherwise
    */
   handleTaskShortcuts(ev: KeyboardEvent): boolean {
-    // Handle task-specific shortcuts if a task is focused
-    const focusedTaskId: TaskId | null = this._taskFocusService.focusedTaskId();
-
-    // Log.log('TaskShortcutService.handleTaskShortcuts', {
-    //   focusedTaskId,
-    //   key: ev.key,
-    //   ctrlKey: ev.ctrlKey,
-    //   shiftKey: ev.shiftKey,
-    //   altKey: ev.altKey,
-    // });
-
-    if (!focusedTaskId) {
-      // Log.log('TaskShortcutService: No focused task ID');
-      return false;
-    }
-
     const cfg = this._configService.cfg();
     if (!cfg) return false;
 
     const keys = cfg.keyboard;
+    const focusedTaskId: TaskId | null = this._taskFocusService.focusedTaskId();
+
+    // Handle togglePlay specially - it works with focusedTaskId OR selectedTaskId
+    // This allows starting time tracking from Schedule view where tasks are selected but not focused
+    if (checkKeyCombo(ev, keys.togglePlay) && this.isTimeTrackingEnabled()) {
+      if (focusedTaskId) {
+        // Focused task exists - delegate to the task component
+        this._handleTaskShortcut(focusedTaskId, 'togglePlayPause');
+      } else {
+        // No focused task - check for selected task (e.g., from Schedule view)
+        const selectedId = this._taskService.selectedTaskId();
+        if (selectedId) {
+          const currentTaskId = this._taskService.currentTaskId();
+          if (currentTaskId === selectedId) {
+            // Already tracking this task - stop tracking
+            this._taskService.setCurrentId(null);
+          } else {
+            // Start tracking the selected task
+            this._taskService.setCurrentId(selectedId);
+          }
+        } else {
+          // Neither focused nor selected - use global toggle
+          this._taskService.toggleStartTask();
+        }
+      }
+      ev.preventDefault();
+      return true;
+    }
+
+    // All other shortcuts require a focused task
+    if (!focusedTaskId) {
+      return false;
+    }
+
     const isShiftOrCtrlPressed = ev.shiftKey || ev.ctrlKey;
 
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
@@ -189,13 +209,6 @@ export class TaskShortcutService {
       (ev.key === 'ArrowRight' || checkKeyCombo(ev, keys.expandSubTasks))
     ) {
       this._handleTaskShortcut(focusedTaskId, 'handleArrowRight');
-      ev.preventDefault();
-      return true;
-    }
-
-    // Toggle play/pause
-    if (checkKeyCombo(ev, keys.togglePlay) && this.isTimeTrackingEnabled()) {
-      this._handleTaskShortcut(focusedTaskId, 'togglePlayPause');
       ev.preventDefault();
       return true;
     }

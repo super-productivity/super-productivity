@@ -125,7 +125,7 @@ cat /tmp/mas-profile.b64 | pbcopy
 
 Then update the GitHub Actions secret:
 
-1. Go to: https://github.com/johannesjo/super-productivity/settings/secrets/actions
+1. Go to: https://github.com/super-productivity/super-productivity/settings/secrets/actions
 2. Find `mas_provision_profile`
 3. Click **Update**
 4. Paste the base64-encoded content

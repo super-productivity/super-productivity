@@ -31,6 +31,7 @@ import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { isToday } from '../../util/is-today.util';
 import { TODAY_TAG } from '../tag/tag.const';
 import {
   selectAllTaskRepeatCfgs,
@@ -79,6 +80,8 @@ export class TaskRepeatCfgService {
     projectId: string | null,
     taskRepeatCfg: Omit<TaskRepeatCfgCopy, 'id'>,
   ): void {
+    // Note: First occurrence calculation and lastTaskCreationDay update
+    // is handled by the updateTaskAfterMakingItRepeatable$ effect (#5594)
     this._store$.dispatch(
       addTaskRepeatCfgToTask({
         taskRepeatCfg: {
@@ -261,7 +264,8 @@ export class TaskRepeatCfgService {
           dueWithTime: dateTime,
           remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
           isMoveToBacklog: false,
-          isSkipAutoRemoveFromToday: true,
+          // Only keep in today list if scheduled for today (#5594)
+          isSkipAutoRemoveFromToday: isToday(dateTime),
         }),
       );
     }

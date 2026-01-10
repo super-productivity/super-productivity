@@ -29,11 +29,6 @@ import {
 import { NOTE_FEATURE_NAME, noteReducer } from '../features/note/store/note.reducer';
 import { NoteEffects } from '../features/note/store/note.effects';
 import {
-  POMODORO_FEATURE_NAME,
-  pomodoroReducer,
-} from '../features/pomodoro/store/pomodoro.reducer';
-import { PomodoroEffects } from '../features/pomodoro/store/pomodoro.effects';
-import {
   PROJECT_FEATURE_NAME,
   projectReducer,
 } from '../features/project/store/project.reducer';
@@ -68,6 +63,8 @@ import { workContextReducer } from '../features/work-context/store/work-context.
 import { WorkContextEffects } from '../features/work-context/store/work-context.effects';
 import { IS_ANDROID_WEB_VIEW } from '../util/is-android-web-view';
 import { AndroidEffects } from '../features/android/store/android.effects';
+import { AndroidFocusModeEffects } from '../features/android/store/android-focus-mode.effects';
+import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
 import { CaldavIssueEffects } from '../features/issue/providers/caldav/caldav-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
@@ -120,9 +117,6 @@ import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
     StoreModule.forFeature(NOTE_FEATURE_NAME, noteReducer),
     EffectsModule.forFeature([NoteEffects]),
 
-    StoreModule.forFeature(POMODORO_FEATURE_NAME, pomodoroReducer),
-    EffectsModule.forFeature([PomodoroEffects]),
-
     StoreModule.forFeature(PROJECT_FEATURE_NAME, projectReducer),
     EffectsModule.forFeature([ProjectEffects]),
 
@@ -159,11 +153,15 @@ import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
     EffectsModule.forFeature([PlannerEffects]),
 
     // EFFECTS ONLY
-    EffectsModule.forFeature([...(IS_ANDROID_WEB_VIEW ? [AndroidEffects] : [])]),
+    EffectsModule.forFeature([
+      ...(IS_ANDROID_WEB_VIEW
+        ? [AndroidEffects, AndroidFocusModeEffects, AndroidForegroundTrackingEffects]
+        : []),
+    ]),
     EffectsModule.forFeature([CaldavIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([ElectronEffects]),
-    EffectsModule.forFeature([PomodoroEffects, DominaModeEffects]),
+    EffectsModule.forFeature([DominaModeEffects]),
     EffectsModule.forFeature([DropboxEffects]),
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),
     EffectsModule.forFeature([GitlabIssueEffects]),

@@ -2,7 +2,7 @@ import { T } from 'src/app/t.const';
 
 export interface BaseOption<T> {
   label: string;
-  type: T | null; // null - default
+  type: T | null; // null - option is not selected
 }
 
 // === SORT ===
@@ -51,7 +51,6 @@ export enum FILTER_OPTION_TYPE {
 }
 
 export enum FILTER_SCHEDULE {
-  default = '0',
   today = 'today',
   tomorrow = 'tomorrow',
   thisWeek = 'thisWeek',
@@ -61,11 +60,14 @@ export enum FILTER_SCHEDULE {
 }
 
 export enum FILTER_TIME {
-  default = '0',
   MIN_10 = '600000',
   MIN_30 = '1800000',
   MIN_60 = '3600000',
   MIN_120 = '7200000',
+}
+
+export enum FILTER_COMMON {
+  NOT_SPECIFIED = 'NOT_SPECIFIED',
 }
 
 // === DEFAULTS ===
@@ -167,10 +169,10 @@ const filterOptions: FilterOption[] = [
   },
 ];
 
-const scheduledPresets: BaseOption<FILTER_SCHEDULE>[] = [
+const scheduledPresets: BaseOption<FILTER_COMMON | FILTER_SCHEDULE>[] = [
   {
-    type: FILTER_SCHEDULE.default,
-    label: T.F.TASK_VIEW.CUSTOMIZER.SCHEDULED_DEFAULT,
+    type: FILTER_COMMON.NOT_SPECIFIED,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
   },
   {
     type: FILTER_SCHEDULE.today,
@@ -198,12 +200,22 @@ const scheduledPresets: BaseOption<FILTER_SCHEDULE>[] = [
   },
 ];
 
-const timePresets: BaseOption<FILTER_TIME>[] = [
-  { type: FILTER_TIME.default, label: T.F.TASK_VIEW.CUSTOMIZER.TIME_DEFAULT },
+const timePresets: BaseOption<FILTER_COMMON | FILTER_TIME>[] = [
+  {
+    type: FILTER_COMMON.NOT_SPECIFIED,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
+  },
   { type: FILTER_TIME.MIN_10, label: T.F.TASK_VIEW.CUSTOMIZER.TIME_10MIN },
   { type: FILTER_TIME.MIN_30, label: T.F.TASK_VIEW.CUSTOMIZER.TIME_30MIN },
   { type: FILTER_TIME.MIN_60, label: T.F.TASK_VIEW.CUSTOMIZER.TIME_1HOUR },
   { type: FILTER_TIME.MIN_120, label: T.F.TASK_VIEW.CUSTOMIZER.TIME_2HOUR },
+];
+
+const tagPresets: BaseOption<FILTER_COMMON>[] = [
+  {
+    type: FILTER_COMMON.NOT_SPECIFIED,
+    label: T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED,
+  },
 ];
 
 export const OPTIONS = {
@@ -223,6 +235,7 @@ export const OPTIONS = {
 };
 
 export const PRESETS = {
+  tag: tagPresets,
   schedule: scheduledPresets,
   time: timePresets,
 };

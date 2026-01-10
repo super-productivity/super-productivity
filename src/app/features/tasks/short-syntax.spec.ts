@@ -1227,7 +1227,7 @@ describe('shortSyntax', () => {
 
   // This group of tests address Chrono's parsing the format "<date> <month> <yy}>" as year
   // This will cause unintended parsing result when the date syntax is used together with the time estimate syntax
-  // https://github.com/johannesjo/super-productivity/issues/4194
+  // https://github.com/super-productivity/super-productivity/issues/4194
   // The focus of this test group will be the ability of the parser to get the correct year and time estimate
   describe('should not parse time estimate syntax as year', () => {
     const today = new Date();

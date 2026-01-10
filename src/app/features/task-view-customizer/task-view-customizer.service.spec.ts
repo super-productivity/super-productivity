@@ -15,7 +15,9 @@ import { ProjectService } from '../project/project.service';
 import { TagService } from '../tag/tag.service';
 import {
   DEFAULT_OPTIONS,
+  FILTER_COMMON,
   FILTER_OPTION_TYPE,
+  FILTER_SCHEDULE,
   FilterOption,
   GROUP_OPTION_TYPE,
   GroupOption,
@@ -23,6 +25,8 @@ import {
   SORT_ORDER,
   SortOption,
 } from './types';
+import { DateAdapter } from '@angular/material/core';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from 'src/app/core/locale.constants';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -118,10 +122,14 @@ describe('TaskViewCustomizerService', () => {
     };
     projectUpdateSpy = jasmine.createSpy('update');
     tagUpdateSpy = jasmine.createSpy('updateTag');
+    const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+      getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+    });
 
     TestBed.configureTestingModule({
       providers: [
         TaskViewCustomizerService,
+        { provide: DateAdapter, useValue: dateAdapter },
         { provide: WorkContextService, useValue: mockWorkContextService },
         { provide: ProjectService, useValue: { update: projectUpdateSpy } },
         { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
@@ -154,9 +162,18 @@ describe('TaskViewCustomizerService', () => {
     expect(filtered.length).toBe(0);
   });
 
-  it('should not filter when filtering with an empty tag', () => {
+  it('should not filter when filtering with an empty tag input', () => {
     const filtered = service['applyFilter'](mockTasks, FILTER_OPTION_TYPE.tag, '');
     expect(filtered.length).toBe(4);
+  });
+
+  it('should filter by NOT_SPECIFIED tag (no tags)', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.tag,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+    expect(filtered.length).toBe(1);
   });
 
   it('should filter by project name', () => {
@@ -173,10 +190,37 @@ describe('TaskViewCustomizerService', () => {
     const filtered = service['applyFilter'](
       mockTasks,
       FILTER_OPTION_TYPE.scheduledDate,
-      'tomorrow',
+      FILTER_SCHEDULE.tomorrow,
     );
     expect(filtered.length).toBe(1);
     expect(filtered[0].id).toBe('Alpha(Tag A)');
+  });
+
+  it('should filter by NOT_SPECIFIED schedule date (no schedule date)', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.scheduledDate,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+    expect(filtered.length).toBe(0);
+  });
+
+  it('should filter by NOT_SPECIFIED timeSpent (no timeSpent)', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.timeSpent,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+    expect(filtered.length).toBe(1);
+  });
+
+  it('should filter by NOT_SPECIFIED estimatedTime (no estimatedTime)', () => {
+    const filtered = service['applyFilter'](
+      mockTasks,
+      FILTER_OPTION_TYPE.estimatedTime,
+      FILTER_COMMON.NOT_SPECIFIED,
+    );
+    expect(filtered.length).toBe(1);
   });
 
   it('should sort by name', () => {

@@ -4,7 +4,7 @@
       (focusModeService.isBreakLong()
         ? T.F.FOCUS_MODE.LONG_BREAK_TITLE
         : T.F.FOCUS_MODE.SHORT_BREAK_TITLE
-      ) | translate: { cycle: focusModeService.currentCycle() }
+      ) | translate: { cycle: focusModeService.currentCycle() - 1 }
     }}
   </h1>
 

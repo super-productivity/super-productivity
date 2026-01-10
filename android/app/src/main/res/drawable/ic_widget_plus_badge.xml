@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Circle background -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#0B77D2" />
+            <stroke
+                android:width="2dp"
+                android:color="#FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Horizontal bar of plus -->
+    <item
+        android:top="11dp"
+        android:bottom="11dp"
+        android:left="5dp"
+        android:right="5dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="1dp" />
+        </shape>
+    </item>
+
+    <!-- Vertical bar of plus -->
+    <item
+        android:top="5dp"
+        android:bottom="5dp"
+        android:left="11dp"
+        android:right="11dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="1dp" />
+        </shape>
+    </item>
+</layer-list>

@@ -66,6 +66,11 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
           initialState: {
             [CONFIG_FEATURE_NAME]: {
               sync: {},
+              localization: {
+                lng: undefined,
+                dateTimeLocale: undefined,
+                firstDayOfWeek: 0,
+              },
             } as any,
           },
         }),
@@ -170,6 +175,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
     });
 
     it('should set selectedDate to targetDay on initialization', async () => {
+      fixture.detectChanges();
       await component.ngAfterViewInit();
 
       const expectedDate = dateStrToUtcDate('2024-01-15');
@@ -191,6 +197,7 @@ describe('DialogScheduleTaskComponent - Select Due Only Mode', () => {
     });
 
     it('should not have initial selectedDate when no targetDay provided', async () => {
+      fixture.detectChanges();
       await component.ngAfterViewInit();
 
       // selectedDate should be null since no targetDay was provided

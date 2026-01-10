@@ -44,7 +44,9 @@ export interface FocusModeState {
   mode: FocusModeMode;
   currentCycle: number;
   lastCompletedDuration: number;
-  // TODO maybe add today total
+
+  // Task tracking during breaks
+  pausedTaskId: string | null;
 }
 
 // Mode strategy interface

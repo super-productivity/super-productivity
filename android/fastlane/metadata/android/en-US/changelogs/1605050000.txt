@@ -1,0 +1,18 @@
+
+### Bug Fixes
+
+* **docs:** remove broken CalDAV documentation link (#5577)
+* **locale:** default first day of week to Monday (ISO 8601)
+* **mobile:** start page setting not applied on Android (#5689)
+* **repeat:** preserve startDate when changing quick settings (fixes #5594)
+* **schedule:** respect default reminder setting when drag-scheduling tasks (fixes #5599)
+* **test:** add proper waits to app-features E2E test to prevent flakiness
+* **test:** mock Date.now() in scheduling tests to avoid midnight failures (fixes #5609)
+* **timezone:** correct dueWithTime handling to prevent timezone corruption (fixes #5515)
+* translation file
+### Features
+
+* **calendar:** improve handling of all-day events from iCal (26723bf), closes #5675
+
+
+

@@ -17,6 +17,7 @@ import { UserProfile } from '../user-profile.model';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { IS_ELECTRON } from '../../../app.constants';
+import { T } from '../../../t.const';
 
 @Component({
   selector: 'dialog-user-profile-management',
@@ -51,6 +52,7 @@ export class DialogUserProfileManagementComponent {
   readonly isCreating = signal(false);
 
   readonly isElectron = IS_ELECTRON;
+  readonly T = T;
 
   async createProfile(): Promise<void> {
     const name = this.newProfileName();

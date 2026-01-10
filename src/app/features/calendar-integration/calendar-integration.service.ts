@@ -18,6 +18,7 @@ import {
   merge,
   Observable,
   of,
+  timer,
 } from 'rxjs';
 import { T } from '../../t.const';
 import { SnackService } from '../../core/snack/snack.service';
@@ -43,6 +44,7 @@ import {
   getCalendarEventIdCandidates,
   matchesAnyCalendarEventId,
 } from './get-calendar-event-id-candidates';
+import { getEffectiveCheckInterval } from '../issue/providers/calendar/calendar.const';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
 
@@ -60,77 +62,96 @@ export class CalendarIntegrationService {
     this._store.select(selectCalendarProviders).pipe(
       distinctUntilChanged(fastArrayCompare),
       switchMap((calendarProviders) => {
-        return calendarProviders && calendarProviders.length
-          ? forkJoin(
-              calendarProviders.map((calProvider) => {
-                if (!calProvider.isEnabled) {
-                  return of({
-                    itemsForProvider: [] as CalendarIntegrationEvent[],
-                    calProvider,
-                    didError: false,
-                  });
-                }
-
-                return this.requestEventsForSchedule$(calProvider, true).pipe(
-                  first(),
-                  map((itemsForProvider: CalendarIntegrationEvent[]) => ({
-                    itemsForProvider,
-                    calProvider,
-                    didError: false,
-                  })),
-                  catchError(() =>
-                    of({
-                      itemsForProvider: [] as CalendarIntegrationEvent[],
-                      calProvider,
-                      didError: true,
-                    }),
-                  ),
-                );
-              }),
-            ).pipe(
-              switchMap((resultForProviders) =>
-                combineLatest([
-                  this._store
-                    .select(selectAllCalendarTaskEventIds)
-                    .pipe(distinctUntilChanged(fastArrayCompare)),
-                  this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
-                ]).pipe(
-                  // tap((val) => Log.log('selectAllCalendarTaskEventIds', val)),
-                  map(([allCalendarTaskEventIds, skippedEventIds]) => {
-                    const cachedByProviderId = this._groupCachedEventsByProvider(
-                      this._getCalProviderFromCache(),
-                    );
-                    return resultForProviders.map(
-                      ({ itemsForProvider, calProvider, didError }) => {
-                        // Fall back to cached data when the live fetch errored so offline mode keeps showing events.
-                        const sourceItems: ScheduleFromCalendarEvent[] = didError
-                          ? (cachedByProviderId.get(calProvider.id) ?? [])
-                          : (itemsForProvider as ScheduleFromCalendarEvent[]);
-                        return {
-                          // filter out items already added as tasks
-                          items: sourceItems.filter(
-                            (calEv) =>
-                              !matchesAnyCalendarEventId(
-                                calEv,
-                                allCalendarTaskEventIds,
-                              ) && !matchesAnyCalendarEventId(calEv, skippedEventIds),
-                          ),
-                        } as ScheduleCalendarMapEntry;
-                      },
-                    );
-                  }),
-                ),
-              ),
-              // tap((v) => Log.log('icalEvents$ final', v)),
-              tap((val) => {
-                saveToRealLs(LS.CAL_EVENTS_CACHE, val);
-              }),
-            )
-          : (of([]) as Observable<ScheduleCalendarMapEntry[]>);
+        if (!calendarProviders?.length) {
+          return of([]) as Observable<ScheduleCalendarMapEntry[]>;
+        }
+        // Calculate the minimum refresh interval from all enabled providers
+        const minInterval = this._getMinRefreshInterval(calendarProviders);
+        // Use timer to periodically refresh calendar data
+        return timer(0, minInterval).pipe(
+          switchMap(() => this._fetchAllProviders(calendarProviders)),
+        );
       }),
-      shareReplay({ bufferSize: 1, refCount: true }),
     ),
-  );
+  ).pipe(shareReplay({ bufferSize: 1, refCount: true }));
+
+  private _fetchAllProviders(
+    calendarProviders: IssueProviderCalendar[],
+  ): Observable<ScheduleCalendarMapEntry[]> {
+    return forkJoin(
+      calendarProviders.map((calProvider) => {
+        if (!calProvider.isEnabled) {
+          return of({
+            itemsForProvider: [] as CalendarIntegrationEvent[],
+            calProvider,
+            didError: false,
+          });
+        }
+
+        return this.requestEventsForSchedule$(calProvider, true).pipe(
+          first(),
+          map((itemsForProvider: CalendarIntegrationEvent[]) => ({
+            itemsForProvider,
+            calProvider,
+            didError: false,
+          })),
+          catchError(() =>
+            of({
+              itemsForProvider: [] as CalendarIntegrationEvent[],
+              calProvider,
+              didError: true,
+            }),
+          ),
+        );
+      }),
+    ).pipe(
+      switchMap((resultForProviders) =>
+        combineLatest([
+          this._store
+            .select(selectAllCalendarTaskEventIds)
+            .pipe(distinctUntilChanged(fastArrayCompare)),
+          this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
+        ]).pipe(
+          map(([allCalendarTaskEventIds, skippedEventIds]) => {
+            const cachedByProviderId = this._groupCachedEventsByProvider(
+              this._getCalProviderFromCache(),
+            );
+            return resultForProviders.map(
+              ({ itemsForProvider, calProvider, didError }) => {
+                // Fall back to cached data when the live fetch errored so offline mode keeps showing events.
+                const sourceItems: ScheduleFromCalendarEvent[] = didError
+                  ? (cachedByProviderId.get(calProvider.id) ?? [])
+                  : (itemsForProvider as ScheduleFromCalendarEvent[]);
+                return {
+                  // filter out items already added as tasks
+                  items: sourceItems.filter(
+                    (calEv) =>
+                      !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
+                      !matchesAnyCalendarEventId(calEv, skippedEventIds),
+                  ),
+                } as ScheduleCalendarMapEntry;
+              },
+            );
+          }),
+        ),
+      ),
+      tap((val) => {
+        saveToRealLs(LS.CAL_EVENTS_CACHE, val);
+      }),
+    );
+  }
+
+  /**
+   * Calculate the minimum refresh interval from all enabled providers.
+   * Uses getEffectiveCheckInterval which returns 5 min for file:// URLs.
+   */
+  private _getMinRefreshInterval(calendarProviders: IssueProviderCalendar[]): number {
+    const enabledProviders = calendarProviders.filter((p) => p.isEnabled && p.icalUrl);
+    if (!enabledProviders.length) {
+      return 2 * 60 * 60 * 1000; // Default 2 hours
+    }
+    return Math.min(...enabledProviders.map((p) => getEffectiveCheckInterval(p)));
+  }
 
   public readonly skippedEventIds$ = new BehaviorSubject<string[]>([]);
 
@@ -210,7 +231,7 @@ export class CalendarIntegrationService {
         },
       })
       .pipe(
-        map((icalStrData) =>
+        switchMap((icalStrData) =>
           getRelevantEventsForCalendarIntegrationFromIcal(
             icalStrData,
             calProvider.id,

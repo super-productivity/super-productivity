@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const path = require('path');
 
 const file = process.argv[2];
@@ -14,7 +14,7 @@ const absolutePath = path.resolve(file);
 try {
   // Run prettier
   console.log(`🎨 Formatting ${path.basename(file)}...`);
-  execSync(`npm run prettier:file ${absolutePath}`, {
+  execFileSync('npm', ['run', 'prettier:file', '--', absolutePath], {
     stdio: 'pipe',
     encoding: 'utf8',
   });
@@ -24,13 +24,13 @@ try {
 
   if (file.endsWith('.scss')) {
     // Use stylelint for SCSS files
-    execSync(`npx stylelint ${absolutePath}`, {
+    execFileSync('npx', ['stylelint', absolutePath], {
       stdio: 'pipe',
       encoding: 'utf8',
     });
   } else {
     // Use ng lint for TypeScript/JavaScript files
-    const lintOutput = execSync(`npm run lint:file ${absolutePath}`, {
+    execFileSync('npm', ['run', 'lint:file', '--', absolutePath], {
       stdio: 'pipe',
       encoding: 'utf8',
     });

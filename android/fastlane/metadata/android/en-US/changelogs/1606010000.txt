@@ -1,0 +1,7 @@
+
+### Bug Fixes
+
+* **calendar:** handle Office 365 updateTimezones crash (#5722)
+* **docker:** drop arm/v7 platform to fix QEMU build failure
+* **repeat:** use fallback for undefined startDate (#5724)
+* **ui:** align time tracking button overlay (#5720)

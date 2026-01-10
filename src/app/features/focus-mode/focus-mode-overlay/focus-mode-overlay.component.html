@@ -1,62 +1,32 @@
 <div class="electron-drag-bar"></div>
 
-@if (!isPomodoroEnabled()) {
-  <header>
-    <banner></banner>
-  </header>
-  @if (activePage()) {
-    <main>
-      <button
-        class="close-btn"
-        mat-icon-button
-        (click)="closeOverlay()"
-      >
-        <mat-icon>close</mat-icon>
-      </button>
+<header>
+  <banner></banner>
+</header>
+@if (activePage()) {
+  <main>
+    <button
+      class="close-btn"
+      mat-icon-button
+      (click)="closeOverlay()"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
 
-      <!-- Mode selector is now integrated into focus-mode-main component -->
+    <!-- Mode selector is now integrated into focus-mode-main component -->
 
+    <!-- -->
+    @switch (activePage()) {
       <!-- -->
-      @switch (activePage()) {
-        <!-- -->
-        @case (FocusScreen.Main) {
-          <focus-mode-main @warpIn></focus-mode-main>
-        }
-        @case (FocusScreen.SessionDone) {
-          <focus-mode-session-done @warpIn></focus-mode-session-done>
-        }
-        @case (FocusScreen.Break) {
-          <focus-mode-break @warpIn></focus-mode-break>
-        }
+      @case (FocusScreen.Main) {
+        <focus-mode-main @warpIn></focus-mode-main>
       }
-    </main>
-  }
-} @else {
-  <button
-    class="close-btn"
-    mat-icon-button
-    (click)="closeOverlay()"
-  >
-    <mat-icon>close</mat-icon>
-  </button>
-  <div class="pomodoro-info-wrapper">
-    <div class="pomodoro-info-msg">{{ T.F.FOCUS_MODE.POMODORO_INFO | translate }}</div>
-    <div style="text-align: center">
-      <button
-        mat-stroked-button
-        color="primary"
-        (click)="deactivatePomodoro()"
-      >
-        <mat-icon>alarm_off</mat-icon>
-        {{ T.F.FOCUS_MODE.POMODORO_DISABLE | translate }}
-      </button>
-      <button
-        mat-stroked-button
-        (click)="cancelFocusSession()"
-      >
-        <mat-icon>arrow_back</mat-icon>
-        {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
-      </button>
-    </div>
-  </div>
+      @case (FocusScreen.SessionDone) {
+        <focus-mode-session-done @warpIn></focus-mode-session-done>
+      }
+      @case (FocusScreen.Break) {
+        <focus-mode-break @warpIn></focus-mode-break>
+      }
+    }
+  </main>
 }

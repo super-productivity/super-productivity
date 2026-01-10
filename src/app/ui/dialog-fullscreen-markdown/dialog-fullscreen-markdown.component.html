@@ -3,14 +3,166 @@
   [class.split-view]="viewMode === 'SPLIT'"
 >
   @if (viewMode === 'TEXT_ONLY' || viewMode === 'SPLIT') {
-    <textarea
-      #textareaEl
-      [(ngModel)]="data.content"
-      (keydown)="keydownHandler($event)"
-      (ngModelChange)="ngModelChange($event)"
-      rows="1"
-      tabindex="3"
-    ></textarea>
+    <div class="editor-section">
+      <div class="formatting-toolbar">
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyHeading(1)"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_1 | translate"
+          aria-label="Heading 1"
+        >
+          <span class="heading-label">H1</span>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyHeading(2)"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_2 | translate"
+          aria-label="Heading 2"
+        >
+          <span class="heading-label">H2</span>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyHeading(3)"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.HEADING_3 | translate"
+          aria-label="Heading 3"
+        >
+          <span class="heading-label">H3</span>
+        </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyBold()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BOLD | translate"
+          aria-label="Bold"
+        >
+          <mat-icon>format_bold</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyItalic()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.ITALIC | translate"
+          aria-label="Italic"
+        >
+          <mat-icon>format_italic</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyStrikethrough()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.STRIKETHROUGH | translate"
+          aria-label="Strikethrough"
+        >
+          <mat-icon>strikethrough_s</mat-icon>
+        </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyBulletList()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.BULLET_LIST | translate"
+          aria-label="Bulleted list"
+        >
+          <mat-icon>format_list_bulleted</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyNumberedList()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.NUMBERED_LIST | translate"
+          aria-label="Numbered list"
+        >
+          <mat-icon>format_list_numbered</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyTaskList()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.TASK_LIST | translate"
+          aria-label="Task list"
+        >
+          <mat-icon>checklist</mat-icon>
+        </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyQuote()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.QUOTE | translate"
+          aria-label="Quote"
+        >
+          <mat-icon>format_quote</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyInlineCode()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INLINE_CODE | translate"
+          aria-label="Inline code"
+        >
+          <mat-icon>code</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onApplyCodeBlock()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.CODE_BLOCK | translate"
+          aria-label="Code block"
+        >
+          <mat-icon>integration_instructions</mat-icon>
+        </button>
+
+        <span class="toolbar-divider"></span>
+
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onInsertLink()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_LINK | translate"
+          aria-label="Insert link"
+        >
+          <mat-icon>link</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onInsertImage()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_IMAGE | translate"
+          aria-label="Insert image"
+        >
+          <mat-icon>image</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (mousedown)="$event.preventDefault()"
+          (click)="onInsertTable()"
+          [matTooltip]="T.F.NOTE.D_FULLSCREEN.TOOLBAR.INSERT_TABLE | translate"
+          aria-label="Insert table"
+        >
+          <mat-icon>table_chart</mat-icon>
+        </button>
+      </div>
+
+      <textarea
+        #textareaEl
+        [(ngModel)]="data.content"
+        (keydown)="keydownHandler($event)"
+        (ngModelChange)="ngModelChange($event)"
+        rows="1"
+        tabindex="3"
+      ></textarea>
+    </div>
   }
   @if (viewMode === 'PARSED' || viewMode === 'SPLIT') {
     <div
@@ -47,14 +199,6 @@
       >
     </mat-button-toggle-group>
   </div>
-
-  <button
-    (click)="close(true)"
-    mat-button
-  >
-    <mat-icon>close</mat-icon>
-    {{ T.G.CANCEL | translate }}
-  </button>
 
   <button
     id="T-save-note"

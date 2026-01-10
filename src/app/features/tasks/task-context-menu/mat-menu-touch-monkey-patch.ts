@@ -5,7 +5,7 @@ import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
  * Monkey patch for Angular Material menu to fix automatic selection issue on touch devices
  * when submenu opens under user's finger near screen edges.
  *
- * Issue: https://github.com/johannesjo/super-productivity/issues/4436
+ * Issue: https://github.com/super-productivity/super-productivity/issues/4436
  * Related: https://github.com/angular/components/issues/27508
  */
 export const applyMatMenuTouchMonkeyPatch = (): void => {

@@ -50,11 +50,11 @@ npm run test:file <filepath>
 ### Testing
 
 - Unit tests: `npm test` - Uses Jasmine/Karma, tests are co-located with source files (`.spec.ts`)
-- E2E tests: `npm run e2e` - Uses Nightwatch, located in `/e2e/src/`
-- Playwright E2E tests: Located in `/e2e/`
-  - `npm run e2e:playwright` - Run all tests with minimal output (shows failures clearly)
-  - `npm run e2e:playwright:file <path>` - Run a single test file with detailed output
-    - Example: `npm run e2e:playwright:file tests/work-view/work-view.spec.ts`
+- E2E tests: `npm run e2e` - Uses Playwright, located in `/e2e/tests/`
+  - `npm run e2e` - Run all tests with minimal output (shows failures clearly)
+  - `npm run e2e:file <path>` - Run a single test file with detailed output
+    - Example: `npm run e2e:file tests/work-view/work-view.spec.ts`
+  - Running tests is slow. When fixing tests always prefer running only the affected test files first. Only when everything seems to work run the full suite to confirm.
 - Linting: `npm run lint` - ESLint for TypeScript, Stylelint for SCSS
 
 ## Architecture Overview
@@ -104,10 +104,14 @@ The app uses NgRx (Redux pattern) for state management. Key state slices:
 5. **Electron Context**: Check `IS_ELECTRON` before using Electron-specific features.
 6. **Privacy**: No analytics or tracking. User data stays local unless explicitly synced.
 
-## 🚫 Known Anti-Patterns to Avoid
+## 🚫 Anti-Patterns → Do This Instead
 
-- `any` or untyped public APIs
-- Direct DOM access (use Angular bindings)
-- Adding side effects in constructors
-- Re-declaring styles that exist in Angular Material theme
-- Using deprecated Angular APIs (e.g., `NgModules` when not needed)
+| Avoid                              | Do Instead                                    |
+| ---------------------------------- | --------------------------------------------- |
+| `any` type                         | Use proper types, `unknown` if truly unknown  |
+| Direct DOM access                  | Use Angular bindings, `viewChild()` if needed |
+| Side effects in constructors       | Prefer `async` pipe or `toSignal`             |
+| Mutating NgRx state directly       | Return new objects in reducers                |
+| Subscribing without cleanup        | Use `takeUntilDestroyed()` or async pipe      |
+| `NgModules` for new code           | Use standalone components                     |
+| Re-declaring Material theme styles | Use existing theme variables                  |

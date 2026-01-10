@@ -32,7 +32,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -58,7 +58,7 @@ jobs:
           release: false
 
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: WinBuildStuff
           path: .tmp/app-builds/*.exe
@@ -92,7 +92,7 @@ jobs:
         id: npm-cache-dir
         run: |
           echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -131,7 +131,7 @@ jobs:
       #      - run: |
       #          echo Installed chromium version: ${{ steps.setup-chrome.outputs.chrome-version }}
       #          ${{ steps.setup-chrome.outputs.chrome-path }} --version
-      # Disabled because not working atm: https://github.com/johannesjo/super-productivity/actions/runs/5924016145/job/16060737982
+      # Disabled because not working atm: https://github.com/super-productivity/super-productivity/actions/runs/5924016145/job/16060737982
       #      - name: Test E2E
       #        run: npm run e2e
 
@@ -158,7 +158,7 @@ jobs:
       #  if: always()
       # run: ls -la && cat notarization-error.log
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: dmg
           path: .tmp/app-builds/*.dmg

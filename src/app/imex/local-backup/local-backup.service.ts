@@ -56,7 +56,7 @@ export class LocalBackupService {
   }
 
   async askForFileStoreBackupIfAvailable(): Promise<void> {
-    if (!IS_ELECTRON || !IS_ANDROID_WEB_VIEW) {
+    if (!IS_ELECTRON && !IS_ANDROID_WEB_VIEW) {
       return;
     }
 

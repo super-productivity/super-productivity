@@ -19,11 +19,8 @@ test.describe('Task List - Start/Stop', () => {
     await playBtn.waitFor({ state: 'visible' });
     await playBtn.click();
 
-    // Wait a moment for the class to be applied
-    await page.waitForTimeout(200);
-
-    // Verify the task has the 'isCurrent' class
-    await expect(firstTask).toHaveClass(/isCurrent/);
+    // Verify the task has the 'isCurrent' class (auto-waits)
+    await expect(firstTask).toHaveClass(/isCurrent/, { timeout: 5000 });
 
     // Hover again to ensure button is visible
     await firstTask.hover();
@@ -31,10 +28,7 @@ test.describe('Task List - Start/Stop', () => {
     // Click the play button again to stop the task
     await playBtn.click();
 
-    // Wait a moment for the class to be removed
-    await page.waitForTimeout(200);
-
-    // Verify the task no longer has the 'isCurrent' class
-    await expect(firstTask).not.toHaveClass(/isCurrent/);
+    // Verify the task no longer has the 'isCurrent' class (auto-waits)
+    await expect(firstTask).not.toHaveClass(/isCurrent/, { timeout: 5000 });
   });
 });

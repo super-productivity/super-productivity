@@ -9,7 +9,7 @@
 <strong>An advanced todo list app with timeboxing & time tracking capabilities that supports importing tasks from your calendar, Jira, GitHub and others</strong>
 <p>
   
-<p align="center">:globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/johannesjo/super-productivity/releases">Download</a></p>
+<p align="center">:globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/releases">Download</a></p>
 
 <br>
 
@@ -35,9 +35,9 @@
        src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square"
        align="center">
 </a>
-<a href="https://github.com/johannesjo/super-productivity/releases">
+<a href="https://github.com/super-productivity/super-productivity/releases">
   <img alt="GitHub All Releases"
-       src="https://img.shields.io/github/downloads/johannesjo/super-productivity/total"
+       src="https://img.shields.io/github/downloads/super-productivity/super-productivity/total"
        align="center">
 </a>
 <a href="https://community.chocolatey.org/packages/super-productivity">
@@ -112,7 +112,7 @@
        style="height: 50px"
        height="50" />
 </a>
-<a href='http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/johannesjo/super-productivity/releases'>
+<a href='http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/super-productivity/super-productivity/releases'>
   <img src='https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png'
        align="center"
        alt='Obtanium Badge'
@@ -133,7 +133,7 @@
   - Need some extra focus? A **Pomodoro timer** is also always at hand.
   - **Collect personal metrics** to see, which of your work routines need adjustments.
 - Integrate with **Jira**, **Trello**, **GitHub**, **GitLab**, **Gitea** and **OpenProject**. Auto import tasks assigned to you, plan the details locally, automatically create work logs, and get notified immediately, when something changes.
-- Basic [**CalDAV**](https://github.com/johannesjo/super-productivity/blob/master/docs/caldav.md) integration.
+- Basic **CalDAV** integration.
 - Back up and synchronize your data across multiple devices with **Dropbox** and **WebDAV** support
 - Attach context information to tasks and projects. Create **notes**, attach **files** or create **project-level bookmarks** for links, files, and even commands.
 - Super Productivity **respects your privacy** and **does NOT collect any data** and there are no user accounts or registration. **You decide where you store your data!**
@@ -149,9 +149,9 @@ If you need some help, [this article on dev.to is the best place to start](https
 
 If you prefer, there is also a (long) [YouTube video available](https://www.youtube.com/watch?v=VoF2_RSdNXA).
 
-There is another older – the app looks and feels much better now ;) – [article](https://dev.to/johannesjo/super-productivity-how-to-grow-fond-of-time-tracking-and-task-management-22ee) on how I personally might use the app - and still [another one](https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk) on how I implement the 'eat the frog' prioritizing scheme in the app.
+There is another older – the app looks and feels much better now ;) – [article](https://dev.to/super-productivity/super-productivity-how-to-grow-fond-of-time-tracking-and-task-management-22ee) on how I personally might use the app - and still [another one](https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk) on how I implement the 'eat the frog' prioritizing scheme in the app.
 
-[If you have further questions, please refer to the discussions page](https://github.com/johannesjo/super-productivity/discussions).
+[If you have further questions, please refer to the discussions page](https://github.com/super-productivity/super-productivity/discussions).
 
 <details>
 <summary> <b>⌨ Keyboard shortcuts and short-syntax</b></summary>
@@ -197,7 +197,7 @@ If you want the Jira integration and idle time tracking to work, you also have t
 
 ### All Platforms
 
-[Install from the releases page](https://github.com/johannesjo/super-productivity/releases).
+[Install from the releases page](https://github.com/super-productivity/super-productivity/releases).
 
 ### Windows
 
@@ -209,6 +209,12 @@ You can also install the app using [Chocolatey](https://community.chocolatey.org
 
 ```powershell
 choco install super-productivity
+```
+
+or using [Scoop](https://scoop.sh/#/apps?q=super-productivity&id=26ccca2d7edd51629727a9468c4136ea89a652a0):
+
+```powershell
+scoop install extras/super-productivity
 ```
 
 ### Linux
@@ -261,7 +267,7 @@ makepkg -si
 #### AppImage
 
 If you encounter problems, please have a look here:
-https://github.com/johannesjo/super-productivity/issues/3193#issuecomment-2131315513
+https://github.com/super-productivity/super-productivity/issues/3193#issuecomment-2131315513
 
 ### MacOS
 
@@ -314,22 +320,22 @@ There are several ways to help.
 
 1. **Spread the word:** More users mean more people testing and contributing to the app which in turn means better stability and possibly more and better features. You can vote for Super Productivity on [Slant](https://www.slant.co/topics/14021/viewpoints/7/~productivity-tools-for-linux~super-productivity), [Product Hunt](https://www.producthunt.com/posts/super-productivity), [Softpedia](https://www.softpedia.com/get/Office-tools/Diary-Organizers-Calendar/Super-Productivity.shtml) or on [AlternativeTo](https://alternativeto.net/software/super-productivity/), you can [tweet about it](https://twitter.com/intent/tweet?text=I%20like%20Super%20Productivity%20%20https%3A%2F%2Fsuper-productivity.com), share it on [LinkedIn](http://www.linkedin.com/shareArticle?mini=true&url=https://super-productivity.com&title=I%20like%20Super%20Productivity&), [reddit](http://www.reddit.com/submit?url=https%3A%2F%2Fsuper-productivity.com&title=I%20like%20Super%20Productivity) or any of your favorite social media platforms. Every little bit helps!
 
-2. **Provide a Pull Request:** Here is a list of [the most popular community requests](https://github.com/johannesjo/super-productivity/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) and here some info on [how to run the development build](https://github.com/johannesjo/super-productivity#running-the-development-server).
+2. **Provide a Pull Request:** Here is a list of [the most popular community requests](https://github.com/super-productivity/super-productivity/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) and here some info on [how to run the development build](https://github.com/super-productivity/super-productivity#running-the-development-server).
    Please make sure that you're following the [angular commit guidelines](https://github.com/angular/angular.js/blob/master/DEVELOPERS.md#commits) and to also include the issue number in your commit message, if you're fixing a particular issue (e.g.: `feat: add nice feature with the number #31`).
 
-3. **[Answer questions](https://github.com/johannesjo/super-productivity/discussions)**: You know the answer to another user's problem? Share your knowledge!
+3. **[Answer questions](https://github.com/super-productivity/super-productivity/discussions)**: You know the answer to another user's problem? Share your knowledge!
 
-4. **[Provide your opinion](https://github.com/johannesjo/super-productivity/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc+label%3A%22community+feedback+wanted%22):** Some community suggestions are controversial. Your input might be helpful and if it is just an up- or down-vote.
+4. **[Provide your opinion](https://github.com/super-productivity/super-productivity/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc+label%3A%22community+feedback+wanted%22):** Some community suggestions are controversial. Your input might be helpful and if it is just an up- or down-vote.
 
-5. **[Provide a more refined UI spec for existing feature requests](https://github.com/johannesjo/super-productivity/issues?q=is%3Aissue+is%3Aopen+label%3A%22needs+concept+and%2For+ui+spec%22)**
+5. **[Provide a more refined UI spec for existing feature requests](https://github.com/super-productivity/super-productivity/issues?q=is%3Aissue+is%3Aopen+label%3A%22needs+concept+and%2For+ui+spec%22)**
 
-6. **[Report bugs](https://github.com/johannesjo/super-productivity/issues/new)**
+6. **[Report bugs](https://github.com/super-productivity/super-productivity/issues/new)**
 
-7. **[Make a feature or improvement request](https://github.com/johannesjo/super-productivity/issues/new)**: Something can be done better? Something essential missing? Let us know!
+7. **[Make a feature or improvement request](https://github.com/super-productivity/super-productivity/issues/new)**: Something can be done better? Something essential missing? Let us know!
 
-8. **[Translations](https://github.com/johannesjo/super-productivity/tree/master/src/assets/i18n), Icons, etc.**: You don't have to be a programmer to help. Some of the icons really need improvement and many of the translations could use some love.
+8. **[Translations](https://github.com/super-productivity/super-productivity/tree/master/src/assets/i18n), Icons, etc.**: You don't have to be a programmer to help. Some of the icons really need improvement and many of the translations could use some love.
 
-[//]: # '[![inlang status badge](https://badge.inlang.com/?url=github.com/johannesjo/super-productivity)](https://fink.inlang.com/github.com/johannesjo/super-productivity?ref=badge)'
+[//]: # '[![inlang status badge](https://badge.inlang.com/?url=github.com/super-productivity/super-productivity)](https://fink.inlang.com/github.com/super-productivity/super-productivity?ref=badge)'
 [//]: #
 [//]: # 'You can use the Fink Localization Editor to edit, lint, and add translations for different languages. [Contribute via fink Guide](https://inlang.com/g/6ddyhpoi).'
 
@@ -358,7 +364,7 @@ To run the development server you need to have Node installed (version 20 or hig
 **Clone repo**
 
 ```bash
-git clone https://github.com/johannesjo/super-productivity.git
+git clone https://github.com/super-productivity/super-productivity.git
 ```
 
 **Install dependencies**
@@ -398,11 +404,11 @@ Further customizations to the Codespaces dev container can be performed by editi
 
 ### Packaging the app
 
-Packaging the app is done via [electron-builder](https://github.com/electron-userland/electron-builder). To start packaging run `npm run dist`. If you want to add new platforms and experiment with the build options the easiest way to do so is manipulating the `build` property in the [package.json](https://github.com/johannesjo/super-productivity/blob/develop/package.json), but you can also use the [command line interface of electron builder](https://www.electron.build/cli).
+Packaging the app is done via [electron-builder](https://github.com/electron-userland/electron-builder). To start packaging run `npm run dist`. If you want to add new platforms and experiment with the build options the easiest way to do so is manipulating the `build` property in the [package.json](https://github.com/super-productivity/super-productivity/blob/develop/package.json), but you can also use the [command line interface of electron builder](https://www.electron.build/cli).
 
 ### Building for Android
 
-_This feature was added on October 7, 2024. See [Pull Request #57](https://github.com/johannesjo/super-productivity-android/pull/57)._
+_This feature was added on October 7, 2024. See [Pull Request #57](https://github.com/super-productivity/super-productivity-android/pull/57)._
 
 To build the Android version of Super Productivity, please refer to the [Android Build Documentation](./android/README.md), which includes instructions on configuring **Connectivity-Free Mode** and **Online-Only Mode (Compatibility Mode)**.
 
@@ -411,7 +417,7 @@ Ensure you follow the setup steps properly to configure the environment for buil
 ## Run as Docker Container
 
 ```bash
-docker run -d -p 80:80 johannesjo/super-productivity:latest
+docker run -d -p 80:80 super-productivity/super-productivity:latest
 ```
 
 > [!NOTE]
@@ -433,7 +439,7 @@ Download the pre-configured `docker-compose.yaml` and `webdav.yaml` from this re
 
 ```bash
 # Alternatively, you can get them by cloning this repository
-git clone https://github.com/johannesjo/super-productivity.git
+git clone https://github.com/super-productivity/super-productivity.git
 mkdir -p sp
 cp super-productivity/docker-compose.yaml sp/
 cp super-productivity/webdav.yaml sp/
@@ -461,7 +467,7 @@ You can provide the default values for WebDAV settings in the "Sync" section of 
 
 In addition to color coding your projects and tags and to the dark and light theme you can also load completely custom CSS to restyle everything. To load a custom theme you simply need to put them into a new file named `styles.css` directly in the [user data folder](#user-data-folder).
 
-There is a great set of [themes available for download in this repository](https://github.com/johannesjo/super-productivity-themes/tree/main/dist) as well as some [info on how to create your own custom themes](https://github.com/johannesjo/super-productivity-themes).
+There is a great set of [themes available for download in this repository](https://github.com/super-productivity/super-productivity-themes/tree/main/dist) as well as some [info on how to create your own custom themes](https://github.com/super-productivity/super-productivity-themes).
 
 ## Custom WebDAV Syncing
 

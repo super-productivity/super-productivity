@@ -56,6 +56,15 @@ export class GlobalTrackingIntervalService {
     this._currentTrackingStart = Date.now();
   }
 
+  /**
+   * Reset the tracking start time to now.
+   * This is used after syncing time from external sources (like Android foreground service)
+   * to prevent double-counting the time that was already synced.
+   */
+  resetTrackingStart(): void {
+    this._currentTrackingStart = Date.now();
+  }
+
   private _createTodayDateStrObservable(): Observable<string> {
     const timerBased$ = this.globalInterval$.pipe(
       map(() => this._dateService.todayStr()),

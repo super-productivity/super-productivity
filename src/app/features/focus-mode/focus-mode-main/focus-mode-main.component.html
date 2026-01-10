@@ -10,13 +10,25 @@
 
 <!-- Mode Selector (Preparation state) -->
 @if (isShowModeSelector()) {
-  <segmented-button-group
-    class="focus-mode-select-mode"
-    [options]="modeOptions"
-    [selectedId]="mode()"
-    [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
-    (selectionChange)="selectMode($event)"
-  ></segmented-button-group>
+  <div class="mode-selector-wrapper">
+    <segmented-button-group
+      class="focus-mode-select-mode"
+      [options]="modeOptions"
+      [selectedId]="mode()"
+      [ariaLabel]="T.F.FOCUS_MODE.SELECT_MODE | translate"
+      (selectionChange)="selectMode($event)"
+    ></segmented-button-group>
+    @if (isShowPomodoroSettings()) {
+      <button
+        mat-icon-button
+        [matTooltip]="T.F.FOCUS_MODE.POMODORO_SETTINGS | translate"
+        (click)="openPomodoroSettings()"
+        class="pomodoro-settings-btn"
+      >
+        <mat-icon>settings</mat-icon>
+      </button>
+    }
+  </div>
 }
 
 <!-- Simple Counter Buttons (In Progress state) -->
@@ -43,6 +55,11 @@
   <!-- Task title -->
   <div class="task-section">
     @if (ct) {
+      @if (ct.parentId && parentTaskTitle()) {
+        <div class="parent-title">
+          <div class="title">{{ parentTaskTitle() }}</div>
+        </div>
+      }
       <task-title
         @fade
         (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
@@ -290,6 +307,7 @@
           (changed)="changeTaskNotes($event); isFocusNotes.set(false)"
           [isFocus]="isFocusNotes()"
           [isShowControls]="true"
+          [isDefaultText]="!ct.notes"
           [model]="ct.notes || defaultTaskNotes()"
         ></inline-markdown>
       </div>

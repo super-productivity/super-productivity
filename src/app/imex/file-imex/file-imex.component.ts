@@ -28,6 +28,7 @@ import {
   DialogConfirmUrlImportData,
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
+import { DataValidationFailedError } from '../../pfapi/api/errors/errors';
 
 @Component({
   selector: 'file-imex',
@@ -186,10 +187,19 @@ export class FileImexComponent implements OnInit {
       // this._snackService.open({ type: 'SUCCESS', msg: 'Data imported successfully!' });
     } catch (e) {
       Log.err('Import process failed', e);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
-      });
+
+      if (e instanceof DataValidationFailedError) {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: `Import failed: ${e.message}`,
+          isSkipTranslate: true,
+        });
+      } else {
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.FILE_IMEX.S_ERR_IMPORT_FAILED,
+        });
+      }
     }
   }
 

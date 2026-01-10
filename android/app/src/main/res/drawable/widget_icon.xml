@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- App icon as base -->
+    <item
+        android:drawable="@mipmap/ic_launcher"
+        android:gravity="center" />
+
+    <!-- Plus badge in bottom-right corner -->
+    <item
+        android:width="20dp"
+        android:height="20dp"
+        android:gravity="bottom|end"
+        android:bottom="2dp"
+        android:end="2dp">
+        <shape android:shape="oval">
+            <solid android:color="#0B77D2" />
+            <stroke
+                android:width="1dp"
+                android:color="#FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Plus sign -->
+    <item
+        android:width="20dp"
+        android:height="20dp"
+        android:gravity="bottom|end"
+        android:bottom="2dp"
+        android:end="2dp">
+        <layer-list>
+            <!-- Horizontal bar -->
+            <item
+                android:width="10dp"
+                android:height="2dp"
+                android:gravity="center">
+                <shape android:shape="rectangle">
+                    <solid android:color="#FFFFFF" />
+                    <corners android:radius="1dp" />
+                </shape>
+            </item>
+            <!-- Vertical bar -->
+            <item
+                android:width="2dp"
+                android:height="10dp"
+                android:gravity="center">
+                <shape android:shape="rectangle">
+                    <solid android:color="#FFFFFF" />
+                    <corners android:radius="1dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</layer-list>

@@ -125,6 +125,14 @@
           ></trello-additional-cfg>
           <!-- -->
         }
+        @case ('CLICKUP') {
+          <clickup-additional-cfg
+            [section]="configFormSection"
+            [cfg]="model"
+            (modelChange)="customCfgCmpSave($event)"
+          ></clickup-additional-cfg>
+          <!-- -->
+        }
       }
     }
   </mat-dialog-content>

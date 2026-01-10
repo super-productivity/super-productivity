@@ -7,4 +7,15 @@
   <string name="webview_block_provider">Provider package: %1$s</string>
   <string name="webview_block_update">Update WebView</string>
   <string name="webview_block_close">Close app</string>
+
+  <!-- Widget strings -->
+  <string name="widget_quick_add_label">Quick Add Task</string>
+  <string name="widget_description">Quickly add a task without opening the app</string>
+  <string name="widget_tap_to_add">Tap to add a task</string>
+  <string name="widget_add_task">Add task</string>
+  <string name="widget_dialog_title">Add Task</string>
+  <string name="widget_input_hint">What do you need to do?</string>
+  <string name="widget_add_button">Add</string>
+  <string name="widget_task_added">Task added</string>
+  <string name="widget_enter_title">Please enter a task title</string>
 </resources>

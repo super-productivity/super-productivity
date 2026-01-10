@@ -1,0 +1,57 @@
+
+### Bug Fixes
+
+* address code review issues from today's changes
+* address code review issues from today's changes
+* **android:** add error handling for native service calls (a14c950), closes #5819
+* **android:** resolve race condition and improve widget reliability
+* **android:** skip reminder dialog on Android to fix snooze button (ed2dbfb), closes #5775
+* **android:** sync notification timer when time spent is manually changed (2c910f6), closes #5772
+* **android:** sync time tracking from notification correctly on resume (55d4fd1), closes #5840 #5842
+* **audio:** prevent app freeze during focus mode ticking sound (3a5cddd), closes #5798
+* **backup:** correct logical operator for platform check on first launch (80acc92), closes #5796
+* **build:** ensure consistent Windows EXE metadata for installer and portable (fff8596), closes #4625
+* **build:** remove deprecated win32metadata from electron-builder config
+* **data-repair:** change quickSetting to CUSTOM when startDate is missing (cb27b53), closes #5802
+* **database:** prevent repeated error dialogs when disk is full (9f6442b), closes #5845
+* **electron:** delay window focus after notification to prevent accidental input (29be592), closes #5762
+* **electron:** reduce idle detection log verbosity (62d449a), closes #5794
+* **error-handler:** use getErrorTxt to prevent [object Object] in error titles (b2d0319), closes #5822
+* **error-handling:** prevent [object Object] from appearing in error messages (e571d6e), closes #5790
+* **focus-mode:** address critical focus mode and Android notification issues
+* **focus-mode:** respect isFocusModeEnabled setting in App Features (47a9897), closes #5776
+* **focus-mode:** use independent 1s timer for Pomodoro countdown (ce70df4), closes #5813
+* **ical:** prevent race condition in lazy loader
+* **localization:** respect Sunday as first day of week preference (635083e), closes #5862
+* **offline-banner:** prevent repeated offline banner on Linux/Electron (871ee35), closes #5738
+* **planner:** schedule next month uses first day of month
+* **planner:** use task startDate for weekly repeat weekday calculation (4198a6b), closes #5806
+* **plugins:** ensure setCounter creates valid SimpleCounter records (1529920), closes #5812
+* **reflection-note:** prevent trailing spaces from being deleted while typing (4c27881), closes #5800
+* **reminder:** cancel native Android reminders immediately on task deletion (93e957e), closes #5831
+* **reminder:** prevent dismissed reminders from reappearing (9c3834b), closes #5826
+* **security:** address CodeQL security alerts (c4023b4), closes #50-52 #40 #39 #37-38
+* **security:** update Angular packages to address CVEs
+* **security:** update axios and brace-expansion dependencies
+* **sync:** add error handling for JSON parse failures in sync data (7496b2d), closes #5771
+* **sync:** redirect to TODAY when active project removed during sync (8794194), closes #5859
+* **sync:** show context-aware permission error for Flatpak/Snap (18a0e78), closes #4078
+* **task-repeat:** prevent race condition when saving repeat config (dc12403), closes #5828
+* **test:** fix fetch spy setup in audio tests
+* **test:** use dynamic date in year boundary test to avoid today collision
+### Features
+
+* **android:** add quick add widget
+* **focus-mode:** add manual break start option for Pomodoro (c74cebd), closes #5736
+* **focus-mode:** add Skip Break button to banner during active breaks (b9bf655), closes #5818
+* **i18n:** add new translations
+* **i18n:** update Turkish language
+* **notes:** add auto-save to fullscreen markdown editor (09d0131), closes #5804
+* **sync:** add WebDAV Test Connection button and improve UX (660adf7), closes #5508 #5508
+* **task:** add Go to Task button for all newly created tasks (b37065a), closes #5759
+
+
+### Performance Improvements
+
+* **android:** prewarm WebView during idle time to speed up startup
+* lazy load ical.js to reduce initial bundle size

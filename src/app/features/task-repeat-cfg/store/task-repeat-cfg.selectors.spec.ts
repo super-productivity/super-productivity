@@ -949,6 +949,120 @@ describe('selectTaskRepeatCfgsSortedByTitleAndProject', () => {
   });
 });
 
+// Issue #5806: Planner shows less scheduled tasks than scheduled/planned view
+describe('Issue #5806 - Weekly tasks with correct weekday show in planner', () => {
+  it('should show task on Sunday when sunday=true and checking Sunday', () => {
+    // This is the CORRECT scenario after the fix
+    const sunday = dateStrToUtcDate('2025-12-28'); // Sunday
+    const result = selectTaskRepeatCfgsForExactDay.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26', // Friday (when task was created)
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true, // Correctly set to Sunday (the scheduled day)
+        }),
+      ],
+      { dayDate: sunday.getTime() },
+    );
+    expect(result.map((r) => r.id)).toEqual(['R1']);
+  });
+
+  it('should NOT show task on Sunday when only friday=true (the bug scenario)', () => {
+    // This demonstrates the bug: task created on Friday with WEEKLY_CURRENT_WEEKDAY
+    // would set friday=true instead of sunday=true
+    const sunday = dateStrToUtcDate('2025-12-28'); // Sunday
+    const result = selectTaskRepeatCfgsForExactDay.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26', // Friday
+          lastTaskCreationDay: '1970-01-01',
+          friday: true, // Wrong! Should be sunday=true
+          sunday: false,
+        }),
+      ],
+      { dayDate: sunday.getTime() },
+    );
+    // Task does NOT show on Sunday because sunday=false
+    expect(result.map((r) => r.id)).toEqual([]);
+  });
+
+  it('should show multiple tasks when all have correct weekday set', () => {
+    // Simulates 4 tasks all scheduled for Sunday with sunday=true
+    const sunday = dateStrToUtcDate('2025-12-28');
+    const result = selectTaskRepeatCfgsForExactDay.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true,
+        }),
+        dummyRepeatable('R2', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true,
+        }),
+        dummyRepeatable('R3', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true,
+        }),
+        dummyRepeatable('R4', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true,
+        }),
+      ],
+      { dayDate: sunday.getTime() },
+    );
+    // All 4 tasks should show
+    expect(result.map((r) => r.id)).toEqual(['R1', 'R2', 'R3', 'R4']);
+  });
+
+  it('should show only tasks with correct weekday (mixed scenario)', () => {
+    // 2 with sunday=true, 2 with friday=true (wrong)
+    const sunday = dateStrToUtcDate('2025-12-28');
+    const result = selectTaskRepeatCfgsForExactDay.projector(
+      [
+        dummyRepeatable('R1', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true, // Correct
+        }),
+        dummyRepeatable('R2', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          friday: true, // Wrong
+          sunday: false,
+        }),
+        dummyRepeatable('R3', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          sunday: true, // Correct
+        }),
+        dummyRepeatable('R4', {
+          repeatCycle: 'WEEKLY',
+          startDate: '2025-12-26',
+          lastTaskCreationDay: '1970-01-01',
+          friday: true, // Wrong
+          sunday: false,
+        }),
+      ],
+      { dayDate: sunday.getTime() },
+    );
+    // Only 2 tasks with sunday=true should show (explains "2 of 4" from bug report)
+    expect(result.map((r) => r.id)).toEqual(['R1', 'R3']);
+  });
+});
+
 describe('Timezone Edge Cases for selectTaskRepeatCfgsForExactDay', () => {
   const createTaskRepeatCfg = (id: string, lastDay: string): TaskRepeatCfg => ({
     ...DEFAULT_TASK_REPEAT_CFG,

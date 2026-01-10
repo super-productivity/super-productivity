@@ -96,6 +96,13 @@ export class Webdav implements SyncProviderServiceInterface<SyncProviderId.WebDA
     await this._api.remove(filePath);
   }
 
+  async testConnection(
+    cfg: WebdavPrivateCfg,
+  ): Promise<{ success: boolean; error?: string; fullUrl: string }> {
+    SyncLog.debug(Webdav.L, 'testConnection', { baseUrl: cfg.baseUrl });
+    return this._api.testConnection(cfg);
+  }
+
   private _getFilePath(targetPath: string, cfg: WebdavPrivateCfg): string {
     const parts = [cfg.syncFolderPath];
     if (this._extraPath) {

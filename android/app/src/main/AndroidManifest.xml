@@ -8,6 +8,7 @@
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
   <application
@@ -76,5 +77,55 @@
       android:name=".webview.WebViewBlockActivity"
       android:exported="false"
       android:theme="@style/AppTheme" />
+
+    <service
+      android:name=".service.TrackingForegroundService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="time_tracking" />
+    </service>
+
+    <service
+      android:name=".service.FocusModeForegroundService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="focus_timer" />
+    </service>
+
+    <receiver
+      android:name=".receiver.ReminderAlarmReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <receiver
+      android:name=".receiver.ReminderActionReceiver"
+      android:enabled="true"
+      android:exported="false" />
+
+    <!-- Quick Add Widget -->
+    <receiver
+      android:name=".widget.QuickAddWidgetProvider"
+      android:exported="true"
+      android:label="@string/widget_quick_add_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/widget_quick_add_info" />
+    </receiver>
+
+    <!-- Quick Add Dialog Activity -->
+    <activity
+      android:name=".widget.QuickAddActivity"
+      android:exported="false"
+      android:theme="@style/Theme.AppCompat.Light.Dialog"
+      android:excludeFromRecents="true" />
   </application>
 </manifest>

@@ -11,6 +11,8 @@ import {
 } from '../schedule.const';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
+import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { calculateTimeFromYPosition } from '../schedule-utils';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import type { DragPreviewContext } from './schedule-week-drag.types';
@@ -30,6 +32,7 @@ const DRAG_OVER_CLASS = 'drag-over';
 export class ScheduleWeekDragService {
   // Central drag state handler so the component can remain mostly declarative.
   private readonly _store = inject(Store);
+  private readonly _globalConfigService = inject(GlobalConfigService);
 
   private readonly _isShiftMode = signal(false);
   readonly isShiftMode: Signal<boolean> = this._isShiftMode.asReadonly();
@@ -620,11 +623,12 @@ export class ScheduleWeekDragService {
   private _scheduleTask(task: TaskCopy, scheduleTime: number): void {
     const hasExistingSchedule = !!task?.dueWithTime;
     const hasReminder = !!task?.reminderId;
-    // Smart reminder logic: if task is brand new to scheduling, add a reminder at start.
+    const defaultReminderOption = this._getDefaultReminderOption();
+    // Smart reminder logic: if task is brand new to scheduling, add a reminder based on user's default setting.
     // If it already has a reminder, update it. Otherwise, leave reminders unchanged.
     const remindAt =
       !hasExistingSchedule && !hasReminder
-        ? remindOptionToMilliseconds(scheduleTime, TaskReminderOptionId.AtStart)
+        ? remindOptionToMilliseconds(scheduleTime, defaultReminderOption)
         : hasReminder
           ? scheduleTime
           : undefined;
@@ -655,6 +659,14 @@ export class ScheduleWeekDragService {
         }),
       );
     }
+  }
+
+  private _getDefaultReminderOption(): TaskReminderOptionId {
+    return (
+      (this._globalConfigService.cfg()?.reminder
+        ?.defaultTaskRemindOption as TaskReminderOptionId) ??
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!
+    );
   }
 
   private _extractDropPoint(

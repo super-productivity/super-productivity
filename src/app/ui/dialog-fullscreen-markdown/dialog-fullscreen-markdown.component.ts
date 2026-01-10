@@ -1,23 +1,27 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  ElementRef,
   inject,
-  OnDestroy,
+  output,
   viewChild,
 } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { T } from '../../t.const';
-import { Subscription } from 'rxjs';
-import { ESCAPE } from '@angular/cdk/keycodes';
-import { LS } from '../../core/persistence/storage-keys.const';
-import { isSmallScreen } from '../../util/is-small-screen';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MarkdownComponent } from 'ngx-markdown';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
-import { MatTooltip } from '@angular/material/tooltip';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
+import { MarkdownComponent } from 'ngx-markdown';
+import { Subject } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
+import { LS } from '../../core/persistence/storage-keys.const';
+import { T } from '../../t.const';
+import { isSmallScreen } from '../../util/is-small-screen';
+import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -35,17 +39,21 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
     MatTooltip,
     MatIcon,
     MatButton,
+    MatIconButton,
     TranslatePipe,
   ],
 })
-export class DialogFullscreenMarkdownComponent implements OnDestroy {
+export class DialogFullscreenMarkdownComponent {
+  private readonly _destroyRef = inject(DestroyRef);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
   data: { content: string } = inject(MAT_DIALOG_DATA) || { content: '' };
 
   T: typeof T = T;
   viewMode: ViewMode = isSmallScreen() ? 'TEXT_ONLY' : 'SPLIT';
   readonly previewEl = viewChild<MarkdownComponent>('previewEl');
-  private _subs: Subscription = new Subscription();
+  readonly textareaEl = viewChild<ElementRef>('textareaEl');
+  readonly contentChanged = output<string>();
+  private readonly _contentChanges$ = new Subject<string>();
 
   constructor() {
     const lastViewMode = localStorage.getItem(LS.LAST_FULLSCREEN_EDIT_VIEW_MODE);
@@ -62,16 +70,24 @@ export class DialogFullscreenMarkdownComponent implements OnDestroy {
       }
     }
 
-    // we want to save as default
+    // Auto-save with debounce
+    this._contentChanges$
+      .pipe(debounceTime(500), takeUntilDestroyed(this._destroyRef))
+      .subscribe((value) => {
+        this.contentChanged.emit(value);
+      });
+
+    // Handle Escape key - save and close
     this._matDialogRef.disableClose = true;
-    this._subs.add(
-      this._matDialogRef.keydownEvents().subscribe((e) => {
-        if ((e as any).keyCode === ESCAPE) {
+    this._matDialogRef
+      .keydownEvents()
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((e) => {
+        if (e.key === 'Escape') {
           e.preventDefault();
-          this.close(undefined, true);
+          this.close();
         }
-      }),
-    );
+      });
   }
 
   keydownHandler(ev: KeyboardEvent): void {
@@ -80,14 +96,12 @@ export class DialogFullscreenMarkdownComponent implements OnDestroy {
     }
   }
 
-  ngModelChange(data: string): void {}
-
-  ngOnDestroy(): void {
-    this._subs.unsubscribe();
+  ngModelChange(content: string): void {
+    this._contentChanges$.next(content);
   }
 
-  close(isSkipSave: boolean = false, isEscapeClose: boolean = false): void {
-    this._matDialogRef.close(!isSkipSave ? this.data?.content : undefined);
+  close(): void {
+    this._matDialogRef.close(this.data?.content);
   }
 
   onViewModeChange(): void {
@@ -125,7 +139,92 @@ export class DialogFullscreenMarkdownComponent implements OnDestroy {
           ? item.replace('[ ]', '[x]').replace('[]', '[x]')
           : item.replace('[x]', '[ ]');
         this.data.content = allLines.join('\n');
+        // Emit change for auto-save
+        this._contentChanges$.next(this.data.content);
       }
     }
+  }
+
+  // =========================================================================
+  // Toolbar actions
+  // =========================================================================
+
+  onApplyBold(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyBold);
+  }
+
+  onApplyItalic(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyItalic);
+  }
+
+  onApplyStrikethrough(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyStrikethrough);
+  }
+
+  onApplyHeading(level: 1 | 2 | 3): void {
+    this._applyTransformWithArgs((text, start, end) =>
+      MarkdownToolbar.applyHeading(text, start, end, level),
+    );
+  }
+
+  onApplyQuote(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyQuote);
+  }
+
+  onApplyBulletList(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyBulletList);
+  }
+
+  onApplyNumberedList(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyNumberedList);
+  }
+
+  onApplyTaskList(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyTaskList);
+  }
+
+  onApplyInlineCode(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyInlineCode);
+  }
+
+  onApplyCodeBlock(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.applyCodeBlock);
+  }
+
+  onInsertLink(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.insertLink);
+  }
+
+  onInsertImage(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.insertImage);
+  }
+
+  onInsertTable(): void {
+    this._applyTransformWithArgs(MarkdownToolbar.insertTable);
+  }
+
+  private _applyTransformWithArgs(
+    transformFn: (
+      text: string,
+      start: number,
+      end: number,
+    ) => MarkdownToolbar.TextTransformResult,
+  ): void {
+    const textarea = this.textareaEl()?.nativeElement;
+    if (!textarea) {
+      return;
+    }
+
+    const { value, selectionStart, selectionEnd } = textarea;
+    const result = transformFn(value || '', selectionStart, selectionEnd);
+
+    this.data.content = result.text;
+    this._contentChanges$.next(result.text);
+
+    // Wait for Angular to update the DOM after ngModel change before restoring selection
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
   }
 }

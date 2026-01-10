@@ -216,6 +216,6 @@ export class TrackingReminderService {
   }
 
   private _focusWindow(): void {
-    this._uiHelperService.focusApp();
+    this._uiHelperService.focusAppAfterNotification();
   }
 }

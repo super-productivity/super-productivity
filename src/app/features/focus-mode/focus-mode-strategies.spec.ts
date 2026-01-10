@@ -73,9 +73,9 @@ describe('FocusModeStrategies', () => {
 
     describe('getBreakDuration', () => {
       it('should return short break for cycles 1-3', () => {
-        const result1 = strategy.getBreakDuration(0); // Next cycle will be 1
-        const result2 = strategy.getBreakDuration(1); // Next cycle will be 2
-        const result3 = strategy.getBreakDuration(2); // Next cycle will be 3
+        const result1 = strategy.getBreakDuration(1);
+        const result2 = strategy.getBreakDuration(2);
+        const result3 = strategy.getBreakDuration(3);
 
         expect(result1).toEqual({ duration: 300000, isLong: false });
         expect(result2).toEqual({ duration: 300000, isLong: false });
@@ -83,20 +83,20 @@ describe('FocusModeStrategies', () => {
       });
 
       it('should return long break for cycle 4', () => {
-        const result = strategy.getBreakDuration(3); // Next cycle will be 4
+        const result = strategy.getBreakDuration(4);
 
         expect(result).toEqual({ duration: 900000, isLong: true });
       });
 
       it('should return short break after long break cycle', () => {
-        const result = strategy.getBreakDuration(4); // Next cycle will be 5
+        const result = strategy.getBreakDuration(5);
 
         expect(result).toEqual({ duration: 300000, isLong: false });
       });
 
       it('should return long break every 4th cycle', () => {
-        const result8 = strategy.getBreakDuration(7); // Next cycle will be 8
-        const result12 = strategy.getBreakDuration(11); // Next cycle will be 12
+        const result8 = strategy.getBreakDuration(8);
+        const result12 = strategy.getBreakDuration(12);
 
         expect(result8).toEqual({ duration: 900000, isLong: true });
         expect(result12).toEqual({ duration: 900000, isLong: true });
@@ -106,8 +106,8 @@ describe('FocusModeStrategies', () => {
         // Replace the spy to return empty object
         (mockGlobalConfigService.pomodoroConfig as jasmine.Spy).and.returnValue({});
 
-        const shortBreak = strategy.getBreakDuration(0);
-        const longBreak = strategy.getBreakDuration(3);
+        const shortBreak = strategy.getBreakDuration(1);
+        const longBreak = strategy.getBreakDuration(4);
 
         expect(shortBreak).toEqual({
           duration: FOCUS_MODE_DEFAULTS.SHORT_BREAK_DURATION,

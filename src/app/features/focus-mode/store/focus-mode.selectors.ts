@@ -84,3 +84,9 @@ export const selectIsSessionCompleted = createSelector(
   selectCurrentScreen,
   (currentScreen) => currentScreen === 'SessionDone',
 );
+
+// Paused task during breaks
+export const selectPausedTaskId = createSelector(
+  selectFocusModeState,
+  (state) => state.pausedTaskId,
+);

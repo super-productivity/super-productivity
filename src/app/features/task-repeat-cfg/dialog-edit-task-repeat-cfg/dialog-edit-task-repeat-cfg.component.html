@@ -11,7 +11,10 @@
   </h1>
 
   <mat-dialog-content>
-    <!--    <h3 class="mat-h3">{{task.title}}</h3>-->
+    @if (repeatCfgId(); as cfgId) {
+      <repeat-task-heatmap [repeatCfgId]="cfgId" />
+    }
+
     <help-section>
       <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP1 | translate }}</p>
       <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP2 | translate }}</p>
@@ -80,7 +83,7 @@
     }
 
     <button
-      [disabled]="!formGroup1().valid || !formGroup2().valid"
+      [disabled]="!formGroup1().valid || !formGroup2().valid || isLoading()"
       color="primary"
       mat-stroked-button
       type="submit"

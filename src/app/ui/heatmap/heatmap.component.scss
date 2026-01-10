@@ -1,0 +1,211 @@
+.heatmap-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--c-dark-10);
+  border-radius: 4px;
+}
+
+.heatmap-grid {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.scrollable-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  // Smooth scrolling
+  scroll-behavior: smooth;
+
+  // Better scrollbar styling
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--c-dark-10);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--c-dark-20);
+    border-radius: 4px;
+
+    &:hover {
+      background: var(--c-dark-30);
+    }
+  }
+}
+
+.heatmap-months {
+  display: flex;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 12px;
+  height: 12px;
+  color: var(--text-color-muted);
+  flex-shrink: 0;
+
+  .month-label {
+    flex: 0 0 auto;
+    width: calc(4 * 12px + 4 * 2px); // 4 weeks * (cell width + gap)
+  }
+}
+
+.day-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-color-muted);
+  padding-right: 4px;
+  width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+
+  .month-spacer {
+    height: 17px; // 12px (heatmap-months height) + 8px (gap in scrollable-content)
+    flex-shrink: 0;
+  }
+
+  .day-label {
+    height: 12px;
+    line-height: 12px;
+    flex-shrink: 0;
+  }
+}
+
+.weeks {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.day {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  flex-shrink: 0;
+
+  &.empty {
+    background: transparent;
+    cursor: default;
+  }
+
+  &.level-0 {
+    background: var(--c-dark-10);
+  }
+
+  &.level-1 {
+    background: color-mix(in srgb, var(--c-primary) 20%, transparent);
+  }
+
+  &.level-2 {
+    background: color-mix(in srgb, var(--c-primary) 40%, transparent);
+  }
+
+  &.level-3 {
+    background: color-mix(in srgb, var(--c-primary) 60%, transparent);
+  }
+
+  &.level-4 {
+    background: var(--c-primary);
+  }
+
+  &:not(.empty):hover {
+    transform: scale(1.3);
+    outline: 1px solid var(--c-dark-20);
+    z-index: 1;
+  }
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-color-muted);
+  padding-right: 4px;
+
+  span {
+    margin: 0 4px;
+  }
+
+  .legend-item {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+
+    &.level-0 {
+      background: var(--c-dark-10);
+    }
+
+    &.level-1 {
+      background: color-mix(in srgb, var(--c-primary) 20%, transparent);
+    }
+
+    &.level-2 {
+      background: color-mix(in srgb, var(--c-primary) 40%, transparent);
+    }
+
+    &.level-3 {
+      background: color-mix(in srgb, var(--c-primary) 60%, transparent);
+    }
+
+    &.level-4 {
+      background: var(--c-primary);
+    }
+  }
+}
+
+// Dark theme support
+:host-context(.isDarkTheme) {
+  .heatmap-container {
+    background: var(--c-light-05);
+  }
+
+  .scrollable-content {
+    &::-webkit-scrollbar-track {
+      background: var(--c-light-05);
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--c-light-10);
+
+      &:hover {
+        background: var(--c-light-33);
+      }
+    }
+  }
+
+  .day {
+    &.level-0 {
+      background: var(--c-light-05);
+    }
+
+    &:not(.empty):hover {
+      outline-color: var(--c-light-10);
+    }
+  }
+
+  .heatmap-legend .legend-item.level-0 {
+    background: var(--c-light-05);
+  }
+}

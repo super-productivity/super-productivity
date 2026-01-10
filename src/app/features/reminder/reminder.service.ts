@@ -49,6 +49,9 @@ export class ReminderService {
 
   private _w: Worker;
   private _reminders: Reminder[] = [];
+  // Track recently processed reminder IDs to prevent duplicate emissions from worker race condition
+  private _recentlyProcessedReminderIds = new Set<string>();
+  private _cleanupTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
     // this._triggerPauseAfterUpdate$.subscribe((v) => Log.log('_triggerPauseAfterUpdate$', v));
@@ -141,6 +144,8 @@ export class ReminderService {
         type,
         recurringConfig,
       });
+      // Update worker immediately to prevent race condition with 10s check interval
+      this._updateRemindersInWorker(this._reminders);
       this._saveModel(this._reminders, isWaitForReady);
       return id;
     }
@@ -157,6 +162,10 @@ export class ReminderService {
       // TODO find out why we need to do this
       this._reminders = dirtyDeepCopy(this._reminders);
       this._reminders[i] = Object.assign({}, this._reminders[i], reminderChanges);
+      // Update worker immediately to prevent race condition with 10s check interval
+      this._updateRemindersInWorker(this._reminders);
+      // Clear from processed set so snooze can trigger notification at new time
+      this._clearProcessedReminder(reminderId);
     }
     this._saveModel(this._reminders);
   }
@@ -168,6 +177,10 @@ export class ReminderService {
       // TODO find out why we need to do this
       this._reminders = dirtyDeepCopy(this._reminders);
       this._reminders.splice(i, 1);
+      // Update worker immediately to prevent race condition with 10s check interval
+      this._updateRemindersInWorker(this._reminders);
+      // Clean up tracking state
+      this._clearProcessedReminder(reminderIdToRemove);
       this._saveModel(this._reminders);
     } else {
       // throw new Error('Unable to find reminder with id ' + reminderIdToRemove);
@@ -203,7 +216,7 @@ export class ReminderService {
       return;
     }
 
-    const remindersWithData: Reminder[] = (await Promise.all(
+    const remindersWithData = await Promise.all(
       reminders.map(async (reminder) => {
         const relatedModel = await this._getRelatedDataForReminder(reminder);
         // Log.log('RelatedModel for Reminder', relatedModel);
@@ -226,11 +239,23 @@ export class ReminderService {
           return reminder;
         }
       }),
-    )) as Reminder[];
-    const finalReminders = remindersWithData.filter((reminder) => !!reminder);
+    );
+    const validReminders = remindersWithData.filter(
+      (reminder): reminder is Reminder => !!reminder,
+    );
+
+    // Filter out reminders that were recently processed to prevent duplicate notifications
+    // from worker race conditions (worker may emit same reminder before state update reaches it)
+    const finalReminders = validReminders.filter(
+      (reminder) => !this._recentlyProcessedReminderIds.has(reminder.id),
+    );
 
     Log.log(`ReminderService: ${finalReminders.length} valid reminder(s) to show`);
     if (finalReminders.length > 0) {
+      // Mark these reminders as processed
+      finalReminders.forEach((reminder) => {
+        this._markReminderAsProcessed(reminder.id);
+      });
       this._onRemindersActive$.next(finalReminders);
     }
   }
@@ -280,5 +305,31 @@ export class ReminderService {
     }
 
     throw new Error('Cannot get related model for reminder');
+  }
+
+  private _markReminderAsProcessed(reminderId: string): void {
+    this._recentlyProcessedReminderIds.add(reminderId);
+
+    // Clear any existing cleanup timeout for this ID
+    const existingTimeout = this._cleanupTimeouts.get(reminderId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Auto-cleanup after 60 seconds to prevent memory leaks
+    const timeoutId = setTimeout(() => {
+      this._recentlyProcessedReminderIds.delete(reminderId);
+      this._cleanupTimeouts.delete(reminderId);
+    }, 60000);
+    this._cleanupTimeouts.set(reminderId, timeoutId);
+  }
+
+  private _clearProcessedReminder(reminderId: string): void {
+    this._recentlyProcessedReminderIds.delete(reminderId);
+    const existingTimeout = this._cleanupTimeouts.get(reminderId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      this._cleanupTimeouts.delete(reminderId);
+    }
   }
 }

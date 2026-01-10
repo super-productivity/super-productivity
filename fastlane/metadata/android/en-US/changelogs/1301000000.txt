@@ -37,7 +37,7 @@
 * missing directive
 * monkey patch mat-context menu to fix mat menu issue of triggering directly the element under the finger in submenus
 * parameterized selectors for task due date selectors
-* preserve default sync folder path when no overriding (3561d6e), closes /github.com/johannesjo/super-productivity/issues/4545#issuecomment-2974843258
+* preserve default sync folder path when no overriding (3561d6e), closes /github.com/super-productivity/super-productivity/issues/4545#issuecomment-2974843258
 * prevent model validation error
 * re-enable reload
 * remove 'any' type from mapSubTasksToTasks function and fix test selectors
@@ -48,7 +48,7 @@
 * restore and fix remaining e2e tests in task-list-basic directory
 * restore missing logic in shared reducers
 * restore task reordering logic for removeTasksFromTodayTag
-* start nginx via its built-in entrypoint script (afc6264), closes /github.com/johannesjo/super-productivity/issues/4545#issuecomment-2974843258
+* start nginx via its built-in entrypoint script (afc6264), closes /github.com/super-productivity/super-productivity/issues/4545#issuecomment-2974843258
 * **sync:** data not being properly persisted during sync
 * **sync:** ensure database unlock is called in finally block to prevent deadlocks
 * **sync:** make android error handling more robust

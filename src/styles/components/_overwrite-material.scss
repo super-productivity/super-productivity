@@ -187,7 +187,10 @@ mat-option.isDone {
   --mat-icon-button-state-layer-size: 40px;
 }
 
-//.mat-mdc-mini-fab.mat-mdc-mini-fab.mat-mdc-mini-fab,
+.mat-mdc-mini-fab.mat-mdc-mini-fab.mat-mdc-mini-fab {
+  --mat-fab-small-state-layer-size: 48px;
+}
+
 .mat-mdc-icon-button.mat-mdc-icon-button.mat-mdc-icon-button {
   width: 40px;
   height: 40px;

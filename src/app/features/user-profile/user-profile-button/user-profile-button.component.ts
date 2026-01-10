@@ -9,6 +9,7 @@ import { DialogUserProfileManagementComponent } from '../dialog-user-profile-man
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { MatDivider } from '@angular/material/divider';
 import { TranslatePipe } from '@ngx-translate/core';
+import { T } from '../../../t.const';
 
 @Component({
   selector: 'user-profile-button',
@@ -60,7 +61,7 @@ import { TranslatePipe } from '@ngx-translate/core';
         (click)="openManagementDialog()"
       >
         <mat-icon>settings</mat-icon>
-        <span>{{ 'USER_PROFILES.MANAGE_PROFILES' | translate }}</span>
+        <span>{{ T.USER_PROFILES.MANAGE_PROFILES | translate }}</span>
       </button>
     </mat-menu>
   `,
@@ -84,6 +85,7 @@ export class UserProfileButtonComponent {
   private readonly _matDialog = inject(MatDialog);
 
   readonly isLoading = signal(false);
+  readonly T = T;
 
   async switchToProfile(profileId: string): Promise<void> {
     if (this.isLoading()) return;

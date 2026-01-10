@@ -17,7 +17,7 @@ import { Subscription } from 'rxjs';
  * This prevents the submenu from immediately selecting an item when it opens under
  * the user's finger near screen edges.
  *
- * Issue: https://github.com/johannesjo/super-productivity/issues/4436
+ * Issue: https://github.com/super-productivity/super-productivity/issues/4436
  * Related Angular Components issues:
  * - https://github.com/angular/components/issues/27508
  * - https://github.com/angular/components/pull/14538

@@ -9,7 +9,6 @@ import {
 import { ProjectService } from '../../features/project/project.service';
 import { LayoutService } from '../layout/layout.service';
 import { TaskService } from '../../features/tasks/task.service';
-import { PomodoroService } from '../../features/pomodoro/pomodoro.service';
 import { T } from '../../t.const';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { filter, map, startWith, switchMap } from 'rxjs/operators';
@@ -23,7 +22,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { NavigationEnd, Router } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { KeyboardConfig } from 'src/app/features/config/keyboard-config.model';
-import { MatIconButton, MatButton } from '@angular/material/button';
+import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -43,7 +42,6 @@ import { DesktopPanelButtonsComponent } from './desktop-panel-buttons/desktop-pa
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
-import { MsToMinuteClockStringPipe } from '../../ui/duration/ms-to-minute-clock-string.pipe';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
@@ -56,7 +54,6 @@ import { UserProfileService } from '../../features/user-profile/user-profile.ser
   animations: [fadeAnimation, expandFadeHorizontalAnimation],
   imports: [
     MatIconButton,
-    MatButton,
     MatIcon,
     MatTooltip,
     TranslatePipe,
@@ -67,7 +64,6 @@ import { UserProfileService } from '../../features/user-profile/user-profile.ser
     PageTitleComponent,
     PlayButtonComponent,
     DesktopPanelButtonsComponent,
-    MsToMinuteClockStringPipe,
     UserProfileButtonComponent,
     FocusButtonComponent,
   ],
@@ -77,7 +73,6 @@ export class MainHeaderComponent implements OnDestroy {
   readonly matDialog = inject(MatDialog);
   readonly workContextService = inject(WorkContextService);
   readonly taskService = inject(TaskService);
-  readonly pomodoroService = inject(PomodoroService);
   readonly layoutService = inject(LayoutService);
   readonly simpleCounterService = inject(SimpleCounterService);
   readonly syncWrapperService = inject(SyncWrapperService);
@@ -137,9 +132,6 @@ export class MainHeaderComponent implements OnDestroy {
 
   currentTask = toSignal(this.taskService.currentTask$);
   currentTaskId = this.taskService.currentTaskId;
-  pomodoroIsEnabled = toSignal(this.pomodoroService.isEnabled$);
-  pomodoroIsBreak = toSignal(this.pomodoroService.isBreak$);
-  pomodoroCurrentSessionTime = toSignal(this.pomodoroService.currentSessionTime$);
   enabledSimpleCounters = toSignal(this.simpleCounterService.enabledSimpleCounters$, {
     initialValue: [],
   });
@@ -165,6 +157,12 @@ export class MainHeaderComponent implements OnDestroy {
   readonly isSyncIconEnabled = computed(() => {
     return this.globalConfigService.cfg()?.appFeatures.isSyncIconEnabled;
   });
+
+  // Check if there are any undone tasks that can be tracked
+  private readonly _hasTrackableTasks$ = this.workContextService.undoneTasks$.pipe(
+    map((tasks) => tasks.length > 0),
+  );
+  hasTrackableTasks = toSignal(this._hasTrackableTasks$, { initialValue: true });
 
   private readonly _userProfileService = inject(UserProfileService);
   isUserProfilesEnabled = computed(() => {

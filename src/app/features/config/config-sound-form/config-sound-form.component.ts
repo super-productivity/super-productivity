@@ -16,6 +16,7 @@ import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { TranslatePipe } from '@ngx-translate/core';
+import { T } from '../../../t.const';
 
 const sectionKey = 'sound';
 
@@ -62,7 +63,8 @@ export class ConfigSoundFormComponent {
 
   soundOpts = SOUND_OPTS;
   config?: SoundConfig;
-  title = 'GCF.SOUND.TITLE';
+  title = T.GCF.SOUND.TITLE;
+  readonly T = T;
   private isInitializing = true;
 
   constructor() {

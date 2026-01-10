@@ -1927,4 +1927,128 @@ describe('dataRepair()', () => {
     ]);
     expect(result.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
   });
+
+  describe('should fix repeat configs with invalid quickSetting (issue #5802)', () => {
+    it('should change quickSetting to CUSTOM when WEEKLY_CURRENT_WEEKDAY has no startDate', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST',
+            title: 'TEST',
+            quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+            startDate: undefined,
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+    });
+
+    it('should change quickSetting to CUSTOM when YEARLY_CURRENT_DATE has no startDate', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST',
+            title: 'TEST',
+            quickSetting: 'YEARLY_CURRENT_DATE',
+            startDate: undefined,
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+    });
+
+    it('should change quickSetting to CUSTOM when MONTHLY_CURRENT_DATE has no startDate', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST',
+            title: 'TEST',
+            quickSetting: 'MONTHLY_CURRENT_DATE',
+            startDate: undefined,
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+    });
+
+    it('should NOT change quickSetting when startDate is provided', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST',
+            title: 'TEST',
+            quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+            startDate: '2024-01-15',
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual(
+        'WEEKLY_CURRENT_WEEKDAY',
+      );
+    });
+
+    it('should NOT change quickSetting for DAILY or CUSTOM', () => {
+      const taskRepeatCfgState = {
+        ...mock.taskRepeatCfg,
+        ...fakeEntityStateFromArray<TaskRepeatCfg>([
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST_DAILY',
+            title: 'TEST_DAILY',
+            quickSetting: 'DAILY',
+            startDate: undefined,
+          },
+          {
+            ...DEFAULT_TASK_REPEAT_CFG,
+            id: 'TEST_CUSTOM',
+            title: 'TEST_CUSTOM',
+            quickSetting: 'CUSTOM',
+            startDate: undefined,
+          },
+        ]),
+      } as any;
+
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: taskRepeatCfgState,
+      } as any);
+
+      expect(result.taskRepeatCfg.entities['TEST_DAILY']?.quickSetting).toEqual('DAILY');
+      expect(result.taskRepeatCfg.entities['TEST_CUSTOM']?.quickSetting).toEqual(
+        'CUSTOM',
+      );
+    });
+  });
 });

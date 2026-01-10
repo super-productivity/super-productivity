@@ -221,6 +221,21 @@
 
 <!-- Filter: Tag submenu -->
 <mat-menu #filterTagMenu="matMenu">
+  <button
+    mat-menu-item
+    (click)="onFilterInputChange(OPTIONS.filter.types.tag, FILTER_COMMON.NOT_SPECIFIED)"
+  >
+    <span class="menu-item-content">
+      <span>{{ T.F.TASK_VIEW.CUSTOMIZER.FILTER_NOT_SPECIFIED | translate }}</span>
+      @if (
+        customizerService.selectedFilter().type === OPTIONS.filter.types.tag &&
+        customizerService.selectedFilter().preset === FILTER_COMMON.NOT_SPECIFIED
+      ) {
+        <mat-icon class="check-icon">check</mat-icon>
+      }
+    </span>
+  </button>
+
   <div
     class="menu-input-wrapper"
     (click)="$event.stopPropagation()"

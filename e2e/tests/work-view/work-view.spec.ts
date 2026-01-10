@@ -17,20 +17,7 @@ test.describe('Work View', () => {
     await expect(taskTitle).toContainText(/.*0 test task koko/);
   });
 
-  test.skip('should still show created task after reload', async ({
-    page,
-    workViewPage,
-  }) => {
-    // FIXME: This test is temporarily skipped due to a task persistence issue
-    // with the global add task bar functionality. Tasks are created successfully
-    // but are not persisting to storage properly after page reload.
-    //
-    // Issue: Tasks created via the global add task bar (used by addTask() method)
-    // disappear after page reload, suggesting a problem with the persistence layer
-    // or task context assignment in the new add task bar implementation.
-    //
-    // This needs to be investigated and fixed in the application code.
-
+  test('should still show created task after reload', async ({ page, workViewPage }) => {
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
 
@@ -41,11 +28,12 @@ test.describe('Work View', () => {
     const task = page.locator('task').first();
     await expect(task).toBeVisible();
 
-    // Verify task content
-    const taskTextarea = task.locator('textarea');
-    await expect(taskTextarea).toHaveValue(/.*0 test task lolo/);
+    // Verify task content using task-title (same as first test)
+    const taskTitle = task.locator('task-title');
+    await expect(taskTitle).toContainText(/.*0 test task lolo/);
 
-    // Wait a bit for the task to be persisted to storage
+    // Wait for the task to be persisted to IndexedDB
+    // NgRx effects write outside Angular's zone, so we need an explicit wait
     await page.waitForTimeout(1000);
 
     // Reload the page
@@ -55,7 +43,6 @@ test.describe('Work View', () => {
     await workViewPage.waitForTaskList();
 
     // Re-define task locator after reload to avoid stale element reference
-    // Check both regular tasks and potentially done tasks
     const allTasks = page.locator('task');
     const taskCount = await allTasks.count();
 
@@ -68,10 +55,11 @@ test.describe('Work View', () => {
       }
     }
 
+    // Verify task persisted after reload
     const finalTask = page.locator('task').first();
     await expect(finalTask).toBeVisible();
-    const finalTaskTextarea = finalTask.locator('textarea');
-    await expect(finalTaskTextarea).toHaveValue(/.*0 test task lolo/);
+    const finalTaskTitle = finalTask.locator('task-title');
+    await expect(finalTaskTitle).toContainText(/.*0 test task lolo/);
   });
 
   test('should add multiple tasks from header button', async ({ page, workViewPage }) => {
@@ -92,10 +80,7 @@ test.describe('Work View', () => {
     await page.keyboard.press('Enter');
 
     // Wait for first task to be created
-    await page.waitForFunction(() => document.querySelectorAll('task').length >= 1, {
-      timeout: 10000,
-    });
-    await page.waitForTimeout(300);
+    await page.locator('task').first().waitFor({ state: 'visible', timeout: 10000 });
 
     // Add second task
     await workViewPage.addTaskGlobalInput.clear();
@@ -137,8 +122,8 @@ test.describe('Work View', () => {
     // Add two tasks - the addTask method now properly waits for each one
     await workViewPage.addTask('test task hihi');
 
-    // Wait a bit between tasks to ensure proper state update
-    await page.waitForTimeout(500);
+    // Wait for first task to be visible before adding second
+    await page.locator('task').first().waitFor({ state: 'visible', timeout: 10000 });
 
     await workViewPage.addTask('some other task here');
 

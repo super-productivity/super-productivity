@@ -22,7 +22,11 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { BoardEditComponent } from './board-edit/board-edit.component';
 import { DEFAULT_BOARD_CFG } from './boards.const';
 import { BoardsActions } from './store/boards.actions';
-import { ContextMenuComponent } from '../../ui/context-menu/context-menu.component';
+import { BoardCfg } from './boards.model';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogBoardEditComponent } from './dialog-board-edit/dialog-board-edit.component';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { Log } from 'src/app/core/log';
 
 @Component({
   selector: 'boards',
@@ -39,13 +43,13 @@ import { ContextMenuComponent } from '../../ui/context-menu/context-menu.compone
     CdkDropListGroup,
     TranslatePipe,
     BoardEditComponent,
-    ContextMenuComponent,
   ],
   templateUrl: './boards.component.html',
   styleUrl: './boards.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BoardsComponent {
+  private _matDialog = inject(MatDialog);
   store = inject(Store);
   elementRef = inject(ElementRef);
   selectedTabIndex = signal(localStorage.getItem(LS.SELECTED_BOARD) || 0);
@@ -83,11 +87,9 @@ export class BoardsComponent {
     return this.elementRef.nativeElement;
   }
 
-  duplicateBoard(): void {
-    const selectedTabId = this.selectedTabIndex();
-    const boardToDuplicate = this.boards()?.[selectedTabId];
+  duplicateBoard(boardToDuplicate: BoardCfg): void {
     if (!boardToDuplicate) {
-      console.warn('No board selected to duplicate');
+      Log.warn('No board selected to duplicate');
       return;
     }
     this.store.dispatch(
@@ -103,5 +105,39 @@ export class BoardsComponent {
         },
       }),
     );
+  }
+
+  editBoard(board: BoardCfg): void {
+    if (!board) {
+      Log.warn('No board selected to edit');
+      return;
+    }
+    this._matDialog.open(DialogBoardEditComponent, {
+      data: {
+        board: board,
+      },
+    });
+  }
+
+  removeBoard(board: BoardCfg): void {
+    if (!board) {
+      Log.warn('No board selected to remove');
+      return;
+    }
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        restoreFocus: true,
+        data: {
+          cancelTxt: T.G.CANCEL,
+          okTxt: T.G.DELETE,
+          message: T.F.BOARDS.V.CONFIRM_DELETE,
+        },
+      })
+      .afterClosed()
+      .subscribe((isConfirm: boolean) => {
+        if (isConfirm) {
+          this.store.dispatch(BoardsActions.removeBoard({ id: board.id }));
+        }
+      });
   }
 }

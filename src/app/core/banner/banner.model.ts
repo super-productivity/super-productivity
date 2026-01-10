@@ -31,6 +31,7 @@ export const BANNER_SORT_PRIO_MAP = {
 export interface BannerAction {
   label: string;
   fn: () => void;
+  icon?: string;
 }
 
 export interface Banner {

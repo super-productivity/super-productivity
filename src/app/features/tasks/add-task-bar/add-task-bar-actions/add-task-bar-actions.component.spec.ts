@@ -893,8 +893,11 @@ describe('AddTaskBarActionsComponent', () => {
     });
 
     it('should handle dates near year boundaries correctly', () => {
-      // Test New Year's Eve
-      const newYearEve = '2025-12-31';
+      // Test a date near year boundary that's not today or tomorrow
+      // Use next year's New Year's Eve to avoid collision with current date
+      const today = new Date();
+      const nextYear = today.getFullYear() + 1;
+      const newYearEve = `${nextYear}-12-31`;
       const stateWithNewYearEve = {
         ...mockState,
         date: newYearEve,

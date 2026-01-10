@@ -15,7 +15,7 @@ import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { PlannerTaskComponent } from '../../planner/planner-task/planner-task.component';
 import { AddTaskInlineComponent } from '../../planner/add-task-inline/add-task-inline.component';
-import { selectUnarchivedVisibleProjects } from '../../project/store/project.selectors';
+import { selectUnarchivedProjects } from '../../project/store/project.selectors';
 import { selectAllTasksWithoutHiddenProjects } from '../../tasks/store/task.selectors';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
@@ -79,7 +79,7 @@ describe('BoardPanelComponent - Backlog Feature', () => {
 
     const storeMock = {
       select: (selectorFn: any) => {
-        if (selectorFn === selectUnarchivedVisibleProjects) {
+        if (selectorFn === selectUnarchivedProjects) {
           return of(mockProjects);
         } else if (selectorFn === selectAllTasksWithoutHiddenProjects) {
           return of(mockTasks);
@@ -164,5 +164,135 @@ describe('BoardPanelComponent - Backlog Feature', () => {
     expect(tasks.length).toBe(2);
     expect(tasks.find((t) => t.id === mockBacklogTaskId)).toBeTruthy();
     expect(tasks.find((t) => t.id === mockNonBacklogTaskId)).toBeTruthy();
+  });
+});
+
+describe('BoardPanelComponent - Hidden Project Backlog', () => {
+  let component: BoardPanelComponent;
+  let fixture: ComponentFixture<BoardPanelComponent>;
+  let actions$: ReplaySubject<any>;
+
+  const hiddenProjectBacklogTaskId = 'hidden-backlog-task';
+  const regularTaskId = 'regular-task';
+
+  const mockPanelCfg: Partial<BoardPanelCfg> = {
+    id: 'panel-1',
+    title: 'Test Panel',
+    taskIds: [],
+    backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
+    includedTagIds: [],
+    excludedTagIds: [],
+    isParentTasksOnly: false,
+    projectId: undefined,
+  };
+
+  const mockTasks: TaskCopy[] = [
+    {
+      id: hiddenProjectBacklogTaskId,
+      title: 'Task from hidden project backlog',
+      projectId: 'hidden-project',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: ['important-tag'],
+      created: Date.now(),
+      subTaskIds: [],
+    } as TaskCopy,
+    {
+      id: regularTaskId,
+      title: 'Regular Task',
+      projectId: 'visible-project',
+      timeSpentOnDay: {},
+      attachments: [],
+      timeEstimate: 0,
+      timeSpent: 0,
+      isDone: false,
+      tagIds: ['important-tag'],
+      created: Date.now(),
+      subTaskIds: [],
+    } as TaskCopy,
+  ];
+
+  // Include hidden project in the list (simulates selectUnarchivedProjects including it)
+  const mockProjects = [
+    { id: 'visible-project', backlogTaskIds: [], isHiddenFromMenu: false },
+    {
+      id: 'hidden-project',
+      backlogTaskIds: [hiddenProjectBacklogTaskId],
+      isHiddenFromMenu: true,
+    },
+  ];
+
+  beforeEach(async () => {
+    actions$ = new ReplaySubject(1);
+
+    const storeMock = {
+      select: (selectorFn: any) => {
+        if (selectorFn === selectUnarchivedProjects) {
+          return of(mockProjects);
+        } else if (selectorFn === selectAllTasksWithoutHiddenProjects) {
+          return of(mockTasks);
+        }
+        return of([]);
+      },
+      dispatch: jasmine.createSpy('dispatch'),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        BoardPanelComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateNoOpLoader },
+        }),
+      ],
+      providers: [
+        provideMockStore({}),
+        provideMockActions(() => actions$),
+        { provide: Store, useValue: storeMock },
+        { provide: TaskService, useValue: { currentTaskId: signal(null) } },
+        { provide: MatDialog, useValue: {} },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+      ],
+    })
+      .overrideComponent(PlannerTaskComponent, {
+        set: { template: '<div>Mock Task</div>', inputs: ['task'] },
+      })
+      .overrideComponent(AddTaskInlineComponent, {
+        set: { template: '<div>Mock Add Task</div>' },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(BoardPanelComponent);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('panelCfg', mockPanelCfg as BoardPanelCfg);
+    fixture.detectChanges();
+  });
+
+  it('should exclude backlog tasks from hidden projects when backlogState is NoBacklog', () => {
+    fixture.componentRef.setInput('panelCfg', {
+      ...mockPanelCfg,
+      backlogState: BoardPanelCfgTaskTypeFilter.NoBacklog,
+    } as BoardPanelCfg);
+    fixture.detectChanges();
+
+    const tasks = component.tasks();
+    expect(tasks.length).toBe(1);
+    expect(tasks[0].id).toBe(regularTaskId);
+    expect(tasks.find((t) => t.id === hiddenProjectBacklogTaskId)).toBeFalsy();
+  });
+
+  it('should include backlog tasks from hidden projects when backlogState is OnlyBacklog', () => {
+    fixture.componentRef.setInput('panelCfg', {
+      ...mockPanelCfg,
+      backlogState: BoardPanelCfgTaskTypeFilter.OnlyBacklog,
+    } as BoardPanelCfg);
+    fixture.detectChanges();
+
+    const tasks = component.tasks();
+    expect(tasks.length).toBe(1);
+    expect(tasks[0].id).toBe(hiddenProjectBacklogTaskId);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "16.5.4",
+  "version": "16.9.2",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -12,7 +12,7 @@
   "homepage": "https://super-productivity.com",
   "repository": {
     "type": "git",
-    "url": "git://github.com/johannesjo/super-productivity.git"
+    "url": "git://github.com/super-productivity/super-productivity.git"
   },
   "license": "MIT",
   "author": "Johannes Millan <contact@super-productivity.com> (http://super-productivity.com)",
@@ -49,7 +49,7 @@
     "dist:win:only": "electron-builder --win",
     "dist:win:store": "git pull && npm run && copy electron-builder.win-store.yaml electron-builder.yaml && npm run dist:win && git checkout electron-builder.yaml || git checkout electron-builder.yaml",
     "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync",
-    "pree2e": "npm run plugins:build",
+    "pree2e": "npm run plugins:build:silent",
     "e2e": "npx playwright test --config e2e/playwright.config.ts --reporter=line",
     "e2e:ui": "npx playwright test --config e2e/playwright.config.ts --ui",
     "e2e:file": "npx playwright test --config e2e/playwright.config.ts --reporter=list",
@@ -57,7 +57,9 @@
     "e2e:headed": "npx playwright test --config e2e/playwright.config.ts --headed",
     "e2e:show-report": "npx playwright show-report .tmp/e2e-test-results/playwright-report",
     "e2e:report": "PLAYWRIGHT_HTML_REPORT=1 npx playwright test --config e2e/playwright.config.ts",
-    "e2e:webdav": "WEBDAV_DATA_DIR=./e2e-webdav-data docker compose up -d webdav && sleep 5 && npm run e2e -- --grep webdav; docker compose down",
+    "e2e:webdav": "docker compose up -d webdav && ./scripts/wait-for-webdav.sh && npm run e2e -- --grep webdav; docker compose down",
+    "e2e:docker": "docker compose -f docker-compose.e2e.yaml up -d app && ./scripts/wait-for-app.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
+    "e2e:docker:webdav": "docker compose -f docker-compose.e2e.yaml up -d && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
     "electron": "NODE_ENV=PROD electron .",
     "electron:build": "tsc -p electron/tsconfig.electron.json",
     "electron:watch": "tsc -p electron/tsconfig.electron.json --watch",
@@ -69,6 +71,7 @@
     "int:clean": "ngx-translate-extract --input ./src --output ./src/assets/i18n/*.json --clean --sort --format namespaced-json --marker _",
     "int:find": "ngx-translate-extract --input ./src --output ./src/assets/i18n/*.json  --sort --format namespaced-json --marker _",
     "int:test": "node ./tools/test-lng-files.js",
+    "int:unused": "node ./tools/find-unused-translations.js",
     "int:watch": "node ./tools/extract-i18n-watch.js",
     "lint": "npm run lint:ts && npm run lint:scss",
     "lint:ts": "ng lint",
@@ -120,7 +123,8 @@
     "plugin-api:build": "cd packages/plugin-api && npm run build",
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
-    "plugins:build": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all"
+    "plugins:build": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
+    "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
   },
   "resolutions": {
     "sass": "1.32.6",
@@ -137,27 +141,27 @@
   },
   "devDependencies": {
     "@angular-builders/custom-webpack": "^20.0.0",
-    "@angular-devkit/build-angular": "^20.3.7",
+    "@angular-devkit/build-angular": "^20.3.13",
     "@angular-eslint/builder": "^20.5.0",
     "@angular-eslint/eslint-plugin": "^20.5.0",
     "@angular-eslint/eslint-plugin-template": "^20.5.0",
     "@angular-eslint/schematics": "^20.5.0",
     "@angular-eslint/template-parser": "^20.5.0",
-    "@angular/animations": "^20.3.7",
+    "@angular/animations": "^20.3.15",
     "@angular/cdk": "^20.2.10",
-    "@angular/cli": "^20.3.7",
-    "@angular/common": "^20.3.7",
-    "@angular/compiler": "^20.3.7",
-    "@angular/compiler-cli": "^20.3.7",
-    "@angular/core": "^20.3.7",
-    "@angular/forms": "^20.3.7",
-    "@angular/language-service": "^20.3.7",
+    "@angular/cli": "^20.3.13",
+    "@angular/common": "^20.3.15",
+    "@angular/compiler": "^20.3.15",
+    "@angular/compiler-cli": "^20.3.15",
+    "@angular/core": "^20.3.15",
+    "@angular/forms": "^20.3.15",
+    "@angular/language-service": "^20.3.15",
     "@angular/material": "^20.2.10",
-    "@angular/platform-browser": "^20.3.7",
-    "@angular/platform-browser-dynamic": "^20.3.7",
-    "@angular/platform-server": "^20.3.7",
-    "@angular/router": "^20.3.7",
-    "@angular/service-worker": "^20.3.7",
+    "@angular/platform-browser": "^20.3.15",
+    "@angular/platform-browser-dynamic": "^20.3.15",
+    "@angular/platform-server": "^20.3.15",
+    "@angular/router": "^20.3.15",
+    "@angular/service-worker": "^20.3.15",
     "@capacitor/android": "^7.4.4",
     "@capacitor/app": "^7.1.0",
     "@capacitor/cli": "^7.4.4",
@@ -194,8 +198,9 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "7.18.0",
     "@typescript-eslint/types": "^8.17.0",
-    "@typescript-eslint/utils": "^8.41.0",
+    "@typescript-eslint/utils": "^8.51.0",
     "angular-material-css-vars": "^9.1.1",
+    "baseline-browser-mapping": "^2.9.11",
     "canvas-confetti": "^1.9.4",
     "chai": "^5.1.2",
     "chart.js": "^4.4.7",
@@ -255,7 +260,8 @@
   "overrides": {
     "ngx-markdown": {
       "marked": "12.0.2"
-    }
+    },
+    "@conventional-changelog/git-client": "^2.5.1"
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.2.0",

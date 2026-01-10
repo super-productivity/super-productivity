@@ -30,62 +30,66 @@
   </button>
 </div>
 
-<mat-calendar
-  (keydown)="onKeyDownOnCalendar($event)"
-  [selected]="selectedDate"
-  [minDate]="minDate"
-  (selectedChange)="dateSelected($event)"
-></mat-calendar>
-
-@if (isShowEnterMsg) {
-  <div
-    class="press-enter-msg"
-    @fade
-  >
-    {{ T.DATETIME_SCHEDULE.PRESS_ENTER_AGAIN | translate }}
-  </div>
-}
-
-<div class="form-ctrl-wrapper">
-  <mat-form-field class="example-full-width">
-    <mat-label>Time</mat-label>
-    <mat-icon matPrefix>schedule</mat-icon>
-    <input
-      type="time"
-      (focus)="onTimeFocus()"
-      [(ngModel)]="selectedTime"
-      step="60"
-      matInput
-      (keydown)="onTimeKeyDown($event)"
-    />
-    @if (selectedTime) {
-      <mat-icon
-        style="cursor: pointer"
-        matSuffix
-        (click)="onTimeClear($event)"
-        >close
-      </mat-icon>
-    }
-  </mat-form-field>
-
-  @if (selectedTime) {
-    <mat-form-field [@expandFade]>
-      <mat-icon matPrefix>alarm</mat-icon>
-      <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}</mat-label>
-      <mat-select
-        [(ngModel)]="selectedReminderCfgId"
-        name="type"
-        required="true"
-      >
-        @for (remindOption of remindAvailableOptions; track remindOption.value) {
-          <mat-option [value]="remindOption.value">
-            {{ remindOption.label | translate }}
-          </mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
+<mat-dialog-content>
+  @if (isConfigReady()) {
+    <mat-calendar
+      (keydown)="onKeyDownOnCalendar($event)"
+      [selected]="selectedDate"
+      [minDate]="minDate"
+      (selectedChange)="dateSelected($event)"
+    ></mat-calendar>
   }
-</div>
+
+  @if (isShowEnterMsg) {
+    <div
+      class="press-enter-msg"
+      @fade
+    >
+      {{ T.DATETIME_SCHEDULE.PRESS_ENTER_AGAIN | translate }}
+    </div>
+  }
+
+  <div class="form-ctrl-wrapper">
+    <mat-form-field class="example-full-width">
+      <mat-label>Time</mat-label>
+      <mat-icon matPrefix>schedule</mat-icon>
+      <input
+        type="time"
+        (focus)="onTimeFocus()"
+        [(ngModel)]="selectedTime"
+        step="60"
+        matInput
+        (keydown)="onTimeKeyDown($event)"
+      />
+      @if (selectedTime) {
+        <mat-icon
+          style="cursor: pointer"
+          matSuffix
+          (click)="onTimeClear($event)"
+          >close
+        </mat-icon>
+      }
+    </mat-form-field>
+
+    @if (selectedTime) {
+      <mat-form-field [@expandFade]>
+        <mat-icon matPrefix>alarm</mat-icon>
+        <mat-label>{{ T.F.TASK.D_SCHEDULE_TASK.REMIND_AT | translate }}</mat-label>
+        <mat-select
+          [(ngModel)]="selectedReminderCfgId"
+          name="type"
+          required="true"
+        >
+          @for (remindOption of remindAvailableOptions; track remindOption.value) {
+            <mat-option [value]="remindOption.value">
+              {{ remindOption.label | translate }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+  </div>
+</mat-dialog-content>
 
 <mat-dialog-actions align="end">
   <button

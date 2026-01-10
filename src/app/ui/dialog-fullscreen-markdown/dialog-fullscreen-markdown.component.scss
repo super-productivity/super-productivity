@@ -18,54 +18,99 @@
   padding-top: var(--mac-title-bar-padding);
 }
 
+.formatting-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--s) var(--s2);
+  background-color: var(--bg-lightest);
+  border-bottom: 1px solid var(--extra-border-color);
+  position: relative;
+  z-index: 1;
+
+  .toolbar-divider {
+    width: 1px;
+    background: currentColor;
+    opacity: 0.2;
+    margin: 4px 4px;
+  }
+
+  .heading-label {
+    font-weight: bold;
+    font-size: 11px;
+    line-height: 1;
+  }
+
+  button {
+    min-width: 28px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    line-height: 28px;
+
+    mat-icon,
+    .mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+  }
+}
+
 .content {
   flex-grow: 1;
   position: relative;
   color: var(--text-color-more-intense);
   background-color: var(--bg-lightest);
-  textarea,
+  display: flex;
+  flex-direction: column;
+
+  .editor-section {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+
+    textarea {
+      flex-grow: 1;
+      padding: var(--s) var(--s2);
+      box-sizing: border-box;
+      overflow: auto;
+      background: inherit;
+      color: inherit;
+      border: none;
+      word-wrap: break-word;
+      display: block;
+      resize: none;
+      font-size: 14px;
+
+      @include scrollY;
+
+      &:focus {
+        outline: none;
+      }
+    }
+  }
+
   .markdown-preview {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 100%;
-    width: 100%;
+    flex-grow: 1;
     padding: var(--s) var(--s2);
+    box-sizing: border-box;
+    overflow: auto;
 
     @include scrollY;
   }
 
-  textarea {
-    background: inherit;
-    color: inherit;
-    border: none;
-    box-sizing: border-box;
-    word-wrap: break-word;
-    display: block;
-    resize: none;
-    min-height: inherit;
-    overflow: auto;
-    padding: var(--s) var(--s2);
-    font-size: 14px;
-
-    &:focus {
-      outline: none;
-    }
-  }
-
   &.split-view {
-    textarea {
+    flex-direction: row;
+
+    .editor-section,
+    .markdown-preview {
       width: 50%;
-      right: 50%;
     }
 
     .markdown-preview {
-      width: 50%;
-      left: 50%;
       border-left: 2px solid;
-
       border-color: var(--extra-border-color);
     }
   }

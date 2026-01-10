@@ -14,27 +14,20 @@ test.describe('Work View Features', () => {
     workViewPage,
     testPrefix,
   }) => {
-    test.setTimeout(30000); // Increase timeout
+    test.setTimeout(30000);
 
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
 
-    // Wait for any dialogs to be dismissed
-    await page.waitForTimeout(2000);
-
     // Verify undone task list is visible
-    await expect(page.locator(UNDONE_TASK_LIST)).toBeVisible({ timeout: 8000 }); // Reduced from 10s to 8s
+    await expect(page.locator(UNDONE_TASK_LIST)).toBeVisible({ timeout: 8000 });
 
     // Create tasks
     await workViewPage.addTask('Task 1');
-    await page.waitForSelector(TASK, { state: 'visible', timeout: 4000 }); // Reduced from 5s to 4s
-    await page.waitForTimeout(500);
+    await page.locator(TASK).first().waitFor({ state: 'visible', timeout: 5000 });
 
     await workViewPage.addTask('Task 2');
-    await page.waitForTimeout(1000);
-
-    // Verify we have 2 tasks
-    await expect(page.locator(TASK)).toHaveCount(2);
+    await expect(page.locator(TASK)).toHaveCount(2, { timeout: 5000 });
 
     // Mark first task as done
     const firstTask = page.locator(FIRST_TASK);
@@ -48,10 +41,12 @@ test.describe('Work View Features', () => {
     await doneBtn.waitFor({ state: 'visible' });
     await doneBtn.click();
 
-    // Wait a bit for the transition
-    await page.waitForTimeout(2000);
+    // Wait for task count in undone list to decrease
+    await expect(page.locator(`${UNDONE_TASK_LIST} ${TASK}`)).toHaveCount(1, {
+      timeout: 5000,
+    });
 
-    // Check if done section exists (it might not show if there are no done tasks)
+    // Check if done section exists
     const doneSectionExists = await page
       .locator(DONE_TASKS_SECTION)
       .isVisible({ timeout: 5000 })
@@ -62,7 +57,7 @@ test.describe('Work View Features', () => {
       const toggleBtn = page.locator(TOGGLE_DONE_TASKS_BTN);
       if (await toggleBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
         await toggleBtn.click();
-        await page.waitForTimeout(1000);
+        await expect(page.locator(DONE_TASK_LIST)).toBeVisible({ timeout: 5000 });
       }
 
       // Verify done task list is visible
@@ -82,17 +77,19 @@ test.describe('Work View Features', () => {
 
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
-    await page.waitForTimeout(1000);
 
-    // Create multiple tasks
+    // Create multiple tasks - wait for each to appear before adding next
     await workViewPage.addTask('First created');
-    await page.waitForTimeout(500);
+    await expect(page.locator(TASK)).toHaveCount(1, { timeout: 5000 });
+
     await workViewPage.addTask('Second created');
-    await page.waitForTimeout(500);
+    await expect(page.locator(TASK)).toHaveCount(2, { timeout: 5000 });
+
     await workViewPage.addTask('Third created');
-    await page.waitForTimeout(500);
+    await expect(page.locator(TASK)).toHaveCount(3, { timeout: 5000 });
+
     await workViewPage.addTask('Fourth created');
-    await page.waitForTimeout(500);
+    await expect(page.locator(TASK)).toHaveCount(4, { timeout: 5000 });
 
     // Verify order (newest first)
     await expect(page.locator('task:nth-of-type(1) task-title')).toContainText(

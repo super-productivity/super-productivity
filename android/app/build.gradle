@@ -20,8 +20,8 @@ android {
         minSdkVersion 24
         targetSdkVersion 35
         compileSdk 35
-        versionCode 16_05_04_0000
-        versionName "16.5.4"
+        versionCode 16_09_02_0000
+        versionName "16.9.2"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
@@ -97,6 +97,7 @@ dependencies {
     implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.5.0"
     implementation "com.google.code.gson:gson:2.10.1"
     implementation "androidx.core:core-ktx:1.16.0"
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation "com.anggrayudi:storage:1.5.4"
@@ -108,7 +109,7 @@ dependencies {
     // Force androidx.webkit to 1.11.0 for better API 28 compatibility
     // This avoids NoClassDefFoundError for WebViewRenderProcessClient on Android 9
     // while retaining audio controls and URL utils added in 1.11.0
-    // See: https://github.com/johannesjo/super-productivity/issues/5285
+    // See: https://github.com/super-productivity/super-productivity/issues/5285
     configurations.all {
         resolutionStrategy {
             force "androidx.webkit:webkit:1.11.0"

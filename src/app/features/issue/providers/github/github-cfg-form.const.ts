@@ -45,7 +45,7 @@ export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[]
   {
     type: 'link',
     props: {
-      url: 'https://github.com/johannesjo/super-productivity/blob/master/docs/github-access-token-instructions.md',
+      url: 'https://github.com/super-productivity/super-productivity/blob/master/docs/github-access-token-instructions.md',
       txt: T.F.ISSUE.HOW_TO_GET_A_TOKEN,
     },
   },

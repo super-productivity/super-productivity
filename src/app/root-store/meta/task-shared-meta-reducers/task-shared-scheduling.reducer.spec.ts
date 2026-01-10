@@ -20,10 +20,19 @@ describe('taskSharedSchedulingMetaReducer', () => {
   let metaReducer: ActionReducer<any, Action>;
   let baseState: RootState;
 
+  // Fixed time at noon to avoid midnight boundary issues (issue #5609)
+  const MOCK_TIME = new Date(2024, 5, 15, 12, 0, 0, 0);
+
   beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(MOCK_TIME);
     mockReducer = jasmine.createSpy('reducer').and.callFake((state, action) => state);
     metaReducer = taskSharedSchedulingMetaReducer(mockReducer);
     baseState = createBaseState();
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
   });
 
   describe('scheduleTaskWithTime action', () => {

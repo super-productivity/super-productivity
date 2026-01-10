@@ -22,6 +22,8 @@ import {
   OPEN_PROJECT_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
+  LINEAR_TYPE,
+  CLICKUP_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
@@ -36,6 +38,8 @@ import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-
 import { OpenProjectCommonInterfacesService } from './providers/open-project/open-project-common-interfaces.service';
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
+import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
+import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
@@ -54,6 +58,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
+import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
 
 @Injectable({
   providedIn: 'root',
@@ -68,6 +73,8 @@ export class IssueService {
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _giteaInterfaceService = inject(GiteaCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
+  private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
+  private _clickUpCommonInterfaceService = inject(ClickUpCommonInterfacesService);
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
   private _workContextService = inject(WorkContextService);
@@ -77,6 +84,7 @@ export class IssueService {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _store = inject(Store);
   private _globalProgressBarService = inject(GlobalProgressBarService);
+  private _navigateToTaskService = inject(NavigateToTaskService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
     [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
@@ -87,6 +95,8 @@ export class IssueService {
     [GITEA_TYPE]: this._giteaInterfaceService,
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
+    [LINEAR_TYPE]: this._linearCommonInterfaceService,
+    [CLICKUP_TYPE]: this._clickUpCommonInterfaceService,
 
     // trello
     [TRELLO_TYPE]: this._trelloCommonInterfacesService,
@@ -520,9 +530,59 @@ export class IssueService {
           issueDataReduced as ICalIssueReduced,
         );
       }
+
+      // Handle subtasks if provider supports it
+      if (this.ISSUE_SERVICE_MAP[issueProviderKey].getSubTasks && taskId) {
+        await this._addSubTasks(
+          issueDataReduced,
+          taskId,
+          issueProviderId,
+          issueProviderKey,
+        );
+      }
     }
 
     return taskId;
+  }
+
+  private async _addSubTasks(
+    issueDataReduced: IssueDataReduced,
+    parentTaskId: string,
+    issueProviderId: string,
+    issueProviderKey: IssueProviderKey,
+  ): Promise<void> {
+    const provider = this.ISSUE_SERVICE_MAP[issueProviderKey];
+    if (!provider.getSubTasks) {
+      return;
+    }
+    try {
+      const subtasks = await provider.getSubTasks(
+        issueDataReduced.id,
+        issueProviderId,
+        issueDataReduced,
+      );
+
+      if (!subtasks || subtasks.length === 0) {
+        return;
+      }
+
+      for (const subtask of subtasks) {
+        const subTaskData = this._getAddTaskData(issueProviderKey, subtask);
+        const { title: subTaskTitle, ...subTaskAdditional } = subTaskData;
+
+        await this._taskService.addSubTaskTo(parentTaskId, {
+          title: subTaskTitle,
+          issueType: issueProviderKey,
+          issueProviderId: issueProviderId,
+          issueId: subtask.id.toString(),
+          issueWasUpdated: false,
+          issueLastUpdated: Date.now(),
+          ...subTaskAdditional,
+        });
+      }
+    } catch (e) {
+      IssueLog.warn('Failed to add subtasks for ' + issueProviderKey, e);
+    }
   }
 
   private async _tryAddSubTask({
@@ -602,6 +662,19 @@ export class IssueService {
           ico: 'arrow_upward',
           msg: T.F.TASK.S.FOUND_MOVE_FROM_BACKLOG,
           translateParams: { title: res.task.title },
+        });
+        return true;
+      } else if (issueType === ICAL_TYPE) {
+        // For calendar events, don't move to today - just show snackbar with navigation
+        const taskId = res.task.id;
+        this._snackService.open({
+          ico: 'info',
+          msg: T.F.TASK.S.TASK_ALREADY_EXISTS,
+          translateParams: { title: res.task.title },
+          actionStr: T.F.TASK.S.GO_TO_TASK,
+          actionFn: () => {
+            this._navigateToTaskService.navigate(taskId, false);
+          },
         });
         return true;
       } else {

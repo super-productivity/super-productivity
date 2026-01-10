@@ -8,7 +8,7 @@ import android.webkit.WebView.getCurrentWebViewPackage
 /**
  * Logs detailed WebView version and provider information for debugging.
  * This helps diagnose WebView-related issues, especially on older Android versions.
- * See: https://github.com/johannesjo/super-productivity/issues/5285
+ * See: https://github.com/super-productivity/super-productivity/issues/5285
  */
 fun printWebViewVersion(webView: WebView) {
     val tag = "SP-WebView"

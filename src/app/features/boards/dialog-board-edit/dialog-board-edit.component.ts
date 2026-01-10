@@ -53,9 +53,7 @@ export class DialogBoardEditComponent {
         data: {
           cancelTxt: T.G.CANCEL,
           okTxt: T.G.DELETE,
-          message:
-            // TODO translate
-            'Are you sure you want to delete this Board?',
+          message: T.F.BOARDS.V.CONFIRM_DELETE,
         },
       })
       .afterClosed()

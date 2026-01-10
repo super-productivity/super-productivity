@@ -14,9 +14,6 @@ export const getNewestPossibleDueDate = (
   // FOR DEBUG
   // return new Date();
 
-  if (!taskRepeatCfg.startDate) {
-    throw new Error('Repeat startDate needs to be defined');
-  }
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
     throw new Error('Invalid repeatEvery value given');
   }

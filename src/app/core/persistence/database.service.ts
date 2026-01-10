@@ -8,6 +8,9 @@ import { DBAdapter } from './db-adapter.model';
 import { AndroidDbAdapterService } from './android-db-adapter.service';
 import { Log } from '../log';
 
+// Flag to prevent showing multiple error dialogs when DB fails repeatedly
+let isIdbErrorAlertShown = false;
+
 @Injectable({
   providedIn: 'root',
 })
@@ -34,7 +37,7 @@ export class DatabaseService {
       return await this._adapter.load(key);
     } catch (e) {
       Log.err('DB Load Error: Last Params,', this._lastParams);
-      return this._errorHandler(e, this.load, [key]);
+      return this._errorHandler(e);
     }
   }
 
@@ -46,7 +49,7 @@ export class DatabaseService {
       return await this._adapter.save(key, data);
     } catch (e) {
       Log.err('DB Save Error: Last Params,', this._lastParams);
-      return this._errorHandler(e, this.save, [key, data]);
+      return this._errorHandler(e);
     }
   }
 
@@ -56,7 +59,7 @@ export class DatabaseService {
       return await this._adapter.remove(key);
     } catch (e) {
       Log.err('DB Remove Error: Last Params,', this._lastParams);
-      return this._errorHandler(e, this.remove, [key]);
+      return this._errorHandler(e);
     }
   }
 
@@ -66,7 +69,7 @@ export class DatabaseService {
       return await this._adapter.clearDatabase();
     } catch (e) {
       Log.err('DB Clear Error: Last Params,', this._lastParams);
-      return this._errorHandler(e, this.clearDatabase, []);
+      return this._errorHandler(e);
     }
   }
 
@@ -82,21 +85,16 @@ export class DatabaseService {
     }
   }
 
-  private async _errorHandler(
-    e: Error | unknown,
-    // eslint-disable-next-line @typescript-eslint/ban-types
-    fn: Function,
-    args: unknown[],
-  ): Promise<void> {
+  private async _errorHandler(e: Error | unknown): Promise<void> {
     devError(e);
-    if (confirm(this._translateService.instant(T.CONFIRM.RELOAD_AFTER_IDB_ERROR))) {
+    // Only show one error dialog to prevent spam when disk is full
+    // and multiple DB operations fail in rapid succession
+    if (!isIdbErrorAlertShown) {
+      isIdbErrorAlertShown = true;
+      alert(this._translateService.instant(T.CONFIRM.RELOAD_AFTER_IDB_ERROR));
       this._restartApp();
-    } else {
-      await this._adapter.teardown();
-      await this._init();
-      // retry after init
-      return fn(...args);
     }
+    // If alert already shown, silently fail (app is restarting anyway)
   }
 
   private _restartApp(): void {

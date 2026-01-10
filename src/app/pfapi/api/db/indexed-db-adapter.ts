@@ -83,6 +83,7 @@ export class IndexedDbAdapter implements DatabaseAdapter {
   }
 
   async loadAll<A extends Record<string, unknown>>(): Promise<A> {
+    await this._afterReady();
     const data = await this._db.getAll(this._dbMainName as typeof FAKE);
     const keys = await this._db.getAllKeys(this._dbMainName as typeof FAKE);
 

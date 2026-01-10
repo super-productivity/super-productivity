@@ -1,0 +1,41 @@
+<form [formGroup]="form">
+  <collapsible
+    [title]="'Workspace Selection'"
+    [isExpanded]="isWorkspaceSelectionExpanded"
+    (isExpandedChange)="isWorkspaceSelectionExpanded = $event"
+  >
+    <div>
+      <button
+        (click)="loadAvailableTeams()"
+        mat-raised-button
+        type="button"
+        [disabled]="isLoadingTeams$ | async"
+      >
+        @if (isLoadingTeams$ | async) {
+          <mat-spinner
+            diameter="20"
+            style="display: inline-block; margin-right: 8px"
+          ></mat-spinner>
+        }
+        Load Available Workspaces
+      </button>
+      <br />
+      <br />
+    </div>
+
+    @if ((availableTeams$ | async)?.length) {
+      <div @expand>
+        <p><strong>Available Workspaces:</strong></p>
+        @for (team of availableTeams$ | async; track trackByTeamId($index, team)) {
+          <div style="margin-bottom: 8px">
+            <mat-checkbox
+              [checked]="isTeamSelected(team.id)"
+              (change)="toggleTeam(team.id, $event.checked)"
+              >{{ team.name }}</mat-checkbox
+            >
+          </div>
+        }
+      </div>
+    }
+  </collapsible>
+</form>

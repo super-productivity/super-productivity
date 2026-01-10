@@ -105,6 +105,15 @@
           "
         />
       </svg>
+      @if (showSkipSyncButton()) {
+        <button
+          mat-stroked-button
+          class="skip-sync-btn"
+          (click)="skipInitialSync()"
+        >
+          {{ T.APP.SKIP_SYNC_WAIT | translate }}
+        </button>
+      }
     </div>
   </div>
 }

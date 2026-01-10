@@ -33,15 +33,15 @@ test.describe('Task detail', () => {
   test('should update created with a time change', async ({ page, workViewPage }) => {
     await addAndOpenIncompleteTask(workViewPage, page);
 
-    const createdInfo = await findDateInfo(page, 'Created');
+    const createdInfo = findDateInfo(page, 'Created');
     const createdInfoText = await createdInfo.textContent();
     await createdInfo.click();
 
-    const timeInput = await page.getByRole('combobox', { name: 'Time' });
-    let timeInputText = await timeInput.inputValue();
-    // Flipping the meridiem should guarantee a change
-    timeInputText = timeInputText!.replace(/([AP])/, (_, c) => (c === 'A' ? 'P' : 'A'));
-    await timeInput.fill(timeInputText);
+    const timeInput = page.getByRole('combobox', { name: 'Time' });
+    // Use fill() with a fixed valid time - simpler and more reliable than computing relative changes
+    await timeInput.fill('11:59 PM');
+    // Blur to trigger form update (ngModelOptions: updateOn: 'blur')
+    await timeInput.press('Tab');
     await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(createdInfo).not.toHaveText(createdInfoText!);
@@ -66,15 +66,15 @@ test.describe('Task detail', () => {
   test('should update completed with a time change', async ({ page, workViewPage }) => {
     await addAndOpenCompleteTask(workViewPage, page);
 
-    const completedInfo = await findDateInfo(page, 'Completed');
+    const completedInfo = findDateInfo(page, 'Completed');
     const completedInfoText = await completedInfo.textContent();
     await completedInfo.click();
 
-    const timeInput = await page.getByRole('combobox', { name: 'Time' });
-    let timeInputText = await timeInput.inputValue();
-    // Flipping the meridiem should guarantee a change
-    timeInputText = timeInputText!.replace(/([AP])/, (_, c) => (c === 'A' ? 'P' : 'A'));
-    await timeInput.fill(timeInputText);
+    const timeInput = page.getByRole('combobox', { name: 'Time' });
+    // Use fill() with a fixed valid time - simpler and more reliable than computing relative changes
+    await timeInput.fill('11:59 PM');
+    // Blur to trigger form update (ngModelOptions: updateOn: 'blur')
+    await timeInput.press('Tab');
     await page.getByRole('button', { name: 'Save' }).click();
 
     await expect(completedInfo).not.toHaveText(completedInfoText!);

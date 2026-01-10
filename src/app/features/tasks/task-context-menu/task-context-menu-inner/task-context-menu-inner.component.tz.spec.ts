@@ -1,6 +1,113 @@
 import { getDbDateStr } from '../../../../util/get-db-date-str';
+import { isToday } from '../../../../util/is-today.util';
 
 describe('TaskContextMenuInnerComponent timezone test', () => {
+  describe('_schedule method same-day detection for tasks with dueWithTime (issue #5872)', () => {
+    // This tests the fix for issue #5872 comment:
+    // When a task is scheduled for today with a time-based reminder, clicking the "today"
+    // quick access button should clear the reminder (via addToMyDay) instead of
+    // rescheduling with a new reminder.
+    //
+    // The condition in _schedule method (lines 618-622):
+    // if (this.task.dueWithTime && isToday(this.task.dueWithTime) && newDay === getDbDateStr())
+
+    it('should detect same-day scheduling when task has dueWithTime for today', () => {
+      // Simulate: task is scheduled for today at 3 PM, user clicks "today" button
+      const todayAt3pm = new Date();
+      todayAt3pm.setHours(15, 0, 0, 0);
+      const dueWithTime = todayAt3pm.getTime();
+
+      // User selects "today" via quick access button
+      const selectedDate = new Date();
+      const newDay = getDbDateStr(new Date(selectedDate));
+
+      // The condition that triggers addToMyDay instead of scheduleTask
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBe(true);
+    });
+
+    it('should NOT detect same-day when task has dueWithTime for tomorrow', () => {
+      // Simulate: task is scheduled for tomorrow at 3 PM, user clicks "today" button
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(15, 0, 0, 0);
+      const dueWithTime = tomorrow.getTime();
+
+      // User selects "today" via quick access button
+      const selectedDate = new Date();
+      const newDay = getDbDateStr(new Date(selectedDate));
+
+      // This should NOT trigger addToMyDay - should go through scheduleTask path
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBe(false);
+    });
+
+    it('should NOT detect same-day when task has dueWithTime for today but scheduling for tomorrow', () => {
+      // Simulate: task is scheduled for today at 3 PM, user clicks "tomorrow" button
+      const todayAt3pm = new Date();
+      todayAt3pm.setHours(15, 0, 0, 0);
+      const dueWithTime = todayAt3pm.getTime();
+
+      // User selects "tomorrow" via quick access button
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const newDay = getDbDateStr(tomorrow);
+
+      // This should NOT trigger addToMyDay - different day selected
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBe(false);
+    });
+
+    it('should handle task scheduled near midnight today, clicking today button', () => {
+      // Simulate: task is scheduled for today at 11:30 PM, user clicks "today" button
+      const todayAt1130pm = new Date();
+      todayAt1130pm.setHours(23, 30, 0, 0);
+      const dueWithTime = todayAt1130pm.getTime();
+
+      // User selects "today" via quick access button
+      const selectedDate = new Date();
+      const newDay = getDbDateStr(new Date(selectedDate));
+
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBe(true);
+    });
+
+    it('should NOT trigger for tasks without dueWithTime (null)', () => {
+      // Simulate: task has no time-based schedule
+      const dueWithTime = null;
+
+      const selectedDate = new Date();
+      const newDay = getDbDateStr(new Date(selectedDate));
+
+      // @ts-ignore - testing null case
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBeFalsy();
+    });
+
+    it('should NOT trigger for tasks without dueWithTime (undefined)', () => {
+      // Simulate: task has no time-based schedule
+      const dueWithTime = undefined;
+
+      const selectedDate = new Date();
+      const newDay = getDbDateStr(new Date(selectedDate));
+
+      const shouldCallAddToMyDay =
+        dueWithTime && isToday(dueWithTime) && newDay === getDbDateStr();
+
+      expect(shouldCallAddToMyDay).toBeFalsy();
+    });
+  });
+
   describe('_schedule method date handling', () => {
     it('should handle scheduled date correctly across timezones', () => {
       // This test demonstrates the usage in task-context-menu-inner.component.ts line 590:

@@ -45,7 +45,6 @@ test.describe('Default task reminder option', () => {
 
     // Scroll into view and hover over the task to reveal action buttons
     await task.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(200);
     await task.hover({ force: true });
 
     // Open the detail panel to access the schedule action
@@ -74,8 +73,7 @@ test.describe('Default task reminder option', () => {
     await timeInput.click();
 
     // Wait for the reminder dropdown to appear and check the default option
-    await page.waitForTimeout(500);
-    await expect(page.getByText(changedOptionText)).toBeVisible();
+    await expect(page.getByText(changedOptionText)).toBeVisible({ timeout: 5000 });
   });
 
   test('should apply when scheduling a task using short syntax', async ({
@@ -96,7 +94,6 @@ test.describe('Default task reminder option', () => {
       const addBtn = page.locator('.tour-addBtn');
       await addBtn.waitFor({ state: 'visible', timeout: 10000 });
       await addBtn.click();
-      await page.waitForTimeout(300);
     }
 
     // Wait for the global add-task input to be available
@@ -113,7 +110,6 @@ test.describe('Default task reminder option', () => {
     }
 
     // Wait for task to be created and reschedule button to appear
-    await page.waitForTimeout(500);
     const rescheduleBtn = page.getByTitle('Reschedule').first();
     await rescheduleBtn.waitFor({ state: 'visible', timeout: 10000 });
     await rescheduleBtn.click();

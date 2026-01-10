@@ -24,6 +24,7 @@ export type MiscConfig = Readonly<{
   isAutMarkParentAsDone: boolean;
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
+  isConfirmBeforeTaskDelete?: boolean;
   isTurnOffMarkdown: boolean;
   isAutoAddWorkedOnToToday: boolean;
   isMinimizeToTray: boolean;
@@ -87,17 +88,6 @@ export type TakeABreakConfig = Readonly<{
 }>;
 
 export type PomodoroConfig = Readonly<{
-  isEnabled?: boolean;
-  isStopTrackingOnBreak?: boolean;
-  isStopTrackingOnLongBreak?: boolean;
-  isDisableAutoStartAfterBreak?: boolean;
-  isManualContinue?: boolean;
-  isManualContinueBreak?: boolean;
-  isPlaySound?: boolean;
-  isPlaySoundAfterBreak?: boolean;
-  // isGoToWorkView?: boolean;
-  isPlayTick?: boolean;
-
   // due to formly not being reliable here we need to be more lenient
   duration?: number | null;
   breakDuration?: number | null;
@@ -178,6 +168,7 @@ export type ReminderConfig = Readonly<{
   countdownDuration: number;
   defaultTaskRemindOption?: TaskReminderOptionId;
   disableReminders?: boolean;
+  isFocusWindow?: boolean;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{
@@ -195,8 +186,12 @@ export type DominaModeConfig = Readonly<{
 }>;
 
 export type FocusModeConfig = Readonly<{
-  isAlwaysUseFocusMode: boolean;
   isSkipPreparation: boolean;
+  isPlayTick?: boolean;
+  isPauseTrackingDuringBreak?: boolean;
+  isSyncSessionWithTracking?: boolean;
+  isStartInBackground?: boolean;
+  isManualBreakStart?: boolean;
 }>;
 
 export type DailySummaryNote = Readonly<{
@@ -249,7 +244,8 @@ export type CustomCfgSection =
   | 'SYNC_SAFETY_BACKUPS'
   | 'JIRA_CFG'
   | 'SIMPLE_COUNTER_CFG'
-  | 'OPENPROJECT_CFG';
+  | 'OPENPROJECT_CFG'
+  | 'CLICKUP_CFG';
 
 // Intermediate model
 export interface ConfigFormSection<FormModel> {

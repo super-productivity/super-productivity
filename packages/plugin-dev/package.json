@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node scripts/build-all.js",
     "build:all": "node scripts/build-all.js",
+    "build:all:silent": "node scripts/build-all.js --silent",
     "clean": "rm -rf */node_modules */dist minimal-plugin.zip",
     "clean:dist": "rm -rf */dist minimal-plugin.zip",
     "install:all": "node scripts/install-all.js",

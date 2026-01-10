@@ -64,13 +64,17 @@ const testCase = (
 
 describe('getNewestPossibleDueDate()', () => {
   describe('Input validation', () => {
-    it('should throw error if startDate is not defined', () => {
+    it('should use fallback date (1970-01-01) when startDate is not defined', () => {
       const cfg = dummyRepeatable('ID1', {
         startDate: undefined as any,
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        lastTaskCreationDay: '1970-01-01',
       });
-      expect(() => getNewestPossibleDueDate(cfg, new Date())).toThrowError(
-        'Repeat startDate needs to be defined',
-      );
+      const today = new Date(2022, 0, 10);
+      // Should not throw, and should return a valid date using the fallback
+      const result = getNewestPossibleDueDate(cfg, today);
+      expect(result).toBeTruthy();
     });
 
     it('should throw error if repeatEvery is not a positive integer', () => {

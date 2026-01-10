@@ -203,6 +203,7 @@ describe('FocusModeModel', () => {
         mode: FocusModeMode.Pomodoro,
         currentCycle: 0,
         lastCompletedDuration: 0,
+        pausedTaskId: null,
       };
 
       expect(state.timer).toEqual(timer);

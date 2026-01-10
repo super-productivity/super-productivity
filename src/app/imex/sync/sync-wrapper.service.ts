@@ -35,6 +35,7 @@ import { DialogIncoherentTimestampsErrorComponent } from './dialog-incoherent-ti
 import { SyncLog } from '../../core/log';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { devError } from '../../util/dev-error';
+import { IS_ELECTRON } from '../../app.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -242,6 +243,13 @@ export class SyncWrapperService {
         // Silently ignore concurrent sync attempts
         SyncLog.log('Sync already in progress, skipping concurrent sync attempt');
         return 'HANDLED_ERROR';
+      } else if (this._isPermissionError(error)) {
+        this._snackService.open({
+          msg: this._getPermissionErrorMessage(),
+          type: 'ERROR',
+          config: { duration: 12000 },
+        });
+        return 'HANDLED_ERROR';
       } else {
         const errStr = getSyncErrorStr(error);
         this._snackService.open({
@@ -374,6 +382,21 @@ export class SyncWrapperService {
 
   private _c(str: string): boolean {
     return confirm(this._translateService.instant(str));
+  }
+
+  private _isPermissionError(error: unknown): boolean {
+    const errStr = String(error);
+    return /EROFS|EACCES|EPERM|read-only file system|permission denied/i.test(errStr);
+  }
+
+  private _getPermissionErrorMessage(): string {
+    if (IS_ELECTRON && window.ea?.isFlatpak?.()) {
+      return T.F.SYNC.S.ERROR_PERMISSION_FLATPAK;
+    }
+    if (IS_ELECTRON && window.ea?.isSnap?.()) {
+      return T.F.SYNC.S.ERROR_PERMISSION_SNAP;
+    }
+    return T.F.SYNC.S.ERROR_PERMISSION;
   }
 
   private lastConflictDialog?: MatDialogRef<any, any>;

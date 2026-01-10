@@ -69,7 +69,7 @@ export const startApp = (): void => {
   app.commandLine.appendSwitch('enable-speech-dispatcher');
 
   // work around for #4375
-  // https://github.com/johannesjo/super-productivity/issues/4375#issuecomment-2883838113
+  // https://github.com/super-productivity/super-productivity/issues/4375#issuecomment-2883838113
   // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
   app.commandLine.appendSwitch('gtk-version', '3');
 
@@ -233,7 +233,7 @@ export const startApp = (): void => {
           `threshold=${CONFIG.MIN_IDLE_TIME}ms`,
           `action=${actionSummary}`,
         ];
-        log(`🕘 Idle check (${logParts.join(', ')})`);
+        electronLog.debug(`🕘 Idle check (${logParts.join(', ')})`);
       } catch (error) {
         consecutiveFailures += 1;
         log('💥 Error getting idle time, falling back to powerMonitor:', error);

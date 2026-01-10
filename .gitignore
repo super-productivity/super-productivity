@@ -15,7 +15,7 @@ src/app/config/env.generated.ts
 /tmp
 /logs
 packages/plugin-api/dist/**
-
+docs/ai/tmp
 
 # dependencies
 /node_modules

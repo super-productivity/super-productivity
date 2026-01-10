@@ -20,6 +20,8 @@ import localeNb from '@angular/common/locales/nb';
 import localeHr from '@angular/common/locales/hr';
 import localeUk from '@angular/common/locales/uk';
 import localeId from '@angular/common/locales/id';
+import localeFi from '@angular/common/locales/fi';
+import localeSv from '@angular/common/locales/sv';
 
 /**
  * All of available app languages
@@ -32,6 +34,7 @@ export enum LanguageCode {
   en = 'en',
   es = 'es',
   fa = 'fa',
+  fi = 'fi',
   fr = 'fr',
   hr = 'hr',
   id = 'id',
@@ -45,6 +48,7 @@ export enum LanguageCode {
   pt_br = 'pt-br', // Portuguese (Brazil)
   ru = 'ru',
   sk = 'sk',
+  sv = 'sv',
   tr = 'tr',
   uk = 'uk',
   zh = 'zh', // Chinese (Simplified)
@@ -112,6 +116,7 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   ar: localeAr,
   cz: localeCs,
   fa: localeFa,
+  fi: localeFi,
   fr: localeFr,
   id: localeId,
   it: localeIt,
@@ -122,6 +127,7 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   hr: localeHr,
   uk: localeUk,
   sk: localeSk,
+  sv: localeSv,
   tr: localeTr,
   zh: localeZh,
 };
