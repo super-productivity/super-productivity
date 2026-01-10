@@ -66,6 +66,7 @@ import { WorkContextThemeCfg } from './features/work-context/work-context.model'
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
+import { saveUserKbLayout } from './util/check-key-combo';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 const productivityTip: string[] | undefined =
@@ -225,6 +226,9 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       .subscribe(() => {
         this.showSkipSyncButton.set(true);
       });
+
+    // ! For keyboard shortcuts to work correctly with any layouts (QWERTZ/AZERTY/etc) - user's keyboard layout must be presaved
+    saveUserKbLayout();
   }
 
   skipInitialSync(): void {

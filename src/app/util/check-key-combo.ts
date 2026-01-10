@@ -1,11 +1,51 @@
-// Just an alias for better readability
-const PLUS_KEY = '+';
-const MINUS_KEY = '-';
+export interface NavigatorWithKeyboard {
+  keyboard?: NavigatorKeyboard;
+}
+
+export interface NavigatorKeyboard {
+  getLayoutMap: () => Promise<Map<string, string>>;
+}
 
 /**
- * Prepares key code (`event.code` from the keyboard event) so that it can be recognized in `checkKeyCombo()` func
+ * A Map where keys are string representations of key codes,
+ * and values are the corresponding characters or symbols for this layout.
  *
- * Removes special prefixes and mapping certain key codes to their corresponding characters
+ * See https://developer.mozilla.org/en-US/docs/Web/API/KeyboardLayoutMap#browser_compatibility
+ */
+export type KeyboardLayout = Map<string, string>;
+
+// Just an alias for better readability
+export const KEYS = {
+  PLUS: {
+    code: 'Equal',
+    raw: '+',
+  },
+  MINUS: {
+    code: 'Minus',
+    raw: '-',
+  },
+} as const;
+
+/** Saved user keyboard layout */
+export const userKbLayout: KeyboardLayout = new Map();
+
+/** Try to save user kayboard layout mapping - https://developer.mozilla.org/en-US/docs/Web/API/KeyboardLayoutMap */
+export const saveUserKbLayout = async (): Promise<void> => {
+  // If browser doesn't support keyboard API https://developer.mozilla.org/en-US/docs/Web/API/KeyboardLayoutMap
+  if (!('keyboard' in navigator)) return;
+
+  const keyboard = navigator.keyboard as NavigatorKeyboard;
+  const kbLayout = await keyboard.getLayoutMap();
+  userKbLayout.clear();
+  kbLayout.forEach((value, key) => userKbLayout.set(key, value));
+};
+
+/**
+ * Prepares key code (`event.code` from the keyboard event) so that it can be recognized in `checkKeyCombo()` func.
+ *
+ * Tries to use user keyboard layout if possible.
+ *
+ * Removes special prefixes and mapping certain key codes to their corresponding characters.
  *
  * @param code - The key code string to normalize (e.g., "KeyA", "Digit1", "Minus", "Equal").
  * @returns The normalized string representation of the key code (e.g., "A", "1", "-", "+").
@@ -27,18 +67,24 @@ const MINUS_KEY = '-';
  * prepareKeyCode("Equal"); // Returns "+"
  * prepareKeyCode("+"); // Returns "+"
  */
-export const prepareKeyCode = (code: string): string => {
+export const prepareKeyCode = (code: KeyboardEvent['code']): string => {
   const rules: { codeMapping: Record<string, string>; replaces: Record<string, string> } =
     {
       codeMapping: {
-        Minus: MINUS_KEY,
-        Equal: PLUS_KEY,
+        [KEYS.MINUS.code]: KEYS.MINUS.raw,
+        [KEYS.PLUS.code]: KEYS.PLUS.raw,
       },
       replaces: {
         Key: '',
         Digit: '',
       },
     };
+
+  // Try to use user kayboard layout mapping - https://developer.mozilla.org/en-US/docs/Web/API/KeyboardLayoutMap
+  if (!rules.codeMapping[code] && userKbLayout.size) {
+    const foundKey = userKbLayout.get(code);
+    if (foundKey) code = foundKey.toUpperCase();
+  }
 
   // ! Replace prefixes (that's just the format of `e.code`)
   // - "Key" prefix
@@ -88,24 +134,24 @@ export const checkKeyCombo = (
 
   // Corner case: only "+" key (without any modifiers)
   if (
-    comboToTest === PLUS_KEY &&
-    pressedKey === PLUS_KEY &&
+    comboToTest === KEYS.PLUS.raw &&
+    pressedKey === KEYS.PLUS.raw &&
     Object.values(modifiersStatus).every((x) => !x) // No modifiers should be pressed
   ) {
     return true;
   }
 
   // Corner case: combo includes "+" key (e.g. "Ctrl++")
-  const isComboIncludesPlusKey = comboToTest.includes(PLUS_KEY + PLUS_KEY);
+  const isComboIncludesPlusKey = comboToTest.includes(KEYS.PLUS.raw + KEYS.PLUS.raw);
 
   // Prepared combo object with separated modifiers list and one key
   const splittedCombo = {
-    _splitted: comboToTest.split(PLUS_KEY).filter((x) => !!x), // Filter to remove empty strings (when combo includes "++", e.g. "Ctrl++")
+    _splitted: comboToTest.split(KEYS.PLUS.raw).filter((x) => !!x), // Filter to remove empty strings (when combo includes "++", e.g. "Ctrl++")
     get modifiers() {
       return isComboIncludesPlusKey ? this._splitted : this._splitted.slice(0, -1);
     },
     get key() {
-      return isComboIncludesPlusKey ? PLUS_KEY : this._splitted.at(-1);
+      return isComboIncludesPlusKey ? KEYS.PLUS.raw : this._splitted.at(-1);
     },
   };
 
@@ -117,7 +163,7 @@ export const checkKeyCombo = (
   });
 
   const isCorrectKeyPressed = isComboIncludesPlusKey
-    ? pressedKey === PLUS_KEY
+    ? pressedKey === KEYS.PLUS.raw
     : pressedKey === splittedCombo.key;
 
   return isAllModifiersValid && isCorrectKeyPressed;
