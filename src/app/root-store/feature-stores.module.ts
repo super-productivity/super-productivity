@@ -72,6 +72,7 @@ import { DropboxEffects } from '../imex/sync/dropbox/store/dropbox.effects';
 import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close/finish-day-before-close.effects';
 import { GitlabIssueEffects } from '../features/issue/providers/gitlab/gitlab-issue.effects';
 import { JiraIssueEffects } from '../features/issue/providers/jira/jira-issue.effects';
+import { LogseqIssueEffects } from '../features/issue/providers/logseq/logseq-issue.effects';
 import { OpenProjectEffects } from '../features/issue/providers/open-project/open-project.effects';
 import { ReminderCountdownEffects } from '../features/reminder/store/reminder-countdown.effects';
 import { SyncEffects } from '../imex/sync/sync.effects';
@@ -189,6 +190,7 @@ import {
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),
     EffectsModule.forFeature([GitlabIssueEffects]),
     EffectsModule.forFeature([JiraIssueEffects]),
+    EffectsModule.forFeature([LogseqIssueEffects]),
     EffectsModule.forFeature([OpenProjectEffects]),
     EffectsModule.forFeature([ReminderCountdownEffects]),
     EffectsModule.forFeature([SyncEffects]),

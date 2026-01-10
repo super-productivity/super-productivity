@@ -1,0 +1,188 @@
+<div class="wrapper">
+  @if (task?.issueWasUpdated) {
+    <div
+      [@expand]
+      class="updates"
+    >
+      <div>
+        <button
+          (click)="hideUpdates()"
+          color="accent"
+          mat-raised-button
+        >
+          {{ T.F.JIRA.ISSUE_CONTENT.MARK_AS_CHECKED | translate }}
+        </button>
+      </div>
+      <h3 class="mat-h3">{{ T.F.JIRA.ISSUE_CONTENT.LIST_OF_CHANGES | translate }}</h3>
+      <ul class="changelog">
+        @for (entry of issue?.changelog; track entry) {
+          <li>
+            @if (entry.author) {
+              <em>{{ entry.author.displayName }}</em>
+            }
+            {{ T.F.JIRA.ISSUE_CONTENT.CHANGED | translate }}
+            <strong>{{ entry.field }}</strong>
+            {{ T.F.JIRA.ISSUE_CONTENT.ON | translate }}
+            {{ entry.created | localeDate: 'short' }}
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  <table class="issue-table">
+    <tr>
+      <th>{{ T.F.JIRA.ISSUE_CONTENT.SUMMARY | translate }}</th>
+      <td class="summary">
+        <strong
+          ><a
+            [href]="issueUrl$ | async"
+            target="_blank"
+            >{{ issue?.key }} {{ issue?.summary }}</a
+          ></strong
+        >
+      </td>
+    </tr>
+    <tr>
+      <th>{{ T.F.JIRA.ISSUE_CONTENT.STATUS | translate }}</th>
+      <td>
+        <!--<img [src]="issue?.status?.iconUrl"-->
+        <!--*ngIf="issue?.status?.iconUrl">-->
+        {{ issue?.status?.name }}
+      </td>
+    </tr>
+    @if (issue?.storyPoints) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.STORY_POINTS | translate }}</th>
+        <td>{{ issue?.storyPoints }}</td>
+      </tr>
+    }
+    <tr>
+      <th>{{ T.F.JIRA.ISSUE_CONTENT.ASSIGNEE | translate }}</th>
+      <td>{{ issue?.assignee?.displayName || '–' }}</td>
+    </tr>
+    @if (issue?.timespent || issue?.timeestimate) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.WORKLOG | translate }}</th>
+        <td>
+          {{ issue?.timespent * 1000 | msToString }} /
+          {{ issue?.timeestimate * 1000 | msToString }}
+        </td>
+      </tr>
+    }
+    @if (jiraSubTasks$ | async; as jiraSubTasks) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.SUB_TASKS | translate }}</th>
+        <td>
+          <ul class="subtask-list">
+            @for (st of jiraSubTasks; track st) {
+              <li>
+                <a
+                  target="_blank"
+                  [href]="st.href"
+                >
+                  {{ st.key }} {{ st.summary }}</a
+                >
+              </li>
+            }
+          </ul>
+        </td>
+      </tr>
+    }
+    @if (jiraRelatedIssues$ | async; as relatedIssues) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.RELATED | translate }}</th>
+        <td>
+          <ul class="related-issue-list">
+            @for (ri of relatedIssues; track ri.id) {
+              <li>
+                <i>{{ ri.relatedHow }} => </i>
+                <a
+                  target="_blank"
+                  [href]="ri['href']"
+                  >{{ ri.key }} {{ ri.summary }}</a
+                >
+              </li>
+            }
+          </ul>
+        </td>
+      </tr>
+    }
+    @if (issue?.components?.length) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.COMPONENTS | translate }}</th>
+        <td>
+          <mat-chip-listbox>
+            @for (component of issue?.components; track trackByIndex($index, component)) {
+              <mat-chip-option [title]="component.description"
+                >{{ component.name }}
+              </mat-chip-option>
+            }
+          </mat-chip-listbox>
+        </td>
+      </tr>
+    }
+    @if (issue?.description) {
+      <tr class="description-row">
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.DESCRIPTION | translate }}</th>
+        <td>
+          @if (description) {
+            <div
+              [data]="description"
+              class="issue-description markdown"
+              markdown
+            ></div>
+          }
+        </td>
+      </tr>
+    }
+    <!--    <tr *ngIf="attachments?.length">-->
+    <!--      <th>{{T.F.JIRA.ISSUE_CONTENT.ATTACHMENTS|translate}}</th>-->
+    <!--      <td>-->
+    <!--        <div [class.hasAttachments]="attachments?.length"-->
+    <!--             class="attachments">-->
+    <!--          <attachment-list [attachments]="attachments"-->
+    <!--                           [isDisableControls]="true"></attachment-list>-->
+    <!--        </div>-->
+    <!--      </td>-->
+    <!--    </tr>-->
+    @if (issue?.comments) {
+      <tr>
+        <th>{{ T.F.JIRA.ISSUE_CONTENT.COMMENTS | translate }}</th>
+        <td>
+          @for (comment of sortedComments; track trackByIndex($index, comment)) {
+            <div class="comment">
+              <img
+                [src]="comment.author.avatarUrl"
+                class="author-avatar"
+              />
+              <div class="name-and-comment-content">
+                <div>
+                  <span class="author-name">{{ comment.author.displayName }}</span>
+                  <span class="when"
+                    >{{ T.F.JIRA.ISSUE_CONTENT.AT | translate }}
+                    {{ comment.created | localeDate: 'short' }}</span
+                  >
+                </div>
+                @if (comment.body) {
+                  <div
+                    [innerHTML]="comment.body | jiraToMarkdown | markdown | async"
+                    class="markdown"
+                  ></div>
+                }
+              </div>
+            </div>
+          }
+          <a
+            [href]="issueUrl$ | async"
+            mat-stroked-button
+            target="_blank"
+          >
+            <mat-icon>textsms</mat-icon>
+            {{ T.F.JIRA.ISSUE_CONTENT.WRITE_A_COMMENT | translate }}</a
+          >
+        </td>
+      </tr>
+    }
+  </table>
+</div>

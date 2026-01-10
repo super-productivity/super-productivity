@@ -35,6 +35,13 @@
   </button>
   <button
     mat-raised-button
+    (click)="openSetupDialog('LOGSEQ')"
+  >
+    <mat-icon svgIcon="logseq"></mat-icon>
+    <span>Logseq</span>
+  </button>
+  <button
+    mat-raised-button
     (click)="openSetupDialog('TRELLO')"
   >
     <mat-icon svgIcon="trello"></mat-icon>

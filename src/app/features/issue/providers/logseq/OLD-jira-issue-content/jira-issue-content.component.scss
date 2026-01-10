@@ -1,0 +1,97 @@
+@use '../../../../../../styles/_globals.scss' as *;
+
+// table styled by ./src/styles/components/issue-table.scss
+
+.issue-description {
+  flex-grow: 1;
+  width: 100%;
+}
+
+.issue-table {
+  .description-row {
+    th {
+      cursor: pointer;
+    }
+  }
+}
+
+.wrapper {
+  margin: var(--s2);
+  margin-bottom: var(--s);
+}
+
+.comment {
+  display: flex;
+  margin-bottom: var(--s2);
+  align-items: flex-start;
+
+  .author-avatar {
+    margin-right: var(--s);
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    border-radius: 50%;
+  }
+
+  .author-name {
+    font-weight: bold;
+  }
+
+  .when {
+    margin-left: var(--s);
+    opacity: 0.6;
+  }
+}
+
+.attachments {
+  //margin-bottom: var(--s);
+  // because they have an inner padding
+  &.hasAttachments {
+    margin-top: calc(-1 * var(--s));
+  }
+}
+
+.updates {
+  text-align: center;
+
+  h3 {
+    margin-top: var(--s);
+    margin-bottom: 0;
+  }
+}
+
+.changelog {
+  list-style: none;
+  margin: 0 0 var(--s2);
+  padding: 0 0 var(--s2);
+  max-height: 100px;
+  display: block;
+  overflow-y: auto;
+
+  li {
+    padding: 0;
+    margin: 0;
+  }
+}
+
+.summary a {
+  color: inherit;
+}
+
+.subtask-list,
+.related-issue-list {
+  margin: 0;
+  padding: 0;
+
+  a {
+    color: inherit;
+    font-weight: bold;
+  }
+}
+.subtask-list {
+  margin-left: var(--s2);
+}
+
+.related-issue-list {
+  list-style-type: none;
+}

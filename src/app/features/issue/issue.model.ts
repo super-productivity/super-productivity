@@ -27,6 +27,8 @@ import {
   ICalIssue,
   ICalIssueReduced,
 } from './providers/calendar/calendar.model';
+import { LogseqCfg } from './providers/logseq/logseq.model';
+import { LogseqBlock, LogseqBlockReduced } from './providers/logseq/logseq-issue.model';
 
 export interface BaseIssueProviderCfg {
   isEnabled: boolean;
@@ -35,6 +37,7 @@ export interface BaseIssueProviderCfg {
 // Trello integration is available alongside other providers
 export type IssueProviderKey =
   | 'JIRA'
+  | 'LOGSEQ'
   | 'GITHUB'
   | 'GITLAB'
   | 'CALDAV'
@@ -48,6 +51,7 @@ export type IssueProviderKey =
 
 export type IssueIntegrationCfg =
   | JiraCfg
+  | LogseqCfg
   | GithubCfg
   | GitlabCfg
   | CaldavCfg
@@ -82,6 +86,7 @@ export interface IssueIntegrationCfgs {
 
 export type IssueData =
   | JiraIssue
+  | LogseqBlock
   | GithubIssue
   | GitlabIssue
   | CaldavIssue
@@ -96,6 +101,7 @@ export type IssueData =
 export type IssueDataReduced =
   | GithubIssueReduced
   | JiraIssueReduced
+  | LogseqBlockReduced
   | GitlabIssue
   | OpenProjectWorkPackageReduced
   | CaldavIssueReduced
@@ -109,27 +115,29 @@ export type IssueDataReduced =
 export type IssueDataReducedMap = {
   [K in IssueProviderKey]: K extends 'JIRA'
     ? JiraIssueReduced
-    : K extends 'GITHUB'
-      ? GithubIssueReduced
-      : K extends 'GITLAB'
-        ? GitlabIssue
-        : K extends 'CALDAV'
-          ? CaldavIssueReduced
-          : K extends 'ICAL'
-            ? ICalIssueReduced
-            : K extends 'OPEN_PROJECT'
-              ? OpenProjectWorkPackageReduced
-              : K extends 'GITEA'
-                ? GiteaIssue
-                : K extends 'TRELLO'
-                  ? TrelloIssueReduced
-                  : K extends 'REDMINE'
-                    ? RedmineIssue
-                    : K extends 'LINEAR'
-                      ? LinearIssueReduced
-                      : K extends 'CLICKUP'
-                        ? ClickUpTaskReduced
-                        : never;
+    : K extends 'LOGSEQ'
+      ? LogseqBlockReduced
+      : K extends 'GITHUB'
+        ? GithubIssueReduced
+        : K extends 'GITLAB'
+          ? GitlabIssue
+          : K extends 'CALDAV'
+            ? CaldavIssueReduced
+            : K extends 'ICAL'
+              ? ICalIssueReduced
+              : K extends 'OPEN_PROJECT'
+                ? OpenProjectWorkPackageReduced
+                : K extends 'GITEA'
+                  ? GiteaIssue
+                  : K extends 'TRELLO'
+                    ? TrelloIssueReduced
+                    : K extends 'REDMINE'
+                      ? RedmineIssue
+                      : K extends 'LINEAR'
+                        ? LinearIssueReduced
+                        : K extends 'CLICKUP'
+                          ? ClickUpTaskReduced
+                          : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -174,6 +182,10 @@ export interface IssueProviderJira extends IssueProviderBase, JiraCfg {
   issueProviderKey: 'JIRA';
 }
 
+export interface IssueProviderLogseq extends IssueProviderBase, LogseqCfg {
+  issueProviderKey: 'LOGSEQ';
+}
+
 export interface IssueProviderGithub extends IssueProviderBase, GithubCfg {
   issueProviderKey: 'GITHUB';
 }
@@ -216,6 +228,7 @@ export interface IssueProviderClickUp extends IssueProviderBase, ClickUpCfg {
 
 export type IssueProvider =
   | IssueProviderJira
+  | IssueProviderLogseq
   | IssueProviderGithub
   | IssueProviderGitlab
   | IssueProviderCaldav
@@ -229,24 +242,26 @@ export type IssueProvider =
 
 export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
   ? IssueProviderJira
-  : T extends 'GITHUB'
-    ? IssueProviderGithub
-    : T extends 'GITLAB'
-      ? IssueProviderGitlab
-      : T extends 'GITEA'
-        ? IssueProviderGitea
-        : T extends 'OPEN_PROJECT'
-          ? IssueProviderOpenProject
-          : T extends 'REDMINE'
-            ? IssueProviderRedmine
-            : T extends 'CALDAV'
-              ? IssueProviderCaldav
-              : T extends 'ICAL'
-                ? IssueProviderCalendar
-                : T extends 'TRELLO'
-                  ? IssueProviderTrello
-                  : T extends 'LINEAR'
-                    ? IssueProviderLinear
-                    : T extends 'CLICKUP'
-                      ? IssueProviderClickUp
-                      : never;
+  : T extends 'LOGSEQ'
+    ? IssueProviderLogseq
+    : T extends 'GITHUB'
+      ? IssueProviderGithub
+      : T extends 'GITLAB'
+        ? IssueProviderGitlab
+        : T extends 'GITEA'
+          ? IssueProviderGitea
+          : T extends 'OPEN_PROJECT'
+            ? IssueProviderOpenProject
+            : T extends 'REDMINE'
+              ? IssueProviderRedmine
+              : T extends 'CALDAV'
+                ? IssueProviderCaldav
+                : T extends 'ICAL'
+                  ? IssueProviderCalendar
+                  : T extends 'TRELLO'
+                    ? IssueProviderTrello
+                    : T extends 'LINEAR'
+                      ? IssueProviderLinear
+                      : T extends 'CLICKUP'
+                        ? IssueProviderClickUp
+                        : never;

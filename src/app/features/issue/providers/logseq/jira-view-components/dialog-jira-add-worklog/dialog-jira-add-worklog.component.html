@@ -1,0 +1,131 @@
+<form
+  (submit)="$event.preventDefault(); submitWorklog()"
+  class="mat-body"
+  name="time-estimate-form"
+>
+  <h1 mat-dialog-title>
+    <mat-icon
+      class="dialog-header-icon"
+      svgIcon="jira"
+    ></mat-icon>
+    <span>{{ T.F.JIRA.DIALOG_WORKLOG.TITLE | translate }}</span>
+  </h1>
+
+  <mat-dialog-content>
+    <p>
+      {{ T.F.JIRA.DIALOG_WORKLOG.SUBMIT_WORKLOG_FOR | translate }}
+      <strong>{{ issue.key }} {{ issue.summary }}</strong
+      >.
+    </p>
+    <p>
+      {{ T.F.JIRA.DIALOG_WORKLOG.CURRENTLY_LOGGED | translate }}
+      <strong>{{ timeLogged | msToString }}</strong>
+    </p>
+
+    <div class="form-wrapper">
+      <mat-label>{{ T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT | translate }}</mat-label>
+      <mat-form-field>
+        <input
+          [(ngModel)]="timeSpent"
+          inputDuration="optional"
+          matInput
+          name="timeSpent"
+          required
+          type="text"
+        />
+
+        <div
+          class="suffix-wrapper"
+          matSuffix
+          [matMenuTriggerFor]="contextMenu"
+          [matTooltip]="T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT_TOOLTIP | translate"
+        >
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon style="font-size: 24px">add</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon style="font-size: 24px">timer</mat-icon>
+          </button>
+        </div>
+      </mat-form-field>
+
+      <mat-menu #contextMenu="matMenu">
+        <ng-template matMenuContent>
+          @for (opt of defaultTimeOptions; track opt) {
+            <button
+              mat-menu-item
+              type="button"
+              (click)="fill(opt.value)"
+            >
+              {{ opt.label | translate }} ({{
+                getTimeToLogForMode(opt.value) | msToString
+              }})
+            </button>
+          }
+        </ng-template>
+      </mat-menu>
+
+      @if (defaultTimeCheckboxContent) {
+        <mat-checkbox
+          [@expandFade]
+          [checked]="defaultTimeCheckboxContent.isChecked"
+          (change)="defaultTimeCheckboxContent.isChecked = $event.checked"
+          style="margin-bottom: 20px"
+          >{{ defaultTimeCheckboxContent.label | translate }}
+        </mat-checkbox>
+      }
+
+      <mat-form-field>
+        <mat-label>{{ T.F.JIRA.DIALOG_WORKLOG.STARTED | translate }}</mat-label>
+        <input
+          [(ngModel)]="started"
+          matInput
+          name="date"
+          required
+          type="datetime-local"
+        />
+        <mat-error>{{ T.F.JIRA.DIALOG_WORKLOG.INVALID_DATE | translate }}</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Comment</mat-label>
+        <textarea
+          [(ngModel)]="comment"
+          cdkAutosizeMaxRows="5"
+          cdkAutosizeMinRows="2"
+          cdkTextareaAutosize
+          matInput
+          name="comment"
+        ></textarea>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <div class="wrap-buttons">
+      <button
+        (click)="close()"
+        class="btn btn-primary submit-button"
+        color="primary"
+        mat-button
+        type="button"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+      <button
+        class="btn btn-primary submit-button"
+        color="primary"
+        mat-stroked-button
+        type="submit"
+      >
+        <mat-icon>save</mat-icon>
+        {{ T.F.JIRA.DIALOG_WORKLOG.SAVE_WORKLOG | translate }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+</form>

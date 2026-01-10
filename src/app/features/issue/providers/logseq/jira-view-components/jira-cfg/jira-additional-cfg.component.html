@@ -1,0 +1,124 @@
+<form [formGroup]="form">
+  <h3 class="sub-section-heading">{{ T.F.JIRA.CFG_CMP.TRANSITION | translate }}</h3>
+  <mat-slide-toggle
+    [ngModel]="cfg.isTransitionIssuesEnabled"
+    (ngModelChange)="partialModelChange({ isTransitionIssuesEnabled: $event })"
+    [ngModelOptions]="{ standalone: true }"
+    name="isTransitionIssuesEnabled"
+    style="margin-bottom: 8px"
+  >
+    {{ T.F.JIRA.CFG_CMP.ENABLE_TRANSITIONS | translate }}
+  </mat-slide-toggle>
+
+  @if (cfg.isTransitionIssuesEnabled) {
+    <section @expand>
+      <mat-form-field>
+        <mat-label
+          >{{ T.F.JIRA.CFG_CMP.SELECT_ISSUE_FOR_TRANSITIONS | translate }}
+        </mat-label>
+        <input
+          [formControl]="issueSuggestionsCtrl"
+          [matAutocomplete]="autoEl"
+          class="border-color-primary"
+          matInput
+        />
+        <mat-autocomplete
+          #autoEl="matAutocomplete"
+          (optionSelected)="updateTransitionOptions()"
+          [autoActiveFirstOption]="true"
+          [displayWith]="displayIssueWith"
+        >
+          @if (isLoading$ | async) {
+            <mat-option
+              [value]="issueSuggestionsCtrl.value"
+              class="is-loading"
+            >
+              <mat-spinner diameter="50"></mat-spinner>
+            </mat-option>
+          }
+          <!---->
+          @for (issue of filteredIssueSuggestions$ | async; track issue.issueData.id) {
+            <mat-option [value]="issue"
+              ><span>{{ issue?.title }}</span>
+            </mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+      @for (opt of transitionConfigOpts; track opt) {
+        <div>
+          <mat-form-field>
+            <!--        @if (opt.key==='OPEN') {-->
+            <!--        <label>{{ T.F.JIRA.CFG_CMP.OPEN|translate }}</label>-->
+            <!--        }-->
+            @if (opt.key === 'IN_PROGRESS') {
+              <label>{{ T.F.JIRA.CFG_CMP.IN_PROGRESS | translate }}</label>
+            }
+            @if (opt.key === 'DONE') {
+              <label>{{ T.F.JIRA.CFG_CMP.DONE | translate }}</label>
+            }
+            <!-- TODO check for a better way to do this -->
+            <!--          <mat-select [(ngModel)]="cfg.transitionConfig[opt.key]"-->
+            <mat-select
+              (ngModelChange)="setTransition(opt.key, $event)"
+              [ngModelOptions]="{ standalone: true }"
+              [ngModel]="getTransition(opt.key)"
+            >
+              <mat-option value="DO_NOT">{{
+                T.F.JIRA.CFG_CMP.DO_NOT | translate
+              }}</mat-option>
+              <mat-option value="ALWAYS_ASK"
+                >{{ T.F.JIRA.CFG_CMP.ALWAYS_ASK | translate }}
+              </mat-option>
+              @for (transition of cfg.availableTransitions; track transition) {
+                <mat-option [value]="transition"> {{ transition.name }} </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      }
+    </section>
+  }
+
+  <section>
+    <h3 class="sub-section-heading">
+      {{ T.F.JIRA.CFG_CMP.MAP_CUSTOM_FIELDS | translate }}
+    </h3>
+    <p>{{ T.F.JIRA.CFG_CMP.MAP_CUSTOM_FIELDS_INFO | translate }}</p>
+
+    <div>
+      <button
+        (click)="loadCustomFields()"
+        mat-raised-button
+        type="button"
+      >
+        {{ T.F.JIRA.CFG_CMP.LOAD_SUGGESTIONS | translate }}
+      </button>
+      <br />
+      <br />
+    </div>
+
+    <mat-form-field>
+      <mat-label>{{ T.F.JIRA.CFG_CMP.STORY_POINTS | translate }}</mat-label>
+      <input
+        [formControl]="customFieldSuggestionsCtrl"
+        [matAutocomplete]="storyPointAutoEl"
+        class="border-color-primary"
+        matInput
+      />
+
+      <mat-autocomplete
+        #storyPointAutoEl="matAutocomplete"
+        [autoActiveFirstOption]="true"
+      >
+        @for (
+          field of filteredCustomFieldSuggestions$ | async;
+          track trackByCustomFieldId($index, field)
+        ) {
+          <mat-option [value]="field.id"
+            ><span>{{ field?.id }}: {{ field?.name }}</span>
+          </mat-option>
+        }
+      </mat-autocomplete>
+    </mat-form-field>
+  </section>
+</form>

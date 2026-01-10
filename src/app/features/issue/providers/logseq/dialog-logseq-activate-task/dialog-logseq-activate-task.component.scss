@@ -1,0 +1,18 @@
+.dialog-header-icon {
+  margin-right: 8px;
+}
+
+.wrap-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+mat-dialog-content {
+  p {
+    margin-bottom: 16px;
+  }
+
+  strong {
+    font-weight: 500;
+  }
+}

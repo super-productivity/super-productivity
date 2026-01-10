@@ -1,0 +1,63 @@
+<h1 mat-dialog-title>
+  <mat-icon
+    class="dialog-header-icon"
+    svgIcon="jira"
+  ></mat-icon>
+  <span>{{ T.F.JIRA.DIALOG_TRANSITION.TITLE | translate }}</span>
+</h1>
+
+<mat-dialog-content>
+  <table>
+    <tr>
+      <th>{{ T.F.JIRA.DIALOG_TRANSITION.TASK_NAME | translate }}</th>
+      <td>{{ data.task ? data.task?.title : '–' }}</td>
+    </tr>
+    <tr>
+      <th>{{ T.F.JIRA.DIALOG_TRANSITION.CURRENT_STATUS | translate }}</th>
+      <td>{{ data.issue?.status ? data.issue?.status?.name : '–' }}</td>
+    </tr>
+    <tr>
+      <th>{{ T.F.JIRA.DIALOG_TRANSITION.CURRENT_ASSIGNEE | translate }}</th>
+      <td>{{ data.issue?.assignee ? data.issue?.assignee?.displayName : '–' }}</td>
+    </tr>
+  </table>
+
+  <mat-form-field>
+    <label>{{ T.F.JIRA.DIALOG_TRANSITION.CHOOSE_STATUS | translate }}</label>
+    <mat-select [(ngModel)]="chosenTransition">
+      <!--<mat-option value="DO_NOT">Don't transition</mat-option>-->
+      <!--<mat-option value="ALWAYS_ASK">Always open dialog</mat-option>-->
+      @for (
+        transition of availableTransitions$ | async;
+        track trackByIndex($index, transition)
+      ) {
+        <mat-option [value]="transition">
+          <!--<img [src]="transition.to.iconUrl">-->
+          {{ transition.name }}
+        </mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close()"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-button
+      type="button"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+    <button
+      (click)="transitionIssue()"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-stroked-button
+    >
+      {{ T.F.JIRA.DIALOG_TRANSITION.TITLE | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>
