@@ -41,7 +41,8 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
         first(),
       )
       .toPromise()
-      .then((result) => result ?? false);
+      .then((result) => result ?? false)
+      .catch(() => false);
   }
 
   issueLink(blockUuid: string, issueProviderId: string): Promise<string> {
@@ -169,8 +170,10 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // Check if scheduled date/time changed
     const blockScheduledDate = extractScheduledDate(block.content);
     const blockScheduledDateTime = extractScheduledDateTime(block.content);
-    const isDueDateChanged = blockScheduledDate !== task.dueDay;
-    const isDueTimeChanged = blockScheduledDateTime !== task.dueWithTime;
+    // Normalize null/undefined comparison (treat them as equivalent)
+    const isDueDateChanged = (blockScheduledDate ?? null) !== (task.dueDay ?? null);
+    const isDueTimeChanged =
+      (blockScheduledDateTime ?? null) !== (task.dueWithTime ?? null);
 
     if (
       wasUpdated ||
