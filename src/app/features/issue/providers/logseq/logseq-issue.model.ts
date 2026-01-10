@@ -18,4 +18,6 @@ export type LogseqBlockReduced = Readonly<{
   marker: string | null;
   updatedAt: number;
   properties: Record<string, any>;
+  scheduledDate?: string | null; // Extracted YYYY-MM-DD from SCHEDULED: <date>
+  scheduledDateTime?: number | null; // Extracted timestamp from SCHEDULED: <date time>
 }>;
