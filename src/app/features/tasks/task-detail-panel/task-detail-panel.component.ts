@@ -143,6 +143,36 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
   // Observable conversions
   private _task$ = toObservable(this.task);
 
+  // Auto-refresh Logseq issues when opening task
+  constructor() {
+    this._task$
+      .pipe(
+        takeUntilDestroyed(this._destroyRef),
+        map((task) => ({
+          id: task.id,
+          issueType: task.issueType,
+          issueId: task.issueId,
+          issueProviderId: task.issueProviderId,
+        })),
+        distinctUntilChanged((prev, curr) => prev.issueId === curr.issueId),
+        switchMap(({ id, issueType, issueId, issueProviderId }) => {
+          // Only auto-refresh for Logseq tasks
+          if (issueType === 'LOGSEQ' && issueId && issueProviderId) {
+            return this.taskService.getByIdOnce$(id).pipe(
+              switchMap((task) => {
+                if (task) {
+                  this._issueService.refreshIssueTask(task, false, false);
+                }
+                return of(null);
+              }),
+            );
+          }
+          return of(null);
+        }),
+      )
+      .subscribe();
+  }
+
   @HostListener('keydown', ['$event'])
   onKeydown(ev: KeyboardEvent): void {
     // Skip handling inside input elements

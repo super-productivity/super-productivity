@@ -1,0 +1,44 @@
+<h1 mat-dialog-title>
+  <mat-icon
+    class="dialog-header-icon"
+    svgIcon="logseq"
+  ></mat-icon>
+  <span>{{ dialogTitle() }}</span>
+</h1>
+
+<mat-dialog-content>
+  <p>{{ dialogMessage() }}</p>
+  <p>Wie möchten Sie fortfahren?</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close()"
+      class="btn btn-primary"
+      color="primary"
+      mat-button
+      type="button"
+    >
+      Abbrechen
+    </button>
+    <button
+      (click)="logseqAction()"
+      class="btn btn-primary"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      {{ logseqActionLabel() }}
+    </button>
+    <button
+      (click)="superProdAction()"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-raised-button
+      type="button"
+    >
+      {{ superProdActionLabel() }}
+    </button>
+  </div>
+</mat-dialog-actions>

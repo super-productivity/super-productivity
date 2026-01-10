@@ -152,6 +152,7 @@ export class GlobalThemeService {
       ['github', 'assets/icons/github.svg'],
       ['gitlab', 'assets/icons/gitlab.svg'],
       ['jira', 'assets/icons/jira.svg'],
+      ['logseq', 'assets/icons/logseq.svg'],
       ['caldav', 'assets/icons/caldav.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
       ['drag_handle', 'assets/icons/drag-handle.svg'],

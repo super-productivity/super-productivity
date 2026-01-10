@@ -1,4 +1,8 @@
 import { DEFAULT_JIRA_CFG, JIRA_CONFIG_FORM_SECTION } from './providers/jira/jira.const';
+import {
+  DEFAULT_LOGSEQ_CFG,
+  LOGSEQ_CONFIG_FORM_SECTION,
+} from './providers/logseq/logseq.const';
 import { IssueProviderBase, IssueProviderKey } from './issue.model';
 import {
   DEFAULT_GITHUB_CFG,
@@ -47,6 +51,7 @@ export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 export const GITLAB_TYPE: IssueProviderKey = 'GITLAB';
 export const GITHUB_TYPE: IssueProviderKey = 'GITHUB';
 export const JIRA_TYPE: IssueProviderKey = 'JIRA';
+export const LOGSEQ_TYPE: IssueProviderKey = 'LOGSEQ';
 export const CALDAV_TYPE: IssueProviderKey = 'CALDAV';
 export const OPEN_PROJECT_TYPE: IssueProviderKey = 'OPEN_PROJECT';
 export const GITEA_TYPE: IssueProviderKey = 'GITEA';
@@ -60,6 +65,7 @@ export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
   GITLAB_TYPE,
   GITHUB_TYPE,
   JIRA_TYPE,
+  LOGSEQ_TYPE,
   CALDAV_TYPE,
   ICAL_TYPE,
   OPEN_PROJECT_TYPE,
@@ -72,6 +78,7 @@ export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
 
 export const ISSUE_PROVIDER_ICON_MAP = {
   [JIRA_TYPE]: 'jira',
+  [LOGSEQ_TYPE]: 'logseq',
   [GITHUB_TYPE]: 'github',
   [GITLAB_TYPE]: 'gitlab',
   [CALDAV_TYPE]: 'caldav',
@@ -86,6 +93,7 @@ export const ISSUE_PROVIDER_ICON_MAP = {
 
 export const ISSUE_PROVIDER_HUMANIZED = {
   [JIRA_TYPE]: 'Jira',
+  [LOGSEQ_TYPE]: 'Logseq',
   [GITHUB_TYPE]: 'GitHub',
   [GITLAB_TYPE]: 'GitLab',
   [CALDAV_TYPE]: 'CalDAV',
@@ -100,6 +108,7 @@ export const ISSUE_PROVIDER_HUMANIZED = {
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [JIRA_TYPE]: DEFAULT_JIRA_CFG,
+  [LOGSEQ_TYPE]: DEFAULT_LOGSEQ_CFG,
   [GITHUB_TYPE]: DEFAULT_GITHUB_CFG,
   [GITLAB_TYPE]: DEFAULT_GITLAB_CFG,
   [CALDAV_TYPE]: DEFAULT_CALDAV_CFG,
@@ -114,6 +123,7 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [JIRA_TYPE]: JIRA_CONFIG_FORM_SECTION,
+  [LOGSEQ_TYPE]: LOGSEQ_CONFIG_FORM_SECTION,
   [GITHUB_TYPE]: GITHUB_CONFIG_FORM_SECTION,
   [GITLAB_TYPE]: GITLAB_CONFIG_FORM_SECTION,
   [CALDAV_TYPE]: CALDAV_CONFIG_FORM_SECTION,
@@ -134,6 +144,7 @@ const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
 export const ISSUE_STR_MAP: { [key: string]: { ISSUE_STR: string; ISSUES_STR: string } } =
   {
     [JIRA_TYPE]: DEFAULT_ISSUE_STRS,
+    [LOGSEQ_TYPE]: DEFAULT_ISSUE_STRS,
     [GITHUB_TYPE]: DEFAULT_ISSUE_STRS,
     [GITLAB_TYPE]: DEFAULT_ISSUE_STRS,
     [CALDAV_TYPE]: DEFAULT_ISSUE_STRS,

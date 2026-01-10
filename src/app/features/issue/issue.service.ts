@@ -19,6 +19,7 @@ import {
   ISSUE_PROVIDER_ICON_MAP,
   ISSUE_STR_MAP,
   JIRA_TYPE,
+  LOGSEQ_TYPE,
   OPEN_PROJECT_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
@@ -29,6 +30,7 @@ import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
+import { LogseqCommonInterfacesService } from './providers/logseq/logseq-common-interfaces.service';
 import { GithubCommonInterfacesService } from './providers/github/github-common-interfaces.service';
 import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
 import { catchError, map, switchMap } from 'rxjs/operators';
@@ -66,6 +68,7 @@ import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-t
 export class IssueService {
   private _taskService = inject(TaskService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
+  private _logseqCommonInterfacesService = inject(LogseqCommonInterfacesService);
   private _trelloCommonInterfacesService = inject(TrelloCommonInterfacesService);
   private _githubCommonInterfacesService = inject(GithubCommonInterfacesService);
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
@@ -90,6 +93,7 @@ export class IssueService {
     [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
     [GITHUB_TYPE]: this._githubCommonInterfacesService,
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
+    [LOGSEQ_TYPE]: this._logseqCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
     [GITEA_TYPE]: this._giteaInterfaceService,
@@ -144,6 +148,14 @@ export class IssueService {
     issueProviderKey: IssueProviderKey,
     isEmptySearch = false,
   ): Promise<SearchResultItem[]> {
+    // Allow Logseq wildcard '*' to bypass special chars check
+    if (issueProviderKey === 'LOGSEQ' && searchTerm === '*') {
+      return this.ISSUE_SERVICE_MAP[issueProviderKey].searchIssues(
+        searchTerm,
+        issueProviderId,
+      );
+    }
+
     // check if text is more than just special chars
     if (searchTerm.replace(/[^\p{L}\p{N}]+/gu, '').length === 0 && !isEmptySearch) {
       return Promise.resolve([]);
@@ -163,9 +175,16 @@ export class IssueService {
           return of([]);
         }
 
+        const isEmptySearch = !searchTerm || searchTerm.trim().length === 0;
+
         const searchObservables = enabledProviders.map((provider) =>
           from(
-            this.searchIssues(searchTerm, provider.id, provider.issueProviderKey),
+            this.searchIssues(
+              searchTerm,
+              provider.id,
+              provider.issueProviderKey,
+              isEmptySearch,
+            ),
           ).pipe(
             map((results) =>
               results.map((result) => ({
