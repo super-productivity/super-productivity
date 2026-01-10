@@ -40,10 +40,6 @@ export const LOGSEQ_ISSUE_CONTENT_CONFIG: IssueContentConfig<LogseqBlock> = {
       label: 'Details',
       value: (block: LogseqBlock) => {
         const details = extractRestOfContent(block.content);
-        console.log('[Logseq Details Debug]');
-        console.log('  block.content:', block.content);
-        console.log('  extracted details:', details);
-        console.log('  details length:', details.length);
 
         // Fallback for testing
         return details || '*(No additional content)*';

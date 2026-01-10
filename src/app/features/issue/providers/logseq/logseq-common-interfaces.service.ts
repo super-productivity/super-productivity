@@ -12,8 +12,11 @@ import { LOGSEQ_POLL_INTERVAL } from './logseq.const';
 import { IssueProviderService } from '../../issue-provider.service';
 import {
   extractFirstLine,
+  extractScheduledDate,
+  extractScheduledDateTime,
   mapBlockToIssueReduced,
   mapBlockToSearchResult,
+  updateScheduledInContent,
 } from './logseq-issue-map.util';
 import { TaskAttachment } from '../../../tasks/task-attachment/task-attachment.model';
 
@@ -55,24 +58,14 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   getById(uuid: string, issueProviderId: string): Promise<LogseqBlock> {
-    console.log('[Logseq Common] getById called with uuid:', uuid);
     return this._getCfgOnce$(issueProviderId)
-      .pipe(
-        concatMap((cfg) => {
-          console.log('[Logseq Common] Calling getBlockByUuid$ with cfg');
-          return this._logseqApiService.getBlockByUuid$(uuid, cfg);
-        }),
-      )
+      .pipe(concatMap((cfg) => this._logseqApiService.getBlockByUuid$(uuid, cfg)))
       .toPromise()
       .then((result) => {
         if (!result) {
           throw new Error('Failed to get Logseq block');
         }
-        console.log('[Logseq Common] getById result:', {
-          uuid: result.uuid,
-          marker: result.marker,
-          content: result.content?.substring(0, 100),
-        });
+
         return result;
       });
   }
@@ -113,13 +106,36 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   getAddTaskData(block: LogseqBlockReduced): Partial<Task> & { title: string } {
-    return {
-      title: extractFirstLine(block.content),
-      issueWasUpdated: false,
-      issueLastUpdated: block.updatedAt,
-      isDone: block.marker === 'DONE',
-      issueMarker: block.marker,
-    };
+    // If time is specified, use dueWithTime, otherwise use dueDay
+    if (block.scheduledDateTime) {
+      return {
+        title: extractFirstLine(block.content),
+        issueWasUpdated: false,
+        issueLastUpdated: block.updatedAt,
+        isDone: block.marker === 'DONE',
+        issueMarker: block.marker,
+        dueWithTime: block.scheduledDateTime,
+        dueDay: undefined, // Clear dueDay when time is set
+      };
+    } else if (block.scheduledDate) {
+      return {
+        title: extractFirstLine(block.content),
+        issueWasUpdated: false,
+        issueLastUpdated: block.updatedAt,
+        isDone: block.marker === 'DONE',
+        issueMarker: block.marker,
+        dueDay: block.scheduledDate,
+        dueWithTime: undefined, // Clear dueWithTime when only date is set
+      };
+    } else {
+      return {
+        title: extractFirstLine(block.content),
+        issueWasUpdated: false,
+        issueLastUpdated: block.updatedAt,
+        isDone: block.marker === 'DONE',
+        issueMarker: block.marker,
+      };
+    }
   }
 
   async getFreshDataForIssueTask(task: Task): Promise<{
@@ -150,7 +166,19 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     const isDoneChanged = (block.marker === 'DONE') !== task.isDone;
     const isMarkerChanged = block.marker !== task.issueMarker;
 
-    if (wasUpdated || isDoneChanged || isMarkerChanged) {
+    // Check if scheduled date/time changed
+    const blockScheduledDate = extractScheduledDate(block.content);
+    const blockScheduledDateTime = extractScheduledDateTime(block.content);
+    const isDueDateChanged = blockScheduledDate !== task.dueDay;
+    const isDueTimeChanged = blockScheduledDateTime !== task.dueWithTime;
+
+    if (
+      wasUpdated ||
+      isDoneChanged ||
+      isMarkerChanged ||
+      isDueDateChanged ||
+      isDueTimeChanged
+    ) {
       return {
         taskChanges: {
           ...this.getAddTaskData(mapBlockToIssueReduced(block)),
@@ -269,17 +297,65 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   async updateIssueFromTask(task: Task): Promise<void> {
-    // This method is kept for backwards compatibility but now uses updateBlockMarker
     if (!task.issueId || !task.issueProviderId) {
       return;
     }
 
-    let marker: 'TODO' | 'DOING' | 'LATER' | 'DONE' = 'TODO';
-    if (task.isDone) {
-      marker = 'DONE';
+    const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
+    if (!cfg) {
+      return;
     }
 
-    await this.updateBlockMarker(task.issueId as string, task.issueProviderId, marker);
+    const block = await this.getById(task.issueId as string, task.issueProviderId);
+
+    let updatedContent = block.content;
+    let hasChanges = false;
+
+    // Update marker if task done status changed
+    if (cfg.isUpdateBlockOnTaskDone && task.isDone && block.marker !== 'DONE') {
+      updatedContent = updatedContent.replace(
+        /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
+        'DONE ',
+      );
+      hasChanges = true;
+    }
+
+    // Update SCHEDULED - use dueWithTime if available, otherwise dueDay
+    const currentScheduledDate = extractScheduledDate(block.content);
+    const currentScheduledDateTime = extractScheduledDateTime(block.content);
+
+    // Determine what should be in Logseq
+    let shouldUpdateScheduled = false;
+
+    if (task.dueWithTime) {
+      // Task has time - check if it differs from current
+      if (currentScheduledDateTime !== task.dueWithTime) {
+        updatedContent = updateScheduledInContent(updatedContent, task.dueWithTime);
+        shouldUpdateScheduled = true;
+      }
+    } else if (task.dueDay) {
+      // Task has only date - check if it differs from current
+      if (currentScheduledDate !== task.dueDay || currentScheduledDateTime !== null) {
+        updatedContent = updateScheduledInContent(updatedContent, task.dueDay);
+        shouldUpdateScheduled = true;
+      }
+    } else {
+      // Task has no due date - remove SCHEDULED if present
+      if (currentScheduledDate !== null || currentScheduledDateTime !== null) {
+        updatedContent = updateScheduledInContent(updatedContent, null);
+        shouldUpdateScheduled = true;
+      }
+    }
+
+    if (shouldUpdateScheduled) {
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      await this._logseqApiService
+        .updateBlock$(block.uuid, updatedContent, cfg)
+        .toPromise();
+    }
   }
 
   private _getCfgOnce$(issueProviderId: string): Observable<LogseqCfg> {

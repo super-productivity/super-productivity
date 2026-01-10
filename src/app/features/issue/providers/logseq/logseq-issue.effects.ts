@@ -1,14 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { filter, concatMap, withLatestFrom, mergeMap, switchMap } from 'rxjs/operators';
-import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { setCurrentTask, unsetCurrentTask } from '../../../tasks/store/task.actions';
+import { PlannerActions } from '../../../planner/store/planner.actions';
 import { TaskService } from '../../../tasks/task.service';
 import { LogseqCommonInterfacesService } from './logseq-common-interfaces.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
-import { SnackService } from '../../../../core/snack/snack.service';
 import { EMPTY, concat, of, from } from 'rxjs';
 import { LogseqCfg, LogseqTaskWorkflow } from './logseq.model';
 import { LogseqBlock } from './logseq-issue.model';
@@ -18,19 +17,13 @@ import { DialogLogseqActivateTaskComponent } from './dialog-logseq-activate-task
 @Injectable()
 export class LogseqIssueEffects {
   private _actions$ = inject(Actions);
-  private _store = inject(Store);
   private _taskService = inject(TaskService);
   private _logseqCommonService = inject(LogseqCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
   private _issueService = inject(IssueService);
-  private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
   private _previousTaskId: string | null = null;
   private _openDialogTaskIds = new Set<string>();
-
-  constructor() {
-    console.log('[Logseq Effects] LogseqIssueEffects initialized');
-  }
 
   private _getMarkers(workflow: LogseqTaskWorkflow): {
     active: 'DOING' | 'NOW';
@@ -205,6 +198,73 @@ export class LogseqIssueEffects {
               return EMPTY;
             });
         }),
+      ),
+    { dispatch: false },
+  );
+
+  // Effect: Sync due date changes to Logseq SCHEDULED (from updateTask or Planner)
+  updateScheduledOnDueDateChange$ = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(
+          TaskSharedActions.updateTask,
+          TaskSharedActions.scheduleTaskWithTime,
+          TaskSharedActions.reScheduleTaskWithTime,
+          PlannerActions.planTaskForDay,
+          PlannerActions.transferTask,
+        ),
+        concatMap((action) => {
+          // Handle different action types
+          if (action.type === TaskSharedActions.updateTask.type) {
+            const updateAction = action as ReturnType<
+              typeof TaskSharedActions.updateTask
+            >;
+            const hasDueDateChange = updateAction.task.changes.dueDay !== undefined;
+            const hasDueTimeChange = updateAction.task.changes.dueWithTime !== undefined;
+            // Only sync manual changes, not issue updates
+            if (
+              (!hasDueDateChange && !hasDueTimeChange) ||
+              updateAction.task.changes.issueWasUpdated === true
+            ) {
+              return EMPTY;
+            }
+            return this._taskService.getByIdOnce$(updateAction.task.id as string);
+          } else if (action.type === TaskSharedActions.scheduleTaskWithTime.type) {
+            // TaskSharedActions.scheduleTaskWithTime
+            const scheduleAction = action as ReturnType<
+              typeof TaskSharedActions.scheduleTaskWithTime
+            >;
+            return this._taskService.getByIdOnce$(scheduleAction.task.id);
+          } else if (action.type === TaskSharedActions.reScheduleTaskWithTime.type) {
+            // TaskSharedActions.reScheduleTaskWithTime (from Scheduler drag & drop)
+            const rescheduleAction = action as ReturnType<
+              typeof TaskSharedActions.reScheduleTaskWithTime
+            >;
+            return this._taskService.getByIdOnce$(rescheduleAction.task.id);
+          } else if (action.type === PlannerActions.planTaskForDay.type) {
+            // PlannerActions.planTaskForDay
+            const planAction = action as ReturnType<typeof PlannerActions.planTaskForDay>;
+            return this._taskService.getByIdOnce$(planAction.task.id as string);
+          } else {
+            // PlannerActions.transferTask (Drag & Drop between days)
+            const transferAction = action as ReturnType<
+              typeof PlannerActions.transferTask
+            >;
+            return this._taskService.getByIdOnce$(transferAction.task.id as string);
+          }
+        }),
+        filter((task) => task.issueType === 'LOGSEQ' && !!task.issueId),
+        concatMap((task) =>
+          this._logseqCommonService
+            .updateIssueFromTask(task)
+            .then(() => EMPTY)
+            .catch((err) => {
+              if (err.offline) {
+                console.warn('Logseq offline: queuing update for', task.issueId);
+              }
+              return EMPTY;
+            }),
+        ),
       ),
     { dispatch: false },
   );
