@@ -92,18 +92,18 @@ jobs:
           github_token: ${{ secrets.github_token }}
           release: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
-      # rename to possibly fix release issue
-      - run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
-      # Release to edge if no tag and to candidate if tag
-      - #otherwise it would be executed twice
-        if: false == startsWith(github.ref, 'refs/tags/v')
-        uses: nick-fields/retry@v3
-        with:
-          max_attempts: 2
-          timeout_minutes: 11
-          command: snapcraft push .tmp/app-builds/sp.snap --release edge
-      #      - run: snapcraft push .tmp/app-builds/sp.snap --release candidate
-      #        if: startsWith(github.ref, 'refs/tags/v')
+      # # rename to possibly fix release issue
+      # - run: find ./.tmp/app-builds -type f -name '*.snap' -exec sh -c 'x="{}"; mv "$x" ".tmp/app-builds/sp.snap"' \;
+      # # Release to edge if no tag and to candidate if tag
+      # - #otherwise it would be executed twice
+      #   if: false == startsWith(github.ref, 'refs/tags/v')
+      #   uses: nick-fields/retry@v3
+      #   with:
+      #     max_attempts: 2
+      #     timeout_minutes: 11
+      #     command: snapcraft push .tmp/app-builds/sp.snap --release edge
+      # #      - run: snapcraft push .tmp/app-builds/sp.snap --release candidate
+      # #        if: startsWith(github.ref, 'refs/tags/v')
   #      - run: snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/candidate --yes
   #        if: startsWith(github.ref, 'refs/tags/v')
 
