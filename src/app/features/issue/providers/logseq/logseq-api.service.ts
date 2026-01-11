@@ -57,16 +57,7 @@ export class LogseqApiService {
   getBlockByUuid$(uuid: string, cfg: LogseqCfg): Observable<LogseqBlock> {
     return this._sendRequest$<any>(cfg, 'logseq.Editor.getBlock', [uuid]).pipe(
       switchMap((rawBlock) => {
-        console.log('[Logseq API] getBlockByUuid$ - rawBlock received:', {
-          uuid: rawBlock?.uuid,
-          marker: rawBlock?.marker,
-          hasError: !!rawBlock?.error,
-        });
         const normalized = this._normalizeBlock(rawBlock);
-        console.log('[Logseq API] getBlockByUuid$ - after normalize:', {
-          uuid: normalized.uuid,
-          marker: normalized.marker,
-        });
 
         // Fetch page name if page ID exists
         if (normalized.page && normalized.page.id) {
@@ -75,30 +66,15 @@ export class LogseqApiService {
               const pageName =
                 page?.originalName || page?.['original-name'] || page?.name;
               const result = { ...normalized, pageName };
-              console.log('[Logseq API] getBlockByUuid$ - final result with page:', {
-                uuid: result.uuid,
-                marker: result.marker,
-              });
               return from([result]);
             }),
             catchError(() => {
               // If page fetch fails, return block without page name
-              console.log(
-                '[Logseq API] getBlockByUuid$ - page fetch failed, returning:',
-                {
-                  uuid: normalized.uuid,
-                  marker: normalized.marker,
-                },
-              );
               return from([normalized]);
             }),
           );
         }
 
-        console.log('[Logseq API] getBlockByUuid$ - final result without page:', {
-          uuid: normalized.uuid,
-          marker: normalized.marker,
-        });
         return from([normalized]);
       }),
     );
@@ -123,15 +99,9 @@ export class LogseqApiService {
   getBlockChildren$(parentUuid: string, cfg: LogseqCfg): Observable<LogseqBlock[]> {
     return this.getBlockByUuid$(parentUuid, cfg).pipe(
       switchMap((block) => {
-        console.log(
-          '[Logseq API] getBlockChildren$ called, block.properties:',
-          block.properties,
-        );
         const children = block.properties?.children || [];
-        console.log('[Logseq API] children array:', children);
 
         if (children.length === 0 || !Array.isArray(children)) {
-          console.log('[Logseq API] No children or not an array, returning empty');
           return from([[]]);
         }
 
@@ -140,23 +110,14 @@ export class LogseqApiService {
           .map((child: any) => this._normalizeBlock(child))
           .filter((normalizedBlock) => normalizedBlock.uuid !== '');
 
-        console.log(
-          '[Logseq API] Normalized children count:',
-          normalized.length,
-          'out of',
-          children.length,
-        );
-
         return from([normalized]);
       }),
     );
   }
 
   private _normalizeBlock(raw: any): LogseqBlock {
-    // Defensive check: if raw data is invalid, log warning and create placeholder
+    // Defensive check: if raw data is invalid, create placeholder
     if (!raw || typeof raw !== 'object' || !raw.uuid || raw.content === undefined) {
-      console.warn('[Logseq API] _normalizeBlock: Invalid raw data, skipping:', raw);
-      console.warn('[Logseq API] Stack trace:', new Error().stack);
       // Return a placeholder block that will be filtered out later
       return {
         id: '',
@@ -170,12 +131,6 @@ export class LogseqApiService {
         properties: {},
       };
     }
-
-    console.log('[Logseq API] _normalizeBlock called with raw:', {
-      uuid: raw.uuid,
-      marker: raw.marker,
-      content: raw.content?.substring(0, 100),
-    });
 
     // Extract marker from content if not provided by API
     let marker = raw.marker || null;
@@ -201,13 +156,10 @@ export class LogseqApiService {
   }
 
   private _normalizeBlocks(blocks: any[]): LogseqBlock[] {
-    console.log('[Logseq API] _normalizeBlocks called with', blocks.length, 'blocks');
     // Normalize all blocks and filter out invalid ones (those with empty uuid)
-    const normalized = blocks
+    return blocks
       .map((block) => this._normalizeBlock(block))
       .filter((normalizedBlock) => normalizedBlock.uuid !== '');
-    console.log('[Logseq API] After normalization:', normalized.length, 'valid blocks');
-    return normalized;
   }
 
   private _handleError(error: any, operation: string): Observable<never> {

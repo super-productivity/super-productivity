@@ -8,7 +8,7 @@ import { SearchResultItem } from '../../issue.model';
 import { LogseqCfg } from './logseq.model';
 import { LogseqBlock, LogseqBlockReduced } from './logseq-issue.model';
 import { isLogseqEnabled } from './is-logseq-enabled.util';
-import { LOGSEQ_POLL_INTERVAL } from './logseq.const';
+import { LOGSEQ_POLL_INTERVAL, LOGSEQ_TYPE } from './logseq.const';
 import { IssueProviderService } from '../../issue-provider.service';
 import {
   extractFirstLine,
@@ -362,6 +362,6 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   private _getCfgOnce$(issueProviderId: string): Observable<LogseqCfg> {
-    return this._issueProviderService.getCfgOnce$(issueProviderId, 'LOGSEQ');
+    return this._issueProviderService.getCfgOnce$(issueProviderId, LOGSEQ_TYPE);
   }
 }

@@ -1,5 +1,4 @@
 import { LogseqCfg } from './logseq.model';
-import { IssueProviderKey } from '../../issue.model';
 
 export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
   isEnabled: false,
@@ -15,7 +14,7 @@ export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
 };
 
 export const LOGSEQ_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
-export const LOGSEQ_TYPE: IssueProviderKey = 'LOGSEQ';
+export const LOGSEQ_TYPE /* : IssueProviderKey */ = 'LOGSEQ';
 export const LOGSEQ_SEARCH_WILDCARD = '*'; // Shows all tasks
 
 // Form config will be exported after it's created

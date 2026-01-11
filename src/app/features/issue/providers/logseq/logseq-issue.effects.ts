@@ -8,9 +8,10 @@ import { TaskService } from '../../../tasks/task.service';
 import { LogseqCommonInterfacesService } from './logseq-common-interfaces.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
-import { EMPTY, concat, of, from } from 'rxjs';
+import { EMPTY, concat, of, from, Observable } from 'rxjs';
 import { LogseqCfg, LogseqTaskWorkflow } from './logseq.model';
 import { LogseqBlock } from './logseq-issue.model';
+import { LOGSEQ_TYPE } from './logseq.const';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogLogseqActivateTaskComponent } from './dialog-logseq-activate-task/dialog-logseq-activate-task.component';
 
@@ -46,20 +47,21 @@ export class LogseqIssueEffects {
           this._previousTaskId = id as string;
 
           // Build observables
-          const operations: any[] = [];
+          const operations: Observable<null>[] = [];
 
           // Stop previous task first (if any and different from new task)
           if (previousId && previousId !== id) {
             operations.push(
               this._taskService.getByIdOnce$(previousId).pipe(
                 filter(
-                  (task) => task.issueType === 'LOGSEQ' && !!task.issueId && !task.isDone,
+                  (task) =>
+                    task.issueType === LOGSEQ_TYPE && !!task.issueId && !task.isDone,
                 ),
                 switchMap((task) =>
                   this._issueProviderService
-                    .getCfgOnce$(task.issueProviderId || '', 'LOGSEQ')
+                    .getCfgOnce$(task.issueProviderId || '', LOGSEQ_TYPE)
                     .pipe(
-                      mergeMap((cfg: LogseqCfg) => {
+                      mergeMap((cfg) => {
                         const markers = this._getMarkers(cfg.taskWorkflow);
                         return this._logseqCommonService
                           .updateBlockMarker(
@@ -68,15 +70,7 @@ export class LogseqIssueEffects {
                             markers.stopped,
                           )
                           .then(() => of(null))
-                          .catch((err) => {
-                            if (err.offline) {
-                              console.warn(
-                                'Logseq offline: queuing update for',
-                                task.issueId,
-                              );
-                            }
-                            return of(null);
-                          });
+                          .catch(() => of(null));
                       }),
                     ),
                 ),
@@ -89,13 +83,14 @@ export class LogseqIssueEffects {
           operations.push(
             this._taskService.getByIdOnce$(id as string).pipe(
               filter(
-                (task) => task.issueType === 'LOGSEQ' && !!task.issueId && !task.isDone,
+                (task) =>
+                  task.issueType === LOGSEQ_TYPE && !!task.issueId && !task.isDone,
               ),
               switchMap((task) =>
                 this._issueProviderService
-                  .getCfgOnce$(task.issueProviderId || '', 'LOGSEQ')
+                  .getCfgOnce$(task.issueProviderId || '', LOGSEQ_TYPE)
                   .pipe(
-                    mergeMap((cfg: LogseqCfg) => {
+                    mergeMap((cfg) => {
                       const markers = this._getMarkers(cfg.taskWorkflow);
                       return this._logseqCommonService
                         .updateBlockMarker(
@@ -104,15 +99,7 @@ export class LogseqIssueEffects {
                           markers.active,
                         )
                         .then(() => of(null))
-                        .catch((err) => {
-                          if (err.offline) {
-                            console.warn(
-                              'Logseq offline: queuing update for',
-                              task.issueId,
-                            );
-                          }
-                          return of(null);
-                        });
+                        .catch(() => of(null));
                     }),
                   ),
               ),
@@ -143,13 +130,13 @@ export class LogseqIssueEffects {
 
           return this._taskService.getByIdOnce$(currentId).pipe(
             filter(
-              (task) => task.issueType === 'LOGSEQ' && !!task.issueId && !task.isDone,
+              (task) => task.issueType === LOGSEQ_TYPE && !!task.issueId && !task.isDone,
             ),
             switchMap((task) =>
               this._issueProviderService
-                .getCfgOnce$(task.issueProviderId || '', 'LOGSEQ')
+                .getCfgOnce$(task.issueProviderId || '', LOGSEQ_TYPE)
                 .pipe(
-                  mergeMap((cfg: LogseqCfg) => {
+                  mergeMap((cfg) => {
                     const markers = this._getMarkers(cfg.taskWorkflow);
                     return this._logseqCommonService
                       .updateBlockMarker(
@@ -158,15 +145,7 @@ export class LogseqIssueEffects {
                         markers.stopped,
                       )
                       .then(() => EMPTY)
-                      .catch((err) => {
-                        if (err.offline) {
-                          console.warn(
-                            'Logseq offline: queuing update for',
-                            task.issueId,
-                          );
-                        }
-                        return EMPTY;
-                      });
+                      .catch(() => this._handleOfflineError(task.issueId));
                   }),
                 ),
             ),
@@ -185,18 +164,13 @@ export class LogseqIssueEffects {
         // Only sync manual changes, not issue updates
         filter(({ task }) => task.changes.issueWasUpdated !== true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        filter((task) => task.issueType === 'LOGSEQ' && !!task.issueId),
+        filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId),
         concatMap((task) => {
           // DONE is the same for both workflows
           return this._logseqCommonService
             .updateBlockMarker(task.issueId as string, task.issueProviderId || '', 'DONE')
             .then(() => EMPTY)
-            .catch((err) => {
-              if (err.offline) {
-                console.warn('Logseq offline: queuing update for', task.issueId);
-              }
-              return EMPTY;
-            });
+            .catch(() => this._handleOfflineError(task.issueId));
         }),
       ),
     { dispatch: false },
@@ -214,56 +188,29 @@ export class LogseqIssueEffects {
           PlannerActions.transferTask,
         ),
         concatMap((action) => {
-          // Handle different action types
+          // Special handling for updateTask - only sync manual changes
           if (action.type === TaskSharedActions.updateTask.type) {
             const updateAction = action as ReturnType<
               typeof TaskSharedActions.updateTask
             >;
             const hasDueDateChange = updateAction.task.changes.dueDay !== undefined;
             const hasDueTimeChange = updateAction.task.changes.dueWithTime !== undefined;
-            // Only sync manual changes, not issue updates
             if (
               (!hasDueDateChange && !hasDueTimeChange) ||
               updateAction.task.changes.issueWasUpdated === true
             ) {
               return EMPTY;
             }
-            return this._taskService.getByIdOnce$(updateAction.task.id as string);
-          } else if (action.type === TaskSharedActions.scheduleTaskWithTime.type) {
-            // TaskSharedActions.scheduleTaskWithTime
-            const scheduleAction = action as ReturnType<
-              typeof TaskSharedActions.scheduleTaskWithTime
-            >;
-            return this._taskService.getByIdOnce$(scheduleAction.task.id);
-          } else if (action.type === TaskSharedActions.reScheduleTaskWithTime.type) {
-            // TaskSharedActions.reScheduleTaskWithTime (from Scheduler drag & drop)
-            const rescheduleAction = action as ReturnType<
-              typeof TaskSharedActions.reScheduleTaskWithTime
-            >;
-            return this._taskService.getByIdOnce$(rescheduleAction.task.id);
-          } else if (action.type === PlannerActions.planTaskForDay.type) {
-            // PlannerActions.planTaskForDay
-            const planAction = action as ReturnType<typeof PlannerActions.planTaskForDay>;
-            return this._taskService.getByIdOnce$(planAction.task.id as string);
-          } else {
-            // PlannerActions.transferTask (Drag & Drop between days)
-            const transferAction = action as ReturnType<
-              typeof PlannerActions.transferTask
-            >;
-            return this._taskService.getByIdOnce$(transferAction.task.id as string);
           }
+
+          return this._taskService.getByIdOnce$((action as any).task.id);
         }),
-        filter((task) => task.issueType === 'LOGSEQ' && !!task.issueId),
+        filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId),
         concatMap((task) =>
           this._logseqCommonService
             .updateIssueFromTask(task)
             .then(() => EMPTY)
-            .catch((err) => {
-              if (err.offline) {
-                console.warn('Logseq offline: queuing update for', task.issueId);
-              }
-              return EMPTY;
-            }),
+            .catch(() => this._handleOfflineError(task.issueId)),
         ),
       ),
     { dispatch: false },
@@ -278,13 +225,13 @@ export class LogseqIssueEffects {
         // Only sync manual changes, not issue updates
         filter(({ task }) => task.changes.issueWasUpdated !== true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        filter((task) => task.issueType === 'LOGSEQ' && !!task.issueId),
+        filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId),
         withLatestFrom(this._taskService.currentTaskId$),
         switchMap(([task, currentTaskId]) =>
           this._issueProviderService
-            .getCfgOnce$(task.issueProviderId || '', 'LOGSEQ')
+            .getCfgOnce$(task.issueProviderId || '', LOGSEQ_TYPE)
             .pipe(
-              mergeMap((cfg: LogseqCfg) => {
+              mergeMap((cfg) => {
                 const markers = this._getMarkers(cfg.taskWorkflow);
                 // If this is the current task, set to active (NOW/DOING), otherwise stopped (LATER/TODO)
                 const marker =
@@ -296,34 +243,10 @@ export class LogseqIssueEffects {
                     marker as 'TODO' | 'DOING' | 'LATER' | 'NOW' | 'DONE',
                   )
                   .then(() => EMPTY)
-                  .catch((err) => {
-                    if (err.offline) {
-                      console.warn('Logseq offline: queuing update for', task.issueId);
-                    }
-                    return EMPTY;
-                  });
+                  .catch(() => this._handleOfflineError(task.issueId));
               }),
             ),
         ),
-      ),
-    { dispatch: false },
-  );
-
-  // DEBUG: Log all updateTask actions
-  debugAllUpdateTasks$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => {
-          if (task.changes.issueWasUpdated !== undefined) {
-            console.log('[Logseq DEBUG] updateTask with issueWasUpdated:', {
-              taskId: task.id,
-              issueWasUpdated: task.changes.issueWasUpdated,
-              allChanges: task.changes,
-            });
-          }
-          return false; // Don't continue, just log
-        }),
       ),
     { dispatch: false },
   );
@@ -333,40 +256,29 @@ export class LogseqIssueEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => {
-          console.log('[Logseq Sync] updateTask:', task);
-          return task.changes.issueWasUpdated === true;
-        }),
+        filter(({ task }) => task.changes.issueWasUpdated === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         filter((task) => {
-          const isLogseqTask = task.issueType === 'LOGSEQ' && !!task.issueId;
+          const isLogseqTask = task.issueType === LOGSEQ_TYPE && !!task.issueId;
           // Validate UUID format (must be string with UUID format, not a number)
           const isValidUuid =
             typeof task.issueId === 'string' &&
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
               task.issueId,
             );
-          console.log(
-            '[Logseq Sync] isLogseqTask:',
-            isLogseqTask,
-            'isValidUuid:',
-            isValidUuid,
-            task,
-          );
           return isLogseqTask && isValidUuid;
         }),
         withLatestFrom(this._taskService.currentTaskId$),
         switchMap(([task, currentTaskId]) =>
           from(
             this._issueService.getById(
-              'LOGSEQ',
+              LOGSEQ_TYPE,
               task.issueId as string,
               task.issueProviderId || '',
             ),
           ).pipe(
             switchMap((issue) => {
               if (!issue) {
-                console.log('[Logseq Sync] No issue found');
                 return EMPTY;
               }
               const block = issue as LogseqBlock;
@@ -375,14 +287,6 @@ export class LogseqIssueEffects {
               const isBlockActive = block.marker === 'NOW' || block.marker === 'DOING';
               const isTaskDone = task.isDone;
               const isBlockDone = block.marker === 'DONE';
-
-              console.log('[Logseq Sync] State comparison:', {
-                taskActive: isTaskActive,
-                blockActive: isBlockActive,
-                taskDone: isTaskDone,
-                blockDone: isBlockDone,
-                blockMarker: block.marker,
-              });
 
               // Detect discrepancies
               let discrepancyType: string | null = null;
@@ -398,15 +302,11 @@ export class LogseqIssueEffects {
               }
 
               if (!discrepancyType) {
-                console.log('[Logseq Sync] No discrepancy detected');
                 return EMPTY;
               }
 
-              console.log('[Logseq Sync] Discrepancy detected:', discrepancyType);
-
               // Check if dialog is already open for this task
               if (this._openDialogTaskIds.has(task.id)) {
-                console.log('[Logseq Sync] Dialog already open for task:', task.id);
                 return EMPTY;
               }
 
@@ -435,4 +335,9 @@ export class LogseqIssueEffects {
       ),
     { dispatch: false },
   );
+
+  private _handleOfflineError(issueId?: string): typeof EMPTY {
+    // Silently handle offline errors (already logged by API service)
+    return EMPTY;
+  }
 }

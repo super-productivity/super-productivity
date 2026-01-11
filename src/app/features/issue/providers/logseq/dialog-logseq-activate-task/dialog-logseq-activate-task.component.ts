@@ -14,6 +14,7 @@ import { setCurrentTask, unsetCurrentTask } from '../../../../tasks/store/task.a
 import { LogseqCommonInterfacesService } from '../logseq-common-interfaces.service';
 import { IssueProviderService } from '../../../issue-provider.service';
 import { LogseqCfg, LogseqTaskWorkflow } from '../logseq.model';
+import { LOGSEQ_TYPE } from '../logseq.const';
 import { TaskService } from '../../../../tasks/task.service';
 import { LogseqBlock } from '../logseq-issue.model';
 import { TaskSharedActions } from '../../../../../root-store/meta/task-shared.actions';
@@ -126,7 +127,7 @@ export class DialogLogseqActivateTaskComponent {
         // Reset Logseq block to TODO/LATER
         if (task.issueId && task.issueProviderId) {
           const cfg = await this._issueProviderService
-            .getCfgOnce$(task.issueProviderId, 'LOGSEQ')
+            .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
             .toPromise();
           if (cfg) {
             const markers = this._getMarkers((cfg as LogseqCfg).taskWorkflow);
@@ -154,7 +155,7 @@ export class DialogLogseqActivateTaskComponent {
         // Set block to NOW/DOING in Logseq
         if (task.issueId && task.issueProviderId) {
           const cfg = await this._issueProviderService
-            .getCfgOnce$(task.issueProviderId, 'LOGSEQ')
+            .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
             .toPromise();
           if (cfg) {
             const markers = this._getMarkers((cfg as LogseqCfg).taskWorkflow);
