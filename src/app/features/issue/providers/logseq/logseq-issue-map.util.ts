@@ -149,9 +149,10 @@ export const extractScheduledDateTime = (content: string): number | null => {
   const hours = parseInt(scheduledMatch[2], 10); // "14"
   const minutes = parseInt(scheduledMatch[3], 10); // "30"
 
-  // Parse as local time (not UTC)
-  const date = new Date(dateStr);
-  date.setHours(hours, minutes, 0, 0);
+  // Parse as local time explicitly (not UTC)
+  // Split the date string and use Date constructor to ensure local timezone
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
   return date.getTime();
 };
