@@ -54,6 +54,11 @@ export const extractRestOfContent = (content: string): string => {
       continue;
     }
 
+    // Skip SCHEDULED and DEADLINE lines
+    if (line.match(/^(SCHEDULED|DEADLINE):\s*<[^>]+>/)) {
+      continue;
+    }
+
     // This is actual content
     // Add separator after property block if we just left one
     if (justLeftPropertyBlock && contentLines.length > 0) {

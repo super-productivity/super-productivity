@@ -9,7 +9,7 @@ import { LogseqCommonInterfacesService } from './logseq-common-interfaces.servic
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
 import { EMPTY, concat, of, from, Observable } from 'rxjs';
-import { LogseqCfg, LogseqTaskWorkflow } from './logseq.model';
+import { LogseqTaskWorkflow } from './logseq.model';
 import { LogseqBlock } from './logseq-issue.model';
 import { LOGSEQ_TYPE } from './logseq.const';
 import { MatDialog } from '@angular/material/dialog';
