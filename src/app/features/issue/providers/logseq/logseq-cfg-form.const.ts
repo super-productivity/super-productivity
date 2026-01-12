@@ -35,7 +35,8 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
         type: 'textarea',
         props: {
           label: 'Datascript Query Filter',
-          placeholder: '[:find (pull ?b [*]) :where [?b :block/marker "TODO"]]',
+          placeholder:
+            '[:find (pull ?block [*]) :where [?block :block/marker ?marker] [(contains? #{"TODO" "LATER" "NOW" "DOING"} ?marker)]]',
           rows: 3,
           description:
             'Custom Datascript query to filter which blocks to import. Default queries for TODO and DOING blocks.',
