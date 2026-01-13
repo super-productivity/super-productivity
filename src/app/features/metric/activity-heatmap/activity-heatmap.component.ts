@@ -11,7 +11,14 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { defer, from } from 'rxjs';
-import { first, map, switchMap } from 'rxjs/operators';
+import {
+  combineLatest,
+  combineLatestWith,
+  first,
+  map,
+  switchMap,
+  tap,
+} from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TODAY_TAG } from '../../tag/tag.const';
@@ -92,20 +99,20 @@ export class ActivityHeatmapComponent {
 
   // Raw data signals
   private readonly _rawHeatmapData = toSignal(
-    combineLatest([
-      this._workContextService.activeWorkContext$,
-      toObservable(this.selectedYear), // Changes in selected year will trigger recalculation
-    ]).pipe(
-      switchMap(([context, selectedYear]) => {
+    this._workContextService.activeWorkContext$.pipe(
+      combineLatestWith(toObservable(this.selectedYear)),
+      switchMap(([context, userSelectedYear]) => {
         // Special case: TODAY tag shows ALL data from all tasks
         if (context.id === TODAY_TAG.id) {
-          // Use defer to ensure the Promise is created fresh each time
           return defer(() => from(this._loadAllTasks())).pipe(
             tap((tasks) => {
+              // Only side effect: update available years
               const yearsWithData = this._extractAvailableYears(tasks);
               this.availableYears.set(yearsWithData);
+              // No selectedYear mutation here!
             }),
             map((tasks) => {
+              // Use computed selectedYear value
               const currentlySelectedYear = this.selectedYear();
               return this._buildHeatmapDataForGivenYear(tasks, currentlySelectedYear);
             }),
@@ -115,11 +122,13 @@ export class ActivityHeatmapComponent {
         // Normal case: use context-filtered worklog
         return this._worklogService.worklog$.pipe(
           tap((worklog) => {
-            // Extract years from worklog and populate availableYears
+            // Only side effect: update available years
             const yearsWithData = this._extractAvailableYearsFromWorklog(worklog);
             this.availableYears.set(yearsWithData);
+            // No selectedYear mutation here!
           }),
           map((worklog) => {
+            // Use computed selectedYear value
             const currentlySelectedYear = this.selectedYear();
             return this._buildHeatmapDataFromWorklog(worklog, currentlySelectedYear);
           }),
