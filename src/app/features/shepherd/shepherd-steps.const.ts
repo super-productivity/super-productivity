@@ -3,7 +3,7 @@ import { nextOnObs, twoWayObs, waitForEl, waitForElObs$ } from './shepherd-helpe
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskService } from '../tasks/task.service';
 import { delay, filter, first, map, switchMap } from 'rxjs/operators';
-import { Actions, ofType } from '@ngrx/effects';
+import { ofType } from '@ngrx/effects';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigState } from '../config/global-config.model';
 import { IS_MOUSE_PRIMARY } from '../../util/is-mouse-primary';
@@ -14,8 +14,9 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { KeyboardConfig } from '../config/keyboard-config.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ShepherdService } from './shepherd.service';
-import { fromEvent, merge, of, timer } from 'rxjs';
+import { fromEvent, merge, Observable, of, timer } from 'rxjs';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { Action } from '@ngrx/store';
 
 const PRIMARY_CLASSES =
   'mdc-button mdc-button--unelevated mat-mdc-unelevated-button mat-primary mat-mdc-button-base';
@@ -71,7 +72,7 @@ const HIDE_QUICK = (shepherdService: ShepherdService): Step.StepOptionsWhen => (
 export const SHEPHERD_STEPS = (
   shepherdService: ShepherdService,
   cfg: GlobalConfigState,
-  actions$: Actions,
+  actions$: Observable<Action>,
   layoutService: LayoutService,
   taskService: TaskService,
   router: Router,
@@ -738,7 +739,7 @@ export const SHEPHERD_STEPS = (
     },
     {
       title: 'Moving around',
-      // eslint-disable-next-line max-len
+
       text: `<p>When a task is focused you can navigate to other tasks by pressing the arrow keys <kbd>↑</kbd> and <kbd>↓</kbd>.</p>`,
       when: {
         show: () => taskService.focusFirstTaskIfVisible(),

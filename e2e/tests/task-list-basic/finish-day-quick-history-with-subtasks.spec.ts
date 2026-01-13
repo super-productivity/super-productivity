@@ -102,17 +102,18 @@ test.describe('Finish Day Quick History With Subtasks', () => {
     await expect(page.locator('table')).toBeVisible();
 
     // Step 8: Confirm tasks are in the table
+    // Tasks are now sorted alphabetically: First Subtask, Main Task with Subtasks, Second Subtask
     await page.waitForSelector(TABLE_ROWS, { state: 'visible', timeout: 5000 });
     await expect(page.locator(TABLE_ROWS).first()).toBeVisible();
     await page.waitForSelector('table > tr:nth-child(1) > td.title > span', {
       state: 'visible',
     });
-    // Verify the task title is present in the table
+    // Verify the tasks appear in alphabetical order
     await expect(page.locator('table > tr:nth-child(1) > td.title > span')).toContainText(
-      'Main Task with Subtasks',
+      'First Subtask',
     );
     await expect(page.locator('table > tr:nth-child(2) > td.title > span')).toContainText(
-      'First Subtask',
+      'Main Task with Subtasks',
     );
     await expect(page.locator('table > tr:nth-child(3) > td.title > span')).toContainText(
       'Second Subtask',

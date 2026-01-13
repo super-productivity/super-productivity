@@ -238,7 +238,7 @@
         "FILTER_USER": "Ім'я користувача (наприклад, для фільтрації власних змін)",
         "GITLAB_BASE_URL": "Користувацький базовий URL GitLab (необов'язково)",
         "PROJECT": "ID проекту (за замовчуванням) або ім'я користувача/проекту",
-        "PROJECT_HINT": "наприклад, johannesjo/super-productivity",
+        "PROJECT_HINT": "наприклад, super-productivity/super-productivity",
         "SCOPE": "Скоуп",
         "SCOPE_ALL": "Усі",
         "SCOPE_ASSIGNED": "Призначені мені",

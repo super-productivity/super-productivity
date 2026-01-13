@@ -21,7 +21,6 @@ import { IdleEffects } from '../features/idle/store/idle.effects';
 import { issueProvidersFeature } from '../features/issue/store/issue-provider.reducer';
 import { PollToBacklogEffects } from '../features/issue/store/poll-to-backlog.effects';
 import { PollIssueUpdatesEffects } from '../features/issue/store/poll-issue-updates.effects';
-import { UnlinkAllTasksOnProviderDeletionEffects } from '../features/issue/store/unlink-all-tasks-on-provider-deletion.effects';
 import {
   METRIC_FEATURE_NAME,
   metricReducer,
@@ -78,17 +77,38 @@ import { ReminderCountdownEffects } from '../features/reminder/store/reminder-co
 import { SyncEffects } from '../imex/sync/sync.effects';
 import { boardsFeature } from '../features/boards/store/boards.reducer';
 import { timeTrackingFeature } from '../features/time-tracking/store/time-tracking.reducer';
+import { ArchiveOperationHandlerEffects } from '../op-log/apply/archive-operation-handler.effects';
 import { plannerFeature } from '../features/planner/store/planner.reducer';
 import { PlannerEffects } from '../features/planner/store/planner.effects';
 import { AppStateEffects } from './app-state/app-state.effects';
 import { appStateFeature } from './app-state/app-state.reducer';
-import { SaveToDbEffects } from './shared/save-to-db.effects';
 import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
+import { OperationLogEffects } from '../op-log/capture/operation-log.effects';
+import {
+  PLUGIN_USER_DATA_FEATURE_NAME,
+  pluginUserDataReducer,
+} from '../plugins/store/plugin-user-data.reducer';
+import {
+  PLUGIN_METADATA_FEATURE_NAME,
+  pluginMetadataReducer,
+} from '../plugins/store/plugin-metadata.reducer';
+import {
+  REMINDER_FEATURE_NAME,
+  reminderReducer,
+} from '../features/reminder/store/reminder.reducer';
+import {
+  ARCHIVE_YOUNG_FEATURE_NAME,
+  archiveYoungReducer,
+} from '../features/archive/store/archive-young.reducer';
+import {
+  ARCHIVE_OLD_FEATURE_NAME,
+  archiveOldReducer,
+} from '../features/archive/store/archive-old.reducer';
 
 @NgModule({
   declarations: [],
   imports: [
-    EffectsModule.forFeature([SaveToDbEffects]),
+    EffectsModule.forFeature([OperationLogEffects]),
 
     StoreModule.forFeature(appStateFeature),
     EffectsModule.forFeature([AppStateEffects]),
@@ -106,11 +126,7 @@ import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
     EffectsModule.forFeature([IdleEffects]),
 
     StoreModule.forFeature(issueProvidersFeature),
-    EffectsModule.forFeature([
-      PollToBacklogEffects,
-      PollIssueUpdatesEffects,
-      UnlinkAllTasksOnProviderDeletionEffects,
-    ]),
+    EffectsModule.forFeature([PollToBacklogEffects, PollIssueUpdatesEffects]),
 
     StoreModule.forFeature(METRIC_FEATURE_NAME, metricReducer),
 
@@ -148,9 +164,16 @@ import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
     StoreModule.forFeature(boardsFeature),
 
     StoreModule.forFeature(timeTrackingFeature),
+    EffectsModule.forFeature([ArchiveOperationHandlerEffects]),
 
     StoreModule.forFeature(plannerFeature),
     EffectsModule.forFeature([PlannerEffects]),
+
+    StoreModule.forFeature(PLUGIN_USER_DATA_FEATURE_NAME, pluginUserDataReducer),
+    StoreModule.forFeature(PLUGIN_METADATA_FEATURE_NAME, pluginMetadataReducer),
+    StoreModule.forFeature(REMINDER_FEATURE_NAME, reminderReducer),
+    StoreModule.forFeature(ARCHIVE_YOUNG_FEATURE_NAME, archiveYoungReducer),
+    StoreModule.forFeature(ARCHIVE_OLD_FEATURE_NAME, archiveOldReducer),
 
     // EFFECTS ONLY
     EffectsModule.forFeature([

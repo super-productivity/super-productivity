@@ -31,7 +31,7 @@ export class PlannerCalendarEventComponent {
     return this.isBeingSubmitted;
   }
 
-  @HostListener('click', ['$event'])
+  @HostListener('click')
   async onClick(): Promise<void> {
     if (this.isBeingSubmitted) {
       return;

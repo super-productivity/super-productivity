@@ -12,10 +12,9 @@ import { Worklog } from './worklog.model';
 import { WorklogComponent } from './worklog.component';
 import { WorklogService } from './worklog.service';
 import { WorkContextService } from '../work-context/work-context.service';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
-import { PfapiService } from '../../pfapi/pfapi.service';
 import { selectAllProjectColorsAndTitles } from '../project/store/project.selectors';
 import { mapArchiveToWorklog } from './util/map-archive-to-worklog';
 
@@ -63,7 +62,6 @@ describe('WorklogComponent', () => {
         provideMockActions(of()),
         provideNoopAnimations(),
         { provide: ActivatedRoute, useValue: activatedRouteSpy },
-        { provide: PfapiService, useValue: {} },
         { provide: TaskArchiveService, useValue: {} },
         { provide: TaskService, useValue: {} },
         { provide: WorkContextService, useValue: {} },

@@ -1,5 +1,5 @@
 import { createSortedBlockerBlocks } from './create-sorted-blocker-blocks';
-import { TaskReminderOptionId, TaskWithReminder } from '../../tasks/task.model';
+import { TaskReminderOptionId } from '../../tasks/task.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import {
   DEFAULT_TASK_REPEAT_CFG,
@@ -108,7 +108,7 @@ const generateBlockedBlocks = (
 
 describe('createBlockerBlocks()', () => {
   it('should merge into single block if all overlapping', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         id: 'S1',
         subTaskIds: [],
@@ -144,7 +144,7 @@ describe('createBlockerBlocks()', () => {
   });
 
   it('should merge into multiple blocks if not overlapping', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         id: 'S1',
         subTaskIds: [],
@@ -201,7 +201,7 @@ describe('createBlockerBlocks()', () => {
   });
 
   it('should work for advanced scenario', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         id: 'S1',
         subTaskIds: [],
@@ -237,7 +237,7 @@ describe('createBlockerBlocks()', () => {
   });
 
   it('should merge multiple times', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         ...BASE_REMINDER_TASK('16:00', 'no duration'),
         timeEstimate: 0,
@@ -310,7 +310,7 @@ describe('createBlockerBlocks()', () => {
   });
 
   it('should work with far future entries', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         ...BASE_REMINDER_TASK('16:00', 'no duration'),
         timeEstimate: 0,
@@ -352,7 +352,7 @@ describe('createBlockerBlocks()', () => {
   });
 
   it('should work for advanced scenario', () => {
-    const fakeTasks: TaskWithReminder[] = [
+    const fakeTasks: any[] = [
       {
         id: '0LtuSnH8s',
         projectId: null,
@@ -1001,7 +1001,7 @@ describe('createBlockerBlocks()', () => {
           ],
         },
       ];
-      const fakeTasks: TaskWithReminder[] = [
+      const fakeTasks: any[] = [
         {
           id: 'S1',
           timeSpent: 0,

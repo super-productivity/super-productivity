@@ -177,9 +177,11 @@ describe('mapArchiveToWorklog', () => {
     expect(w[2015].ent[1].ent[15].timeSpent).toBe(13333);
 
     expect(w[2015].ent[1].ent[15].logEntries.length).toBe(4);
-    expect(w[2015].ent[1].ent[15].logEntries[0].task.id).toBe('PT1');
-    expect(w[2015].ent[1].ent[15].logEntries[1].task.id).toBe('SUB_A');
-    expect(w[2015].ent[1].ent[15].logEntries[2].task.id).toBe('SUB_B');
+    // With alphabetical sorting: MT1 comes before PT1
+    expect(w[2015].ent[1].ent[15].logEntries[0].task.id).toBe('MT1');
+    expect(w[2015].ent[1].ent[15].logEntries[1].task.id).toBe('PT1');
+    expect(w[2015].ent[1].ent[15].logEntries[2].task.id).toBe('SUB_A');
+    expect(w[2015].ent[1].ent[15].logEntries[3].task.id).toBe('SUB_B');
   });
 
   it('should work for sub tasks and parents spanning over multiple days', () => {
@@ -266,8 +268,9 @@ describe('mapArchiveToWorklog', () => {
     expect(w[2021].ent[6].ent[8].logEntries.length).toBe(4);
     expect(w[2021].ent[6].ent[8].logEntries[0].task.id).toBe('PT1');
     expect(w[2021].ent[6].ent[8].logEntries[1].task.id).toBe('SUB_A');
-    expect(w[2021].ent[6].ent[8].logEntries[2].task.id).toBe('SUB_C');
-    expect(w[2021].ent[6].ent[8].logEntries[3].task.id).toBe('SUB_B');
+    // With alphabetical sorting: SUB_B comes before SUB_C
+    expect(w[2021].ent[6].ent[8].logEntries[2].task.id).toBe('SUB_B');
+    expect(w[2021].ent[6].ent[8].logEntries[3].task.id).toBe('SUB_C');
   });
 
   it('should work for sub tasks with zero time worked', () => {
@@ -356,7 +359,8 @@ describe('mapArchiveToWorklog', () => {
     expect(w[2021].ent[6].ent[8].logEntries.length).toBe(4);
     expect(w[2021].ent[6].ent[8].logEntries[0].task.id).toBe('PT1');
     expect(w[2021].ent[6].ent[8].logEntries[1].task.id).toBe('SUB_A');
-    expect(w[2021].ent[6].ent[8].logEntries[2].task.id).toBe('SUB_C');
-    expect(w[2021].ent[6].ent[8].logEntries[3].task.id).toBe('SUB_B');
+    // With alphabetical sorting: SUB_B comes before SUB_C
+    expect(w[2021].ent[6].ent[8].logEntries[2].task.id).toBe('SUB_B');
+    expect(w[2021].ent[6].ent[8].logEntries[3].task.id).toBe('SUB_C');
   });
 });

@@ -9,7 +9,7 @@ import {
 import { nanoid } from 'nanoid';
 import { T } from '../../t.const';
 import { DEFAULT_PANEL_CFG } from './boards.const';
-import { FormlyFieldConfig } from '@ngx-formly/core/lib/models/fieldconfig';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 
 const getNewPanel = (): BoardPanelCfg => ({
   ...DEFAULT_PANEL_CFG,

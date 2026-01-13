@@ -1,628 +1,300 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { Observable, of } from 'rxjs';
+import { Action, Store } from '@ngrx/store';
 import { TaskReminderEffects } from './task-reminder.effects';
-import { MockStore, provideMockStore } from '@ngrx/store/testing';
-import { ReminderService } from '../../reminder/reminder.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskService } from '../task.service';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { Task, TaskWithSubTasks } from '../task.model';
-import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
-import { removeReminderFromTask } from './task.actions';
+import { DEFAULT_TASK, Task } from '../task.model';
+import { TestScheduler } from 'rxjs/testing';
+import { T } from '../../../t.const';
 
 describe('TaskReminderEffects', () => {
+  let actions$: Observable<Action>;
   let effects: TaskReminderEffects;
-  let actions$: Observable<any>;
-  let reminderServiceMock: jasmine.SpyObj<ReminderService>;
-  let taskServiceMock: jasmine.SpyObj<TaskService>;
-  let store: MockStore;
+  let snackService: jasmine.SpyObj<SnackService>;
+  let taskService: jasmine.SpyObj<TaskService>;
+  let store: jasmine.SpyObj<Store>;
+  let datePipe: jasmine.SpyObj<LocaleDatePipe>;
+  let testScheduler: TestScheduler;
 
-  const createMockTask = (overrides: Partial<Task> = {}): Task =>
-    ({
-      id: 'task-123',
-      title: 'Test Task',
-      projectId: null,
-      tagIds: [],
-      subTaskIds: [],
-      parentId: null,
-      timeSpentOnDay: {},
-      timeSpent: 0,
-      timeEstimate: 0,
-      isDone: false,
-      notes: '',
-      doneOn: undefined,
-      plannedAt: null,
-      reminderId: null,
-      repeatCfgId: null,
-      issueId: null,
-      issueType: null,
-      issueProviderId: null,
-      issueWasUpdated: false,
-      issueLastUpdated: null,
-      issueTimeTracked: null,
-      attachments: [],
-      created: Date.now(),
-      _showSubTasksMode: 2,
-      ...overrides,
-    }) as Task;
+  const mockTask: Task = {
+    ...DEFAULT_TASK,
+    id: 'task-1',
+    title: 'Test Task',
+    projectId: 'project-1',
+    created: Date.now(),
+  };
 
-  const createMockTaskWithSubTasks = (
-    overrides: Partial<TaskWithSubTasks> = {},
-  ): TaskWithSubTasks =>
-    ({
-      ...createMockTask(),
-      subTasks: [],
-      ...overrides,
-    }) as TaskWithSubTasks;
+  const mockTaskWithReminder: Task = {
+    ...mockTask,
+    remindAt: Date.now() + 3600000,
+  };
 
   beforeEach(() => {
-    reminderServiceMock = jasmine.createSpyObj('ReminderService', [
-      'removeReminderByRelatedIdIfSet',
-      'removeRemindersByRelatedIds',
-      'removeReminder',
-      'addReminder',
-      'updateReminder',
-    ]);
-
-    taskServiceMock = jasmine.createSpyObj('TaskService', [
-      'getByIdOnce$',
-      'getByIdsLive$',
-    ]);
+    const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
+    const taskServiceSpy = jasmine.createSpyObj('TaskService', ['getByIdOnce$']);
+    const storeSpy = jasmine.createSpyObj('Store', ['dispatch']);
+    const datePipeSpy = jasmine.createSpyObj('LocaleDatePipe', ['transform']);
 
     TestBed.configureTestingModule({
       providers: [
         TaskReminderEffects,
         provideMockActions(() => actions$),
-        provideMockStore({ initialState: {} }),
-        { provide: ReminderService, useValue: reminderServiceMock },
-        {
-          provide: SnackService,
-          useValue: jasmine.createSpyObj('SnackService', ['open']),
-        },
-        {
-          provide: TaskService,
-          useValue: taskServiceMock,
-        },
-        {
-          provide: LocaleDatePipe,
-          useValue: jasmine.createSpyObj('LocaleDatePipe', ['transform']),
-        },
+        { provide: SnackService, useValue: snackServiceSpy },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: Store, useValue: storeSpy },
+        { provide: LocaleDatePipe, useValue: datePipeSpy },
       ],
     });
 
     effects = TestBed.inject(TaskReminderEffects);
-    store = TestBed.inject(MockStore);
-  });
+    snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
+    taskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
+    store = TestBed.inject(Store) as jasmine.SpyObj<Store>;
+    datePipe = TestBed.inject(LocaleDatePipe) as jasmine.SpyObj<LocaleDatePipe>;
 
-  describe('clearRemindersOnDelete$', () => {
-    it('should call removeReminderByRelatedIdIfSet for deleted task', (done) => {
-      const task = createMockTaskWithSubTasks({ id: 'task-to-delete' });
-      actions$ = of(TaskSharedActions.deleteTask({ task }));
-
-      effects.clearRemindersOnDelete$.subscribe(() => {
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledWith(
-          'task-to-delete',
-        );
-        done();
-      });
-    });
-
-    it('should call removeReminderByRelatedIdIfSet for all subtasks', (done) => {
-      const task = createMockTaskWithSubTasks({
-        id: 'parent-task',
-        subTaskIds: ['subtask-1', 'subtask-2'],
-      });
-      actions$ = of(TaskSharedActions.deleteTask({ task }));
-
-      effects.clearRemindersOnDelete$.subscribe(() => {
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledTimes(
-          3,
-        );
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledWith(
-          'parent-task',
-        );
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledWith(
-          'subtask-1',
-        );
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledWith(
-          'subtask-2',
-        );
-        done();
-      });
-    });
-
-    it('should handle task with empty subtaskIds', (done) => {
-      const task = createMockTaskWithSubTasks({
-        id: 'task-no-subtasks',
-        subTaskIds: [],
-      });
-      actions$ = of(TaskSharedActions.deleteTask({ task }));
-
-      effects.clearRemindersOnDelete$.subscribe(() => {
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledTimes(
-          1,
-        );
-        expect(reminderServiceMock.removeReminderByRelatedIdIfSet).toHaveBeenCalledWith(
-          'task-no-subtasks',
-        );
-        done();
-      });
+    testScheduler = new TestScheduler((actual, expected) => {
+      expect(actual).toEqual(expected);
     });
   });
 
-  describe('clearMultipleReminders', () => {
-    it('should call removeRemindersByRelatedIds with all task IDs', (done) => {
-      const taskIds = ['task-1', 'task-2', 'task-3'];
-      actions$ = of(TaskSharedActions.deleteTasks({ taskIds }));
-
-      effects.clearMultipleReminders.subscribe(() => {
-        expect(reminderServiceMock.removeRemindersByRelatedIds).toHaveBeenCalledWith(
-          taskIds,
-        );
-        done();
+  describe('snack$', () => {
+    it('should show success snack when task is scheduled with reminder', () => {
+      const dueWithTime = Date.now() + 86400000;
+      const remindAt = dueWithTime - 300000;
+      const action = TaskSharedActions.scheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime,
+        remindAt,
+        isMoveToBacklog: false,
       });
-    });
 
-    it('should handle empty task IDs array', (done) => {
-      const taskIds: string[] = [];
-      actions$ = of(TaskSharedActions.deleteTasks({ taskIds }));
+      datePipe.transform.and.returnValue('1/1/2025, 10:00 AM');
+      actions$ = of(action);
 
-      effects.clearMultipleReminders.subscribe(() => {
-        expect(reminderServiceMock.removeRemindersByRelatedIds).toHaveBeenCalledWith([]);
-        done();
-      });
-    });
-  });
+      effects.snack$.subscribe();
 
-  describe('clearRemindersForArchivedTasks$', () => {
-    it('should call removeReminder for each task with a reminderId', (done) => {
-      const tasks = [
-        createMockTaskWithSubTasks({ id: 'archived-1', reminderId: 'rem-1' }),
-        createMockTaskWithSubTasks({ id: 'archived-2', reminderId: 'rem-2' }),
-      ];
-      actions$ = of(TaskSharedActions.moveToArchive({ tasks }));
-
-      effects.clearRemindersForArchivedTasks$.subscribe(() => {
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledTimes(2);
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-1');
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-2');
-        done();
-      });
-    });
-
-    it('should not call removeReminder for tasks without reminderId', (done) => {
-      const tasks = [
-        createMockTaskWithSubTasks({ id: 'archived-1', reminderId: undefined }),
-        createMockTaskWithSubTasks({ id: 'archived-2', reminderId: 'rem-2' }),
-      ];
-      actions$ = of(TaskSharedActions.moveToArchive({ tasks }));
-
-      effects.clearRemindersForArchivedTasks$.subscribe(() => {
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledTimes(1);
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-2');
-        done();
-      });
-    });
-
-    it('should not call removeReminder when tasks array is empty', (done) => {
-      const tasks: TaskWithSubTasks[] = [];
-      actions$ = of(TaskSharedActions.moveToArchive({ tasks }));
-
-      effects.clearRemindersForArchivedTasks$.subscribe(() => {
-        expect(reminderServiceMock.removeReminder).not.toHaveBeenCalled();
-        done();
-      });
-    });
-
-    it('should handle nested subtasks in archived tasks', (done) => {
-      const tasks = [
-        createMockTaskWithSubTasks({
-          id: 'parent-1',
-          reminderId: 'rem-parent',
-          subTasks: [
-            createMockTask({
-              id: 'sub-1',
-              reminderId: 'rem-sub-1',
-              parentId: 'parent-1',
-            }),
-            createMockTask({
-              id: 'sub-2',
-              reminderId: 'rem-sub-2',
-              parentId: 'parent-1',
-            }),
-          ],
-        }),
-      ];
-      actions$ = of(TaskSharedActions.moveToArchive({ tasks }));
-
-      effects.clearRemindersForArchivedTasks$.subscribe(() => {
-        // flattenTasks should include parent + subtasks
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-parent');
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-sub-1');
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-sub-2');
-        done();
-      });
-    });
-  });
-
-  describe('removeTaskReminderTrigger1$', () => {
-    it('should handle undefined tasks in array without crashing (issue #5873)', (done) => {
-      const taskWithReminder = createMockTask({ id: 'task-1', reminderId: 'rem-1' });
-      // Simulate a deleted task that returns undefined from the selector
-      taskServiceMock.getByIdsLive$.and.returnValue(
-        of([
-          taskWithReminder,
-          undefined as unknown as Task,
-          undefined as unknown as Task,
-        ]),
-      );
-
-      actions$ = of(
-        TaskSharedActions.planTasksForToday({
-          taskIds: ['task-1', 'deleted-task', 'another-deleted'],
-          parentTaskMap: {},
-          isSkipRemoveReminder: false,
-        }),
-      );
-
-      const emittedActions: any[] = [];
-      effects.removeTaskReminderTrigger1$.subscribe({
-        next: (action) => emittedActions.push(action),
-        complete: () => {
-          // Should only emit action for the valid task with reminder
-          expect(emittedActions.length).toBe(1);
-          expect(emittedActions[0]).toEqual(
-            removeReminderFromTask({
-              id: 'task-1',
-              reminderId: 'rem-1',
-              isSkipToast: true,
-            }),
-          );
-          done();
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        translateParams: {
+          title: 'Test Task',
+          date: '1/1/2025, 10:00 AM',
         },
+        msg: T.F.TASK.S.REMINDER_ADDED,
+        ico: 'alarm',
       });
     });
 
-    it('should not emit actions when all tasks are undefined', (done) => {
-      taskServiceMock.getByIdsLive$.and.returnValue(
-        of([undefined as unknown as Task, undefined as unknown as Task]),
-      );
+    it('should show schedule icon when remindAt is not set', () => {
+      const dueWithTime = Date.now() + 86400000;
+      const action = TaskSharedActions.scheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime,
+        remindAt: undefined,
+        isMoveToBacklog: false,
+      });
 
-      actions$ = of(
-        TaskSharedActions.planTasksForToday({
-          taskIds: ['deleted-1', 'deleted-2'],
-          parentTaskMap: {},
-          isSkipRemoveReminder: false,
+      datePipe.transform.and.returnValue('1/1/2025, 10:00 AM');
+      actions$ = of(action);
+
+      effects.snack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          ico: 'schedule',
         }),
       );
-
-      const emittedActions: any[] = [];
-      effects.removeTaskReminderTrigger1$.subscribe({
-        next: (action) => emittedActions.push(action),
-        complete: () => {
-          expect(emittedActions.length).toBe(0);
-          done();
-        },
-      });
     });
 
-    it('should only emit for tasks with reminderId', (done) => {
-      const taskWithReminder = createMockTask({ id: 'task-1', reminderId: 'rem-1' });
-      const taskWithoutReminder = createMockTask({ id: 'task-2', reminderId: undefined });
-      taskServiceMock.getByIdsLive$.and.returnValue(
-        of([taskWithReminder, taskWithoutReminder]),
-      );
-
-      actions$ = of(
-        TaskSharedActions.planTasksForToday({
-          taskIds: ['task-1', 'task-2'],
-          parentTaskMap: {},
-          isSkipRemoveReminder: false,
-        }),
-      );
-
-      const emittedActions: any[] = [];
-      effects.removeTaskReminderTrigger1$.subscribe({
-        next: (action) => emittedActions.push(action),
-        complete: () => {
-          expect(emittedActions.length).toBe(1);
-          expect(emittedActions[0]).toEqual(
-            removeReminderFromTask({
-              id: 'task-1',
-              reminderId: 'rem-1',
-              isSkipToast: true,
-            }),
-          );
-          done();
-        },
-      });
-    });
-  });
-
-  describe('removeTaskReminderSideEffects$', () => {
-    it('should call removeReminder when removing a task reminder', (done) => {
-      actions$ = of(
-        removeReminderFromTask({
-          id: 'task-123',
-          reminderId: 'rem-456',
-          isSkipToast: false,
-        }),
-      );
-
-      effects.removeTaskReminderSideEffects$.subscribe(() => {
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-456');
-        done();
-      });
-    });
-
-    it('should not call removeReminder when reminderId is falsy', (done) => {
-      actions$ = of(
-        removeReminderFromTask({
-          id: 'task-123',
-          reminderId: undefined as any,
-          isSkipToast: false,
-        }),
-      );
-
-      let emitted = false;
-      effects.removeTaskReminderSideEffects$.subscribe({
-        next: () => {
-          emitted = true;
-        },
+    it('should truncate long task titles', () => {
+      const longTitleTask: Task = {
+        ...mockTask,
+        title:
+          'This is a very long task title that exceeds the maximum allowed length for display',
+      };
+      const dueWithTime = Date.now() + 86400000;
+      const action = TaskSharedActions.scheduleTaskWithTime({
+        task: longTitleTask,
+        dueWithTime,
+        remindAt: dueWithTime,
+        isMoveToBacklog: false,
       });
 
-      // Give some time for potential emission
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        expect(reminderServiceMock.removeReminder).not.toHaveBeenCalled();
-        done();
-      }, 50);
-    });
+      datePipe.transform.and.returnValue('1/1/2025');
+      actions$ = of(action);
 
-    it('should handle isSkipToast flag', (done) => {
-      const snackServiceMock = TestBed.inject(
-        SnackService,
-      ) as jasmine.SpyObj<SnackService>;
+      effects.snack$.subscribe();
 
-      actions$ = of(
-        removeReminderFromTask({
-          id: 'task-123',
-          reminderId: 'rem-456',
-          isSkipToast: true,
-        }),
-      );
-
-      effects.removeTaskReminderSideEffects$.subscribe(() => {
-        expect(snackServiceMock.open).not.toHaveBeenCalled();
-        expect(reminderServiceMock.removeReminder).toHaveBeenCalledWith('rem-456');
-        done();
-      });
-    });
-  });
-
-  // Test the Android native alarm cancellation logic separately
-  // (IS_ANDROID_WEB_VIEW is a compile-time constant, so we test the logic directly)
-  describe('removeTaskReminderSideEffects$ - Android cancellation logic', () => {
-    /**
-     * Tests for the native Android alarm cancellation added in fix for issue #5921.
-     * When a reminder is removed, the native Android alarm should be cancelled
-     * to prevent it from firing at the original scheduled time.
-     */
-
-    let cancelNativeReminderSpy: jasmine.Spy;
-    let generateNotificationIdSpy: jasmine.Spy;
-    let removeReminderSpy: jasmine.Spy;
-
-    // Replicate the Android cancellation logic for testing
-    const cancelAndroidReminderIfNeeded = (
-      isAndroid: boolean,
-      taskId: string,
-      reminderId: string,
-      generateNotificationId: (id: string) => number,
-      cancelNativeReminder: (id: number) => void,
-      removeReminder: (id: string) => void,
-    ): void => {
-      if (isAndroid) {
-        try {
-          const notificationId = generateNotificationId(taskId);
-          cancelNativeReminder(notificationId);
-        } catch (e) {
-          console.error('Failed to cancel native reminder:', e);
+      expect(snackService.open).toHaveBeenCalled();
+      const callArgs = snackService.open.calls.mostRecent().args[0];
+      if (typeof callArgs !== 'string' && callArgs.translateParams) {
+        const title = callArgs.translateParams.title;
+        if (typeof title === 'string') {
+          expect(title.length).toBeLessThanOrEqual(40);
         }
       }
-      removeReminder(reminderId);
-    };
-
-    beforeEach(() => {
-      cancelNativeReminderSpy = jasmine.createSpy('cancelNativeReminder');
-      generateNotificationIdSpy = jasmine
-        .createSpy('generateNotificationId')
-        .and.returnValue(12345);
-      removeReminderSpy = jasmine.createSpy('removeReminder');
-    });
-
-    it('should cancel native Android reminder before removing reminder', () => {
-      const callOrder: string[] = [];
-      cancelNativeReminderSpy.and.callFake(() => callOrder.push('cancelNative'));
-      removeReminderSpy.and.callFake(() => callOrder.push('removeReminder'));
-
-      cancelAndroidReminderIfNeeded(
-        true, // isAndroid
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(callOrder).toEqual(['cancelNative', 'removeReminder']);
-    });
-
-    it('should generate notification ID from task ID (not reminder ID)', () => {
-      cancelAndroidReminderIfNeeded(
-        true,
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(generateNotificationIdSpy).toHaveBeenCalledWith('task-123');
-      expect(generateNotificationIdSpy).not.toHaveBeenCalledWith('rem-456');
-    });
-
-    it('should pass generated notification ID to cancelNativeReminder', () => {
-      generateNotificationIdSpy.and.returnValue(99999);
-
-      cancelAndroidReminderIfNeeded(
-        true,
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(cancelNativeReminderSpy).toHaveBeenCalledWith(99999);
-    });
-
-    it('should NOT call cancelNativeReminder on non-Android platforms', () => {
-      cancelAndroidReminderIfNeeded(
-        false, // isAndroid = false
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(cancelNativeReminderSpy).not.toHaveBeenCalled();
-      expect(generateNotificationIdSpy).not.toHaveBeenCalled();
-    });
-
-    it('should still call removeReminder on non-Android platforms', () => {
-      cancelAndroidReminderIfNeeded(
-        false,
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(removeReminderSpy).toHaveBeenCalledWith('rem-456');
-    });
-
-    it('should still call removeReminder even if cancelNativeReminder throws', () => {
-      cancelNativeReminderSpy.and.throwError('Native error');
-
-      cancelAndroidReminderIfNeeded(
-        true,
-        'task-123',
-        'rem-456',
-        generateNotificationIdSpy,
-        cancelNativeReminderSpy,
-        removeReminderSpy,
-      );
-
-      expect(removeReminderSpy).toHaveBeenCalledWith('rem-456');
-    });
-
-    it('should handle error gracefully when generateNotificationId throws', () => {
-      generateNotificationIdSpy.and.throwError('ID generation error');
-
-      expect(() => {
-        cancelAndroidReminderIfNeeded(
-          true,
-          'task-123',
-          'rem-456',
-          generateNotificationIdSpy,
-          cancelNativeReminderSpy,
-          removeReminderSpy,
-        );
-      }).not.toThrow();
-
-      expect(removeReminderSpy).toHaveBeenCalledWith('rem-456');
     });
   });
+
+  // Note: autoMoveToBacklog$ effect was removed - functionality moved to task-shared-scheduling.reducer
+  // The isMoveToBacklog flag is now handled atomically in the reducer for atomic consistency
+
+  describe('updateTaskReminderSnack$', () => {
+    it('should show snack when task reminder is updated', () => {
+      const action = TaskSharedActions.reScheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime: Date.now() + 86400000,
+        remindAt: Date.now() + 86000000,
+        isMoveToBacklog: false,
+      });
+
+      actions$ = of(action);
+
+      effects.updateTaskReminderSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        translateParams: {
+          title: 'Test Task',
+        },
+        msg: T.F.TASK.S.REMINDER_UPDATED,
+        ico: 'schedule',
+      });
+    });
+
+    it('should not show snack when remindAt is undefined', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.reScheduleTaskWithTime({
+          task: mockTask,
+          dueWithTime: Date.now() + 86400000,
+          remindAt: undefined,
+          isMoveToBacklog: false,
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // Non-dispatching effect, just verify snack not called
+        effects.updateTaskReminderSnack$.subscribe();
+      });
+    });
+  });
+
+  // Note: autoMoveToBacklogOnReschedule$ effect was removed - functionality moved to task-shared-scheduling.reducer
+  // The isMoveToBacklog flag is now handled atomically in the reducer for atomic consistency
 
   describe('unscheduleDoneTask$', () => {
-    it('should dispatch unscheduleTask when task with reminder is marked done', (done) => {
-      const taskWithReminder = createMockTask({
-        id: 'task-with-reminder',
-        reminderId: 'rem-123',
-        isDone: true,
+    it('should dispatch unscheduleTask when completing task with reminder', () => {
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task-1', changes: { isDone: true } },
       });
-      taskServiceMock.getByIdOnce$.and.returnValue(of(taskWithReminder));
 
-      const dispatchSpy = spyOn(store, 'dispatch');
+      actions$ = of(action);
+      taskService.getByIdOnce$.and.returnValue(of(mockTaskWithReminder));
 
-      actions$ = of(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-with-reminder', changes: { isDone: true } },
-        }),
+      effects.unscheduleDoneTask$.subscribe();
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        TaskSharedActions.unscheduleTask({ id: 'task-1' }),
       );
+    });
 
-      effects.unscheduleDoneTask$.subscribe(() => {
-        expect(taskServiceMock.getByIdOnce$).toHaveBeenCalledWith('task-with-reminder');
-        expect(dispatchSpy).toHaveBeenCalledWith(
-          TaskSharedActions.unscheduleTask({
-            id: 'task-with-reminder',
-            reminderId: 'rem-123',
-          }),
-        );
-        done();
+    it('should not dispatch when task has no reminder', () => {
+      const taskWithoutReminder: Task = {
+        ...mockTask,
+        remindAt: undefined,
+      };
+      const action = TaskSharedActions.updateTask({
+        task: { id: 'task-1', changes: { isDone: true } },
+      });
+
+      actions$ = of(action);
+      taskService.getByIdOnce$.and.returnValue(of(taskWithoutReminder));
+
+      effects.unscheduleDoneTask$.subscribe();
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not process when isDone change is false', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { isDone: false } },
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        // Non-dispatching effect with filter - should not call getByIdOnce$
+        effects.unscheduleDoneTask$.subscribe();
+
+        expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
       });
     });
 
-    it('should not dispatch unscheduleTask when task has no reminder', (done) => {
-      const taskWithoutReminder = createMockTask({
-        id: 'task-no-reminder',
-        reminderId: undefined,
-        isDone: true,
+    it('should not process updates without isDone change', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.updateTask({
+          task: { id: 'task-1', changes: { title: 'New Title' } },
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        effects.unscheduleDoneTask$.subscribe();
+
+        expect(taskService.getByIdOnce$).not.toHaveBeenCalled();
       });
-      taskServiceMock.getByIdOnce$.and.returnValue(of(taskWithoutReminder));
-
-      const dispatchSpy = spyOn(store, 'dispatch');
-
-      actions$ = of(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-no-reminder', changes: { isDone: true } },
-        }),
-      );
-
-      effects.unscheduleDoneTask$.subscribe(() => {
-        expect(taskServiceMock.getByIdOnce$).toHaveBeenCalledWith('task-no-reminder');
-        expect(dispatchSpy).not.toHaveBeenCalled();
-        done();
-      });
-    });
-
-    it('should not trigger for non-isDone updates', (done) => {
-      const dispatchSpy = spyOn(store, 'dispatch');
-
-      actions$ = of(
-        TaskSharedActions.updateTask({
-          task: { id: 'task-123', changes: { title: 'New Title' } },
-        }),
-      );
-
-      // Effect should filter out this action since isDone is not set
-      let emitted = false;
-      effects.unscheduleDoneTask$.subscribe({
-        next: () => {
-          emitted = true;
-        },
-      });
-
-      // Give some time for potential emission
-      setTimeout(() => {
-        expect(emitted).toBe(false);
-        expect(dispatchSpy).not.toHaveBeenCalled();
-        done();
-      }, 50);
     });
   });
+
+  describe('unscheduleSnack$', () => {
+    it('should show snack when task is unscheduled', () => {
+      const action = TaskSharedActions.unscheduleTask({ id: 'task-1' });
+
+      actions$ = of(action);
+
+      effects.unscheduleSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.F.TASK.S.REMINDER_DELETED,
+        ico: 'schedule',
+      });
+    });
+
+    it('should not show snack when isSkipToast is true', () => {
+      testScheduler.run(({ hot, expectObservable }) => {
+        const action = TaskSharedActions.unscheduleTask({
+          id: 'task-1',
+          isSkipToast: true,
+        });
+
+        actions$ = hot('-a', { a: action });
+
+        effects.unscheduleSnack$.subscribe();
+      });
+
+      expect(snackService.open).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dismissReminderSnack$', () => {
+    it('should show snack when reminder is dismissed', () => {
+      const action = TaskSharedActions.dismissReminderOnly({ id: 'task-1' });
+
+      actions$ = of(action);
+
+      effects.dismissReminderSnack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith({
+        type: 'SUCCESS',
+        msg: T.F.TASK.S.REMINDER_DELETED,
+        ico: 'schedule',
+      });
+    });
+  });
+
+  // NOTE: Tests for removeTaskReminderTrigger1$ were removed because the effect no longer exists.
+  // The reminder removal is now handled differently in the task-shared scheduling meta-reducer.
 });

@@ -6,6 +6,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import { WorkStartEnd } from '../../work-context/work-context.model';
 import { formatDayMonthStr } from '../../../util/format-day-month-str';
 import { DateTimeLocale } from 'src/app/core/locale.constants';
+import { sortWorklogEntriesAlphabetically } from './sort-worklog-entries';
 
 // Provides defaults to display tasks without time spent on them
 const _getTimeSpentOnDay = (entities: any, task: Task): { [key: string]: number } => {
@@ -111,6 +112,20 @@ export const mapArchiveToWorklogWeeks = (
 
       // worklogYearsWithSimpleWeeks[year][weekNrKey].timeSpent += timeSpentOnDay;
       // worklogYearsWithSimpleWeeks[year][weekNrKey].ent[day] =
+    });
+  });
+
+  // Sort log entries alphabetically with parent/subtask grouping
+  Object.keys(worklogYearsWithSimpleWeeks).forEach((yearIN: string) => {
+    const weeks = worklogYearsWithSimpleWeeks[yearIN as any];
+    weeks.forEach((week) => {
+      if (week) {
+        Object.keys(week.ent).forEach((dayIN: string) => {
+          week.ent[dayIN as any].logEntries = sortWorklogEntriesAlphabetically(
+            week.ent[dayIN as any].logEntries,
+          );
+        });
+      }
     });
   });
 

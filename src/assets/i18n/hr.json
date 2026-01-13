@@ -233,7 +233,7 @@
         "FILTER_USER": "Korisničko ime (npr. za izdvajanje vlastitih promjena)",
         "GITLAB_BASE_URL": "Prilagođeni osnovni GitLab URL (opcionalno)",
         "PROJECT": "(standardni) ID projekta ili korisničko ime/projekt",
-        "PROJECT_HINT": "pa egzanp johannesjo/super-productivity",
+        "PROJECT_HINT": "pa egzanp super-productivity/super-productivity",
         "SCOPE": "Opseg",
         "SCOPE_ALL": "Sve",
         "SCOPE_ASSIGNED": "Dodijeljeno meni",

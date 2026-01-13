@@ -51,6 +51,10 @@ linux:
     - rpm
   publish:
     - github
+
+rpm:
+  # Fix for issue #5368: Prevent /usr/lib/.build-id/ collisions with other Electron apps
+  fpm: ['--rpm-rpmbuild-define=_build_id_links none']
 # leads to Error: Please specify executable name as linux.executableName instead of linux.desktop.Exec
 #  desktop:
 #    Name: Super Productivity
@@ -67,6 +71,10 @@ snap:
   autoStart: true
   base: core22
   confinement: strict
+  environment:
+    # Fix for issue #4920: Isolate fontconfig cache to prevent GTK dialog rendering issues
+    # https://github.com/super-productivity/super-productivity/issues/4920
+    FC_CACHEDIR: $SNAP_USER_DATA/.cache/fontconfig
   plugs:
     - default
     - password-manager-service

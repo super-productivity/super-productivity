@@ -2,8 +2,6 @@ import { getNextRepeatOccurrence } from './get-next-repeat-occurrence.util';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
-/* eslint-disable no-mixed-operators */
-
 const FAKE_MONDAY_THE_10TH = new Date(2022, 0, 10).getTime();
 
 const DUMMY_REPEATABLE_TASK: TaskRepeatCfg = {

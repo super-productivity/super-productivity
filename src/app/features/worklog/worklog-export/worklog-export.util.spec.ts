@@ -1,4 +1,3 @@
-/* eslint-disable one-var */
 import { WorkStartEnd } from 'src/app/features/work-context/work-context.model';
 import { WorklogGrouping } from '../worklog.model';
 import { createRows } from './worklog-export.util';

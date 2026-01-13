@@ -780,17 +780,18 @@ describe('taskSharedMetaReducer', () => {
   });
 
   describe('moveToArchive action', () => {
-    const createArchiveAction = (tasks: Partial<TaskWithSubTasks>[] = []) =>
-      TaskSharedActions.moveToArchive({
-        tasks: tasks.map(
-          (t) =>
-            ({
-              ...createMockTask(),
-              subTasks: [],
-              ...t,
-            }) as TaskWithSubTasks,
-        ),
-      });
+    // Helper to create TaskWithSubTasks from mock task
+    const createTaskWithSubTasks = (
+      taskOverrides: Partial<Task>,
+      subTasks: Task[] = [],
+    ): TaskWithSubTasks => ({
+      ...createMockTask(taskOverrides),
+      subTasks,
+    });
+
+    // Helper to create archive action with tasks
+    const createArchiveAction = (tasks: TaskWithSubTasks[]) =>
+      TaskSharedActions.moveToArchive({ tasks });
 
     it('should remove tasks from project taskIds and backlogTaskIds', () => {
       const testState = createStateWithExistingTasks(
@@ -799,14 +800,32 @@ describe('taskSharedMetaReducer', () => {
         ['task1', 'subtask1', 'keep-task'],
         ['task1', 'subtask1', 'today-task'],
       );
-      const action = createArchiveAction([
-        {
-          id: 'task1',
-          subTaskIds: ['subtask1'],
-          subTasks: [{ id: 'subtask1', tagIds: ['tag1'] } as Task],
-        },
-        { id: 'task2', projectId: 'project1' },
-      ]);
+
+      const subtask1 = createMockTask({
+        id: 'subtask1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'task1',
+      });
+
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks(
+          {
+            id: 'task1',
+            projectId: 'project1',
+            tagIds: ['tag1'],
+            subTaskIds: ['subtask1'],
+          },
+          [subtask1],
+        ),
+        createTaskWithSubTasks({
+          id: 'task2',
+          projectId: 'project1',
+          tagIds: [],
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -861,27 +880,47 @@ describe('taskSharedMetaReducer', () => {
         'tag2',
       ];
 
-      const action = createArchiveAction([
-        {
-          id: 'parent-task',
-          tagIds: ['tag1'],
-          subTaskIds: ['subtask1', 'subtask2'],
-          subTasks: [
-            {
-              ...DEFAULT_TASK,
-              id: 'subtask1',
-              projectId: 'test-project',
-              tagIds: ['tag1'],
-            },
-            {
-              ...DEFAULT_TASK,
-              id: 'subtask2',
-              projectId: 'test-project',
-              tagIds: ['tag1', 'tag2'],
-            },
-          ],
-        },
-      ]);
+      // Update task entities to match expected state (handleMoveToArchive reads from state)
+      testState[TASK_FEATURE_NAME].entities['parent-task'] = {
+        ...testState[TASK_FEATURE_NAME].entities['parent-task'],
+        subTaskIds: ['subtask1', 'subtask2'],
+      } as Task;
+      testState[TASK_FEATURE_NAME].entities.subtask2 = {
+        ...testState[TASK_FEATURE_NAME].entities.subtask2,
+        tagIds: ['tag1', 'tag2'],
+        parentId: 'parent-task',
+      } as Task;
+      testState[TASK_FEATURE_NAME].entities.subtask1 = {
+        ...testState[TASK_FEATURE_NAME].entities.subtask1,
+        parentId: 'parent-task',
+      } as Task;
+
+      const subtask1 = createMockTask({
+        id: 'subtask1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'parent-task',
+      });
+      const subtask2 = createMockTask({
+        id: 'subtask2',
+        projectId: 'project1',
+        tagIds: ['tag1', 'tag2'],
+        parentId: 'parent-task',
+      });
+
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks(
+          {
+            id: 'parent-task',
+            projectId: 'project1',
+            tagIds: ['tag1'],
+            subTaskIds: ['subtask1', 'subtask2'],
+          },
+          [subtask1, subtask2],
+        ),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -907,25 +946,15 @@ describe('taskSharedMetaReducer', () => {
         ['task1'],
       );
 
-      // Create tasks without projectId
-      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
-        id: 'task1',
-        projectId: undefined,
-        tagIds: ['tag1'],
-      });
-      testState[TASK_FEATURE_NAME].entities.task2 = createMockTask({
-        id: 'task2',
-        projectId: undefined,
-        tagIds: ['tag1'],
-      });
-
-      const action = createArchiveAction([
-        {
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks({
           id: 'task1',
           projectId: undefined,
           tagIds: ['tag1'],
-        },
-      ]);
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -947,25 +976,20 @@ describe('taskSharedMetaReducer', () => {
         ['project-task', 'orphan-task'],
       );
 
-      // Create orphan task without projectId
-      testState[TASK_FEATURE_NAME].entities['orphan-task'] = createMockTask({
-        id: 'orphan-task',
-        projectId: undefined,
-        tagIds: ['tag1'],
-      });
-
-      const action = createArchiveAction([
-        {
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks({
           id: 'project-task',
           projectId: 'project1',
           tagIds: ['tag1'],
-        },
-        {
+        }),
+        createTaskWithSubTasks({
           id: 'orphan-task',
           projectId: undefined,
           tagIds: ['tag1'],
-        },
-      ]);
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -990,12 +1014,15 @@ describe('taskSharedMetaReducer', () => {
         [], // No tasks in TODAY
       );
 
-      const action = createArchiveAction([
-        {
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks({
           id: 'task1',
+          projectId: 'project1',
           tagIds: ['tag1'],
-        },
-      ]);
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -1028,25 +1055,27 @@ describe('taskSharedMetaReducer', () => {
         'project2',
       ];
 
-      // Update task2 to be in project2
-      testState[TASK_FEATURE_NAME].entities.task2 = createMockTask({
-        id: 'task2',
+      // Update task2 entity to have correct projectId (createStateWithExistingTasks
+      // only sets projectId for tasks in project1's taskIds/backlogTaskIds)
+      testState[TASK_FEATURE_NAME].entities.task2 = {
+        ...testState[TASK_FEATURE_NAME].entities.task2,
         projectId: 'project2',
-        tagIds: ['tag1'],
-      });
+      } as Task;
 
-      const action = createArchiveAction([
-        {
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks({
           id: 'task1',
           projectId: 'project1',
           tagIds: ['tag1'],
-        },
-        {
+        }),
+        createTaskWithSubTasks({
           id: 'task2',
           projectId: 'project2',
           tagIds: ['tag1'],
-        },
-      ]);
+        }),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -1073,18 +1102,38 @@ describe('taskSharedMetaReducer', () => {
         [],
       );
 
-      const action = createArchiveAction([
-        {
-          id: 'parent',
-          tagIds: ['tag1'],
-          subTaskIds: ['sub1', 'sub2', 'sub3'],
-          subTasks: [
-            { ...DEFAULT_TASK, id: 'sub1', projectId: 'test-project', tagIds: ['tag1'] },
-            { ...DEFAULT_TASK, id: 'sub2', projectId: 'test-project', tagIds: ['tag1'] },
-            { ...DEFAULT_TASK, id: 'sub3', projectId: 'test-project', tagIds: ['tag1'] },
-          ],
-        },
-      ]);
+      const sub1 = createMockTask({
+        id: 'sub1',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'parent',
+      });
+      const sub2 = createMockTask({
+        id: 'sub2',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'parent',
+      });
+      const sub3 = createMockTask({
+        id: 'sub3',
+        projectId: 'project1',
+        tagIds: ['tag1'],
+        parentId: 'parent',
+      });
+
+      const tasksToArchive: TaskWithSubTasks[] = [
+        createTaskWithSubTasks(
+          {
+            id: 'parent',
+            projectId: 'project1',
+            tagIds: ['tag1'],
+            subTaskIds: ['sub1', 'sub2', 'sub3'],
+          },
+          [sub1, sub2, sub3],
+        ),
+      ];
+
+      const action = createArchiveAction(tasksToArchive);
 
       expectStateUpdate(
         {
@@ -1779,8 +1828,10 @@ describe('taskSharedMetaReducer', () => {
         ['task1', 'task2', 'keep-task'],
         ['task1', 'task3', 'keep-task'],
       );
+      const mockProject = createMockProject();
       const action = TaskSharedActions.deleteProject({
-        project: createMockProject(),
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
         allTaskIds: ['task1', 'task2', 'task3'],
       });
 
@@ -1795,8 +1846,10 @@ describe('taskSharedMetaReducer', () => {
     });
 
     it('should handle empty project task lists', () => {
+      const mockProject = createMockProject();
       const action = TaskSharedActions.deleteProject({
-        project: createMockProject(),
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
         allTaskIds: [],
       });
 
@@ -2372,14 +2425,20 @@ describe('taskSharedMetaReducer', () => {
       );
     });
 
-    it('should not change state when task is already in Today and planned for today', () => {
+    it('should reorder task in Today tag when already in Today and planned for today', () => {
       const todayStr = getDbDateStr();
       const testState = createStateWithExistingTasks([], [], [], ['task1', 'other-task']);
-      const task = createMockTask({ id: 'task1' });
+      // Set task1.tagIds to already include TODAY for board-style consistency test
+      (testState as any).tasks.entities['task1'].tagIds = ['TODAY'];
+      const task = createMockTask({ id: 'task1', tagIds: ['TODAY'] });
       const action = createPlanTaskForDayAction(task, todayStr, false);
 
-      metaReducer(testState, action);
-      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+      // Task gets reordered to end of TODAY tag (isAddToTop=false)
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['other-task', 'task1'] }),
+        action,
+        testState,
+      );
     });
 
     it('should not change state when task is not in Today and not planned for today', () => {

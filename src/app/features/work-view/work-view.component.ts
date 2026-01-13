@@ -128,11 +128,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
 
   isPlanningMode = this.planningModeService.isPlanningMode;
-  todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$);
-  estimateRemainingToday = toSignal(this.workContextService.estimateRemainingToday$);
-  workingToday = toSignal(this.workContextService.workingToday$);
+  todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
+    initialValue: 0,
+  });
+  estimateRemainingToday = toSignal(this.workContextService.estimateRemainingToday$, {
+    initialValue: 0,
+  });
+  workingToday = toSignal(this.workContextService.workingToday$, { initialValue: 0 });
   selectedTaskId = this.taskService.selectedTaskId;
-  isOnTodayList = toSignal(this.workContextService.isTodayList$);
+  isOnTodayList = toSignal(this.workContextService.isTodayList$, { initialValue: false });
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));

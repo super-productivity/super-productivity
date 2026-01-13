@@ -1,9 +1,9 @@
 import { DEFAULT_GLOBAL_CONFIG } from '../features/config/default-global-config.const';
 import { createEmptyEntity } from './create-empty-entity';
-import { AppDataCompleteNew } from '../pfapi/pfapi-config';
+import { AppDataComplete } from '../op-log/model/model-config';
 import { initialTimeTrackingState } from '../features/time-tracking/store/time-tracking.reducer';
 
-export const createAppDataCompleteMock = (): AppDataCompleteNew => ({
+export const createAppDataCompleteMock = (): AppDataComplete => ({
   project: {
     ...createEmptyEntity(),
   },
@@ -36,8 +36,6 @@ export const createAppDataCompleteMock = (): AppDataCompleteNew => ({
     todayOrder: [],
   },
   metric: createEmptyEntity(),
-  improvement: createEmptyEntity() as any,
-  obstruction: createEmptyEntity(),
   planner: { days: {}, addPlannedTasksDialogLastShown: undefined },
   issueProvider: createEmptyEntity() as any,
   boards: {

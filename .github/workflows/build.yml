@@ -5,6 +5,9 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: write
+
 jobs:
   linux-bin-and-snap-release:
     runs-on: ubuntu-latest

@@ -27,8 +27,7 @@ export enum SORT_ORDER {
 
 // === GROUP ===
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-export interface GroupOption extends BaseOption<GROUP_OPTION_TYPE> {}
+export type GroupOption = BaseOption<GROUP_OPTION_TYPE>;
 
 export enum GROUP_OPTION_TYPE {
   tag = 'tag',

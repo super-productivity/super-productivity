@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import { ConfigFormSection, IdleConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 import { HelperClasses } from '../../../app.constants';

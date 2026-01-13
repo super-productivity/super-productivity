@@ -87,8 +87,10 @@ test.describe('Task Delete Confirmation', () => {
     await workViewPage.addTask('Task to delete with keyboard');
     await expect(page.locator('task')).toHaveCount(1);
 
-    // Focus the task
-    await page.locator('task').first().click();
+    // Focus the task by clicking on drag-handle (not task-title which would open edit mode)
+    const task = page.locator('task').first();
+    await task.locator('.drag-handle').click();
+    await expect(task).toBeFocused();
 
     // Act: Press Backspace (default delete shortcut)
     await page.keyboard.press('Backspace');

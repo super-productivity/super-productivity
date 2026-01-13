@@ -291,7 +291,7 @@
         "FILTER_USER": "Filtrar usuario",
         "GITLAB_BASE_URL": "URL base de GitLab personalizada (opcional)",
         "PROJECT": "nombre de usuario/proyecto",
-        "PROJECT_HINT": "p. ej. johannesjo/super-productivity",
+        "PROJECT_HINT": "p. ej. super-productivity/super-productivity",
         "SCOPE": "Ámbito",
         "SCOPE_ALL": "Todo",
         "SCOPE_ASSIGNED": "Asignado a mí",

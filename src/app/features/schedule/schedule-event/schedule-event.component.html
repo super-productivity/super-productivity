@@ -12,7 +12,7 @@
       <div class="day-of-month">{{ se().dayOfMonth }}</div>
     }
     @case ('SCHEDULED_TASK') {
-      @if (task()?.reminderId) {
+      @if (task()?.remindAt) {
         <mat-icon
           class="ico"
           inline="true"

@@ -1,13 +1,23 @@
+# Docker Compose override for E2E tests
+# Note: For supersync tests, use both files: -f docker-compose.yaml -f docker-compose.e2e.yaml
+# This file is standalone for app/webdav tests only
+#
+# FAST LOCAL ALTERNATIVE: Run `ng serve` locally + `npm run e2e:webdav` (only webdav in Docker)
 services:
   # Angular development server for E2E tests
+  # Uses volume mount to avoid copying/rebuilding node_modules
+  # Requires: npm install to be run locally first
   app:
     build:
       context: .
-      dockerfile: Dockerfile.e2e.dev
+      dockerfile: Dockerfile.e2e.dev.fast
     ports:
       - '${APP_PORT:-4242}:${APP_PORT:-4242}'
     environment:
       - APP_PORT=${APP_PORT:-4242}
+    volumes:
+      - .:/app
+      - /app/.angular # Exclude .angular cache (use container's)
     healthcheck:
       test: ['CMD', 'curl', '-sf', 'http://localhost:${APP_PORT:-4242}']
       interval: 10s

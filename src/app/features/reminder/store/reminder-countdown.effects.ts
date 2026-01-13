@@ -1,10 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect } from '@ngrx/effects';
-import { ReminderService } from '../reminder.service';
+import { createEffect } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
+  selectAllTasksWithReminder,
   selectCurrentTaskId,
   selectTaskById,
-  selectTasksById,
 } from '../../tasks/store/task.selectors';
 import {
   concatMap,
@@ -19,11 +19,10 @@ import { T } from '../../../t.const';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { Store } from '@ngrx/store';
 import { BannerService } from '../../../core/banner/banner.service';
-import { Reminder } from '../reminder.model';
 import { selectReminderConfig } from '../../config/store/global-config.reducer';
 import { BehaviorSubject, combineLatest, EMPTY, timer } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
-import { Task, TaskWithReminder } from '../../tasks/task.model';
+import { TaskWithReminder } from '../../tasks/task.model';
 import { ProjectService } from '../../project/project.service';
 import { Router } from '@angular/router';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
@@ -36,8 +35,7 @@ const COUNTDOWN_MAGIC_GAP = 500;
 
 @Injectable()
 export class ReminderCountdownEffects {
-  private actions$ = inject(Actions);
-  private _reminderService = inject(ReminderService);
+  private actions$ = inject(LOCAL_ACTIONS);
   private _datePipe = inject(LocaleDatePipe);
   private _store = inject(Store);
   private _bannerService = inject(BannerService);
@@ -53,41 +51,30 @@ export class ReminderCountdownEffects {
         switchMap((reminderCfg) =>
           reminderCfg.isCountdownBannerEnabled
             ? combineLatest([
-                this._reminderService.reminders$,
-                this._skippedReminderIds$,
+                this._store.select(selectAllTasksWithReminder),
+                this._skippedTaskIds$,
               ]).pipe(
-                map(([reminders, skippedReminderIds]) => {
+                map(([tasksWithReminder, skippedTaskIds]) => {
                   const now = Date.now();
-                  return reminders.filter(
-                    (reminder) =>
-                      reminder.type === 'TASK' &&
-                      reminder.remindAt - reminderCfg.countdownDuration < now &&
+                  return tasksWithReminder.filter(
+                    (task) =>
+                      task.remindAt - reminderCfg.countdownDuration < now &&
                       // reminders due will show as an alert anyway
-                      reminder.remindAt > now &&
-                      !skippedReminderIds.includes(reminder.id),
+                      task.remindAt > now &&
+                      !skippedTaskIds.includes(task.id),
                   );
                 }),
-                switchMap((dueReminders) =>
-                  this._store
-                    .select(selectCurrentTaskId)
-                    .pipe(distinctUntilChanged())
-                    .pipe(map((currentId) => ({ currentId, dueReminders }))),
+                switchMap((dueTasks) =>
+                  this._store.select(selectCurrentTaskId).pipe(
+                    // currentTaskId is local UI state (not synced), so distinctUntilChanged is sufficient
+                    distinctUntilChanged(),
+                    map((currentId) => ({
+                      currentId,
+                      dueTasks: dueTasks.filter((t) => t.id !== currentId),
+                    })),
+                  ),
                 ),
-                switchMap(({ dueReminders, currentId }) => {
-                  const taskIds = dueReminders
-                    .map((dr) => dr.relatedId)
-                    .filter((id) => id !== currentId);
-                  return this._store.select(selectTasksById, { ids: taskIds }).pipe(
-                    map((tasks) => {
-                      return dueReminders
-                        .map((reminder, i) => {
-                          return { reminder, task: tasks[i] };
-                        })
-                        .filter(({ reminder, task }) => !!(reminder && task));
-                    }),
-                  );
-                }),
-                tap((dueReminders) => this._showBanner(dueReminders)),
+                tap(({ dueTasks }) => this._showBanner(dueTasks)),
               )
             : EMPTY,
         ),
@@ -97,50 +84,45 @@ export class ReminderCountdownEffects {
     },
   );
 
-  private _skippedReminderIds$ = new BehaviorSubject<string[]>([]);
-  private _currentBannerReminder?: Reminder;
+  private _skippedTaskIds$ = new BehaviorSubject<string[]>([]);
+  private _currentBannerTask?: TaskWithReminder;
 
-  private _skipReminder(reminderId: string): void {
-    this._skippedReminderIds$.next([...this._skippedReminderIds$.getValue(), reminderId]);
+  private _skipTask(taskId: string): void {
+    this._skippedTaskIds$.next([...this._skippedTaskIds$.getValue(), taskId]);
   }
 
-  private async _showBanner(
-    dueRemindersAndTasks: { reminder: Reminder; task: Task }[],
-  ): Promise<void> {
-    const firstDue = dueRemindersAndTasks[0];
+  private async _showBanner(dueTasks: TaskWithReminder[]): Promise<void> {
+    const firstDue = dueTasks[0];
     if (!firstDue) {
       this._bannerService.dismiss(BannerId.ReminderCountdown);
-      this._currentBannerReminder = undefined;
+      this._currentBannerTask = undefined;
       return;
     }
     if (
-      this._currentBannerReminder &&
-      this._currentBannerReminder.id === firstDue.reminder.id &&
-      this._currentBannerReminder.remindAt === firstDue.reminder.remindAt
+      this._currentBannerTask &&
+      this._currentBannerTask.id === firstDue.id &&
+      this._currentBannerTask.remindAt === firstDue.remindAt
     ) {
-      // just leave banner as
+      // just leave banner as is
       return;
     }
-    this._currentBannerReminder = firstDue.reminder;
+    this._currentBannerTask = firstDue;
 
     const firstDueTask = await this._store
-      .select(selectTaskById, { id: firstDue.reminder.relatedId })
+      .select(selectTaskById, { id: firstDue.id })
       .pipe(first())
       .toPromise();
 
     const showBannerStart = Date.now();
-    const remainingAtBannerStart = firstDue.reminder.remindAt - showBannerStart;
+    const remainingAtBannerStart = firstDue.remindAt - showBannerStart;
 
-    const startsAt = this._datePipe.transform(
-      firstDue.reminder.remindAt,
-      'shortTime',
-    ) as string;
+    const startsAt = this._datePipe.transform(firstDue.remindAt, 'shortTime') as string;
 
-    const nrOfAllBanners = dueRemindersAndTasks.length;
+    const nrOfAllBanners = dueTasks.length;
     Log.log({
       firstDueTask,
       firstDue,
-      dueRemindersAndTasks,
+      dueTasks,
     });
 
     this._bannerService.open({
@@ -158,16 +140,16 @@ export class ReminderCountdownEffects {
       action: {
         label: T.G.HIDE,
         fn: () => {
-          this._skipReminder(firstDue.reminder.id);
-          this._currentBannerReminder = undefined;
+          this._skipTask(firstDue.id);
+          this._currentBannerTask = undefined;
         },
       },
       action2: {
         label: T.F.REMINDER.COUNTDOWN_BANNER.START_NOW,
         fn: () => {
-          this._skipReminder(firstDue.reminder.id);
-          this._currentBannerReminder = undefined;
-          this._startTask(firstDue.task as TaskWithReminder);
+          this._skipTask(firstDue.id);
+          this._currentBannerTask = undefined;
+          this._startTask(firstDue);
         },
       },
       progress$: timer(0, UPDATE_PERCENTAGE_INTERVAL).pipe(
@@ -178,22 +160,18 @@ export class ReminderCountdownEffects {
           return percentage;
         }),
       ),
-      // action2:
     });
   }
 
   private _startTask(task: TaskWithReminder): void {
-    // NOTE: reminder needs to be deleted first to avoid problems with "Missing reminder" devError
-    if (!!task.reminderId) {
-      this._store.dispatch(
-        TaskSharedActions.unscheduleTask({
-          id: task.id,
-          reminderId: task.reminderId,
-        }),
-      );
-    }
+    // Unschedule the task (clears remindAt)
+    this._store.dispatch(
+      TaskSharedActions.unscheduleTask({
+        id: task.id,
+      }),
+    );
     if (task.projectId) {
-      if (!!task.parentId) {
+      if (task.parentId) {
         this._projectService.moveTaskToTodayList(task.parentId, task.projectId, true);
       } else {
         this._projectService.moveTaskToTodayList(task.id, task.projectId, true);

@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import {
   concatMap,
@@ -14,7 +14,7 @@ import {
 import { JiraApiService } from './jira-api.service';
 import { JiraIssueReduced } from './jira-issue.model';
 import { SnackService } from '../../../../core/snack/snack.service';
-import { Task } from '../../../tasks/task.model';
+import { Task, TaskCopy } from '../../../tasks/task.model';
 import { TaskService } from '../../../tasks/task.service';
 import { EMPTY, Observable, of, throwError, timer } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -34,10 +34,11 @@ import { isJiraEnabled } from './is-jira-enabled.util';
 import { IssueProviderService } from '../../issue-provider.service';
 import { assertTruthy } from '../../../../util/assert-truthy';
 import { devError } from '../../../../util/dev-error';
+import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 
 @Injectable()
 export class JiraIssueEffects {
-  private readonly _actions$ = inject(Actions);
+  private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _store$ = inject<Store<any>>(Store);
   private readonly _snackService = inject(SnackService);
   private readonly _taskService = inject(TaskService);
@@ -54,6 +55,7 @@ export class JiraIssueEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id.toString())),
+        filter((task) => !!task),
         concatMap((task) =>
           task.parentId
             ? this._taskService
@@ -61,6 +63,7 @@ export class JiraIssueEffects {
                 .pipe(map((parent) => ({ mainTask: parent, subTask: task })))
             : of({ mainTask: task, subTask: undefined }),
         ),
+        filter(({ mainTask }) => !!mainTask),
         concatMap(({ mainTask, subTask }) =>
           mainTask.issueType === JIRA_TYPE && mainTask.issueId && mainTask.issueProviderId
             ? this._getCfgOnce$(mainTask.issueProviderId).pipe(
@@ -113,10 +116,8 @@ export class JiraIssueEffects {
         filter(({ id }) => !!id),
         withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
         filter(
-          ([, currentTaskOrParent]) =>
-            !!currentTaskOrParent &&
-            currentTaskOrParent.issueType === JIRA_TYPE &&
-            !!currentTaskOrParent.issueId,
+          (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
+            !!input[1] && input[1].issueType === JIRA_TYPE && !!input[1].issueId,
         ),
         concatMap(([, currentTaskOrParent]) => {
           if (!currentTaskOrParent.issueProviderId) {
@@ -204,8 +205,8 @@ export class JiraIssueEffects {
         filter(({ id }) => !!id),
         withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
         filter(
-          ([, currentTaskOrParent]) =>
-            currentTaskOrParent && currentTaskOrParent.issueType === JIRA_TYPE,
+          (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
+            input[1] != null && input[1].issueType === JIRA_TYPE,
         ),
         concatMap(([, currentTaskOrParent]) => {
           if (!currentTaskOrParent.issueProviderId) {

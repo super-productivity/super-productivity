@@ -1,0 +1,36 @@
+<h1 mat-dialog-title>{{ T.MIGRATE.DIALOG_TITLE | translate }}</h1>
+
+<div mat-dialog-content>
+  @if (hasError()) {
+    <div class="error-state">
+      <mat-icon>error</mat-icon>
+      <p class="error-message">{{ error() }}</p>
+    </div>
+  } @else {
+    <p class="intro">{{ T.MIGRATE.DIALOG_MESSAGE | translate }}</p>
+
+    <div class="status-container">
+      @if (status() !== 'complete') {
+        <mat-spinner diameter="32"></mat-spinner>
+      } @else {
+        <mat-icon class="success-icon">check_circle</mat-icon>
+      }
+      <span class="status-text">{{ getStatusKey() | translate }}</span>
+    </div>
+  }
+</div>
+
+@if (hasError()) {
+  <div
+    mat-dialog-actions
+    align="end"
+  >
+    <button
+      mat-flat-button
+      color="primary"
+      (click)="acknowledge()"
+    >
+      {{ 'G.OK' | translate }}
+    </button>
+  </div>
+}

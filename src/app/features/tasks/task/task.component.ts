@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   ElementRef,
   forwardRef,
   HostListener,
@@ -55,7 +56,7 @@ import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -134,6 +135,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _destroyRef = inject(DestroyRef);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
@@ -147,7 +149,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
   isTaskOnTodayList = computed(() =>
-    this._taskService.todayList().includes(this.task().id),
+    this._taskService.todayListSet().has(this.task().id),
   );
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
@@ -299,10 +301,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // TODO remove
+    // Dev-time sanity check: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
+    // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
     if (!environment.production) {
       if (this.task().tagIds.includes(TODAY_TAG.id)) {
-        throw new Error('Task should not have today tag');
+        throw new Error('Task should not have TODAY_TAG in tagIds - it is a virtual tag');
       }
     }
 
@@ -380,6 +383,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           },
         })
         .afterClosed()
+        .pipe(takeUntilDestroyed(this._destroyRef))
         .subscribe((isConfirm) => {
           if (isConfirm) {
             this._performDelete(isClick);
@@ -675,7 +679,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.unscheduleTask({
         id: this.task().id,
-        reminderId: this.task().reminderId,
       }),
     );
   }

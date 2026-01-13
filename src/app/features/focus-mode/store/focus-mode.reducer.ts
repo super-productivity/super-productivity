@@ -251,6 +251,12 @@ export const focusModeReducer = createReducer(
     currentCycle: 1,
   })),
 
+  // Store pausedTaskId without pausing the session
+  on(a.setPausedTaskId, (state, { pausedTaskId }) => ({
+    ...state,
+    pausedTaskId,
+  })),
+
   // Adjust remaining time by modifying goal duration (work sessions only)
   on(a.adjustRemainingTime, (state, { amountMs }) => {
     if (state.timer.purpose !== 'work') {

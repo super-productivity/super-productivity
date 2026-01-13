@@ -1,0 +1,576 @@
+{
+  "timestamp": 1733000000000,
+  "lastUpdate": 1733000000000,
+  "crossModelVersion": 4.5,
+  "data": {
+    "project": {
+      "ids": ["INBOX_PROJECT", "TEST_PROJECT"],
+      "entities": {
+        "INBOX_PROJECT": {
+          "id": "INBOX_PROJECT",
+          "title": "Inbox",
+          "isHiddenFromMenu": false,
+          "taskIds": [],
+          "backlogTaskIds": [],
+          "noteIds": [],
+          "theme": {
+            "primary": "#607d8b",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "inbox",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "TEST_PROJECT": {
+          "id": "TEST_PROJECT",
+          "title": "Migration Test Project",
+          "isHiddenFromMenu": false,
+          "taskIds": [
+            "parent-task-1",
+            "subtask-1",
+            "subtask-2",
+            "tagged-task-1",
+            "standalone-task-1"
+          ],
+          "backlogTaskIds": ["backlog-task-1"],
+          "noteIds": ["note-1"],
+          "theme": {
+            "primary": "#4caf50",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "folder",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "menuTree": {
+      "tagTree": [],
+      "projectTree": []
+    },
+    "globalConfig": {
+      "misc": {
+        "isConfirmBeforeExit": false,
+        "isConfirmBeforeExitWithoutFinishDay": true,
+        "isNotifyWhenTimeEstimateExceeded": false,
+        "isAutMarkParentAsDone": true,
+        "isAutoStartNextTask": true,
+        "isTurnOffMarkdown": false,
+        "isAutoAddWorkedOnToToday": true,
+        "isDisableInitialDialog": true,
+        "firstDayOfWeek": 1,
+        "startOfNextDay": 0,
+        "daysToShowForPastDates": 14,
+        "isMinimizeToTray": false,
+        "isEnableAdvanced": false,
+        "isTrayShowCurrentTask": true,
+        "taskNotesTpl": "",
+        "isDisableAnimations": false
+      },
+      "appFeatures": {
+        "isTimeTrackingEnabled": true,
+        "isFocusModeEnabled": true,
+        "isSchedulerEnabled": true,
+        "isPlannerEnabled": true,
+        "isBoardsEnabled": true,
+        "isScheduleDayPanelEnabled": true,
+        "isIssuesPanelEnabled": true,
+        "isProjectNotesEnabled": true,
+        "isSyncIconEnabled": true,
+        "isDonatePageEnabled": true,
+        "isEnableUserProfiles": false
+      },
+      "localization": {},
+      "evaluation": {
+        "isHideEvaluationSheet": false
+      },
+      "idle": {
+        "isEnableIdleTimeTracking": false,
+        "isUnTrackedIdleResetsBreakTimer": false,
+        "minIdleTime": 60000,
+        "isOnlyOpenIdleWhenCurrentTask": false
+      },
+      "takeABreak": {
+        "isTakeABreakEnabled": false,
+        "takeABreakMinWorkingTime": 60,
+        "takeABreakSnoozeTime": 15,
+        "motivationalImgs": [],
+        "isLockScreen": false,
+        "isTimedFullScreenBlocker": false,
+        "timedFullScreenBlockerDuration": 8000,
+        "isFocusWindow": false,
+        "takeABreakMessage": "Take a break!"
+      },
+      "pomodoro": {
+        "isEnabled": false,
+        "duration": 1500000,
+        "breakDuration": 300000,
+        "longerBreakDuration": 900000,
+        "cyclesBeforeLongerBreak": 4,
+        "isStopTrackingOnBreak": true,
+        "isStopTrackingOnLongBreak": true,
+        "isManualContinue": false,
+        "isPlaySound": true,
+        "isPlaySoundAfterBreak": false,
+        "isEnabled2": false
+      },
+      "keyboard": {},
+      "localBackup": {
+        "isEnabled": false
+      },
+      "lang": {},
+      "sync": {
+        "isEnabled": true,
+        "isCompressionEnabled": true,
+        "syncInterval": 30000,
+        "isEncryptionEnabled": false,
+        "syncProvider": "WebDAV",
+        "webDav": {
+          "baseUrl": "https://example.com/webdav",
+          "userName": "testuser",
+          "password": "testpass123",
+          "syncFilePath": null,
+          "syncFolderPath": "/sp-sync"
+        },
+        "superSync": {
+          "baseUrl": "https://supersync.example.com",
+          "userName": "syncuser",
+          "password": null,
+          "syncFilePath": null,
+          "syncFolderPath": null,
+          "accessToken": null,
+          "isEncryptionEnabled": false,
+          "encryptKey": null
+        },
+        "localFileSync": {
+          "syncFilePath": null,
+          "syncFolderPath": null
+        }
+      },
+      "timeline": {
+        "isWorkStartEndEnabled": false,
+        "workStart": "9:00",
+        "workEnd": "17:00"
+      },
+      "reminder": {
+        "isCountdownBannerEnabled": true,
+        "countdownDuration": 600000
+      },
+      "focusMode": {
+        "isAlwaysUseFocusMode": false,
+        "isSkipPreparation": false
+      },
+      "sound": {
+        "volume": 70,
+        "isPlayDoneSound": true,
+        "doneSound": "done2.mp3",
+        "isPlayTickSound": false,
+        "isIncreaseDoneSoundPitch": true,
+        "breakReminderSound": null
+      },
+      "timeTracking": {
+        "trackingInterval": 1000,
+        "defaultEstimate": 0,
+        "defaultEstimateSubTasks": 0,
+        "isNotifyWhenTimeEstimateExceeded": true,
+        "isAutoStartNextTask": false,
+        "isTrackingReminderEnabled": false,
+        "isTrackingReminderShowOnMobile": false,
+        "trackingReminderMinTime": 300000
+      },
+      "quickNotes": {},
+      "dominaMode": {
+        "isEnabled": false,
+        "text": "Your current task is: ${currentTaskTitle}",
+        "interval": 300000,
+        "volume": 75
+      },
+      "shortSyntax": {
+        "isEnableProject": true,
+        "isEnableDue": true,
+        "isEnableTag": true
+      },
+      "schedule": {
+        "isWorkStartEndEnabled": true,
+        "workStart": "9:00",
+        "workEnd": "17:00",
+        "isLunchBreakEnabled": false,
+        "lunchBreakStart": "13:00",
+        "lunchBreakEnd": "14:00"
+      }
+    },
+    "task": {
+      "ids": [
+        "parent-task-1",
+        "subtask-1",
+        "subtask-2",
+        "tagged-task-1",
+        "standalone-task-1",
+        "backlog-task-1"
+      ],
+      "entities": {
+        "parent-task-1": {
+          "id": "parent-task-1",
+          "title": "Legacy Migration - Parent Task With Subtasks",
+          "subTaskIds": ["subtask-1", "subtask-2"],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 7200000,
+          "isDone": false,
+          "dueDay": "2024-12-15",
+          "notes": "This is a parent task with two subtasks for migration testing",
+          "tagIds": [],
+          "created": 1733000000000,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        },
+        "subtask-1": {
+          "id": "subtask-1",
+          "title": "Legacy Migration - First Subtask",
+          "subTaskIds": [],
+          "parentId": "parent-task-1",
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "First subtask of the parent",
+          "tagIds": [],
+          "created": 1733000000001,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        },
+        "subtask-2": {
+          "id": "subtask-2",
+          "title": "Legacy Migration - Second Subtask",
+          "subTaskIds": [],
+          "parentId": "parent-task-1",
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "Second subtask of the parent",
+          "tagIds": [],
+          "created": 1733000000002,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        },
+        "tagged-task-1": {
+          "id": "tagged-task-1",
+          "title": "Legacy Migration - Task With Tag",
+          "subTaskIds": [],
+          "timeSpentOnDay": {
+            "2024-12-01": 1800000,
+            "2024-12-02": 3600000
+          },
+          "timeSpent": 5400000,
+          "timeEstimate": 7200000,
+          "isDone": false,
+          "dueDay": "2024-12-20",
+          "notes": "This task has a tag and time tracking data",
+          "tagIds": ["test-tag-1"],
+          "created": 1733000000003,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        },
+        "standalone-task-1": {
+          "id": "standalone-task-1",
+          "title": "Legacy Migration - Standalone Task",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "A standalone task without subtasks or tags",
+          "tagIds": [],
+          "created": 1733000000004,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        },
+        "backlog-task-1": {
+          "id": "backlog-task-1",
+          "title": "Legacy Migration - Backlog Task",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 14400000,
+          "isDone": false,
+          "notes": "A task in the backlog",
+          "tagIds": [],
+          "created": 1733000000005,
+          "attachments": [],
+          "projectId": "TEST_PROJECT"
+        }
+      },
+      "currentTaskId": null,
+      "selectedTaskId": null,
+      "lastCurrentTaskId": null,
+      "isDataLoaded": false
+    },
+    "tag": {
+      "ids": ["TODAY", "test-tag-1"],
+      "entities": {
+        "TODAY": {
+          "id": "TODAY",
+          "title": "Today",
+          "taskIds": ["parent-task-1", "tagged-task-1"],
+          "icon": "wb_sunny",
+          "created": 1733000000000,
+          "theme": {
+            "primary": "#ffa726",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "test-tag-1": {
+          "id": "test-tag-1",
+          "title": "Migration Test Tag",
+          "taskIds": ["tagged-task-1"],
+          "icon": "label",
+          "created": 1733000000006,
+          "theme": {
+            "primary": "#9c27b0",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "simpleCounter": {
+      "ids": [],
+      "entities": {}
+    },
+    "taskRepeatCfg": {
+      "ids": [],
+      "entities": {}
+    },
+    "reminders": [],
+    "note": {
+      "ids": ["note-1"],
+      "entities": {
+        "note-1": {
+          "id": "note-1",
+          "projectId": "TEST_PROJECT",
+          "isPinnedToToday": false,
+          "content": "This is a test note for migration verification. It contains some **markdown** content.",
+          "imgUrl": null,
+          "isLock": false,
+          "backgroundColor": null,
+          "created": 1733000000007,
+          "modified": 1733000000007
+        }
+      },
+      "todayOrder": []
+    },
+    "metric": {
+      "ids": [],
+      "entities": {}
+    },
+    "planner": {
+      "days": {}
+    },
+    "issueProvider": {
+      "ids": [],
+      "entities": {}
+    },
+    "boards": {
+      "boardCfgs": []
+    },
+    "timeTracking": {
+      "project": {
+        "TEST_PROJECT": {
+          "2024-12-01": {
+            "s": 1701428400000,
+            "e": 1701460800000,
+            "b": 1,
+            "bt": 3600000
+          },
+          "2024-12-02": {
+            "s": 1701514800000,
+            "e": 1701543600000,
+            "b": 0,
+            "bt": 0
+          }
+        }
+      },
+      "tag": {
+        "test-tag-1": {
+          "2024-12-01": {
+            "s": 1701428400000,
+            "e": 1701435600000,
+            "b": 0,
+            "bt": 0
+          }
+        }
+      }
+    },
+    "archiveYoung": {
+      "task": {
+        "ids": ["archived-task-1", "archived-task-2"],
+        "entities": {
+          "archived-task-1": {
+            "id": "archived-task-1",
+            "title": "Legacy Migration - Archived Task 1",
+            "subTaskIds": [],
+            "timeSpentOnDay": {
+              "2024-11-15": 3600000
+            },
+            "timeSpent": 3600000,
+            "timeEstimate": 3600000,
+            "isDone": true,
+            "doneOn": 1731715200000,
+            "notes": "First archived task",
+            "tagIds": [],
+            "created": 1731628800000,
+            "attachments": [],
+            "projectId": "TEST_PROJECT"
+          },
+          "archived-task-2": {
+            "id": "archived-task-2",
+            "title": "Legacy Migration - Archived Task 2",
+            "subTaskIds": [],
+            "timeSpentOnDay": {
+              "2024-11-20": 7200000
+            },
+            "timeSpent": 7200000,
+            "timeEstimate": 7200000,
+            "isDone": true,
+            "doneOn": 1732147200000,
+            "notes": "Second archived task with tag",
+            "tagIds": ["test-tag-1"],
+            "created": 1732060800000,
+            "attachments": [],
+            "projectId": "TEST_PROJECT"
+          }
+        }
+      },
+      "timeTracking": {
+        "project": {
+          "TEST_PROJECT": {
+            "2024-11-15": {
+              "s": 1731654000000,
+              "e": 1731682800000,
+              "b": 1,
+              "bt": 1800000
+            },
+            "2024-11-20": {
+              "s": 1732086000000,
+              "e": 1732118400000,
+              "b": 0,
+              "bt": 0
+            }
+          }
+        },
+        "tag": {
+          "test-tag-1": {
+            "2024-11-20": {
+              "s": 1732086000000,
+              "e": 1732093200000,
+              "b": 0,
+              "bt": 0
+            }
+          }
+        }
+      },
+      "lastTimeTrackingFlush": 1732233600000
+    },
+    "archiveOld": {
+      "task": {
+        "ids": ["old-archived-task-1"],
+        "entities": {
+          "old-archived-task-1": {
+            "id": "old-archived-task-1",
+            "title": "Legacy Migration - Old Archived Task",
+            "subTaskIds": [],
+            "timeSpentOnDay": {
+              "2024-10-01": 5400000
+            },
+            "timeSpent": 5400000,
+            "timeEstimate": 7200000,
+            "isDone": true,
+            "doneOn": 1727827200000,
+            "notes": "An older archived task from archiveOld",
+            "tagIds": [],
+            "created": 1727740800000,
+            "attachments": [],
+            "projectId": "TEST_PROJECT"
+          }
+        }
+      },
+      "timeTracking": {
+        "project": {
+          "TEST_PROJECT": {
+            "2024-10-01": {
+              "s": 1727766000000,
+              "e": 1727798400000,
+              "b": 2,
+              "bt": 3600000
+            }
+          }
+        },
+        "tag": {}
+      }
+    },
+    "pluginMetadata": [],
+    "pluginUserData": []
+  }
+}

@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { select, Store } from '@ngrx/store';
 import {
   addTaskRepeatCfgToTask,
-  deleteTaskRepeatCfg,
   deleteTaskRepeatCfgs,
   updateTaskRepeatCfg,
   updateTaskRepeatCfgs,
@@ -20,6 +19,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { MatDialog } from '@angular/material/dialog';
 import { T } from '../../t.const';
 import { first, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -41,6 +41,7 @@ import {
   selectTaskRepeatCfgsForExactDay,
 } from './store/task-repeat-cfg.selectors';
 import { devError } from '../../util/dev-error';
+import { getRepeatableTaskId } from './get-repeatable-task-id.util';
 
 @Injectable({
   providedIn: 'root',
@@ -96,8 +97,17 @@ export class TaskRepeatCfgService {
     );
   }
 
-  deleteTaskRepeatCfg(id: string): void {
-    this._store$.dispatch(deleteTaskRepeatCfg({ id }));
+  async deleteTaskRepeatCfg(id: string): Promise<void> {
+    // Gather task IDs to unlink - this ensures atomic sync
+    const tasks = await firstValueFrom(this._taskService.getTasksByRepeatCfgId$(id));
+    const taskIdsToUnlink = tasks.map((task) => task.id);
+
+    this._store$.dispatch(
+      TaskSharedActions.deleteTaskRepeatCfg({
+        taskRepeatCfgId: id,
+        taskIdsToUnlink,
+      }),
+    );
   }
 
   deleteTaskRepeatCfgsNoTaskCleanup(ids: string[]): void {
@@ -152,9 +162,9 @@ export class TaskRepeatCfgService {
         },
       })
       .afterClosed()
-      .subscribe((isConfirm: boolean) => {
+      .subscribe(async (isConfirm: boolean) => {
         if (isConfirm) {
-          this.deleteTaskRepeatCfg(id);
+          await this.deleteTaskRepeatCfg(id);
         }
       });
   }
@@ -202,13 +212,19 @@ export class TaskRepeatCfgService {
     // differs from the repeat day we are about to create.
     const targetDateStr = getDbDateStr(targetCreated);
 
-    const isCreateNew =
-      existingTaskInstances.filter((taskI) => {
-        const existingDateStr = taskI.dueDay || getDbDateStr(taskI.created);
-        return existingDateStr === targetDateStr;
-      }).length === 0;
+    // Generate the deterministic ID that would be used for this task.
+    // This ensures both local dueDay check AND ID check prevent duplicates.
+    const expectedTaskId = getRepeatableTaskId(taskRepeatCfg.id, targetDateStr);
 
-    if (!isCreateNew) {
+    // Check if a task already exists with this deterministic ID or dueDay.
+    // The ID check handles cases where another device created the task but it hasn't
+    // fully synced yet (the task exists locally but dueDay might differ during migration).
+    const taskAlreadyExists = existingTaskInstances.some((taskI) => {
+      const existingDateStr = taskI.dueDay || getDbDateStr(taskI.created);
+      return taskI.id === expectedTaskId || existingDateStr === targetDateStr;
+    });
+
+    if (taskAlreadyExists) {
       return [];
     }
     // Check if this date is in the deleted instances list
@@ -217,13 +233,15 @@ export class TaskRepeatCfgService {
       return [];
     }
 
-    const { task, isAddToBottom } = this._getTaskRepeatTemplate(taskRepeatCfg);
+    const { task, isAddToBottom } = this._getTaskRepeatTemplate(
+      taskRepeatCfg,
+      targetDateStr,
+    );
     const taskWithTargetDates: Task = {
       ...task,
       // NOTE if moving this to top isCreateNew check above would not work as intended
       // we use created also for the repeat day label for past tasks
       created: targetCreated.getTime(),
-      dueDay: targetDateStr,
     };
 
     const createNewActions: (
@@ -299,20 +317,24 @@ export class TaskRepeatCfgService {
     return createNewActions;
   }
 
-  private _getTaskRepeatTemplate(taskRepeatCfg: TaskRepeatCfg): {
+  private _getTaskRepeatTemplate(
+    taskRepeatCfg: TaskRepeatCfg,
+    dueDay: string,
+  ): {
     task: Task;
     isAddToBottom: boolean;
   } {
+    const taskId = getRepeatableTaskId(taskRepeatCfg.id, dueDay);
     return {
       task: this._taskService.createNewTaskWithDefaults({
         title: taskRepeatCfg.title,
+        id: taskId,
         additional: {
           repeatCfgId: taskRepeatCfg.id,
           timeEstimate: taskRepeatCfg.defaultEstimate || 0,
           projectId: taskRepeatCfg.projectId || undefined,
           notes: taskRepeatCfg.notes || '',
-          // always due for today
-          dueDay: getDbDateStr(),
+          dueDay,
           tagIds: taskRepeatCfg.tagIds.filter((tagId) => tagId !== TODAY_TAG.id),
         },
       }),

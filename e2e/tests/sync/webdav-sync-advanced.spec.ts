@@ -171,10 +171,13 @@ test.describe('WebDAV Sync Advanced Features', () => {
     const taskB = pageB.locator('task', { hasText: taskName }).first();
     await expect(taskB).toBeVisible();
 
+    // Scroll task into view - it may be outside viewport after sync
+    await taskB.scrollIntoViewIfNeeded();
+
     // Click the attachment button to open the side panel with attachments expanded
     const attachmentBtnB = taskB.locator('.attachment-btn');
     await expect(attachmentBtnB).toBeVisible();
-    await attachmentBtnB.click({ force: true });
+    await attachmentBtnB.click();
 
     await expect(pageB.locator('.attachment-link')).toContainText('Google');
 

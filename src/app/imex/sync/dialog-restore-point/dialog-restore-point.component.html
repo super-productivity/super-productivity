@@ -1,0 +1,76 @@
+<h1 mat-dialog-title>{{ T.F.SYNC.D_RESTORE.TITLE | translate }}</h1>
+
+<div mat-dialog-content>
+  @if (isLoading()) {
+    <div class="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>{{ T.F.SYNC.D_RESTORE.LOADING | translate }}</p>
+    </div>
+  } @else if (error()) {
+    <div class="error">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (restorePoints().length === 0) {
+    <div class="empty">
+      <mat-icon>history</mat-icon>
+      <p>{{ T.F.SYNC.D_RESTORE.NO_POINTS | translate }}</p>
+    </div>
+  } @else {
+    <p class="intro">{{ T.F.SYNC.D_RESTORE.INTRO | translate }}</p>
+    <p class="warning">
+      <mat-icon>warning</mat-icon>
+      {{ T.F.SYNC.D_RESTORE.WARNING | translate }}
+    </p>
+
+    <div class="restore-points">
+      @for (point of restorePoints(); track point.serverSeq) {
+        <div
+          class="restore-point"
+          [class.selected]="selectedPoint()?.serverSeq === point.serverSeq"
+          (click)="selectPoint(point)"
+        >
+          <mat-icon class="type-icon">{{ getTypeIcon(point.type) }}</mat-icon>
+          <div class="point-info">
+            <div class="point-date">{{ point.timestamp | date: 'medium' }}</div>
+            <div class="point-type">{{ getTypeLabel(point.type) | translate }}</div>
+            @if (point.description) {
+              <div class="point-desc">{{ point.description }}</div>
+            }
+          </div>
+          @if (selectedPoint()?.serverSeq === point.serverSeq) {
+            <mat-icon class="selected-icon">check_circle</mat-icon>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<div
+  mat-dialog-actions
+  align="end"
+>
+  <button
+    mat-button
+    [disabled]="isRestoring()"
+    (click)="cancel()"
+  >
+    {{ 'G.CANCEL' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="warn"
+    [disabled]="!selectedPoint() || isRestoring()"
+    (click)="restore()"
+  >
+    @if (isRestoring()) {
+      <mat-spinner
+        diameter="20"
+        color="accent"
+      ></mat-spinner>
+    } @else {
+      {{ T.F.SYNC.D_RESTORE.BTN_RESTORE | translate }}
+    }
+  </button>
+</div>

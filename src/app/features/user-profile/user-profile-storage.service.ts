@@ -6,7 +6,7 @@ import {
   UserProfile,
 } from './user-profile.model';
 import { Log } from '../../core/log';
-import { CompleteBackup } from '../../pfapi/api';
+import { CompleteBackup } from '../../op-log/sync-exports';
 
 /**
  * Service for managing profile storage

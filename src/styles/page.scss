@@ -25,6 +25,29 @@ html {
   a {
     -webkit-app-region: no-drag !important;
   }
+
+  // scrollbars - apply to html only, properties inherit to scrollable children
+  /* Modern browsers with `scrollbar-*` support */
+  @supports (scrollbar-width: auto) {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    scrollbar-width: thin;
+  }
+
+  /* Legacy browsers with `::-webkit-scrollbar-*` support */
+  @supports selector(::-webkit-scrollbar) {
+    ::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+
+    ::-webkit-scrollbar {
+      max-width: 4px;
+      max-height: 4px;
+    }
+  }
 }
 
 body {
@@ -163,41 +186,4 @@ img {
   max-width: 100%;
   height: auto;
   display: block;
-}
-
-// scrollbars
-* {
-  --scrollbar-width: thin;
-  --scrollbar-width-legacy: 4px;
-  --scrollbar-color-thumb: var(--scrollbar-thumb);
-  --scrollbar-color-track: var(--scrollbar-track);
-
-  .isDarkTheme & {
-    --scrollbar-color-thumb: var(--scrollbar-thumb);
-    --scrollbar-color-track: var(--scrollbar-track);
-  }
-
-  /* Modern browsers with `scrollbar-*` support */
-  @supports (scrollbar-width: auto) {
-    & {
-      scrollbar-color: var(--scrollbar-color-thumb) var(--scrollbar-color-track);
-      scrollbar-width: var(--scrollbar-width);
-    }
-  }
-
-  /* Legacy browsers with `::-webkit-scrollbar-*` support */
-  @supports selector(::-webkit-scrollbar) {
-    &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-color-thumb);
-    }
-
-    &::-webkit-scrollbar-track {
-      background: var(--scrollbar-color-track);
-    }
-
-    &::-webkit-scrollbar {
-      max-width: var(--scrollbar-width-legacy);
-      max-height: var(--scrollbar-width-legacy);
-    }
-  }
 }

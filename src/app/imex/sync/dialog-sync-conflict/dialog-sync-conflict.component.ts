@@ -9,7 +9,7 @@ import {
 } from '@angular/material/dialog';
 import { T } from 'src/app/t.const';
 import { DialogConflictResolutionResult } from '../sync.model';
-import { ConflictData, VectorClock } from '../../../pfapi/api';
+import { ConflictData, VectorClock } from '../../../op-log/sync-exports';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -20,7 +20,7 @@ import {
   compareVectorClocks,
   VectorClockComparison,
   vectorClockToString,
-} from '../../../pfapi/api/util/vector-clock';
+} from '../../../core/util/vector-clock';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 

@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { switchMap, tap } from 'rxjs/operators';
 import { timer } from 'rxjs';
-import { ReminderService } from '../../reminder/reminder.service';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
@@ -11,6 +10,8 @@ import { generateNotificationId } from '../android-notification-id.util';
 import { androidInterface } from '../android-interface';
 import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
+import { Store } from '@ngrx/store';
+import { selectAllTasksWithReminder } from '../../tasks/store/task.selectors';
 
 // TODO send message to electron when current task changes here
 
@@ -19,10 +20,10 @@ const DELAY_SCHEDULE = 5000;
 
 @Injectable()
 export class AndroidEffects {
-  private _reminderService = inject(ReminderService);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
   private _taskAttachmentService = inject(TaskAttachmentService);
+  private _store = inject(Store);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
   private _hasCheckedExactAlarm = false;
@@ -56,18 +57,25 @@ export class AndroidEffects {
       },
     );
 
-  // Use native reminder scheduling with BroadcastReceiver for actions
-  // This allows snooze/done to work without opening the app
+  /**
+   * Schedule native Android reminders for tasks with remindAt set.
+   *
+   * SYNC-SAFE: This effect is intentionally safe during sync/hydration because:
+   * - dispatch: false - no store mutations, only native Android API calls
+   * - We WANT notifications scheduled for synced tasks (user-facing functionality)
+   * - Native AlarmManager calls are idempotent - rescheduling the same reminder is harmless
+   * - Cancellation of removed reminders correctly handles tasks deleted via sync
+   */
   scheduleNotifications$ =
     IS_ANDROID_WEB_VIEW &&
     createEffect(
       () =>
         timer(DELAY_SCHEDULE).pipe(
-          switchMap(() => this._reminderService.reminders$),
-          tap(async (reminders) => {
+          switchMap(() => this._store.select(selectAllTasksWithReminder)),
+          tap(async (tasksWithReminders) => {
             try {
               const currentReminderIds = new Set(
-                (reminders || []).map((r) => r.relatedId),
+                (tasksWithReminders || []).map((t) => t.id),
               );
 
               // Cancel reminders that are no longer in the list
@@ -82,12 +90,12 @@ export class AndroidEffects {
                 }
               }
 
-              if (!reminders || reminders.length === 0) {
+              if (!tasksWithReminders || tasksWithReminders.length === 0) {
                 this._scheduledReminderIds.clear();
                 return;
               }
               DroidLog.log('AndroidEffects: scheduling reminders natively', {
-                reminderCount: reminders.length,
+                reminderCount: tasksWithReminders.length,
               });
 
               // Check permissions first
@@ -104,18 +112,17 @@ export class AndroidEffects {
               await this._ensureExactAlarmAccess();
 
               // Schedule each reminder using native Android AlarmManager
-              for (const reminder of reminders) {
-                const id = generateNotificationId(reminder.relatedId);
+              for (const task of tasksWithReminders) {
+                const id = generateNotificationId(task.id);
                 const now = Date.now();
-                const scheduleAt =
-                  reminder.remindAt <= now ? now + 1000 : reminder.remindAt;
+                const scheduleAt = task.remindAt! <= now ? now + 1000 : task.remindAt!;
 
                 androidInterface.scheduleNativeReminder?.(
                   id,
-                  reminder.id,
-                  reminder.relatedId,
-                  reminder.title,
-                  reminder.type,
+                  task.id,
+                  task.id,
+                  task.title,
+                  'TASK',
                   scheduleAt,
                 );
               }
@@ -124,7 +131,7 @@ export class AndroidEffects {
               this._scheduledReminderIds = currentReminderIds;
 
               DroidLog.log('AndroidEffects: scheduled native reminders', {
-                reminderCount: reminders.length,
+                reminderCount: tasksWithReminders.length,
               });
             } catch (error) {
               DroidLog.err(error);
@@ -202,29 +209,6 @@ export class AndroidEffects {
         ),
       { dispatch: false },
     );
-
-  // markTaskAsDone$ = createEffect(() =>
-  //   androidInterface.onMarkCurrentTaskAsDone$.pipe(
-  //     withLatestFrom(this._store$.select(selectCurrentTask)),
-  //     filter(([, currentTask]) => !!currentTask),
-  //     map(([, currentTask]) =>
-  //       updateTask({
-  //         task: { id: (currentTask as TaskCopy).id, changes: { isDone: true } },
-  //       }),
-  //     ),
-  //   ),
-  // );
-  //
-  // pauseTracking$ = createEffect(() =>
-  //   androidInterface.onPauseCurrentTask$.pipe(
-  //     withLatestFrom(this._store$.select(selectCurrentTask)),
-  //     filter(([, currentTask]) => !!currentTask),
-  //     map(([, currentTask]) => setCurrentTask({ id: null })),
-  //   ),
-  // );
-  // showAddTaskBar$ = createEffect(() =>
-  //   androidInterface.onAddNewTask$.pipe(map(() => showAddTaskBar())),
-  // );
 
   private async _ensureExactAlarmAccess(): Promise<void> {
     try {

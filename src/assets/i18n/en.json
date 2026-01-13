@@ -88,10 +88,10 @@
       "V": {
         "ADD_NEW_BOARD": "Add new board",
         "CONFIRM_DELETE": "Do you really want to delete this board?",
-        "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
         "CREATE_NEW_TAGS_MSG": "{{nr}} new tags needs to be created for this board to work",
+        "CREATE_NEW_TAG_BTN": "Create Tag",
+        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
         "EDIT_BOARD": "Edit board",
         "NO_PANELS_BTN": "Configure Board",
         "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
@@ -132,8 +132,8 @@
         "TXT_PAST_MULTIPLE": "<strong>{{title}}</strong> started at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other events are due)"
       },
       "EVENT_STRINGS": {
-        "EVENT_STR": "event",
-        "EVENTS_STR": "events"
+        "EVENTS_STR": "events",
+        "EVENT_STR": "event"
       },
       "S": {
         "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}"
@@ -143,12 +143,6 @@
       "S": {
         "UPDATE_SECTION": "Updated settings for <strong>{{sectionKey}}</strong>"
       }
-    },
-    "D_RATE": {
-      "A_HOW": "How and where to rate",
-      "BTN_DONT_BOTHER": "Don't bother me again",
-      "TITLE": "🙈 Please forgive us, but...",
-      "TXT": "You would help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
     },
     "DOMINA_MODE": {
       "FORM": {
@@ -167,6 +161,12 @@
         "SYNC_ERROR": "Dropbox: Error while syncing",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Unable to generate PKCE challenge."
       }
+    },
+    "D_RATE": {
+      "A_HOW": "How and where to rate",
+      "BTN_DONT_BOTHER": "Don't bother me again",
+      "TITLE": "🙈 Please forgive us, but...",
+      "TXT": "You would help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
@@ -199,6 +199,7 @@
       "FOCUS_TIME_TOOLTIP": "Focus time",
       "GET_READY": "Get ready for your focus session!",
       "GOGOGO": "Go, go, go!!!",
+      "GO_TO_PROCRASTINATION": "Get help, when procrastinating",
       "LONG_BREAK": "Long Break",
       "LONG_BREAK_TITLE": "Long Break - Cycle {{cycle}}",
       "ON": "on",
@@ -286,11 +287,11 @@
     "GITLAB": {
       "DIALOG_SUBMIT_WORKLOG": {
         "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
+        "TITLE": "Submit Time Spent on Issues to GitLab",
+        "TOTAL_MSG": "You will submit <em>{{totalTimeToSubmit}}</em> work time for today in total to <em>{{nrOfTasksToSubmit}}</em> different issues.",
         "T_ALREADY_TRACKED": "Already Tracked",
         "T_TITLE": "Title",
-        "T_TO_BE_SUBMITTED": "To be submitted",
-        "TITLE": "Submit Time Spent on Issues to GitLab",
-        "TOTAL_MSG": "You will submit <em>{{totalTimeToSubmit}}</em> work time for today in total to <em>{{nrOfTasksToSubmit}}</em> different issues."
+        "T_TO_BE_SUBMITTED": "To be submitted"
       },
       "FORM": {
         "FILTER": "Custom Filter",
@@ -298,7 +299,7 @@
         "FILTER_USER": "Filter username",
         "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
         "PROJECT": "user name/project",
-        "PROJECT_HINT": "e.g. johannesjo/super-productivity",
+        "PROJECT_HINT": "e.g. super-productivity/super-productivity",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -332,8 +333,8 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your browser. Please download the Desktop or Android version of Super Productivity!",
       "DEFAULT": {
-        "ISSUE_STR": "issue",
-        "ISSUES_STR": "issues"
+        "ISSUES_STR": "issues",
+        "ISSUE_STR": "issue"
       },
       "DEFAULT_PROJECT_DESCRIPTION": "Project assigned to tasks created from issues.",
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
@@ -389,8 +390,8 @@
       },
       "CFG_CMP": {
         "ALWAYS_ASK": "Always open dialog",
-        "DO_NOT": "Don't transition",
         "DONE": "Status for completing task",
+        "DO_NOT": "Don't transition",
         "ENABLE": "Enable Jira integration",
         "ENABLE_TRANSITIONS": "Enable Transition Handling",
         "IN_PROGRESS": "Status for starting task",
@@ -448,8 +449,9 @@
         "ALLOW_SELF_SIGNED": "Allow self signed certificate",
         "HOST": "Host (e.g.: http://my-host.de:1234)",
         "PASSWORD": "Token / Password",
+        "USER_NAME": "Email / Username",
         "USE_PAT": "Use Personal Access Token instead (LEGACY)",
-        "USER_NAME": "Email / Username"
+        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback Authentication (desktop app only)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Advanced Config",
@@ -495,8 +497,16 @@
         "NO_VALID_TRANSITION": "Jira: No valid transition configured",
         "TIMED_OUT": "Jira: Request timed out",
         "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
+        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them",
         "TRANSITION_SUCCESS": "Jira: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
+        "UNABLE_TO_REASSIGN": "Jira: Unable to reassign ticket to yourself, because you didn't specify a username. Please visit the settings."
+      },
+      "STEPPER": {
+        "CREDENTIALS": "Credentials",
+        "DONE": "You are now done.",
+        "LOGIN_SUCCESS": "Login successful!",
+        "TEST_CREDENTIALS": "Test Credentials",
+        "WELCOME_USER": "Welcome {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -583,6 +593,11 @@
         "PLACEHOLDER_3": "Where did focus slip - and how can you protect it?",
         "PLACEHOLDER_4": "Which task gave you energy? Which drained it?",
         "PLACEHOLDER_5": "One thing to repeat. One thing to change.",
+        "REMINDER_CREATED": "Reflection reminder scheduled for tomorrow",
+        "REMINDER_ERROR": "Could not schedule the reminder",
+        "REMINDER_NEEDS_TEXT": "Write a reflection before asking for a reminder",
+        "REMINDER_TASK_TITLE": "Revisit reflection note",
+        "REMIND_LABEL": "Remind me tomorrow about this",
         "TITLE": "Reflection Note"
       }
     },
@@ -609,14 +624,14 @@
         "VIEW_SPLIT": "View parsed and unparsed markdown in split view",
         "VIEW_TEXT_ONLY": "View as unparsed text"
       },
-      "NOTE_CMP": {
-        "DISABLE_PARSE": "Disable markdown parsing for preview",
-        "ENABLE_PARSE": "Enable markdown parse"
-      },
       "NOTES_CMP": {
         "ADD_BTN": "Add new Note",
         "DROP_TO_ADD": "Drop here to add new note",
         "NO_NOTES": "There are currently no notes"
+      },
+      "NOTE_CMP": {
+        "DISABLE_PARSE": "Disable markdown parsing for preview",
+        "ENABLE_PARSE": "Enable markdown parse"
       },
       "S": {
         "NOTE_ADDED": "Note saved"
@@ -625,8 +640,8 @@
     "OPEN_PROJECT": {
       "CFG_CMP": {
         "ALWAYS_ASK": "Always open dialog",
-        "DO_NOT": "Don't transition",
         "DONE": "Status for completing task",
+        "DO_NOT": "Don't transition",
         "ENABLE": "Enable Openproject integration",
         "ENABLE_TRANSITIONS": "Enable Transition Handling",
         "IN_PROGRESS": "Status for starting task",
@@ -681,16 +696,16 @@
         "UPLOAD_ATTACHMENT": "Upload to Task"
       },
       "ISSUE_STRINGS": {
-        "ISSUE_STR": "work package",
-        "ISSUES_STR": "work packages"
+        "ISSUES_STR": "work packages",
+        "ISSUE_STR": "work package"
       },
       "S": {
         "ERR_NO_FILE": "No file selected",
         "ERR_UNKNOWN": "OpenProject: Unknown error {{statusCode}} {{errorMsg}}. Is CORS properly configured for the server?",
         "POST_TIME_SUCCESS": "OpenProject: Successfully created time entry for {{issueTitle}}",
         "TRANSITION": "OpenProject: Set issue \"{{issueKey}}\" to \"{{name}}\"",
-        "TRANSITION_SUCCESS": "OpenProject: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Transitions loaded. Use the selects below to assign them"
+        "TRANSITIONS_LOADED": "Transitions loaded. Use the selects below to assign them",
+        "TRANSITION_SUCCESS": "OpenProject: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>"
       }
     },
     "PLANNER": {
@@ -711,7 +726,7 @@
       }
     },
     "POMODORO": {
-      "BREAK_IS_DONE": "Focus break is over!"
+      "BREAK_IS_DONE": "Break is over!"
     },
     "PROJECT": {
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
@@ -823,6 +838,10 @@
       },
       "END": "Work End",
       "INSERT_BEFORE": "Before",
+      "LUNCH_BREAK": "Lunch Break",
+      "MONTH": "Month",
+      "NOW": "Now",
+      "NO_TASKS": "Currently there are no tasks. Please add some tasks via the + Button in the top bar.",
       "PLAN_END_DAY": "End of {{date}}",
       "PLAN_START_DAY": "Start of {{date}}",
       "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
@@ -870,6 +889,7 @@
         "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
       },
       "BTN_SYNC_NOW": "Sync Now",
+      "BTN_RESTORE_FROM_HISTORY": "Restore from History",
       "C": {
         "FORCE_UPLOAD": "Forcing an upload of your data could lead to data loss. Continue?"
       },
@@ -914,6 +934,24 @@
         "P2": "Or you can also change your password, which will overwrite all remote data.",
         "PASSWORD": "Password"
       },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and apply this data?",
+        "OK": "Download Remote Data",
+        "TITLE": "Initial Sync"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "TITLE": "Sync Conflict Detected",
+        "MESSAGE": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices.",
+        "EXPLANATION": "These changes were made without knowledge of your import and cannot be automatically merged.",
+        "IMPORT_DATE": "Import date",
+        "FILTERED_CHANGES": "Filtered changes",
+        "USE_LOCAL": "Use My Data",
+        "USE_REMOTE": "Use Server Data"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "You have {{count}} unsynced local changes that will be replaced by remote data. Do you want to continue?",
+        "TITLE": "Replace Local Data?"
+      },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Close App",
         "BTN_DOWNLOAD_BACKUP": "Download Local Backup",
@@ -931,17 +969,66 @@
         "SAVE_AND_ENABLE": "Save & Enable Sync",
         "TITLE": "Configure Sync"
       },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Disable sync",
+        "PERM_FILE": "Give permission",
+        "TEXT": "<p>Your file permission for local syncing has been revoked.</p>",
+        "TITLE": "Sync: Local file permission denied"
+      },
+      "D_RESTORE": {
+        "TITLE": "Restore from History",
+        "LOADING": "Loading restore points...",
+        "NO_POINTS": "No restore points available. Restore points are created when you sync or import data.",
+        "INTRO": "Select a point in time to restore your data to:",
+        "WARNING": "This will replace all your current data with the selected backup. This action cannot be undone.",
+        "BTN_RESTORE": "Restore",
+        "TYPE_SYNC_IMPORT": "Full sync import",
+        "TYPE_BACKUP_IMPORT": "Backup restore",
+        "TYPE_REPAIR": "Auto-repair",
+        "CONFIRM_TITLE": "Confirm Restore",
+        "CONFIRM_MSG": "Are you absolutely sure you want to restore to <strong>{{timestamp}}</strong>?<br><br>This will <strong>completely replace</strong> all your current data and <strong>cannot be undone</strong>.",
+        "ERROR_LOADING": "Failed to load restore points",
+        "ERROR_RESTORE": "Failed to restore data"
+      },
       "FORM": {
+        "DROPBOX": {
+          "L_ACCESS_TOKEN": "Access Token (generated from Auth Code)"
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "Sync File Name"
+        },
+        "LOCAL_FILE": {
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
+          "L_SYNC_FOLDER_PATH": "Sync folder path"
+        },
+        "SUPER_SYNC": {
+          "INFO_TEXT": "SuperSync keeps your tasks synchronized across all your devices in real-time. Your data is stored securely on the sync server. Note: SuperSync is currently in Beta.",
+          "L_SERVER_URL": "Server URL",
+          "SERVER_URL_DESCRIPTION": "Leave as-is for the official server, or enter a custom server URL",
+          "LOGIN_INSTRUCTIONS": "Click the button below to open the server login page. After logging in, copy your access token and paste it here.",
+          "BTN_GET_TOKEN": "Open Server & Get Token",
+          "L_ACCESS_TOKEN": "Access Token",
+          "ACCESS_TOKEN_DESCRIPTION": "Paste the token you copied from the server login page",
+          "L_ENABLE_E2E_ENCRYPTION": "Enable end-to-end encryption",
+          "E2E_ENCRYPTION_DESCRIPTION": "Will be slower, but more secure",
+          "ENCRYPTION_WARNING": "WARNING: If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Change Encryption Password",
+          "CHANGE_PASSWORD_WARNING": "WARNING: This will permanently delete ALL sync history and backups on the server. Previous versions cannot be recovered. Your current data will be re-uploaded with the new password. All other devices will need the new password.",
+          "CHANGE_PASSWORD_SUCCESS": "Encryption password changed successfully",
+          "L_NEW_PASSWORD": "New Encryption Password",
+          "L_CONFIRM_PASSWORD": "Confirm Password",
+          "PASSWORDS_DONT_MATCH": "Passwords do not match",
+          "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters",
+          "BTN_CHANGE_PASSWORD": "Change Password"
+        },
         "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",
         "L_ENABLE_SYNCING": "Enable Syncing",
         "L_ENCRYPTION_NOTES": "IMPORTANT NOTES: You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please also note that <strong>you will NOT be able to access your data, if you forget this password. There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart of most attackers, but <strong>there is no guarantee.</strong>",
         "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET)",
         "L_SYNC_INTERVAL": "Sync Interval",
+        "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_PROVIDER": "Sync Provider",
-        "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "Sync folder path"
-        },
         "TITLE": "Sync",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in the browser:</strong> To make this work in the browser you need to whitelist Super Productivity for CORS requests for your webdav server. This can have negative security implications! For nextcloud please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
@@ -954,21 +1041,67 @@
           "L_USER_NAME": "Username",
           "S_FILL_ALL_FIELDS": "Please fill in all WebDAV fields first",
           "S_TEST_FAIL": "Connection test failed: {{error}} - Target URL: {{url}}",
-          "S_TEST_SUCCESS": "Connection test successful! Target URL: {{url}}"
+          "S_TEST_SUCCESS": "Connection test successful! Target URL: {{url}}",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "Reduced Sync Safety",
+          "CONDITIONAL_HEADER_WARNING_MSG": "Your WebDAV server does not support conditional headers (If-Unmodified-Since). This means Super Productivity cannot detect concurrent changes from other devices during upload.<br><br>Sync will still work, but there is a small risk of data conflicts if you make changes on multiple devices simultaneously."
         }
       },
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
+        "CLOCK_DRIFT_WARNING": "Your device clock appears to be off by {{minutes}} minutes. This may cause sync issues.",
+        "COMPACTION_FAILED": "Database cleanup failed. App may slow down.",
+        "CONFLICT_RESOLUTION_FAILED": "Sync conflict resolution failed. Please reload.",
+        "CONFLICT_DIALOG_TIMEOUT": "Sync conflict dialog timed out and was cancelled. Sync will retry on next trigger.",
+        "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
+        "DATA_REPAIRED": "Data automatically repaired ({{count}} issues fixed)",
         "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis might be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
         "ERROR_PERMISSION": "File access denied. Please check your filesystem permissions.",
         "ERROR_PERMISSION_FLATPAK": "File access denied. Grant filesystem permission via Flatseal or use a path inside ~/.var/app/",
         "ERROR_PERMISSION_SNAP": "File access denied. Run 'snap connect super-productivity:home' or use a path inside ~/snap/super-productivity/common/",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
+        "HYDRATION_FAILED": "Failed to load data. Please reload the app.",
+        "INTEGRITY_CHECK_FAILED": "Data integrity issue detected. Auto-repair attempted. If you experience issues, please reload the app.",
+        "IMPORTING": "Importing data",
         "INCOMPLETE_CFG": "Authentication for sync failed. Please check your Config!",
+        "INCOMPLETE_OP_SYNC": "Sync incomplete: {{count}} operation file(s) failed to download",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
+        "INITIAL_SYNC_ERROR": "Initial Sync failed",
+        "INVALID_OPERATION_PAYLOAD": "Invalid operation detected. Changes may not be saved - please reload.",
+        "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
+        "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
+        "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",
+        "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
+        "STORAGE_QUOTA_EXCEEDED": "Sync server storage is full. Your changes are NOT syncing. Please archive old tasks or upgrade your plan.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
+        "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have a lot of archived tasks. Your data was NOT synced.\n\nPlease contact support for assistance.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}",
+        "UPLOAD_ERROR": "Unknown Upload Error (Settings correct?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}} operation(s) were permanently rejected by the server and won't be synced.",
+        "VERSION_TOO_OLD": "Your app version is too old for the synced data. Please update!",
+        "VERSION_UNSUPPORTED": "Cannot sync: data requires a newer app version. Please update.",
+        "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Initial sync cancelled. Remote data was not applied.",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
+        "RESTORE_SUCCESS": "Data restored successfully",
+        "RESTORE_ERROR": "Failed to restore data",
+        "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
+        "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
+        "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
+        "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup."
+      },
+      "D_DATA_REPAIRED": {
+        "TITLE": "Data Repair Executed",
+        "MSG": "Your data required automatic repair ({{count}} issues fixed). This should not normally happen. If this occurs repeatedly, please report it.",
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
       },
       "SAFETY_BACKUP": {
@@ -1019,6 +1152,7 @@
         "TITLE": "Basic Settings"
       },
       "S": {
+        "ARCHIVE_CLEANUP_FAILED": "Failed to clean up archived data for deleted tag",
         "UPDATED": "Tag Settings were updated"
       },
       "TTL": {
@@ -1044,6 +1178,22 @@
       "TOOLTIP_CREATE": "Create tag folder"
     },
     "TASK": {
+      "ADDITIONAL_INFO": {
+        "ADD_ATTACHMENT": "Add attachment",
+        "ADD_SUB_TASK": "Add Sub Task",
+        "ATTACHMENTS": "Attachments ({{nr}})",
+        "DUE": "Planned at",
+        "FROM_PARENT": "(from Parent)",
+        "LOCAL_ATTACHMENTS": "Local Attachments",
+        "NOTES": "Description",
+        "PARENT": "Parent",
+        "REMINDER": "Reminder",
+        "REPEAT": "Repeat",
+        "SCHEDULE_TASK": "Schedule Task",
+        "SUB_TASKS": "Sub Tasks ({{nr}})",
+        "TIME": "Time",
+        "TITLE_PLACEHOLDER": "Enter a title"
+      },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
@@ -1054,6 +1204,8 @@
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Toggle adding task to backlog / today's list",
         "TOMORROW": "Tomorrow",
         "TOOLTIP_ADD_TASK": "Add task",
         "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
@@ -1065,20 +1217,6 @@
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
         "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
-      },
-      "ADDITIONAL_INFO": {
-        "ADD_ATTACHMENT": "Add attachment",
-        "ADD_SUB_TASK": "Add Sub Task",
-        "ATTACHMENTS": "Attachments ({{nr}})",
-        "DUE": "Planned at",
-        "LOCAL_ATTACHMENTS": "Local Attachments",
-        "NOTES": "Description",
-        "PARENT": "Parent",
-        "REPEAT": "Repeat",
-        "SCHEDULE_TASK": "Schedule Task",
-        "SUB_TASKS": "Sub Tasks ({{nr}})",
-        "TIME": "Time",
-        "TITLE_PLACEHOLDER": "Enter a title"
       },
       "B": {
         "ADD_HALF_HOUR": "Add 1/2 hour",
@@ -1151,11 +1289,11 @@
         "QA_TODAY": "Schedule Today",
         "QA_TOMORROW": "Schedule Tomorrow",
         "REMIND_AT": "Remind at",
-        "RO_1H": "1 hour before it starts",
-        "RO_5M": "5 minutes before it starts",
         "RO_10M": "10 minutes before it starts",
         "RO_15M": "15 minutes before it starts",
+        "RO_1H": "1 hour before it starts",
         "RO_30M": "30 minutes before it starts",
+        "RO_5M": "5 minutes before it starts",
         "RO_NEVER": "Never",
         "RO_START": "when it starts",
         "SCHEDULE": "Schedule",
@@ -1275,13 +1413,13 @@
         "NOTES": "Default notes",
         "ORDER": "Order",
         "ORDER_DESCRIPTION": "Creation order of repeatable tasks. Only affects repeatable tasks created at the same time. A lower value means a task will be created higher up the list, a higher number that it will be further down. A value greater than 0 means items are created at the bottom of normal tasks.",
+        "QUICK_SETTING": "Repeat Config",
         "Q_CUSTOM": "Custom repeat config",
         "Q_DAILY": "Every day",
         "Q_MONDAY_TO_FRIDAY": "Every monday to friday",
         "Q_MONTHLY_CURRENT_DATE": "Every month on the {{dateDayStr}}th",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Every week on {{weekdayStr}}",
         "Q_YEARLY_CURRENT_DATE": "Every year on the {{dayAndMonthStr}}",
-        "QUICK_SETTING": "Repeat Config",
         "REMIND_AT": "Remind at",
         "REMIND_AT_PLACEHOLDER": "Select when to remind",
         "REMOVE_FOR_DATE": "Remove for {{date}}",
@@ -1331,9 +1469,9 @@
         "SORT_PERMANENT": "Sort (permanent)",
         "SORT_SCHEDULED_DATE": "Scheduled Date",
         "SORT_TEMPORARY": "Sort (temporary)",
+        "TIME_10MIN": "> 10 Minutes",
         "TIME_1HOUR": "> 1 Hour",
         "TIME_2HOUR": "> 2 Hours",
-        "TIME_10MIN": "> 10 Minutes",
         "TIME_30MIN": "> 30 Minutes",
         "TIME_SPENT": "Time Spent"
       }
@@ -1372,6 +1510,20 @@
         "TASK": "Task",
         "TRACK_TO": "Track to:",
         "UNTRACKED_TIME": "Untracked time:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "TITLE": "Compress Archive",
+        "LOADING": "Analyzing archive...",
+        "INTRO": "This will compress your archived tasks by removing old data. This operation is synced across all devices.",
+        "SUBTASKS_TO_DELETE": "Subtasks to delete (time merged to parent)",
+        "NOTES_TO_CLEAR": "Task notes to clear (older than 1 year)",
+        "ISSUE_FIELDS_TO_CLEAR": "Issue fields to clear",
+        "ESTIMATED_SAVINGS": "Estimated space savings",
+        "WARNING": "This operation cannot be undone. Make sure you have a backup before proceeding.",
+        "CONFIRM_TITLE": "Confirm Archive Compression",
+        "CONFIRM_MSG": "Are you sure you want to compress the archive? This will permanently delete the data listed above.",
+        "BTN_COMPRESS": "Compress Archive",
+        "NO_DATA": "No data to compress. Your archive is already optimized."
       }
     },
     "WORKLOG": {
@@ -1453,17 +1605,29 @@
     "S_ERR_INVALID_URL": "Import failed: Invalid URL provided",
     "S_ERR_NETWORK": "Import failed: Network error while fetching data from URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Error: Could not decode the URL parameter for import. Please ensure it is correctly formatted.",
-    "URL_PLACEHOLDER": "Enter URL to import from"
+    "URL_PLACEHOLDER": "Enter URL to import from",
+    "BTN_COMPRESS_ARCHIVE": "Compress Archive"
+  },
+  "MIGRATE": {
+    "DIALOG_TITLE": "Migrating Your Data",
+    "DIALOG_MESSAGE": "We're updating how your data is stored for improved sync reliability. A backup will be downloaded automatically.",
+    "STATUS_PREPARING": "Preparing migration...",
+    "STATUS_BACKUP": "Creating backup of your data...",
+    "STATUS_MIGRATING": "Migrating data...",
+    "STATUS_COMPLETE": "Migration complete!"
   },
   "G": {
     "ADD": "Add",
     "ADVANCED_CFG": "Advanced Config",
+    "APPLY": "Apply",
     "CANCEL": "Cancel",
     "CLOSE": "Close",
     "COMPLETE": "Complete",
     "CONFIRM": "Confirm",
+    "CONTINUE": "Continue",
     "DELETE": "Delete",
     "DISMISS": "Dismiss",
+    "DONT_SHOW_AGAIN": "Don't show again",
     "DO_IT": "Do it!",
     "DUPLICATE": "Duplicate",
     "DURATION_DESCRIPTION": "e.g. \"5h 23m\" which results in 5 hours and 23 minutes",
@@ -1477,6 +1641,7 @@
     "MINUTES": "{{m}} minutes",
     "MOVE_BACKWARD": "Move Backward",
     "MOVE_FORWARD": "Move Forward",
+    "NEXT": "Next",
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
@@ -1696,13 +1861,14 @@
     },
     "SCHEDULE": {
       "HELP": "The schedule feature should provide you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
+      "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",
-      "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
+      "MONTH": "Month",
       "TITLE": "Schedule",
       "WORK_START_END_DESCRIPTION": "e.g. 17:00"
     },
@@ -1756,11 +1922,11 @@
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
+      "AN_HOUR": "in an hour",
       "A_DAY": "in a day",
       "A_MINUTE": "in a minute",
       "A_MONTH": "in a month",
       "A_YEAR": "in a year",
-      "AN_HOUR": "in an hour",
       "DAYS": "in {{count}} days",
       "FEW_SECONDS": "in a few seconds",
       "HOURS": "in {{count}} hours",
@@ -1769,11 +1935,11 @@
       "YEARS": "in {{count}} years"
     },
     "PAST": {
+      "AN_HOUR": "an hour ago",
       "A_DAY": "a day ago",
       "A_MINUTE": "a minute ago",
       "A_MONTH": "a month ago",
       "A_YEAR": "a year ago",
-      "AN_HOUR": "an hour ago",
       "DAYS": "{{count}} days ago",
       "FEW_SECONDS": "a few seconds ago",
       "HOURS": "{{count}} hours ago",
@@ -1794,6 +1960,7 @@
     "PERSISTENCE_DISALLOWED": "Data will be not persisted permanently. Be aware that this can lead to data loss!!",
     "PERSISTENCE_ERROR": "Error when requesting to persist data: {{err}}",
     "RUNNING_X": "Running \"{{str}}\".",
+    "SAVE_BLOCKED_DURING_SYNC": "Sync in progress - some changes may need to be re-saved",
     "SHARE_FAILED": "Sharing failed. Please copy manually.",
     "SHARE_FAILED_FALLBACK": "Sharing failed. Copied to clipboard instead.",
     "SHARE_UNAVAILABLE_FALLBACK": "Copied to clipboard.",
@@ -1838,8 +2005,14 @@
     },
     "METRICS": "Metrics",
     "NO_TASKS_TO_TRACK": "Add a task first to start tracking time",
+    "NOTES": "Notes",
+    "NOTES_PANEL_INFO": "Notes can only be shown from the schedule and the regular task list views.",
+    "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the \"Create Project\" button.",
+    "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",
     "PLANNER": "Planner",
+    "PROCRASTINATE": "Procrastinate",
     "PROJECT_MENU": "Project Menu",
+    "PROJECT_SETTINGS": "Project Settings",
     "PROJECTS": "Projects",
     "QUICK_HISTORY": "Quick History",
     "SCHEDULE": "Schedule",
@@ -1848,6 +2021,9 @@
     "SHARE_TASK_LIST_MARKDOWN": "Share Task List",
     "SIDE_PANEL_MENU": "Side Panel Menu",
     "TAGS": "Tags",
+    "TASKS": "Tasks",
+    "TASK_LIST": "Task List",
+    "TOGGLE_SHOW_BOOKMARKS": "Show/Hide Bookmarks",
     "TOGGLE_SHOW_ISSUE_PANEL": "Show/Hide Issue Panel",
     "TOGGLE_SHOW_NOTES": "Show/Hide Project Notes",
     "TOGGLE_TRACK_TIME": "Start/Stop tracking time",
@@ -1861,6 +2037,10 @@
     "E_MIGRATION_FAILED": "Migration failed! with Error:",
     "E_RESTART_FAILED": "Automatic restart failed. Please restart the app manually!",
     "SUCCESS": "Migration all done! Restarting app now..."
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_TITLE": "System Update",
+    "DIALOG_MESSAGE": "We're updating how your data is stored for improved sync reliability.<br><br>A backup of your data will be downloaded automatically. You can use this backup to restore your data if needed (File > Import)."
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
@@ -1884,15 +2064,15 @@
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
     "REVIEW_TASKS": "Review",
-    "ROUND_5M": "Round all tasks to 5 minutes",
     "ROUND_15M": "Round all tasks to 15 minutes",
     "ROUND_30M": "Round all tasks to 30 minutes",
+    "ROUND_5M": "Round all tasks to 5 minutes",
     "ROUND_TIME_SPENT": "Round Time Spent",
     "ROUND_TIME_SPENT_TITLE": "Round time spent on all tasks. Be careful! You cannot undo this!",
     "ROUND_TIME_WARNING": "!!! Be careful this cannot be undone !!!",
-    "ROUND_UP_5M": "Round UP all tasks to 5 minutes",
     "ROUND_UP_15M": "Round UP all tasks to 15 minutes",
     "ROUND_UP_30M": "Round UP all tasks to 30 minutes",
+    "ROUND_UP_5M": "Round UP all tasks to 5 minutes",
     "SAVE_AND_GO_HOME": "Finish the day",
     "SAVE_AND_GO_HOME_TOOLTIP": "Move all done tasks to the archive (worklog) and optionally sync all data and close the app.",
     "START_END": "Start – End",
@@ -1936,9 +2116,10 @@
     "GRANT_PERMISSION": "Grant Permission",
     "HOOKS": "Hooks",
     "ID": "ID:",
+    "INDEX_HTML_NOT_LOADED": "Plugin index.html not loaded",
+    "INSTALLING": "Installing...",
     "INSTALL_PLUGIN": "Install Plugin",
     "INSTALL_WARNING": "Before installing a plugin, ensure you trust its source and understand the permissions it requests.",
-    "INSTALLING": "Installing...",
     "LOADING_INTERFACE": "Loading plugin interface...",
     "LOADING_PLUGIN": "Loading...",
     "MANIFEST_NOT_FOUND": "Plugin manifest (manifest.json) not found in ZIP file",
@@ -1947,11 +2128,11 @@
     "MENU_ENTRY_LABEL_REQUIRED": "Menu entry label is required",
     "MENU_ENTRY_ONCLICK_REQUIRED": "Menu entry onClick handler is required",
     "MIN_VERSION": "Min. Version:",
+    "NODE_EXECUTION_REQUIRED": "This plugin requires Node.js execution which is only available in the desktop app.",
+    "NODE_ONLY_DESKTOP": "Node.js execution is only available in the desktop app",
     "NO_ADDITIONAL_INFO": "No additional information available",
     "NO_CONTENT_PROVIDED": "No content provided",
     "NO_PLUGIN_MANIFEST_NODE": "Plugin manifest does not include Node.js module",
-    "NODE_EXECUTION_REQUIRED": "This plugin requires Node.js execution which is only available in the desktop app.",
-    "NODE_ONLY_DESKTOP": "Node.js execution is only available in the desktop app",
     "OK": "OK",
     "PARENT_TASK_DOES_NOT_EXIST": "Parent task does not exist",
     "PARENT_TASK_NOT_FOUND": "Parent task not found in context '{{contextId}}'",
@@ -1974,9 +2155,9 @@
     "SYSTEM_ACCESS_REQUEST_DESC": "This plugin is requesting permission to execute Node.js code on your system. This will allow it to:",
     "SYSTEM_ACCESS_REQUEST_TITLE": "System Access Request",
     "TAGS_DO_NOT_EXIST": "One or more tags do not exist",
-    "TASK_NOT_FOUND": "Task with ID '{{taskId}}' not found",
     "TASKS_NOT_IN_PROJECT": "One or more tasks are not in project '{{contextId}}'",
     "TASKS_NOT_SUBTASKS": "One or more tasks are not subtasks of '{{contextId}}'",
+    "TASK_NOT_FOUND": "Task with ID '{{taskId}}' not found",
     "TOGGLE_PLUGIN": "Toggle {{pluginName}}",
     "TRUST_WARNING": "Only grant permission if you trust this plugin",
     "TYPE": "Type: {{type}}",
@@ -1996,8 +2177,11 @@
     "PRODUCTIVITY_HELPER": "Productivity Helper",
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "Provide Feedback",
+    "RELOAD": "Reload",
     "SYNC_EXPORT": "Sync & Export",
-    "TAG_SETTINGS": "Tag Specific Settings"
+    "TAG_SETTINGS": "Tag Specific Settings",
+    "TOGGLE_DARK_MODE": "Toggle Dark Mode",
+    "UPDATE_APP": "Update App"
   },
   "SCHEDULE": {
     "LAST": "Last:",
@@ -2007,6 +2191,28 @@
     "NO_SCHEDULED_TITLE": "Scheduled Tasks for Day",
     "REPEATED_TASKS": "Repeated Tasks",
     "SCHEDULED_TASKS": "Scheduled tasks",
+    "SCHEDULED_TASKS_WITH_TIME": "Scheduled Tasks with Start Time",
+    "START_TASK": "Start task and remove reminder"
+  },
+  "Share Chart": "",
+  "Share Heatmap": "",
+  "THEMES": {
+    "SELECT_THEME": "Select Theme",
+    "amber": "amber",
+    "blue": "blue",
+    "blue-grey": "blue-grey",
+    "cyan": "cyan",
+    "deep-orange": "deep-orange",
+    "deep-purple": "deep-purple",
+    "green": "green",
+    "indigo": "indigo",
+    "light-blue": "light-blue",
+    "light-green": "light-green",
+    "lime": "lime",
+    "pink": "pink",
+    "purple": "purple",
+    "teal": "teal",
+    "yellow": "yellow",
     "SCHEDULED_TASKS_WITH_TIME": "Scheduled Tasks with Start Time"
   },
   "USER_PROFILES": {
@@ -2014,8 +2220,8 @@
     "CANCEL": "Cancel",
     "CLOSE": "Close",
     "CREATE": "Create",
-    "CREATE_NEW_PROFILE": "Create New Profile",
     "CREATED": "Created:",
+    "CREATE_NEW_PROFILE": "Create New Profile",
     "DELETE_PROFILE": "Delete Profile",
     "DIALOG_TITLE": "Manage User Profiles",
     "EXISTING_PROFILES": "Existing Profiles",
@@ -2047,8 +2253,8 @@
     "LATER_TODAY": "Later Today",
     "MOVE_DONE_TO_ARCHIVE": "Move done to archive",
     "NO_DONE_TASKS": "There are currently no done tasks",
-    "NO_PLANNED_TASK_ALL_DONE": "all tasks done",
     "NO_PLANNED_TASKS": "no tasks planned",
+    "NO_PLANNED_TASK_ALL_DONE": "all tasks done",
     "READY_TO_WORK": "Ready to work!",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time Estimated:",

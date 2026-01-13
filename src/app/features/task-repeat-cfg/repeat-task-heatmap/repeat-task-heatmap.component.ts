@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../../archive/task-archive.service';
 import { from } from 'rxjs';
 import { filter, first, map, switchMap } from 'rxjs/operators';
 import { Task } from '../../tasks/task.model';

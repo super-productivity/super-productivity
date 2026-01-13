@@ -1,0 +1,114 @@
+# Production docker-compose for super-sync-server
+#
+# Usage:
+#   1. Copy env.example to .env and configure your settings
+#   2. Run: docker-compose up -d
+#   3. View logs: docker-compose logs -f
+#
+# For local builds (development):
+#   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+
+x-logging: &default-logging
+  driver: 'json-file'
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  supersync:
+    image: ${SUPERSYNC_IMAGE:-ghcr.io/johannesjo/supersync:latest}
+    container_name: supersync-server
+    restart: always
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=1900
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-supersync}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-supersync}
+      - JWT_SECRET=${JWT_SECRET}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:1900}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://app.super-productivity.com}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-Super Productivity Sync}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:1900}
+    ports:
+      - '1900:1900'
+    volumes:
+      - supersync-data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:1900/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - internal
+    logging: *default-logging
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: supersync-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-supersync}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-supersync}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-supersync} -d ${POSTGRES_DB:-supersync}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: supersync-caddy
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN}
+    networks:
+      - internal
+    depends_on:
+      - supersync
+    logging: *default-logging
+
+volumes:
+  supersync-data:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:
+    driver: bridge

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { Store } from '@ngrx/store';
-import { map, pairwise, startWith, tap, withLatestFrom } from 'rxjs/operators';
+import { filter, map, pairwise, startWith, tap, withLatestFrom } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import {
@@ -17,11 +17,13 @@ import { selectCurrentTask, selectCurrentTaskId } from '../../tasks/store/task.s
 import { combineLatest } from 'rxjs';
 import { FocusModeMode, TimerState } from '../../focus-mode/focus-mode.model';
 import { DroidLog } from '../../../core/log';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 import { SnackService } from '../../../core/snack/snack.service';
 
 @Injectable()
 export class AndroidFocusModeEffects {
   private _store = inject(Store);
+  private _hydrationState = inject(HydrationStateService);
   private _snackService = inject(SnackService);
 
   // Start/stop focus mode notification when timer state changes
@@ -37,6 +39,8 @@ export class AndroidFocusModeEffects {
           this._store.select(selectIsLongBreak),
           this._store.select(selectTimeRemaining),
         ]).pipe(
+          // PERF: Skip during hydration/sync to avoid unnecessary processing
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
           map(
             ([timer, mode, currentTask, isBreakActive, isLongBreak, timeRemaining]) => ({
               timer,

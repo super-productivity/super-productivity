@@ -150,15 +150,16 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   clickPreview($event: MouseEvent): void {
     if (($event.target as HTMLElement).tagName === 'A') {
-      // } else if (($event.target as HTMLElement).classList.contains('checkbox-wrapper')) {
-      //   this._handleCheckboxClick($event.target as HTMLElement);
-    } else if (
-      $event?.target &&
-      ($event.target as HTMLElement).classList.contains('checkbox')
-    ) {
-      this._handleCheckboxClick(
-        ($event.target as HTMLElement).parentElement as HTMLElement,
-      );
+      // Let links work normally
+      return;
+    }
+
+    // Check if click is anywhere inside a checkbox-wrapper (text or checkbox icon)
+    const wrapper = ($event.target as HTMLElement).closest(
+      '.checkbox-wrapper',
+    ) as HTMLElement;
+    if (wrapper) {
+      this._handleCheckboxClick(wrapper);
     } else {
       this._toggleShowEdit();
     }

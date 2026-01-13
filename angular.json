@@ -42,7 +42,17 @@
             "browser": "src/main.ts",
             "stylePreprocessorOptions": {
               "includePaths": [".", "src", "src/styles"]
-            }
+            },
+            "allowedCommonJsDependencies": [
+              "typia",
+              "electron-log",
+              "stacktrace-js",
+              "spark-md5",
+              "chrono-node",
+              "dayjs",
+              "jira2md",
+              "query-string"
+            ]
           },
           "configurations": {
             "development": {

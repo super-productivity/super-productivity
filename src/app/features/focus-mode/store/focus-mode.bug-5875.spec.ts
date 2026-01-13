@@ -207,9 +207,11 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
   describe('Bug 2: Manual End Session should stop time tracking', () => {
     it('should dispatch unsetCurrentTask when session is manually ended and sync is enabled', (done) => {
       // Setup: Session is running, sync is enabled, task is being tracked
+      // isPauseTrackingDuringBreak must be true for this effect to fire (Bug #5954 fix)
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
       });
       currentTaskId$.next('task-123'); // Task is being tracked
       store.refreshState();
@@ -224,9 +226,11 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
 
     it('should NOT dispatch unsetCurrentTask when session ends automatically (timer completion)', (done) => {
       // Setup: Session completes automatically (not manual)
+      // isPauseTrackingDuringBreak is true, but isManual is false, so effect should not fire
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isSkipPreparation: false,
+        isPauseTrackingDuringBreak: true,
       });
       currentTaskId$.next('task-123');
       store.refreshState();

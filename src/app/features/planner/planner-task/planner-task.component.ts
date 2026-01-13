@@ -83,7 +83,7 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
     return this.task.id === this._taskService.currentTaskId();
   }
 
-  @HostListener('click', ['$event'])
+  @HostListener('click')
   async clickHandler(): Promise<void> {
     if (this.task) {
       // Use bottom panel on mobile, dialog on desktop

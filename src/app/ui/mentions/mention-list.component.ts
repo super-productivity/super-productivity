@@ -42,8 +42,8 @@ import { Log } from '../../core/log';
     >
       @for (item of items; track item; let i = $index) {
         <li
-          [class.active]="activeIndex == i"
-          [class.mention-active]="!styleOff && activeIndex == i"
+          [class.active]="activeIndex === i"
+          [class.mention-active]="!styleOff && activeIndex === i"
         >
           <a
             class="dropdown-item"

@@ -1,4 +1,3 @@
-// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 import { Observable } from 'rxjs';
 import { filter } from 'rxjs/operators';
 

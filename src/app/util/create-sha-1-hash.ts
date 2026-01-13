@@ -1,4 +1,4 @@
-import { WebCryptoNotAvailableError } from '../pfapi/api';
+import { WebCryptoNotAvailableError } from '../sync/sync-exports';
 
 export const createSha1Hash = (str: string): Promise<string> => {
   console.time('createSha1Hash');

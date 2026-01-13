@@ -16,8 +16,7 @@ interface LogEntry {
   args: unknown[];
 }
 
-// Map old numeric levels to new enum for backwards compatibility
-const LOG_LEVEL = environment.production ? LogLevel.DEBUG : LogLevel.DEBUG;
+const LOG_LEVEL = environment.production ? LogLevel.VERBOSE : LogLevel.VERBOSE;
 
 const MAX_DATA_LENGTH = 400;
 
@@ -293,57 +292,59 @@ export class Log {
     const contextPrefix = `[${context}]`;
 
     // Return wrapper functions that always record logs
+    // Note: Using explicit Log.level instead of this.level to ensure correct
+    // static property access in test environments where this binding may vary
     return {
       critical: (...args: unknown[]) => {
-        this.recordLog('CRITICAL', context, args);
+        Log.recordLog('CRITICAL', context, args);
         console.log(contextPrefix, ...args);
       },
       err: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.ERROR) {
-          this.recordLog('ERROR', context, args);
+        if (Log.level >= LogLevel.ERROR) {
+          Log.recordLog('ERROR', context, args);
           console.error(contextPrefix, ...args);
         }
       },
       log: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.NORMAL) {
-          this.recordLog('LOG', context, args);
+        if (Log.level >= LogLevel.NORMAL) {
+          Log.recordLog('LOG', context, args);
           console.log(contextPrefix, ...args);
         }
       },
       info: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.NORMAL) {
-          this.recordLog('INFO', context, args);
+        if (Log.level >= LogLevel.NORMAL) {
+          Log.recordLog('INFO', context, args);
           console.info(contextPrefix, ...args);
         }
       },
       verbose: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.VERBOSE) {
-          this.recordLog('VERBOSE', context, args);
+        if (Log.level >= LogLevel.VERBOSE) {
+          Log.recordLog('VERBOSE', context, args);
           console.log(contextPrefix, ...args);
         }
       },
       debug: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.DEBUG) {
-          this.recordLog('DEBUG', context, args);
+        if (Log.level >= LogLevel.DEBUG) {
+          Log.recordLog('DEBUG', context, args);
           console.debug(contextPrefix, ...args);
         }
       },
       // Backwards compatibility aliases
       error: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.ERROR) {
-          this.recordLog('ERROR', context, args);
+        if (Log.level >= LogLevel.ERROR) {
+          Log.recordLog('ERROR', context, args);
           console.error(contextPrefix, ...args);
         }
       },
       normal: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.NORMAL) {
-          this.recordLog('LOG', context, args);
+        if (Log.level >= LogLevel.NORMAL) {
+          Log.recordLog('LOG', context, args);
           console.log(contextPrefix, ...args);
         }
       },
       warn: (...args: unknown[]) => {
-        if (LOG_LEVEL >= LogLevel.ERROR) {
-          this.recordLog('WARN', context, args);
+        if (Log.level >= LogLevel.ERROR) {
+          Log.recordLog('WARN', context, args);
           console.warn(contextPrefix, ...args);
         }
       },
@@ -355,6 +356,7 @@ export class Log {
 // All context loggers now record to history
 export const SyncLog = Log.withContext('sync');
 export const PFLog = Log.withContext('pf');
+export const OpLog = Log.withContext('ol');
 export const PluginLog = Log.withContext('plugin');
 export const IssueLog = Log.withContext('issue');
 export const DroidLog = Log.withContext('droid');

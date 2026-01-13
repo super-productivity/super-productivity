@@ -13,20 +13,28 @@
   ></div>
 </mat-dialog-content>
 
+@if (data.showDontShowAgain) {
+  <mat-checkbox [(ngModel)]="dontShowAgain">
+    {{ T.G.DONT_SHOW_AGAIN | translate }}
+  </mat-checkbox>
+}
+
 <mat-dialog-actions align="end">
   <div class="wrap-buttons">
-    <button
-      tabindex="1"
-      #cancelButton
-      (click)="close(false)"
-      class="btn btn-primary"
-      mat-button
-      type="button"
-      (keydown.ArrowRight)="focusNextButton(confirmButton)"
-    >
-      <mat-icon>close</mat-icon>
-      {{ data.cancelTxt || T.G.CANCEL | translate }}
-    </button>
+    @if (!data.hideCancelButton) {
+      <button
+        tabindex="1"
+        #cancelButton
+        (click)="close(false)"
+        class="btn btn-primary"
+        mat-button
+        type="button"
+        (keydown.ArrowRight)="focusNextButton(confirmButton)"
+      >
+        <mat-icon>close</mat-icon>
+        {{ data.cancelTxt || T.G.CANCEL | translate }}
+      </button>
+    }
 
     <button
       tabindex="2"
@@ -37,7 +45,7 @@
       color="primary"
       type="button"
       mat-stroked-button
-      (keydown.ArrowLeft)="focusNextButton(cancelButton)"
+      (keydown.ArrowLeft)="!data.hideCancelButton && focusCancelButton()"
     >
       <mat-icon>check</mat-icon>
       {{ data.okTxt || T.G.OK | translate }}

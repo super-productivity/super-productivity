@@ -678,8 +678,6 @@ export class ScheduleDayPanelComponent implements AfterViewInit, OnDestroy {
       style: '',
       startHours: 0,
       timeLeftInHours: timeInHours,
-      isCloseToOthersFirst: false,
-      isCloseToOthers: false,
       data: task,
     };
   }

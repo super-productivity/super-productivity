@@ -1,8 +1,6 @@
 import { createBlockedBlocksByDayMap } from './create-blocked-blocks-by-day-map';
 import { TaskCopy, TaskWithDueTime } from '../../tasks/task.model';
 
-/* eslint-disable @typescript-eslint/naming-convention */
-
 const NDS = '1970-01-01';
 const H = 60 * 60 * 1000;
 const TZ_OFFSET = new Date(NDS).getTimezoneOffset() * 60000;
@@ -16,7 +14,7 @@ const FAKE_TASK: Partial<TaskCopy> = {
 
 const h = (hr: number): number => hr * 60 * 1000 * 60;
 // const hTz = (hr: number): number => h(hr) + TZ_OFFSET;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars,no-mixed-operators
+// eslint-disable-next-line no-mixed-operators
 const dh = (d: number = 0, hr: number): number => hr * H + d * h(24);
 const dhTz = (d: number = 0, hr: number): number => dh(d, hr) + TZ_OFFSET;
 

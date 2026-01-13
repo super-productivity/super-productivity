@@ -17,7 +17,10 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 1,
   // Reduce worker count to avoid resource contention causing flakiness
   // Lower worker count improves stability by reducing parallel execution stress
-  workers: process.env.CI ? Math.min(3, os.cpus().length) : Math.min(4, os.cpus().length),
+  workers:
+    (process.env.CI
+      ? Math.min(3, os.cpus().length)
+      : Math.min(12, os.cpus().length - 1)) || 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI
     ? [

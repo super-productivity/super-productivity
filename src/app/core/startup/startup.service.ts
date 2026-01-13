@@ -1,7 +1,4 @@
 import { effect, inject, Injectable } from '@angular/core';
-import { PersistenceLocalService } from '../persistence/persistence-local.service';
-import { PersistenceLegacyService } from '../persistence/persistence-legacy.service';
-import { PfapiService } from '../../pfapi/pfapi.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { TranslateService } from '@ngx-translate/core';
 import { LocalBackupService } from '../../imex/local-backup/local-backup.service';
@@ -16,12 +13,9 @@ import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/c
 import { ProjectService } from '../../features/project/project.service';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
-import { SyncStatus } from '../../pfapi/api';
 import { Log } from '../log';
-import { download } from '../../util/download';
-import { AppDataCompleteNew } from '../../pfapi/pfapi-config';
 import { T } from '../../t.const';
-import { DEFAULT_META_MODEL } from '../../pfapi/api/model-ctrl/meta-model-ctrl';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { BannerId } from '../banner/banner.model';
 import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
@@ -33,7 +27,6 @@ import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const'
 import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
-import { SyncSafetyBackupService } from '../../imex/sync/sync-safety-backup.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -44,9 +37,6 @@ const DEFERRED_INIT_DELAY_MS = 1000;
   providedIn: 'root',
 })
 export class StartupService {
-  private _persistenceLocalService = inject(PersistenceLocalService);
-  private _persistenceLegacyService = inject(PersistenceLegacyService);
-  private _pfapiService = inject(PfapiService);
   private _imexMetaService = inject(ImexViewService);
   private _translateService = inject(TranslateService);
   private _localBackupService = inject(LocalBackupService);
@@ -60,11 +50,9 @@ export class StartupService {
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _projectService = inject(ProjectService);
   private _trackingReminderService = inject(TrackingReminderService);
+  private _opLogStore = inject(OperationLogStoreService);
 
   constructor() {
-    // needs to be injected somewhere to initialize
-    inject(SyncSafetyBackupService);
-
     // Initialize electron error handler in an effect
     if (IS_ELECTRON) {
       effect(() => {
@@ -88,8 +76,16 @@ export class StartupService {
     }
   }
 
-  init(): void {
-    this._checkMigrationAndInitBackups();
+  async init(): Promise<void> {
+    if (!IS_ANDROID_WEB_VIEW && !IS_ELECTRON) {
+      const isSingle = await this._checkIsSingleInstance();
+      if (!isSingle) {
+        this._showMultiInstanceBlocker();
+        return;
+      }
+    }
+
+    this._initBackups();
     this._requestPersistence();
 
     // deferred init
@@ -135,7 +131,10 @@ export class StartupService {
         if (!gCfg) {
           throw new Error();
         }
-        if (gCfg.misc.isConfirmBeforeExit) {
+        if (
+          gCfg.misc.isConfirmBeforeExit ||
+          this._syncWrapperService.isSyncInProgressSync()
+        ) {
           e.preventDefault();
           e.returnValue = '';
         }
@@ -143,132 +142,70 @@ export class StartupService {
 
       if (!IS_ANDROID_WEB_VIEW) {
         this._chromeExtensionInterfaceService.init();
-        this._initMultiInstanceWarning();
       }
     }
   }
 
-  private async _checkMigrationAndInitBackups(): Promise<void> {
-    const MIGRATED_VAL = 42;
-    const lastLocalSyncModelChange =
-      await this._persistenceLocalService.loadLastSyncModelChange();
-    // CHECK AND DO MIGRATION
-    // ---------------------
-    if (
-      typeof lastLocalSyncModelChange === 'number' &&
-      lastLocalSyncModelChange > MIGRATED_VAL
-    ) {
-      // disable sync until reload
-      this._pfapiService.pf.sync = () => Promise.resolve({ status: SyncStatus.InSync });
-      this._imexMetaService.setDataImportInProgress(true);
-
-      const legacyData = await this._persistenceLegacyService.loadComplete();
-      Log.log({ legacyData: legacyData });
-
-      alert(this._translateService.instant(T.MIGRATE.DETECTED_LEGACY));
-
-      if (
-        !IS_ANDROID_WEB_VIEW &&
-        confirm(this._translateService.instant(T.MIGRATE.C_DOWNLOAD_BACKUP))
-      ) {
-        try {
-          await download('sp-legacy-backup.json', JSON.stringify(legacyData));
-        } catch (e) {
-          Log.error(e);
-        }
+  private async _initBackups(): Promise<void> {
+    // if completely fresh instance check for local backups
+    if (IS_ELECTRON || IS_ANDROID_WEB_VIEW) {
+      const stateCache = await this._opLogStore.loadStateCache();
+      // If no state cache exists, this is a fresh instance - offer to restore from backup
+      if (!stateCache) {
+        await this._localBackupService.askForFileStoreBackupIfAvailable();
       }
-      try {
-        await this._pfapiService.importCompleteBackup(
-          legacyData as unknown as AppDataCompleteNew,
-          true,
-          true,
-        );
-        this._imexMetaService.setDataImportInProgress(true);
-        await this._persistenceLocalService.updateLastSyncModelChange(MIGRATED_VAL);
-
-        alert(this._translateService.instant(T.MIGRATE.SUCCESS));
-
-        if (IS_ELECTRON) {
-          window.ea.relaunch();
-          // if relaunch fails we hard close the app
-          window.setTimeout(() => window.ea.exit(1234), 1000);
-        }
-        window.location.reload();
-        // fallback
-        window.setTimeout(
-          () => alert(this._translateService.instant(T.MIGRATE.E_RESTART_FAILED)),
-          2000,
-        );
-      } catch (error) {
-        // prevent any interaction with the app on after failure
-        this._imexMetaService.setDataImportInProgress(true);
-        Log.err(error);
-
-        try {
-          alert(
-            this._translateService.instant(T.MIGRATE.E_MIGRATION_FAILED) +
-              '\n\n' +
-              JSON.stringify(
-                (error as { additionalLog?: Array<{ errors: unknown }> })
-                  .additionalLog?.[0]?.errors,
-              ),
-          );
-        } catch (e) {
-          alert(
-            this._translateService.instant(T.MIGRATE.E_MIGRATION_FAILED) +
-              '\n\n' +
-              error?.toString(),
-          );
-        }
-        return;
-      }
-    } else {
-      // if everything is normal, check for TMP stray backup
-      await this._pfapiService.isCheckForStrayLocalTmpDBBackupAndImport();
-
-      // if completely fresh instance check for local backups
-      if (IS_ELECTRON || IS_ANDROID_WEB_VIEW) {
-        const meta = await this._pfapiService.pf.metaModel.load();
-        if (!meta || meta.lastUpdate === DEFAULT_META_MODEL.lastUpdate) {
-          await this._localBackupService.askForFileStoreBackupIfAvailable();
-        }
-        // trigger backup init after
-        this._localBackupService.init();
-      }
+      // trigger backup init after
+      this._localBackupService.init();
     }
   }
 
-  private _initMultiInstanceWarning(): void {
+  private async _checkIsSingleInstance(): Promise<boolean> {
     const channel = new BroadcastChannel('superProductivityTab');
-    let isOriginal = true;
+    let isAnotherInstanceActive = false;
 
-    enum Msg {
-      newTabOpened = 'newTabOpened',
-      alreadyOpenElsewhere = 'alreadyOpenElsewhere',
+    // 1. Listen for other instances saying "I'm here!"
+    const checkListener = (msg: MessageEvent): void => {
+      if (msg.data === 'alreadyOpenElsewhere') {
+        isAnotherInstanceActive = true;
+      }
+    };
+    channel.addEventListener('message', checkListener);
+
+    // 2. Ask "Is anyone here?"
+    channel.postMessage('newTabOpened');
+
+    // 3. Wait a bit for a response
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    channel.removeEventListener('message', checkListener);
+
+    if (isAnotherInstanceActive) {
+      return false;
     }
 
-    channel.postMessage(Msg.newTabOpened);
-    // note that listener is added after posting the message
-
+    // 4. If we are the only one, start listening for new tabs to warn them
     channel.addEventListener('message', (msg) => {
-      if (msg.data === Msg.newTabOpened && isOriginal) {
-        // message received from 2nd tab
-        // reply to all new tabs that the website is already open
-        channel.postMessage(Msg.alreadyOpenElsewhere);
-      }
-      if (msg.data === Msg.alreadyOpenElsewhere) {
-        isOriginal = false;
-        // message received from original tab
-        // replace this with whatever logic you need
-        // NOTE: translations not ready yet
-        const t =
-          'You are running multiple instances of Super Productivity (possibly over multiple tabs). This is not recommended and might lead to data loss!!';
-        const t2 = 'Please close all other instances, before you continue!';
-        // show in two dialogs to be sure the user didn't miss it
-        alert(t);
-        alert(t2);
+      if (msg.data === 'newTabOpened') {
+        channel.postMessage('alreadyOpenElsewhere');
       }
     });
+
+    return true;
+  }
+
+  private _showMultiInstanceBlocker(): void {
+    const msg =
+      'Super Productivity is already running in another tab. Please close this tab or the other one.';
+    const style =
+      'display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; font-family: sans-serif; padding: 2rem;';
+    document.body.innerHTML = `
+      <div style="${style}">
+        <div>
+          <h1>App is already open</h1>
+          <p>${msg}</p>
+        </div>
+      </div>
+    `;
   }
 
   private _isTourLikelyToBeShown(): boolean {

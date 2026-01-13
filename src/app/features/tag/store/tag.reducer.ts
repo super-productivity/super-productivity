@@ -1,3 +1,16 @@
+/**
+ * Tag Reducer
+ *
+ * IMPORTANT: TODAY_TAG is a "Virtual Tag"
+ * -----------------------------------------
+ * TODAY_TAG (ID: 'TODAY') is handled specially:
+ * - Should NEVER be in task.tagIds - membership is determined by task.dueDay
+ * - TODAY_TAG.taskIds only stores ordering for the today list
+ * - Move handlers below work uniformly for ALL tags including TODAY
+ *
+ * This pattern keeps move operations (drag/drop, Ctrl+↑/↓) simple.
+ * See: docs/ai/today-tag-architecture.md
+ */
 import { createEntityAdapter, EntityAdapter } from '@ngrx/entity';
 import { Tag, TagState } from '../tag.model';
 import { createFeatureSelector, createReducer, createSelector, on } from '@ngrx/store';
@@ -10,7 +23,7 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../../work-context/store/work-context-meta.actions';
-import { moveTaskForWorkContextLikeState } from '../../work-context/store/work-context-meta.helper';
+import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 import {
   arrayMoveLeftUntil,
   arrayMoveRightUntil,
@@ -26,7 +39,6 @@ import {
   updateAdvancedConfigForTag,
   updateTag,
   updateTagOrder,
-  upsertTag,
 } from './tag.actions';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -47,12 +59,92 @@ export const selectAllTagsWithoutMyDay = createSelector(
   (tags: Tag[]): Tag[] => tags.filter((tag) => tag.id !== TODAY_TAG.id),
 );
 
+/**
+ * @deprecated Use `selectTodayTaskIds` from work-context.selectors.ts instead.
+ *
+ * This selector returns raw stored taskIds which may be stale or incomplete.
+ * `selectTodayTaskIds` computes membership from task.dueDay (virtual tag pattern)
+ * and is self-healing.
+ *
+ * See: docs/ai/today-tag-architecture.md
+ */
 export const selectTodayTagTaskIds = createSelector(
   selectTagFeatureState,
   (state: TagState): string[] => {
     return state.entities[TODAY_TAG.id]!.taskIds as string[];
   },
 );
+
+/**
+ * Helper function to compute ordered task IDs for a tag using board-style hybrid pattern.
+ *
+ * This pattern makes `task.tagIds` the single source of truth for tag membership,
+ * while `tag.taskIds` is used only for ordering. This provides:
+ *
+ * 1. **Atomic consistency**: Membership determined by task.tagIds (single source of truth)
+ * 2. **Order preservation**: User-specified order from tag.taskIds
+ * 3. **Self-healing**:
+ *    - Stale taskIds in tag.taskIds → gracefully filtered out
+ *    - Tasks with tagId not in tag.taskIds → auto-added at end
+ *
+ * @param tagId - The ID of the tag to get tasks for
+ * @param tag - The tag entity (or undefined if not found)
+ * @param taskEntities - Map of task entities
+ * @returns Ordered array of task IDs
+ */
+export const computeOrderedTaskIdsForTag = (
+  tagId: string,
+  tag: Tag | undefined,
+  taskEntities: Record<
+    string,
+    { id: string; tagIds: string[]; parentId?: string | null } | undefined
+  >,
+): string[] => {
+  if (!tag) {
+    return [];
+  }
+
+  const storedOrder = tag.taskIds;
+
+  // Find all tasks that have this tag in their tagIds (membership source of truth)
+  // Only include main tasks (not subtasks) since tag lists show parent tasks
+  const tasksWithTag: string[] = [];
+  for (const taskId of Object.keys(taskEntities)) {
+    const task = taskEntities[taskId];
+    if (task && !task.parentId && task.tagIds?.includes(tagId)) {
+      tasksWithTag.push(taskId);
+    }
+  }
+
+  if (tasksWithTag.length === 0) {
+    return [];
+  }
+
+  // Order tasks according to stored order, with unordered tasks appended at end
+  // PERF: Use Map for O(1) lookup instead of indexOf which is O(n) per task
+  const orderedTasks: (string | undefined)[] = [];
+  const unorderedTasks: string[] = [];
+  const tasksWithTagSet = new Set(tasksWithTag);
+  const storedOrderMap = new Map(storedOrder.map((id, idx) => [id, idx]));
+
+  for (const taskId of tasksWithTag) {
+    const orderIndex = storedOrderMap.get(taskId);
+    if (orderIndex !== undefined) {
+      orderedTasks[orderIndex] = taskId;
+    } else {
+      // Task has tagId but not in stored order - auto-add at end
+      unorderedTasks.push(taskId);
+    }
+  }
+
+  // Filter out undefined slots (stale IDs in stored order) and append unordered
+  return [
+    ...orderedTasks.filter(
+      (id): id is string => id !== undefined && tasksWithTagSet.has(id),
+    ),
+    ...unorderedTasks,
+  ];
+};
 
 export const selectTagById = createSelector(
   selectTagFeatureState,
@@ -186,11 +278,15 @@ export const tagReducer = createReducer<TagState>(
 
   // REGULAR ACTIONS
   // --------------------
+  // Move handlers work uniformly for ALL tags, including TODAY_TAG.
+  // This is why we keep TODAY_TAG.taskIds separate from planner.days -
+  // it allows drag/drop and keyboard shortcuts (Ctrl+↑/↓) to use the same
+  // code path for today as for any other tag. See: docs/ai/today-tag-architecture.md
   on(
     moveTaskInTodayList,
     (
       state: TagState,
-      { taskId, newOrderedIds, src, target, workContextType, workContextId },
+      { taskId, afterTaskId, target, workContextType, workContextId },
     ) => {
       if (workContextType !== WORK_CONTEXT_TYPE) {
         return state;
@@ -200,12 +296,12 @@ export const tagReducer = createReducer<TagState>(
         throw new Error('No tag');
       }
       const taskIdsBefore = tag.taskIds;
-      const taskIds = moveTaskForWorkContextLikeState(
-        taskId,
-        newOrderedIds,
-        target,
-        taskIdsBefore,
-      );
+      // When moving to DONE section with null anchor, append to end
+      // Otherwise use standard anchor-based positioning
+      const taskIds =
+        afterTaskId === null && target === 'DONE'
+          ? [...taskIdsBefore.filter((id) => id !== taskId), taskId]
+          : moveItemAfterAnchor(taskId, afterTaskId, taskIdsBefore);
       return tagAdapter.updateOne(
         {
           id: workContextId,
@@ -220,42 +316,50 @@ export const tagReducer = createReducer<TagState>(
 
   on(
     moveTaskUpInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) =>
-      workContextType === WORK_CONTEXT_TYPE
-        ? tagAdapter.updateOne(
-            {
-              id: workContextId,
-              changes: {
-                taskIds: arrayMoveLeftUntil(
-                  (state.entities[workContextId] as Tag).taskIds,
-                  taskId,
-                  (id) => !doneTaskIds.includes(id),
-                ),
-              },
-            },
-            state,
-          )
-        : state,
+    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+      if (workContextType !== WORK_CONTEXT_TYPE) {
+        return state;
+      }
+      // Use Set for O(1) lookup instead of O(n) .includes() in callback
+      const doneTaskIdSet = new Set(doneTaskIds);
+      return tagAdapter.updateOne(
+        {
+          id: workContextId,
+          changes: {
+            taskIds: arrayMoveLeftUntil(
+              (state.entities[workContextId] as Tag).taskIds,
+              taskId,
+              (id) => !doneTaskIdSet.has(id),
+            ),
+          },
+        },
+        state,
+      );
+    },
   ),
 
   on(
     moveTaskDownInTodayList,
-    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) =>
-      workContextType === WORK_CONTEXT_TYPE
-        ? tagAdapter.updateOne(
-            {
-              id: workContextId,
-              changes: {
-                taskIds: arrayMoveRightUntil(
-                  (state.entities[workContextId] as Tag).taskIds,
-                  taskId,
-                  (id) => !doneTaskIds.includes(id),
-                ),
-              },
-            },
-            state,
-          )
-        : state,
+    (state: TagState, { taskId, workContextId, workContextType, doneTaskIds }) => {
+      if (workContextType !== WORK_CONTEXT_TYPE) {
+        return state;
+      }
+      // Use Set for O(1) lookup instead of O(n) .includes() in callback
+      const doneTaskIdSet = new Set(doneTaskIds);
+      return tagAdapter.updateOne(
+        {
+          id: workContextId,
+          changes: {
+            taskIds: arrayMoveRightUntil(
+              (state.entities[workContextId] as Tag).taskIds,
+              taskId,
+              (id) => !doneTaskIdSet.has(id),
+            ),
+          },
+        },
+        state,
+      );
+    },
   ),
 
   on(moveTaskToTopInTodayList, (state, { taskId, workContextType, workContextId }) => {
@@ -298,8 +402,6 @@ export const tagReducer = createReducer<TagState>(
 
   on(updateTag, (state: TagState, { tag }) => tagAdapter.updateOne(tag, state)),
 
-  on(upsertTag, (state: TagState, { tag }) => tagAdapter.upsertOne(tag, state)),
-
   on(deleteTag, (state: TagState, { id }) => tagAdapter.removeOne(id, state)),
 
   on(deleteTags, (state: TagState, { ids }) => tagAdapter.removeMany(ids, state)),
@@ -334,6 +436,8 @@ export const tagReducer = createReducer<TagState>(
       state,
     );
   }),
+
+  // addTagToTask no longer creates tags - use TagActions.addTag first if needed
 
   // TASK STUFF
   // ---------

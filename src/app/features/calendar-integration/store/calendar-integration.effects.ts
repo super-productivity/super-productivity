@@ -41,6 +41,16 @@ export class CalendarIntegrationEffects {
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _issueService = inject(IssueService);
 
+  /**
+   * Poll external calendar providers for events and auto-import them as tasks.
+   *
+   * SYNC-SAFE: This effect is intentionally safe during sync/hydration because:
+   * - dispatch: false - no direct store mutations
+   * - Duplicate prevention built-in: matchesAnyCalendarEventId() checks existing tasks
+   *   before importing, so synced tasks won't be duplicated
+   * - Timer-driven from external calendar API data, not store-change driven
+   * - Task creation via IssueService handles deduplication internally
+   */
   pollChanges$ = createEffect(
     () =>
       this._globalTrackingIntervalService.todayDateStr$.pipe(

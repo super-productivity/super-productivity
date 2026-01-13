@@ -71,7 +71,7 @@ The app uses NgRx (Redux pattern) for state management. Key state slices:
 
 ### Data Flow
 
-1. **Persistence Layer** (`/src/app/pfapi/`): Handles data storage with multiple adapters (IndexedDB)
+1. **Persistence Layer** (`/src/app/op-log/` and `/src/app/sync/`): Handles data storage (IndexedDB) and sync providers
 2. **Services** (`*.service.ts`): Business logic and state mutations via NgRx
 3. **Components**: (`*.component.ts`) Subscribe to state via selectors, dispatch actions for changes
 4. **Effects**: Handle side effects (persistence, sync, notifications)

@@ -33,10 +33,15 @@ export abstract class BasePage {
 
     const inputEl = this.page.locator('add-task-bar.global input');
 
-    // If the global input is not present, open the Add Task Bar first
-    const inputCount = await inputEl.count();
-    if (inputCount === 0) {
+    // Check if input is visible - if not, try clicking the add button
+    const isInputVisible = await inputEl
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (!isInputVisible) {
       const addBtn = this.page.locator('.tour-addBtn');
+      // Wait for add button with longer timeout - it depends on config loading
+      await addBtn.waitFor({ state: 'visible', timeout: 20000 });
       await addBtn.click();
     }
 

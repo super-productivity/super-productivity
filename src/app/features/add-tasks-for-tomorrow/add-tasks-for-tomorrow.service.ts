@@ -104,7 +104,12 @@ export class AddTasksForTomorrowService {
       .pipe(first())
       .toPromise();
     const allDueSorted = this._sortAll([
-      ...allDue.filter((t) => !todaysTaskIds.includes(t.id)),
+      ...allDue
+        .filter((t) => !todaysTaskIds.includes(t.id))
+        // Exclude subtasks whose parent is already in TODAY
+        // (preventParentAndSubTaskInTodayList$ will remove them anyway,
+        // causing an infinite add/remove loop and phantom sync changes)
+        .filter((t) => !t.parentId || !todaysTaskIds.includes(t.parentId)),
     ]);
 
     if (allDueSorted.length > 0) {
@@ -172,7 +177,12 @@ export class AddTasksForTomorrowService {
       .pipe(first())
       .toPromise();
     const allDueSorted = this._sortAll([
-      ...allDue.filter((t) => !todaysTaskIds.includes(t.id)),
+      ...allDue
+        .filter((t) => !todaysTaskIds.includes(t.id))
+        // Exclude subtasks whose parent is already in TODAY
+        // (preventParentAndSubTaskInTodayList$ will remove them anyway,
+        // causing an infinite add/remove loop and phantom sync changes)
+        .filter((t) => !t.parentId || !todaysTaskIds.includes(t.parentId)),
     ]);
 
     if (allDueSorted.length > 0) {

@@ -113,3 +113,4 @@ playwright-report/
 
 electron-builder-appx.yaml
 test-results/
+data/

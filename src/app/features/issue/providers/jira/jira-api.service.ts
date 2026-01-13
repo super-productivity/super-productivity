@@ -39,7 +39,6 @@ import { JiraIssue, JiraIssueReduced } from './jira-issue.model';
 import { BannerService } from '../../../../core/banner/banner.service';
 import { BannerId } from '../../../../core/banner/banner.model';
 import { T } from '../../../../t.const';
-import { stringify } from 'query-string';
 import { getErrorTxt } from '../../../../util/get-error-text';
 import { isOnline } from '../../../../util/is-online';
 import { GlobalProgressBarService } from '../../../../core-ui/global-progress-bar/global-progress-bar.service';
@@ -453,7 +452,7 @@ export class JiraApiService {
         const requestInit = this._makeRequestInit(jiraReqCfg, cfg);
 
         const queryStr = jiraReqCfg.query
-          ? `?${stringify(jiraReqCfg.query, { arrayFormat: 'comma' })}`
+          ? `?${stringifyQueryParams(jiraReqCfg.query)}`
           : '';
         const base = `${stripTrailing(cfg.host || 'null', '/')}/rest/api/${API_VERSION}`;
         const url = `${base}/${jiraReqCfg.pathname}${queryStr}`.trim();
@@ -746,4 +745,20 @@ async function streamToJsonIfPossible(stream: ReadableStream): Promise<any> {
     IssueLog.err('Jira: Could not parse response', text);
     return text;
   }
+}
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function stringifyQueryParams(
+  params: Record<string, string | boolean | number | string[]>,
+): string {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      // arrayFormat: 'comma' - join array values with comma
+      searchParams.set(key, value.join(','));
+    } else if (value !== undefined && value !== null) {
+      searchParams.set(key, String(value));
+    }
+  }
+  return searchParams.toString();
 }

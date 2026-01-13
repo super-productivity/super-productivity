@@ -30,6 +30,7 @@ import {
   switchMap,
   take,
   takeUntil,
+  timeout,
   withLatestFrom,
 } from 'rxjs/operators';
 import { DateService } from 'src/app/core/date/date.service';
@@ -52,7 +53,7 @@ import { TaskSummaryTablesComponent } from '../../features/tasks/task-summary-ta
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
 import { TaskService } from '../../features/tasks/task.service';
 import { TasksByTagComponent } from '../../features/tasks/tasks-by-tag/tasks-by-tag.component';
-import { TaskArchiveService } from '../../features/time-tracking/task-archive.service';
+import { TaskArchiveService } from '../../features/archive/task-archive.service';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
 import { WorklogWeekComponent } from '../../features/worklog/worklog-week/worklog-week.component';
@@ -325,7 +326,28 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   async finishDay(): Promise<void> {
-    await this._beforeFinishDayService.executeActions();
+    try {
+      await this._beforeFinishDayService.executeActions();
+      // Wait for any ongoing sync to complete before archiving to avoid DB lock errors.
+      // Use a 30-second timeout to prevent hanging indefinitely if sync is stuck.
+      await this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$
+        .pipe(first(), timeout(30000))
+        .toPromise()
+        .catch((err) => {
+          // Log timeout but continue - better to proceed than to block the user
+          Log.warn(
+            '[DailySummary] Sync wait timed out after 30s, proceeding anyway:',
+            err,
+          );
+        });
+    } catch (error) {
+      Log.error('[DailySummary] Failed during pre-archive operations:', error);
+      this._snackService.open({
+        msg: T.F.SYNC.S.FINISH_DAY_SYNC_ERROR,
+        type: 'ERROR',
+      });
+      return;
+    }
     if (IS_ELECTRON && this.isForToday) {
       const isConfirm = await this._matDialog
         .open(DialogConfirmComponent, {

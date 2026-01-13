@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Privacy Policy - SuperSync</title>
+    <link
+      rel="stylesheet"
+      href="style.css"
+    />
+    <style>
+      .content-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: var(--card-bg);
+        padding: 2rem;
+        border-radius: var(--radius);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: left;
+      }
+      h1 {
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+      }
+      h2 {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        color: var(--text);
+      }
+      p {
+        margin-bottom: 1rem;
+        color: var(--text);
+      }
+      ul {
+        margin-bottom: 1rem;
+        padding-left: 2rem;
+      }
+      li {
+        margin-bottom: 0.5rem;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1rem;
+        color: var(--text-light);
+        text-decoration: none;
+      }
+      .back-link:hover {
+        color: var(--primary);
+      }
+      address {
+        font-style: normal;
+        margin: 1rem 0;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="content-container">
+      <a
+        href="/"
+        class="back-link"
+        >← Back to Home</a
+      >
+      <h1>Privacy Policy</h1>
+      <p>Last updated: December 9, 2025</p>
+
+      <h2>1. Information We Collect</h2>
+      <p>
+        We collect information you provide directly to us, such as when you create or
+        modify your account, request customer support, or communicate with us.
+      </p>
+      <ul>
+        <li>
+          <strong>Account Information:</strong> When you register, we collect your email
+          address and password (hashed).
+        </li>
+        <li>
+          <strong>Sync Data:</strong> We store the productivity data (tasks, settings,
+          etc.) you synchronize through our Service.
+        </li>
+        <li>
+          <strong>Usage Data:</strong> We may collect information about how you access and
+          use the Service.
+        </li>
+      </ul>
+
+      <h2>2. How We Use Your Information</h2>
+      <p>
+        We use the information we collect to operate, maintain, and provide the features
+        of the Service, to verify your identity, and to provide customer support.
+      </p>
+
+      <h2>3. Data Storage and Security</h2>
+      <p>
+        We implement security measures designed to protect your information from
+        unauthorized access, disclosure, alteration, and destruction. We support
+        end-to-end encryption, allowing you to encrypt your data on your device before it
+        is sent to our servers.
+      </p>
+
+      <h2>4. Data Sharing</h2>
+      <p>
+        We do not share your personal information with third parties except as described
+        in this privacy policy or with your consent.
+      </p>
+
+      <h2>5. Data Retention</h2>
+      <p>
+        We retain your account information and sync data for as long as your account is
+        active or as needed to provide you the Service. You may request deletion of your
+        account and data at any time.
+      </p>
+
+      <h2>6. Children's Privacy</h2>
+      <p>
+        Our Service is not directed to individuals under the age of 13. We do not
+        knowingly collect personal information from children under 13.
+      </p>
+
+      <h2>7. Changes to This Policy</h2>
+      <p>
+        We may update this Privacy Policy from time to time. We will notify you of any
+        changes by posting the new Privacy Policy on this page.
+      </p>
+
+      <h2>8. Data Controller</h2>
+      <p>The data controller responsible for your personal data is:</p>
+      <address>
+        {{ PRIVACY_CONTACT_NAME }}<br />
+        {{ PRIVACY_ADDRESS_STREET }}<br />
+        {{ PRIVACY_ADDRESS_CITY }}<br />
+        {{ PRIVACY_ADDRESS_COUNTRY }}<br />
+        <br />
+        Email:
+        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a>
+      </address>
+
+      <h2>9. Contact Us</h2>
+      <p>
+        If you have any questions about this Privacy Policy, please contact us at
+        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a
+        >.
+      </p>
+    </div>
+  </body>
+</html>

@@ -190,10 +190,8 @@
 >
   @if (isShowAsText) {
     <button
+      (click)="copyToClipboard()"
       color="primary"
-      data-clipboard-action="copy"
-      data-clipboard-target="#task-textarea"
-      id="clipboard-btn"
       mat-button
     >
       <mat-icon>content_paste</mat-icon>

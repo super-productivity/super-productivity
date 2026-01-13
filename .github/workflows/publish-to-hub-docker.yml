@@ -28,11 +28,14 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # Note: Docker Hub image is under johannesjo/ (personal account) while
+      # the GitHub repo is under super-productivity/ org. This is intentional
+      # to maintain existing Docker image references for users.
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
         with:
-          images: super-productivity/super-productivity
+          images: johannesjo/super-productivity
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

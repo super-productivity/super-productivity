@@ -74,6 +74,7 @@ export class ScheduleEventComponent {
   private _taskService = inject(TaskService);
 
   readonly T: typeof T = T;
+  readonly isDragPreview = input<boolean>(false);
   readonly isMonthView = input<boolean>(false);
   readonly event = input.required<ScheduleEvent>();
 
@@ -177,12 +178,6 @@ export class ScheduleEventComponent {
       addClass = 'split-start';
     }
 
-    if (evt.isCloseToOthersFirst) {
-      addClass += ' close-to-others-first';
-    } else if (evt.isCloseToOthers) {
-      addClass += ' close-to-others';
-    }
-
     if (evt.timeLeftInHours <= 1 / 4) {
       addClass += ' very-short-event';
     }
@@ -194,7 +189,21 @@ export class ScheduleEventComponent {
     return evt.type + '  ' + addClass;
   });
 
-  readonly style = computed(() => this.se().style);
+  readonly style = computed(() => {
+    const { overlap, style } = this.se();
+    // Arbitrarily chosen value that controls width reduction of this component
+    // whenever the underlying event duration overlaps with others
+    const overlapReductionFactor = 0.75;
+    return (
+      (!this.isMonthView() && !this.isDragPreview() && overlap
+        ? // eslint-disable-next-line no-mixed-operators -- conflicts with prettier formatting
+          `margin-left: ${100 - 100 * Math.pow(overlapReductionFactor, overlap.offset)}%; ` +
+          `width: calc(${Math.pow(overlapReductionFactor, overlap.count) * 100}% - var(--margin-right)); ` +
+          // Content inside the event element can spill out when the width is limited enough
+          'overflow: hidden !important; '
+        : '') + style
+    );
+  });
 
   private readonly _projectId = computed(() => this.task()?.projectId || null);
 

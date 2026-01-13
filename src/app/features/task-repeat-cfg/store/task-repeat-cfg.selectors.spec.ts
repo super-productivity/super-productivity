@@ -122,7 +122,6 @@ describe('selectTaskRepeatCfgsDueOnDay', () => {
     });
 
     [
-      // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH + DAY,
       // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH + DAY * 11,
@@ -150,7 +149,6 @@ describe('selectTaskRepeatCfgsDueOnDay', () => {
     });
 
     [
-      // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH,
       // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH + DAY * 2,
@@ -539,7 +537,6 @@ describe('selectAllUnprocessedTaskRepeatCfgs', () => {
     });
 
     [
-      // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH,
       // eslint-disable-next-line no-mixed-operators
       FAKE_MONDAY_THE_10TH + DAY * 2,

@@ -1,0 +1,316 @@
+{
+  "timestamp": 1733000000000,
+  "lastUpdate": 1733000000000,
+  "crossModelVersion": 4.5,
+  "data": {
+    "project": {
+      "ids": ["INBOX_PROJECT"],
+      "entities": {
+        "INBOX_PROJECT": {
+          "id": "INBOX_PROJECT",
+          "title": "Inbox",
+          "isHiddenFromMenu": false,
+          "taskIds": ["active-task-1", "active-task-2"],
+          "backlogTaskIds": [],
+          "noteIds": [],
+          "theme": {
+            "primary": "#607d8b",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "inbox",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "menuTree": {
+      "tagTree": [],
+      "projectTree": []
+    },
+    "globalConfig": {
+      "misc": {
+        "isConfirmBeforeExit": false,
+        "isConfirmBeforeExitWithoutFinishDay": true,
+        "isNotifyWhenTimeEstimateExceeded": false,
+        "isAutMarkParentAsDone": true,
+        "isAutoStartNextTask": true,
+        "isTurnOffMarkdown": false,
+        "isAutoAddWorkedOnToToday": true,
+        "isDisableInitialDialog": true,
+        "firstDayOfWeek": 1,
+        "startOfNextDay": 0,
+        "daysToShowForPastDates": 14,
+        "isMinimizeToTray": false,
+        "isEnableAdvanced": false,
+        "isTrayShowCurrentTask": true,
+        "taskNotesTpl": "",
+        "isDisableAnimations": false
+      },
+      "appFeatures": {
+        "isTimeTrackingEnabled": true,
+        "isFocusModeEnabled": true,
+        "isSchedulerEnabled": true,
+        "isPlannerEnabled": true,
+        "isBoardsEnabled": true,
+        "isScheduleDayPanelEnabled": true,
+        "isIssuesPanelEnabled": true,
+        "isProjectNotesEnabled": true,
+        "isSyncIconEnabled": true,
+        "isDonatePageEnabled": true,
+        "isEnableUserProfiles": false
+      },
+      "localization": {},
+      "evaluation": {
+        "isHideEvaluationSheet": false
+      },
+      "idle": {
+        "isEnableIdleTimeTracking": false,
+        "isUnTrackedIdleResetsBreakTimer": false,
+        "minIdleTime": 60000,
+        "isOnlyOpenIdleWhenCurrentTask": false
+      },
+      "takeABreak": {
+        "isTakeABreakEnabled": false,
+        "takeABreakMinWorkingTime": 60,
+        "takeABreakSnoozeTime": 15,
+        "motivationalImgs": [],
+        "isLockScreen": false,
+        "isTimedFullScreenBlocker": false,
+        "timedFullScreenBlockerDuration": 8000,
+        "isFocusWindow": false,
+        "takeABreakMessage": "Take a break!"
+      },
+      "pomodoro": {
+        "isEnabled": false,
+        "duration": 1500000,
+        "breakDuration": 300000,
+        "longerBreakDuration": 900000,
+        "cyclesBeforeLongerBreak": 4,
+        "isStopTrackingOnBreak": true,
+        "isStopTrackingOnLongBreak": true,
+        "isManualContinue": false,
+        "isPlaySound": true,
+        "isPlaySoundAfterBreak": false,
+        "isEnabled2": false
+      },
+      "keyboard": {},
+      "localBackup": {
+        "isEnabled": false
+      },
+      "lang": {},
+      "sync": {
+        "isEnabled": false,
+        "isCompressionEnabled": true,
+        "syncInterval": 0,
+        "isEncryptionEnabled": false,
+        "syncProvider": null
+      },
+      "timeline": {
+        "isWorkStartEndEnabled": false,
+        "workStart": "9:00",
+        "workEnd": "17:00"
+      },
+      "reminder": {
+        "isCountdownBannerEnabled": true,
+        "countdownDuration": 600000
+      },
+      "focusMode": {
+        "isAlwaysUseFocusMode": false,
+        "isSkipPreparation": false
+      },
+      "sound": {
+        "volume": 70,
+        "isPlayDoneSound": true,
+        "doneSound": "done2.mp3",
+        "isPlayTickSound": false,
+        "isIncreaseDoneSoundPitch": true,
+        "breakReminderSound": null
+      },
+      "timeTracking": {
+        "trackingInterval": 1000,
+        "defaultEstimate": 0,
+        "defaultEstimateSubTasks": 0,
+        "isNotifyWhenTimeEstimateExceeded": true,
+        "isAutoStartNextTask": false,
+        "isTrackingReminderEnabled": false,
+        "isTrackingReminderShowOnMobile": false,
+        "trackingReminderMinTime": 300000
+      },
+      "quickNotes": {},
+      "dominaMode": {
+        "isEnabled": false,
+        "text": "Your current task is: ${currentTaskTitle}",
+        "interval": 300000,
+        "volume": 75
+      },
+      "shortSyntax": {
+        "isEnableProject": true,
+        "isEnableDue": true,
+        "isEnableTag": true
+      },
+      "schedule": {
+        "isWorkStartEndEnabled": true,
+        "workStart": "9:00",
+        "workEnd": "17:00",
+        "isLunchBreakEnabled": false,
+        "lunchBreakStart": "13:00",
+        "lunchBreakEnd": "14:00"
+      }
+    },
+    "task": {
+      "ids": ["active-task-1", "active-task-2", "active-task-subtask-1"],
+      "entities": {
+        "active-task-1": {
+          "id": "active-task-1",
+          "title": "E2E Import Test - Active Task With Subtask",
+          "subTaskIds": ["active-task-subtask-1"],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "created": 1733000000000,
+          "attachments": [],
+          "dueDay": "2024-12-01",
+          "projectId": "INBOX_PROJECT"
+        },
+        "active-task-subtask-1": {
+          "id": "active-task-subtask-1",
+          "title": "E2E Import Test - Subtask of Active Task",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "",
+          "tagIds": [],
+          "parentId": "active-task-1",
+          "created": 1733000000001,
+          "attachments": [],
+          "projectId": "INBOX_PROJECT"
+        },
+        "active-task-2": {
+          "id": "active-task-2",
+          "title": "E2E Import Test - Simple Active Task",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "This task has some tracked time",
+          "tagIds": [],
+          "created": 1733000000002,
+          "attachments": [],
+          "dueDay": "2024-12-01",
+          "projectId": "INBOX_PROJECT"
+        }
+      },
+      "currentTaskId": null,
+      "selectedTaskId": null,
+      "lastCurrentTaskId": null,
+      "isDataLoaded": false
+    },
+    "tag": {
+      "ids": ["TODAY"],
+      "entities": {
+        "TODAY": {
+          "id": "TODAY",
+          "title": "Today",
+          "taskIds": [],
+          "icon": "wb_sunny",
+          "created": 1733000000000,
+          "theme": {
+            "primary": "#ffa726",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "simpleCounter": {
+      "ids": [],
+      "entities": {}
+    },
+    "taskRepeatCfg": {
+      "ids": [],
+      "entities": {}
+    },
+    "reminders": [],
+    "note": {
+      "ids": [],
+      "entities": {},
+      "todayOrder": []
+    },
+    "metric": {
+      "ids": [],
+      "entities": {}
+    },
+    "planner": {
+      "days": {}
+    },
+    "issueProvider": {
+      "ids": [],
+      "entities": {}
+    },
+    "boards": {
+      "boardCfgs": []
+    },
+    "timeTracking": {
+      "project": {},
+      "tag": {}
+    },
+    "archiveYoung": {
+      "task": {
+        "ids": [],
+        "entities": {}
+      },
+      "timeTracking": {
+        "project": {},
+        "tag": {}
+      }
+    },
+    "archiveOld": {
+      "task": {
+        "ids": [],
+        "entities": {}
+      },
+      "timeTracking": {
+        "project": {},
+        "tag": {}
+      }
+    },
+    "pluginMetadata": [],
+    "pluginUserData": []
+  }
+}

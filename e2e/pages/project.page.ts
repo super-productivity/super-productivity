@@ -403,13 +403,20 @@ export class ProjectPage extends BasePage {
     await expect(this.workCtxTitle).toContainText(projectName);
   }
 
-  async addNote(noteContent: string): Promise<void> {
+  async addNote(noteContent: string, projectId?: string): Promise<void> {
+    // Ensure we are on the correct project route if an id is provided
+    if (projectId && !this.page.url().includes(projectId)) {
+      await this.page.goto(`/#/project/${projectId}`);
+      await this.page.waitForLoadState('networkidle');
+    }
+
     // Wait for the app to be ready
     const routerWrapper = this.page.locator('.route-wrapper');
     await routerWrapper.waitFor({ state: 'visible', timeout: 6000 }); // Reduced from 10s to 6s
 
     // Wait for project view to be ready
-    await this.page.locator('.page-project').waitFor({ state: 'visible' });
+    const workView = this.page.locator('work-view');
+    await workView.waitFor({ state: 'attached', timeout: 15000 });
 
     // First ensure notes section is visible by clicking toggle if needed
     const toggleNotesBtn = this.page.locator('.e2e-toggle-notes-btn');
@@ -422,31 +429,127 @@ export class ProjectPage extends BasePage {
       await this.page.locator('notes').waitFor({ state: 'visible', timeout: 5000 });
     }
 
-    // Try multiple approaches to open the note dialog
-    let dialogOpened = false;
-
-    // Approach 1: Try to click the add note button
-    const addNoteBtn = this.page.locator('#add-note-btn');
-    const isAddBtnVisible = await addNoteBtn
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
-    if (isAddBtnVisible) {
-      await addNoteBtn.click();
-      dialogOpened = true;
-    }
-
-    // Approach 2: If button not visible, try keyboard shortcut
-    if (!dialogOpened) {
-      // Focus on the main content area first
-      await this.page.locator('body').click();
+    // Hover header to ensure buttons might appear
+    const projectHeader = this.page
+      .locator('.project-header, .page-title-wrapper')
+      .first();
+    if (await projectHeader.isVisible()) {
+      await projectHeader.hover();
       await this.page.waitForTimeout(500);
-      await this.page.keyboard.press('n');
     }
 
-    // Wait for dialog to appear with better error handling
-    await this.page.locator('dialog-fullscreen-markdown, mat-dialog-container').waitFor({
+    // Retry loop to open dialog
+
+    for (let i = 0; i < 3; i++) {
+      try {
+        // Ensure any previous overlays are closed
+
+        const backdrop = this.page.locator('.cdk-overlay-backdrop');
+
+        if (await backdrop.isVisible()) {
+          await backdrop.click({ force: true });
+
+          await this.page.waitForTimeout(200);
+        }
+
+        // Try multiple approaches to open the note dialog
+
+        let dialogOpened = false;
+
+        // Approach 1: Try to click the add note button
+
+        const addNoteBtn = this.page
+          .locator(
+            '#add-note-btn, button[title="Add Note"], button[aria-label="Add Note"], button mat-icon:has-text("note_add")',
+          )
+          .first();
+
+        const isAddBtnVisible = await addNoteBtn
+
+          .isVisible({ timeout: 2000 })
+
+          .catch(() => false);
+
+        if (isAddBtnVisible) {
+          // Move cursor away to avoid tooltip overlays blocking the click, then force-click
+
+          await this.page.mouse.move(0, 0);
+
+          await addNoteBtn.click({ force: true });
+
+          dialogOpened = true;
+        } else {
+          // Check overflow menu - scope to work context menu to avoid picking up task menus
+
+          const moreBtn = this.workCtxMenu
+            .locator('button mat-icon:has-text("more_vert")')
+            .first();
+
+          if (await moreBtn.isVisible()) {
+            await moreBtn.click({ force: true });
+
+            const menuAddNote = this.page
+
+              .locator('.mat-mdc-menu-item')
+
+              .filter({ hasText: 'Add Note' })
+
+              .first();
+
+            // Wait briefly for menu
+
+            try {
+              await menuAddNote.waitFor({ state: 'visible', timeout: 2000 });
+
+              await menuAddNote.click({ force: true });
+
+              dialogOpened = true;
+            } catch {
+              // Close menu if item not found
+
+              await this.page.keyboard.press('Escape');
+            }
+          }
+        }
+
+        // Approach 2: If button not visible, try keyboard shortcut
+
+        if (!dialogOpened) {
+          // Focus on the work view area first
+
+          if (await workView.isVisible()) {
+            await workView.click({ force: true });
+          } else {
+            await this.page.locator('body').click({ force: true });
+          }
+
+          await this.page.waitForTimeout(500);
+
+          await this.page.keyboard.press('n');
+        }
+
+        // Wait for dialog to appear with better error handling
+
+        await this.page.locator('dialog-fullscreen-markdown').waitFor({
+          state: 'visible',
+
+          timeout: 5000, // Short timeout for retry
+        });
+
+        break; // Success
+      } catch (e) {
+        console.log(`Attempt ${i + 1} to open note dialog failed, retrying...`);
+
+        await this.page.waitForTimeout(1000);
+      }
+    }
+
+    // Final check/throw
+
+    await this.page.locator('dialog-fullscreen-markdown').waitFor({
       state: 'visible',
-      timeout: 5000,
+
+      timeout: 10000,
     });
 
     // Try different selectors for the textarea
@@ -487,7 +590,7 @@ export class ProjectPage extends BasePage {
     }
 
     // Wait for dialog to close
-    await this.page.locator('dialog-fullscreen-markdown, mat-dialog-container').waitFor({
+    await this.page.locator('dialog-fullscreen-markdown').waitFor({
       state: 'hidden',
       timeout: 5000,
     });
@@ -509,5 +612,58 @@ export class ProjectPage extends BasePage {
 
     // Hover over the notes area like in Nightwatch
     await notesWrapper.hover({ position: { x: 10, y: 50 } });
+  }
+
+  /**
+   * Deletes a project via the sidebar context menu
+   */
+  async deleteProject(projectName: string): Promise<void> {
+    const fullProjectName = this.applyPrefix(projectName);
+
+    // Get the Projects nav-list-tree container
+    const projectsTree = this.page
+      .locator('nav-list-tree')
+      .filter({ hasText: 'Projects' });
+
+    // Ensure Projects group is expanded
+    const projectsGroupBtn = projectsTree
+      .locator('.g-multi-btn-wrapper nav-item button')
+      .first();
+    await projectsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
+
+    const isExpanded = await projectsGroupBtn.getAttribute('aria-expanded');
+    if (isExpanded !== 'true') {
+      await projectsGroupBtn.click();
+      await this.page.waitForTimeout(500);
+    }
+
+    // Find the project in the sidebar
+    const projectTreeItem = projectsTree
+      .locator('[role="treeitem"]')
+      .filter({ hasText: fullProjectName })
+      .first();
+    await projectTreeItem.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Right-click to open context menu
+    await projectTreeItem.click({ button: 'right' });
+
+    // Click delete option - look for "Delete" text
+    const deleteBtn = this.page
+      .locator('.mat-mdc-menu-content button')
+      .filter({ hasText: /delete/i })
+      .first();
+    await deleteBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await deleteBtn.click();
+
+    // Handle confirmation dialog
+    const confirmDialog = this.page.locator('dialog-confirm');
+    await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
+    // Click "Ok" button to confirm deletion
+    const confirmBtn = confirmDialog.locator('button').filter({ hasText: /ok/i });
+    await confirmBtn.click();
+    await confirmDialog.waitFor({ state: 'hidden', timeout: 3000 });
+
+    // Wait for project to be removed from sidebar
+    await projectTreeItem.waitFor({ state: 'hidden', timeout: 5000 });
   }
 }

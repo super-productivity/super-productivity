@@ -1,4 +1,17 @@
 /**
+ * Maximum size of plugin data in bytes (1 MB).
+ * This prevents malicious or broken plugins from flooding storage with large data.
+ */
+export const MAX_PLUGIN_DATA_SIZE = 1024 * 1024; // 1 MB
+
+/**
+ * Minimum interval between plugin data persist calls in milliseconds.
+ * This rate-limits how often a plugin can call persistDataSynced to prevent
+ * flooding the operation log and sync server.
+ */
+export const MIN_PLUGIN_PERSIST_INTERVAL_MS = 1000; // 1 second
+
+/**
  * Plugin user data - data that plugins store and retrieve via persistDataSynced/loadSyncedData
  */
 export interface PluginUserData {

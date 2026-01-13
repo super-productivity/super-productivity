@@ -43,9 +43,9 @@ export const CREATE_PROJECT_BASIC_CONFIG_FORM_CONFIG: ConfigFormSection<Project>
   // TODO translate
   title: 'Project Settings & Theme',
   key: 'basic',
-  /* eslint-disable */
+
   help: `Very basic settings for your project.`,
-  /* eslint-enable */
+
   items: [
     {
       key: 'title',

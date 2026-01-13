@@ -67,13 +67,6 @@ export interface WorkContextCommon {
   taskIds: string[];
   id: string;
   title: string;
-
-  // to make it simpler for validation
-  // TODO remove legacy
-  breakTime?: any;
-  breakNr?: any;
-  workStart?: any;
-  workEnd?: any;
 }
 
 export type WorkContextAdvancedCfgKey = keyof WorkContextAdvancedCfg;

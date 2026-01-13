@@ -24,7 +24,6 @@ const TASK: TaskCopy = {
   notes: '',
   tagIds: [],
   parentId: undefined,
-  reminderId: undefined,
   created: Date.now(),
   repeatCfgId: undefined,
   dueWithTime: undefined,

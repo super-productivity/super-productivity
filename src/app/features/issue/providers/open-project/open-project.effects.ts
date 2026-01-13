@@ -1,12 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { concatMap, filter, map, take, tap, withLatestFrom } from 'rxjs/operators';
 import { select, Store } from '@ngrx/store';
 import { OPEN_PROJECT_TYPE } from '../../issue.const';
 import { MatDialog } from '@angular/material/dialog';
-import { Task } from '../../../tasks/task.model';
+import { Task, TaskCopy } from '../../../tasks/task.model';
 import { OpenProjectCfg, OpenProjectTransitionOption } from './open-project.model';
 import { EMPTY, Observable, of, timer } from 'rxjs';
 import { DialogOpenProjectTrackTimeComponent } from './open-project-view-components/dialog-open-project-track-time/dialog-open-project-track-time.component';
@@ -22,10 +22,11 @@ import { T } from 'src/app/t.const';
 import { DialogOpenProjectTransitionComponent } from './open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component';
 import { IssueProviderService } from '../../issue-provider.service';
 import { assertTruthy } from '../../../../util/assert-truthy';
+import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 
 @Injectable()
 export class OpenProjectEffects {
-  private readonly _actions$ = inject(Actions);
+  private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _store$ = inject<Store<any>>(Store);
   private readonly _snackService = inject(SnackService);
   private readonly _openProjectApiService = inject(OpenProjectApiService);
@@ -40,6 +41,7 @@ export class OpenProjectEffects {
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
+        filter((task) => !!task),
         concatMap((task) =>
           task.parentId
             ? this._taskService
@@ -47,6 +49,7 @@ export class OpenProjectEffects {
                 .pipe(map((parent) => ({ mainTask: parent, subTask: task })))
             : of({ mainTask: task, subTask: undefined }),
         ),
+        filter(({ mainTask }) => !!mainTask),
         concatMap(({ mainTask, subTask }) =>
           mainTask.issueType === OPEN_PROJECT_TYPE &&
           mainTask.issueId &&
@@ -93,8 +96,8 @@ export class OpenProjectEffects {
         filter(({ id }) => !!id),
         withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
         filter(
-          ([, currentTaskOrParent]) =>
-            currentTaskOrParent && currentTaskOrParent.issueType === OPEN_PROJECT_TYPE,
+          (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
+            input[1] != null && input[1].issueType === OPEN_PROJECT_TYPE,
         ),
         concatMap(([, currentTaskOrParent]) => {
           if (!currentTaskOrParent.issueProviderId) {

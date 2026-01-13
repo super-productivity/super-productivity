@@ -367,7 +367,7 @@
         "FILTER_USER": "筛选用户名",
         "GITLAB_BASE_URL": "自定义 GitLab 基本 URL（可选）",
         "PROJECT": "用户名/项目",
-        "PROJECT_HINT": "例如 johannesjo/super-productivity",
+        "PROJECT_HINT": "例如 super-productivity/super-productivity",
         "SCOPE": "范围",
         "SCOPE_ALL": "全部",
         "SCOPE_ASSIGNED": "分配给我",

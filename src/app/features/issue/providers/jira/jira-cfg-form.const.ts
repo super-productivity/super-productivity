@@ -77,7 +77,7 @@ export const JIRA_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderJira> = {
       type: 'input',
       templateOptions: {
         type: 'url',
-        /* eslint-disable-next-line */
+
         pattern:
           /^(http(s)?:\/\/)?(localhost|[\w.\-]+(?:\.[\w\.\-]+)+)(:\d+)?(\/[^\s]*)?$/i,
         required: true,

@@ -34,8 +34,7 @@ import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { MsToStringPipe } from '../../ui/duration/ms-to-string.pipe';
 import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
-import { PfapiService } from '../../pfapi/pfapi.service';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
 
 @Component({
@@ -67,7 +66,6 @@ import { Log } from '../../core/log';
 export class WorklogComponent implements AfterViewInit, OnDestroy {
   readonly worklogService = inject(WorklogService);
   readonly workContextService = inject(WorkContextService);
-  private readonly _pfapiService = inject(PfapiService);
   private readonly _taskService = inject(TaskService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _router = inject(Router);

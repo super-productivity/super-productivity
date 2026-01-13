@@ -204,7 +204,7 @@
             <mat-icon>attach_file</mat-icon>
           </button>
         }
-        @if (t.reminderId) {
+        @if (t.remindAt) {
           <button
             (click)="scheduleTask()"
             [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"

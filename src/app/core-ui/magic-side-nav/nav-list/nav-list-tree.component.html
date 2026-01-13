@@ -157,7 +157,7 @@
 
 <!-- Project Visibility Menu -->
 <mat-menu #visibilityMenu="matMenu">
-  @for (project of allProjectsExceptInbox(); track project.id) {
+  @for (project of allUnarchivedProjects(); track project.id) {
     <button
       mat-menu-item
       (click)="toggleProjectVisibility(project.id)"

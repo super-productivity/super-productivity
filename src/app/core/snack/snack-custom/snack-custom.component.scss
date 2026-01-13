@@ -21,6 +21,10 @@
   .error & {
     color: var(--c-warn);
   }
+
+  .warning & {
+    color: var(--c-accent);
+  }
 }
 
 .message {

@@ -17,7 +17,7 @@ import { calculateTimeFromYPosition } from '../schedule-utils';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import type { DragPreviewContext } from './schedule-week-drag.types';
 import type { ScheduleEvent } from '../schedule.model';
-import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { first } from 'rxjs/operators';
 
 interface PointerPosition {
@@ -531,11 +531,7 @@ export class ScheduleWeekDragService {
     if (!event) {
       return 6;
     }
-    const task = this._pluckTaskFromEvent(event);
-    if (task?.timeEstimate) {
-      const timeInHours = task.timeEstimate / (60 * 60 * 1000);
-      return Math.max(Math.round(timeInHours * FH), 1);
-    }
+    // Use timeLeftInHours which already accounts for timeSpent
     return Math.max(Math.round(event.timeLeftInHours * FH), 1);
   }
 
@@ -622,7 +618,7 @@ export class ScheduleWeekDragService {
 
   private _scheduleTask(task: TaskCopy, scheduleTime: number): void {
     const hasExistingSchedule = !!task?.dueWithTime;
-    const hasReminder = !!task?.reminderId;
+    const hasReminder = !!(task?.remindAt ?? task?.reminderId);
     const defaultReminderOption = this._getDefaultReminderOption();
     // Smart reminder logic: if task is brand new to scheduling, add a reminder based on user's default setting.
     // If it already has a reminder, update it. Otherwise, leave reminders unchanged.
@@ -759,7 +755,6 @@ export class ScheduleWeekDragService {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: task.id,
-          reminderId: task.reminderId,
           isLeaveInToday: true,
         }),
       );
@@ -769,15 +764,14 @@ export class ScheduleWeekDragService {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: task.id,
-          reminderId: task.reminderId,
         }),
       );
     } else {
       this._store
-        .select(selectTodayTagTaskIds)
+        .select(selectTodayTaskIds)
         .pipe(first())
-        .subscribe((todayTagTaskIds) => {
-          if (todayTagTaskIds.includes(task.id)) {
+        .subscribe((todayTaskIds) => {
+          if (todayTaskIds.includes(task.id)) {
             this._store.dispatch(
               TaskSharedActions.removeTasksFromTodayTag({
                 taskIds: [task.id],

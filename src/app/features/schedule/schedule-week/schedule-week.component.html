@@ -166,6 +166,7 @@
       [style]="dragPreviewStyle()!"
       [class.isShiftInsertPreview]="dragPreviewContext()?.kind === 'shift-task'"
       [class.isScheduleForDay]="isShiftNoScheduleMode()"
+      [isDragPreview]="true"
     >
       @if (dragPreviewLabel()) {
         <div class="drag-preview-time-badge">

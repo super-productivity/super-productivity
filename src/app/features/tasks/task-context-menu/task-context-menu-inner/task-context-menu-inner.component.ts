@@ -69,7 +69,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { TagService } from '../../../tag/tag.service';
 import { DialogPromptComponent } from '../../../../ui/dialog-prompt/dialog-prompt.component';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import { selectTodayTagTaskIds } from '../../../tag/store/tag.reducer';
+import { selectTodayTaskIds } from '../../../work-context/store/work-context.selectors';
 import { isToday } from '../../../../util/is-today.util';
 import { MenuTouchFixDirective } from '../menu-touch-fix.directive';
 import { TaskLog } from '../../../../core/log';
@@ -119,7 +119,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
   protected readonly T = T;
 
   isAdvancedControls = input<boolean>(false);
-  todayList = toSignal(this._store.select(selectTodayTagTaskIds), { initialValue: [] });
+  todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
   isOnTodayList = computed(() => this.todayList().includes(this.task.id));
   readonly isTimeTrackingEnabled = computed(
     () => this._globalConfigService.cfg()?.appFeatures.isTimeTrackingEnabled,
@@ -428,7 +428,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.unscheduleTask({
         id: this.task.id,
-        reminderId: this.task.reminderId,
       }),
     );
   }
@@ -693,7 +692,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.unscheduleTask({
         id: this.task.id,
-        reminderId: this.task.reminderId,
       }),
     );
   }

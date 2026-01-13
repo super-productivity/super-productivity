@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { hideNonTaskSidePanelContent } from './layout.actions';
 import { filter, mapTo } from 'rxjs/operators';
 import { setSelectedTask } from '../../../features/tasks/store/task.actions';
@@ -17,7 +18,7 @@ import { NavigationStart, NavigationEnd, Router } from '@angular/router';
 
 @Injectable()
 export class LayoutEffects {
-  private actions$ = inject(Actions);
+  private actions$ = inject(LOCAL_ACTIONS);
   private layoutService = inject(LayoutService);
   private router = inject(Router);
 

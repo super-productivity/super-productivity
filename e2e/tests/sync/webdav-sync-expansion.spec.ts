@@ -1,17 +1,20 @@
-import { test, expect } from '../../fixtures/test.fixture';
+import { expect, test } from '../../fixtures/test.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { ProjectPage } from '../../pages/project.page';
-import { waitForAppReady, waitForStatePersistence } from '../../utils/waits';
+import { waitForStatePersistence } from '../../utils/waits';
 import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
-  WEBDAV_CONFIG_TEMPLATE,
-  setupSyncClient,
   createSyncFolder,
-  waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
+  setupSyncClient,
+  waitForSyncComplete,
+  WEBDAV_CONFIG_TEMPLATE,
 } from '../../utils/sync-helpers';
+
+// Timing constants for sync detection
+
+const WEBDAV_TIMESTAMP_DELAY_MS = 2000;
 
 test.describe('WebDAV Sync Expansion', () => {
   // Run sync tests serially to avoid WebDAV server contention
@@ -72,10 +75,8 @@ test.describe('WebDAV Sync Expansion', () => {
     await syncPageB.triggerSync();
     await waitForSyncComplete(pageB, syncPageB);
 
-    // Reload to ensure UI is updated with synced data
-    await pageB.reload();
-    await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
+    // Wait for state persistence to complete after sync
+    await waitForStatePersistence(pageB);
 
     // Wait for the synced project to appear in the sidebar
     // First ensure Projects group is expanded
@@ -101,20 +102,28 @@ test.describe('WebDAV Sync Expansion', () => {
 
     // Add task on B in project
     await workViewPageB.addTask('Task in Project B');
+
+    // Wait for state persistence before syncing
+    await waitForStatePersistence(pageB);
+
     await syncPageB.triggerSync();
     await waitForSyncComplete(pageB, syncPageB);
 
-    // Sync A
+    // Wait for server to process and ensure Last-Modified timestamp differs
+    // WebDAV servers often have second-level timestamp precision
+    await pageB.waitForTimeout(WEBDAV_TIMESTAMP_DELAY_MS);
+
+    // Sync A - trigger sync to download changes from B
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
 
-    await pageA.reload();
-    await waitForAppReady(pageA);
+    // Wait for state persistence to complete after sync
+    await waitForStatePersistence(pageA);
 
-    // Ensure we are on the project page
+    // Navigate to project page to verify task synced
     await projectPageA.navigateToProjectByName(projectName);
 
-    // Verify task on A
+    // Check if task B is visible immediately after sync (no reload)
     await expect(pageA.locator('task', { hasText: 'Task in Project B' })).toBeVisible({
       timeout: 20000,
     });
@@ -159,10 +168,8 @@ test.describe('WebDAV Sync Expansion', () => {
     await syncPageB.triggerSync();
     await waitForSyncComplete(pageB, syncPageB);
 
-    await pageB.reload();
-    await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
-    await workViewPageB.waitForTaskList();
+    // Wait for state persistence to complete after sync
+    await waitForStatePersistence(pageB);
 
     // Verify task synced to B
     const taskB = pageB.locator('task', { hasText: taskName }).first();
@@ -185,41 +192,13 @@ test.describe('WebDAV Sync Expansion', () => {
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
 
-    // Reload A to ensure UI reflects synced state
-    await pageA.reload();
-    await waitForAppReady(pageA);
-    await dismissTourIfVisible(pageA);
-    await workViewPageA.waitForTaskList();
+    // Wait for state persistence to complete after sync
+    await waitForStatePersistence(pageA);
 
-    // Check if task appears in main list or Done Tasks section
-    // First try to find task directly
-    let taskA = pageA.locator('task', { hasText: taskName }).first();
-    const isTaskVisible = await taskA.isVisible().catch(() => false);
-
-    if (!isTaskVisible) {
-      // Task might be in collapsed "Done Tasks" section, expand it
-      const doneTasksHeader = pageA.locator('.task-list-header', {
-        hasText: 'Done Tasks',
-      });
-      if (await doneTasksHeader.isVisible()) {
-        await doneTasksHeader.click();
-        await pageA.waitForTimeout(500);
-      }
-      // Re-locate task after expanding
-      taskA = pageA.locator('task', { hasText: taskName }).first();
-    }
-
-    await taskA.waitFor({ state: 'visible', timeout: 10000 });
-
-    // Verify task is marked as done - either has isDone class or is in Done section
-    const hasDoneClass = await taskA.evaluate((el) => el.classList.contains('isDone'));
-    const isInDoneSection = await pageA
-      .locator('.done-tasks task', { hasText: taskName })
-      .isVisible()
-      .catch(() => false);
-
-    // Task should be done (either by class or by being in done section)
-    expect(hasDoneClass || isInDoneSection).toBe(true);
+    // Note: We DON'T reload - sync updates NgRx directly
+    // Verify task is marked as done on A after sync
+    const taskA = pageA.locator('task', { hasText: taskName }).first();
+    await expect(taskA).toHaveClass(/isDone/, { timeout: 10000 });
 
     await contextA.close();
     await contextB.close();

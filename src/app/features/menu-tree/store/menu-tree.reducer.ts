@@ -8,7 +8,7 @@ import {
   updateFolder,
 } from './menu-tree.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { deleteTag, deleteTags } from '../../tag/store/tag.actions';
+import { addTag, deleteTag, deleteTags } from '../../tag/store/tag.actions';
 
 export const menuTreeFeatureKey = 'menuTree';
 
@@ -109,6 +109,24 @@ const _deleteItemsFromTree = (
   return itemIds.reduce((acc, id) => _deleteItemFromTree(acc, id, itemKind), tree);
 };
 
+const _itemExistsInTree = (
+  tree: MenuTreeTreeNode[],
+  itemId: string,
+  itemKind: MenuTreeKind.PROJECT | MenuTreeKind.TAG,
+): boolean => {
+  for (const node of tree) {
+    if (node.k === itemKind && node.id === itemId) {
+      return true;
+    }
+    if (node.k === MenuTreeKind.FOLDER) {
+      if (_itemExistsInTree(node.children, itemId, itemKind)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 export const menuTreeReducer = createReducer(
   menuTreeInitialState,
   on(loadAllData, (_state, { appDataComplete }) => {
@@ -156,9 +174,9 @@ export const menuTreeReducer = createReducer(
         ? _updateFolderInTree(state.tagTree, folderId, name)
         : state.tagTree,
   })),
-  on(TaskSharedActions.deleteProject, (state, { project }) => ({
+  on(TaskSharedActions.deleteProject, (state, { projectId }) => ({
     ...state,
-    projectTree: _deleteItemFromTree(state.projectTree, project.id, MenuTreeKind.PROJECT),
+    projectTree: _deleteItemFromTree(state.projectTree, projectId, MenuTreeKind.PROJECT),
   })),
   on(deleteTag, (state, { id }) => ({
     ...state,
@@ -168,4 +186,20 @@ export const menuTreeReducer = createReducer(
     ...state,
     tagTree: _deleteItemsFromTree(state.tagTree, ids, MenuTreeKind.TAG),
   })),
+  on(addTag, (state, { tag }) => {
+    // Only add to tree if tag doesn't already exist
+    if (_itemExistsInTree(state.tagTree, tag.id, MenuTreeKind.TAG)) {
+      return state;
+    }
+    return {
+      ...state,
+      tagTree: [
+        ...state.tagTree,
+        {
+          k: MenuTreeKind.TAG as const,
+          id: tag.id,
+        },
+      ],
+    };
+  }),
 );

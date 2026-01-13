@@ -79,6 +79,8 @@ export const plannerReducer = createReducer(
     (state, { today, allTaskIds }) => {
       const daysCopy = { ...state.days };
       const todayDate = new Date(today);
+      // Use Set for O(1) lookup instead of O(n) .includes() in filter
+      const allTaskIdSet = new Set(allTaskIds);
       let wasChanged = false;
       Object.keys(daysCopy).forEach((day) => {
         // NOTE: also deletes today
@@ -88,7 +90,7 @@ export const plannerReducer = createReducer(
         }
         // remove all deleted tasks if day was not deleted
         if (!!daysCopy[day]) {
-          const newDayVal = daysCopy[day].filter((id) => allTaskIds.includes(id));
+          const newDayVal = daysCopy[day].filter((id) => allTaskIdSet.has(id));
           if (newDayVal.length !== daysCopy[day].length) {
             daysCopy[day] = newDayVal;
             wasChanged = true;
@@ -127,8 +129,13 @@ export const plannerReducer = createReducer(
     // filter out from other days
     let wasMutated = false;
     Object.keys(daysCopy).forEach((dayI) => {
-      if (daysCopy[dayI].includes(action.fromTask.id)) {
-        daysCopy[dayI] = daysCopy[dayI].filter((id) => id !== action.fromTask.id);
+      // Use indexOf once instead of includes + filter (avoids double scan)
+      const fromIndex = daysCopy[dayI].indexOf(action.fromTask.id);
+      if (fromIndex !== -1) {
+        daysCopy[dayI] = [
+          ...daysCopy[dayI].slice(0, fromIndex),
+          ...daysCopy[dayI].slice(fromIndex + 1),
+        ];
         wasMutated = true;
       }
       const toIndex = daysCopy[dayI].indexOf(action.toTaskId);
@@ -166,7 +173,9 @@ export const plannerReducer = createReducer(
       ...state,
       days: {
         ...daysCopy,
-        // Only add to planner days if NOT today (today is managed by today tag)
+        // Today's ordering is managed by TODAY_TAG.taskIds, not planner.days.
+        // This dual-system design keeps move operations (drag/drop, Ctrl+↑/↓)
+        // uniform for all tags. See: docs/ai/today-tag-architecture.md
         ...(isPlannedForToday
           ? {}
           : {

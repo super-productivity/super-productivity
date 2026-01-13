@@ -67,8 +67,8 @@ export class NavListTreeComponent {
   readonly DEFAULT_PROJECT_ICON = DEFAULT_PROJECT_ICON;
   readonly MenuTreeKind = MenuTreeKind;
 
-  // Access to service methods and data for visibility menu
-  readonly allProjectsExceptInbox = this._navConfigService.allProjectsExceptInbox;
+  // Access to service methods and data for visibility menu (includes Inbox for unhiding)
+  readonly allUnarchivedProjects = this._navConfigService.allUnarchivedProjects;
 
   readonly treeNodes = signal<TreeNode<MenuTreeViewNode>[]>([]);
   readonly treeKind = computed<MenuTreeKind>(() => this.item().treeKind);

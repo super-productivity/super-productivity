@@ -3,20 +3,16 @@ import { from, Observable } from 'rxjs';
 import { mapTo, take } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { allDataWasLoaded } from '../../root-store/meta/all-data-was-loaded.actions';
-import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { DataRepairService } from '../data-repair/data-repair.service';
-import { PfapiService } from '../../pfapi/pfapi.service';
-import { CROSS_MODEL_VERSION } from '../../pfapi/pfapi-config';
 import { DataInitStateService } from './data-init-state.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
+import { OperationLogHydratorService } from '../../op-log/persistence/operation-log-hydrator.service';
 
 @Injectable({ providedIn: 'root' })
 export class DataInitService {
-  private _pfapiService = inject(PfapiService);
   private _store$ = inject<Store<any>>(Store);
-  private _dataRepairService = inject(DataRepairService);
   private _dataInitStateService = inject(DataInitStateService);
   private _userProfileService = inject(UserProfileService);
+  private _operationLogHydratorService = inject(OperationLogHydratorService);
 
   private _isAllDataLoadedInitially$: Observable<boolean> = from(this.reInit()).pipe(
     mapTo(true),
@@ -45,36 +41,26 @@ export class DataInitService {
       await this._userProfileService.initialize();
     }
 
-    await this._pfapiService.pf.wasDataMigratedInitiallyPromise;
-    const appDataComplete = await this._pfapiService.pf.getAllSyncModelData(true);
-    const validationResult = this._pfapiService.pf.validate(appDataComplete);
-    if (validationResult.success) {
-      this._store$.dispatch(loadAllData({ appDataComplete }));
-    } else {
-      // DATA REPAIR CASE
-      // ----------------
-      if (this._dataRepairService.isRepairPossibleAndConfirmed(appDataComplete)) {
-        const fixedData = this._pfapiService.pf.repairCompleteData(
-          appDataComplete,
-          validationResult.errors,
-        );
-        this._store$.dispatch(
-          loadAllData({
-            appDataComplete: fixedData,
-          }),
-        );
-        const localCrossModelVersion =
-          (await this._pfapiService.pf.metaModel.load()).crossModelVersion ||
-          CROSS_MODEL_VERSION;
+    // Hydrate from Operation Log (which handles migration from legacy if needed)
+    await this._operationLogHydratorService.hydrateStore();
+  }
 
-        await this._pfapiService.pf.importAllSycModelData({
-          data: fixedData,
-          crossModelVersion: localCrossModelVersion,
-          // since we already did try
-          isAttemptRepair: false,
-        });
-      }
-      // TODO handle start fresh case
-    }
+  /**
+   * Re-initialize the app after a remote sync download.
+   * This uses hydrateFromRemoteSync() which:
+   * 1. Uses the downloaded mainModelData (passed from sync service)
+   * 2. Persists it to SUP_OPS as a SYNC_IMPORT operation
+   * 3. Creates a snapshot for crash safety
+   * 4. Updates NgRx with the synced data
+   *
+   * @param downloadedMainModelData - The main model data from the remote meta file.
+   *   Entity models are not stored in IndexedDB, so this must be passed explicitly.
+   */
+  async reInitFromRemoteSync(
+    downloadedMainModelData?: Record<string, unknown>,
+  ): Promise<void> {
+    await this._operationLogHydratorService.hydrateFromRemoteSync(
+      downloadedMainModelData,
+    );
   }
 }

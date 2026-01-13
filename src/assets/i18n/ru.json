@@ -291,7 +291,7 @@
         "FILTER_USER": "Имя пользователя (чтобы отфильтровать изменения самостоятельно)",
         "GITLAB_BASE_URL": "Пользовательский базовый URL GitLab",
         "PROJECT": "Идентификатор проекта или имя \"username/repository\"",
-        "PROJECT_HINT": "например, johannesjo/super-productivity",
+        "PROJECT_HINT": "например, super-productivity/super-productivity",
         "SCOPE": "Область",
         "SCOPE_ALL": "Все",
         "SCOPE_ASSIGNED": "Назначено мне",

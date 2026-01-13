@@ -1,6 +1,60 @@
 import { DropListModelSource } from '../../tasks/task.model';
 import { filterOutId } from '../../../util/filter-out-id';
 
+/**
+ * Moves an item to a position after the specified anchor.
+ * Used for anchor-based positioning which is more sync-friendly than full list replacement.
+ *
+ * @param itemId - The item to move
+ * @param afterItemId - The item to place after (null = move to start)
+ * @param currentList - The current list of IDs
+ * @returns The updated list with the item in its new position
+ */
+export const moveItemAfterAnchor = (
+  itemId: string,
+  afterItemId: string | null,
+  currentList: string[],
+): string[] => {
+  // Remove the item from its current position
+  const listWithoutItem = currentList.filter((id) => id !== itemId);
+
+  if (afterItemId === null) {
+    // Move to start
+    return [itemId, ...listWithoutItem];
+  }
+
+  const anchorIndex = listWithoutItem.indexOf(afterItemId);
+  if (anchorIndex === -1) {
+    // Anchor not found - append to end as fallback
+    // This handles the case where the anchor was deleted concurrently
+    return [...listWithoutItem, itemId];
+  }
+
+  // Insert after the anchor
+  const result = [...listWithoutItem];
+  result.splice(anchorIndex + 1, 0, itemId);
+  return result;
+};
+
+/**
+ * Extracts the anchor ID from a drag-drop event's new ordered list.
+ * The anchor is the item immediately before the moved item in the new list.
+ *
+ * @param itemId - The item that was moved
+ * @param newOrderedIds - The list after the drag-drop operation
+ * @returns The ID of the item before the moved item, or null if moving to start
+ */
+export const getAnchorFromDragDrop = (
+  itemId: string,
+  newOrderedIds: string[],
+): string | null => {
+  const newIndex = newOrderedIds.indexOf(itemId);
+  if (newIndex <= 0) {
+    return null;
+  }
+  return newOrderedIds[newIndex - 1];
+};
+
 export const moveTaskForWorkContextLikeState = (
   taskId: string,
   newOrderedIds: string[],

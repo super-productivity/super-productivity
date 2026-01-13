@@ -1,0 +1,7 @@
+
+### Bug Fixes
+
+* **calendar:** display proper error messages instead of [object Object] (3b14a04), closes #5870
+* **e2e:** fix keyboard shortcut delete test and reduce sync test flakiness
+* **schedule:** maintain visibility during task overlap on schedule (#5887)
+* **tasks:** add subscription cleanup to delete confirmation dialog

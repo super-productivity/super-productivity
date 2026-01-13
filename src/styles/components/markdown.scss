@@ -112,6 +112,7 @@
     display: block;
     list-style: none;
     padding-bottom: var(--s);
+    cursor: pointer;
 
     &.done {
       opacity: 0.6;

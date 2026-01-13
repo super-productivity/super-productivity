@@ -19,7 +19,6 @@ export const isEqualSimpleCounterCfg = (
     }
     for (let i = 0; i < a.length; ++i) {
       if (a[i] !== b[i]) {
-        // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let j = 0; j < FIELDS_TO_COMPARE.length; j++) {
           const field = FIELDS_TO_COMPARE[j];
           if (a[field] !== b[field]) {

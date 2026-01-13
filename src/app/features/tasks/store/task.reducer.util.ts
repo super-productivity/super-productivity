@@ -12,6 +12,7 @@ import { taskAdapter } from './task.adapter';
 import { filterOutId } from '../../../util/filter-out-id';
 import { Update } from '@ngrx/entity';
 import { TaskLog } from '../../../core/log';
+import { devError } from '../../../util/dev-error';
 
 export const getTaskById = (taskId: string, state: TaskState): Task => {
   if (!state.entities[taskId]) {
@@ -171,6 +172,58 @@ export const updateStartDateForRepeatableTask = (
   }
 };
 
+/**
+ * Incrementally updates parent's timeSpentOnDay based on delta from subtask change.
+ * Much faster than full recalculation when only one day changed.
+ */
+const updateParentTimeSpentIncremental = (
+  parentId: string,
+  oldTimeSpentOnDay: TimeSpentOnDay | undefined,
+  newTimeSpentOnDay: TimeSpentOnDay,
+  state: TaskState,
+): TaskState => {
+  const parent = state.entities[parentId];
+  if (!parent) return state;
+
+  // Find what days changed and by how much
+  const allDays = new Set([
+    ...Object.keys(oldTimeSpentOnDay || {}),
+    ...Object.keys(newTimeSpentOnDay),
+  ]);
+
+  let totalDelta = 0;
+  const parentTimeSpentOnDay = { ...parent.timeSpentOnDay };
+
+  for (const day of allDays) {
+    const oldVal = oldTimeSpentOnDay?.[day] || 0;
+    const newVal = newTimeSpentOnDay[day] || 0;
+    const delta = newVal - oldVal;
+
+    if (delta !== 0) {
+      totalDelta += delta;
+      const currentParentVal = parentTimeSpentOnDay[day] || 0;
+      const newParentVal = currentParentVal + delta;
+
+      if (newParentVal > 0) {
+        parentTimeSpentOnDay[day] = newParentVal;
+      } else {
+        delete parentTimeSpentOnDay[day];
+      }
+    }
+  }
+
+  return taskAdapter.updateOne(
+    {
+      id: parentId,
+      changes: {
+        timeSpentOnDay: parentTimeSpentOnDay,
+        timeSpent: parent.timeSpent + totalDelta,
+      },
+    },
+    state,
+  );
+};
+
 export const updateTimeSpentForTask = (
   id: string,
   newTimeSpentOnDay: TimeSpentOnDay,
@@ -181,6 +234,7 @@ export const updateTimeSpentForTask = (
   }
 
   const task = getTaskById(id, state);
+  const oldTimeSpentOnDay = task.timeSpentOnDay;
   const timeSpent = calcTotalTimeSpent(newTimeSpentOnDay);
 
   const stateAfterUpdate = taskAdapter.updateOne(
@@ -194,8 +248,14 @@ export const updateTimeSpentForTask = (
     state,
   );
 
+  // Use incremental update for parent instead of full recalculation
   return task.parentId
-    ? reCalcTimeSpentForParentIfParent(task.parentId, stateAfterUpdate)
+    ? updateParentTimeSpentIncremental(
+        task.parentId,
+        oldTimeSpentOnDay,
+        newTimeSpentOnDay,
+        stateAfterUpdate,
+      )
     : stateAfterUpdate;
 };
 
@@ -242,13 +302,38 @@ export const deleteTaskHelper = (
 
   // SUB TASK side effects
   // also delete all sub tasks if any
-  if (taskToDelete.subTaskIds) {
-    stateCopy = taskAdapter.removeMany(taskToDelete.subTaskIds, stateCopy);
+  const payloadSubTaskIds = taskToDelete.subTaskIds || [];
+
+  // DEFENSIVE FIX: Also check state for subtasks not in subTaskIds.
+  // This handles race conditions where subtasks were added but parent's
+  // subTaskIds wasn't synced before a SYNC_IMPORT + moveToArchive.
+  // See: https://github.com/johannesjo/super-productivity/issues/XXXX
+  const stateSubTaskIds = (state.ids as string[]).filter(
+    (id) => state.entities[id]?.parentId === taskToDelete.id,
+  );
+
+  // Find orphans: subtasks in state but NOT in payload's subTaskIds
+  const orphanSubTaskIds = stateSubTaskIds.filter(
+    (id) => !payloadSubTaskIds.includes(id),
+  );
+
+  // Log devError if we found orphan subtasks - this indicates an upstream bug
+  if (orphanSubTaskIds.length > 0) {
+    devError(
+      `[deleteTaskHelper] Found ${orphanSubTaskIds.length} orphan subtask(s) not in parent's subTaskIds. ` +
+        `Parent: ${taskToDelete.id}, Orphans: ${orphanSubTaskIds.join(', ')}. ` +
+        `This indicates a sync race condition - subtasks added but parent.subTaskIds not updated before archive.`,
+    );
+  }
+
+  // Combine both lists to ensure all subtasks are removed
+  const allSubTaskIds = [...new Set([...payloadSubTaskIds, ...stateSubTaskIds])];
+
+  if (allSubTaskIds.length > 0) {
+    stateCopy = taskAdapter.removeMany(allSubTaskIds, stateCopy);
     // unset current if one of them is the current task
     currentTaskId =
-      !!currentTaskId && taskToDelete.subTaskIds.includes(currentTaskId)
-        ? null
-        : currentTaskId;
+      !!currentTaskId && allSubTaskIds.includes(currentTaskId) ? null : currentTaskId;
   }
 
   return {

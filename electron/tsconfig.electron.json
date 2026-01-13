@@ -10,9 +10,12 @@
     "skipLibCheck": true,
     "typeRoots": ["node_modules/@types"],
     "downlevelIteration": true,
-    "lib": ["dom"],
-    "esModuleInterop": true
+    "lib": ["dom", "es2022"],
+    "target": "es2022",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "baseUrl": ".."
   },
-  "include": ["main.ts", "**/*.ts"],
+  "include": ["main.ts", "**/*.ts", "../src/app/core/window-ea.d.ts"],
   "exclude": ["../node_modules", "**/*.spec.ts"]
 }

@@ -21,7 +21,6 @@ import { isImageUrl, isImageUrlSimple } from '../../util/is-image-url';
 import { DropPasteInput } from '../../core/drop-paste-input/drop-paste.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
-import { PfapiService } from '../../pfapi/pfapi.service';
 import { isInputElement } from '../../util/dom-element';
 
 @Injectable({
@@ -29,7 +28,6 @@ import { isInputElement } from '../../util/dom-element';
 })
 export class NoteService {
   private _store$ = inject<Store<any>>(Store);
-  private _pfapiService = inject(PfapiService);
   private _workContextService = inject(WorkContextService);
 
   notes$: Observable<Note[]> = this._store$.pipe(select(selectAllNotes));

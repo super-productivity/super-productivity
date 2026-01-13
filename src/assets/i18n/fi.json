@@ -291,7 +291,7 @@
         "FILTER_USER": "Suodata käyttäjänimi",
         "GITLAB_BASE_URL": "Mukautettu GitLab-perus-URL (valinnainen)",
         "PROJECT": "käyttäjänimi/projekti",
-        "PROJECT_HINT": "esim. johannesjo/super-productivity",
+        "PROJECT_HINT": "esim. super-productivity/super-productivity",
         "SCOPE": "Laajuus",
         "SCOPE_ALL": "Kaikki",
         "SCOPE_ASSIGNED": "Minulle osoitetut",

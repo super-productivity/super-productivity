@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
   concatMap,
   filter,
@@ -11,12 +12,8 @@ import {
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
-import {
-  addTaskRepeatCfgToTask,
-  deleteTaskRepeatCfg,
-  updateTaskRepeatCfg,
-} from './task-repeat-cfg.actions';
-import { Task, TaskCopy } from '../../tasks/task.model';
+import { addTaskRepeatCfgToTask, updateTaskRepeatCfg } from './task-repeat-cfg.actions';
+import { Task, TaskCopy, TaskReminderOptionId } from '../../tasks/task.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { TaskService } from '../../tasks/task.service';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
@@ -29,7 +26,7 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { isToday } from '../../../util/is-today.util';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../../archive/task-archive.service';
 import { Log } from '../../../core/log';
 import {
   addSubTask,
@@ -43,19 +40,18 @@ import { EMPTY, forkJoin, from, Observable, of as rxOf } from 'rxjs';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { remindOptionToMilliseconds } from '../../tasks/util/remind-option-to-milliseconds';
 import { devError } from '../../../util/dev-error';
-import { TaskReminderOptionId } from '../../tasks/task.model';
 import { getFirstRepeatOccurrence } from './get-first-repeat-occurrence.util';
 
 @Injectable()
 export class TaskRepeatCfgEffects {
-  private _actions$ = inject(Actions);
+  private _localActions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _matDialog = inject(MatDialog);
   private _taskArchiveService = inject(TaskArchiveService);
 
   addRepeatCfgToTaskUpdateTask$ = createEffect(() =>
-    this._actions$.pipe(
+    this._localActions$.pipe(
       ofType(addTaskRepeatCfgToTask),
       filter(({ startTime, remindAt }) => !!startTime && !!remindAt),
       concatMap(({ taskId, startTime, remindAt, taskRepeatCfg }) =>
@@ -108,39 +104,12 @@ export class TaskRepeatCfgEffects {
     ),
   );
 
-  removeConfigIdFromTaskStateTasks$ = createEffect(() =>
-    this._actions$.pipe(
-      ofType(deleteTaskRepeatCfg),
-      concatMap(({ id }) => this._taskService.getTasksByRepeatCfgId$(id).pipe(take(1))),
-      filter((tasks) => tasks && !!tasks.length),
-      mergeMap((tasks: Task[]) =>
-        tasks.map((task) =>
-          TaskSharedActions.updateTask({
-            task: {
-              id: task.id,
-              changes: {
-                repeatCfgId: undefined,
-              },
-            },
-          }),
-        ),
-      ),
-    ),
-  );
-
-  removeConfigIdFromTaskArchiveTasks$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(deleteTaskRepeatCfg),
-        tap(({ id }) => {
-          this._taskArchiveService.removeRepeatCfgFromArchiveTasks(id);
-        }),
-      ),
-    { dispatch: false },
-  );
+  // NOTE: Archive cleanup for deleteTaskRepeatCfg is now handled by
+  // ArchiveOperationHandler._handleDeleteTaskRepeatCfg, which is the single
+  // source of truth for archive operations.
 
   updateTaskAfterMakingItRepeatable$ = createEffect(() =>
-    this._actions$.pipe(
+    this._localActions$.pipe(
       ofType(addTaskRepeatCfgToTask),
       switchMap(({ taskRepeatCfg, taskId }) => {
         return this._taskService.getByIdWithSubTaskData$(taskId).pipe(
@@ -222,7 +191,7 @@ export class TaskRepeatCfgEffects {
    */
   autoSyncSubtaskTemplatesFromNewest$ = createEffect(
     () =>
-      this._actions$.pipe(
+      this._localActions$.pipe(
         ofType(
           addSubTask,
           moveSubTask,
@@ -316,7 +285,7 @@ export class TaskRepeatCfgEffects {
    * from the newest instance to set initial templates.
    */
   enableAutoUpdateOrInheritSnapshot$ = createEffect(() =>
-    this._actions$.pipe(
+    this._localActions$.pipe(
       ofType(updateTaskRepeatCfg),
       // only react to enabling inherit subtasks; avoids loops
       // Note: this snapshots current subtasks when inherit is enabled, regardless of auto-update flag
@@ -402,7 +371,7 @@ export class TaskRepeatCfgEffects {
 
   // Update startDate when a task with repeatOnComplete is marked as done
   updateStartDateOnComplete$ = createEffect(() =>
-    this._actions$.pipe(
+    this._localActions$.pipe(
       ofType(TaskSharedActions.updateTask),
       filter((a) => a.task.changes.isDone === true),
       switchMap(({ task }) =>
@@ -410,7 +379,7 @@ export class TaskRepeatCfgEffects {
           .getByIdOnce$(task.id as string)
           .pipe(map((fullTask) => fullTask)),
       ),
-      filter((task) => !!task.repeatCfgId),
+      filter((task) => !!task?.repeatCfgId),
       switchMap((task) =>
         this._taskRepeatCfgService.getTaskRepeatCfgById$(task.repeatCfgId as string).pipe(
           take(1),
@@ -436,7 +405,7 @@ export class TaskRepeatCfgEffects {
 
   checkToUpdateAllTaskInstances$ = createEffect(
     () =>
-      this._actions$.pipe(
+      this._localActions$.pipe(
         ofType(updateTaskRepeatCfg),
         filter(({ isAskToUpdateAllTaskInstances }) => !!isAskToUpdateAllTaskInstances),
         concatMap(({ taskRepeatCfg }) => {
@@ -548,7 +517,7 @@ export class TaskRepeatCfgEffects {
         completeCfg.startTime as string,
         new Date(),
       );
-      if (task.reminderId) {
+      if (task.remindAt) {
         this._taskService.reScheduleTask({
           task,
           due: dateTime,

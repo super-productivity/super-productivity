@@ -10,24 +10,18 @@
   .mat-mdc-progress-bar {
     height: 3px;
     box-shadow: var(--whiteframe-shadow-2dp);
+    opacity: 0.3;
   }
 }
 
 .badge {
   display: inline-block;
-  //position: absolute;
-  //bottom: 3px;
-  //left: 0;
-  //left: 50%;
-  //transform: translateX(-50%);
-  //z-index: 9998;
   pointer-events: none;
-  padding: 4px 8px;
-  padding-left: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
   line-height: 1;
   border-top-right-radius: var(--card-border-radius);
-  box-shadow: var(--whiteframe-shadow-1dp);
-
   background: var(--bg-lighter);
   color: var(--text-color-less-intense);
+  opacity: 0.85;
 }

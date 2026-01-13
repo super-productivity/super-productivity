@@ -15,4 +15,4 @@
 [Download from FDroid](https://f-droid.org/en/packages/com.superproductivity.superproductivity/)
 
 **List of all Changes**:
-[--Changelog--](https://github.com/johannesjo/super-productivity/blob/master/CHANGELOG.md)
+[--Changelog--](https://github.com/super-productivity/super-productivity/blob/master/CHANGELOG.md)

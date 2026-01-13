@@ -5,6 +5,7 @@ import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-r
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { TaskReminderOptionId } from '../../tasks/task.model';
 
 const updateParent = (
   field: FormlyFieldConfig,
@@ -224,6 +225,7 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
       {
         key: 'remindAt',
         type: 'select',
+        defaultValue: TaskReminderOptionId.AtStart,
         hideExpression: '!model.startTime',
         templateOptions: {
           required: true,

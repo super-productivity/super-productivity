@@ -1,0 +1,51 @@
+{
+  "name": "@super-productivity/super-sync-server",
+  "version": "1.0.0",
+  "description": "SuperSync server for Super Productivity",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/src/index.js",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "test": "vitest run",
+    "docker:build": "./scripts/build-and-push.sh",
+    "docker:deploy": "./scripts/deploy.sh",
+    "docker:deploy:build": "./scripts/deploy.sh --build",
+    "docker:backup": "./scripts/backup.sh",
+    "docker:logs": "docker logs supersync-server -f",
+    "delete-user": "ts-node scripts/delete-user.ts",
+    "clear-data": "ts-node scripts/clear-data.ts",
+    "monitor": "node dist/scripts/monitor.js",
+    "monitor:dev": "ts-node scripts/monitor.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/static": "^8.3.0",
+    "@prisma/client": "5.22.0",
+    "@simplewebauthn/server": "^13.2.2",
+    "@simplewebauthn/types": "^12.0.0",
+    "@sp/shared-schema": "*",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.6.2",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^7.0.11",
+    "uuidv7": "^1.1.0",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^18.0.0",
+    "@types/nodemailer": "^7.0.4",
+    "@types/supertest": "^6.0.3",
+    "nodemon": "^3.1.11",
+    "prisma": "5.22.0",
+    "supertest": "^7.1.4",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  }
+}

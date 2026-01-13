@@ -1,0 +1,50 @@
+# Docker Compose for fast local E2E tests
+# Uses volume mounts instead of copying source/installing deps
+# Requires: npm install to be run locally first
+services:
+  # Angular development server for E2E tests
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e.dev.fast
+    ports:
+      - '${APP_PORT:-4242}:${APP_PORT:-4242}'
+    environment:
+      - APP_PORT=${APP_PORT:-4242}
+    volumes:
+      - .:/app
+      - /app/.angular # Exclude .angular cache (use container's)
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:${APP_PORT:-4242}']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  # WebDAV sync server (for sync tests)
+  webdav:
+    image: hacdias/webdav:latest
+    ports:
+      - '${WEBDAV_PORT:-2345}:${WEBDAV_PORT:-2345}'
+    environment:
+      - PORT=${WEBDAV_PORT:-2345}
+    volumes:
+      - ./webdav.yaml:/config.yml:ro
+      - webdav_data:/data
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://localhost:${WEBDAV_PORT:-2345}/',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  webdav_data:

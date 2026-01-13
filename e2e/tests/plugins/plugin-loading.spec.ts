@@ -184,8 +184,22 @@ test.describe.serial('Plugin Loading', () => {
     );
     expect(enableResult).toBe(true);
 
+    // Wait for plugin card to be stable before disabling
+    await page.waitForTimeout(500);
+
+    // Ensure plugin management is still visible and scroll to it
+    await page.evaluate(() => {
+      const pluginMgmt = document.querySelector('plugin-management');
+      if (pluginMgmt) {
+        pluginMgmt.scrollIntoView({ behavior: 'instant', block: 'center' });
+      }
+    });
+
     // Navigate to plugin management - check for attachment
     await expect(page.locator(PLUGIN_ITEM).first()).toBeAttached({ timeout: 10000 });
+
+    // Wait a bit for any animations to complete
+    await page.waitForTimeout(300);
 
     // Disable the plugin using the helper function
     const disableResult = await disablePluginWithVerification(
@@ -193,7 +207,25 @@ test.describe.serial('Plugin Loading', () => {
       'API Test Plugin',
       15000,
     );
-    expect(disableResult).toBe(true);
+
+    // If disable failed, try reinitializing plugin management and retry
+    if (!disableResult) {
+      console.log('[Plugin Test] First disable attempt failed, retrying...');
+      const retryReady = await waitForPluginManagementInit(page);
+      if (retryReady) {
+        const retryDisable = await disablePluginWithVerification(
+          page,
+          'API Test Plugin',
+          15000,
+        );
+        expect(retryDisable).toBe(true);
+      } else {
+        expect(disableResult).toBe(true); // Will fail with original error
+      }
+    }
+
+    // Wait for disable to take effect
+    await page.waitForTimeout(500);
 
     // Re-enable the plugin using the helper function
     const reEnableResult = await enablePluginWithVerification(

@@ -6,7 +6,8 @@ import {
   input,
 } from '@angular/core';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
-import { Tag } from '../tag.model';
+import { Tag, TagState } from '../tag.model';
+import { ProjectState } from '../../project/project.model';
 import { Task } from '../../tasks/task.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
@@ -41,8 +42,12 @@ export class TagListComponent {
 
   workContext = toSignal(this._workContextService.activeWorkContextTypeAndId$);
 
-  tagState = toSignal(this._store.select(selectTagFeatureState));
-  projectState = toSignal(this._store.select(selectProjectFeatureState));
+  tagState = toSignal(this._store.select(selectTagFeatureState), {
+    initialValue: { ids: [], entities: {} } as TagState,
+  });
+  projectState = toSignal(this._store.select(selectProjectFeatureState), {
+    initialValue: { ids: [], entities: {} } as ProjectState,
+  });
 
   tagIds = computed<string[]>(() => this.task().tagIds || []);
 

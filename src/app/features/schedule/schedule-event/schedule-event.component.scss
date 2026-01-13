@@ -26,11 +26,6 @@
   z-index: 2;
   user-select: none;
 
-  // Bring hovered events above others
-  &:hover {
-    z-index: 10;
-  }
-
   // has to be for after elements
   overflow: visible !important;
   min-width: 0;
@@ -100,9 +95,9 @@
     content: '';
     position: absolute;
     top: 0;
-    bottom: calc(-1 * (var(--margin-bottom) + 1px));
+    bottom: 0;
     left: 0;
-    right: calc(-1 * (var(--margin-right) + 4px));
+    right: 0;
     z-index: 3;
     display: block;
   }

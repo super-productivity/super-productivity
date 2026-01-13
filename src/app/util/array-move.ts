@@ -10,11 +10,11 @@ export const arrayMove = <T>(
 };
 
 export const arrayMoveLeft = <T>(arr: T[], val: T): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
 
-  const oldIndex = arr.indexOf(val);
   const newIndex = oldIndex - 1;
 
   if (newIndex >= 0) {
@@ -24,11 +24,11 @@ export const arrayMoveLeft = <T>(arr: T[], val: T): T[] => {
 };
 
 export const arrayMoveRight = <T>(arr: T[], val: T): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
 
-  const oldIndex = arr.indexOf(val);
   const newIndex = oldIndex + 1;
 
   if (newIndex < arr.length) {
@@ -42,10 +42,10 @@ export const arrayMoveLeftUntil = <T>(
   val: T,
   skipDoneConditionFn: (item: T) => boolean,
 ): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
-  const oldIndex = arr.indexOf(val);
   let newIndex: number = oldIndex - 1;
   while (skipDoneConditionFn(arr[newIndex]) && newIndex > 0) {
     newIndex--;
@@ -62,10 +62,10 @@ export const arrayMoveRightUntil = <T>(
   val: T,
   skipDoneConditionFn: (item: T) => boolean,
 ): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
-  const oldIndex = arr.indexOf(val);
   let newIndex: number = oldIndex + 1;
   while (skipDoneConditionFn(arr[newIndex]) && newIndex < arr.length) {
     newIndex++;
@@ -78,21 +78,19 @@ export const arrayMoveRightUntil = <T>(
 };
 
 export const arrayMoveToStart = <T>(arr: T[], val: T): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
-
-  const oldIndex = arr.indexOf(val);
 
   return arrayMove(arr, oldIndex, 0);
 };
 
 export const arrayMoveToEnd = <T>(arr: T[], val: T): T[] => {
-  if (!arr.includes(val)) {
+  const oldIndex = arr.indexOf(val);
+  if (oldIndex === -1) {
     return arr;
   }
-
-  const oldIndex = arr.indexOf(val);
 
   return arrayMove(arr, oldIndex, arr.length - 1);
 };

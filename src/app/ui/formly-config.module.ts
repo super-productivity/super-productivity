@@ -18,7 +18,7 @@ import { KeyboardInputComponent } from '../features/config/keyboard-input/keyboa
 import { IconInputComponent } from '../features/config/icon-input/icon-input.component';
 import { SelectProjectComponent } from '../features/config/select-project/select-project.component';
 import { RepeatSectionTypeComponent } from '../features/config/repeat-section-type/repeat-section-type.component';
-import { FormlyMatSliderModule } from '@ngx-formly/material/slider';
+import { FormlySliderComponent } from './formly-slider/formly-slider.component';
 import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-selection.component';
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
@@ -28,7 +28,7 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
   imports: [
     CommonModule,
     FormsModule,
-    FormlyMatSliderModule,
+    FormlySliderComponent,
     ReactiveFormsModule,
     FormlyModule.forRoot({
       validationMessages: [
@@ -40,6 +40,7 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
         { name: 'maxLength', message: 'Value is too long' },
       ],
       types: [
+        { name: 'slider', component: FormlySliderComponent, wrappers: ['form-field'] },
         { name: 'link', component: FormlyLinkWidgetComponent },
         {
           name: 'duration',

@@ -1,4 +1,5 @@
 import {
+  APP_INITIALIZER,
   enableProdMode,
   ErrorHandler,
   importProvidersFrom,
@@ -17,7 +18,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
-import { MarkdownModule, MARKED_OPTIONS, provideMarkdown } from 'ngx-markdown';
+import { MarkdownModule, MARKED_OPTIONS, provideMarkdown, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { FeatureStoresModule } from './app/root-store/feature-stores.module';
 import { MATERIAL_ANIMATIONS, MatNativeDateModule } from '@angular/material/core';
@@ -36,17 +37,10 @@ import {
 } from '@angular/router';
 import { APP_ROUTES } from './app/app.routes';
 import { StoreModule } from '@ngrx/store';
-import { undoTaskDeleteMetaReducer } from './app/root-store/meta/undo-task-delete.meta-reducer';
-import { actionLoggerReducer } from './app/root-store/meta/action-logger.reducer';
-import {
-  plannerSharedMetaReducer,
-  projectSharedMetaReducer,
-  tagSharedMetaReducer,
-  taskBatchUpdateMetaReducer,
-  taskSharedCrudMetaReducer,
-  taskSharedLifecycleMetaReducer,
-  taskSharedSchedulingMetaReducer,
-} from './app/root-store/meta/task-shared-meta-reducers';
+import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
+import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
+import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
+import { ImmediateUploadService } from './app/op-log/sync/immediate-upload.service';
 import { EffectsModule } from '@ngrx/effects';
 import { StoreDevtoolsModule } from '@ngrx/store-devtools';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -93,7 +87,7 @@ bootstrapApplication(AppComponent, {
           provide: MARKED_OPTIONS,
           useFactory: markedOptionsFactory,
         },
-        sanitize: SecurityContext.HTML,
+        sanitize: { provide: SANITIZE, useValue: SecurityContext.HTML },
       }),
       MaterialCssVarsModule.forRoot(),
       MatSidenavModule,
@@ -103,18 +97,9 @@ bootstrapApplication(AppComponent, {
       // External
       BrowserModule,
       // NOTE: both need to be present to use forFeature stores
+      // Meta-reducers are defined in meta-reducer-registry.ts with detailed phase documentation
       StoreModule.forRoot(undefined, {
-        metaReducers: [
-          undoTaskDeleteMetaReducer,
-          taskSharedCrudMetaReducer,
-          taskBatchUpdateMetaReducer,
-          taskSharedLifecycleMetaReducer,
-          taskSharedSchedulingMetaReducer,
-          projectSharedMetaReducer,
-          tagSharedMetaReducer,
-          plannerSharedMetaReducer,
-          actionLoggerReducer,
-        ],
+        metaReducers: META_REDUCERS,
         ...(environment.production
           ? {
               runtimeChecks: {
@@ -136,7 +121,11 @@ bootstrapApplication(AppComponent, {
       }),
       EffectsModule.forRoot([]),
       !environment.production && !environment.stage
-        ? StoreDevtoolsModule.instrument()
+        ? StoreDevtoolsModule.instrument({
+            maxAge: 15,
+            logOnly: environment.production,
+            actionsBlocklist: ['[TimeTracking] Add time spent'],
+          })
         : [],
       ReactiveFormsModule,
       ServiceWorkerModule.register('ngsw-worker.js', {
@@ -180,6 +169,29 @@ bootstrapApplication(AppComponent, {
     provideRouter(APP_ROUTES, withHashLocation(), withPreloading(PreloadAllModules)),
     PLUGIN_INITIALIZER_PROVIDER,
     provideZonelessChangeDetection(),
+    // Initialize operation capture service for synchronous state change capture
+    // This must run before any persistent actions are dispatched
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (captureService: OperationCaptureService) => {
+        return () => {
+          setOperationCaptureService(captureService);
+        };
+      },
+      deps: [OperationCaptureService],
+      multi: true,
+    },
+    // Initialize immediate upload service for real-time sync to SuperSync
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (immediateUploadService: ImmediateUploadService) => {
+        return () => {
+          immediateUploadService.initialize();
+        };
+      },
+      deps: [ImmediateUploadService],
+      multi: true,
+    },
   ],
 }).then(() => {
   // Initialize touch fix for Material menus

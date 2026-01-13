@@ -24,8 +24,9 @@ test.describe('App Features - Focus Mode', () => {
     });
 
     // Wait for task list and add a task
+    // Use sd:today to set dueDay so task appears in TODAY view
     await workViewPage.waitForTaskList();
-    await workViewPage.addTask('TestTask');
+    await workViewPage.addTask('TestTask sd:today');
     await expect(firstTask).toBeVisible();
 
     // Go to settings page

@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { filter, map, tap } from 'rxjs/operators';
 import {
   addProject,
@@ -12,33 +13,29 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
 import { Project } from '../project.model';
 import { Observable } from 'rxjs';
-import { ReminderService } from '../../reminder/reminder.service';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
-import { TimeTrackingService } from '../../time-tracking/time-tracking.service';
 
 @Injectable()
 export class ProjectEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _snackService = inject(SnackService);
-  private _taskArchiveService = inject(TaskArchiveService);
   private _globalConfigService = inject(GlobalConfigService);
-  private _reminderService = inject(ReminderService);
-  private _timeTrackingService = inject(TimeTrackingService);
 
+  /**
+   * Handles non-archive cleanup when a project is deleted.
+   *
+   * NOTE: Archive cleanup (task removal, time tracking cleanup) is now handled by
+   * ArchiveOperationHandler, which is the single source of truth for archive operations.
+   *
+   * @see ArchiveOperationHandler._handleDeleteProject
+   */
   deleteProjectRelatedData: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.deleteProject),
-        tap(async ({ project, allTaskIds }) => {
-          // NOTE: we also do stuff on a reducer level (probably better to handle on this level @TODO refactor)
-          const id = project.id as string;
-          this._taskArchiveService.removeAllArchiveTasksForProject(id);
-          this._reminderService.removeRemindersByRelatedIds(allTaskIds);
-          this._timeTrackingService.cleanupDataEverywhereForProject(id);
-
-          // we also might need to account for this unlikely but very nasty scenario
+        tap(({ projectId }) => {
+          // Clear defaultProjectId if the deleted project was the default
           const cfg = this._globalConfigService.cfg();
-          if (cfg && id === cfg.misc.defaultProjectId) {
+          if (cfg && projectId === cfg.misc.defaultProjectId) {
             this._globalConfigService.updateSection('misc', { defaultProjectId: null });
           }
         }),

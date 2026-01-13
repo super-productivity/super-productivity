@@ -49,6 +49,7 @@ export class FocusButtonComponent {
   });
 
   readonly isSessionRunning = this.focusModeService.isSessionRunning;
+  readonly isBreakActive = this.focusModeService.isBreakActive;
   readonly progress = this.focusModeService.progress;
   readonly mode = this.focusModeService.mode;
   readonly FocusModeMode = FocusModeMode;
@@ -62,7 +63,9 @@ export class FocusButtonComponent {
     return shortcut ? ` [${shortcut}]` : '';
   });
 
-  readonly circleVisible = computed(() => this.isSessionRunning());
+  readonly circleVisible = computed(
+    () => this.isSessionRunning() || this.isBreakActive(),
+  );
 
   readonly isCountdownMode = computed(() => {
     const mode = this.mode();
@@ -73,7 +76,8 @@ export class FocusButtonComponent {
     if (!this.circleVisible()) {
       return null;
     }
-    if (this.isCountdownMode()) {
+    // Show progress for both work sessions and breaks in countdown modes
+    if (this.isCountdownMode() || this.isBreakActive()) {
       const progress = this.progress();
       return typeof progress === 'number' ? Math.min(100, Math.max(0, progress)) : 0;
     }
@@ -90,7 +94,8 @@ export class FocusButtonComponent {
     if (!this.circleVisible()) {
       return null;
     }
-    if (this.isCountdownMode()) {
+    // Breaks always use countdown
+    if (this.isBreakActive() || this.isCountdownMode()) {
       const remaining = this.focusModeService.timeRemaining();
       return typeof remaining === 'number' ? Math.max(0, remaining) : 0;
     }

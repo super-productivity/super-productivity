@@ -59,7 +59,6 @@ export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[]
         key: 'filterUsernameForIssueUpdates',
         type: 'input',
         expressions: {
-          // eslint-disable-next-line @typescript-eslint/naming-convention
           // 'props.disabled': '!model.filterUsername',
           hide: '!model.isAutoPoll',
         },
@@ -75,7 +74,6 @@ export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[]
         key: 'backlogQuery',
         type: 'input',
         expressions: {
-          // eslint-disable-next-line @typescript-eslint/naming-convention
           // 'props.disabled': '!model.filterUsername',
           hide: '!model.isAutoAddToBacklog || !model.defaultProjectId',
         },

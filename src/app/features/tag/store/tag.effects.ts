@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
   distinctUntilChanged,
   filter,
@@ -10,21 +11,19 @@ import {
   tap,
 } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
-import { selectTodayTagTaskIds } from './tag.reducer';
+import {
+  selectTodayTagRepair,
+  selectTodayTaskIds,
+} from '../../work-context/store/work-context.selectors';
 import { T } from '../../../t.const';
 import { SnackService } from '../../../core/snack/snack.service';
 import { deleteTag, deleteTags, updateTag } from './tag.actions';
 import { TagService } from '../tag.service';
-import { TaskService } from '../../tasks/task.service';
 import { EMPTY, Observable, of } from 'rxjs';
-import { Task } from '../../tasks/task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { Router } from '@angular/router';
 import { TODAY_TAG } from '../tag.const';
-import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
-import { TimeTrackingService } from '../../time-tracking/time-tracking.service';
 import { fastArrayCompare } from '../../../util/fast-array-compare';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateService } from '@ngx-translate/core';
@@ -32,19 +31,16 @@ import { PlannerService } from '../../planner/planner.service';
 import { selectAllTasksDueToday } from '../../planner/store/planner.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
+import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
 
 @Injectable()
 export class TagEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject<Store<any>>(Store);
   private _snackService = inject(SnackService);
   private _tagService = inject(TagService);
   private _workContextService = inject(WorkContextService);
-  private _taskService = inject(TaskService);
-  private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _router = inject(Router);
-  private _taskArchiveService = inject(TaskArchiveService);
-  private _timeTrackingService = inject(TimeTrackingService);
   private _translateService = inject(TranslateService);
   private _plannerService = inject(PlannerService);
 
@@ -53,8 +49,8 @@ export class TagEffects {
       this._actions$.pipe(
         ofType(updateTag),
         tap(
-          ({ isSkipSnack }) =>
-            !isSkipSnack &&
+          (action) =>
+            !action.isSkipSnack &&
             this._snackService.open({
               type: 'SUCCESS',
               msg: T.F.TAG.S.UPDATED,
@@ -88,59 +84,15 @@ export class TagEffects {
     { dispatch: false },
   );
 
-  deleteTagRelatedData: Observable<unknown> = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(deleteTag, deleteTags),
-        map((a: any) => (a.ids ? a.ids : [a.id])),
-        tap(async (tagIdsToRemove: string[]) => {
-          // remove from all tasks
-          this._taskService.removeTagsForAllTask(tagIdsToRemove);
-          // remove from archive
-          await this._taskArchiveService.removeTagsFromAllTasks(tagIdsToRemove);
-
-          const isOrphanedParentTask = (t: Task): boolean =>
-            !t.projectId && !t.tagIds.length && !t.parentId;
-
-          // remove orphaned
-          const tasks = await this._taskService.allTasks$.pipe(first()).toPromise();
-          const taskIdsToRemove: string[] = tasks
-            .filter(isOrphanedParentTask)
-            .map((t) => t.id);
-          this._taskService.removeMultipleTasks(taskIdsToRemove);
-
-          tagIdsToRemove.forEach((id) => {
-            this._timeTrackingService.cleanupDataEverywhereForTag(id);
-          });
-
-          // remove from task repeat
-          const taskRepeatCfgs = await this._taskRepeatCfgService.taskRepeatCfgs$
-            .pipe(take(1))
-            .toPromise();
-          taskRepeatCfgs.forEach((taskRepeatCfg) => {
-            if (taskRepeatCfg.tagIds.some((r) => tagIdsToRemove.indexOf(r) >= 0)) {
-              const tagIds = taskRepeatCfg.tagIds.filter(
-                (tagId) => !tagIdsToRemove.includes(tagId),
-              );
-              if (tagIds.length === 0 && !taskRepeatCfg.projectId) {
-                this._taskRepeatCfgService.deleteTaskRepeatCfg(
-                  taskRepeatCfg.id as string,
-                );
-              } else {
-                this._taskRepeatCfgService.updateTaskRepeatCfg(
-                  taskRepeatCfg.id as string,
-                  {
-                    tagIds,
-                  },
-                );
-              }
-            }
-          });
-        }),
-      ),
-    { dispatch: false },
-  );
-
+  /**
+   * Redirects to Today tag if the current tag is deleted.
+   *
+   * NOTE: Archive cleanup (removing tags from archived tasks, cleaning up time tracking)
+   * is now handled by ArchiveOperationHandler, which is the single source of truth for
+   * archive operations.
+   *
+   * @see ArchiveOperationHandler._handleDeleteTags
+   */
   redirectIfCurrentTagIsDeleted: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
@@ -192,41 +144,58 @@ export class TagEffects {
     { dispatch: false },
   );
 
+  /**
+   * Maintains TODAY_TAG.taskIds consistency by:
+   * 1. Removing subtasks whose parents are also in the list (parent takes precedence)
+   * 2. Adding tasks with dueDay=today that aren't in the list yet
+   *
+   * SAFETY: This is a selector-based effect that dispatches actions.
+   * Protected against sync replay by:
+   * - skipDuringSyncWindow() - skips during both op application AND post-sync cooldown
+   * - distinctUntilChanged - prevents duplicate dispatches for same state
+   * - explicit isChanged check before dispatch
+   *
+   * Note: Converting to a meta-reducer was considered but rejected because:
+   * - The logic needs access to multiple selectors (todayTaskIds, allTasksDueToday)
+   * - The current guards provide sufficient protection
+   * - This is a "cleanup" effect that corrects inconsistencies, not a primary data flow
+   */
   preventParentAndSubTaskInTodayList$: any = createEffect(() =>
-    this._store$.select(selectTodayTagTaskIds).pipe(
+    this._store$.select(selectTodayTaskIds).pipe(
       filter((v) => v.length > 0),
+      skipDuringSyncWindow(),
       distinctUntilChanged(fastArrayCompare),
       // NOTE: wait a bit for potential effects to be executed
-      switchMap((todayTagTaskIds) =>
+      switchMap((todayTaskIds) =>
         this._store$.select(selectAllTasksDueToday).pipe(
           first(),
-          map((allTasksDueToday) => ({ allTasksDueToday, todayTagTaskIds })),
+          map((allTasksDueToday) => ({ allTasksDueToday, todayTaskIds })),
         ),
       ),
-      switchMap(({ allTasksDueToday, todayTagTaskIds }) => {
+      switchMap(({ allTasksDueToday, todayTaskIds }) => {
         const tasksWithParentInListIds = allTasksDueToday
-          .filter((t) => t.parentId && todayTagTaskIds.includes(t.parentId))
+          .filter((t) => t.parentId && todayTaskIds.includes(t.parentId))
           .map((t) => t.id);
 
         const dueNotInListIds = allTasksDueToday
-          .filter((t) => !todayTagTaskIds.includes(t.id))
+          .filter((t) => !todayTaskIds.includes(t.id))
           .map((t) => t.id);
 
-        const newTaskIds = [...todayTagTaskIds, ...dueNotInListIds].filter(
+        const newTaskIds = [...todayTaskIds, ...dueNotInListIds].filter(
           (id) => !tasksWithParentInListIds.includes(id),
         );
 
         // Only dispatch if the taskIds actually change
         const isChanged =
-          newTaskIds.length !== todayTagTaskIds.length ||
-          newTaskIds.some((id, i) => id !== todayTagTaskIds[i]);
+          newTaskIds.length !== todayTaskIds.length ||
+          newTaskIds.some((id, i) => id !== todayTaskIds[i]);
 
         if (isChanged && (tasksWithParentInListIds.length || dueNotInListIds.length)) {
           Log.log('Preventing parent and subtask in today list', {
             isChanged,
             tasksWithParentInListIds,
             dueNotInListIds,
-            todayTagTaskIds,
+            todayTaskIds,
             newTaskIds,
           });
 
@@ -245,6 +214,45 @@ export class TagEffects {
 
         return EMPTY;
       }),
+    ),
+  );
+
+  /**
+   * Repairs TODAY_TAG.taskIds when it becomes inconsistent with tasks' dueDay values.
+   *
+   * This handles state divergence caused by per-entity conflict resolution during sync.
+   * When "Add to today" and "Snooze" operations conflict, the TASK entity may resolve
+   * to one client's values while TODAY_TAG entity gets different values.
+   *
+   * SAFETY: Protected by skipDuringSyncWindow() - won't fire during sync replay
+   * or post-sync cooldown period.
+   *
+   * @see selectTodayTagRepair - detects inconsistencies between TODAY_TAG.taskIds and task.dueDay
+   * @see docs/ai/today-tag-architecture.md
+   */
+  repairTodayTagConsistency$: Observable<unknown> = createEffect(() =>
+    this._store$.select(selectTodayTagRepair).pipe(
+      skipDuringSyncWindow(),
+      filter(
+        (repair): repair is { needsRepair: boolean; repairedTaskIds: string[] } =>
+          repair !== null && repair.needsRepair,
+      ),
+      tap((repair) => {
+        Log.log('Repairing TODAY_TAG consistency', {
+          repairedTaskIds: repair.repairedTaskIds,
+        });
+      }),
+      map((repair) =>
+        updateTag({
+          tag: {
+            id: TODAY_TAG.id,
+            changes: {
+              taskIds: repair.repairedTaskIds,
+            },
+          },
+          isSkipSnack: true,
+        }),
+      ),
     ),
   );
   // PREVENT LAST TAG DELETION ACTIONS

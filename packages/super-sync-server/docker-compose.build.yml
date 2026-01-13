@@ -1,0 +1,11 @@
+# Local build override for development
+#
+# Usage:
+#   docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+
+services:
+  supersync:
+    build:
+      context: ../..
+      dockerfile: packages/super-sync-server/Dockerfile
+    image: supersync:local

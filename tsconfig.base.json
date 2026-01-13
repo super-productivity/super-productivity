@@ -5,8 +5,9 @@
     "outDir": "./dist/out-tsc",
     "sourceMap": true,
     "declaration": false,
-    "module": "es2022",
-    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "strict": true,
@@ -23,7 +24,8 @@
     "typeRoots": ["node_modules/@types"],
     "lib": ["es2022", "dom"],
     "paths": {
-      "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"]
+      "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
+      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"]
     },
     "plugins": [
       {

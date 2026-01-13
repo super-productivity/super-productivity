@@ -16,7 +16,6 @@ export const mapScheduleDaysToScheduleEvents = (
 
   days.forEach((day, dayIndex) => {
     beyondBudgetDays[dayIndex] = day.beyondBudgetTasks.map((taskPlannedForDay) => {
-      // eslint-disable-next-line no-mixed-operators
       const timeLeft = getTimeLeftForTask(taskPlannedForDay);
       const timeLeftInHours = timeLeft / 1000 / 60 / 60;
       const rowSpan = Math.max(Math.round(timeLeftInHours * FH), 1);
@@ -27,13 +26,13 @@ export const mapScheduleDaysToScheduleEvents = (
         type: SVEType.TaskPlannedForDay,
         style: `height: ${rowSpan * 8}px`,
         timeLeftInHours,
-        isCloseToOthers: false,
-        isCloseToOthersFirst: false,
         startHours: 0,
       };
     });
 
-    day.entries.forEach((entry, entryIndex) => {
+    const activeEntries: typeof day.entries = [];
+
+    day.entries.forEach((entry) => {
       if (entry.type !== SVEType.WorkdayEnd && entry.type !== SVEType.WorkdayStart) {
         const start = new Date(entry.start);
         const startHour = start.getHours();
@@ -44,19 +43,6 @@ export const mapScheduleDaysToScheduleEvents = (
         // NOTE: +1 cause grids start on 1
         const startRow = Math.round(hoursToday * FH) + 1;
         const timeLeft = entry.duration;
-
-        const entryBefore = day.entries[entryIndex - 1];
-        const diff = entry.start - entryBefore?.start;
-        // const isCloseToOthers = entryBefore && diff <= 5 * 60 * 1000 && diff >= 0;
-        const isCloseToOthers = !!entryBefore && diff === 0;
-        if (
-          isCloseToOthers &&
-          eventsFlat[eventsFlat.length - 1] &&
-          !eventsFlat[eventsFlat.length - 1].isCloseToOthers
-        ) {
-          eventsFlat[eventsFlat.length - 1].isCloseToOthers = true;
-          eventsFlat[eventsFlat.length - 1].isCloseToOthersFirst = true;
-        }
 
         // NOTE since we only use getMinutes we also need to floor the minutes for timeLeftInHours
         const timeLeftInHours = Math.floor(timeLeft / 1000 / 60) / 60;
@@ -73,12 +59,38 @@ export const mapScheduleDaysToScheduleEvents = (
           type: entry.type as SVEType,
           startHours: hoursToday,
           timeLeftInHours,
-          isCloseToOthers,
-          isCloseToOthersFirst: false,
-          // title: entry.data.title,
           style: `grid-column: ${dayIndex + 2};  grid-row: ${startRow} / span ${rowSpan}`,
           data: entry.data,
         });
+
+        let overlapCount = 0;
+        for (let i = 0; i < activeEntries.length; i++) {
+          if (!activeEntries[i]) {
+            continue;
+          }
+          if (
+            entry.start + entry.duration <= activeEntries[i].start ||
+            activeEntries[i].start + activeEntries[i].duration <= entry.start
+          ) {
+            delete activeEntries[i];
+          } else {
+            overlapCount += 1;
+          }
+        }
+
+        let nextInactiveSlot = activeEntries.findIndex((s) => !s);
+        if (nextInactiveSlot === -1) {
+          nextInactiveSlot = activeEntries.length === 0 ? 0 : activeEntries.length;
+        }
+
+        activeEntries[nextInactiveSlot] = entry;
+
+        if (overlapCount > 0 || nextInactiveSlot > 0) {
+          eventsFlat[eventsFlat.length - 1].overlap = {
+            count: overlapCount,
+            offset: nextInactiveSlot,
+          };
+        }
       }
     });
   });

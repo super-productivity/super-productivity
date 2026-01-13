@@ -1,0 +1,14 @@
+FROM node:22-bookworm
+
+# Install Angular CLI globally and curl for healthcheck
+RUN npm install -g @angular/cli && apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Default port (can be overridden via environment variable)
+ENV APP_PORT=4242
+
+EXPOSE ${APP_PORT}
+
+# Start Angular dev server with dynamic port
+CMD ["sh", "-c", "ng serve --port ${APP_PORT} --host 0.0.0.0"]

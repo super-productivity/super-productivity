@@ -6,6 +6,18 @@ import {
   WORK_CONTEXT_DEFAULT_THEME,
 } from '../work-context/work-context.const';
 
+/**
+ * TODAY_TAG is a "virtual tag" - it behaves differently from regular tags:
+ *
+ * 1. Should NOT be in task.tagIds - membership is determined by task.dueDay
+ * 2. TODAY_TAG.taskIds stores the ordering of today's tasks
+ * 3. Move operations (drag/drop, Ctrl+↑/↓) work uniformly via tag.reducer.ts
+ *
+ * This pattern keeps the work context system simple while separating
+ * "today" ordering (TODAY_TAG.taskIds) from future days (planner.days).
+ *
+ * See: docs/ai/today-tag-architecture.md
+ */
 export const TODAY_TAG: Tag = {
   color: null,
   created: Date.now(),
@@ -82,3 +94,14 @@ export const IN_PROGRESS_TAG: Tag = {
     isDisableBackgroundTint: false,
   },
 };
+
+/**
+ * IDs of system-created tags that should be excluded when counting user-created tags.
+ * These tags are created automatically and don't represent user data.
+ */
+export const SYSTEM_TAG_IDS: ReadonlySet<string> = new Set([
+  TODAY_TAG.id,
+  URGENT_TAG.id,
+  IMPORTANT_TAG.id,
+  IN_PROGRESS_TAG.id,
+]);

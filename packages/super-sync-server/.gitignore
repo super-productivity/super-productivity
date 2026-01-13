@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+./.env
+.env
+
+# Generated from privacy.template.html at server startup
+public/privacy.html

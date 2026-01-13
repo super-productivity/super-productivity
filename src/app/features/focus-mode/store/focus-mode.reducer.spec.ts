@@ -573,6 +573,32 @@ describe('FocusModeReducer', () => {
     });
   });
 
+  describe('setPausedTaskId (Bug #5954)', () => {
+    it('should set pausedTaskId', () => {
+      const action = a.setPausedTaskId({ pausedTaskId: 'task-123' });
+      const result = focusModeReducer(initialState, action);
+
+      expect(result.pausedTaskId).toBe('task-123');
+    });
+
+    it('should clear pausedTaskId when set to null', () => {
+      const state = { ...initialState, pausedTaskId: 'task-123' };
+      const action = a.setPausedTaskId({ pausedTaskId: null });
+      const result = focusModeReducer(state, action);
+
+      expect(result.pausedTaskId).toBeNull();
+    });
+
+    it('should preserve other state when setting pausedTaskId', () => {
+      const state = { ...initialState, currentCycle: 3, pausedTaskId: 'old-task' };
+      const action = a.setPausedTaskId({ pausedTaskId: 'new-task' });
+      const result = focusModeReducer(state, action);
+
+      expect(result.pausedTaskId).toBe('new-task');
+      expect(result.currentCycle).toBe(3);
+    });
+  });
+
   describe('FOCUS_MODE_FEATURE_KEY', () => {
     it('should export the correct feature key', () => {
       expect(FOCUS_MODE_FEATURE_KEY).toBe('focusMode');

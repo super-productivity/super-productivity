@@ -2,10 +2,10 @@ import { inject, Injectable } from '@angular/core';
 import { AppDataCompleteLegacy } from '../../imex/sync/sync.model';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
-import { isDataRepairPossible } from '../../pfapi/repair/is-data-repair-possible.util';
-import { getLastValidityError } from '../../pfapi/validate/is-related-model-data-valid';
+import { isDataRepairPossible } from '../../op-log/validation/is-data-repair-possible.util';
+import { getLastValidityError } from '../../op-log/validation/is-related-model-data-valid';
 import { IS_ELECTRON } from '../../app.constants';
-import { AppDataCompleteNew } from '../../pfapi/pfapi-config';
+import { AppDataComplete } from '../../op-log/model/model-config';
 import { Log } from '../log';
 
 @Injectable({
@@ -14,9 +14,7 @@ import { Log } from '../log';
 export class DataRepairService {
   private _translateService = inject(TranslateService);
 
-  isRepairPossibleAndConfirmed(
-    dataIn: AppDataCompleteLegacy | AppDataCompleteNew,
-  ): boolean {
+  isRepairPossibleAndConfirmed(dataIn: AppDataCompleteLegacy | AppDataComplete): boolean {
     if (!isDataRepairPossible(dataIn)) {
       Log.log({ dataIn });
       alert('Data damaged, repair not possible.');

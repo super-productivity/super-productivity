@@ -9,10 +9,9 @@ export interface ScheduleEvent {
   style: string;
   startHours: number;
   timeLeftInHours: number;
-  isCloseToOthersFirst: boolean;
-  isCloseToOthers: boolean;
   dayOfMonth?: number;
   data?: SVE['data'];
+  overlap?: { count: number; offset: number };
 }
 
 export interface ScheduleDay {
@@ -77,8 +76,10 @@ export interface ScheduleFromCalendarEvent extends CalendarIntegrationEvent {
   icon?: string;
 }
 
-export interface ScheduleCustomEvent
-  extends Omit<ScheduleFromCalendarEvent, 'calProviderId'> {
+export interface ScheduleCustomEvent extends Omit<
+  ScheduleFromCalendarEvent,
+  'calProviderId'
+> {
   icon: string;
 }
 

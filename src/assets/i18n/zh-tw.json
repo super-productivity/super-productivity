@@ -284,7 +284,7 @@
         "FILTER_USER": "Filter username",
         "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
         "PROJECT": "user name/project",
-        "PROJECT_HINT": "e.g. johannesjo/super-productivity",
+        "PROJECT_HINT": "e.g. super-productivity/super-productivity",
         "SCOPE": "範圍",
         "SCOPE_ALL": "全部",
         "SCOPE_ASSIGNED": "Assigned to me",

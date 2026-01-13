@@ -41,15 +41,7 @@
                   <div
                     (click)="editTaskRepeatCfg(taskRepeatCfg)"
                     class="repeat-text-and-icon"
-                    [matTooltip]="
-                      T.SCHEDULE.NEXT +
-                      ' ' +
-                      (getNextOccurrence(taskRepeatCfg) | shortDate2) +
-                      ', ' +
-                      T.SCHEDULE.LAST +
-                      ' ' +
-                      (taskRepeatCfg.lastTaskCreationDay | shortDate2)
-                    "
+                    [matTooltip]="getTooltipText(taskRepeatCfg)"
                     mat-ripple
                   >
                     <div class="repeat-text">{{ getRepeatInfoText(taskRepeatCfg) }}</div>
@@ -96,7 +88,7 @@
                 </div>
                 <div class="time-left">({{ task.dueWithTime | humanizeTimestamp }})</div>
               </div>
-              @if (task.reminderId) {
+              @if (task.remindAt) {
                 <mat-icon>alarm</mat-icon>
               } @else {
                 <mat-icon>schedule</mat-icon>

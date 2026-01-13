@@ -93,8 +93,6 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 61 / span 12',
           timeLeftInHours: 1,
           type: 'Task',
-          isCloseToOthers: false,
-          isCloseToOthersFirst: false,
         },
         {
           data: {
@@ -111,8 +109,6 @@ describe('mapScheduleDaysToScheduleEvents()', () => {
           style: 'grid-column: 2;  grid-row: 73 / span 6',
           timeLeftInHours: 0.5,
           type: 'Task',
-          isCloseToOthers: false,
-          isCloseToOthersFirst: false,
         },
       ],
     } as any);

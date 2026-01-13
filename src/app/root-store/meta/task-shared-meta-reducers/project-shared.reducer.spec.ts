@@ -4,6 +4,8 @@ import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
 import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
+import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
+import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import {
@@ -14,6 +16,23 @@ import {
   expectStateUpdate,
   expectTagUpdates,
 } from './test-utils';
+import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import {
+  DEFAULT_TASK_REPEAT_CFG,
+  TaskRepeatCfg,
+  TaskRepeatCfgState,
+} from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
+
+const createMockTaskRepeatCfg = (
+  overrides: Partial<TaskRepeatCfg> = {},
+): TaskRepeatCfg => ({
+  ...DEFAULT_TASK_REPEAT_CFG,
+  id: 'cfg1',
+  title: 'Repeat Config',
+  projectId: null,
+  tagIds: [],
+  ...overrides,
+});
 
 describe('projectSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -404,8 +423,10 @@ describe('projectSharedMetaReducer', () => {
         ['task1', 'task2', 'keep-task'],
         ['task1', 'task3', 'keep-task'],
       );
+      const mockProject = createMockProject();
       const action = TaskSharedActions.deleteProject({
-        project: createMockProject(),
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
         allTaskIds: ['task1', 'task2', 'task3'],
       });
 
@@ -436,7 +457,8 @@ describe('projectSharedMetaReducer', () => {
       };
 
       const action = TaskSharedActions.deleteProject({
-        project: projectToDelete,
+        projectId: projectToDelete.id,
+        noteIds: projectToDelete.noteIds,
         allTaskIds: ['task1'],
       });
 
@@ -453,8 +475,10 @@ describe('projectSharedMetaReducer', () => {
     });
 
     it('should handle empty project task lists', () => {
+      const mockProject = createMockProject();
       const action = TaskSharedActions.deleteProject({
-        project: createMockProject(),
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
         allTaskIds: [],
       });
 
@@ -468,6 +492,187 @@ describe('projectSharedMetaReducer', () => {
         mockReducer,
         baseState,
       );
+    });
+
+    it('should cleanup time tracking state for deleted project', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // Add time tracking state
+      testState[TIME_TRACKING_FEATURE_KEY] = {
+        tag: {},
+        project: {
+          project1: { timeSpent: 3600 },
+          'other-project': { timeSpent: 7200 },
+        },
+      } as TimeTrackingState;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      metaReducer(testState, action);
+
+      const passedState = mockReducer.calls.mostRecent().args[0];
+      expect(passedState[TIME_TRACKING_FEATURE_KEY].project.project1).toBeUndefined();
+      expect(
+        passedState[TIME_TRACKING_FEATURE_KEY].project['other-project'],
+      ).toBeDefined();
+    });
+
+    it('should handle deleting project without time tracking state', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // No time tracking state set
+      testState[TIME_TRACKING_FEATURE_KEY] = undefined;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      // Should not throw
+      expect(() => metaReducer(testState, action)).not.toThrow();
+    });
+
+    it('should delete orphaned task repeat configs when project is deleted', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // Add task repeat configs: one linked to the project (no tags = orphaned), one not
+      testState[TASK_REPEAT_CFG_FEATURE_NAME] = {
+        ids: ['cfg-project', 'cfg-other'],
+        entities: {
+          'cfg-project': createMockTaskRepeatCfg({
+            id: 'cfg-project',
+            projectId: 'project1',
+            tagIds: [],
+          }),
+          'cfg-other': createMockTaskRepeatCfg({
+            id: 'cfg-other',
+            projectId: 'other-project',
+            tagIds: [],
+          }),
+        },
+      } as TaskRepeatCfgState;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      metaReducer(testState, action);
+      const passedState = mockReducer.calls.mostRecent().args[0];
+
+      // cfg-project should be deleted (orphaned: no tags, project deleted)
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-project'],
+      ).toBeUndefined();
+      // cfg-other should remain
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-other'],
+      ).toBeDefined();
+    });
+
+    it('should delete task repeat config even if it has tags', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // Add task repeat config linked to project AND has tags
+      testState[TASK_REPEAT_CFG_FEATURE_NAME] = {
+        ids: ['cfg-with-tags'],
+        entities: {
+          'cfg-with-tags': createMockTaskRepeatCfg({
+            id: 'cfg-with-tags',
+            projectId: 'project1',
+            tagIds: ['tag1', 'tag2'],
+          }),
+        },
+      } as TaskRepeatCfgState;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      metaReducer(testState, action);
+      const passedState = mockReducer.calls.mostRecent().args[0];
+
+      // cfg-with-tags should be deleted (repeat configs are always deleted with project)
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-with-tags'],
+      ).toBeUndefined();
+    });
+
+    it('should delete all project repeat configs but leave unrelated configs', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // Mix of configs: some linked to project (with/without tags), some unrelated
+      testState[TASK_REPEAT_CFG_FEATURE_NAME] = {
+        ids: ['cfg-no-tags', 'cfg-with-tags', 'cfg-unrelated'],
+        entities: {
+          'cfg-no-tags': createMockTaskRepeatCfg({
+            id: 'cfg-no-tags',
+            projectId: 'project1',
+            tagIds: [],
+          }),
+          'cfg-with-tags': createMockTaskRepeatCfg({
+            id: 'cfg-with-tags',
+            projectId: 'project1',
+            tagIds: ['tag1'],
+          }),
+          'cfg-unrelated': createMockTaskRepeatCfg({
+            id: 'cfg-unrelated',
+            projectId: 'other-project',
+            tagIds: ['tag2'],
+          }),
+        },
+      } as TaskRepeatCfgState;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      metaReducer(testState, action);
+      const passedState = mockReducer.calls.mostRecent().args[0];
+
+      // All project1 configs should be deleted
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-no-tags'],
+      ).toBeUndefined();
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-with-tags'],
+      ).toBeUndefined();
+      // cfg-unrelated should remain unchanged
+      expect(
+        passedState[TASK_REPEAT_CFG_FEATURE_NAME].entities['cfg-unrelated'].projectId,
+      ).toBe('other-project');
+    });
+
+    it('should handle deleting project without task repeat cfg state', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], []) as any;
+
+      // No task repeat cfg state set
+      testState[TASK_REPEAT_CFG_FEATURE_NAME] = undefined;
+
+      const mockProject = createMockProject({ id: 'project1' });
+      const action = TaskSharedActions.deleteProject({
+        projectId: mockProject.id,
+        noteIds: mockProject.noteIds,
+        allTaskIds: ['task1'],
+      });
+
+      // Should not throw
+      expect(() => metaReducer(testState, action)).not.toThrow();
     });
   });
 

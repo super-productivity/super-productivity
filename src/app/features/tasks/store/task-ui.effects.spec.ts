@@ -1,6 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideMockActions } from '@ngrx/effects/testing';
-import { Observable, of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { TaskUiEffects } from './task-ui.effects';
 import { provideMockStore } from '@ngrx/store/testing';
 import { TaskService } from '../task.service';
@@ -17,10 +16,12 @@ import { T } from '../../../t.const';
 import { Task } from '../task.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { selectProjectById } from '../../project/store/project.selectors';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { Action } from '@ngrx/store';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
-  let actions$: Observable<any>;
+  let actions$: Subject<Action>;
   let snackServiceMock: jasmine.SpyObj<SnackService>;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let navigateToTaskServiceMock: jasmine.SpyObj<NavigateToTaskService>;
@@ -66,6 +67,7 @@ describe('TaskUiEffects', () => {
 
   describe('taskCreatedSnack$ with visible task', () => {
     beforeEach(() => {
+      actions$ = new Subject<Action>();
       snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
       taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
       navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
@@ -79,7 +81,7 @@ describe('TaskUiEffects', () => {
       TestBed.configureTestingModule({
         providers: [
           TaskUiEffects,
-          provideMockActions(() => actions$),
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
             initialState: {},
             selectors: [{ selector: selectProjectById, value: null }],
@@ -109,7 +111,6 @@ describe('TaskUiEffects', () => {
 
     it('should show snack with action button when task is visible on current page', (done) => {
       const task = createMockTask({ id: 'existing-task-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         expect(snackServiceMock.open).toHaveBeenCalled();
@@ -119,11 +120,12 @@ describe('TaskUiEffects', () => {
         expect(snackParams.actionFn).toBeDefined();
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
 
     it('should call taskService.setSelectedId when action clicked for visible task', (done) => {
       const task = createMockTask({ id: 'existing-task-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
@@ -133,11 +135,12 @@ describe('TaskUiEffects', () => {
         expect(navigateToTaskServiceMock.navigate).not.toHaveBeenCalled();
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
 
     it('should show TASK_CREATED message for task visible on current page', (done) => {
       const task = createMockTask({ id: 'existing-task-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
@@ -145,11 +148,14 @@ describe('TaskUiEffects', () => {
         expect(snackParams.msg).toBe(T.F.TASK.S.TASK_CREATED);
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
   });
 
   describe('taskCreatedSnack$ with non-visible task', () => {
     beforeEach(() => {
+      actions$ = new Subject<Action>();
       snackServiceMock = jasmine.createSpyObj('SnackService', ['open']);
       taskServiceMock = jasmine.createSpyObj('TaskService', ['setSelectedId']);
       navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
@@ -163,7 +169,7 @@ describe('TaskUiEffects', () => {
       TestBed.configureTestingModule({
         providers: [
           TaskUiEffects,
-          provideMockActions(() => actions$),
+          { provide: LOCAL_ACTIONS, useValue: actions$ },
           provideMockStore({
             initialState: {},
             selectors: [
@@ -198,7 +204,6 @@ describe('TaskUiEffects', () => {
 
     it('should show snack with action button when task is NOT visible on current page', (done) => {
       const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         expect(snackServiceMock.open).toHaveBeenCalled();
@@ -208,11 +213,12 @@ describe('TaskUiEffects', () => {
         expect(snackParams.actionFn).toBeDefined();
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
 
     it('should call navigateToTaskService.navigate when action clicked for non-visible task', (done) => {
       const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
@@ -225,11 +231,12 @@ describe('TaskUiEffects', () => {
         expect(taskServiceMock.setSelectedId).not.toHaveBeenCalled();
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
 
     it('should show CREATED_FOR_PROJECT message for task in different project', (done) => {
       const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
-      actions$ = of(createAddTaskAction(task));
 
       effects.taskCreatedSnack$.subscribe(() => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
@@ -237,6 +244,8 @@ describe('TaskUiEffects', () => {
         expect(snackParams.msg).toBe(T.F.TASK.S.CREATED_FOR_PROJECT);
         done();
       });
+
+      actions$.next(createAddTaskAction(task));
     });
   });
 });

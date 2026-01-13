@@ -1,8 +1,10 @@
 import { selectLaterTodayTasksWithSubTasks } from './task.selectors';
 import { Task, TaskState } from '../task.model';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('selectLaterTodayTasksWithSubTasks', () => {
   const now = new Date();
+  const todayStr = getDbDateStr(now); // Virtual tag pattern: use dueDay for TODAY membership
   const tomorrow = new Date(
     now.getFullYear(),
     now.getMonth(),
@@ -66,13 +68,15 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       ...overrides,
     }) as Task;
 
+  // Virtual tag pattern: Tasks are "in TODAY" because of dueDay, not tagIds
+  // TODAY_TAG should NEVER be in task.tagIds
   const mockAllTasks: Task[] = [
     // Task scheduled for later today (2 PM)
     createMockTask({
       id: 'LATER_TODAY_1',
       title: 'Meeting at 2 PM',
       dueWithTime: todayAt(14, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
     // Task scheduled for even later today (6 PM)
@@ -80,7 +84,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'LATER_TODAY_2',
       title: 'Exercise at 6 PM',
       dueWithTime: todayAt(18, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
     // Task scheduled for earlier today (already passed - 8 AM)
@@ -88,7 +92,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'EARLIER_TODAY',
       title: 'Morning standup',
       dueWithTime: todayAt(8, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
     // Task scheduled for tomorrow
@@ -96,7 +100,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'TOMORROW_TASK',
       title: 'Tomorrow task',
       dueWithTime: new Date(tomorrow).setHours(10, 0, 0, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr, // Still in today list even though scheduled for tomorrow
     }),
 
     // Task in TODAY but without dueWithTime
@@ -104,7 +108,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'UNSCHEDULED_TODAY',
       title: 'Unscheduled today task',
       dueWithTime: undefined,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
     // Task scheduled for later but already done
@@ -113,15 +117,16 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Done task',
       dueWithTime: todayAt(15, 0),
       isDone: true,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
-    // Task scheduled for later but not in TODAY
+    // Task scheduled for later today via dueWithTime (no dueDay)
+    // With the virtual tag pattern, this IS in TODAY because dueWithTime is for today
     createMockTask({
-      id: 'NOT_TODAY_SCHEDULED',
-      title: 'Not in today',
+      id: 'VIA_TIME_ONLY',
+      title: 'Scheduled via time only',
       dueWithTime: todayAt(16, 0),
-      tagIds: [],
+      dueDay: null, // No dueDay, but still in TODAY via dueWithTime
     }),
 
     // Parent task with subtasks
@@ -129,7 +134,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_LATER',
       title: 'Parent task for later',
       dueWithTime: todayAt(17, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_1', 'SUB_2'],
     }),
 
@@ -138,14 +143,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'SUB_1',
       title: 'Subtask 1',
       parentId: 'PARENT_LATER',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
 
     createMockTask({
       id: 'SUB_2',
       title: 'Subtask 2',
       parentId: 'PARENT_LATER',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     }),
   ];
 
@@ -160,13 +165,10 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should select tasks scheduled for later today', () => {
-    // Only pass IDs of tasks that are in TODAY tag
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
+    // Virtual tag pattern: tasks are "in TODAY" because of dueDay or dueWithTime for today
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -176,9 +178,10 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(taskIds).toContain('LATER_TODAY_1');
     expect(taskIds).toContain('LATER_TODAY_2');
     expect(taskIds).toContain('PARENT_LATER');
+    expect(taskIds).toContain('VIA_TIME_ONLY'); // Task with dueWithTime only (no dueDay)
     expect(taskIds).not.toContain('SUB_1');
     expect(taskIds).not.toContain('SUB_2');
-    expect(result.length).toBe(3);
+    expect(result.length).toBe(4);
 
     // Verify that PARENT_LATER has its subtasks
     const parentTask = result.find((t) => t.id === 'PARENT_LATER');
@@ -187,12 +190,9 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should not include tasks scheduled for earlier today', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -200,12 +200,9 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should not include tasks scheduled for tomorrow', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -213,12 +210,9 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should not include unscheduled tasks', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -226,38 +220,51 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
   });
 
   it('should not include done tasks', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
     expect(taskIds).not.toContain('DONE_LATER_TODAY');
   });
 
-  it('should only include tasks that are in TODAY tag', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
+  it('should only include tasks that are in TODAY (via dueDay or dueWithTime)', () => {
+    // Create a task for tomorrow that should NOT be included
+    const tomorrowDate = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      new Date().getDate() + 1,
+    );
+    const tomorrowStr = getDbDateStr(tomorrowDate);
+    const taskForTomorrow = createMockTask({
+      id: 'SCHEDULED_FOR_TOMORROW',
+      title: 'Scheduled for tomorrow',
+      // Use Date constructor to avoid timezone issues with date string parsing
+      dueWithTime: new Date(
+        tomorrowDate.getFullYear(),
+        tomorrowDate.getMonth(),
+        tomorrowDate.getDate(),
+        14,
+        0,
+        0,
+      ).getTime(),
+      dueDay: tomorrowStr,
+    });
+
     const result = selectLaterTodayTasksWithSubTasks.projector(
-      createTaskState(mockAllTasks),
-      todayTaskIds,
+      createTaskState([...mockAllTasks, taskForTomorrow]),
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
-    expect(taskIds).not.toContain('NOT_TODAY_SCHEDULED');
+    expect(taskIds).not.toContain('SCHEDULED_FOR_TOMORROW');
   });
 
   it('should include parent tasks with all their subtasks (not as separate items)', () => {
-    const todayTaskIds = mockAllTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const parentIndex = result.findIndex((t) => t.id === 'PARENT_LATER');
@@ -279,16 +286,13 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'CURRENT_TIME_TASK',
       title: 'Task at current time',
       dueWithTime: currentTimeMs,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const tasksWithCurrent = [...mockAllTasks, taskAtCurrentTime];
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(tasksWithCurrent),
-      [
-        ...mockAllTasks.filter((t) => t.tagIds.includes('TODAY')).map((t) => t.id),
-        'CURRENT_TIME_TASK',
-      ],
+      todayStr,
     );
 
     // Task scheduled at exactly current time should be included
@@ -306,16 +310,13 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'MIDNIGHT_TASK',
       title: 'Task at midnight',
       dueWithTime: todayAt(23, 59),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const tasksWithMidnight = [...mockAllTasks, taskAtMidnight];
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(tasksWithMidnight),
-      [
-        ...mockAllTasks.filter((t) => t.tagIds.includes('TODAY')).map((t) => t.id),
-        'MIDNIGHT_TASK',
-      ],
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -327,24 +328,24 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       createMockTask({
         id: 'PAST_TASK',
         dueWithTime: todayAt(8, 0),
-        tagIds: ['TODAY'],
+        dueDay: todayStr,
       }),
       createMockTask({
         id: 'TOMORROW_TASK_2',
         dueWithTime: new Date(tomorrow).getTime(),
-        tagIds: ['TODAY'],
+        dueDay: todayStr,
       }),
     ];
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(noMatchingTasks),
-      ['PAST_TASK', 'TOMORROW_TASK_2'],
+      todayStr,
     );
 
     expect(result.length).toBe(0);
   });
 
-  it('should return empty array when TODAY tag is null', () => {
+  it('should return empty array when todayStr is null', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       null as any,
@@ -358,7 +359,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_UNSCHEDULED',
       title: 'Parent without schedule',
       dueWithTime: undefined,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_SCHEDULED'],
     });
 
@@ -367,17 +368,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask scheduled for later',
       dueWithTime: todayAt(15, 0),
       parentId: 'PARENT_UNSCHEDULED',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentWithScheduledSubtask, scheduledSubtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Should include parent (because it has scheduled subtask) - not the subtask as separate item
@@ -392,7 +390,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_NOT_SCHEDULED',
       title: 'Parent not scheduled for later',
       dueWithTime: undefined, // Parent not scheduled
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_SCHEDULED'],
     });
 
@@ -401,17 +399,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Scheduled subtask',
       dueWithTime: todayAt(14, 0), // Subtask is scheduled
       parentId: 'PARENT_NOT_SCHEDULED',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentTask, scheduledSubtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -432,7 +427,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_1',
       title: 'Parent 1',
       dueWithTime: todayAt(16, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_1_1'],
     });
 
@@ -441,7 +436,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask 1-1',
       dueWithTime: todayAt(14, 0),
       parentId: 'PARENT_1',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     // Parent unscheduled with subtask at 3 PM
@@ -449,7 +444,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_2',
       title: 'Parent 2',
       dueWithTime: undefined,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_2_1'],
     });
 
@@ -458,17 +453,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask 2-1',
       dueWithTime: todayAt(15, 0),
       parentId: 'PARENT_2',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parent1, sub1, parent2, sub2];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Should be sorted by earliest time: Parent 1 (has subtask at 2 PM), then Parent 2 (has subtask at 3 PM)
@@ -488,7 +480,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_NO_SCHEDULE',
       title: 'Parent without schedule',
       dueWithTime: undefined,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_NO_SCHEDULE', 'SUB_PAST'],
     });
 
@@ -497,7 +489,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask without schedule',
       dueWithTime: undefined,
       parentId: 'PARENT_NO_SCHEDULE',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const subPast = createMockTask({
@@ -505,17 +497,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask in past',
       dueWithTime: todayAt(8, 0),
       parentId: 'PARENT_NO_SCHEDULE',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentUnscheduled, subUnscheduled, subPast];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Should not include any tasks
@@ -527,7 +516,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_SCHEDULED',
       title: 'Parent scheduled',
       dueWithTime: todayAt(16, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_ALSO_SCHEDULED'],
     });
 
@@ -536,17 +525,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask also scheduled',
       dueWithTime: todayAt(14, 0),
       parentId: 'PARENT_SCHEDULED',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentTask, subtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -561,12 +547,23 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(parent.subTasks?.[0].id).toBe('SUB_ALSO_SCHEDULED');
   });
 
-  it('should show orphaned subtask when parent is not in TODAY tag', () => {
+  it('should show orphaned subtask when parent is not in TODAY', () => {
+    // Parent scheduled for tomorrow - not in TODAY at all
+    const tomorrowTimestamp = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      new Date().getDate() + 1,
+      15,
+      0,
+      0,
+    ).getTime();
+    const tomorrowStr = getDbDateStr(new Date(tomorrowTimestamp));
+
     const parentNotToday = createMockTask({
       id: 'PARENT_NOT_TODAY',
-      title: 'Parent not in today',
-      dueWithTime: todayAt(15, 0),
-      tagIds: [], // NOT in TODAY tag
+      title: 'Parent scheduled for tomorrow',
+      dueWithTime: tomorrowTimestamp,
+      dueDay: tomorrowStr, // Scheduled for tomorrow, not today
       subTaskIds: ['SUB_IN_TODAY'],
     });
 
@@ -575,20 +572,17 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Subtask in today',
       dueWithTime: todayAt(14, 0),
       parentId: 'PARENT_NOT_TODAY',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentNotToday, orphanedSubtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
-    // Only orphaned subtask should appear
+    // Only orphaned subtask should appear (parent is for tomorrow)
     expect(result.length).toBe(1);
     expect(result[0].id).toBe('SUB_IN_TODAY');
     expect(result[0].subTasks?.length).toBe(0);
@@ -599,7 +593,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'PARENT_MIXED',
       title: 'Parent with mixed subtasks',
       dueWithTime: undefined, // Parent not scheduled
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_SCHEDULED_M', 'SUB_UNSCHEDULED_M'],
     });
 
@@ -608,7 +602,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Scheduled subtask',
       dueWithTime: todayAt(14, 0),
       parentId: 'PARENT_MIXED',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const unscheduledSubtask = createMockTask({
@@ -616,17 +610,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Unscheduled subtask',
       dueWithTime: undefined,
       parentId: 'PARENT_MIXED',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentTask, scheduledSubtask, unscheduledSubtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Parent should be included because it has a scheduled subtask
@@ -648,7 +639,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       id: 'GRANDPARENT',
       title: 'Grandparent',
       dueWithTime: undefined,
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['PARENT_MIDDLE'],
     });
 
@@ -657,7 +648,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Parent in middle',
       dueWithTime: undefined,
       parentId: 'GRANDPARENT',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['CHILD_SCHEDULED'],
     });
 
@@ -666,17 +657,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       title: 'Scheduled child',
       dueWithTime: todayAt(15, 0),
       parentId: 'PARENT_MIDDLE',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [grandparent, parent, child];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Only grandparent should appear as top-level
@@ -687,12 +675,32 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     expect(result[0].subTasks?.[0].id).toBe('PARENT_MIDDLE');
   });
 
+  it('should include task with dueWithTime for today but no dueDay (virtual tag pattern)', () => {
+    // This is the key bug fix test: when scheduling with time, dueDay is cleared
+    // but the task should still appear in Later Today via dueWithTime
+    const taskWithTimeOnly = createMockTask({
+      id: 'TIME_ONLY_TASK',
+      title: 'Task scheduled via dueWithTime only',
+      dueWithTime: todayAt(15, 0),
+      dueDay: undefined, // No dueDay set - this was the bug scenario
+    });
+
+    const result = selectLaterTodayTasksWithSubTasks.projector(
+      createTaskState([taskWithTimeOnly]),
+      todayStr,
+    );
+
+    // Task should be included because dueWithTime is for today
+    expect(result.length).toBe(1);
+    expect(result[0].id).toBe('TIME_ONLY_TASK');
+  });
+
   it('should properly handle done tasks exclusion', () => {
     const parentTask = createMockTask({
       id: 'PARENT_WITH_DONE',
       title: 'Parent task',
       dueWithTime: todayAt(15, 0),
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
       subTaskIds: ['SUB_DONE', 'SUB_NOT_DONE'],
     });
 
@@ -702,7 +710,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       dueWithTime: todayAt(14, 0),
       isDone: true,
       parentId: 'PARENT_WITH_DONE',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const notDoneSubtask = createMockTask({
@@ -711,17 +719,14 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
       dueWithTime: todayAt(16, 0),
       isDone: false,
       parentId: 'PARENT_WITH_DONE',
-      tagIds: ['TODAY'],
+      dueDay: todayStr,
     });
 
     const mockTasks = [parentTask, doneSubtask, notDoneSubtask];
-    const todayTaskIds = mockTasks
-      .filter((t) => t.tagIds.includes('TODAY'))
-      .map((t) => t.id);
 
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
-      todayTaskIds,
+      todayStr,
     );
 
     // Parent should be included

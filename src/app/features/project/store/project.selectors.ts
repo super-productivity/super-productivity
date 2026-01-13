@@ -71,12 +71,3 @@ export const selectUnarchivedProjectsWithoutCurrent = createSelector(
       .filter((p) => !p.isArchived && !p.isHiddenFromMenu && p.id);
   },
 );
-
-export const selectProjectBreakTimeForProject = createSelector(
-  selectProjectById,
-  (project) => project.breakTime,
-);
-export const selectProjectBreakNrForProject = createSelector(
-  selectProjectById,
-  (project) => project.breakNr,
-);

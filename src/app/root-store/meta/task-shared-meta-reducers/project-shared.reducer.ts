@@ -8,6 +8,8 @@ import {
   TASK_FEATURE_NAME,
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
+import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
+import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { unique } from '../../../util/unique';
@@ -19,6 +21,17 @@ import {
   updateProject,
   updateTags,
 } from './task-shared-helpers';
+import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { TaskRepeatCfgState } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
+import { adapter as taskRepeatCfgAdapter } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
+
+/**
+ * Extended state type that includes feature stores not in RootState.
+ * Meta-reducers have access to ALL store state.
+ */
+interface ExtendedState extends RootState {
+  [TASK_REPEAT_CFG_FEATURE_NAME]?: TaskRepeatCfgState;
+}
 
 // =============================================================================
 // ACTION HANDLERS
@@ -78,11 +91,55 @@ const handleMoveToOtherProject = (
   return updatedState;
 };
 
+/**
+ * Removes deleted project from TIME_TRACKING state.
+ * Only handles current state - archive cleanup must stay in effect (async).
+ */
+const cleanupTimeTrackingForProject = (
+  timeTrackingState: TimeTrackingState | undefined,
+  projectId: string,
+): TimeTrackingState | undefined => {
+  if (!timeTrackingState) return timeTrackingState;
+  if (!(projectId in timeTrackingState.project)) return timeTrackingState;
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { [projectId]: _, ...remainingProjects } = timeTrackingState.project;
+  return {
+    ...timeTrackingState,
+    project: remainingProjects,
+  };
+};
+
+/**
+ * Deletes all task repeat configs when their project is deleted.
+ * Repeat configs are always deleted regardless of whether they have tags,
+ * because they are tied to the project's workflow.
+ */
+const cleanupTaskRepeatCfgsForProject = (
+  taskRepeatCfgState: TaskRepeatCfgState | undefined,
+  projectId: string,
+): TaskRepeatCfgState | undefined => {
+  if (!taskRepeatCfgState) return taskRepeatCfgState;
+
+  const cfgIdsToDelete: string[] = [];
+
+  Object.values(taskRepeatCfgState.entities).forEach((cfg) => {
+    if (!cfg || cfg.projectId !== projectId) return;
+    cfgIdsToDelete.push(cfg.id as string);
+  });
+
+  if (cfgIdsToDelete.length === 0) {
+    return taskRepeatCfgState;
+  }
+
+  return taskRepeatCfgAdapter.removeMany(cfgIdsToDelete, taskRepeatCfgState);
+};
+
 const handleDeleteProject = (
-  state: RootState,
-  project: { id: string },
+  state: ExtendedState,
+  projectId: string,
   allTaskIds: string[],
-): RootState => {
+): ExtendedState => {
   const tagUpdates = (state[TAG_FEATURE_NAME].ids as string[]).map(
     (tagId): Update<Tag> => ({
       id: tagId,
@@ -93,18 +150,36 @@ const handleDeleteProject = (
   );
 
   // First update tags
-  const stateWithUpdatedTags = updateTags(state, tagUpdates);
+  const stateWithUpdatedTags = updateTags(state, tagUpdates) as ExtendedState;
+
+  // Cleanup TIME_TRACKING for deleted project
+  const updatedTimeTracking = cleanupTimeTrackingForProject(
+    stateWithUpdatedTags[TIME_TRACKING_FEATURE_KEY],
+    projectId,
+  );
+
+  // Cleanup TASK_REPEAT_CFG for deleted project
+  const updatedTaskRepeatCfgState = cleanupTaskRepeatCfgsForProject(
+    stateWithUpdatedTags[TASK_REPEAT_CFG_FEATURE_NAME],
+    projectId,
+  );
 
   // Then remove the project entity
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { [project.id]: _, ...remainingEntities } =
+  const { [projectId]: _, ...remainingEntities } =
     stateWithUpdatedTags[PROJECT_FEATURE_NAME].entities;
   const remainingIds = (
     stateWithUpdatedTags[PROJECT_FEATURE_NAME].ids as string[]
-  ).filter((id) => id !== project.id);
+  ).filter((id) => id !== projectId);
 
   return {
     ...stateWithUpdatedTags,
+    ...(updatedTimeTracking && {
+      [TIME_TRACKING_FEATURE_KEY]: updatedTimeTracking,
+    }),
+    ...(updatedTaskRepeatCfgState && {
+      [TASK_REPEAT_CFG_FEATURE_NAME]: updatedTaskRepeatCfgState,
+    }),
     [PROJECT_FEATURE_NAME]: {
       ...stateWithUpdatedTags[PROJECT_FEATURE_NAME],
       ids: remainingIds,
@@ -117,7 +192,10 @@ const handleDeleteProject = (
 // META REDUCER
 // =============================================================================
 
-const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
+const createActionHandlers = (
+  state: ExtendedState,
+  action: Action,
+): ActionHandlerMap => ({
   [TaskSharedActions.moveToOtherProject.type]: () => {
     const { task, targetProjectId } = action as ReturnType<
       typeof TaskSharedActions.moveToOtherProject
@@ -125,10 +203,10 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
     return handleMoveToOtherProject(state, task, targetProjectId);
   },
   [TaskSharedActions.deleteProject.type]: () => {
-    const { project, allTaskIds } = action as ReturnType<
+    const { projectId, allTaskIds } = action as ReturnType<
       typeof TaskSharedActions.deleteProject
     >;
-    return handleDeleteProject(state, project, allTaskIds);
+    return handleDeleteProject(state, projectId, allTaskIds);
   },
 });
 
@@ -138,10 +216,10 @@ export const projectSharedMetaReducer: MetaReducer = (
   return (state: unknown, action: Action) => {
     if (!state) return reducer(state, action);
 
-    const rootState = state as RootState;
-    const actionHandlers = createActionHandlers(rootState, action);
+    const extendedState = state as ExtendedState;
+    const actionHandlers = createActionHandlers(extendedState, action);
     const handler = actionHandlers[action.type];
-    const updatedState = handler ? handler(rootState) : rootState;
+    const updatedState = handler ? handler(extendedState) : extendedState;
 
     return reducer(updatedState, action);
   };

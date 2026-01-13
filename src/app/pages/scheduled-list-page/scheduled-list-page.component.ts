@@ -32,6 +32,7 @@ import { getNextRepeatOccurrence } from '../../features/task-repeat-cfg/store/ge
 import { ShortDate2Pipe } from '../../ui/pipes/short-date2.pipe';
 import { ShortTimePipe } from '../../ui/pipes/short-time.pipe';
 import { MatTooltip } from '@angular/material/tooltip';
+import { formatMonthDay } from '../../util/format-month-day.util';
 
 @Component({
   selector: 'scheduled-list-page',
@@ -115,5 +116,19 @@ export class ScheduledListPageComponent {
 
   getNextOccurrence(repeatCfg: TaskRepeatCfg): number | null {
     return getNextRepeatOccurrence(repeatCfg, new Date())?.getTime() || null;
+  }
+
+  getTooltipText(repeatCfg: TaskRepeatCfg): string {
+    const locale = this._dateTimeFormatService.currentLocale;
+    const nextDate = this.getNextOccurrence(repeatCfg);
+    const nextFormatted = nextDate ? formatMonthDay(new Date(nextDate), locale) : '';
+    const lastFormatted = repeatCfg.lastTaskCreationDay
+      ? formatMonthDay(new Date(repeatCfg.lastTaskCreationDay), locale)
+      : '';
+
+    const next = this._translateService.instant(T.SCHEDULE.NEXT);
+    const last = this._translateService.instant(T.SCHEDULE.LAST);
+
+    return `${next} ${nextFormatted}, ${last} ${lastFormatted}`;
   }
 }

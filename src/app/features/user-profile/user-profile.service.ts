@@ -1,11 +1,16 @@
 import { inject, Injectable, Injector, signal } from '@angular/core';
 import { DEFAULT_PROFILE_ID, ProfileMetadata, UserProfile } from './user-profile.model';
 import { UserProfileStorageService } from './user-profile-storage.service';
-import { PfapiService } from '../../pfapi/pfapi.service';
+import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
+import { BackupService } from '../../op-log/backup/backup.service';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { Log } from '../../core/log';
 import { nanoid } from 'nanoid';
 import { SnackService } from '../../core/snack/snack.service';
-import { GlobalConfigService } from '../config/global-config.service';
+import { Store } from '@ngrx/store';
+import { updateGlobalConfigSection } from '../config/store/global-config.actions';
+import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 /**
  * Core service for user profile management
@@ -16,10 +21,24 @@ import { GlobalConfigService } from '../config/global-config.service';
 })
 export class UserProfileService {
   private readonly _storageService = inject(UserProfileStorageService);
-  private readonly _pfapiService = inject(PfapiService);
+  private readonly _providerManager = inject(SyncProviderManager);
+  private readonly _backupService = inject(BackupService);
+  private readonly _opLogStore = inject(OperationLogStoreService);
   private readonly _snackService = inject(SnackService);
   private readonly _injector = inject(Injector);
-  private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _store = inject(Store);
+
+  // Lazy-loaded to avoid circular dependency:
+  // UserProfileService → SyncWrapperService → DataInitService → UserProfileService
+  private _syncWrapperServiceCache: SyncWrapperService | null = null;
+  private get _syncWrapperService(): SyncWrapperService {
+    if (!this._syncWrapperServiceCache) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { SyncWrapperService: SWS } = require('../../imex/sync/sync-wrapper.service');
+      this._syncWrapperServiceCache = this._injector.get(SWS);
+    }
+    return this._syncWrapperServiceCache!;
+  }
 
   readonly isInitialized = signal(false);
 
@@ -268,12 +287,12 @@ export class UserProfileService {
     );
 
     try {
-      // Step 1: Trigger sync for current profile using pfapi directly
+      // Step 1: Trigger sync for current profile
       Log.log('UserProfileService: Triggering sync before profile switch');
       try {
-        const syncProvider = this._pfapiService.pf.getActiveSyncProvider();
+        const syncProvider = this._providerManager.getActiveProvider();
         if (syncProvider) {
-          await this._pfapiService.pf.sync();
+          await this._syncWrapperService.sync();
           Log.log('UserProfileService: Sync completed successfully');
         } else {
           Log.log('UserProfileService: No active sync provider, skipping sync');
@@ -288,7 +307,7 @@ export class UserProfileService {
 
       // Step 2: Save current profile data
       Log.log('UserProfileService: Saving current profile data');
-      const currentData = await this._pfapiService.pf.loadCompleteBackup();
+      const currentData = await this._backupService.loadCompleteBackup(true);
       Log.log('UserProfileService: Current profile data structure:', {
         hasData: !!currentData,
         hasDataData: !!currentData?.data,
@@ -338,7 +357,7 @@ export class UserProfileService {
         // Profile has existing data - import it
         // importCompleteBackup will reload the window automatically
         Log.log('UserProfileService: Importing target profile data (will reload app)');
-        await this._pfapiService.importCompleteBackup(
+        await this._backupService.importCompleteBackup(
           targetData,
           false, // isSkipLegacyWarnings
           false, // isSkipReload - let it reload automatically
@@ -349,20 +368,23 @@ export class UserProfileService {
         Log.log(
           'UserProfileService: Target profile has no data, clearing database for fresh start',
         );
-        await this._pfapiService.pf.db.clearDatabase();
+        // Clear all operations to start fresh
+        await this._opLogStore.clearAllOperations();
 
         // IMPORTANT: Enable user profiles in the new profile's config
         // Otherwise the user won't see the profile button to switch back
-        // We directly write to the database to avoid race conditions with NgRx
+        // We dispatch to NgRx to update the config
         Log.log('UserProfileService: Enabling user profiles in new profile config');
-        const defaultConfig = await this._pfapiService.pf.m.globalConfig.load();
-        await this._pfapiService.pf.m.globalConfig.save({
-          ...defaultConfig,
-          appFeatures: {
-            ...defaultConfig.appFeatures,
-            isEnableUserProfiles: true,
-          },
-        });
+        const defaultConfig = DEFAULT_GLOBAL_CONFIG;
+        this._store.dispatch(
+          updateGlobalConfigSection({
+            sectionKey: 'appFeatures',
+            sectionCfg: {
+              ...defaultConfig.appFeatures,
+              isEnableUserProfiles: true,
+            } as any, // Type cast needed for section-specific config
+          }),
+        );
 
         Log.log(
           'UserProfileService: Database cleared and profiles enabled, reloading app',
@@ -423,7 +445,7 @@ export class UserProfileService {
 
     // Check if there's existing user data in the database
     try {
-      const existingData = await this._pfapiService.pf.loadCompleteBackup();
+      const existingData = await this._backupService.loadCompleteBackup(true);
 
       // Only save if there's actual data (check if any model has data)
       const hasData = existingData && Object.keys(existingData.data || {}).length > 0;

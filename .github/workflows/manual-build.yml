@@ -7,6 +7,9 @@ on:
         required: true
         default: 'master'
 
+permissions:
+  contents: write
+
 jobs:
   windows-bin:
     runs-on: windows-latest

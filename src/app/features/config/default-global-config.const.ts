@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { TRACKING_INTERVAL } from '../../app.constants';
 import { getDefaultVoice } from '../domina-mode/getAvailableVoices';
 import { TaskReminderOptionId } from '../tasks/task.model';
@@ -70,7 +71,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isTimedFullScreenBlocker: false,
     timedFullScreenBlockerDuration: 8000,
     isFocusWindow: false,
-    /* eslint-disable-next-line */
+
     takeABreakMessage:
       'You have been working for ${duration} without one. Go away from the computer! Take a short walk! Makes you more productive in the long run!',
     takeABreakMinWorkingTime: 60 * minute,
@@ -192,12 +193,23 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     encryptKey: null,
     syncProvider: null,
     syncInterval: minute,
+    isManualSyncOnly: false,
 
     webDav: {
       baseUrl: null,
       userName: null,
       password: null,
       syncFolderPath: 'super-productivity',
+    },
+
+    superSync: {
+      baseUrl: environment.production
+        ? 'https://sync.super-productivity.com'
+        : 'http://localhost:1900',
+      userName: null,
+      password: null,
+      accessToken: null,
+      syncFolderPath: null,
     },
 
     localFileSync: {

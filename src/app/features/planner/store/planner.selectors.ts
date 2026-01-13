@@ -51,9 +51,12 @@ export const selectAllTasksDueToday = createSelector(
       // there is a chance that the task is not in the store anymore
       .filter((t) => !!t);
 
+    // Use Set for O(1) lookup instead of O(n) .find() in loop
+    const allDueIds = new Set(allDue.map((t) => t.id));
     [...allDueDayTasks, ...allDueWithTimeTasks].forEach((task) => {
-      if (!allDue.find((t) => t.id === task.id)) {
+      if (!allDueIds.has(task.id)) {
         allDue.push(task);
+        allDueIds.add(task.id);
       }
     });
     return allDue;
@@ -83,10 +86,9 @@ export const selectPlannerDays = (
   todayStr: string,
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 ) => {
-  const allAllPlannedIds = allPlannedTasks.map((t) => t.id);
-  const unplannedTaskIdsToday = todayListTaskIds.filter(
-    (id) => !allAllPlannedIds.includes(id),
-  );
+  // Use Set for O(1) lookup instead of O(n) .includes() in filter
+  const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
+  const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
     selectTaskFeatureState,

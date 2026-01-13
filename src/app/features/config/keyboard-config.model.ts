@@ -7,8 +7,6 @@ export type KeyboardConfig = Readonly<{
   goToWorkView?: string | null;
   goToTimeline?: string | null;
   goToScheduledView?: string | null;
-  // goToFocusMode?: string|null,
-  // goToDailyAgenda?: string|null,
   goToSettings?: string | null;
   addNewTask?: string | null;
   addNewProject?: string | null;

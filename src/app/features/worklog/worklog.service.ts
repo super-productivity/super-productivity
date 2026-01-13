@@ -29,16 +29,14 @@ import { NavigationEnd, Router } from '@angular/router';
 import { WorklogTask } from '../tasks/task.model';
 import { mapArchiveToWorklogWeeks } from './util/map-archive-to-worklog-weeks';
 import { DateAdapter } from '@angular/material/core';
-import { PfapiService } from '../../pfapi/pfapi.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
 @Injectable({ providedIn: 'root' })
 export class WorklogService {
-  private readonly _pfapiService = inject(PfapiService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _taskService = inject(TaskService);

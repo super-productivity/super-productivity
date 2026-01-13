@@ -1,4 +1,5 @@
 import {
+  DestroyRef,
   effect,
   EnvironmentInjector,
   inject,
@@ -7,7 +8,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { BodyClass, IS_ELECTRON } from '../../app.constants';
 import { IS_MAC } from '../../util/is-mac';
 import { distinctUntilChanged, map, startWith, switchMap, take } from 'rxjs/operators';
@@ -52,6 +53,7 @@ export class GlobalThemeService {
   private _http = inject(HttpClient);
   private _customThemeService = inject(CustomThemeService);
   private _environmentInjector = inject(EnvironmentInjector);
+  private _destroyRef = inject(DestroyRef);
   private _hasInitialized = false;
 
   darkMode = signal<DarkModeCfg>(
@@ -230,10 +232,12 @@ export class GlobalThemeService {
 
   private _initThemeWatchers(): void {
     // init theme watchers
-    this._workContextService.currentTheme$.subscribe((theme: WorkContextThemeCfg) =>
-      this._setColorTheme(theme),
-    );
-    this._isDarkThemeObs$.subscribe((isDarkTheme) => this._setDarkTheme(isDarkTheme));
+    this._workContextService.currentTheme$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((theme: WorkContextThemeCfg) => this._setColorTheme(theme));
+    this._isDarkThemeObs$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((isDarkTheme) => this._setDarkTheme(isDarkTheme));
 
     // Update Electron title bar overlay when dark mode changes
     if (IS_ELECTRON && !IS_MAC) {
@@ -276,15 +280,19 @@ export class GlobalThemeService {
     }
 
     if (IS_ANDROID_WEB_VIEW) {
-      androidInterface.isKeyboardShown$.subscribe((isShown) => {
-        Log.log('isShown', isShown);
+      androidInterface.isKeyboardShown$
+        .pipe(takeUntilDestroyed(this._destroyRef))
+        .subscribe((isShown) => {
+          Log.log('isShown', isShown);
 
-        this.document.body.classList.remove(BodyClass.isAndroidKeyboardHidden);
-        this.document.body.classList.remove(BodyClass.isAndroidKeyboardShown);
-        this.document.body.classList.add(
-          isShown ? BodyClass.isAndroidKeyboardShown : BodyClass.isAndroidKeyboardHidden,
-        );
-      });
+          this.document.body.classList.remove(BodyClass.isAndroidKeyboardHidden);
+          this.document.body.classList.remove(BodyClass.isAndroidKeyboardShown);
+          this.document.body.classList.add(
+            isShown
+              ? BodyClass.isAndroidKeyboardShown
+              : BodyClass.isAndroidKeyboardHidden,
+          );
+        });
     }
 
     // Use effect to reactively update animation class
@@ -324,16 +332,18 @@ export class GlobalThemeService {
       }
     });
 
-    this._imexMetaService.isDataImportInProgress$.subscribe((isInProgress) => {
-      // timer(1000, 5000)
-      //   .pipe(map((val) => val % 2 === 0))
-      //   .subscribe((isInProgress) => {
-      if (isInProgress) {
-        this.document.body.classList.add(BodyClass.isDataImportInProgress);
-      } else {
-        this.document.body.classList.remove(BodyClass.isDataImportInProgress);
-      }
-    });
+    this._imexMetaService.isDataImportInProgress$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe((isInProgress) => {
+        // timer(1000, 5000)
+        //   .pipe(map((val) => val % 2 === 0))
+        //   .subscribe((isInProgress) => {
+        if (isInProgress) {
+          this.document.body.classList.add(BodyClass.isDataImportInProgress);
+        } else {
+          this.document.body.classList.remove(BodyClass.isDataImportInProgress);
+        }
+      });
 
     if (IS_TOUCH_ONLY) {
       this.document.body.classList.add(BodyClass.isTouchOnly);

@@ -2,10 +2,12 @@ import { Injectable, computed, effect, signal } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import { Banner, BANNER_SORT_PRIO_MAP, BannerId } from './banner.model';
 import { tap } from 'rxjs/operators';
+import { Subscription } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class BannerService {
   private _banners = signal<Banner[]>([]);
+  private _hideWhenSub: Subscription | null = null;
 
   activeBanner = computed(() => {
     const banners = this._banners();
@@ -22,8 +24,12 @@ export class BannerService {
     // Set up auto-dismiss effect
     effect(() => {
       const activeBanner = this.activeBanner();
+      // Clean up previous subscription when banner changes
+      this._hideWhenSub?.unsubscribe();
+      this._hideWhenSub = null;
+
       if (activeBanner?.hideWhen$) {
-        activeBanner.hideWhen$
+        this._hideWhenSub = activeBanner.hideWhen$
           .pipe(
             tap(() => {
               this.dismiss(activeBanner.id);

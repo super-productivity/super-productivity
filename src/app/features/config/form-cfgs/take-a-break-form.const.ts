@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import { ConfigFormSection, TakeABreakConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 /* eslint-disable @typescript-eslint/naming-convention */

@@ -40,6 +40,7 @@ import { IssueProviderCalendar } from '../issue/issue.model';
 import { CalendarProviderCfg } from '../issue/providers/calendar/calendar.model';
 import { CORS_SKIP_EXTRA_HEADERS, IS_WEB_BROWSER } from '../../app.constants';
 import { Log } from '../../core/log';
+import { getErrorTxt } from '../../util/get-error-text';
 import {
   getCalendarEventIdCandidates,
   matchesAnyCalendarEventId,
@@ -245,7 +246,7 @@ export class CalendarIntegrationService {
             type: 'ERROR',
             msg: T.F.CALENDARS.S.CAL_PROVIDER_ERROR,
             translateParams: {
-              errTxt: err?.toString() || err?.status || err?.message || 'UNKNOWN :(',
+              errTxt: getErrorTxt(err),
             },
           });
           if (isForwardError) {

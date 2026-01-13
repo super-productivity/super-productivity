@@ -348,7 +348,6 @@ const convertVEventToCalendarIntegrationEvent = (
   };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getAllPossibleEventsAfterStartFromIcal = (
   ICAL: any,
   icalData: string,

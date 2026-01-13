@@ -39,7 +39,7 @@ import { first, take, map } from 'rxjs/operators';
 import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
-import { TaskArchiveService } from '../features/time-tracking/task-archive.service';
+import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { PluginDialogComponent } from './ui/plugin-dialog/plugin-dialog.component';
 import { IS_ELECTRON } from '../app.constants';
@@ -51,6 +51,7 @@ import { Log, PluginLog } from '../core/log';
 import { TaskCopy } from '../features/tasks/task.model';
 import { ProjectCopy } from '../features/project/project.model';
 import { TagCopy } from '../features/tag/tag.model';
+import { MAX_BATCH_OPERATIONS_SIZE } from '../op-log/core/operation-log.const';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
@@ -625,12 +626,13 @@ export class PluginBridgeService implements OnDestroy {
   /**
    * Batch update tasks for a project
    * Only generate IDs here - let the reducer handle all validation
+   * Large batches are automatically chunked to prevent oversized operation payloads
    */
   async batchUpdateForProject(request: BatchUpdateRequest): Promise<BatchUpdateResult> {
     typia.assert<BatchUpdateRequest>(request);
 
-    // Generate IDs for all create operations
-    // We need to do this here so we can return them to the plugin immediately
+    // Generate IDs for all create operations upfront
+    // We need consistent IDs across all chunks
     const createdTaskIds: { [tempId: string]: string } = {};
     request.operations.forEach((op) => {
       if (op.type === 'create') {
@@ -639,14 +641,27 @@ export class PluginBridgeService implements OnDestroy {
       }
     });
 
-    // Dispatch the batch update action - let the reducer handle all validation
-    this._store.dispatch(
-      TaskSharedActions.batchUpdateForProject({
-        projectId: request.projectId,
-        operations: request.operations,
-        createdTaskIds,
-      }),
-    );
+    // Chunk large operations to prevent oversized payloads
+    const chunks = this._chunkOperations(request.operations);
+
+    if (chunks.length > 1) {
+      PluginLog.log('PluginBridge: Chunking large batch operation', {
+        totalOperations: request.operations.length,
+        chunks: chunks.length,
+        chunkSize: MAX_BATCH_OPERATIONS_SIZE,
+      });
+    }
+
+    // Dispatch each chunk as a separate action
+    chunks.forEach((chunk) => {
+      this._store.dispatch(
+        TaskSharedActions.batchUpdateForProject({
+          projectId: request.projectId,
+          operations: chunk,
+          createdTaskIds, // Same IDs mapping for all chunks
+        }),
+      );
+    });
 
     // Return the generated IDs immediately
     // The reducer will validate everything including project existence
@@ -657,18 +672,41 @@ export class PluginBridgeService implements OnDestroy {
   }
 
   /**
+   * Chunks operations array into smaller batches to prevent oversized payloads
+   */
+  private _chunkOperations<T>(operations: T[]): T[][] {
+    if (operations.length <= MAX_BATCH_OPERATIONS_SIZE) {
+      return [operations];
+    }
+
+    const chunks: T[][] = [];
+    for (let i = 0; i < operations.length; i += MAX_BATCH_OPERATIONS_SIZE) {
+      chunks.push(operations.slice(i, i + MAX_BATCH_OPERATIONS_SIZE));
+    }
+    return chunks;
+  }
+
+  /**
    * Internal method to persist plugin data
+   * Includes size and rate limit validation
    */
   private async _persistDataSynced(pluginId: string, dataStr: string): Promise<void> {
     typia.assert<string>(dataStr);
 
     try {
-      await this._pluginUserPersistenceService.persistPluginUserData(pluginId, dataStr);
+      this._pluginUserPersistenceService.persistPluginUserData(pluginId, dataStr);
       console.log('PluginBridge: Plugin data persisted successfully', {
         pluginId,
+        dataSize: new Blob([dataStr]).size,
       });
     } catch (error) {
+      // Log the specific error (rate limit or size exceeded)
       PluginLog.err('PluginBridge: Failed to persist plugin data:', error);
+
+      // Rethrow with the original error message for better debugging
+      if (error instanceof Error) {
+        throw error;
+      }
       throw new Error(this._translateService.instant(T.PLUGINS.UNABLE_TO_PERSIST_DATA));
     }
   }

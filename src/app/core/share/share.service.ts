@@ -265,9 +265,8 @@ export class ShareService {
   private async _showShareDialog(payload: SharePayload): Promise<ShareResult> {
     try {
       // Import dialog component dynamically to avoid circular dependencies
-      const { DialogShareComponent } = await import(
-        './dialog-share/dialog-share.component'
-      );
+      const { DialogShareComponent } =
+        await import('./dialog-share/dialog-share.component');
 
       const dialogRef = this._matDialog.open(DialogShareComponent, {
         width: '500px',

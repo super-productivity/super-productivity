@@ -68,10 +68,10 @@ const _reducer = createReducer<NoteState>(
     appDataComplete.note ? appDataComplete.note : state,
   ),
 
-  on(TaskSharedActions.deleteProject, (state, { project }) => {
-    return adapter.removeMany(project.noteIds, {
+  on(TaskSharedActions.deleteProject, (state, { noteIds }) => {
+    return adapter.removeMany(noteIds, {
       ...state,
-      todayOrder: state.todayOrder.filter((idI) => !project.noteIds.includes(idI)),
+      todayOrder: state.todayOrder.filter((idI) => !noteIds.includes(idI)),
     });
   }),
 

@@ -2,7 +2,7 @@ import { WorkContextCommon, WorkContextThemeCfg } from './work-context.model';
 import { WorklogExportSettings, WorklogGrouping } from '../worklog/worklog.model';
 import { ConfigFormSection } from '../config/global-config.model';
 import { T } from '../../t.const';
-import { FormlyFieldConfig } from '@ngx-formly/core/lib/models/fieldconfig';
+import { FormlyFieldConfig } from '@ngx-formly/core';
 
 export const WORKLOG_EXPORT_DEFAULTS: WorklogExportSettings = {
   cols: ['DATE', 'START', 'END', 'TIME_CLOCK', 'TITLES_INCLUDING_SUB'],

@@ -28,9 +28,10 @@ import { NotifyService } from '../../core/notify/notify.service';
 import { UiHelperService } from '../ui-helper/ui-helper.service';
 import { WorkContextService } from '../work-context/work-context.service';
 import { Tick } from '../../core/global-tracking-interval/tick.model';
-import { Actions, ofType } from '@ngrx/effects';
+import { ofType } from '@ngrx/effects';
 import { idleDialogResult, triggerResetBreakTimer } from '../idle/store/idle.actions';
 import { playSound } from '../../util/play-sound';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
 const BREAK_TRIGGER_DURATION = 10 * 60 * 1000;
 const PING_UPDATE_BANNER_INTERVAL = 60 * 1000;
@@ -54,7 +55,7 @@ export class TakeABreakService {
   private _taskService = inject(TaskService);
   private _timeTrackingService = inject(GlobalTrackingIntervalService);
   private _idleService = inject(IdleService);
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _configService = inject(GlobalConfigService);
   private _workContextService = inject(WorkContextService);
   private _notifyService = inject(NotifyService);

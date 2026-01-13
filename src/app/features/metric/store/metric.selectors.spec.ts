@@ -13,16 +13,10 @@ describe('Metric Selectors - Focus Sessions', () => {
     entities: {
       [dayOne]: {
         id: dayOne,
-        obstructions: [],
-        improvements: [],
-        improvementsTomorrow: [],
         focusSessions: [25 * 60 * 1000, 15 * 60 * 1000],
       },
       [dayTwo]: {
         id: dayTwo,
-        obstructions: [],
-        improvements: [],
-        improvementsTomorrow: [],
         focusSessions: [],
       },
     },

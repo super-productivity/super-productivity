@@ -1,4 +1,3 @@
-import { saveAs } from 'file-saver';
 import { Directory, Encoding, Filesystem, WriteFileResult } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { IS_ANDROID_WEB_VIEW } from './is-android-web-view';
@@ -54,7 +53,14 @@ export const download = async (
     return { isSnap: true };
   } else {
     const blob = new Blob([stringData], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, filename);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     return {};
   }
 };

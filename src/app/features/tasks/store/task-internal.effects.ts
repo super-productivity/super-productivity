@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import {
   addSubTask,
   setCurrentTask,
@@ -24,7 +25,7 @@ import {
 
 @Injectable()
 export class TaskInternalEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject(Store);
   private _workContextSession = inject(WorkContextService);
 

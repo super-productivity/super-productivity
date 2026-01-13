@@ -36,7 +36,7 @@ import {
   selectAllTasksWithSubTasks,
   selectTasksWithSubTasksByIds,
 } from '../tasks/store/task.selectors';
-import { Actions, ofType } from '@ngrx/effects';
+import { ofType } from '@ngrx/effects';
 import { WorklogExportSettings } from '../worklog/worklog.model';
 import { updateProjectAdvancedCfg } from '../project/store/project.actions';
 import { updateAdvancedConfigForTag } from '../tag/store/tag.actions';
@@ -61,19 +61,20 @@ import { distinctUntilChangedObject } from '../../util/distinct-until-changed-ob
 import { DateService } from 'src/app/core/date/date.service';
 import { getTimeSpentForDay } from './get-time-spent-for-day.util';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
-import { TimeTrackingActions } from '../time-tracking/store/time-tracking.actions';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import { updateWorkContextData } from '../time-tracking/store/time-tracking.actions';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { Log } from '../../core/log';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
 @Injectable({
   providedIn: 'root',
 })
 export class WorkContextService {
   private _store$ = inject<Store<WorkContextState>>(Store);
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _tagService = inject(TagService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _dateService = inject(DateService);
@@ -274,21 +275,23 @@ export class WorkContextService {
     shareReplay(1),
   );
 
+  // Filter project tasks to show only those scheduled for today
+  // TODAY_TAG is a virtual tag - membership is determined by task.dueDay, not task.tagIds
+  // See: docs/ai/today-tag-architecture.md
   mainListTasksInProject$: Observable<TaskWithSubTasks[]> = this.mainListTasks$.pipe(
-    map((tasks) =>
-      tasks
+    map((tasks) => {
+      const todayStr = getDbDateStr();
+      return tasks
         .filter(
           (task) =>
-            task.tagIds.includes(TODAY_TAG.id) ||
-            task.subTasks.some((subTask) => subTask.tagIds.includes(TODAY_TAG.id)),
+            task.dueDay === todayStr ||
+            task.subTasks.some((subTask) => subTask.dueDay === todayStr),
         )
         .map((task) => ({
           ...task,
-          subTasks: task.subTasks.filter((subTask) =>
-            subTask.tagIds.includes(TODAY_TAG.id),
-          ),
-        })),
-    ),
+          subTasks: task.subTasks.filter((subTask) => subTask.dueDay === todayStr),
+        }));
+    }),
   );
 
   doneTaskIds$: Observable<string[]> = this._store$.select(
@@ -527,8 +530,8 @@ export class WorkContextService {
     return this._store$.pipe(select(selectAllTasks)).pipe(
       map((tasks) =>
         getTimeSpentForDay(
-          // avoid double counting parent and sub tasks
-          tasks.filter((task) => !task.parentId),
+          // Guard against undefined tasks during sync, avoid double counting parent/sub tasks
+          tasks.filter((task) => task && !task.parentId),
           day,
         ),
       ),
@@ -586,7 +589,7 @@ export class WorkContextService {
       throw new Error('Invalid active work context');
     }
     this._store$.dispatch(
-      TimeTrackingActions.updateWorkContextData({
+      updateWorkContextData({
         ctx: { id: this.activeWorkContextId, type: this.activeWorkContextType },
         date,
         updates: { s: newVal },
@@ -599,7 +602,7 @@ export class WorkContextService {
       throw new Error('Invalid active work context');
     }
     this._store$.dispatch(
-      TimeTrackingActions.updateWorkContextData({
+      updateWorkContextData({
         ctx: { id: this.activeWorkContextId, type: this.activeWorkContextType },
         date,
         updates: { e: newVal },
@@ -618,7 +621,7 @@ export class WorkContextService {
     const currentBreakNr = (await this.getBreakNr$().pipe(first()).toPromise()) || 0;
 
     this._store$.dispatch(
-      TimeTrackingActions.updateWorkContextData({
+      updateWorkContextData({
         ctx: { id: this.activeWorkContextId, type: this.activeWorkContextType },
         date,
         updates: { b: currentBreakNr + 1, bt: currentBreakTime + valToAdd },
@@ -635,7 +638,7 @@ export class WorkContextService {
     }
 
     this._store$.dispatch(
-      TimeTrackingActions.updateWorkContextData({
+      updateWorkContextData({
         ctx: { id: this.activeWorkContextId, type: this.activeWorkContextType },
         date,
         updates: { b: nrBreaks },
@@ -652,7 +655,7 @@ export class WorkContextService {
     }
 
     this._store$.dispatch(
-      TimeTrackingActions.updateWorkContextData({
+      updateWorkContextData({
         ctx: { id: this.activeWorkContextId, type: this.activeWorkContextType },
         date,
         updates: { bt: breakTime },

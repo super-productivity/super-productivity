@@ -291,7 +291,7 @@
         "FILTER_USER": "Nome utente (es. per filtrare le modifiche fatte da te)",
         "GITLAB_BASE_URL": "URL di base GitLab personalizzato",
         "PROJECT": "Percorso completo o nome utente / progetto",
-        "PROJECT_HINT": "es. johannesjo/super-productivity",
+        "PROJECT_HINT": "es. super-productivity/super-productivity",
         "SCOPE": "Scopo",
         "SCOPE_ALL": "Tutti",
         "SCOPE_ASSIGNED": "Assegnato a me",

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { EMPTY, merge, Observable, timer } from 'rxjs';
 import { first, map, switchMap, tap } from 'rxjs/operators';
 import { IssueService } from '../issue.service';
@@ -17,7 +18,7 @@ import { IssueLog } from '../../../core/log';
 @Injectable()
 export class PollIssueUpdatesEffects {
   private _store = inject(Store);
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private readonly _issueService = inject(IssueService);
   private readonly _workContextService = inject(WorkContextService);
 

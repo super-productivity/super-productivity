@@ -4,7 +4,11 @@ import { stringToMs } from '../ui/duration/string-to-ms.pipe';
 export const adjustToLiveFormlyForm = (
   items: FormlyFieldConfig[],
 ): FormlyFieldConfig[] => {
-  return items.map((item) => {
+  // Filter out undefined/null items to prevent "Cannot read properties of undefined" errors
+  // This can happen during race conditions when forms are rebuilt during state changes
+  const validItems = items.filter((item): item is FormlyFieldConfig => item != null);
+
+  return validItems.map((item) => {
     if (item.type === 'checkbox') {
       return {
         ...item,

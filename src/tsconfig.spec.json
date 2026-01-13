@@ -5,7 +5,8 @@
     "outDir": "../.tmp/out-tsc/spec",
     "types": ["jasmine", "node"],
     "paths": {
-      "@super-productivity/plugin-api": ["../packages/plugin-api/dist/index.d.ts"]
+      "@super-productivity/plugin-api": ["packages/plugin-api/src/index.ts"],
+      "@sp/shared-schema": ["packages/shared-schema/src/index.ts"]
     }
   },
   "files": ["test.ts", "polyfills.ts"],

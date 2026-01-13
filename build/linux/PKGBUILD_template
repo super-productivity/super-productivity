@@ -13,7 +13,7 @@ depends=('gtk3' 'nss')
 provides=("${_pkgname}")
 conflicts=("${_pkgname}"
 		   "${_pkgname}-git")
-source=("superproductivity-${pkgver}-amd64.deb::https://github.com/johannesjo/super-productivity/releases/download/v${pkgver}/superProductivity-amd64.deb")
+source=("superproductivity-${pkgver}-amd64.deb::https://github.com/super-productivity/super-productivity/releases/download/v${pkgver}/superProductivity-amd64.deb")
 sha256sums=('SKIP')
 
 package() {

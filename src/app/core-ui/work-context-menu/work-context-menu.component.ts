@@ -205,7 +205,6 @@ export class WorkContextMenuComponent implements OnInit {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: task.id,
-          reminderId: task.reminderId,
           isSkipToast: true,
         }),
       );

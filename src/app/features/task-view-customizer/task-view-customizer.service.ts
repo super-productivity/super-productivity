@@ -7,7 +7,7 @@ import { selectAllTags } from './../tag/store/tag.reducer';
 import { Store } from '@ngrx/store';
 import { Project } from '../project/project.model';
 import { Tag } from '../tag/tag.model';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { computed } from '@angular/core';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { getWeekRange } from '../../util/get-week-range';
@@ -61,18 +61,24 @@ export class TaskViewCustomizerService {
 
   private _initProjects(): void {
     if (!this._projectsLoaded) {
-      this.store.select(selectAllProjects).subscribe((projects) => {
-        this._allProjects = projects;
-      });
+      this.store
+        .select(selectAllProjects)
+        .pipe(takeUntilDestroyed())
+        .subscribe((projects) => {
+          this._allProjects = projects;
+        });
       this._projectsLoaded = true;
     }
   }
 
   private _initTags(): void {
     if (!this._tagsLoaded) {
-      this.store.select(selectAllTags).subscribe((tags) => {
-        this._allTags = tags;
-      });
+      this.store
+        .select(selectAllTags)
+        .pipe(takeUntilDestroyed())
+        .subscribe((tags) => {
+          this._allTags = tags;
+        });
       this._tagsLoaded = true;
     }
   }

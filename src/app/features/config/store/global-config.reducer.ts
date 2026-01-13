@@ -89,9 +89,39 @@ export const initialGlobalConfigState: GlobalConfigState = {
 export const globalConfigReducer = createReducer<GlobalConfigState>(
   initialGlobalConfigState,
 
-  on(loadAllData, (oldState, { appDataComplete }) =>
-    appDataComplete.globalConfig ? appDataComplete.globalConfig : oldState,
-  ),
+  on(loadAllData, (oldState, { appDataComplete }) => {
+    if (!appDataComplete.globalConfig) {
+      return oldState;
+    }
+
+    const incomingSyncConfig = appDataComplete.globalConfig.sync;
+
+    // Preserve local-only sync settings if they're already set.
+    // These settings should remain local to each client:
+    // - syncProvider: Each client can use different providers (Dropbox, WebDAV, etc.)
+    // - isEnabled: Each client independently controls whether sync is enabled
+    //
+    // If oldState.sync.syncProvider is null, we're on first load (using initialGlobalConfigState)
+    // and should use the incoming values (from snapshot). Otherwise, preserve local values.
+    const hasLocalSettings = oldState.sync.syncProvider !== null;
+
+    const syncProvider = hasLocalSettings
+      ? oldState.sync.syncProvider
+      : incomingSyncConfig.syncProvider;
+
+    const isEnabled = hasLocalSettings
+      ? oldState.sync.isEnabled
+      : incomingSyncConfig.isEnabled;
+
+    return {
+      ...appDataComplete.globalConfig,
+      sync: {
+        ...incomingSyncConfig,
+        syncProvider,
+        isEnabled,
+      },
+    };
+  }),
 
   on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
     ...state,

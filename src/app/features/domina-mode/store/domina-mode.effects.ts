@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect } from '@ngrx/effects';
+import { createEffect } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { EMPTY, Observable, timer } from 'rxjs';
 import { distinctUntilChanged, switchMap, tap, withLatestFrom } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
@@ -9,7 +10,7 @@ import { speak } from '../../../util/speak';
 
 @Injectable()
 export class DominaModeEffects {
-  private actions$ = inject(Actions);
+  private actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject(Store);
 
   dominaMode$: Observable<unknown> = createEffect(

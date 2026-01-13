@@ -22,14 +22,20 @@ export const issueProviderReducer = createReducer(
   on(loadAllData, (oldState, { appDataComplete }) =>
     appDataComplete.issueProvider ? appDataComplete.issueProvider : oldState,
   ),
-  on(TaskSharedActions.deleteProject, (state, { project }) =>
+  on(TaskSharedActions.deleteProject, (state, { projectId }) =>
     adapter.updateMany(
       state.ids
         .map((id) => state.entities[id])
-        .filter((ip) => ip?.defaultProjectId === project.id)
+        .filter((ip) => ip?.defaultProjectId === projectId)
         .map((ip) => ({ id: ip!.id, changes: { defaultProjectId: null } })),
       state,
     ),
+  ),
+  on(TaskSharedActions.deleteIssueProvider, (state, { issueProviderId }) =>
+    adapter.removeOne(issueProviderId, state),
+  ),
+  on(TaskSharedActions.deleteIssueProviders, (state, { ids }) =>
+    adapter.removeMany(ids, state),
   ),
   // -----------
 
@@ -50,12 +56,6 @@ export const issueProviderReducer = createReducer(
   ),
   on(IssueProviderActions.updateIssueProviders, (state, action) =>
     adapter.updateMany(action.issueProviders, state),
-  ),
-  on(IssueProviderActions.deleteIssueProvider, (state, action) =>
-    adapter.removeOne(action.id, state),
-  ),
-  on(IssueProviderActions.deleteIssueProviders, (state, action) =>
-    adapter.removeMany(action.ids, state),
   ),
   on(IssueProviderActions.loadIssueProviders, (state, action) =>
     adapter.setAll(action.issueProviders, state),

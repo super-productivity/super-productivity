@@ -44,7 +44,7 @@
       [task]="task"
       [tagsToHide]="panelCfg().includedTagIds || []"
     >
-      @if (task.reminderId) {
+      @if (task.remindAt) {
         <button
           (click)="scheduleTask(task, $event)"
           [title]="T.F.TASK.CMP.EDIT_SCHEDULED | translate"

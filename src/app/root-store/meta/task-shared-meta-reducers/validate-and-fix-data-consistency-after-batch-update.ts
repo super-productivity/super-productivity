@@ -10,6 +10,16 @@ import { Tag } from '../../../features/tag/tag.model';
 import { taskAdapter } from '../../../features/tasks/store/task.adapter';
 
 /**
+ * Compares two arrays for same elements (order-independent).
+ * O(n) using Set instead of O(n log n + serialization) with JSON.stringify + sort.
+ */
+const arraysHaveSameElements = (a: string[], b: string[]): boolean => {
+  if (a.length !== b.length) return false;
+  const setA = new Set(a);
+  return b.every((id) => setA.has(id));
+};
+
+/**
  * Validates and fixes data consistency across tasks, projects, and tags
  * Ensures bidirectional consistency: project.taskIds ↔ task.projectId, tag.taskIds ↔ task.tagIds
  */
@@ -123,10 +133,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
       const currentTaskIds = currentTag.taskIds || [];
 
       // Only update if the task list actually changed
-      if (
-        JSON.stringify([...currentTaskIds].sort()) !==
-        JSON.stringify([...newTaskIds].sort())
-      ) {
+      if (!arraysHaveSameElements(currentTaskIds, newTaskIds)) {
         tagUpdates.push({
           id: tagId,
           changes: { taskIds: newTaskIds },
@@ -205,10 +212,7 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
       const currentSubTaskIds = parentTask.subTaskIds || [];
 
       // Only update if the subtask list actually changed
-      if (
-        JSON.stringify([...currentSubTaskIds].sort()) !==
-        JSON.stringify([...newSubTaskIds].sort())
-      ) {
+      if (!arraysHaveSameElements(currentSubTaskIds, newSubTaskIds)) {
         parentChildUpdates.push({
           id: parentId,
           changes: { subTaskIds: newSubTaskIds },
@@ -262,25 +266,42 @@ export const validateAndFixDataConsistencyAfterBatchUpdate = (
   // 4. ORPHAN CLEANUP: Delete orphaned subtasks and clean non-existent references
   // =========================================================================
 
-  // Simple approach: iterate over all tasks and collect orphaned subtasks
+  // Build parent-child index once for O(1) child lookups
+  const childrenByParent = new Map<string, string[]>();
   const orphanedTaskIds: string[] = [];
   const existingTaskIds = new Set(Object.keys(newState[TASK_FEATURE_NAME].entities));
 
-  // Find all tasks that have a parentId pointing to a non-existent parent
+  // Single pass: build index and find orphaned tasks
   Object.values(newState[TASK_FEATURE_NAME].entities).forEach((task) => {
-    if (task && task.parentId && !existingTaskIds.has(task.parentId)) {
-      orphanedTaskIds.push(task.id);
+    if (task) {
+      if (task.parentId) {
+        // Build parent-child index
+        let children = childrenByParent.get(task.parentId);
+        if (!children) {
+          children = [];
+          childrenByParent.set(task.parentId, children);
+        }
+        children.push(task.id);
+
+        // Check for orphaned tasks (parentId points to non-existent parent)
+        if (!existingTaskIds.has(task.parentId)) {
+          orphanedTaskIds.push(task.id);
+        }
+      }
     }
   });
 
-  // Recursively collect all descendants of orphaned tasks
+  // Collect descendants using indexed lookup (O(n) total instead of O(n²))
   const collectDescendants = (taskId: string, collected: Set<string>): void => {
-    Object.values(newState[TASK_FEATURE_NAME].entities).forEach((task) => {
-      if (task && task.parentId === taskId && !collected.has(task.id)) {
-        collected.add(task.id);
-        collectDescendants(task.id, collected);
+    const children = childrenByParent.get(taskId);
+    if (children) {
+      for (const childId of children) {
+        if (!collected.has(childId)) {
+          collected.add(childId);
+          collectDescendants(childId, collected);
+        }
       }
-    });
+    }
   };
 
   // Collect all tasks to delete (orphans and their descendants)

@@ -16,8 +16,12 @@ import {
   ActionHandlerMap,
   getTag,
   removeTasksFromList,
+  removeTasksFromPlannerDays,
+  updateProject,
+  getProjectOrUndefined,
   updateTags,
 } from './task-shared-helpers';
+import { filterOutId } from '../../../util/filter-out-id';
 
 // =============================================================================
 // ACTION HANDLERS
@@ -25,8 +29,10 @@ import {
 
 const handleScheduleTaskWithTime = (
   state: RootState,
-  task: { id: string },
+  task: { id: string; projectId?: string | null },
   dueWithTime: number,
+  remindAt?: number,
+  isMoveToBacklog?: boolean,
 ): RootState => {
   // Check if task already has the same dueWithTime
   const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
@@ -38,28 +44,48 @@ const handleScheduleTaskWithTime = (
   const isScheduledForToday = isToday(dueWithTime);
   const isCurrentlyInToday = todayTag.taskIds.includes(task.id);
 
-  // If task is already correctly scheduled, don't change state
+  // If task is already correctly scheduled, don't change state (unless backlog move requested)
   if (
     currentTask.dueWithTime === dueWithTime &&
-    isScheduledForToday === isCurrentlyInToday
+    currentTask.remindAt === remindAt &&
+    isScheduledForToday === isCurrentlyInToday &&
+    !isMoveToBacklog
   ) {
     return state;
   }
 
   // First, update the task entity with the scheduling data
-  const updatedState = {
+  let updatedState: RootState = {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
         id: task.id,
         changes: {
           dueWithTime,
-          dueDay: undefined,
+          dueDay: isScheduledForToday ? getDbDateStr() : undefined,
+          remindAt,
         },
       },
       state[TASK_FEATURE_NAME],
     ),
   };
+
+  // Handle backlog move atomically if requested
+  if (isMoveToBacklog && currentTask.projectId) {
+    const project = getProjectOrUndefined(updatedState, currentTask.projectId);
+    if (project && project.isEnableBacklog) {
+      const todaysTaskIdsBefore = project.taskIds;
+      const backlogIdsBefore = project.backlogTaskIds;
+
+      // Only move if not already in backlog
+      if (!backlogIdsBefore.includes(task.id)) {
+        updatedState = updateProject(updatedState, currentTask.projectId, {
+          taskIds: todaysTaskIdsBefore.filter(filterOutId(task.id)),
+          backlogTaskIds: [task.id, ...backlogIdsBefore],
+        });
+      }
+    }
+  }
 
   // No tag change needed
   if (isScheduledForToday === isCurrentlyInToday) {
@@ -92,6 +118,7 @@ const handleUnScheduleTask = (
         changes: {
           dueDay: isLeaveInToday ? getDbDateStr() : undefined,
           dueWithTime: undefined,
+          remindAt: undefined,
         },
       },
       state[TASK_FEATURE_NAME],
@@ -115,14 +142,14 @@ const handleUnScheduleTask = (
 };
 
 const handleDismissReminderOnly = (state: RootState, taskId: string): RootState => {
-  // Only clear the dueWithTime (reminder time) but keep dueDay and Today tag
+  // Only clear remindAt (the reminder notification) but keep dueWithTime, dueDay, and Today tag
   return {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
         id: taskId,
         changes: {
-          dueWithTime: undefined,
+          remindAt: undefined,
         },
       },
       state[TASK_FEATURE_NAME],
@@ -145,8 +172,19 @@ const handlePlanTasksForToday = (
     return !parentId || !todayTag.taskIds.includes(parentId);
   });
 
-  // First, update the task entities with dueDay
-  const taskUpdates: Update<Task>[] = taskIds.map((taskId) => {
+  // Filter out tasks that already have dueDay set to today
+  const tasksNeedingDueDayUpdate = taskIds.filter((taskId) => {
+    const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+    return task && task.dueDay !== today;
+  });
+
+  // Early return if no actual changes needed
+  if (newTasksForToday.length === 0 && tasksNeedingDueDayUpdate.length === 0) {
+    return state;
+  }
+
+  // Only create updates for tasks that need dueDay change
+  const taskUpdates: Update<Task>[] = tasksNeedingDueDayUpdate.map((taskId) => {
     const task = state[TASK_FEATURE_NAME].entities[taskId] as Task;
 
     // Preserve dueWithTime if it matches today's date
@@ -157,6 +195,7 @@ const handlePlanTasksForToday = (
       id: taskId,
       changes: {
         dueDay: today,
+        remindAt: undefined, // Always clear reminder when explicitly adding to today
         ...(shouldClearTime ? { dueWithTime: undefined } : {}),
       },
     };
@@ -177,26 +216,8 @@ const handlePlanTasksForToday = (
     },
   ]);
 
-  // Remove taskIds from planner days if planner state exists
-  if (stateWithTodayTag.planner?.days) {
-    const plannerDaysCopy = { ...stateWithTodayTag.planner.days };
-    Object.keys(plannerDaysCopy).forEach((day) => {
-      const filtered = plannerDaysCopy[day].filter((id) => !taskIds.includes(id));
-      if (filtered.length !== plannerDaysCopy[day].length) {
-        plannerDaysCopy[day] = filtered;
-      }
-    });
-
-    return {
-      ...stateWithTodayTag,
-      planner: {
-        ...stateWithTodayTag.planner,
-        days: plannerDaysCopy,
-      },
-    };
-  }
-
-  return stateWithTodayTag;
+  // Remove taskIds from planner days
+  return removeTasksFromPlannerDays(stateWithTodayTag, taskIds);
 };
 
 const handleRemoveTasksFromTodayTag = (
@@ -243,16 +264,28 @@ const handleMoveTaskInTodayTagList = (
 
 const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
   [TaskSharedActions.scheduleTaskWithTime.type]: () => {
-    const { task, dueWithTime } = action as ReturnType<
+    const { task, dueWithTime, remindAt, isMoveToBacklog } = action as ReturnType<
       typeof TaskSharedActions.scheduleTaskWithTime
     >;
-    return handleScheduleTaskWithTime(state, task, dueWithTime);
+    return handleScheduleTaskWithTime(
+      state,
+      task,
+      dueWithTime,
+      remindAt,
+      isMoveToBacklog,
+    );
   },
   [TaskSharedActions.reScheduleTaskWithTime.type]: () => {
-    const { task, dueWithTime } = action as ReturnType<
+    const { task, dueWithTime, remindAt, isMoveToBacklog } = action as ReturnType<
       typeof TaskSharedActions.reScheduleTaskWithTime
     >;
-    return handleScheduleTaskWithTime(state, task, dueWithTime);
+    return handleScheduleTaskWithTime(
+      state,
+      task,
+      dueWithTime,
+      remindAt,
+      isMoveToBacklog,
+    );
   },
   [TaskSharedActions.unscheduleTask.type]: () => {
     const { id, isLeaveInToday } = action as ReturnType<

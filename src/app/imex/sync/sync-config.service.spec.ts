@@ -1,17 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { SyncConfigService } from './sync-config.service';
-import { PfapiService } from '../../pfapi/pfapi.service';
+import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { BehaviorSubject } from 'rxjs';
 import { SyncConfig } from '../../features/config/global-config.model';
 import { LegacySyncProvider } from './legacy-sync-provider.model';
-import { SyncProviderId } from '../../pfapi/api';
+import { SyncProviderId } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { first } from 'rxjs/operators';
 
 describe('SyncConfigService', () => {
   let service: SyncConfigService;
-  let pfapiService: jasmine.SpyObj<PfapiService>;
+  let providerManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncConfig$: BehaviorSubject<SyncConfig>;
   let mockCurrentProviderPrivateCfg$: BehaviorSubject<any>;
 
@@ -34,16 +34,13 @@ describe('SyncConfigService', () => {
 
     mockCurrentProviderPrivateCfg$ = new BehaviorSubject(null);
 
-    const mockPf = {
-      getSyncProviderById: jasmine.createSpy('getSyncProviderById'),
-      getActiveSyncProvider: jasmine.createSpy('getActiveSyncProvider'),
-      setPrivateCfgForSyncProvider: jasmine.createSpy('setPrivateCfgForSyncProvider'),
-    };
-
-    const pfapiServiceSpy = jasmine.createSpyObj('PfapiService', [], {
-      currentProviderPrivateCfg$: mockCurrentProviderPrivateCfg$,
-      pf: mockPf,
-    });
+    const providerManagerSpy = jasmine.createSpyObj(
+      'SyncProviderManager',
+      ['getProviderById', 'getActiveProvider', 'setProviderConfig', 'getProviderConfig'],
+      {
+        currentProviderPrivateCfg$: mockCurrentProviderPrivateCfg$,
+      },
+    );
 
     const globalConfigServiceSpy = jasmine.createSpyObj(
       'GlobalConfigService',
@@ -56,13 +53,15 @@ describe('SyncConfigService', () => {
     TestBed.configureTestingModule({
       providers: [
         SyncConfigService,
-        { provide: PfapiService, useValue: pfapiServiceSpy },
+        { provide: SyncProviderManager, useValue: providerManagerSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
       ],
     });
 
     service = TestBed.inject(SyncConfigService);
-    pfapiService = TestBed.inject(PfapiService) as jasmine.SpyObj<PfapiService>;
+    providerManager = TestBed.inject(
+      SyncProviderManager,
+    ) as jasmine.SpyObj<SyncProviderManager>;
   });
 
   describe('updateSettingsFromForm', () => {
@@ -112,9 +111,8 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(mockProvider),
-      );
+      // getProviderById returns synchronously, not a Promise
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -130,7 +128,7 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.WebDAV,
         {
           baseUrl: 'https://example.com',
@@ -143,10 +141,8 @@ describe('SyncConfigService', () => {
     });
 
     it('should apply default values for LocalFile provider fields when no existing config', async () => {
-      // Mock no existing provider
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
-      );
+      // Mock no existing provider - getProviderById returns synchronously
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -161,7 +157,7 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.LocalFile,
         {
           syncFolderPath: '',
@@ -184,9 +180,8 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(mockProvider),
-      );
+      // getProviderById returns synchronously, not a Promise
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -198,7 +193,7 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.Dropbox,
         {
           accessToken: 'existing-access-token', // Preserved OAuth tokens
@@ -225,9 +220,8 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(mockProvider),
-      );
+      // getProviderById returns synchronously, not a Promise
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
 
       // Update settings without changing the provider
       const settings: SyncConfig = {
@@ -241,7 +235,7 @@ describe('SyncConfigService', () => {
       await service.updateSettingsFromForm(settings);
 
       // Verify the token is preserved
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.Dropbox,
         jasmine.objectContaining({
           accessToken: existingToken, // Must be preserved!
@@ -251,15 +245,13 @@ describe('SyncConfigService', () => {
     });
 
     it('should prevent duplicate saves when settings are unchanged', async () => {
-      // Mock provider for the test
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve({
-          id: SyncProviderId.WebDAV,
-          privateCfg: {
-            load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
-          },
-        }),
-      );
+      // Mock provider for the test - getProviderById returns synchronously
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue({
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
+        },
+      });
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -276,15 +268,15 @@ describe('SyncConfigService', () => {
 
       // First call
       await service.updateSettingsFromForm(settings);
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledTimes(1);
+      expect(providerManager.setProviderConfig).toHaveBeenCalledTimes(1);
 
       // Second call with same settings - should be skipped
       await service.updateSettingsFromForm(settings);
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledTimes(1);
+      expect(providerManager.setProviderConfig).toHaveBeenCalledTimes(1);
 
       // Third call with isForce=true - should proceed
       await service.updateSettingsFromForm(settings, true);
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledTimes(2);
+      expect(providerManager.setProviderConfig).toHaveBeenCalledTimes(2);
     });
 
     it('should not save private config when no provider is selected', async () => {
@@ -297,14 +289,12 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).not.toHaveBeenCalled();
+      expect(providerManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should handle provider with no existing config', async () => {
-      // Mock no existing provider (e.g., initial setup)
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
-      );
+      // Mock no existing provider (e.g., initial setup) - getProviderById returns synchronously
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -322,7 +312,7 @@ describe('SyncConfigService', () => {
 
       await service.updateSettingsFromForm(settings);
 
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.WebDAV,
         {
           baseUrl: 'https://example.com',
@@ -352,18 +342,16 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock: No provider exists initially
-      (pfapiService.pf.getActiveSyncProvider as jasmine.Spy).and.returnValue(null);
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
-      );
+      // Mock: No provider exists initially - getProviderById returns synchronously
+      (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
 
       // User saves the form
       await service.updateSettingsFromForm(initialSettings);
 
       // The provider should be created/initialized
       // and the encryption key should be saved to the provider's private config
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.LocalFile,
         jasmine.objectContaining({
           syncFolderPath: 'C:\\Users\\test\\sync',
@@ -408,11 +396,9 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // No provider exists yet
-      (pfapiService.pf.getActiveSyncProvider as jasmine.Spy).and.returnValue(null);
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
-      );
+      // No provider exists yet - getProviderById returns synchronously
+      (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
 
       await service.updateSettingsFromForm(initialSettings);
 
@@ -476,21 +462,19 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock existing WebDAV provider
+      // Mock existing WebDAV provider - getProviderById returns synchronously
       const mockProvider = {
         id: SyncProviderId.WebDAV,
         privateCfg: {
           load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
         },
       };
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(mockProvider),
-      );
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
 
       await service.updateSettingsFromForm(webDavSettings);
 
       // Verify WebDAV config is saved correctly with encryption key
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.WebDAV,
         jasmine.objectContaining({
           baseUrl: 'https://example.com/webdav',
@@ -517,17 +501,15 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock that there's no active provider yet (initial setup)
-      (pfapiService.pf.getActiveSyncProvider as jasmine.Spy).and.returnValue(null);
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(null),
-      );
+      // Mock that there's no active provider yet (initial setup) - getProviderById returns synchronously
+      (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
 
       // Act: User saves the form with encryption enabled
       await service.updateSettingsFromForm(newSettings);
 
       // Verify that setPrivateCfgForSyncProvider was called with encryption key
-      expect(pfapiService.pf.setPrivateCfgForSyncProvider).toHaveBeenCalledWith(
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.LocalFile,
         jasmine.objectContaining({
           syncFolderPath: 'C:\\Users\\test\\sync',
@@ -548,10 +530,8 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Update mocks to simulate provider is now available
-      (pfapiService.pf.getSyncProviderById as jasmine.Spy).and.returnValue(
-        Promise.resolve(mockProvider),
-      );
+      // Update mocks to simulate provider is now available - getProviderById returns synchronously
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
 
       // In a real scenario, after setPrivateCfgForSyncProvider is called,
       // the currentProviderPrivateCfg$ would be updated with the saved config
@@ -615,6 +595,80 @@ describe('SyncConfigService', () => {
         jasmine.objectContaining({
           syncFolderPath: 'C:\\Users\\test\\sync',
         }),
+      );
+    });
+  });
+
+  describe('SuperSync default baseUrl preservation', () => {
+    it('should preserve default superSync.baseUrl when stored config has empty superSync object', async () => {
+      // This test verifies the fix for: "when setting up super sync for the first time, server url is empty"
+      // The bug occurred because shallow merge of {...DEFAULT_GLOBAL_CONFIG.sync, ...syncCfg}
+      // would replace DEFAULT_GLOBAL_CONFIG.sync.superSync entirely with an empty {}
+
+      // Simulate stored config with empty superSync (no baseUrl)
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: false,
+        syncProvider: null,
+        superSync: {}, // Empty - no baseUrl
+      } as SyncConfig);
+
+      // No active provider yet
+      mockCurrentProviderPrivateCfg$.next(null);
+
+      // Get form settings
+      const formSettings = await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      // The default baseUrl should be preserved from DEFAULT_GLOBAL_CONFIG
+      expect(formSettings!.superSync!.baseUrl).toBe(
+        DEFAULT_GLOBAL_CONFIG.sync.superSync!.baseUrl,
+      );
+    });
+
+    it('should use user-provided superSync.baseUrl over default', async () => {
+      const customUrl = 'https://my-custom-server.com';
+
+      // Simulate stored config with custom baseUrl
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.SuperSync,
+        superSync: {
+          baseUrl: customUrl,
+        },
+      } as SyncConfig);
+
+      // No active provider yet
+      mockCurrentProviderPrivateCfg$.next(null);
+
+      // Get form settings
+      const formSettings = await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      // The user's custom URL should take precedence
+      expect(formSettings!.superSync!.baseUrl).toBe(customUrl);
+    });
+
+    it('should preserve default webDav and localFileSync settings with deep merge', async () => {
+      // Simulate stored config with empty provider configs
+      mockSyncConfig$.next({
+        ...DEFAULT_GLOBAL_CONFIG.sync,
+        isEnabled: false,
+        syncProvider: null,
+        webDav: {}, // Empty
+        localFileSync: {}, // Empty
+        superSync: {}, // Empty
+      } as SyncConfig);
+
+      mockCurrentProviderPrivateCfg$.next(null);
+
+      const formSettings = await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      // All defaults should be preserved via deep merge
+      expect(formSettings!.superSync!.baseUrl).toBe(
+        DEFAULT_GLOBAL_CONFIG.sync.superSync!.baseUrl,
+      );
+      expect(formSettings!.webDav!.syncFolderPath).toBe(
+        DEFAULT_GLOBAL_CONFIG.sync.webDav!.syncFolderPath,
       );
     });
   });

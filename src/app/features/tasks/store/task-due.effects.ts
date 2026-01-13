@@ -10,6 +10,7 @@ import {
   switchMap,
   withLatestFrom,
 } from 'rxjs/operators';
+import { EMPTY, of } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
@@ -18,9 +19,10 @@ import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { environment } from '../../../../environments/environment';
 import { TaskLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
+import { environment } from '../../../../environments/environment';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
 
 @Injectable()
 export class TaskDueEffects {
@@ -29,6 +31,7 @@ export class TaskDueEffects {
   private _syncWrapperService = inject(SyncWrapperService);
   private _addTasksForTomorrowService = inject(AddTasksForTomorrowService);
   private _syncTriggerService = inject(SyncTriggerService);
+  private _hydrationState = inject(HydrationStateService);
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   createRepeatableTasksAndAddDueToday$ = createEffect(
@@ -39,6 +42,8 @@ export class TaskDueEffects {
           // Keep listening for date changes throughout the app lifecycle
           this._globalTrackingIntervalService.todayDateStr$.pipe(
             distinctUntilChanged(),
+            // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
+            filter(() => !this._hydrationState.isApplyingRemoteOps()),
             switchMap((dateStr) => {
               TaskLog.log(
                 '[TaskDueEffects] Date changed, processing tasks for:',
@@ -72,6 +77,8 @@ export class TaskDueEffects {
         // Keep listening for date changes throughout the app lifecycle
         this._globalTrackingIntervalService.todayDateStr$.pipe(
           distinctUntilChanged(),
+          // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
           switchMap((dateStr) => {
             TaskLog.log('[TaskDueEffects] Date changed, removing overdue for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
@@ -84,18 +91,21 @@ export class TaskDueEffects {
           filter((overdue) => !!overdue.length),
           withLatestFrom(this._store$.select(selectTodayTaskIds)),
           // we do this to maintain the order of tasks
-          map(([overdue, todayTaskIds]) => {
+          switchMap(([overdue, todayTaskIds]) => {
             const overdueIds = todayTaskIds.filter(
               (id) => !!overdue.find((oT) => oT.id === id),
             );
-            if (overdueIds.length > 0) {
-              TaskLog.log('[TaskDueEffects] Removing overdue tasks from today', {
-                overdueCount: overdueIds.length,
-              });
+            if (overdueIds.length === 0) {
+              return EMPTY;
             }
-            return TaskSharedActions.removeTasksFromTodayTag({
-              taskIds: overdueIds,
+            TaskLog.log('[TaskDueEffects] Removing overdue tasks from today', {
+              overdueCount: overdueIds.length,
             });
+            return of(
+              TaskSharedActions.removeTasksFromTodayTag({
+                taskIds: overdueIds,
+              }),
+            );
           }),
         ),
       ),
@@ -110,6 +120,8 @@ export class TaskDueEffects {
         // Keep listening for date changes throughout the app lifecycle
         this._globalTrackingIntervalService.todayDateStr$.pipe(
           distinctUntilChanged(),
+          // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
+          filter(() => !this._hydrationState.isApplyingRemoteOps()),
           switchMap((dateStr) => {
             TaskLog.log('[TaskDueEffects] Date changed, ensuring tasks for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
@@ -124,7 +136,22 @@ export class TaskDueEffects {
               map(([tasksDueToday, todayTaskIds]) => {
                 const missingTaskIds = tasksDueToday
                   .filter((task) => !todayTaskIds.includes(task.id))
+                  // Exclude subtasks whose parent is already in TODAY
+                  // (preventParentAndSubTaskInTodayList$ will remove them anyway,
+                  // causing an infinite add/remove loop and phantom sync changes)
+                  .filter(
+                    (task) => !task.parentId || !todayTaskIds.includes(task.parentId),
+                  )
                   .map((task) => task.id);
+
+                // Debug log to investigate repeated operations
+                TaskLog.log('[TaskDueEffects] ensureTasksDueTodayInTodayTag check:', {
+                  tasksDueTodayCount: tasksDueToday.length,
+                  tasksDueTodayIds: tasksDueToday.map((t) => t.id),
+                  todayTaskIdsCount: todayTaskIds.length,
+                  missingTaskIds,
+                  willDispatch: missingTaskIds.length > 0,
+                });
 
                 if (!environment.production && missingTaskIds.length > 0) {
                   TaskLog.err(

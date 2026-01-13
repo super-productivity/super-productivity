@@ -288,7 +288,7 @@
         "FILTER_USER": "Filtrera användarnamn",
         "GITLAB_BASE_URL": "Anpassad GitLab-bas-URL (valfritt)",
         "PROJECT": "användarnamn/projekt",
-        "PROJECT_HINT": "t.ex. johannesjo/super-productivity",
+        "PROJECT_HINT": "t.ex. super-productivity/super-productivity",
         "SCOPE": "Omfattning",
         "SCOPE_ALL": "Alla",
         "SCOPE_ASSIGNED": "Tilldelad mig",

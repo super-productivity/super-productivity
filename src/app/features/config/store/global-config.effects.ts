@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { filter, tap, withLatestFrom } from 'rxjs/operators';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { distinctUntilChanged, filter, map, tap, withLatestFrom } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { IS_ELECTRON } from '../../../app.constants';
 import { T } from '../../../t.const';
@@ -11,12 +12,13 @@ import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { KeyboardConfig } from '../keyboard-config.model';
 import { updateGlobalConfigSection } from './global-config.actions';
+import { selectLocalizationConfig } from './global-config.reducer';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 
 @Injectable()
 export class GlobalConfigEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _languageService = inject(LanguageService);
   private _dateService = inject(DateService);
   private _snackService = inject(SnackService);
@@ -73,34 +75,22 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 
-  selectLanguageOnChange = createEffect(
+  // Selector-based effect to apply language from state.
+  // This fires on initial load, local changes, AND remote sync.
+  // Intentional: UI config should apply from any source, dispatch: false
+  applyLanguageFromState$ = createEffect(
     () =>
-      this._actions$.pipe(
-        ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => sectionKey === 'localization'),
-        filter(({ sectionKey, sectionCfg }) => sectionCfg['lng'] !== undefined), // skip if language has not been manually set yet
-        tap(({ sectionKey, sectionCfg }) => {
-          this._languageService.setLng(sectionCfg['lng']);
-        }),
-      ),
-    { dispatch: false },
-  );
-
-  selectLanguageOnLoad = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(loadAllData),
-        tap(({ appDataComplete }) => {
-          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-          const lng = cfg.localization.lng;
-          const isInitial = lng === undefined; // language is not set manually by user yet
-
-          if (isInitial) {
-            // so we can try autoswitch if needed
+      this._store.select(selectLocalizationConfig).pipe(
+        map((config) => config.lng),
+        distinctUntilChanged(),
+        tap((lng) => {
+          if (lng === undefined) {
+            // Initial state - try autoswitch first, then detect browser language
             const autoswitched = this._languageService.tryAutoswitch();
-            // or use user system language
             if (!autoswitched) this._languageService.setLng();
-          } else this._languageService.setLng(lng);
+          } else {
+            this._languageService.setLng(lng);
+          }
         }),
       ),
     { dispatch: false },
@@ -111,13 +101,11 @@ export class GlobalConfigEffects {
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
         filter(({ sectionKey, sectionCfg }) => sectionKey === 'misc'),
-        // eslint-disable-next-line
         filter(
-          ({ sectionKey, sectionCfg }) =>
-            sectionCfg && !!(sectionCfg as MiscConfig).startOfNextDay,
+          ({ sectionCfg }) =>
+            sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
         ),
         tap(({ sectionKey, sectionCfg }) => {
-          // eslint-disable-next-line
           this._dateService.setStartOfNextDayDiff((sectionCfg as any)['startOfNextDay']);
         }),
       ),

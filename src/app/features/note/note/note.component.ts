@@ -61,7 +61,6 @@ export class NoteComponent implements OnChanges {
   private readonly _projectService = inject(ProjectService);
   private readonly _workContextService = inject(WorkContextService);
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   note!: Note;
 
   // TODO: Skipped for migration because:
