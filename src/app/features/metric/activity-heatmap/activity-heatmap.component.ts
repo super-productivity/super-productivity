@@ -59,8 +59,18 @@ export class ActivityHeatmapComponent {
   private readonly _snackService = inject(SnackService);
   private readonly _shareService = inject(ShareService);
   private readonly _dateAdapter = inject(DateAdapter);
+  private readonly _userSelectedYear = signal<number | null>(null);
   availableYears = signal<number[]>([]);
-  selectedYear = signal<number>(new Date().getFullYear());
+  selectedYear = computed(() => {
+    const userSelection = this._userSelectedYear();
+    const availableYears = this.availableYears();
+    // If user has made a selection and it's valid, use it
+    if (userSelection !== null && availableYears.includes(userSelection)) {
+      return userSelection;
+    }
+    // Otherwise, default to most recent year with data or the current year
+    return availableYears.length > 0 ? availableYears[0] : new Date().getFullYear();
+  });
   T: typeof T = T;
   weeks: WeekData[] = [];
   isSharing = signal(false);
@@ -70,7 +80,7 @@ export class ActivityHeatmapComponent {
   );
 
   onYearChange(year: number): void {
-    this.selectedYear.set(year);
+    this._userSelectedYear.set(year); // Only update user selection
   }
 
   // Day labels adjusted for first day of week
@@ -94,11 +104,6 @@ export class ActivityHeatmapComponent {
             tap((tasks) => {
               const yearsWithData = this._extractAvailableYears(tasks);
               this.availableYears.set(yearsWithData);
-              // Set selectedYear to the most recent year with data
-              // if current year has no data
-              if (yearsWithData.length > 0 && !yearsWithData.includes(selectedYear)) {
-                this.selectedYear.set(yearsWithData[0]);
-              }
             }),
             map((tasks) => {
               const currentlySelectedYear = this.selectedYear();
@@ -113,14 +118,6 @@ export class ActivityHeatmapComponent {
             // Extract years from worklog and populate availableYears
             const yearsWithData = this._extractAvailableYearsFromWorklog(worklog);
             this.availableYears.set(yearsWithData);
-            // Set selectedYear to the most recent year with data if current year
-            // has no data
-            if (
-              yearsWithData.length > 0 &&
-              !yearsWithData.includes(this.selectedYear())
-            ) {
-              this.selectedYear.set(yearsWithData[0]);
-            }
           }),
           map((worklog) => {
             const currentlySelectedYear = this.selectedYear();
