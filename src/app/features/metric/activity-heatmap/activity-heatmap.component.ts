@@ -23,30 +23,18 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
 import { ShareService } from '../../../core/share/share.service';
+import {
+  DayData,
+  WeekData,
+  HeatmapComponent,
+} from '../../../ui/heatmap/heatmap.component';
 import { DateAdapter } from '@angular/material/core';
-
-interface DayData {
-  date: Date;
-  dateStr: string;
-  taskCount: number;
-  timeSpent: number;
-  level: number; // 0-4 for color intensity
-}
 
 interface YearlyActivityData {
   dayMap: Map<string, DayData>;
   startDate: Date;
   endDate: Date;
 }
-
-interface WeekData {
-  days: (DayData | null)[];
-}
-import {
-  DayData,
-  WeekData,
-  HeatmapComponent,
-} from '../../../ui/heatmap/heatmap.component';
 
 @Component({
   selector: 'activity-heatmap',
