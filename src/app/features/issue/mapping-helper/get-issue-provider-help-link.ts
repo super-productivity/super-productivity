@@ -12,7 +12,6 @@ export const getIssueProviderHelpLink = (
     case 'GITLAB':
       return 'https://docs.gitlab.com/ee/user/search/advanced_search.html';
     // case 'LOGSEQ':
-    // NOTE: Logseq uses wildcard '*' - no external help link needed
     // case 'GITEA':
     // case 'CALDAV':
     // case 'REDMINE':

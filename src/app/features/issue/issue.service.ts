@@ -148,14 +148,6 @@ export class IssueService {
     issueProviderKey: IssueProviderKey,
     isEmptySearch = false,
   ): Promise<SearchResultItem[]> {
-    // Allow Logseq wildcard '*' to bypass special chars check
-    if (issueProviderKey === 'LOGSEQ' && searchTerm === '*') {
-      return this.ISSUE_SERVICE_MAP[issueProviderKey].searchIssues(
-        searchTerm,
-        issueProviderId,
-      );
-    }
-
     // check if text is more than just special chars
     if (searchTerm.replace(/[^\p{L}\p{N}]+/gu, '').length === 0 && !isEmptySearch) {
       return Promise.resolve([]);
@@ -175,16 +167,9 @@ export class IssueService {
           return of([]);
         }
 
-        const isEmptySearch = !searchTerm || searchTerm.trim().length === 0;
-
         const searchObservables = enabledProviders.map((provider) =>
           from(
-            this.searchIssues(
-              searchTerm,
-              provider.id,
-              provider.issueProviderKey,
-              isEmptySearch,
-            ),
+            this.searchIssues(searchTerm, provider.id, provider.issueProviderKey),
           ).pipe(
             map((results) =>
               results.map((result) => ({

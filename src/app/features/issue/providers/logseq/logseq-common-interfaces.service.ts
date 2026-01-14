@@ -8,7 +8,11 @@ import { SearchResultItem } from '../../issue.model';
 import { LogseqCfg } from './logseq.model';
 import { LogseqBlock, LogseqBlockReduced } from './logseq-issue.model';
 import { isLogseqEnabled } from './is-logseq-enabled.util';
-import { LOGSEQ_POLL_INTERVAL, LOGSEQ_TYPE } from './logseq.const';
+import {
+  LOGSEQ_POLL_INTERVAL,
+  LOGSEQ_SEARCH_WILDCARD,
+  LOGSEQ_TYPE,
+} from './logseq.const';
 import { IssueProviderService } from '../../issue-provider.service';
 import {
   extractFirstLine,
@@ -79,9 +83,11 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
             return of([]);
           }
 
-          // Wildcard '*' or empty search shows all tasks
+          // Wildcard or empty search shows all tasks
           const isShowAll =
-            searchTerm === '*' || !searchTerm || searchTerm.trim().length === 0;
+            searchTerm === LOGSEQ_SEARCH_WILDCARD ||
+            !searchTerm ||
+            searchTerm.trim().length === 0;
 
           // Use custom query from config or default
           const baseQuery =

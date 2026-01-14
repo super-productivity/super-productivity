@@ -5,6 +5,14 @@ import {
 import { IssueProviderLogseq } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 
+export const LOGSEQ_SEARCH_WILDCARD = '<all>'; // Shows all tasks
+
+const encodeHTML = (str): string => {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+};
+
 export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[] = [
   {
     key: 'apiUrl',
@@ -122,7 +130,7 @@ export const LOGSEQ_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderLogseq> 
     <h3>Using the Issue Panel</h3>
     <p>To show all available Logseq tasks in the Issue Panel:</p>
     <ol>
-      <li>Enter <strong>*</strong> in the search field</li>
+      <li>Enter <strong>${encodeHTML(LOGSEQ_SEARCH_WILDCARD)}</strong> in the search field</li>
       <li>Click the <strong>pin button</strong> (📌) to save this search</li>
       <li>Next time you open the Issue Panel, all tasks will be shown automatically</li>
     </ol>
