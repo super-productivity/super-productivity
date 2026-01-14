@@ -21,7 +21,6 @@ export class LogseqApiService {
         headers: {
           // eslint-disable-next-line @typescript-eslint/naming-convention
           'content-type': 'application/json',
-          // eslint-disable-next-line @typescript-eslint/naming-convention
           Authorization: `Bearer ${cfg.authToken}`,
         },
         body: JSON.stringify({ method, args }),
