@@ -98,6 +98,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     longerBreakDuration: 15 * minute,
     cyclesBeforeLongerBreak: 4,
   },
+  ntfy: {
+      isEnabled: false,
+      topic: '',
+      baseUrl: 'https://ntfy.sh',
+      priority: 3
+    },
   keyboard: {
     globalShowHide: 'Ctrl+Shift+X',
     globalToggleTaskStart: null,
