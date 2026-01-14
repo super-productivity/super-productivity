@@ -4,6 +4,10 @@ import { MarkdownModule } from 'ngx-markdown';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { InlineMarkdownComponent } from './inline-markdown.component';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { provideMockStore } from '@ngrx/store/testing';
+import { provideMockActions } from '@ngrx/effects/testing';
+import { of } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
 
 describe('InlineMarkdownComponent', () => {
   let component: InlineMarkdownComponent;
@@ -18,10 +22,17 @@ describe('InlineMarkdownComponent', () => {
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
 
     await TestBed.configureTestingModule({
-      imports: [InlineMarkdownComponent, MarkdownModule.forRoot(), NoopAnimationsModule],
+      imports: [
+        InlineMarkdownComponent,
+        MarkdownModule.forRoot(),
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+      ],
       providers: [
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: MatDialog, useValue: mockMatDialog },
+        provideMockStore(),
+        provideMockActions(() => of()),
       ],
     }).compileComponents();
 

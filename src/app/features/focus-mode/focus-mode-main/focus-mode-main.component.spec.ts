@@ -3,6 +3,8 @@ import { Store } from '@ngrx/store';
 import { BehaviorSubject, of } from 'rxjs';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
+import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { provideMockActions } from '@ngrx/effects/testing';
 import { FocusModeMainComponent } from './focus-mode-main.component';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskService } from '../../tasks/task.service';
@@ -37,7 +39,7 @@ class MockFocusModeTaskSelectorComponent {
 describe('FocusModeMainComponent', () => {
   let component: FocusModeMainComponent;
   let fixture: ComponentFixture<FocusModeMainComponent>;
-  let mockStore: jasmine.SpyObj<Store>;
+  let mockStore: MockStore;
   let mockTaskService: jasmine.SpyObj<TaskService>;
   let mockTaskAttachmentService: jasmine.SpyObj<TaskAttachmentService>;
   let mockIssueService: jasmine.SpyObj<IssueService>;
@@ -64,9 +66,6 @@ describe('FocusModeMainComponent', () => {
   } as TaskCopy;
 
   beforeEach(async () => {
-    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
-    storeSpy.select.and.returnValue(of([]));
-
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       misc: jasmine.createSpy().and.returnValue({
         taskNotesTpl: 'Default task notes template',
@@ -118,7 +117,8 @@ describe('FocusModeMainComponent', () => {
         EffectsModule.forRoot([]),
       ],
       providers: [
-        { provide: Store, useValue: storeSpy },
+        provideMockStore(),
+        provideMockActions(() => of()),
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
@@ -136,7 +136,8 @@ describe('FocusModeMainComponent', () => {
 
     fixture = TestBed.createComponent(FocusModeMainComponent);
     component = fixture.componentInstance;
-    mockStore = TestBed.inject(Store) as jasmine.SpyObj<Store>;
+    mockStore = TestBed.inject(Store) as MockStore;
+    spyOn(mockStore, 'dispatch');
     mockTaskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
     mockTaskAttachmentService = TestBed.inject(
       TaskAttachmentService,
@@ -144,7 +145,7 @@ describe('FocusModeMainComponent', () => {
     mockIssueService = TestBed.inject(IssueService) as jasmine.SpyObj<IssueService>;
 
     fixture.detectChanges();
-    mockStore.dispatch.calls.reset();
+    (mockStore.dispatch as jasmine.Spy).calls.reset();
   });
 
   it('should create', () => {
@@ -357,7 +358,7 @@ describe('FocusModeMainComponent', () => {
     it('should set doneOn to current timestamp', () => {
       component.finishCurrentTask();
 
-      const calls = mockStore.dispatch.calls.all();
+      const calls = (mockStore.dispatch as jasmine.Spy).calls.all();
       const actionTypes = calls.map((c: any) => c.args[0].type);
 
       // Verify exact actions dispatched
@@ -404,7 +405,7 @@ describe('FocusModeMainComponent', () => {
 
   describe('startSession', () => {
     beforeEach(() => {
-      mockStore.dispatch.calls.reset();
+      (mockStore.dispatch as jasmine.Spy).calls.reset();
       focusModeServiceSpy.mode.and.returnValue(FocusModeMode.Pomodoro);
       focusModeServiceSpy.focusModeConfig.and.returnValue({
         isSkipPreparation: false,
@@ -582,9 +583,6 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     mainStateSignal = signal(FocusMainUIState.InProgress);
     isSessionRunningSignal = signal(true);
 
-    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
-    storeSpy.select.and.returnValue(of([]));
-
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       misc: jasmine.createSpy().and.returnValue({
         taskNotesTpl: 'Default task notes template',
@@ -639,7 +637,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
         MarkdownModule.forRoot(),
       ],
       providers: [
-        { provide: Store, useValue: storeSpy },
+        provideMockStore(),
+        provideMockActions(() => of()),
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskService, useValue: taskServiceSpy },
         { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
