@@ -384,6 +384,7 @@ export class OperationLogUploadService {
         op.vectorClock,
         op.schemaVersion,
         isPayloadEncrypted,
+        op.id, // CRITICAL: Pass op.id to prevent ID mismatch bugs
       );
       return response;
     } catch (err) {

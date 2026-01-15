@@ -12,21 +12,28 @@
   display: flex;
   align-items: center;
   position: relative;
-  overflow: hidden;
+  // Use overflow: clip instead of hidden to prevent CDK overlay positioning issues (#5955)
+  // overflow: clip clips content like hidden but doesn't affect overlay positioning
+  overflow: clip;
 
   // Hide additional buttons by default on desktop
+  // Use visibility instead of display:none to keep element in layout flow
+  // This ensures getBoundingClientRect() returns correct values for mat-menu positioning (#5955)
   .additional-btns {
-    display: none;
+    visibility: hidden;
+    pointer-events: none;
 
     @include touchPrimaryDevice() {
-      display: flex;
+      visibility: visible;
+      pointer-events: auto;
     }
   }
 
   // Show additional buttons on focus/hover (desktop)
   //&:focus-within .additional-btns,
   &:hover .additional-btns {
-    display: flex;
+    visibility: visible;
+    pointer-events: auto;
   }
 
   // Folder header drop zone styling
@@ -50,6 +57,7 @@
   .additional-btns {
     opacity: 1 !important;
     visibility: visible !important;
+    pointer-events: auto !important;
   }
 }
 

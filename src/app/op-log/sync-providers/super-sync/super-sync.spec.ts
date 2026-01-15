@@ -556,7 +556,15 @@ describe('SuperSyncProvider', () => {
       );
 
       await expectAsync(
-        provider.uploadSnapshot({}, 'client-1', 'recovery', {}, 1),
+        provider.uploadSnapshot(
+          {},
+          'client-1',
+          'recovery',
+          {},
+          1,
+          undefined,
+          'test-op-id',
+        ),
       ).toBeRejectedWithError(/SuperSync API error: 413.*Storage quota exceeded/);
     });
   });
@@ -666,7 +674,15 @@ describe('SuperSyncProvider', () => {
       );
 
       await expectAsync(
-        provider.uploadSnapshot({}, 'client-1', 'recovery', {}, 1),
+        provider.uploadSnapshot(
+          {},
+          'client-1',
+          'recovery',
+          {},
+          1,
+          undefined,
+          'test-op-id',
+        ),
       ).toBeRejectedWith(jasmine.any(AuthFailSPError));
     });
 
@@ -974,6 +990,8 @@ describe('SuperSyncProvider', () => {
         'recovery',
         vectorClock,
         1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-snapshot', // opId
       );
 
       expect(result).toEqual(mockResponse);
@@ -997,7 +1015,15 @@ describe('SuperSyncProvider', () => {
         } as Response),
       );
 
-      await provider.uploadSnapshot({ data: 'test' }, 'client-1', 'initial', {}, 1);
+      await provider.uploadSnapshot(
+        { data: 'test' },
+        'client-1',
+        'initial',
+        {},
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-gzip', // opId
+      );
 
       const body = fetchSpy.calls.mostRecent().args[1].body;
       expect(body).toBeInstanceOf(Blob);
@@ -1022,7 +1048,15 @@ describe('SuperSyncProvider', () => {
       const state = { tasks: [] };
       const vectorClock: Record<string, number> = {};
       vectorClock['client-1'] = 5;
-      await provider.uploadSnapshot(state, 'client-1', 'migration', vectorClock, 2);
+      await provider.uploadSnapshot(
+        state,
+        'client-1',
+        'migration',
+        vectorClock,
+        2,
+        undefined, // isPayloadEncrypted
+        'test-op-id-fields', // opId
+      );
 
       // Decompress and verify payload
       expect(capturedBody).not.toBeNull();
@@ -1039,7 +1073,15 @@ describe('SuperSyncProvider', () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(null));
 
       await expectAsync(
-        provider.uploadSnapshot({}, 'client-1', 'recovery', {}, 1),
+        provider.uploadSnapshot(
+          {},
+          'client-1',
+          'recovery',
+          {},
+          1,
+          undefined,
+          'test-op-id',
+        ),
       ).toBeRejectedWith(jasmine.any(MissingCredentialsSPError));
     });
 
@@ -1062,6 +1104,8 @@ describe('SuperSyncProvider', () => {
           'recovery',
           {},
           1,
+          undefined, // isPayloadEncrypted
+          'test-op-id-error', // opId
         ),
       ).toBeRejectedWithError(/SuperSync API error: 413/);
     });
@@ -1083,7 +1127,15 @@ describe('SuperSyncProvider', () => {
           } as Response),
         );
 
-        await provider.uploadSnapshot({}, 'client-1', reason, {}, 1);
+        await provider.uploadSnapshot(
+          {},
+          'client-1',
+          reason,
+          {},
+          1,
+          undefined, // isPayloadEncrypted
+          `test-op-id-${reason}`, // opId
+        );
 
         // Verify the reason was included in the compressed payload
         const body = fetchSpy.calls.mostRecent().args[1].body as Blob;
@@ -1114,7 +1166,15 @@ describe('SuperSyncProvider', () => {
         })),
       };
 
-      await provider.uploadSnapshot(largeState, 'client-1', 'recovery', {}, 1);
+      await provider.uploadSnapshot(
+        largeState,
+        'client-1',
+        'recovery',
+        {},
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-compress', // opId
+      );
 
       const originalSize = JSON.stringify({
         state: largeState,

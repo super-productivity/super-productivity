@@ -10,14 +10,9 @@
   justify-content: stretch;
   align-items: stretch;
   user-select: none;
-  min-width: 320px;
-  max-width: 320px;
+  width: 400px;
+  max-width: 100%;
   display: block;
-
-  @media (min-width: 370px) {
-    min-width: 352px;
-    max-width: 352px;
-  }
 
   :host-context([dir='rtl']) {
     direction: rtl;

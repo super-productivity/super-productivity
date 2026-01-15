@@ -124,8 +124,10 @@ export class PluginRunner {
 
     const executionPromise = new Promise<void>((resolve, reject) => {
       try {
-        // Simple function execution with PluginAPI in scope
+        // Simple function execution with plugin API in scope
+        // Provide both 'plugin' and 'PluginAPI' for backward compatibility
         const pluginFunction = new Function(
+          'plugin',
           'PluginAPI',
           `
           'use strict';
@@ -137,8 +139,8 @@ export class PluginRunner {
         `,
         );
 
-        // Execute with API
-        pluginFunction(api);
+        // Execute with API (pass same object for both parameter names)
+        pluginFunction(api, api);
         resolve();
       } catch (error) {
         reject(error);

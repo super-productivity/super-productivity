@@ -124,6 +124,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         'recovery',
         {},
         1,
+        undefined, // isPayloadEncrypted
+        'test-snapshot-op-id-1', // opId
       );
 
       // Client B downloads again - should detect gap (syncVersion reset)
@@ -154,6 +156,8 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
         'recovery',
         {},
         1,
+        undefined, // isPayloadEncrypted
+        'test-snapshot-op-id-2', // opId
       );
 
       // Client B downloads expecting ops from sinceSeq > 0, but finds empty recentOps

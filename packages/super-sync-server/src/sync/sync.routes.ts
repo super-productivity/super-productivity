@@ -90,6 +90,8 @@ const UploadSnapshotSchema = z.object({
   vectorClock: z.record(z.string(), z.number()),
   schemaVersion: z.number().optional(),
   isPayloadEncrypted: z.boolean().optional(),
+  // Client's operation ID - server MUST use this to prevent ID mismatch bugs
+  opId: z.string().uuid().optional(),
 });
 
 // Error helper
@@ -643,6 +645,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           vectorClock,
           schemaVersion,
           isPayloadEncrypted,
+          opId,
         } = parseResult.data;
         const syncService = getSyncService();
 
@@ -734,8 +737,10 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Create a SYNC_IMPORT operation
         // Use the correct NgRx action type so the operation can be replayed on other clients
+        // FIX: Use client's opId if provided to prevent ID mismatch bugs
+        // When client doesn't send opId (legacy clients), fall back to server-generated UUID
         const op = {
-          id: uuidv7(),
+          id: opId ?? uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
           opType: 'SYNC_IMPORT' as const,

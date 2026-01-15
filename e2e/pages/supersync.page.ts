@@ -230,15 +230,29 @@ export class SuperSyncPage extends BasePage {
       intervals: [500, 1000, 1500, 2000, 2500, 3000],
     });
 
-    // Click the SuperSync option with retry to handle dropdown closing issues
+    // Click the SuperSync option and verify selection was applied
     await expect(async () => {
-      // Check if option is visible - if not, dropdown may have closed unexpectedly
+      // Check if dropdown is open - if not, we may need to reopen it
+      if (!(await dropdownPanel.isVisible())) {
+        await this.providerSelect.click({ timeout: 2000, force: true });
+        await dropdownPanel.waitFor({ state: 'visible', timeout: 3000 });
+      }
+
+      // Click the option if visible
       if (await superSyncOption.isVisible()) {
         await superSyncOption.click({ timeout: 2000 });
       }
 
       // Wait for dropdown panel to close
       await dropdownPanel.waitFor({ state: 'detached', timeout: 3000 });
+
+      // CRITICAL: Verify selection was actually applied
+      const selectedText = await this.providerSelect
+        .locator('.mat-mdc-select-value-text')
+        .textContent();
+      if (!selectedText?.includes('SuperSync')) {
+        throw new Error(`Provider selection not applied. Selected: "${selectedText}"`);
+      }
     }).toPass({
       timeout: 15000,
       intervals: [500, 1000, 1500, 2000],

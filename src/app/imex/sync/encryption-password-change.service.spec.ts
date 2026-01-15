@@ -119,6 +119,7 @@ describe('EncryptionPasswordChangeService', () => {
         TEST_VECTOR_CLOCK,
         jasmine.any(Number), // CURRENT_SCHEMA_VERSION
         true, // isPayloadEncrypted
+        jasmine.any(String), // opId (UUID)
       );
       expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
         jasmine.objectContaining({

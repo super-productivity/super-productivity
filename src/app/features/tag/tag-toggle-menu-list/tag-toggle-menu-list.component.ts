@@ -90,9 +90,5 @@ export class TagToggleMenuListComponent {
       });
   }
 
-  isEmojiIcon(icon: string | undefined): boolean {
-    return icon ? isSingleEmoji(icon) : false;
-  }
-
   protected readonly T = T;
 }

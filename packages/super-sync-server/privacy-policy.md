@@ -10,8 +10,6 @@ Mit dieser Datenschutzerklärung informieren wir Sie über die Art, den Umfang u
 ## 2. Verantwortlicher
 
 **Johannes Millan**
-[Hier Straße und Hausnummer ergänzen]
-[Hier PLZ und Ort ergänzen]
 Deutschland
 
 E-Mail: contact@super-productivity.com

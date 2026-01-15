@@ -734,3 +734,225 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     expect(inlineMarkdown.componentInstance.model).toBe(existingNotes);
   });
 });
+
+/**
+ * Separate test suite for isPlayButtonDisabled and startSession with sync tracking (issue #6009)
+ * Uses signal-based mocks to properly test computed signals
+ */
+describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
+  let component: FocusModeMainComponent;
+  let fixture: ComponentFixture<FocusModeMainComponent>;
+  let mockStore: jasmine.SpyObj<Store>;
+  let currentTaskSubject: BehaviorSubject<TaskCopy | null>;
+  let focusModeConfigSignal: WritableSignal<any>;
+
+  const mockTask: TaskCopy = {
+    id: 'task-1',
+    title: 'Test Task',
+    notes: 'Test notes',
+    timeSpent: 0,
+    timeEstimate: 0,
+    created: Date.now(),
+    isDone: false,
+    subTaskIds: [],
+    projectId: 'project-1',
+    timeSpentOnDay: {},
+    attachments: [],
+    tagIds: [],
+  } as TaskCopy;
+
+  beforeEach(async () => {
+    // Create writable signal for focusModeConfig to test computed signals
+    focusModeConfigSignal = signal({
+      isSkipPreparation: false,
+      isSyncSessionWithTracking: false,
+    });
+
+    const storeSpy = jasmine.createSpyObj('Store', ['dispatch', 'select']);
+    storeSpy.select.and.returnValue(of([]));
+
+    const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
+      misc: jasmine.createSpy().and.returnValue({
+        taskNotesTpl: 'Default task notes template',
+      }),
+    });
+
+    currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
+    const taskServiceSpy = jasmine.createSpyObj(
+      'TaskService',
+      ['update', 'setCurrentId'],
+      {
+        currentTask$: currentTaskSubject.asObservable(),
+        currentTaskId: jasmine.createSpy().and.returnValue(null),
+      },
+    );
+
+    const taskAttachmentServiceSpy = jasmine.createSpyObj('TaskAttachmentService', [
+      'createFromDrop',
+    ]);
+
+    const issueServiceSpy = jasmine.createSpyObj('IssueService', ['issueLink']);
+    issueServiceSpy.issueLink.and.returnValue(Promise.resolve('https://example.com'));
+
+    const simpleCounterServiceSpy = jasmine.createSpyObj('SimpleCounterService', [''], {
+      enabledSimpleCounters$: of([]),
+    });
+
+    const mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockMatDialog.open.and.returnValue({
+      afterClosed: () => of(null),
+    } as MatDialogRef<any>);
+
+    // Use signals for properties that affect computed signals
+    const focusModeServiceMock = {
+      timeElapsed: signal(60000),
+      isCountTimeDown: signal(true),
+      progress: signal(0),
+      timeRemaining: signal(1500000),
+      isSessionRunning: signal(false),
+      isSessionPaused: signal(false),
+      isBreakActive: signal(false),
+      currentCycle: signal(1),
+      sessionDuration: signal(0),
+      mode: signal(FocusModeMode.Pomodoro),
+      mainState: signal(FocusMainUIState.Preparation),
+      focusModeConfig: focusModeConfigSignal,
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [
+        FocusModeMainComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot(),
+        EffectsModule.forRoot([]),
+        MarkdownModule.forRoot(),
+      ],
+      providers: [
+        { provide: Store, useValue: storeSpy },
+        { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
+        { provide: TaskService, useValue: taskServiceSpy },
+        { provide: TaskAttachmentService, useValue: taskAttachmentServiceSpy },
+        { provide: IssueService, useValue: issueServiceSpy },
+        { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
+        { provide: FocusModeService, useValue: focusModeServiceMock },
+        { provide: MatDialog, useValue: mockMatDialog },
+      ],
+    })
+      .overrideComponent(FocusModeMainComponent, {
+        remove: { imports: [FocusModeTaskSelectorComponent] },
+        add: { imports: [MockFocusModeTaskSelectorComponent] },
+      })
+      .compileComponents();
+
+    fixture = TestBed.createComponent(FocusModeMainComponent);
+    component = fixture.componentInstance;
+    mockStore = TestBed.inject(Store) as jasmine.SpyObj<Store>;
+    fixture.detectChanges();
+    mockStore.dispatch.calls.reset();
+  });
+
+  describe('isPlayButtonDisabled', () => {
+    it('should return true when sync with tracking is enabled and no task selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(null);
+      fixture.detectChanges();
+
+      expect(component.isPlayButtonDisabled()).toBe(true);
+    });
+
+    it('should return false when sync with tracking is enabled and task is selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(mockTask);
+      fixture.detectChanges();
+
+      expect(component.isPlayButtonDisabled()).toBe(false);
+    });
+
+    it('should return false when sync with tracking is disabled and no task selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: false,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(null);
+      fixture.detectChanges();
+
+      expect(component.isPlayButtonDisabled()).toBe(false);
+    });
+
+    it('should return false when sync with tracking is disabled and task is selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: false,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(mockTask);
+      fixture.detectChanges();
+
+      expect(component.isPlayButtonDisabled()).toBe(false);
+    });
+  });
+
+  describe('startSession with sync tracking', () => {
+    it('should open task selector when sync is enabled and no task selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(null);
+      fixture.detectChanges();
+
+      component.startSession();
+
+      expect(mockStore.dispatch).not.toHaveBeenCalled();
+      expect(component.isTaskSelectorOpen()).toBe(true);
+    });
+
+    it('should dispatch startFocusPreparation when sync is enabled and task is selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(mockTask);
+      fixture.detectChanges();
+
+      component.startSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(actions.startFocusPreparation());
+      expect(component.isTaskSelectorOpen()).toBe(false);
+    });
+
+    it('should dispatch startFocusPreparation when sync is disabled and no task selected', () => {
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: false,
+        isSkipPreparation: false,
+      });
+      currentTaskSubject.next(null);
+      fixture.detectChanges();
+
+      component.startSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(actions.startFocusPreparation());
+    });
+
+    it('should dispatch startFocusSession when sync is enabled, task is selected, and skip preparation is enabled', () => {
+      component.displayDuration.set(1500000);
+      focusModeConfigSignal.set({
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: true,
+      });
+      currentTaskSubject.next(mockTask);
+      fixture.detectChanges();
+
+      component.startSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 1500000 }),
+      );
+    });
+  });
+});

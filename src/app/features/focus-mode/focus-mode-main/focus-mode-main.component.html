@@ -229,7 +229,12 @@
       <button
         mat-fab
         color="primary"
-        [matTooltip]="T.F.FOCUS_MODE.START_FOCUS_SESSION | translate"
+        [matTooltip]="
+          isPlayButtonDisabled()
+            ? (T.F.FOCUS_MODE.SELECT_TASK_FIRST | translate)
+            : (T.F.FOCUS_MODE.START_FOCUS_SESSION | translate)
+        "
+        [disabled]="isPlayButtonDisabled()"
         (click)="startSession()"
         class="play-button"
       >

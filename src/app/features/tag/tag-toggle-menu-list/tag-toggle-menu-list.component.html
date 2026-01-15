@@ -20,7 +20,7 @@
         } @else {
           <mat-icon>check_box_outline_blank</mat-icon>
         }
-        @if (tag.icon && isEmojiIcon(tag.icon)) {
+        @if (tag.icon && tag.isEmojiIcon) {
           <span
             [style.color]="tag.color || tag.theme.primary"
             class="tag-ico tag-ico-emoji"

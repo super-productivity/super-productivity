@@ -30,6 +30,11 @@
         margin-bottom: 1rem;
         color: var(--text);
       }
+      h3 {
+        margin-top: 1.5rem;
+        margin-bottom: 0.75rem;
+        color: var(--text);
+      }
       p {
         margin-bottom: 1rem;
         color: var(--text);
@@ -57,6 +62,11 @@
         background: rgba(255, 255, 255, 0.05);
         border-radius: 0.5rem;
       }
+      .note {
+        font-style: italic;
+        color: var(--text-light);
+        font-size: 0.9em;
+      }
     </style>
   </head>
   <body>
@@ -68,83 +78,243 @@
       >
       <h1>Privacy Policy</h1>
       <p>Last updated: December 9, 2025</p>
-
-      <h2>1. Information We Collect</h2>
-      <p>
-        We collect information you provide directly to us, such as when you create or
-        modify your account, request customer support, or communicate with us.
-      </p>
-      <ul>
-        <li>
-          <strong>Account Information:</strong> When you register, we collect your email
-          address and password (hashed).
-        </li>
-        <li>
-          <strong>Sync Data:</strong> We store the productivity data (tasks, settings,
-          etc.) you synchronize through our Service.
-        </li>
-        <li>
-          <strong>Usage Data:</strong> We may collect information about how you access and
-          use the Service.
-        </li>
-      </ul>
-
-      <h2>2. How We Use Your Information</h2>
-      <p>
-        We use the information we collect to operate, maintain, and provide the features
-        of the Service, to verify your identity, and to provide customer support.
+      <p class="note">
+        Note: This is a translation for convenience only. In case of discrepancies between
+        the German and the English version, the German version shall prevail.
       </p>
 
-      <h2>3. Data Storage and Security</h2>
+      <h2>1. Introduction</h2>
       <p>
-        We implement security measures designed to protect your information from
-        unauthorized access, disclosure, alteration, and destruction. We support
-        end-to-end encryption, allowing you to encrypt your data on your device before it
-        is sent to our servers.
+        With this Privacy Policy, we inform you about the type, scope, and purpose of the
+        processing of personal data ("Data") within the scope of using the service
+        <strong>Super Productivity Sync</strong>. This policy also explains your rights
+        under the General Data Protection Regulation (GDPR).
       </p>
 
-      <h2>4. Data Sharing</h2>
-      <p>
-        We do not share your personal information with third parties except as described
-        in this privacy policy or with your consent.
-      </p>
-
-      <h2>5. Data Retention</h2>
-      <p>
-        We retain your account information and sync data for as long as your account is
-        active or as needed to provide you the Service. You may request deletion of your
-        account and data at any time.
-      </p>
-
-      <h2>6. Children's Privacy</h2>
-      <p>
-        Our Service is not directed to individuals under the age of 13. We do not
-        knowingly collect personal information from children under 13.
-      </p>
-
-      <h2>7. Changes to This Policy</h2>
-      <p>
-        We may update this Privacy Policy from time to time. We will notify you of any
-        changes by posting the new Privacy Policy on this page.
-      </p>
-
-      <h2>8. Data Controller</h2>
-      <p>The data controller responsible for your personal data is:</p>
+      <h2>2. Data Controller</h2>
       <address>
         {{ PRIVACY_CONTACT_NAME }}<br />
-        {{ PRIVACY_ADDRESS_STREET }}<br />
-        {{ PRIVACY_ADDRESS_CITY }}<br />
         {{ PRIVACY_ADDRESS_COUNTRY }}<br />
         <br />
         Email:
         <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a>
       </address>
-
-      <h2>9. Contact Us</h2>
       <p>
-        If you have any questions about this Privacy Policy, please contact us at
-        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a
-        >.
+        A Data Protection Officer has not been appointed as the statutory requirements for
+        this are not met (fewer than 20 persons constantly involved in data processing).
+      </p>
+
+      <h2>3. What Data We Process</h2>
+
+      <h3>(1) Inventory Data</h3>
+      <ul>
+        <li>Email address</li>
+        <li>Password (stored exclusively as a cryptographic hash)</li>
+        <li>Registration date</li>
+        <li>Account status information (e.g., Active, Inactive)</li>
+      </ul>
+
+      <h3>(2) Content Data</h3>
+      <p>
+        This includes all data you save in the "Super Productivity" app and synchronize
+        via the Service:
+      </p>
+      <ul>
+        <li>Tasks</li>
+        <li>Projects</li>
+        <li>Notes</li>
+        <li>Time tracking entries</li>
+        <li>Settings</li>
+      </ul>
+      <p class="note">
+        Note: If End-to-End Encryption (E2EE) is activated, this data exists on our server
+        exclusively in encrypted form.
+      </p>
+
+      <h3>(3) Meta and Log Data</h3>
+      <p>Technically necessary when accessing the server:</p>
+      <ul>
+        <li>IP address</li>
+        <li>Time of access</li>
+        <li>App version / Browser type</li>
+        <li>Operating system</li>
+        <li>Error and diagnostic information</li>
+      </ul>
+
+      <h2>4. Legal Basis for Processing</h2>
+      <p>We process your data based on the following legal bases:</p>
+
+      <h3>(1) Performance of Contract (Art. 6(1)(b) GDPR)</h3>
+      <ul>
+        <li>Storage of your account</li>
+        <li>Synchronization of your content</li>
+        <li>Technical provision of the Service</li>
+        <li>Sending security-relevant system emails (e.g., password reset)</li>
+      </ul>
+
+      <h3>(2) Legitimate Interest (Art. 6(1)(f) GDPR)</h3>
+      <ul>
+        <li>Server and service security</li>
+        <li>Detection and defense against misuse (DDoS, brute force attacks)</li>
+        <li>Error analysis and stability improvement</li>
+      </ul>
+
+      <h3>(3) Legal Obligations (Art. 6(1)(c) GDPR)</h3>
+      <p>
+        This applies to tax retention obligations for paid plans or official requests for
+        information.
+      </p>
+
+      <h2>5. Hosting and Infrastructure</h2>
+      <p>The Service is hosted by:</p>
+      <address>
+        <strong>Alfahosting GmbH</strong><br />
+        Ankerstraße 3b<br />
+        06108 Halle (Saale)<br />
+        Germany<br />
+        Website: <a href="https://alfahosting.de/">https://alfahosting.de/</a>
+      </address>
+      <p>
+        <strong>Data Location:</strong> Processing takes place exclusively on servers in
+        Germany.
+      </p>
+      <p>
+        <strong>Data Processing Agreement:</strong> We have concluded a Data Processing
+        Agreement (DPA) with Alfahosting GmbH in accordance with Art. 28 GDPR. No transfer
+        to a third country takes place via the hoster.
+      </p>
+
+      <h2>6. Data Processing during Synchronization</h2>
+
+      <h3>A) Standard Synchronization (without E2EE)</h3>
+      <ul>
+        <li>Your content data is transmitted via TLS/SSL transport encryption.</li>
+        <li>
+          It is stored in our database on the server. No end-to-end encryption is used
+          here.
+        </li>
+        <li>
+          Access by the Provider is technically possible but occurs exclusively if
+          required for maintenance, diagnosis, or defense against technical disturbances.
+        </li>
+      </ul>
+
+      <h3>B) End-to-End Encryption (E2EE – optional)</h3>
+      <p>If you enable E2EE in the app:</p>
+      <ul>
+        <li>Your data is encrypted locally on your device before transmission.</li>
+        <li>The server stores only encrypted data blocks ("Blobs").</li>
+        <li>
+          We have <strong>no access</strong> to your keys and cannot restore, decrypt, or
+          view the data.
+        </li>
+        <li>Loss of the key results in permanent data loss.</li>
+      </ul>
+
+      <h2>7. Email Sending</h2>
+      <p>
+        We send exclusively transactional emails (e.g., password reset, email address
+        confirmation, security-relevant system messages). Data processing is carried out
+        based on Art. 6(1)(b) GDPR (Performance of Contract).
+      </p>
+      <p>
+        <strong>Service Provider:</strong> Emails are sent technically via the mail
+        servers of our hosting provider <strong>Alfahosting GmbH</strong> (see Section 5).
+        No external email marketing providers are used. The data thus remains within the
+        German infrastructure.
+      </p>
+
+      <h2>8. Storage Duration and Deletion</h2>
+
+      <h3>(1) Account Deletion</h3>
+      <p>
+        If you delete your account via the app settings, we will delete your inventory
+        data and content data immediately, but no later than within
+        <strong>7 days</strong> from all active systems.
+      </p>
+
+      <h3>(2) Inactivity (Free Accounts)</h3>
+      <p>
+        We reserve the right to delete free accounts that have not been used for more than
+        <strong>12 months</strong>. This will only occur after prior notification to the
+        registered email address.
+      </p>
+
+      <h3>(3) Server Log Files</h3>
+      <p>
+        Log data (IP addresses) are automatically deleted after
+        <strong>7 to 14 days</strong>, unless security-relevant incidents require longer
+        storage.
+      </p>
+
+      <h3>(4) Statutory Retention Obligations</h3>
+      <p>
+        For paid accounts, we are obliged to retain invoice-relevant data for up to
+        <strong>10 years</strong> in accordance with statutory requirements.
+      </p>
+
+      <h2>9. Transfer to Third Parties</h2>
+      <p>Data is generally not transferred to third parties unless:</p>
+      <ul>
+        <li>You have expressly consented (Art. 6(1)(a) GDPR),</li>
+        <li>
+          It is necessary for the performance of the contract (e.g., transfer to payment
+          service providers for premium accounts),
+        </li>
+        <li>It serves the technical provision (see Hosting),</li>
+        <li>Or we are legally obliged to do so (e.g., to law enforcement agencies).</li>
+      </ul>
+      <p>We <strong>never</strong> sell your data to third parties or advertisers.</p>
+
+      <h2>10. Your Rights</h2>
+      <p>Under the GDPR, you have the following rights at any time:</p>
+      <ul>
+        <li><strong>Right of Access</strong> to your data stored by us (Art. 15 GDPR)</li>
+        <li><strong>Right to Rectification</strong> of incorrect data (Art. 16 GDPR)</li>
+        <li><strong>Right to Erasure</strong> of your data (Art. 17 GDPR)</li>
+        <li><strong>Right to Restriction of Processing</strong> (Art. 18 GDPR)</li>
+        <li>
+          <strong>Right to Data Portability</strong> (export of your data) (Art. 20 GDPR)
+        </li>
+        <li><strong>Right to Object</strong> to processing (Art. 21 GDPR)</li>
+        <li><strong>Right to Withdraw Consent</strong> (Art. 7(3) GDPR)</li>
+      </ul>
+      <p>
+        To exercise your rights (e.g., deletion), a simple email is sufficient:
+        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a>
+      </p>
+
+      <h2>11. Right to Lodge a Complaint</h2>
+      <p>
+        You have the right to lodge a complaint with a data protection supervisory
+        authority. The authority responsible for us is:
+      </p>
+      <address>
+        <strong
+          >The Saxon Data Protection Commissioner (Sächsischer
+          Datenschutzbeauftragter)</strong
+        ><br />
+        Website:
+        <a href="https://www.saechsdsb.de/">https://www.saechsdsb.de/</a>
+      </address>
+
+      <h2>12. Cookies and Tracking</h2>
+      <p>
+        The SuperSync service uses only technically necessary session cookies for
+        authentication. We do not use tracking cookies, analytics services, or advertising
+        technologies.
+      </p>
+
+      <h2>13. Automated Decision-Making</h2>
+      <p>
+        We do not use automated decision-making or profiling as defined by Art. 22 GDPR.
+      </p>
+
+      <h2>14. Contact</h2>
+      <p>If you have any questions about data protection, please contact us:</p>
+      <p>
+        Email:
+        <a href="mailto:{{ PRIVACY_CONTACT_EMAIL }}">{{ PRIVACY_CONTACT_EMAIL }}</a>
       </p>
     </div>
   </body>

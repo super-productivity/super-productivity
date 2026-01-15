@@ -516,6 +516,7 @@ export class MagicNavConfigService {
         if (result && result.title) {
           this._tagService.addTag({
             title: result.title,
+            icon: result.icon,
             color: result.color,
           });
         }

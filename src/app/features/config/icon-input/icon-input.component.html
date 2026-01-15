@@ -5,6 +5,7 @@
 <input
   [ngModel]="formControl.value"
   (ngModelChange)="onInputValueChange($event)"
+  (focus)="onFocus()"
   (paste)="onPaste($event)"
   [formlyAttributes]="field"
   [matAutocomplete]="auto"

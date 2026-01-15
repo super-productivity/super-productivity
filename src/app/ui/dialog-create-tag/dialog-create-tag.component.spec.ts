@@ -42,6 +42,7 @@ describe('DialogCreateTagComponent', () => {
 
     expect(mockDialogRef.close).toHaveBeenCalledWith({
       title: 'Test Tag',
+      icon: null,
       color: '#ff0000',
     });
   });

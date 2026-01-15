@@ -176,6 +176,12 @@ export class FocusModeMainComponent {
     () => this._isInProgress() && this.mode() !== FocusModeMode.Flowtime,
   );
 
+  // Play button should be disabled when sync with tracking is enabled but no task is selected
+  isPlayButtonDisabled = computed(() => {
+    const config = this.focusModeConfig();
+    return config?.isSyncSessionWithTracking && !this.currentTask();
+  });
+
   // Mode selector options
   readonly modeOptions: ReadonlyArray<SegmentedButtonOption> = [
     {
@@ -343,7 +349,15 @@ export class FocusModeMainComponent {
   }
 
   startSession(): void {
-    const shouldSkipPreparation = this.focusModeConfig()?.isSkipPreparation || false;
+    const config = this.focusModeConfig();
+
+    // If sync with tracking is enabled, require a task to be selected
+    if (config?.isSyncSessionWithTracking && !this.currentTask()) {
+      this.openTaskSelector();
+      return;
+    }
+
+    const shouldSkipPreparation = config?.isSkipPreparation || false;
     if (shouldSkipPreparation) {
       const duration =
         this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();

@@ -162,8 +162,15 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
     this._isSyncInProgress$.next(true);
+    // Set SYNCING status so ImmediateUploadService knows not to interfere
+    this._providerManager.setSyncStatus('SYNCING');
     return this._sync().finally(() => {
       this._isSyncInProgress$.next(false);
+      // Safeguard: if _sync() threw or completed without setting a final status,
+      // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
+      if (this._providerManager.isSyncInProgress) {
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+      }
     });
   }
 

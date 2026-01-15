@@ -54,9 +54,9 @@ test.describe('Mat Menu Touch Submenu Fix', () => {
     const tagBtn = page.locator('.mat-mdc-menu-content button', { hasText: tagName });
     await tagBtn.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Wait for 300ms touch protection delay to expire, then a small buffer
+    // Wait for 300ms touch protection delay to expire, plus buffer for CI stability
     // This is a timing-based protection feature being tested, so timeout is justified
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(450);
 
     // Click on the tag - should work after delay
     await tagBtn.click();

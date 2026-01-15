@@ -20,6 +20,31 @@
     </mat-form-field>
 
     <mat-form-field>
+      <mat-label>{{ T.F.TAG.FORM_BASIC.L_ICON | translate }}</mat-label>
+      <mat-icon>{{ icon }}</mat-icon>
+      <input
+        [(ngModel)]="icon"
+        (focus)="onIconFocus()"
+        (ngModelChange)="onIconInput($event)"
+        [matAutocomplete]="iconAuto"
+        name="icon"
+        matInput
+        type="text"
+      />
+      <mat-autocomplete
+        #iconAuto="matAutocomplete"
+        [autoActiveFirstOption]="false"
+      >
+        @for (ico of filteredIcons(); track ico) {
+          <mat-option [value]="ico">
+            <mat-icon>{{ ico }}</mat-icon>
+            <span>{{ ico }}</span>
+          </mat-option>
+        }
+      </mat-autocomplete>
+    </mat-form-field>
+
+    <mat-form-field>
       <mat-label>{{ T.F.TAG.FORM_BASIC.L_COLOR | translate }}</mat-label>
       <input
         [(ngModel)]="color"

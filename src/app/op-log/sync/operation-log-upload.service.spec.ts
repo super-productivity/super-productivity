@@ -606,6 +606,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           jasmine.anything(),
           false, // isPayloadEncrypted
+          'op-1', // op.id
         );
       });
 
@@ -622,6 +623,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           jasmine.anything(),
           false, // isPayloadEncrypted
+          'op-1', // op.id
         );
       });
 
@@ -638,6 +640,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           jasmine.anything(),
           false, // isPayloadEncrypted
+          'op-1', // op.id
         );
       });
 
@@ -782,6 +785,46 @@ describe('OperationLogUploadService', () => {
         expect(mockApiProvider.setLastServerSeq).toHaveBeenCalledWith(42);
       });
 
+      /**
+       * FIX VERIFIED: uploadSnapshot now receives op.id to prevent ID mismatch
+       *
+       * BACKGROUND: Previously uploadSnapshot() was called WITHOUT the client's op.id.
+       * The server would generate its own ID, causing filterNewOps() to not recognize
+       * the server's operation as the same one the client uploaded. This caused data
+       * loss when the old state was re-applied.
+       *
+       * FIX: op.id is now passed as the 7th argument to uploadSnapshot.
+       * Server uses this ID instead of generating a new one, ensuring client and
+       * server have matching operation IDs.
+       */
+      it('uploadSnapshot receives op.id to prevent ID mismatch', async () => {
+        const entry = createFullStateEntry(
+          1,
+          'my-backup-import-id',
+          'client-1',
+          OpType.BackupImport,
+        );
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        await service.uploadPendingOps(mockApiProvider);
+
+        // Verify uploadSnapshot was called
+        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
+
+        // Get the call arguments
+        const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
+
+        // Verify all 7 args are passed including op.id
+        expect(callArgs.length).toBe(7);
+
+        // Verify specific args
+        expect(callArgs[1]).toBe('client-1'); // clientId
+        expect(callArgs[2]).toBe('recovery'); // reason
+
+        // CRITICAL: Verify op.id is passed as 7th argument
+        expect(callArgs[6]).toBe('my-backup-import-id');
+      });
+
       it('should pass vectorClock and schemaVersion to snapshot upload', async () => {
         const vectorClock: Record<string, number> = {};
         vectorClock['client-1'] = 5;
@@ -818,6 +861,7 @@ describe('OperationLogUploadService', () => {
           vectorClock,
           42,
           false, // isPayloadEncrypted
+          'op-1', // op.id
         );
       });
 

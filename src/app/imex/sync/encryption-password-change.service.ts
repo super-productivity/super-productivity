@@ -12,6 +12,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
+import { uuidv7 } from '../../util/uuid-v7';
 
 /**
  * Service for changing the encryption password for SuperSync.
@@ -90,6 +91,7 @@ export class EncryptionPasswordChangeService {
         vectorClock,
         CURRENT_SCHEMA_VERSION,
         true, // isPayloadEncrypted
+        uuidv7(), // opId - server must use this ID
       );
 
       if (!response.accepted) {
@@ -139,6 +141,7 @@ export class EncryptionPasswordChangeService {
             vectorClock,
             CURRENT_SCHEMA_VERSION,
             true,
+            uuidv7(), // opId - server must use this ID
           );
 
           if (recoveryResponse.accepted) {

@@ -390,7 +390,8 @@ describe('SyncWrapperService', () => {
 
       await service.sync();
 
-      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
+      // setSyncStatus is called with 'SYNCING' at start, but should NOT be called with 'IN_SYNC' on error
+      expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalledWith('IN_SYNC');
     });
 
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too complex"', async () => {

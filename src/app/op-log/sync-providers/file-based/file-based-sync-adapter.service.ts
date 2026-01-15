@@ -335,7 +335,8 @@ export class FileBasedSyncAdapterService {
         reason: 'initial' | 'recovery' | 'migration',
         vectorClock: Record<string, number>,
         schemaVersion: number,
-        isPayloadEncrypted?: boolean,
+        isPayloadEncrypted: boolean | undefined,
+        _opId: string, // Not used in file-based sync (operation IDs are client-local)
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,

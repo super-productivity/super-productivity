@@ -1333,11 +1333,13 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
+      await taskLocatorB.waitFor({ state: 'visible', timeout: 5000 });
       await taskLocatorB.dblclick();
-      const titleInputB = clientB.page.locator(
-        'input.mat-mdc-input-element:focus, textarea:focus',
-      );
+      const titleInputB = clientB.page
+        .locator('input.mat-mdc-input-element, textarea')
+        .first();
       await titleInputB.waitFor({ state: 'visible', timeout: 5000 });
+      await titleInputB.focus();
       await titleInputB.fill(`${taskName}-Updated`);
       await clientB.page.keyboard.press('Enter');
       await clientB.page.waitForTimeout(300);

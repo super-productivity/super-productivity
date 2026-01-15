@@ -1685,6 +1685,33 @@ describe('FocusModeEffects', () => {
         done();
       }, 50);
     });
+
+    it('should dispatch setCurrentTask when BREAK resumes with pausedTaskId', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ isRunning: true, purpose: 'break' }),
+      );
+      store.overrideSelector(selectors.selectPausedTaskId, 'task-123');
+      // Mock that the task exists
+      store.overrideSelector(selectTaskById as any, {
+        id: 'task-123',
+        title: 'Test Task',
+      });
+      currentTaskId$.next(null); // No current task
+      store.refreshState();
+
+      actions$ = of(actions.unPauseFocusSession());
+
+      effects.syncSessionResumeToTracking$.subscribe((action) => {
+        expect(action.type).toEqual('[Task] SetCurrentTask');
+        expect((action as any).id).toBe('task-123');
+        done();
+      });
+    });
   });
 
   describe('syncSessionStartToTracking$', () => {
@@ -1782,7 +1809,7 @@ describe('FocusModeEffects', () => {
       }, 50);
     });
 
-    it('should NOT dispatch setCurrentTask when task no longer exists', (done) => {
+    it('should dispatch showFocusOverlay when task no longer exists (Bug #5954)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isSkipPreparation: false,
@@ -1796,15 +1823,10 @@ describe('FocusModeEffects', () => {
 
       actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-      let emitted = false;
-      effects.syncSessionStartToTracking$.subscribe(() => {
-        emitted = true;
-      });
-
-      setTimeout(() => {
-        expect(emitted).toBe(false);
+      effects.syncSessionStartToTracking$.subscribe((action) => {
+        expect(action.type).toEqual('[FocusMode] Show Overlay');
         done();
-      }, 50);
+      });
     });
 
     it('should fall back to lastCurrentTask when no pausedTaskId (Bug #5954)', (done) => {
@@ -1836,7 +1858,7 @@ describe('FocusModeEffects', () => {
       });
     });
 
-    it('should NOT dispatch when lastCurrentTask is done', (done) => {
+    it('should dispatch showFocusOverlay when lastCurrentTask is done (Bug #5954)', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isSkipPreparation: false,
@@ -1858,15 +1880,10 @@ describe('FocusModeEffects', () => {
 
       actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-      let emitted = false;
-      effects.syncSessionStartToTracking$.subscribe(() => {
-        emitted = true;
-      });
-
-      setTimeout(() => {
-        expect(emitted).toBe(false);
+      effects.syncSessionStartToTracking$.subscribe((action) => {
+        expect(action.type).toEqual('[FocusMode] Show Overlay');
         done();
-      }, 50);
+      });
     });
   });
 
@@ -2540,7 +2557,9 @@ describe('FocusModeEffects', () => {
         });
     });
 
-    it('should NOT dispatch setPausedTaskId when isPauseTrackingDuringBreak is false', (done) => {
+    // Bug #5974 fix: Store pausedTaskId even when isPauseTrackingDuringBreak is false
+    // This allows tracking to resume if user manually stops tracking before starting break
+    it('should dispatch setPausedTaskId when isPauseTrackingDuringBreak is false', (done) => {
       actions$ = of(actions.completeFocusSession({ isManual: false }));
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
       store.overrideSelector(selectFocusModeConfig, {
@@ -2552,12 +2571,11 @@ describe('FocusModeEffects', () => {
       currentTaskId$.next('task-123');
       store.refreshState();
 
-      effects.storePausedTaskOnManualBreakSession$
-        .pipe(toArray())
-        .subscribe((actionsArr) => {
-          expect(actionsArr.length).toBe(0);
-          done();
-        });
+      effects.storePausedTaskOnManualBreakSession$.pipe(take(1)).subscribe((action) => {
+        expect(action.type).toEqual(actions.setPausedTaskId.type);
+        expect(action.pausedTaskId).toBe('task-123');
+        done();
+      });
     });
 
     it('should NOT dispatch setPausedTaskId when no current task', (done) => {
@@ -2641,7 +2659,7 @@ describe('FocusModeEffects', () => {
         });
       });
 
-      it('should NOT dispatch when lastCurrentTask no longer exists in store', (done) => {
+      it('should dispatch showFocusOverlay when lastCurrentTask no longer exists in store (Bug #5954)', (done) => {
         store.overrideSelector(selectFocusModeConfig, {
           isSyncSessionWithTracking: true,
           isSkipPreparation: false,
@@ -2659,15 +2677,10 @@ describe('FocusModeEffects', () => {
 
         actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
 
-        let emitted = false;
-        effects.syncSessionStartToTracking$.subscribe(() => {
-          emitted = true;
-        });
-
-        setTimeout(() => {
-          expect(emitted).toBe(false);
+        effects.syncSessionStartToTracking$.subscribe((action) => {
+          expect(action.type).toEqual('[FocusMode] Show Overlay');
           done();
-        }, 50);
+        });
       });
     });
 

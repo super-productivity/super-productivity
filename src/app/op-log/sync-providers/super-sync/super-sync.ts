@@ -206,13 +206,15 @@ export class SuperSyncProvider
     reason: 'initial' | 'recovery' | 'migration',
     vectorClock: Record<string, number>,
     schemaVersion: number,
-    isPayloadEncrypted?: boolean,
+    isPayloadEncrypted: boolean | undefined,
+    opId: string,
   ): Promise<SnapshotUploadResponse> {
     SyncLog.debug(this.logLabel, 'uploadSnapshot', {
       clientId,
       reason,
       schemaVersion,
       isPayloadEncrypted,
+      opId,
     });
     const cfg = await this._cfgOrError();
 
@@ -224,6 +226,7 @@ export class SuperSyncProvider
       vectorClock,
       schemaVersion,
       isPayloadEncrypted,
+      opId, // CRITICAL: Server must use this ID to prevent ID mismatch bugs
     });
 
     // On Android, use CapacitorHttp with base64-encoded gzip

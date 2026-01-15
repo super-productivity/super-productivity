@@ -42,6 +42,8 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
   filteredIcons = signal<string[]>([]);
   isEmoji = signal(false);
   private readonly _destroyRef = inject(DestroyRef);
+  // Guards against duplicate processing when Windows emoji picker triggers multiple events
+  private _lastSetValue: string | null = null;
 
   protected readonly IS_ELECTRON = IS_ELECTRON;
   isLinux = IS_ELECTRON && window.ea.isLinux();
@@ -62,7 +64,27 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
     return i;
   }
 
+  onFocus(): void {
+    // Show initial icons when field is focused and no filter applied yet
+    if (this.filteredIcons().length === 0) {
+      const currentValue = this.formControl.value || '';
+      if (currentValue) {
+        // If there's a current value, filter by it
+        this.onInputValueChange(currentValue);
+      } else {
+        // Show first 50 icons when empty
+        this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
+      }
+    }
+  }
+
   onInputValueChange(val: string): void {
+    // Skip if this is the value we just set programmatically (prevents double processing)
+    if (val === this._lastSetValue) {
+      this._lastSetValue = null;
+      return;
+    }
+
     const arr = MATERIAL_ICONS.filter(
       (icoStr) => icoStr && icoStr.toLowerCase().includes(val.toLowerCase()),
     );
@@ -75,13 +97,16 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
       const firstEmoji = extractFirstEmoji(val);
 
       if (firstEmoji) {
+        this._lastSetValue = firstEmoji;
         this.formControl.setValue(firstEmoji);
         this.isEmoji.set(true);
       } else {
+        this._lastSetValue = '';
         this.formControl.setValue('');
         this.isEmoji.set(false);
       }
     } else if (!val) {
+      this._lastSetValue = '';
       this.formControl.setValue('');
       this.isEmoji.set(false);
     } else {
@@ -90,6 +115,7 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
   }
 
   onIconSelect(icon: string): void {
+    this._lastSetValue = icon;
     this.formControl.setValue(icon);
     const emojiCheck = isSingleEmoji(icon);
     this.isEmoji.set(emojiCheck && !this.filteredIcons().includes(icon));
@@ -110,6 +136,7 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
       const firstEmoji = extractFirstEmoji(pastedText);
 
       if (firstEmoji && isSingleEmoji(firstEmoji)) {
+        this._lastSetValue = firstEmoji;
         this.formControl.setValue(firstEmoji);
         this.isEmoji.set(true);
       }

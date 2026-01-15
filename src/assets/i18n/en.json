@@ -220,6 +220,7 @@
       "RESUME_SESSION": "Resume session",
       "SELECT_MODE": "Choose your focus mode",
       "SELECT_TASK": "Select Task to focus on",
+      "SELECT_TASK_FIRST": "Select a task first to start tracking",
       "SELECT_TASK_TO_FOCUS": "Select Task to Focus",
       "SESSION_COMPLETED": "Focus Session Completed!",
       "SHORT_BREAK": "Short Break",

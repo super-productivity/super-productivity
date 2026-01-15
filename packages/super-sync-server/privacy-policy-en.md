@@ -12,8 +12,6 @@ With this Privacy Policy, we inform you about the type, scope, and purpose of th
 ## 2. Controller
 
 **Johannes Millan**
-[Insert Street and House Number here]
-[Insert Zip Code and City here]
 Germany
 
 Email: contact@super-productivity.com

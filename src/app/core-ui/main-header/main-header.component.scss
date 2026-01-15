@@ -123,6 +123,12 @@ button.isActive2 {
   transform: translateX(-50%);
   z-index: 2;
   pointer-events: none;
+  // Scrolling support for many counters (fixes #5999)
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: var(--s);
 
   &.isVisible {
     pointer-events: all;
@@ -136,6 +142,7 @@ button.isActive2 {
     z-index: 2;
     margin-top: var(--s);
     margin-left: 0;
+    flex-shrink: 0;
 
     @for $i from 2 through 7 {
       &:nth-child(#{$i}) {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -13,9 +13,13 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_TAG_COLOR } from '../../features/work-context/work-context.const';
+import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
+import { MatOption } from '@angular/material/core';
+import { MATERIAL_ICONS } from '../material-icons.const';
 
 export interface CreateTagData {
   title?: string;
+  icon?: string | null;
   color?: string;
 }
 
@@ -34,6 +38,9 @@ export interface CreateTagData {
     MatButton,
     MatIcon,
     TranslatePipe,
+    MatAutocomplete,
+    MatAutocompleteTrigger,
+    MatOption,
   ],
 })
 export class DialogCreateTagComponent {
@@ -42,12 +49,29 @@ export class DialogCreateTagComponent {
 
   T: typeof T = T;
   title: string = '';
+  icon: string | null = null;
   color: string = DEFAULT_TAG_COLOR;
+  filteredIcons = signal<string[]>([]);
+
+  onIconFocus(): void {
+    if (this.filteredIcons().length === 0) {
+      this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
+    }
+  }
+
+  onIconInput(val: string): void {
+    const filtered = MATERIAL_ICONS.filter((ico) =>
+      ico.toLowerCase().includes(val.toLowerCase()),
+    );
+    filtered.length = Math.min(50, filtered.length);
+    this.filteredIcons.set(filtered);
+  }
 
   close(isSave: boolean): void {
     if (isSave && this.title.trim()) {
       this._matDialogRef.close({
         title: this.title.trim(),
+        icon: this.icon || null,
         color: this.color,
       } as CreateTagData);
     } else {

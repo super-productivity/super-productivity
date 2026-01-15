@@ -22,6 +22,7 @@ import { ArchiveCompressionService } from '../../features/archive/archive-compre
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
+import { OpType } from '../core/operation.types';
 
 /**
  * Creates an empty ArchiveModel with default values.
@@ -504,46 +505,70 @@ export class ArchiveOperationHandler {
     // Write archiveYoung if present in the import data
     if (archiveYoung !== undefined) {
       if (hasExistingYoung && isIncomingYoungEmpty) {
-        OpLog.warn(
-          '[ArchiveOperationHandler] SAFETY GUARD: Refusing to overwrite non-empty archiveYoung with empty archive. ' +
-            'This may indicate a bug in SYNC_IMPORT creation (using sync instead of async snapshot).',
-          { existingTaskCount: originalArchiveYoung?.task?.ids?.length ?? 0 },
-        );
-      } else {
-        await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
+        const existingCount = originalArchiveYoung?.task?.ids?.length ?? 0;
+        if (action.meta.opType === OpType.SyncImport) {
+          throw new Error(
+            '[ArchiveOperationHandler] SAFETY GUARD: Refusing to overwrite non-empty archiveYoung with empty archive. ' +
+              'This is a bug in SYNC_IMPORT creation (using sync instead of async snapshot). ' +
+              `Existing task count: ${existingCount}`,
+          );
+        } else if (action.meta.opType === OpType.BackupImport) {
+          const confirmed = window.confirm(
+            `This backup has empty archives, but you have ${existingCount} archived tasks locally. ` +
+              'Restoring will delete your archived data. Continue?',
+          );
+          if (!confirmed) {
+            throw new Error(
+              '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
+            );
+          }
+        }
       }
+      await this._archiveDbAdapter.saveArchiveYoung(archiveYoung);
     }
 
     // Write archiveOld if present in the import data
     if (archiveOld !== undefined) {
       if (hasExistingOld && isIncomingOldEmpty) {
-        OpLog.warn(
-          '[ArchiveOperationHandler] SAFETY GUARD: Refusing to overwrite non-empty archiveOld with empty archive. ' +
-            'This may indicate a bug in SYNC_IMPORT creation (using sync instead of async snapshot).',
-          { existingTaskCount: originalArchiveOld?.task?.ids?.length ?? 0 },
-        );
-      } else {
-        try {
-          await this._archiveDbAdapter.saveArchiveOld(archiveOld);
-        } catch (e) {
-          // Attempt rollback: restore archiveYoung to original state
-          OpLog.err(
-            '[ArchiveOperationHandler] archiveOld write failed, attempting rollback...',
-            e,
+        const existingCount = originalArchiveOld?.task?.ids?.length ?? 0;
+        if (action.meta.opType === OpType.SyncImport) {
+          throw new Error(
+            '[ArchiveOperationHandler] SAFETY GUARD: Refusing to overwrite non-empty archiveOld with empty archive. ' +
+              'This is a bug in SYNC_IMPORT creation (using sync instead of async snapshot). ' +
+              `Existing task count: ${existingCount}`,
           );
-          try {
-            if (originalArchiveYoung !== undefined) {
-              await this._archiveDbAdapter.saveArchiveYoung(originalArchiveYoung);
-              OpLog.log('[ArchiveOperationHandler] Rollback successful');
-            }
-          } catch (rollbackErr) {
-            OpLog.err(
-              '[ArchiveOperationHandler] Rollback FAILED - archive may be inconsistent',
-              rollbackErr,
+        } else if (action.meta.opType === OpType.BackupImport) {
+          const confirmed = window.confirm(
+            `This backup has empty old archives, but you have ${existingCount} old archived tasks locally. ` +
+              'Restoring will delete your old archived data. Continue?',
+          );
+          if (!confirmed) {
+            throw new Error(
+              '[ArchiveOperationHandler] User cancelled backup import to preserve archives',
             );
           }
-          throw e; // Re-throw original error
         }
+      }
+      try {
+        await this._archiveDbAdapter.saveArchiveOld(archiveOld);
+      } catch (e) {
+        // Attempt rollback: restore archiveYoung to original state
+        OpLog.err(
+          '[ArchiveOperationHandler] archiveOld write failed, attempting rollback...',
+          e,
+        );
+        try {
+          if (originalArchiveYoung !== undefined) {
+            await this._archiveDbAdapter.saveArchiveYoung(originalArchiveYoung);
+            OpLog.log('[ArchiveOperationHandler] Rollback successful');
+          }
+        } catch (rollbackErr) {
+          OpLog.err(
+            '[ArchiveOperationHandler] Rollback FAILED - archive may be inconsistent',
+            rollbackErr,
+          );
+        }
+        throw e; // Re-throw original error
       }
     }
 

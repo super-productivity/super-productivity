@@ -14,6 +14,7 @@ import { deleteTag, deleteTags } from '../../features/tag/store/tag.actions';
 import { TimeTrackingService } from '../../features/time-tracking/time-tracking.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
+import { OpType } from '../core/operation.types';
 
 describe('isArchiveAffectingAction', () => {
   it('should return true for moveToArchive action', () => {
@@ -963,6 +964,171 @@ describe('ArchiveOperationHandler', () => {
         expect(
           mockTaskArchiveService.removeAllArchiveTasksForProject,
         ).not.toHaveBeenCalled();
+      });
+
+      describe('safety guard for empty archive overwrite', () => {
+        const existingArchiveYoung = createArchiveModelForTest([
+          'existing-1',
+          'existing-2',
+        ]);
+        const existingArchiveOld = createArchiveModelForTest(['old-existing-1']);
+        const emptyArchive: ArchiveModel = {
+          task: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          lastTimeTrackingFlush: 0,
+        };
+
+        beforeEach(() => {
+          mockArchiveDbAdapter.loadArchiveYoung.and.returnValue(
+            Promise.resolve(existingArchiveYoung),
+          );
+          mockArchiveDbAdapter.loadArchiveOld.and.returnValue(
+            Promise.resolve(existingArchiveOld),
+          );
+        });
+
+        describe('SYNC_IMPORT', () => {
+          it('should throw error when empty archiveYoung would overwrite non-empty archive', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+            } as unknown as PersistentAction;
+
+            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
+              /SAFETY GUARD.*archiveYoung.*bug in SYNC_IMPORT/,
+            );
+            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+          });
+
+          it('should throw error when empty archiveOld would overwrite non-empty archive', async () => {
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveOld: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+            } as unknown as PersistentAction;
+
+            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
+              /SAFETY GUARD.*archiveOld.*bug in SYNC_IMPORT/,
+            );
+            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          });
+
+          it('should allow writing non-empty archive over existing archive', async () => {
+            const newArchive = createArchiveModelForTest(['new-task']);
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: newArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+              newArchive,
+            );
+          });
+        });
+
+        describe('BACKUP_IMPORT', () => {
+          let originalConfirm: typeof window.confirm;
+
+          beforeEach(() => {
+            originalConfirm = window.confirm;
+            window.confirm = jasmine.createSpy('confirm').and.returnValue(true);
+          });
+
+          afterEach(() => {
+            window.confirm = originalConfirm;
+          });
+
+          it('should show confirm dialog and throw if user cancels (archiveYoung)', async () => {
+            (window.confirm as jasmine.Spy).and.returnValue(false);
+
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+            } as unknown as PersistentAction;
+
+            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
+              /User cancelled backup import/,
+            );
+            expect(window.confirm).toHaveBeenCalledWith(
+              jasmine.stringContaining('2 archived tasks'),
+            );
+            expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+          });
+
+          it('should show confirm dialog and proceed if user confirms (archiveYoung)', async () => {
+            (window.confirm as jasmine.Spy).and.returnValue(true);
+
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(window.confirm).toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+              emptyArchive,
+            );
+          });
+
+          it('should show confirm dialog and throw if user cancels (archiveOld)', async () => {
+            (window.confirm as jasmine.Spy).and.returnValue(false);
+
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveOld: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+            } as unknown as PersistentAction;
+
+            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
+              /User cancelled backup import/,
+            );
+            expect(window.confirm).toHaveBeenCalledWith(
+              jasmine.stringContaining('1 old archived tasks'),
+            );
+            expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          });
+
+          it('should show confirm dialog and proceed if user confirms (archiveOld)', async () => {
+            (window.confirm as jasmine.Spy).and.returnValue(true);
+
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveOld: emptyArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(window.confirm).toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(
+              emptyArchive,
+            );
+          });
+
+          it('should not show confirm dialog when archive is not empty', async () => {
+            const newArchive = createArchiveModelForTest(['new-task']);
+
+            const action = {
+              type: loadAllData.type,
+              appDataComplete: { archiveYoung: newArchive },
+              meta: { isPersistent: true, isRemote: true, opType: OpType.BackupImport },
+            } as unknown as PersistentAction;
+
+            await service.handleOperation(action);
+
+            expect(window.confirm).not.toHaveBeenCalled();
+            expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
+              newArchive,
+            );
+          });
+        });
       });
     });
 

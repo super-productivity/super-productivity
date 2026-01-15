@@ -647,6 +647,8 @@ describe('FileBasedSyncAdapterService', () => {
         'initial',
         vectorClock,
         2,
+        undefined, // isPayloadEncrypted
+        'test-op-id-1', // opId
       );
 
       expect(result.accepted).toBe(true);
@@ -664,7 +666,15 @@ describe('FileBasedSyncAdapterService', () => {
       );
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-1' }));
 
-      await adapter.uploadSnapshot({}, 'client1', 'recovery', { client1: 1 }, 1);
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'recovery',
+        { client1: 1 },
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-2', // opId
+      );
 
       // Should upload to main sync file with force overwrite (no backup created)
       expect(mockProvider.uploadFile).toHaveBeenCalledWith(
@@ -692,7 +702,15 @@ describe('FileBasedSyncAdapterService', () => {
       await adapter.setLastServerSeq(100);
 
       // Upload snapshot (syncVersion becomes 1)
-      await adapter.uploadSnapshot({}, 'client1', 'initial', { client1: 1 }, 1);
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'initial',
+        { client1: 1 },
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-3', // opId
+      );
 
       // Seq should match syncVersion (1), not reset to 0
       // This prevents repeated conflict dialogs after USE_LOCAL resolution
@@ -935,7 +953,15 @@ describe('FileBasedSyncAdapterService', () => {
           return Promise.resolve({ rev: 'rev-1' });
         });
 
-        await adapter.uploadSnapshot({}, 'client1', 'initial', { client1: 1 }, 1);
+        await adapter.uploadSnapshot(
+          {},
+          'client1',
+          'initial',
+          { client1: 1 },
+          1,
+          undefined, // isPayloadEncrypted
+          'test-op-id-4', // opId
+        );
 
         const uploadedData = parseWithPrefix(uploadedDataStr);
         expect(uploadedData.archiveYoung).toEqual(mockArchiveYoung);
@@ -1027,7 +1053,15 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
 
       // Act: Upload a snapshot (simulates USE_LOCAL conflict resolution)
-      await adapter.uploadSnapshot({}, 'client1', 'initial', { client1: 1 }, 1);
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'initial',
+        { client1: 1 },
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-5', // opId
+      );
 
       // Verify: lastServerSeq should be 1 (not 0)
       const lastSeq = await adapter.getLastServerSeq();
@@ -1059,7 +1093,15 @@ describe('FileBasedSyncAdapterService', () => {
       mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
 
       // Step 1: Upload snapshot (simulates USE_LOCAL)
-      await adapter.uploadSnapshot({}, 'client1', 'initial', { client1: 1 }, 1);
+      await adapter.uploadSnapshot(
+        {},
+        'client1',
+        'initial',
+        { client1: 1 },
+        1,
+        undefined, // isPayloadEncrypted
+        'test-op-id-6', // opId
+      );
 
       // Step 2: Verify seq is set correctly to syncVersion
       const seqAfterUpload = await adapter.getLastServerSeq();
