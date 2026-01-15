@@ -80,6 +80,7 @@ export class ShortcutService {
             minWidth: '100vw',
             height: '100vh',
             restoreFocus: true,
+            autoFocus: 'textarea',
           });
         }
       });
@@ -164,6 +165,7 @@ export class ShortcutService {
           minWidth: '100vw',
           height: '100vh',
           restoreFocus: true,
+          autoFocus: 'textarea',
         });
         ev.preventDefault();
       }

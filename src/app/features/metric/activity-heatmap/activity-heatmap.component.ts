@@ -9,7 +9,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../../worklog/worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../../archive/task-archive.service';
 import { defer, from } from 'rxjs';
 import { first, map, switchMap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';

@@ -70,6 +70,7 @@ export interface AndroidInterface {
     title: string,
     reminderType: string,
     triggerAtMs: number,
+    useAlarmStyle: boolean,
   ): void;
   cancelNativeReminder?(notificationId: number): void;
 

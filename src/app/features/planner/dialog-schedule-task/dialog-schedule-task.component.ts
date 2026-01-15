@@ -26,7 +26,6 @@ import { PlannerActions } from '../store/planner.actions';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { SnackService } from '../../../core/snack/snack.service';
-import { removeReminderFromTask } from '../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { truncate } from '../../../util/truncate';
 import { TASK_REMINDER_OPTIONS } from './task-reminder-options.const';
@@ -138,17 +137,13 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   async ngAfterViewInit(): Promise<void> {
     // Handle case when task is provided
     if (this.data.task) {
-      if (this.data.task.reminderId) {
-        const reminder = this._reminderService.getById(this.data.task.reminderId);
-        if (reminder && this.data.task.dueWithTime) {
+      if (this.data.task.remindAt) {
+        if (this.data.task.dueWithTime) {
           this.selectedReminderCfgId = millisecondsDiffToRemindOption(
             this.data.task.dueWithTime,
-            reminder.remindAt,
+            this.data.task.remindAt,
           );
-        } else {
-          Log.err('No reminder found for task', this.data.task);
         }
-        // for tasks without anything scheduled
       } else if (!this.data.task.dueWithTime) {
         this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
       } else {
@@ -281,12 +276,10 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       return;
     }
 
-    // TODO simplify
-    if (this.data.task.reminderId) {
+    if (this.data.task.remindAt) {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
-          reminderId: this.data.task.reminderId,
         }),
       );
     } else if (this.plannedDayForTask === getDbDateStr()) {
@@ -294,7 +287,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
-          reminderId: this.data.task.reminderId,
           isSkipToast: true,
         }),
       );
@@ -308,7 +300,6 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: this.data.task.id,
-          reminderId: this.data.task.reminderId,
           isSkipToast: true,
         }),
       );
@@ -397,14 +388,16 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
     if (
       this.data.task &&
       this.selectedReminderCfgId === TaskReminderOptionId.DoNotRemind &&
-      typeof this.data.task.reminderId === 'string'
+      this.data.task.remindAt !== undefined
     ) {
       this._store.dispatch(
-        removeReminderFromTask({
-          id: this.data.task.id,
-          reminderId: this.data.task.reminderId,
-          isSkipToast: true,
-          isLeaveDueTime: true,
+        TaskSharedActions.updateTask({
+          task: {
+            id: this.data.task.id,
+            changes: {
+              remindAt: undefined,
+            },
+          },
         }),
       );
     }

@@ -5,6 +5,9 @@ import { taskSharedSchedulingMetaReducer } from './task-shared-scheduling.reduce
 import { projectSharedMetaReducer } from './project-shared.reducer';
 import { tagSharedMetaReducer } from './tag-shared.reducer';
 import { plannerSharedMetaReducer } from './planner-shared.reducer';
+import { RootState } from '../../root-state';
+import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { Task } from '../../../features/tasks/task.model';
 
 /**
  * Combines all task-shared meta-reducers for testing purposes.
@@ -23,3 +26,25 @@ export const createCombinedTaskSharedMetaReducer = (
   combinedReducer = plannerSharedMetaReducer(combinedReducer);
   return combinedReducer;
 };
+
+/**
+ * Updates a task entity in state with the given changes.
+ * Useful for setting up test state where task entities need specific values.
+ */
+export const updateTaskEntity = (
+  state: RootState,
+  taskId: string,
+  changes: Partial<Task>,
+): RootState => ({
+  ...state,
+  [TASK_FEATURE_NAME]: {
+    ...state[TASK_FEATURE_NAME],
+    entities: {
+      ...state[TASK_FEATURE_NAME].entities,
+      [taskId]: {
+        ...state[TASK_FEATURE_NAME].entities[taskId],
+        ...changes,
+      } as Task,
+    },
+  },
+});

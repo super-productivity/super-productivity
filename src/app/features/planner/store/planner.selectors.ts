@@ -34,28 +34,32 @@ export const selectAllTasksDueToday = createSelector(
   selectTaskFeatureState,
   selectPlannerState,
   (todayStr, taskState, plannerState): (TaskWithDueTime | TaskWithDueDay)[] => {
-    const allDueDayTasks = Object.values(taskState.entities).filter(
-      (task) => !!task && !!(task as TaskWithDueTime).dueDay && todayStr === task.dueDay,
-    ) as TaskWithDueDay[];
-    const allDueWithTimeTasks = Object.values(taskState.entities).filter(
-      (task) =>
-        !!task &&
-        !!(task as TaskWithDueTime).dueWithTime &&
-        isToday((task as TaskWithDueTime).dueWithTime),
-    ) as TaskWithDueTime[];
-
+    // Start with tasks from planner state for today
     const allDue: (TaskWithDueTime | TaskWithDueDay)[] = (
       plannerState.days[todayStr] || []
     )
-      .map((tid) => taskState.entities[tid] as TaskWithDueDay)
+      .map((tid) => taskState.entities[tid])
       // there is a chance that the task is not in the store anymore
-      .filter((t) => !!t);
+      .filter((t): t is TaskWithDueDay => !!t);
 
-    [...allDueDayTasks, ...allDueWithTimeTasks].forEach((task) => {
-      if (!allDue.find((t) => t.id === task.id)) {
-        allDue.push(task);
+    // Use Set for O(1) lookup
+    const allDueIds = new Set(allDue.map((t) => t.id));
+
+    // PERF: Single pass over ids instead of two Object.values() calls
+    for (const id of taskState.ids) {
+      if (allDueIds.has(id)) continue;
+      const task = taskState.entities[id];
+      if (!task) continue;
+
+      // Check if task is due today (either by dueDay or dueWithTime)
+      const isDueByDay = task.dueDay === todayStr;
+      const isDueByTime = task.dueWithTime && isToday(task.dueWithTime);
+
+      if (isDueByDay || isDueByTime) {
+        allDue.push(task as TaskWithDueTime | TaskWithDueDay);
+        allDueIds.add(id);
       }
-    });
+    }
     return allDue;
   },
 );
@@ -83,10 +87,9 @@ export const selectPlannerDays = (
   todayStr: string,
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 ) => {
-  const allAllPlannedIds = allPlannedTasks.map((t) => t.id);
-  const unplannedTaskIdsToday = todayListTaskIds.filter(
-    (id) => !allAllPlannedIds.includes(id),
-  );
+  // Use Set for O(1) lookup instead of O(n) .includes() in filter
+  const allPlannedIdSet = new Set(allPlannedTasks.map((t) => t.id));
+  const unplannedTaskIdsToday = todayListTaskIds.filter((id) => !allPlannedIdSet.has(id));
 
   return createSelector(
     selectTaskFeatureState,

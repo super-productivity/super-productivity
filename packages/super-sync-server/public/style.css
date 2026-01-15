@@ -1,0 +1,456 @@
+:root {
+  --primary: #0077b6;
+  --primary-dark: #005a8c;
+  --secondary: #5c6370;
+  --secondary-dark: #4b5563;
+  --bg: #f5f7fa;
+  --card-bg: #ffffff;
+  --text: #333333;
+  --text-light: #595959;
+  --border: #e0e0e0;
+  --success: #2e7d32;
+  --error: #c62828;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+}
+
+header h1 {
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+header p {
+  color: var(--text-light);
+  margin-bottom: 2rem;
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  margin-bottom: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0.75rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-light);
+  transition: color 0.2s;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom: 2px solid var(--primary);
+  margin-bottom: -2px;
+}
+
+/* Forms */
+.auth-form {
+  display: none;
+  text-align: left;
+}
+
+.auth-form.active {
+  display: block;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+a {
+  color: var(--primary);
+}
+
+a:visited {
+  color: var(--primary);
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+/* Buttons */
+.btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.1s;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn.primary {
+  background-color: var(--primary);
+  color: white;
+}
+
+.btn.primary:hover {
+  background-color: var(--primary-dark);
+}
+
+.btn.secondary {
+  background-color: var(--secondary);
+  color: white;
+}
+
+.btn.secondary:hover {
+  background-color: var(--secondary-dark);
+}
+
+.btn.text-only {
+  background: none;
+  color: var(--text-light);
+  margin-top: 1rem;
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.btn.text-only:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.btn.danger {
+  color: var(--error);
+}
+
+.btn.danger:hover {
+  color: #9a1f1f;
+}
+
+/* Token Display */
+.success-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.token-box {
+  margin: 1.5rem 0;
+}
+
+#token-area {
+  width: 100%;
+  height: 100px;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: monospace;
+  font-size: 0.9rem;
+  resize: none;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+
+/* Instructions */
+.instructions {
+  text-align: left;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background-color: var(--bg);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.instructions summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.instructions ol {
+  margin: 0.75rem 0 0 1.25rem;
+  color: var(--text-light);
+}
+
+.instructions li {
+  margin-bottom: 0.25rem;
+}
+
+.warning-box {
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  color: #6d5200;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+/* Action Buttons */
+.action-buttons {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.btn.success {
+  background-color: var(--success);
+}
+
+/* Messages */
+#message-area {
+  padding: 1rem;
+  border-radius: var(--radius);
+  margin-top: 1rem;
+  font-weight: 500;
+}
+
+.msg-error {
+  background-color: #ffebee;
+  color: var(--error);
+  border: 1px solid #ffcdd2;
+}
+
+.msg-success {
+  background-color: #e8f5e9;
+  color: var(--success);
+  border: 1px solid #c8e6c9;
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 1rem 0;
+  color: var(--text-light);
+  font-size: 0.85rem;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--border);
+}
+
+.divider span {
+  padding: 0 0.75rem;
+}
+
+/* Text Links Row */
+.text-links {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.text-links .btn.text-only {
+  margin-top: 0;
+}
+
+/* Footer */
+footer {
+  margin-top: 2rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+/* Settings Sections */
+.settings-section {
+  text-align: left;
+  margin-bottom: 1.5rem;
+}
+
+.settings-section h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.settings-section p {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.settings-section .btn {
+  width: auto;
+  padding: 0.5rem 1rem;
+}
+
+.danger-zone {
+  padding-top: 1rem;
+}
+
+.danger-zone h3 {
+  color: var(--error);
+}
+
+#account-settings hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}
+
+#account-settings h2 {
+  margin-bottom: 1.5rem;
+}
+
+/* Danger button (solid) */
+.btn.danger {
+  background-color: var(--error);
+  color: white;
+}
+
+.btn.danger:hover {
+  background-color: #9a1f1f;
+  color: white;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #4db8e8;
+    --primary-dark: #0099cc;
+    --secondary: #a3a3a3;
+    --secondary-dark: #8b95a5;
+    --bg: #1a1a1a;
+    --card-bg: #2d2d2d;
+    --text: #e5e5e5;
+    --text-light: #a3a3a3;
+    --border: #404040;
+    --success: #66bb6a;
+    --error: #ef5350;
+  }
+
+  .card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  }
+
+  input {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+
+  /* Buttons need darker backgrounds for white text contrast */
+  .btn.primary {
+    background-color: #0077b6;
+  }
+
+  .btn.primary:hover {
+    background-color: #005a8c;
+  }
+
+  .btn.secondary {
+    background-color: #5c6370;
+  }
+
+  .btn.secondary:hover {
+    background-color: #4b5563;
+  }
+
+  .btn.success {
+    background-color: #2e7d32;
+  }
+
+  .warning-box {
+    background-color: #4a3f00;
+    border-color: #6d5a00;
+    color: #ffd54f;
+  }
+
+  .msg-error {
+    background-color: #3d1b1b;
+    color: #ef9a9a;
+    border-color: #5c2b2b;
+  }
+
+  .msg-success {
+    background-color: #1b3d1f;
+    color: #81c784;
+    border-color: #2b5c30;
+  }
+
+  .btn.danger {
+    background-color: #c62828;
+  }
+
+  .btn.danger:hover {
+    background-color: #9a1f1f;
+  }
+
+  .danger-zone h3 {
+    color: #f77;
+  }
+}

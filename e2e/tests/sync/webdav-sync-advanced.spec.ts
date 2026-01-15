@@ -75,12 +75,11 @@ test.describe('WebDAV Sync Advanced Features', () => {
     const parentTaskB = pageB.locator('task', { hasText: parentTaskName }).first();
     await expect(parentTaskB).toBeVisible();
 
-    // Check for subtask count - expand first
-    await parentTaskB.click(); // Ensure focus/expanded? Usually auto-expanded.
-
-    // Use more specific locator for subtasks
+    // Wait for sub-task list to be rendered with correct count
+    // Sub-tasks are visible by default (no click needed to expand)
     const subTaskList = pageB.locator(`task-list[listid="SUB"]`);
-    await expect(subTaskList.locator('task')).toHaveCount(2);
+    await expect(subTaskList).toBeVisible({ timeout: 10000 });
+    await expect(subTaskList.locator('task')).toHaveCount(2, { timeout: 10000 });
     await expect(subTaskList.locator('task', { hasText: 'Sub Task 1' })).toBeVisible();
     await expect(subTaskList.locator('task', { hasText: 'Sub Task 2' })).toBeVisible();
 
@@ -171,10 +170,13 @@ test.describe('WebDAV Sync Advanced Features', () => {
     const taskB = pageB.locator('task', { hasText: taskName }).first();
     await expect(taskB).toBeVisible();
 
+    // Scroll task into view - it may be outside viewport after sync
+    await taskB.scrollIntoViewIfNeeded();
+
     // Click the attachment button to open the side panel with attachments expanded
     const attachmentBtnB = taskB.locator('.attachment-btn');
     await expect(attachmentBtnB).toBeVisible();
-    await attachmentBtnB.click({ force: true });
+    await attachmentBtnB.click();
 
     await expect(pageB.locator('.attachment-link')).toContainText('Google');
 

@@ -58,13 +58,20 @@ export class UiHelperService {
    * Focus app after a delay to prevent accidental input.
    * Used for "surprise" focus scenarios (tracking reminder, idle, take-a-break)
    * where user might still be typing in another app.
+   *
+   * The 1500ms delay gives users time to finish typing after notification appears.
+   * Based on user feedback in issue #5762 where immediate focus caused unintended input.
    */
   focusAppAfterNotification(): void {
     if (!IS_ELECTRON) {
       return;
     }
 
+    // Delay focus to prevent accidental input if user is typing in another app.
+    // 1500ms gives users time to finish typing after notification appears.
     const FOCUS_DELAY_MS = 1500;
+    // Small delay after focus to let window activation complete before blurring
+    const BLUR_DELAY_MS = 100;
 
     setTimeout(() => {
       window.ea.showOrFocus();
@@ -73,7 +80,7 @@ export class UiHelperService {
         if (document.activeElement && document.activeElement !== document.body) {
           (document.activeElement as HTMLElement).blur();
         }
-      }, 100);
+      }, BLUR_DELAY_MS);
     }, FOCUS_DELAY_MS);
   }
 

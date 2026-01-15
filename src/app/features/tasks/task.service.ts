@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import typia from 'typia';
-import { first, map, take, withLatestFrom } from 'rxjs/operators';
+import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
@@ -36,6 +36,7 @@ import {
 } from './store/task.actions';
 import { IssueProviderKey } from '../issue/issue.model';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
+import { BatchedTimeSyncAccumulator } from '../../core/util/batched-time-sync-accumulator';
 import {
   selectAllTasks,
   selectCurrentTask,
@@ -55,7 +56,7 @@ import {
   selectTasksByTag,
   selectTaskWithSubTasksByRepeatConfigId,
 } from './store/task.selectors';
-import { selectTodayTagTaskIds } from '../tag/store/tag.reducer';
+import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { RoundTimeOption } from '../project/project.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { WorkContextType } from '../work-context/work-context.model';
@@ -66,6 +67,7 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../work-context/store/work-context-meta.actions';
+import { getAnchorFromDragDrop } from '../work-context/store/work-context-meta.helper';
 import { Router } from '@angular/router';
 import { unique } from '../../util/unique';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
@@ -82,9 +84,14 @@ import {
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-store/root-state';
 import { DateService } from '../../core/date/date.service';
-import { TimeTrackingActions } from '../time-tracking/store/time-tracking.actions';
-import { ArchiveService } from '../time-tracking/archive.service';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import {
+  TimeTrackingActions,
+  syncTimeSpent,
+  syncTimeTracking,
+} from '../time-tracking/store/time-tracking.actions';
+import { selectTimeTrackingState } from '../time-tracking/store/time-tracking.selectors';
+import { ArchiveService } from '../archive/archive.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { getDbDateStr } from '../../util/get-db-date-str';
@@ -121,7 +128,7 @@ export class TaskService {
     // NOTE: we can't use share here, as we need the last emitted value
   );
 
-  currentTaskParentOrCurrent$: Observable<Task> = this._store.pipe(
+  currentTaskParentOrCurrent$: Observable<Task | undefined> = this._store.pipe(
     select(selectCurrentTaskParentOrCurrent),
     // NOTE: we can't use share here, as we need the last emitted value
   );
@@ -135,9 +142,13 @@ export class TaskService {
   );
 
   // Shared signal to avoid creating 200+ subscriptions in task components
-  todayList = toSignal(this._store.pipe(select(selectTodayTagTaskIds)), {
+  // Uses selectTodayTaskIds which computes membership from task.dueDay (virtual tag pattern)
+  todayList = toSignal(this._store.pipe(select(selectTodayTaskIds)), {
     initialValue: [] as string[],
   });
+
+  // Set version for O(1) lookup - used by task components to check membership
+  todayListSet = computed(() => new Set(this.todayList()));
 
   selectedTask$: Observable<TaskWithSubTasks | null> = this._store.pipe(
     select(selectSelectedTask),
@@ -181,6 +192,18 @@ export class TaskService {
   private _lastFocusedTaskEl: HTMLElement | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
 
+  // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
+  private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  private _timeAccumulator = new BatchedTimeSyncAccumulator(
+    TaskService.SYNC_INTERVAL_MS,
+    (taskId, date, duration) =>
+      this._store.dispatch(syncTimeSpent({ taskId, date, duration })),
+  );
+  private _unsyncedContexts: Map<
+    string,
+    { contextType: 'TAG' | 'PROJECT'; contextId: string; date: string }
+  > = new Map();
+
   constructor() {
     document.addEventListener(
       'focus',
@@ -196,22 +219,91 @@ export class TaskService {
       true,
     );
 
-    // time tracking
+    // time tracking with batch sync
     this._timeTrackingService.tick$
       .pipe(
         withLatestFrom(this.currentTask$, this._imexMetaService.isDataImportInProgress$),
       )
       .subscribe(([tick, currentTask, isImportInProgress]) => {
-        if (currentTask && !isImportInProgress) {
+        if (currentTask?.id && !isImportInProgress) {
+          // Update local state immediately (existing behavior)
           this.addTimeSpent(currentTask, tick.duration, tick.date);
+
+          // Accumulate for batch sync
+          this._timeAccumulator.accumulate(currentTask.id, tick.duration, tick.date);
+
+          // Track contexts for TIME_TRACKING sync
+          this._trackContextsForSync(currentTask, tick.date);
+
+          // Check if it's time to sync (every 5 minutes)
+          if (this._timeAccumulator.shouldFlush()) {
+            this._flushAccumulatedTimeSpent();
+          }
         }
       });
+
+    // Flush accumulated time when task stops (currentTaskId becomes null or changes)
+    this.currentTaskId$.pipe(distinctUntilChanged()).subscribe((newTaskId) => {
+      // When task changes or stops, flush any accumulated time
+      this._flushAccumulatedTimeSpent();
+    });
 
     effect(() => {
       if (!this.isTimeTrackingEnabled() && untracked(this.currentTaskId) != null) {
         this.toggleStartTask();
       }
     });
+  }
+
+  /**
+   * Tracks contexts (tags and project) that need TIME_TRACKING sync.
+   */
+  private _trackContextsForSync(task: Task, date: string): void {
+    // Track project context
+    if (task.projectId) {
+      const key = `PROJECT:${task.projectId}:${date}`;
+      this._unsyncedContexts.set(key, {
+        contextType: 'PROJECT',
+        contextId: task.projectId,
+        date,
+      });
+    }
+
+    // Track tag contexts (including TODAY_TAG)
+    for (const tagId of [TODAY_TAG.id, ...task.tagIds]) {
+      const key = `TAG:${tagId}:${date}`;
+      this._unsyncedContexts.set(key, {
+        contextType: 'TAG',
+        contextId: tagId,
+        date,
+      });
+    }
+  }
+
+  /**
+   * Dispatches syncTimeSpent for all accumulated time and resets accumulators.
+   */
+  private _flushAccumulatedTimeSpent(): void {
+    // Sync task.timeSpent totals
+    this._timeAccumulator.flush();
+
+    // Sync TIME_TRACKING session data (start/end times)
+    if (this._unsyncedContexts.size > 0) {
+      this._store
+        .pipe(select(selectTimeTrackingState), take(1))
+        .subscribe((timeTrackingState) => {
+          this._unsyncedContexts.forEach(({ contextType, contextId, date }) => {
+            const prop = contextType === 'TAG' ? 'tag' : 'project';
+            const data = timeTrackingState?.[prop]?.[contextId]?.[date];
+            if (data) {
+              this._store.dispatch(
+                syncTimeTracking({ contextType, contextId, date, data }),
+              );
+            }
+          });
+          this._unsyncedContexts.clear();
+        });
+    }
   }
 
   getAllParentWithoutTag$(tagId: string): Observable<Task[]> {
@@ -398,10 +490,11 @@ export class TaskService {
       // move inside today
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
         moveTaskInTodayList({
           taskId,
-          newOrderedIds,
+          afterTaskId,
           src,
           target,
           workContextId,
@@ -410,15 +503,17 @@ export class TaskService {
       );
     } else if (src === 'BACKLOG' && target === 'BACKLOG') {
       // move inside backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveProjectTaskInBacklogList({ taskId, newOrderedIds, workContextId }),
+        moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
       );
     } else if (src === 'BACKLOG' && isTargetTodayList) {
       // move from backlog to today
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
         moveProjectTaskToRegularList({
           taskId,
-          newOrderedIds,
+          afterTaskId,
           src,
           target,
           workContextId,
@@ -426,13 +521,15 @@ export class TaskService {
       );
     } else if (isSrcTodayList && target === 'BACKLOG') {
       // move from today to backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveProjectTaskToBacklogList({ taskId, newOrderedIds, workContextId }),
+        moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
       );
     } else {
       // move sub task
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, newOrderedIds }),
+        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
       );
     }
   }
@@ -640,18 +737,16 @@ export class TaskService {
   }
 
   private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
-    // Tasks render asynchronously; retry focus a few times before giving up.
-    const MAX_ATTEMPTS = 5;
-    const attemptFocus = (attempt = 0): void => {
-      window.setTimeout(() => {
+    // Use double-RAF to ensure Angular has completed rendering after change detection.
+    // First RAF queues after the current frame, second RAF runs after the render.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         const taskElement = document.getElementById(`t-${taskId}`);
-        if (taskElement) {
-          taskElement.focus();
+        if (!taskElement) return;
 
-          if (!shouldStartEditing) {
-            return;
-          }
+        taskElement.focus();
 
+        if (shouldStartEditing) {
           const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
           if (
             taskComponent &&
@@ -659,17 +754,10 @@ export class TaskService {
             !taskComponent.task().title?.trim().length
           ) {
             taskComponent.focusTitleForEdit();
-            return;
           }
         }
-
-        if (attempt < MAX_ATTEMPTS) {
-          attemptFocus(attempt + 1);
-        }
-      }, 50);
-    };
-
-    attemptFocus();
+      });
+    });
   }
 
   addTimeSpent(
@@ -774,6 +862,7 @@ export class TaskService {
     if (parentTasks.length) {
       TaskLog.log('[TaskService] Dispatching moveToArchive action for parent tasks');
       // Only move parent tasks to archive, never subtasks
+      // Note: Full task payload required for sync - see docs/archive-operation-redesign.md
       this._store.dispatch(TaskSharedActions.moveToArchive({ tasks: parentTasks }));
       // Only archive parent tasks to prevent orphaned subtasks
       TaskLog.log('[TaskService] Calling archive service to persist tasks');
@@ -1123,11 +1212,13 @@ export class TaskService {
 
   createNewTaskWithDefaults({
     title,
+    id,
     additional = {},
     workContextType = this._workContextService.activeWorkContextType as WorkContextType,
     workContextId = this._workContextService.activeWorkContextId as string,
   }: {
     title: string | null;
+    id?: string;
     additional?: Partial<Task>;
     workContextType?: WorkContextType;
     workContextId?: string;
@@ -1137,7 +1228,7 @@ export class TaskService {
       ...DEFAULT_TASK,
       created: Date.now(),
       title: title as string,
-      id: nanoid(),
+      id: id || nanoid(),
 
       ...(workContextType === WorkContextType.PROJECT
         ? { projectId: workContextId }

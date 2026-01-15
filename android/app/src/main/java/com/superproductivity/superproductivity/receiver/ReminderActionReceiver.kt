@@ -21,6 +21,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
         const val EXTRA_RELATED_ID = "related_id"
         const val EXTRA_TITLE = "title"
         const val EXTRA_REMINDER_TYPE = "reminder_type"
+        const val EXTRA_USE_ALARM_STYLE = "use_alarm_style"
 
         const val SNOOZE_DURATION_MS = 10 * 60 * 1000L // 10 minutes
     }
@@ -33,6 +34,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
         val relatedId = intent.getStringExtra(EXTRA_RELATED_ID) ?: return
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Reminder"
         val reminderType = intent.getStringExtra(EXTRA_REMINDER_TYPE) ?: "TASK"
+        val useAlarmStyle = intent.getBooleanExtra(EXTRA_USE_ALARM_STYLE, false)
 
         Log.d(TAG, "Snooze: notificationId=$notificationId, title=$title")
 
@@ -50,7 +52,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
             relatedId,
             title,
             reminderType,
-            newTriggerTime
+            newTriggerTime,
+            useAlarmStyle
         )
 
         Log.d(TAG, "Rescheduled reminder for ${SNOOZE_DURATION_MS / 60000} minutes from now")

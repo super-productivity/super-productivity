@@ -30,10 +30,10 @@ export const taskRepeatCfgReducer = createReducer<TaskRepeatCfgState>(
   ),
 
   // delete all project tasks from tags on project delete
-  on(TaskSharedActions.deleteProject, (state, { project, allTaskIds }) => {
+  on(TaskSharedActions.deleteProject, (state, { projectId }) => {
     const taskRepeatCfgs = state.ids.map((id) => state.entities[id] as TaskRepeatCfg);
     const allCfgIdsForProject = taskRepeatCfgs.filter(
-      (cfg) => cfg.projectId === project.id,
+      (cfg) => cfg.projectId === projectId,
     );
     return adapter.removeMany(
       allCfgIdsForProject.map((repeatCfg) => repeatCfg.id),
@@ -55,6 +55,9 @@ export const taskRepeatCfgReducer = createReducer<TaskRepeatCfgState>(
     //   // this._taskRepeatCfgService.updateTaskRepeatCfgs(cfgsToUpdate, { projectId: null });
     // }
   }),
+  on(TaskSharedActions.deleteTaskRepeatCfg, (state, { taskRepeatCfgId }) =>
+    adapter.removeOne(taskRepeatCfgId, state),
+  ),
 
   // INTERNAL
   on(addTaskRepeatCfgToTask, (state, { taskRepeatCfg }) =>

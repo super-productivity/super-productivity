@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/naming-convention,@typescript-eslint/explicit-function-return-type */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { Task, TaskState } from '../task.model';
 import { initialTaskState, taskReducer } from './task.reducer';
 import { PlannerActions } from '../../planner/store/planner.actions';
@@ -167,11 +167,15 @@ describe('Task Reducer - transferTask action', () => {
     const result = reducerWithMetaReducers(rootState, action) as RootState;
     const taskState = result[TASK_FEATURE_NAME];
 
+    // Virtual tag pattern: TODAY_TAG should NOT be in task.tagIds
+    // Membership is determined by task.dueDay, not tagIds
     expect(taskState.entities.task1).toEqual({
       ...task,
       dueDay: today,
       dueWithTime: undefined,
+      // tagIds should NOT contain TODAY (virtual tag pattern)
     });
+    expect(taskState.entities.task1!.tagIds).not.toContain(TODAY_TAG.id);
   });
 
   it('should not affect other tasks when transferring', () => {

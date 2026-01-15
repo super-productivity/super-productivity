@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { FieldType } from '@ngx-formly/material';
 import { MatButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Log } from '../../core/log';
 
@@ -10,7 +11,7 @@ import { Log } from '../../core/log';
   templateUrl: './formly-btn.component.html',
   styleUrl: './formly-btn.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormlyModule, MatButton, TranslatePipe],
+  imports: [FormlyModule, MatButton, MatTooltip, TranslatePipe],
 })
 export class FormlyBtnComponent extends FieldType<FormlyFieldConfig> {
   onClick(): void {

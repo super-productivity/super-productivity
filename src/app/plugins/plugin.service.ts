@@ -285,15 +285,25 @@ export class PluginService implements OnDestroy {
 
     // If currently loading, wait for it
     if (state.status === 'loading') {
-      // Wait for status to change
-      await new Promise<void>((resolve) => {
+      // Wait for status to change (max 10 seconds)
+      const maxAttempts = 100;
+      let attempts = 0;
+      await new Promise<void>((resolve, reject) => {
         const checkStatus = setInterval(() => {
+          attempts++;
+          if (attempts > maxAttempts) {
+            clearInterval(checkStatus);
+            reject(new Error(`Plugin loading timeout after ${maxAttempts * 100}ms`));
+            return;
+          }
           const currentState = this._getPluginState(pluginId);
           if (currentState && currentState.status !== 'loading') {
             clearInterval(checkStatus);
             resolve();
           }
         }, 100);
+      }).catch((err) => {
+        console.error('Plugin activation error:', err);
       });
 
       const updatedState = this._getPluginState(pluginId);

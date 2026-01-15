@@ -2,6 +2,7 @@
   (click)="!data.actionStr && close()"
   [class.error]="data.type === 'ERROR'"
   [class.success]="data.type === 'SUCCESS'"
+  [class.warning]="data.type === 'WARNING'"
   class="wrapper"
 >
   @if (!data.ico) {
@@ -10,6 +11,9 @@
     }
     @if (data.type === 'ERROR') {
       <mat-icon class="snack-icon">error </mat-icon>
+    }
+    @if (data.type === 'WARNING') {
+      <mat-icon class="snack-icon">warning </mat-icon>
     }
   }
   @if (data.ico) {

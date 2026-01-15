@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                              Int       @id @default(autoincrement())
+  email                           String    @unique
+  passwordHash                    String?   @map("password_hash") // Nullable for passkey-only users
+  isVerified                      Int       @default(0) @map("is_verified") // 0 or 1
+  verificationToken               String?   @map("verification_token")
+  verificationTokenExpiresAt      BigInt?   @map("verification_token_expires_at")
+  verificationResendCount         Int       @default(0) @map("verification_resend_count")
+  resetPasswordToken              String?   @map("reset_password_token")
+  resetPasswordTokenExpiresAt     BigInt?   @map("reset_password_token_expires_at")
+  passkeyRecoveryToken            String?   @map("passkey_recovery_token")
+  passkeyRecoveryTokenExpiresAt   BigInt?   @map("passkey_recovery_token_expires_at")
+  loginToken                      String?   @map("login_token")
+  loginTokenExpiresAt             BigInt?   @map("login_token_expires_at")
+  failedLoginAttempts             Int       @default(0) @map("failed_login_attempts")
+  lockedUntil                     BigInt?   @map("locked_until")
+  tokenVersion                    Int       @default(0) @map("token_version")
+  termsAcceptedAt                 BigInt?   @map("terms_accepted_at")
+  createdAt                       DateTime  @default(now()) @map("created_at")
+  storageQuotaBytes               BigInt    @default(104857600) @map("storage_quota_bytes")  // 100MB default
+  storageUsedBytes                BigInt    @default(0) @map("storage_used_bytes")
+
+  operations                 Operation[]
+  syncState                  UserSyncState?
+  devices                    SyncDevice[]
+  passkeys                   Passkey[]
+
+  @@index([verificationToken])
+  @@index([resetPasswordToken])
+  @@index([passkeyRecoveryToken])
+  @@index([loginToken])
+  @@map("users")
+}
+
+model Passkey {
+  id              String    @id @default(cuid())
+  credentialId    Bytes     @unique @map("credential_id")
+  publicKey       Bytes     @map("public_key")
+  counter         BigInt    @default(0)
+  transports      String?   // JSON array of transport types
+  createdAt       DateTime  @default(now()) @map("created_at")
+  lastUsedAt      DateTime? @map("last_used_at")
+
+  userId          Int       @map("user_id")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+model Operation {
+  id                 String  @id
+  userId             Int     @map("user_id")
+  clientId           String  @map("client_id")
+  serverSeq          Int     @map("server_seq")
+  actionType         String  @map("action_type")
+  opType             String  @map("op_type")
+  entityType         String  @map("entity_type")
+  entityId           String? @map("entity_id")
+  payload            Json
+  vectorClock        Json    @map("vector_clock")
+  schemaVersion      Int     @map("schema_version")
+  clientTimestamp    BigInt  @map("client_timestamp")
+  receivedAt         BigInt  @map("received_at")
+  isPayloadEncrypted Boolean @default(false) @map("is_payload_encrypted")
+
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serverSeq])
+  @@index([userId, serverSeq])
+  @@index([userId, entityType, entityId])
+  @@index([userId, clientId])
+  @@index([userId, receivedAt])
+  @@index([userId, opType]) // Speeds up restore point listing (queries for SYNC_IMPORT/BACKUP_IMPORT ops)
+  @@map("operations")
+}
+
+model UserSyncState {
+  userId                Int     @id @map("user_id")
+  lastSeq               Int     @default(0) @map("last_seq")
+  lastSnapshotSeq       Int?    @map("last_snapshot_seq")
+  snapshotData          Bytes?  @map("snapshot_data")
+  snapshotAt            BigInt? @map("snapshot_at")
+  snapshotSchemaVersion Int?    @default(1) @map("snapshot_schema_version")
+
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sync_state")
+}
+
+model SyncDevice {
+  clientId     String  @map("client_id")
+  userId       Int     @map("user_id")
+  deviceName   String? @map("device_name")
+  userAgent    String? @map("user_agent")
+  lastSeenAt   BigInt  @map("last_seen_at")
+  lastAckedSeq Int     @default(0) @map("last_acked_seq")
+  createdAt    BigInt  @map("created_at")
+
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, clientId])
+  @@map("sync_devices")
+}
+

@@ -10,7 +10,7 @@ import { TagService } from '../tag/tag.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { DateService } from '../../core/date/date.service';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
-import { TaskArchiveService } from '../time-tracking/task-archive.service';
+import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { WorkContextType } from './work-context.model';
 

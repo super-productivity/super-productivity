@@ -1,0 +1,299 @@
+/**
+ * Catppuccin Mocha Theme for Super Productivity
+ * Dark theme based on the Catppuccin Mocha color palette
+ * https://github.com/catppuccin/catppuccin
+ */
+
+/* Smooth transitions */
+:root {
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+}
+
+/* Catppuccin Mocha theme variables */
+body.isDarkTheme {
+  /* ===============================
+   * CATPPUCCIN MOCHA COLOR PALETTE
+   * ===============================*/
+
+  /* Base colors */
+  --ctp-base: #1e1e2e;
+  --ctp-mantle: #181825;
+  --ctp-crust: #11111b;
+
+  /* Surface colors */
+  --ctp-surface0: #313244;
+  --ctp-surface1: #45475a;
+  --ctp-surface2: #585b70;
+
+  /* Overlay colors */
+  --ctp-overlay0: #6c7086;
+  --ctp-overlay1: #7f849c;
+  --ctp-overlay2: #9399b2;
+
+  /* Text colors */
+  --ctp-text: #cdd6f4;
+  --ctp-subtext0: #a6adc8;
+  --ctp-subtext1: #bac2de;
+
+  /* Accent colors */
+  --ctp-lavender: #b4befe;
+  --ctp-blue: #89b4fa;
+  --ctp-sapphire: #74c7ec;
+  --ctp-sky: #89dceb;
+  --ctp-teal: #94e2d5;
+  --ctp-green: #a6e3a1;
+  --ctp-yellow: #f9e2af;
+  --ctp-peach: #fab387;
+  --ctp-maroon: #eba0ac;
+  --ctp-red: #f38ba8;
+  --ctp-mauve: #cba6f7;
+  --ctp-pink: #f5c2e7;
+  --ctp-flamingo: #f2cdcd;
+  --ctp-rosewater: #f5e0dc;
+
+  /* ===============================
+   * BACKGROUND COLORS
+   * ===============================*/
+
+  /* Main backgrounds */
+  --bg: var(--ctp-base);
+  --bg-darker: var(--ctp-crust);
+  --bg-slightly-lighter: #262637;
+  --bg-lighter: var(--ctp-surface0);
+  --bg-lightest: var(--ctp-surface1);
+  --bg-super-light: var(--ctp-surface2);
+
+  /* Component backgrounds */
+  --card-bg: var(--ctp-surface0);
+  --sidenav-bg: var(--ctp-mantle);
+  --selected-task-bg-color: var(--ctp-surface1);
+  --banner-bg: var(--ctp-surface1);
+
+  /* Task backgrounds */
+  --task-c-bg: #262637;
+  --task-c-selected-bg: var(--ctp-surface1);
+  --sub-task-c-bg: #262637;
+  --sub-task-c-bg-done: #1a1a28;
+  --task-c-bg-done: #1a1a28;
+  --task-c-current-bg: var(--ctp-surface1);
+  --task-c-drag-drop-bg: var(--ctp-surface1);
+  --sub-task-c-bg-in-selected: #2a2a3c;
+
+  /* Note backgrounds */
+  --standard-note-bg: var(--ctp-surface0);
+  --standard-note-bg-hovered: var(--ctp-surface1);
+
+  /* Planner specific */
+  --planner-task-bg: var(--ctp-mantle);
+  --planner-days-bg: var(--ctp-crust);
+
+  /* ===============================
+   * TEXT COLORS
+   * ===============================*/
+
+  --text-color: var(--ctp-text);
+  --text-color-less-intense: rgba(205, 214, 244, 0.87);
+  --text-color-muted: var(--ctp-subtext0);
+  --text-color-more-intense: var(--ctp-subtext1);
+  --text-color-most-intense: #ffffff;
+
+  /* Note text */
+  --standard-note-fg: var(--ctp-text);
+
+  /* Task detail */
+  --task-detail-value-color: rgba(205, 214, 244, 0.7);
+
+  /* ===============================
+   * BORDERS & SEPARATORS
+   * ===============================*/
+
+  --extra-border-color: var(--ctp-crust);
+  --separator-color: rgba(69, 71, 90, 0.6);
+  --divider-color: var(--ctp-mantle);
+
+  /* Chip borders */
+  --chip-outline-color: rgba(205, 214, 244, 0.23);
+
+  /* ===============================
+   * ACCENT & THEME COLORS
+   * ===============================*/
+
+  /* Lavender as primary accent */
+  --palette-accent-500: var(--ctp-lavender);
+  --c-accent: var(--ctp-lavender);
+  --palette-accent-100: #e5e8fe;
+  --palette-accent-200: #d4d9fe;
+  --palette-accent-300: #c4cbfe;
+  --palette-accent-400: #b4befe;
+  --palette-accent-600: #a0aae5;
+  --palette-accent-700: #8c96cc;
+  --palette-accent-800: #7882b3;
+  --palette-accent-900: #646e9a;
+
+  /* Secondary colors */
+  --c-success: var(--ctp-green);
+  --c-warning: var(--ctp-yellow);
+  --c-error: var(--ctp-red);
+  --c-info: var(--ctp-blue);
+
+  /* ===============================
+   * UI ELEMENTS
+   * ===============================*/
+
+  /* Scrollbar */
+  --scrollbar-thumb: var(--ctp-surface1);
+  --scrollbar-thumb-hover: var(--ctp-surface2);
+  --scrollbar-track: var(--ctp-base);
+
+  /* Close button */
+  --close-btn-bg: var(--ctp-surface1);
+  --close-btn-border: transparent;
+
+  /* Select/Options */
+  --select-hover-bg: rgba(180, 190, 254, 0.12);
+  --options-border-color: rgba(180, 190, 254, 0.2);
+
+  /* Attachments */
+  --attachment-bg: var(--ctp-surface0);
+  --attachment-border: transparent;
+  --attachment-control-bg: rgba(0, 0, 0, 0.3);
+  --attachment-control-border: transparent;
+  --attachment-control-hover-bg: rgba(0, 0, 0, 0.7);
+
+  /* Grid */
+  --grid-color: rgba(205, 214, 244, 0.08);
+
+  /* Progress */
+  --progress-bg: rgba(205, 214, 244, 0.15);
+
+  /* Improvement banner */
+  --improvement-text: var(--ctp-text);
+  --improvement-border: rgba(180, 190, 254, 0.3);
+  --improvement-button-text: #ffffff;
+
+  /* Special backgrounds */
+  --color-background-color-options: #2a2a3c;
+  --color-background-text-field: rgba(180, 190, 254, 0.1);
+  --color-background-dark: var(--ctp-crust);
+  --color-background-notes: #262637;
+  --color-background-inline-markdown: #1a1a28;
+  --color-background-button-shadow: var(--ctp-lavender);
+
+  /* ===============================
+   * SHADOWS - SUBTLE
+   * ===============================*/
+
+  --shadow-key-umbra-opacity: 0.15;
+  --shadow-key-penumbra-opacity: 0.1;
+  --shadow-ambient-shadow-opacity: 0.08;
+
+  /* Task shadows */
+  --task-current-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  --task-selected-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+
+  /* ===============================
+   * HOVER CONTROLS
+   * ===============================*/
+
+  --hover-controls-border: 1px solid rgba(180, 190, 254, 0.3);
+  --hover-controls-border-opacity: 0.3;
+
+  /* ===============================
+   * INTERACTION STATES
+   * ===============================*/
+
+  --hover-bg-opacity: 0.04;
+  --focus-bg-opacity: 0.08;
+  --pressed-bg-opacity: 0.12;
+  --disabled-opacity: 0.38;
+}
+
+/* Apply background and text colors */
+body,
+body.isDarkTheme {
+  background-color: var(--bg);
+  color: var(--text-color) !important;
+  transition:
+    background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+/* Page wrapper */
+body .page-wrapper,
+body.isDarkTheme .page-wrapper {
+  color: var(--text-color) !important;
+}
+
+/* Links with Catppuccin accent */
+a,
+body a[href],
+body.isDarkTheme a[href] {
+  color: var(--c-accent);
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+a:hover,
+body a[href]:hover,
+body.isDarkTheme a[href]:hover {
+  opacity: 0.8;
+}
+
+/* Smooth hover states */
+.task-c:hover,
+.sub-task-c:hover {
+  background-color: var(--task-c-selected-bg);
+  transition: background-color var(--transition-fast);
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* Material overrides for Catppuccin theme */
+body.isDarkTheme {
+  --mat-theme-surface: var(--card-bg);
+  --mat-theme-on-surface: var(--text-color);
+  --mat-theme-background: var(--bg);
+  --mat-theme-primary: var(--ctp-lavender);
+  --mat-fab-small-container-color: var(--c-accent);
+  --mat-sys-primary-container: var(--c-accent);
+}
+
+/* Code blocks */
+code,
+pre {
+  background-color: var(--ctp-surface0);
+  color: var(--ctp-text);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+/* Catppuccin color utility classes */
+.ctp-lavender {
+  color: var(--ctp-lavender);
+}
+.ctp-blue {
+  color: var(--ctp-blue);
+}
+.ctp-green {
+  color: var(--ctp-green);
+}
+.ctp-yellow {
+  color: var(--ctp-yellow);
+}
+.ctp-peach {
+  color: var(--ctp-peach);
+}
+.ctp-red {
+  color: var(--ctp-red);
+}
+.ctp-mauve {
+  color: var(--ctp-mauve);
+}
+.ctp-pink {
+  color: var(--ctp-pink);
+}

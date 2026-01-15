@@ -19,8 +19,8 @@ import { MatIcon } from '@angular/material/icon';
 import { MatButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
-import { AppDataCompleteNew } from '../../pfapi/pfapi-config';
-import { PfapiService } from 'src/app/pfapi/pfapi.service';
+import { AppDataComplete } from '../../op-log/model/model-config';
+import { BackupService } from '../../op-log/backup/backup.service';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { first } from 'rxjs/operators';
 import {
@@ -28,7 +28,8 @@ import {
   DialogConfirmUrlImportData,
 } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { Log } from '../../core/log';
-import { DataValidationFailedError } from '../../pfapi/api/errors/errors';
+import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
+import { DataValidationFailedError } from '../../op-log/core/errors/sync-errors';
 
 @Component({
   selector: 'file-imex',
@@ -40,7 +41,7 @@ import { DataValidationFailedError } from '../../pfapi/api/errors/errors';
 export class FileImexComponent implements OnInit {
   private _snackService = inject(SnackService);
   private _router = inject(Router);
-  private _pfapiService = inject(PfapiService);
+  private _backupService = inject(BackupService);
   private _activatedRoute = inject(ActivatedRoute);
   private _matDialog = inject(MatDialog);
   private _http = inject(HttpClient);
@@ -155,7 +156,7 @@ export class FileImexComponent implements OnInit {
   }
 
   private async _processAndImportData(dataString: string): Promise<void> {
-    let data: AppDataCompleteNew | undefined;
+    let data: AppDataComplete | undefined;
     let oldData: unknown; // For V1 legacy data format check
 
     try {
@@ -181,10 +182,14 @@ export class FileImexComponent implements OnInit {
     }
 
     try {
+      // Import first, then navigate (no page reload, state updates inline)
+      // isForceConflict=true resets vector clock to prevent accumulation of old client IDs
+      await this._backupService.importCompleteBackup(
+        data as AppDataComplete,
+        false,
+        true,
+      );
       await this._router.navigate([`tag/${TODAY_TAG.id}/tasks`]);
-      await this._pfapiService.importCompleteBackup(data as AppDataCompleteNew);
-      // Optionally, add a success snackbar here if desired
-      // this._snackService.open({ type: 'SUCCESS', msg: 'Data imported successfully!' });
     } catch (e) {
       Log.err('Import process failed', e);
 
@@ -204,7 +209,7 @@ export class FileImexComponent implements OnInit {
   }
 
   async downloadBackup(): Promise<void> {
-    const data = await this._pfapiService.pf.loadCompleteBackup();
+    const data = await this._backupService.loadCompleteBackup(true);
     const result = await download('super-productivity-backup.json', JSON.stringify(data));
     if ((IS_ANDROID_WEB_VIEW && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
@@ -218,7 +223,7 @@ export class FileImexComponent implements OnInit {
   }
 
   async privacyAppDataDownload(): Promise<void> {
-    const data = await this._pfapiService.pf.loadCompleteBackup();
+    const data = await this._backupService.loadCompleteBackup(true);
     const result = await download('super-productivity-backup.json', privacyExport(data));
     if ((IS_ANDROID_WEB_VIEW && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
@@ -228,5 +233,12 @@ export class FileImexComponent implements OnInit {
           : T.FILE_IMEX.S_BACKUP_DOWNLOADED,
       });
     }
+  }
+
+  openArchiveCompression(): void {
+    this._matDialog.open(DialogArchiveCompressionComponent, {
+      width: '500px',
+      maxWidth: '90vw',
+    });
   }
 }

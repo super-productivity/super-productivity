@@ -52,15 +52,26 @@ export const waitForAppReady = async (
   // Wait for initial page load
   await page.waitForLoadState('domcontentloaded');
 
+  // Handle any blocking dialogs (pre-migration, confirmation, etc.)
+  // These dialogs block app until dismissed
+  for (let i = 0; i < 3; i++) {
+    try {
+      const dialogConfirmBtn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
+      await dialogConfirmBtn.waitFor({ state: 'visible', timeout: 2000 });
+      await dialogConfirmBtn.click();
+      await page.waitForTimeout(500);
+    } catch {
+      // No dialog visible, break out
+      break;
+    }
+  }
+
   // Wait for the loading screen to disappear (if visible).
   // The app shows `.loading-full-page-wrapper` while syncing/importing data.
-  // The `.route-wrapper` is conditionally rendered and won't exist until loading completes.
   const loadingWrapper = page.locator('.loading-full-page-wrapper');
   try {
-    // Short timeout to check if loading screen is visible
     const isLoadingVisible = await loadingWrapper.isVisible().catch(() => false);
     if (isLoadingVisible) {
-      // Wait for loading screen to disappear (longer timeout for sync operations)
       await loadingWrapper.waitFor({ state: 'hidden', timeout: 30000 });
     }
   } catch {
@@ -68,8 +79,17 @@ export const waitForAppReady = async (
   }
 
   // Wait for route to match (if required)
+  // Use longer timeout with retry for slow-loading apps (especially second client)
   if (ensureRoute) {
-    await page.waitForURL(routeRegex, { timeout: 15000 });
+    try {
+      await page.waitForURL(routeRegex, { timeout: 20000 });
+    } catch {
+      // If route doesn't match, try refreshing once and waiting again
+      console.log('[waitForAppReady] Route timeout, attempting reload...');
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForURL(routeRegex, { timeout: 15000 });
+    }
   }
 
   // Wait for main route wrapper to be visible (indicates app shell loaded)
@@ -83,20 +103,56 @@ export const waitForAppReady = async (
     await page.locator(selector).first().waitFor({ state: 'visible', timeout: 8000 });
   }
 
-  // Note: We no longer call waitForAngularStability here because:
-  // 1. We've already confirmed .route-wrapper is visible
-  // 2. Playwright's auto-waiting handles element actionability
-  // 3. The readyState check in waitForAngularStability can cause flakiness
+  await waitForAngularStability(page).catch(() => {});
+
+  // Small buffer to ensure animations settle.
+  // Check if page is still open before waiting (handles test timeout scenarios)
+  if (!page.isClosed()) {
+    await page.waitForTimeout(200);
+  }
+};
+
+/**
+ * Wait for UI to settle after an action (e.g., adding a task).
+ * Uses Angular stability as the primary signal rather than fixed timeouts.
+ * Falls back to a minimal timeout if Angular stability check fails.
+ */
+export const waitForUISettle = async (page: Page): Promise<void> => {
+  if (page.isClosed()) {
+    return;
+  }
+  try {
+    await waitForAngularStability(page, 2000);
+  } catch {
+    // Fall back to minimal fixed timeout if stability check fails
+    if (!page.isClosed()) {
+      await page.waitForTimeout(200);
+    }
+  }
 };
 
 /**
  * Wait for local state changes to persist before triggering sync.
  * This ensures IndexedDB writes have completed after UI state changes.
- * Optimized to rely on Angular stability rather than networkidle.
+ * Uses Angular stability + networkidle as indicators that async operations have settled.
+ *
+ * Note: IndexedDB writes happen asynchronously outside of Angular's zone and network
+ * requests, so we add an explicit delay after stability checks to ensure persistence
+ * completes before operations like page reload.
  */
 export const waitForStatePersistence = async (page: Page): Promise<void> => {
+  // Check if page is still open
+  if (page.isClosed()) {
+    return;
+  }
   // Wait for Angular to become stable (async operations complete)
-  await waitForAngularStability(page, 3000);
-  // Small buffer for IndexedDB writes to complete
-  await page.waitForTimeout(100);
+  await waitForAngularStability(page, 3000).catch(() => {});
+  // Wait for any pending network requests to complete
+  await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+  // Additional delay for IndexedDB writes to complete (they happen outside Angular zone)
+  // The operation log effects use concatMap which serializes writes, but the actual
+  // IndexedDB transaction may still be pending when Angular reports stability.
+  if (!page.isClosed()) {
+    await page.waitForTimeout(500);
+  }
 };

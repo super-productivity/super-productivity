@@ -1,5 +1,5 @@
 // TODO: Fix plugin tests after stabilizing task model changes
-/* eslint-disable */
+
 /*
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
@@ -566,3 +566,211 @@ describe('PluginBridgeService', () => {
   });
 });
 */
+
+/* eslint-disable @typescript-eslint/naming-convention */
+// Active tests for setCounter fix (issue #5812)
+import { TestBed } from '@angular/core/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
+import { PluginBridgeService } from './plugin-bridge.service';
+import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
+import {
+  updateSimpleCounter,
+  upsertSimpleCounter,
+} from '../features/simple-counter/store/simple-counter.actions';
+import {
+  SimpleCounter,
+  SimpleCounterType,
+} from '../features/simple-counter/simple-counter.model';
+import { EMPTY_SIMPLE_COUNTER } from '../features/simple-counter/simple-counter.const';
+import { SnackService } from '../core/snack/snack.service';
+import { NotifyService } from '../core/notify/notify.service';
+import { MatDialog } from '@angular/material/dialog';
+import { PluginHooksService } from './plugin-hooks';
+import { TaskService } from '../features/tasks/task.service';
+import { WorkContextService } from '../features/work-context/work-context.service';
+import { ProjectService } from '../features/project/project.service';
+import { TagService } from '../features/tag/tag.service';
+import { PluginUserPersistenceService } from './plugin-user-persistence.service';
+import { PluginConfigService } from './plugin-config.service';
+import { TaskArchiveService } from '../features/archive/task-archive.service';
+import { Router } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
+import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
+
+describe('PluginBridgeService - Counter Methods', () => {
+  let service: PluginBridgeService;
+  let store: MockStore;
+  let dispatchSpy: jasmine.Spy;
+
+  const mockExistingCounter: SimpleCounter = {
+    ...EMPTY_SIMPLE_COUNTER,
+    id: 'existing-counter',
+    title: 'Existing Counter',
+    isEnabled: true,
+    type: SimpleCounterType.ClickCounter,
+    countOnDay: { '2025-12-30': 5 },
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PluginBridgeService,
+        provideMockStore({
+          selectors: [
+            { selector: selectAllSimpleCounters, value: [mockExistingCounter] },
+          ],
+        }),
+        { provide: SnackService, useValue: {} },
+        { provide: NotifyService, useValue: {} },
+        { provide: MatDialog, useValue: {} },
+        { provide: PluginHooksService, useValue: {} },
+        { provide: TaskService, useValue: {} },
+        { provide: WorkContextService, useValue: {} },
+        { provide: ProjectService, useValue: {} },
+        { provide: TagService, useValue: {} },
+        { provide: PluginUserPersistenceService, useValue: {} },
+        { provide: PluginConfigService, useValue: {} },
+        { provide: TaskArchiveService, useValue: {} },
+        { provide: Router, useValue: {} },
+        { provide: TranslateService, useValue: {} },
+        { provide: SyncWrapperService, useValue: {} },
+      ],
+    });
+
+    service = TestBed.inject(PluginBridgeService);
+    store = TestBed.inject(MockStore);
+    dispatchSpy = spyOn(store, 'dispatch').and.callThrough();
+  });
+
+  afterEach(() => {
+    store.resetSelectors();
+  });
+
+  describe('setCounter', () => {
+    it('should create a new counter with all mandatory fields when counter does not exist', async () => {
+      // Arrange
+      const counterId = 'new-counter';
+      const value = 10;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Act
+      await service.setCounter(counterId, value);
+
+      // Assert
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.type).toBe(upsertSimpleCounter.type);
+
+      const counter = dispatchedAction.simpleCounter;
+      expect(counter.id).toBe(counterId);
+      expect(counter.title).toBe(counterId);
+      expect(counter.isEnabled).toBe(true);
+      expect(counter.type).toBe(SimpleCounterType.ClickCounter);
+      expect(counter.countOnDay[today]).toBe(value);
+      // Verify EMPTY_SIMPLE_COUNTER spread is applied
+      expect(counter.isOn).toBe(false);
+      expect(counter.isTrackStreaks).toBe(true);
+    });
+
+    it('should update only countOnDay when counter already exists', async () => {
+      // Arrange
+      const counterId = 'existing-counter';
+      const value = 15;
+      const today = new Date().toISOString().split('T')[0];
+
+      // Act
+      await service.setCounter(counterId, value);
+
+      // Assert
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.type).toBe(updateSimpleCounter.type);
+
+      const changes = dispatchedAction.simpleCounter.changes;
+      expect(changes.countOnDay[today]).toBe(value);
+      // Should preserve existing day values
+      expect(changes.countOnDay['2025-12-30']).toBe(5);
+    });
+
+    it('should throw error for invalid counter key', async () => {
+      await expectAsync(service.setCounter('invalid key!', 10)).toBeRejectedWithError(
+        'Invalid counter key: must be alphanumeric with hyphens',
+      );
+    });
+
+    it('should throw error for negative value', async () => {
+      await expectAsync(service.setCounter('valid-key', -5)).toBeRejectedWithError(
+        'Invalid counter value: must be a non-negative number',
+      );
+    });
+  });
+
+  describe('incrementCounter', () => {
+    it('should increment existing counter value', async () => {
+      // Arrange: existing counter has value 5 for 2025-12-30
+      const today = new Date().toISOString().split('T')[0];
+      store.overrideSelector(selectAllSimpleCounters, [
+        { ...mockExistingCounter, countOnDay: { [today]: 5 } },
+      ]);
+
+      // Act
+      const newValue = await service.incrementCounter('existing-counter', 3);
+
+      // Assert
+      expect(newValue).toBe(8);
+    });
+
+    it('should create counter when incrementing non-existent counter', async () => {
+      // Act
+      const newValue = await service.incrementCounter('new-counter', 5);
+
+      // Assert
+      expect(newValue).toBe(5);
+      expect(dispatchSpy).toHaveBeenCalled();
+      const dispatchedAction = dispatchSpy.calls.mostRecent().args[0];
+      expect(dispatchedAction.type).toBe(upsertSimpleCounter.type);
+    });
+
+    it('should throw error for non-positive increment', async () => {
+      await expectAsync(service.incrementCounter('valid-key', 0)).toBeRejectedWithError(
+        'Invalid increment amount: must be a positive number',
+      );
+    });
+  });
+
+  describe('decrementCounter', () => {
+    it('should decrement existing counter value', async () => {
+      // Arrange
+      const today = new Date().toISOString().split('T')[0];
+      store.overrideSelector(selectAllSimpleCounters, [
+        { ...mockExistingCounter, countOnDay: { [today]: 10 } },
+      ]);
+
+      // Act
+      const newValue = await service.decrementCounter('existing-counter', 3);
+
+      // Assert
+      expect(newValue).toBe(7);
+    });
+
+    it('should not go below zero', async () => {
+      // Arrange
+      const today = new Date().toISOString().split('T')[0];
+      store.overrideSelector(selectAllSimpleCounters, [
+        { ...mockExistingCounter, countOnDay: { [today]: 2 } },
+      ]);
+
+      // Act
+      const newValue = await service.decrementCounter('existing-counter', 10);
+
+      // Assert
+      expect(newValue).toBe(0);
+    });
+
+    it('should throw error for non-positive decrement', async () => {
+      await expectAsync(service.decrementCounter('valid-key', -1)).toBeRejectedWithError(
+        'Invalid decrement amount: must be a positive number',
+      );
+    });
+  });
+});

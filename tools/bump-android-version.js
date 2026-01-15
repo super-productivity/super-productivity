@@ -5,10 +5,11 @@ const path = require('path');
 const packageJson = require('../package.json');
 const version = packageJson.version;
 
-if (version.includes('-' || version.includes('rc'))) {
-  console.log('Version contains - or rc – skipping android version bump');
-  return;
-}
+// Parse version to extract pre-release info
+const versionParts = version.split('-');
+const baseVersion = versionParts[0]; // e.g., "17.0.0"
+const preRelease = versionParts[1]; // e.g., "RC.1" or undefined
+const isPreRelease = !!preRelease;
 
 String.prototype.insertAt = function (index, string) {
   return this.substr(0, index) + string + this.substr(index);
@@ -20,14 +21,27 @@ const gradleFilePath = path.join(__dirname, '..', 'android', 'app', 'build.gradl
 // Read the build.gradle file
 let gradleFileContent = fs.readFileSync(gradleFilePath, 'utf8');
 
-// Update the versionCode and versionName
-const versionCodeDroid =
-  version
+// Calculate versionCode
+const baseVersionCode =
+  baseVersion
     .split('.')
     .map((num) => num.padStart(2, '0'))
     .join('') * 10000;
+
+let versionCodeDroid;
+if (isPreRelease) {
+  // Pre-release: extract number (RC.1 → 1, alpha.5 → 5)
+  // Uses suffix 0001-8999 to be LOWER than stable (9000)
+  const preReleaseNum = parseInt(preRelease.split('.')[1] || '1', 10);
+  versionCodeDroid = baseVersionCode + preReleaseNum;
+} else {
+  // Stable release: use suffix 9000 to be HIGHER than any RC
+  versionCodeDroid = baseVersionCode + 9000;
+}
+
 const versionCodeDroidWithUnderscores = versionCodeDroid
   .toString()
+  .padStart(10, '0')
   .insertAt(6, '_')
   .insertAt(4, '_')
   .insertAt(2, '_');
@@ -45,6 +59,12 @@ gradleFileContent = gradleFileContent.replace(
 fs.writeFileSync(gradleFilePath, gradleFileContent, 'utf8');
 
 console.log(`Updated build.gradle to version ${version}`);
+
+// Skip fastlane changelog for pre-release versions
+if (isPreRelease) {
+  console.log('Pre-release version – skipping fastlane changelog generation');
+  process.exit(0);
+}
 
 // CREATE fastlane changelog file
 // Define the paths
@@ -90,4 +110,3 @@ if (!fs.existsSync(outputDir)) {
 fs.writeFileSync(outputFilePath, latestChanges, 'utf8');
 
 console.log(`Wrote latest changes to ${outputFilePath}`);
-// console.log(latestChanges);

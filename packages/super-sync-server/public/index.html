@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>SuperSync Server - Connect</title>
+    <link
+      rel="stylesheet"
+      href="style.css"
+    />
+    <link
+      rel="icon"
+      href="favicon.ico"
+      type="image/x-icon"
+    />
+    <script src="simplewebauthn-browser.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>SuperSync</h1>
+        <p>Connect your productivity</p>
+      </header>
+
+      <main id="app">
+        <div
+          class="warning-box"
+          style="margin-bottom: 1rem"
+        >
+          <p>
+            ⚠️ <strong>Note:</strong> This service is free for now, but will likely cost
+            money in the future.
+          </p>
+        </div>
+
+        <!-- Authentication Forms -->
+        <div
+          id="auth-forms"
+          class="card"
+        >
+          <div class="tabs">
+            <button
+              class="tab-btn active"
+              id="tab-login"
+            >
+              Login
+            </button>
+            <button
+              class="tab-btn"
+              id="tab-register"
+            >
+              Register
+            </button>
+          </div>
+
+          <!-- Login Form -->
+          <form
+            id="login-form"
+            class="auth-form active"
+          >
+            <div class="form-group">
+              <label for="login-email">Email</label>
+              <input
+                type="email"
+                id="login-email"
+                required
+                placeholder="name@example.com"
+              />
+            </div>
+
+            <button
+              type="button"
+              class="btn primary"
+              id="login-passkey-btn"
+            >
+              Login with Passkey
+            </button>
+
+            <div class="divider"><span>or</span></div>
+
+            <button
+              type="button"
+              class="btn secondary"
+              id="login-magic-link-btn"
+            >
+              Send Login Link
+            </button>
+
+            <button
+              type="button"
+              class="btn text-only"
+              id="show-lost-passkey"
+            >
+              Lost your passkey?
+            </button>
+          </form>
+
+          <!-- Lost Passkey Form -->
+          <form
+            id="lost-passkey-form"
+            class="auth-form"
+          >
+            <p style="margin-bottom: 1rem; color: var(--text-light)">
+              Enter your email address and we'll send you a link to register a new
+              passkey.
+            </p>
+            <div class="form-group">
+              <label for="lost-passkey-email">Email</label>
+              <input
+                type="email"
+                id="lost-passkey-email"
+                required
+                placeholder="name@example.com"
+              />
+            </div>
+            <button
+              type="submit"
+              class="btn primary"
+            >
+              Send Recovery Link
+            </button>
+            <button
+              type="button"
+              class="btn text-only"
+              id="back-to-login-from-passkey"
+            >
+              Back to Login
+            </button>
+          </form>
+
+          <!-- Register Form -->
+          <form
+            id="register-form"
+            class="auth-form"
+          >
+            <div class="form-group">
+              <label for="register-email">Email</label>
+              <input
+                type="email"
+                id="register-email"
+                required
+                placeholder="name@example.com"
+              />
+            </div>
+            <div
+              class="form-group checkbox-group"
+              style="display: flex; gap: 0.5rem; align-items: flex-start"
+            >
+              <input
+                type="checkbox"
+                id="register-terms"
+                required
+                style="width: auto; margin-top: 0.25rem"
+              />
+              <label
+                for="register-terms"
+                style="display: inline; font-weight: normal; font-size: 0.9rem"
+              >
+                I agree to the
+                <a
+                  href="/terms.html"
+                  target="_blank"
+                  >Terms of Service</a
+                >
+                and
+                <a
+                  href="/privacy.html"
+                  target="_blank"
+                  >Privacy Policy</a
+                >
+              </label>
+            </div>
+
+            <button
+              type="button"
+              class="btn primary"
+              id="register-passkey-btn"
+            >
+              Register with Passkey
+            </button>
+          </form>
+        </div>
+
+        <!-- Success / Token Display -->
+        <div
+          id="token-display"
+          class="card hidden"
+        >
+          <div class="success-icon">🔐</div>
+          <h2>Connection Successful</h2>
+          <p>
+            <strong>Next step:</strong> Copy this token and paste it in Super
+            Productivity's sync settings.
+          </p>
+
+          <div class="token-box">
+            <textarea
+              id="token-area"
+              readonly
+            ></textarea>
+            <button
+              id="copy-btn"
+              class="btn primary"
+            >
+              Copy Token
+            </button>
+          </div>
+
+          <details class="instructions">
+            <summary>How to use this token</summary>
+            <ol>
+              <li>Open Super Productivity</li>
+              <li>Go to Settings (gear icon)</li>
+              <li>Click "Setup Sync" or go to the Sync section</li>
+              <li>Select "SuperSync" as your sync provider</li>
+              <li>Paste the token in the "Access Token" field</li>
+              <li>Click "Save & Enable"</li>
+            </ol>
+          </details>
+
+          <div class="action-buttons">
+            <button
+              id="refresh-btn"
+              class="btn text-only"
+            >
+              Refresh Token
+            </button>
+            <button
+              id="logout-btn"
+              class="btn text-only"
+            >
+              Log Out
+            </button>
+            <button
+              id="account-settings-btn"
+              class="btn text-only"
+            >
+              Account Settings
+            </button>
+          </div>
+        </div>
+
+        <!-- Account Settings -->
+        <div
+          id="account-settings"
+          class="card hidden"
+        >
+          <h2>Account Settings</h2>
+
+          <section class="settings-section">
+            <h3>Reset Account</h3>
+            <p>
+              Clear all synced data from the server. Your account remains active and you
+              can sync fresh data afterwards. Local data in Super Productivity is not
+              affected.
+            </p>
+            <button
+              id="reset-account-btn"
+              class="btn secondary"
+            >
+              Reset Account (Clear Data)
+            </button>
+          </section>
+
+          <hr />
+
+          <section class="settings-section danger-zone">
+            <h3>Danger Zone</h3>
+            <p>
+              Permanently delete your account and all synced data. This action cannot be
+              undone.
+            </p>
+            <button
+              id="delete-account-btn"
+              class="btn danger"
+            >
+              Delete Account
+            </button>
+          </section>
+
+          <div class="action-buttons">
+            <button
+              id="back-to-token-btn"
+              class="btn text-only"
+            >
+              ← Back to Token
+            </button>
+          </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div
+          id="message-area"
+          class="hidden"
+        ></div>
+      </main>
+
+      <footer>
+        <p>Super Productivity Sync Server</p>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -173,7 +173,7 @@ export class IssueService {
                 issueProviderId: provider.id,
               })),
             ),
-            catchError((err) => {
+            catchError((err: unknown) => {
               this._snackService.open({
                 svgIco: ISSUE_PROVIDER_ICON_MAP[provider.issueProviderKey],
                 msg: T.F.ISSUE.S.ERR_GENERIC,
@@ -183,7 +183,8 @@ export class IssueService {
                   errTxt: getErrorTxt(err),
                 },
               });
-              throw new Error(err);
+              // Re-throw original error to preserve stack trace
+              throw err;
             }),
           ),
         );
@@ -208,10 +209,11 @@ export class IssueService {
     issueType: IssueProviderKey,
     issueDataIN: IssueData,
   ): TaskAttachment[] {
-    if (!this.ISSUE_SERVICE_MAP[issueType].getMappedAttachments) {
+    const service = this.ISSUE_SERVICE_MAP[issueType];
+    if (!service.getMappedAttachments) {
       return [];
     }
-    return (this.ISSUE_SERVICE_MAP[issueType].getMappedAttachments as any)(issueDataIN);
+    return service.getMappedAttachments(issueDataIN);
   }
 
   async checkAndImportNewIssuesToBacklogForProject(
@@ -234,12 +236,14 @@ export class IssueService {
     const allExistingIssueIds: string[] | number[] =
       await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
 
-    const potentialIssuesToAdd = await (
-      this.ISSUE_SERVICE_MAP[providerKey] as any
-    ).getNewIssuesToAddToBacklog(issueProviderId, allExistingIssueIds);
+    const service = this.ISSUE_SERVICE_MAP[providerKey];
+    const potentialIssuesToAdd = await service.getNewIssuesToAddToBacklog!(
+      issueProviderId,
+      allExistingIssueIds,
+    );
 
     const issuesToAdd: IssueDataReduced[] = potentialIssuesToAdd.filter(
-      (issue: IssueData): boolean =>
+      (issue: IssueDataReduced): boolean =>
         !(allExistingIssueIds as string[]).includes(issue.id as string),
     );
 
@@ -291,12 +295,21 @@ export class IssueService {
     if (!issueId || !issueType || !issueProviderId) {
       throw new Error('No issue task');
     }
-    if (!this.ISSUE_SERVICE_MAP[issueType].getFreshDataForIssueTask) {
-      throw new Error('Issue method not available');
+    const service = this.ISSUE_SERVICE_MAP[issueType];
+    if (!service.getFreshDataForIssueTask) {
+      throw new Error(
+        `Issue method getFreshDataForIssueTask not available for ${issueType}`,
+      );
     }
 
+    // NOTE: Interface defines single param but implementations may use additional params
+    // TODO: Consider updating interface or refactoring implementations
     const update = await (
-      this.ISSUE_SERVICE_MAP[issueType].getFreshDataForIssueTask as any
+      service.getFreshDataForIssueTask as (
+        task: Task,
+        isNotifySuccess?: boolean,
+        isNotifyNoUpdateRequired?: boolean,
+      ) => ReturnType<IssueServiceInterface['getFreshDataForIssueTask']>
     )(task, isNotifySuccess, isNotifyNoUpdateRequired);
 
     if (update) {
@@ -330,15 +343,14 @@ export class IssueService {
   // TODO given we have issueProvider available, we could also just pass that
   async refreshIssueTasks(tasks: Task[], issueProvider: IssueProvider): Promise<void> {
     // dynamic map that has a list of tasks for every entry where the entry is an issue type
-    const tasksIssueIdsByIssueProviderKey: any = {};
+    const tasksIssueIdsByIssueProviderKey: Record<string, Task[]> = {};
     const tasksWithoutIssueId: Readonly<Task>[] = [];
 
     for (const task of tasks) {
       if (!task.issueId || !task.issueType) {
         tasksWithoutIssueId.push(task);
       } else if (!tasksIssueIdsByIssueProviderKey[task.issueType]) {
-        tasksIssueIdsByIssueProviderKey[task.issueType] = [];
-        tasksIssueIdsByIssueProviderKey[task.issueType].push(task);
+        tasksIssueIdsByIssueProviderKey[task.issueType] = [task];
       } else {
         tasksIssueIdsByIssueProviderKey[task.issueType].push(task);
       }

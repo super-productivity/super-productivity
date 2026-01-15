@@ -22,7 +22,13 @@ export const isEntityStateConsistent = <T extends Dictionary<any>>(
 };
 
 export const fixEntityStateConsistency = <T extends Dictionary<any>>(data: T): T => {
-  if (Object.keys(data.entities).length !== data.ids.length) {
+  if (
+    !data ||
+    !data.entities ||
+    !data.ids ||
+    Object.keys(data.entities).length !== data.ids.length ||
+    !arrayEquals(Object.keys(data.entities).sort(), [...data.ids].sort())
+  ) {
     Log.err('FIXING ENTITY STATE', {
       ...data,
       ids: Object.keys(data.entities),
@@ -39,7 +45,13 @@ export const fixEntityStateConsistency = <T extends Dictionary<any>>(data: T): T
 export const fixEntityStateConsistencyOrError = <T extends Dictionary<any>>(
   data: T,
 ): T => {
-  if (Object.keys(data.entities).length !== data.ids.length) {
+  if (
+    !data ||
+    !data.entities ||
+    !data.ids ||
+    Object.keys(data.entities).length !== data.ids.length ||
+    !arrayEquals(Object.keys(data.entities).sort(), [...data.ids].sort())
+  ) {
     Log.log({
       ...data,
       ids: Object.keys(data.entities),

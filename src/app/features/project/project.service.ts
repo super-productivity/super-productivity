@@ -3,7 +3,7 @@ import { firstValueFrom, Observable, of } from 'rxjs';
 import { Project } from './project.model';
 import { select, Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
-import { Actions, ofType } from '@ngrx/effects';
+import { ofType } from '@ngrx/effects';
 import { catchError, map, shareReplay, switchMap, take } from 'rxjs/operators';
 import {
   BreakNr,
@@ -26,7 +26,6 @@ import {
   unarchiveProject,
   updateProject,
   updateProjectOrder,
-  upsertProject,
 } from './store/project.actions';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { DEFAULT_PROJECT } from './project.const';
@@ -48,6 +47,7 @@ import { Note } from '../note/note.model';
 import { selectNoteFeatureState } from '../note/store/note.reducer';
 import { addNote } from '../note/store/note.actions';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
 @Injectable({
   providedIn: 'root',
@@ -55,7 +55,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 export class ProjectService {
   private readonly _workContextService = inject(WorkContextService);
   private readonly _store$ = inject<Store<any>>(Store);
-  private readonly _actions$ = inject(Actions);
+  private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _timeTrackingService = inject(TimeTrackingService);
   private readonly _taskService = inject(TaskService);
   private readonly _translate = inject(TranslateService);
@@ -117,8 +117,6 @@ export class ProjectService {
         return breakNr;
       }),
     );
-
-    // return this._store$.pipe(select(selectProjectBreakNrForProject, { id: projectId }));
   }
 
   getBreakTimeForProject$(projectId: string): Observable<BreakTime> {
@@ -189,17 +187,6 @@ export class ProjectService {
     return id;
   }
 
-  upsert(project: Partial<Project>): void {
-    this._store$.dispatch(
-      upsertProject({
-        project: {
-          ...project,
-          id: project.id || nanoid(),
-        } as Project,
-      }),
-    );
-  }
-
   async remove(project: Project): Promise<void> {
     const taskState = await this._store$
       .select(selectTaskFeatureState)
@@ -214,7 +201,13 @@ export class ProjectService {
       }
     });
     const allTaskIds = [...allParentTaskIds, ...subTaskIdsForProject];
-    this._store$.dispatch(TaskSharedActions.deleteProject({ project, allTaskIds }));
+    this._store$.dispatch(
+      TaskSharedActions.deleteProject({
+        projectId: project.id,
+        noteIds: project.noteIds,
+        allTaskIds,
+      }),
+    );
   }
 
   update(projectId: string, changedFields: Partial<Project>): void {

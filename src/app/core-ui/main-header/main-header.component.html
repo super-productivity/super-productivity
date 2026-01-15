@@ -25,6 +25,15 @@
   }
 
   <nav class="action-nav">
+    @if (isTimeTrackingEnabled()) {
+      <play-button
+        [currentTask]="currentTask()"
+        [currentTaskId]="currentTaskId()"
+        [currentTaskContext]="currentTaskContext()"
+        [hasTrackableTasks]="hasTrackableTasks()"
+      ></play-button>
+    }
+
     @if (showDesktopButtons()) {
       <button
         (click)="layoutService.showAddTaskBar()"
@@ -54,8 +63,12 @@
             } @else {
               <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
             }
-            @if (syncState() === 'IN_SYNC') {
-              <mat-icon class="sync-state-ico">check</mat-icon>
+            @if (hasNoPendingOps()) {
+              @if (superSyncIsConfirmedInSync()) {
+                <mat-icon class="sync-state-ico">done_all</mat-icon>
+              } @else {
+                <mat-icon class="sync-state-ico">check</mat-icon>
+              }
             }
           } @else {
             <mat-icon>wifi_off</mat-icon>
@@ -70,15 +83,6 @@
 
     @if (isUserProfilesEnabled()) {
       <user-profile-button></user-profile-button>
-    }
-
-    @if (isTimeTrackingEnabled()) {
-      <play-button
-        [currentTask]="currentTask()"
-        [currentTaskId]="currentTaskId()"
-        [currentTaskContext]="currentTaskContext()"
-        [hasTrackableTasks]="hasTrackableTasks()"
-      ></play-button>
     }
 
     @if (isFocusModeEnabled() && !isXxxs()) {

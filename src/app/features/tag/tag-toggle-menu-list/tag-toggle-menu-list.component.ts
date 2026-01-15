@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   input,
   output,
@@ -21,6 +22,7 @@ import { DialogPromptComponent } from '../../../ui/dialog-prompt/dialog-prompt.c
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskService } from '../../tasks/task.service';
+import { isSingleEmoji } from '../../../util/extract-first-emoji';
 
 @Component({
   selector: 'tag-toggle-menu-list',
@@ -41,7 +43,15 @@ export class TagToggleMenuListComponent {
   afterClose = output<void>();
   addNewTag = output<string>();
 
-  toggleTagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
+  private _tagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
+    initialValue: [],
+  });
+  toggleTagList = computed(() =>
+    this._tagList().map((tag) => ({
+      ...tag,
+      isEmojiIcon: tag.icon ? isSingleEmoji(tag.icon) : false,
+    })),
+  );
   menuEl = viewChild('menuEl', {
     // read: MatMenu,
   });

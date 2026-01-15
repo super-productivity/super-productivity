@@ -20,18 +20,20 @@
 
 .formatting-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 2px;
   padding: var(--s) var(--s2);
   background-color: var(--bg-lightest);
   border-bottom: 1px solid var(--extra-border-color);
   position: relative;
   z-index: 1;
+  color: var(--text-color);
 
   .toolbar-divider {
     width: 1px;
-    background: currentColor;
-    opacity: 0.2;
+    flex-shrink: 0;
+    background: var(--divider-color);
     margin: 4px 4px;
   }
 
@@ -41,12 +43,14 @@
     line-height: 1;
   }
 
-  button {
+  .mat-mdc-icon-button {
+    --mdc-icon-button-icon-size: 18px;
     min-width: 28px;
     width: 28px;
     height: 28px;
     padding: 0;
     line-height: 28px;
+    flex-shrink: 0;
 
     mat-icon,
     .mat-icon {

@@ -1,6 +1,7 @@
 import { ConfigFormSection, ReminderConfig } from '../global-config.model';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { T } from '../../../t.const';
+import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 
 export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
   title: T.GCF.REMINDER.TITLE,
@@ -47,5 +48,17 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
         label: T.GCF.REMINDER.IS_FOCUS_WINDOW,
       },
     },
+    ...(IS_ANDROID_WEB_VIEW
+      ? [
+          {
+            key: 'useAlarmStyleReminders' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.REMINDER.USE_ALARM_STYLE_REMINDERS,
+              description: T.GCF.REMINDER.USE_ALARM_STYLE_REMINDERS_DESCRIPTION,
+            },
+          },
+        ]
+      : []),
   ],
 };

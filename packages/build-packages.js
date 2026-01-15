@@ -38,7 +38,15 @@ async function getPlugins() {
 
   const plugins = [];
 
-  // Add plugin-api first as it's a dependency
+  // Add shared-schema first as it's needed for type resolution
+  plugins.push({
+    name: 'shared-schema',
+    path: 'packages/shared-schema',
+    buildCommand: 'npm run build',
+    skipCopy: true,
+  });
+
+  // Add plugin-api as it's a dependency for plugins
   plugins.push({
     name: 'plugin-api',
     path: 'packages/plugin-api',
@@ -46,7 +54,7 @@ async function getPlugins() {
     skipCopy: true,
   });
 
-  // Add vite-plugin second as it's a build dependency
+  // Add vite-plugin as it's a build dependency
   plugins.push({
     name: 'vite-plugin',
     path: 'packages/vite-plugin',

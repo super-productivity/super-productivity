@@ -39,16 +39,6 @@ export class DateTimeFormatService {
   }
 
   constructor() {
-    // Debug logging when locale changes
-    const formatted = this._testFormats();
-    console.group('[DateTimeFormat] Using locale:', this._locale() ?? 'default');
-    console.log(
-      `  - Test time formating (13:00): ${formatted.time}.`,
-      `format: ${formatted.time.includes('13') ? '24-hour' : '12-hour'}`,
-    );
-    console.log('  - Test date (31 december 2000):', formatted.date);
-    console.groupEnd();
-
     this._initMonkeyPatchFirstDayOfWeek();
 
     // Use effect to reactively update date adapter locale when config changes

@@ -32,11 +32,12 @@ import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { PfapiService } from '../../pfapi/pfapi.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { Store } from '@ngrx/store';
 import { selectCurrentTaskId } from '../../features/tasks/store/task.selectors';
 import { SyncLog } from '../../core/log';
+import { SyncWrapperService } from './sync-wrapper.service';
+import { SyncProviderId } from '../../op-log/sync-exports';
 
 const MAX_WAIT_FOR_INITIAL_SYNC = 25000;
 const USER_INTERACTION_SYNC_CHECK_THROTTLE_TIME = 15 * 60 * 10000;
@@ -49,10 +50,13 @@ export class SyncTriggerService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _idleService = inject(IdleService);
-  private readonly _pfapiService = inject(PfapiService);
   private readonly _store = inject(Store);
+  private readonly _syncWrapperService = inject(SyncWrapperService);
 
-  private _onUpdateLocalDataTrigger$ = this._pfapiService.onLocalMetaUpdate$;
+  // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.
+  // For file-based sync, this doesn't matter as sync is immediate-upload based.
+  // For SuperSync, operations are uploaded immediately via ImmediateUploadService.
+  private _onUpdateLocalDataTrigger$: Observable<unknown> = of(null);
 
   // IMMEDIATE TRIGGERS
   // ----------------------
@@ -147,9 +151,21 @@ export class SyncTriggerService {
   private _isInitialSyncDoneManual$: ReplaySubject<boolean> = new ReplaySubject<boolean>(
     1,
   );
+  private _isInitialSyncDoneSync = false;
   private _isInitialSyncDone$: Observable<boolean> = this._isInitialSyncEnabled$.pipe(
     switchMap((isActive) => {
-      return isActive ? this._isInitialSyncDoneManual$.asObservable() : of(true);
+      if (!isActive) {
+        return of(true);
+      }
+      // SuperSync has data locally - no need to wait for initial sync
+      return this._syncWrapperService.syncProviderId$.pipe(
+        take(1),
+        switchMap((providerId) =>
+          providerId === SyncProviderId.SuperSync
+            ? of(true)
+            : this._isInitialSyncDoneManual$.asObservable(),
+        ),
+      );
     }),
   );
   private _afterInitialSyncDoneAndDataLoadedInitially$: Observable<boolean> =
@@ -163,7 +179,16 @@ export class SyncTriggerService {
   // NOTE: can be called multiple times apparently
   afterInitialSyncDoneAndDataLoadedInitially$: Observable<boolean> = merge(
     this._afterInitialSyncDoneAndDataLoadedInitially$,
-    timer(MAX_WAIT_FOR_INITIAL_SYNC).pipe(mapTo(true)),
+    timer(MAX_WAIT_FOR_INITIAL_SYNC).pipe(
+      // When timeout fires, wait for conflict dialog to close if it's open
+      switchMap(() =>
+        this._syncWrapperService.isWaitingForUserInput$.pipe(
+          filter((isWaiting) => !isWaiting),
+          first(),
+        ),
+      ),
+      mapTo(true),
+    ),
   ).pipe(first(), shareReplay(1));
 
   getSyncTrigger$(syncInterval: number = SYNC_DEFAULT_AUDIT_TIME): Observable<unknown> {
@@ -217,6 +242,16 @@ export class SyncTriggerService {
   }
 
   setInitialSyncDone(val: boolean): void {
+    this._isInitialSyncDoneSync = val;
     this._isInitialSyncDoneManual$.next(val);
+  }
+
+  /**
+   * Synchronous getter for initial sync done state.
+   * Used by operators like skipDuringSyncWindow() that need
+   * to check state synchronously in filter callbacks.
+   */
+  isInitialSyncDoneSync(): boolean {
+    return this._isInitialSyncDoneSync;
   }
 }

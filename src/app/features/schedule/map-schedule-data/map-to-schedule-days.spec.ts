@@ -33,11 +33,10 @@ const FAKE_TASK: Partial<TaskCopy> = {
 
 const h = (hr: number): number => hr * 60 * 1000 * 60;
 const hTz = (hr: number): number => h(hr) + TZ_OFFSET;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars,no-mixed-operators
+// eslint-disable-next-line no-mixed-operators
 const dh = (d: number = 0, hr: number): number => hr * H + d * h(24);
 const dhTz = (d: number = 0, hr: number): number => dh(d, hr) + TZ_OFFSET;
 
-// eslint-disable-next-line no-mixed-operators
 const minAfterNow = (min: number): Date => new Date(1970, 0, 1, 0, min, 0, 0);
 
 const minAfterNowTs = (min: number): number => minAfterNow(min).getTime();
@@ -404,7 +403,7 @@ describe('mapToScheduleDays()', () => {
             id: 'N1',
             // NOTE: the 24h stuff only works if we count from 0 of the current timezone
             start: h(0),
-            // eslint-disable-next-line no-mixed-operators
+
             duration: h(23) - 60000,
             type: 'Task',
           },
@@ -418,7 +417,7 @@ describe('mapToScheduleDays()', () => {
           {
             data: jasmine.any(Object),
             id: 'N2',
-            // eslint-disable-next-line no-mixed-operators
+
             start: hTz(24),
             duration: h(1),
             type: 'SplitTask',
@@ -426,7 +425,7 @@ describe('mapToScheduleDays()', () => {
           {
             data: jasmine.any(Object),
             id: 'R1_1970-01-02',
-            // eslint-disable-next-line no-mixed-operators
+
             start: hTz(25),
             duration: h(1),
             type: 'ScheduledRepeatProjection',
@@ -434,7 +433,7 @@ describe('mapToScheduleDays()', () => {
           {
             data: jasmine.any(Object),
             id: 'N2_1970-01-02_0',
-            // eslint-disable-next-line no-mixed-operators
+
             start: hTz(26),
             duration: h(1),
             type: 'SplitTaskContinuedLast',
@@ -482,7 +481,7 @@ describe('mapToScheduleDays()', () => {
             data: jasmine.any(Object),
             id: 'N1',
             start: hTz(0),
-            // eslint-disable-next-line no-mixed-operators
+
             duration: h(23) - 60000,
             type: 'Task',
           },
@@ -496,7 +495,7 @@ describe('mapToScheduleDays()', () => {
           {
             data: jasmine.any(Object),
             id: 'R1_1970-01-02',
-            // eslint-disable-next-line no-mixed-operators
+
             start: hTz(24),
             duration: h(2),
             type: 'RepeatProjection',
@@ -550,7 +549,7 @@ describe('mapToScheduleDays()', () => {
           data: jasmine.any(Object),
           id: 'N1',
           start: dhTz(0, 9),
-          // eslint-disable-next-line no-mixed-operators
+
           duration: h(8),
           type: 'SplitTask',
         },

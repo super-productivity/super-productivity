@@ -9,8 +9,7 @@ import { Tag as PluginTag } from '@super-productivity/plugin-api';
 
 // Omit conflicting properties from PluginTag when extending
 export interface TagCopy
-  extends Omit<PluginTag, 'advancedCfg' | 'theme'>,
-    WorkContextCommon {
+  extends Omit<PluginTag, 'advancedCfg' | 'theme'>, WorkContextCommon {
   // All fields already included in PluginTag
 }
 

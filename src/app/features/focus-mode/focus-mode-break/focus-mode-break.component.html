@@ -19,6 +19,27 @@
     <div class="timer-text">
       {{ remainingTime() | msToClockString: true }}
     </div>
+    @if (remainingTime() > 0) {
+      @if (isBreakPaused()) {
+        <button
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.RESUME_BREAK | translate"
+          (click)="resumeBreak()"
+          class="pause-resume-btn"
+        >
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+      } @else {
+        <button
+          mat-icon-button
+          [matTooltip]="T.F.FOCUS_MODE.PAUSE_BREAK | translate"
+          (click)="pauseBreak()"
+          class="pause-resume-btn"
+        >
+          <mat-icon>pause</mat-icon>
+        </button>
+      }
+    }
   </div>
 
   <task-tracking-info></task-tracking-info>
@@ -26,13 +47,22 @@
   <p class="break-message">{{ T.F.FOCUS_MODE.BREAK_RELAX_MSG | translate }}</p>
 
   @if (remainingTime() > 0) {
-    <button
-      mat-stroked-button
-      (click)="skipBreak()"
-    >
-      <mat-icon>skip_next</mat-icon>
-      {{ T.F.FOCUS_MODE.SKIP_BREAK | translate }}
-    </button>
+    <div class="button-row">
+      <button
+        mat-stroked-button
+        (click)="exitToPlanning()"
+      >
+        <mat-icon>edit_calendar</mat-icon>
+        {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
+      </button>
+      <button
+        mat-stroked-button
+        (click)="skipBreak()"
+      >
+        <mat-icon>skip_next</mat-icon>
+        {{ T.F.FOCUS_MODE.SKIP_BREAK | translate }}
+      </button>
+    </div>
   } @else {
     <div class="button-row">
       <button

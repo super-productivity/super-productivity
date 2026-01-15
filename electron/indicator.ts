@@ -17,6 +17,12 @@ const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
 const IS_WINDOWS = process.platform === 'win32';
 
+// Static GUID for Windows tray icon position persistence across updates.
+// This allows Windows to remember tray icon visibility/position even when
+// the executable path changes (e.g., after Microsoft Store updates).
+// WARNING: This GUID must never change once deployed.
+const WINDOWS_TRAY_GUID = 'f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d';
+
 export const initIndicator = ({
   showApp,
   quitApp,
@@ -41,7 +47,8 @@ export const initIndicator = ({
   initListeners();
 
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
-  tray = new Tray(DIR + `stopped${suf}`);
+  const trayIconPath = DIR + `stopped${suf}`;
+  tray = IS_WINDOWS ? new Tray(trayIconPath, WINDOWS_TRAY_GUID) : new Tray(trayIconPath);
   tray.setContextMenu(createContextMenu(showApp, quitApp));
 
   tray.on('click', () => {

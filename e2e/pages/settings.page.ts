@@ -42,25 +42,23 @@ export class SettingsPage extends BasePage {
    * Expand a collapsible section by scrolling to it and clicking header
    */
   async expandSection(sectionSelector: string): Promise<void> {
-    await this.page.evaluate((selector) => {
-      const section = document.querySelector(selector);
-      if (section) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+    const section = this.page.locator(sectionSelector);
+    await section.scrollIntoViewIfNeeded();
 
-      const collapsible = section?.querySelector('collapsible');
-      if (collapsible) {
-        const isExpanded = collapsible.classList.contains('isExpanded');
-        if (!isExpanded) {
-          const header = collapsible.querySelector('.collapsible-header');
-          if (header) {
-            (header as HTMLElement).click();
-          }
-        }
-      }
-    }, sectionSelector);
+    const collapsible = section.locator('collapsible');
+    const isExpanded = await collapsible.evaluate((el) =>
+      el.classList.contains('isExpanded'),
+    );
 
-    await this.page.waitForTimeout(500); // Wait for expansion animation
+    if (!isExpanded) {
+      const header = collapsible.locator('.collapsible-header');
+      await header.click();
+      // Wait for expansion - panel only exists when expanded (@if in template)
+      await collapsible
+        .locator('.collapsible-panel')
+        .waitFor({ state: 'visible', timeout: 5000 });
+    }
+
     await waitForAngularStability(this.page);
   }
 
@@ -69,7 +67,11 @@ export class SettingsPage extends BasePage {
    */
   async expandPluginSection(): Promise<void> {
     await this.expandSection(PLUGIN_SECTION);
+    // Ensure plugin management component and at least file input are visible
     await this.pluginManagement.waitFor({ state: 'visible', timeout: 5000 });
+    await this.page
+      .locator(PLUGIN_FILE_INPUT)
+      .waitFor({ state: 'attached', timeout: 5000 });
   }
 
   /**

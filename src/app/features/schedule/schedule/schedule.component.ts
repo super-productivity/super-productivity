@@ -139,7 +139,7 @@ export class ScheduleComponent {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
-    // eslint-disable-next-line no-mixed-operators
+
     const hoursToday = hours + minutes / 60;
     return Math.round(hoursToday * FH);
   });

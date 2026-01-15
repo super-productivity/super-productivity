@@ -4,12 +4,10 @@ import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskCopy } from '../../tasks/task.model';
 import { PlannerActions } from '../store/planner.actions';
-import { ReminderCopy } from '../../reminder/reminder.model';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { Store } from '@ngrx/store';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
-import { ReminderService } from '../../reminder/reminder.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { DateService } from '../../../core/date/date.service';
 import { DialogScheduleTaskComponent } from '../dialog-schedule-task/dialog-schedule-task.component';
@@ -55,7 +53,6 @@ export class PlannerDayComponent {
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
-  private _reminderService = inject(ReminderService);
   private _dateService = inject(DateService);
 
   // TODO: Skipped for migration because:
@@ -145,12 +142,9 @@ export class PlannerDayComponent {
   private _rescheduleTask(task: TaskCopy, newDate: Date): void {
     const taskPlannedAtDate = new Date(task.dueWithTime as number);
     newDate.setHours(taskPlannedAtDate.getHours(), taskPlannedAtDate.getMinutes(), 0, 0);
-    const reminder: ReminderCopy | undefined = task.reminderId
-      ? this._reminderService.getById(task.reminderId) || undefined
-      : undefined;
     const selectedReminderCfgId = millisecondsDiffToRemindOption(
       task.dueWithTime as number,
-      reminder?.remindAt,
+      task.remindAt,
     );
     this._taskService.scheduleTask(task, newDate.getTime(), selectedReminderCfgId, false);
   }

@@ -12,8 +12,9 @@ const audioBufferCache = new Map<string, AudioBuffer>();
  */
 export const getAudioContext = (): AudioContext => {
   if (!audioContext) {
-    audioContext = new ((window as any).AudioContext ||
-      (window as any).webkitAudioContext)();
+    audioContext = new (
+      (window as any).AudioContext || (window as any).webkitAudioContext
+    )();
   }
 
   // Resume if suspended (can happen due to browser autoplay policies)

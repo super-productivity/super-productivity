@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect } from '@ngrx/effects';
+import { createEffect } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 import { ExecBeforeCloseService } from '../../core/electron/exec-before-close.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import {
@@ -24,7 +25,7 @@ const EXEC_BEFORE_CLOSE_ID = 'FINISH_DAY_BEFORE_CLOSE_EFFECT';
 
 @Injectable()
 export class FinishDayBeforeCloseEffects {
-  private actions$ = inject(Actions);
+  private actions$ = inject(LOCAL_ACTIONS);
   private _execBeforeCloseService = inject(ExecBeforeCloseService);
   private _globalConfigService = inject(GlobalConfigService);
   private _dataInitStateService = inject(DataInitStateService);

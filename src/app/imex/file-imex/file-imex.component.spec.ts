@@ -11,7 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { FileImexComponent } from './file-imex.component';
 import { SnackService } from '../../core/snack/snack.service';
-import { PfapiService } from '../../pfapi/pfapi.service';
+import { BackupService } from '../../op-log/backup/backup.service';
 import { T } from '../../t.const';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { ConfirmUrlImportDialogComponent } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
@@ -23,7 +23,7 @@ describe('FileImexComponent', () => {
   let fixture: ComponentFixture<FileImexComponent>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockRouter: jasmine.SpyObj<Router>;
-  let mockPfapiService: jasmine.SpyObj<PfapiService>;
+  let mockBackupService: jasmine.SpyObj<BackupService>;
   let mockActivatedRoute: any;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let httpTestingController: HttpTestingController;
@@ -38,17 +38,11 @@ describe('FileImexComponent', () => {
 
     const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
-    const pfapiServiceSpy = jasmine.createSpyObj(
-      'PfapiService',
-      ['importCompleteBackup'],
-      {
-        pf: {
-          loadCompleteBackup: jasmine
-            .createSpy()
-            .and.returnValue(Promise.resolve(mockAppData)),
-        },
-      },
-    );
+    const backupServiceSpy = jasmine.createSpyObj('BackupService', [
+      'importCompleteBackup',
+      'loadCompleteBackup',
+    ]);
+    backupServiceSpy.loadCompleteBackup.and.returnValue(Promise.resolve(mockAppData));
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
 
     mockActivatedRoute = {
@@ -56,7 +50,7 @@ describe('FileImexComponent', () => {
     };
 
     routerSpy.navigate.and.returnValue(Promise.resolve(true));
-    pfapiServiceSpy.importCompleteBackup.and.returnValue(Promise.resolve());
+    backupServiceSpy.importCompleteBackup.and.returnValue(Promise.resolve());
     matDialogSpy.open.and.returnValue({
       afterClosed: jasmine.createSpy().and.returnValue(of(false)),
     } as any);
@@ -68,7 +62,7 @@ describe('FileImexComponent', () => {
         provideHttpClientTesting(),
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: Router, useValue: routerSpy },
-        { provide: PfapiService, useValue: pfapiServiceSpy },
+        { provide: BackupService, useValue: backupServiceSpy },
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
         { provide: MatDialog, useValue: matDialogSpy },
       ],
@@ -78,7 +72,7 @@ describe('FileImexComponent', () => {
     component = fixture.componentInstance;
     mockSnackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
     mockRouter = TestBed.inject(Router) as jasmine.SpyObj<Router>;
-    mockPfapiService = TestBed.inject(PfapiService) as jasmine.SpyObj<PfapiService>;
+    mockBackupService = TestBed.inject(BackupService) as jasmine.SpyObj<BackupService>;
     mockMatDialog = TestBed.inject(MatDialog) as jasmine.SpyObj<MatDialog>;
     httpTestingController = TestBed.inject(HttpTestingController);
   });
@@ -322,8 +316,11 @@ describe('FileImexComponent', () => {
       await component['_processAndImportData'](validData);
 
       expect(mockRouter.navigate).toHaveBeenCalledWith([`tag/${TODAY_TAG.id}/tasks`]);
-      expect(mockPfapiService.importCompleteBackup).toHaveBeenCalledWith(
+      // importCompleteBackup is called with (data, isBackup=false, isForceConflict=true)
+      expect(mockBackupService.importCompleteBackup).toHaveBeenCalledWith(
         jasmine.any(Object),
+        false,
+        true,
       );
     });
 
@@ -336,7 +333,7 @@ describe('FileImexComponent', () => {
         type: 'ERROR',
         msg: T.FILE_IMEX.S_ERR_INVALID_DATA,
       });
-      expect(mockPfapiService.importCompleteBackup).not.toHaveBeenCalled();
+      expect(mockBackupService.importCompleteBackup).not.toHaveBeenCalled();
     });
 
     it('should handle V1 data format', async () => {
@@ -347,12 +344,12 @@ describe('FileImexComponent', () => {
       expect(window.alert).toHaveBeenCalledWith(
         'V1 Data. Migration not supported any more.',
       );
-      expect(mockPfapiService.importCompleteBackup).not.toHaveBeenCalled();
+      expect(mockBackupService.importCompleteBackup).not.toHaveBeenCalled();
     });
 
     it('should handle import errors', async () => {
       const validData = JSON.stringify(mockAppData);
-      mockPfapiService.importCompleteBackup.and.returnValue(
+      mockBackupService.importCompleteBackup.and.returnValue(
         Promise.reject(new Error('Import failed')),
       );
 
@@ -378,7 +375,7 @@ describe('FileImexComponent', () => {
     it('should load backup data', async () => {
       await component.downloadBackup();
 
-      expect(mockPfapiService.pf.loadCompleteBackup).toHaveBeenCalled();
+      expect(mockBackupService.loadCompleteBackup).toHaveBeenCalled();
     });
   });
 
@@ -386,7 +383,7 @@ describe('FileImexComponent', () => {
     it('should load backup data for privacy export', async () => {
       await component.privacyAppDataDownload();
 
-      expect(mockPfapiService.pf.loadCompleteBackup).toHaveBeenCalled();
+      expect(mockBackupService.loadCompleteBackup).toHaveBeenCalled();
     });
   });
 });

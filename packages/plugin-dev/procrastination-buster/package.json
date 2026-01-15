@@ -14,13 +14,13 @@
   },
   "devDependencies": {
     "@solidjs/router": "^0.14.10",
+    "@super-productivity/vite-plugin": "file:../../vite-plugin",
     "@types/node": "^22.15.33",
+    "archiver": "^7.0.1",
     "solid-js": "^1.9.7",
     "typescript": "^5.8.3",
     "vite": "^7.2.0",
-    "vite-plugin-solid": "^2.11.10",
-    "archiver": "^7.0.1",
-    "@super-productivity/vite-plugin": "file:../../vite-plugin"
+    "vite-plugin-solid": "^2.11.10"
   },
   "dependencies": {
     "@super-productivity/plugin-api": "file:../../plugin-api"

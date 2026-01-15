@@ -1,0 +1,103 @@
+<h1 mat-dialog-title>{{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.TITLE | translate }}</h1>
+
+<div mat-dialog-content>
+  @if (isLoading()) {
+    <div class="loading">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>{{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.LOADING | translate }}</p>
+    </div>
+  } @else if (error()) {
+    <div class="error">
+      <mat-icon>error</mat-icon>
+      <p>{{ error() }}</p>
+    </div>
+  } @else if (!hasDataToCompress()) {
+    <div class="empty">
+      <mat-icon>check_circle</mat-icon>
+      <p>{{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.NO_DATA | translate }}</p>
+    </div>
+  } @else {
+    <p class="intro">{{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.INTRO | translate }}</p>
+
+    <div class="preview-stats">
+      @if (preview()!.subtasksToDelete > 0) {
+        <div class="stat-item">
+          <mat-icon>delete</mat-icon>
+          <div class="stat-info">
+            <strong>{{ preview()!.subtasksToDelete }}</strong>
+            <span>{{
+              T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.SUBTASKS_TO_DELETE | translate
+            }}</span>
+          </div>
+        </div>
+      }
+
+      @if (preview()!.notesToClear > 0) {
+        <div class="stat-item">
+          <mat-icon>note</mat-icon>
+          <div class="stat-info">
+            <strong>{{ preview()!.notesToClear }}</strong>
+            <span>{{
+              T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.NOTES_TO_CLEAR | translate
+            }}</span>
+          </div>
+        </div>
+      }
+
+      @if (preview()!.issueFieldsToClear > 0) {
+        <div class="stat-item">
+          <mat-icon>link_off</mat-icon>
+          <div class="stat-info">
+            <strong>{{ preview()!.issueFieldsToClear }}</strong>
+            <span>{{
+              T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.ISSUE_FIELDS_TO_CLEAR | translate
+            }}</span>
+          </div>
+        </div>
+      }
+
+      <div class="stat-item highlight">
+        <mat-icon>save</mat-icon>
+        <div class="stat-info">
+          <strong>~{{ preview()!.estimatedSavingsKB }} KB</strong>
+          <span>{{
+            T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.ESTIMATED_SAVINGS | translate
+          }}</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="warning">
+      <mat-icon>warning</mat-icon>
+      {{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.WARNING | translate }}
+    </p>
+  }
+</div>
+
+<div
+  mat-dialog-actions
+  align="end"
+>
+  <button
+    mat-button
+    [disabled]="isCompressing()"
+    (click)="cancel()"
+  >
+    {{ 'G.CANCEL' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="primary"
+    [disabled]="!hasDataToCompress() || isCompressing()"
+    (click)="compress()"
+  >
+    @if (isCompressing()) {
+      <mat-spinner
+        diameter="20"
+        color="accent"
+      ></mat-spinner>
+    } @else {
+      {{ T.F.TIME_TRACKING.D_ARCHIVE_COMPRESS.BTN_COMPRESS | translate }}
+    }
+  </button>
+</div>

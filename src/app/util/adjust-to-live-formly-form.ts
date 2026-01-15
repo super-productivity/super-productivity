@@ -4,7 +4,11 @@ import { stringToMs } from '../ui/duration/string-to-ms.pipe';
 export const adjustToLiveFormlyForm = (
   items: FormlyFieldConfig[],
 ): FormlyFieldConfig[] => {
-  return items.map((item) => {
+  // Filter out undefined/null items to prevent "Cannot read properties of undefined" errors
+  // This can happen during race conditions when forms are rebuilt during state changes
+  const validItems = items.filter((item): item is FormlyFieldConfig => item != null);
+
+  return validItems.map((item) => {
     if (item.type === 'checkbox') {
       return {
         ...item,
@@ -23,9 +27,10 @@ export const adjustToLiveFormlyForm = (
         templateOptions: {
           ...item.templateOptions,
           keydown: (field: FormlyFieldConfig, event: KeyboardEvent) => {
-            if (event.key === 'Enter' && (event.target as any)?.tagName !== 'TEXTAREA') {
+            const target = event.target as HTMLInputElement | HTMLTextAreaElement | null;
+            if (event.key === 'Enter' && target?.tagName !== 'TEXTAREA') {
               event.preventDefault();
-              const value = (event?.target as any)?.value;
+              const value = target?.value;
               // For duration fields, convert the string to milliseconds
               if (item.type === 'duration') {
                 field.formControl?.setValue(value ? stringToMs(value) : null);

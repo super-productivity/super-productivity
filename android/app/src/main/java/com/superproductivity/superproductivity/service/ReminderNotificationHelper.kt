@@ -24,31 +24,54 @@ import com.superproductivity.superproductivity.receiver.ReminderAlarmReceiver
  */
 object ReminderNotificationHelper {
     const val TAG = "ReminderNotifHelper"
-    const val CHANNEL_ID = "sp_reminders_channel"
+    const val CHANNEL_ID_ALARM = "sp_reminders_channel"
+    const val CHANNEL_ID_REGULAR = "sp_reminders_regular_channel"
 
-    fun createChannel(context: Context) {
+    fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = context.getSystemService(NotificationManager::class.java)
+
+            // Alarm-style channel (louder, more intrusive)
             val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-            val audioAttributes = AudioAttributes.Builder()
+            val alarmAudioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
 
-            val channel = NotificationChannel(
-                CHANNEL_ID,
+            val alarmChannel = NotificationChannel(
+                CHANNEL_ID_ALARM,
+                "Reminders (Alarm)",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alarm-style task reminders with louder sound"
+                setShowBadge(true)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+                setSound(alarmSound, alarmAudioAttributes)
+            }
+            notificationManager.createNotificationChannel(alarmChannel)
+
+            // Regular notification channel (standard notification sound)
+            val notificationSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+            val notificationAudioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+
+            val regularChannel = NotificationChannel(
+                CHANNEL_ID_REGULAR,
                 "Reminders",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Task and note reminders"
                 setShowBadge(true)
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
-                setSound(alarmSound, audioAttributes)
+                setSound(notificationSound, notificationAudioAttributes)
             }
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(regularChannel)
         }
     }
 
@@ -59,9 +82,10 @@ object ReminderNotificationHelper {
         relatedId: String,
         title: String,
         reminderType: String,
-        triggerAtMs: Long
+        triggerAtMs: Long,
+        useAlarmStyle: Boolean = false
     ) {
-        Log.d(TAG, "Scheduling reminder: id=$notificationId, title=$title")
+        Log.d(TAG, "Scheduling reminder: id=$notificationId, title=$title, useAlarmStyle=$useAlarmStyle")
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
@@ -72,6 +96,7 @@ object ReminderNotificationHelper {
             putExtra(ReminderAlarmReceiver.EXTRA_RELATED_ID, relatedId)
             putExtra(ReminderAlarmReceiver.EXTRA_TITLE, title)
             putExtra(ReminderAlarmReceiver.EXTRA_REMINDER_TYPE, reminderType)
+            putExtra(ReminderAlarmReceiver.EXTRA_USE_ALARM_STYLE, useAlarmStyle)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -109,9 +134,12 @@ object ReminderNotificationHelper {
         reminderId: String,
         relatedId: String,
         title: String,
-        reminderType: String
+        reminderType: String,
+        useAlarmStyle: Boolean = false
     ) {
-        createChannel(context)
+        createChannels(context)
+
+        val channelId = if (useAlarmStyle) CHANNEL_ID_ALARM else CHANNEL_ID_REGULAR
 
         // Tapping notification opens app
         val contentIntent = Intent(context, CapacitorMainActivity::class.java).apply {
@@ -130,13 +158,16 @@ object ReminderNotificationHelper {
             putExtra(ReminderActionReceiver.EXTRA_RELATED_ID, relatedId)
             putExtra(ReminderActionReceiver.EXTRA_TITLE, title)
             putExtra(ReminderActionReceiver.EXTRA_REMINDER_TYPE, reminderType)
+            putExtra(ReminderActionReceiver.EXTRA_USE_ALARM_STYLE, useAlarmStyle)
         }
         val snoozePendingIntent = PendingIntent.getBroadcast(
             context, notificationId * 10 + 1, snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val category = if (useAlarmStyle) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER
+
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(title)
             .setContentText(if (reminderType == "TASK") "Task reminder" else "Note reminder")
@@ -144,7 +175,7 @@ object ReminderNotificationHelper {
             .setAutoCancel(true)
             .addAction(0, "Snooze 10m", snoozePendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(category)
             .build()
 
         try {

@@ -283,29 +283,40 @@ const createBlockerBlocksForCalendarEvents = (
   return blockedBlocks;
 };
 
-// NOTE: we recursively merge all overlapping blocks
-// TODO find more effective algorithm
+// Merge overlapping blocks using an efficient O(n log n) algorithm
+// Sort by start time, then single-pass merge of consecutive overlapping blocks
 const mergeBlocksRecursively = (blockedBlocks: BlockedBlock[]): BlockedBlock[] => {
-  for (const blockedBlock of blockedBlocks) {
-    let wasMergedInner = false;
-    for (const blockedBlockInner of blockedBlocks) {
-      if (
-        blockedBlockInner !== blockedBlock &&
-        isOverlappingBlock(blockedBlockInner, blockedBlock)
-      ) {
-        blockedBlock.start = Math.min(blockedBlockInner.start, blockedBlock.start);
-        blockedBlock.end = Math.max(blockedBlockInner.end, blockedBlock.end);
-        blockedBlock.entries = blockedBlock.entries.concat(blockedBlockInner.entries);
-        blockedBlocks.splice(blockedBlocks.indexOf(blockedBlockInner), 1);
-        wasMergedInner = true;
-        break;
-      }
-    }
-    if (wasMergedInner) {
-      return mergeBlocksRecursively(blockedBlocks);
+  if (blockedBlocks.length <= 1) {
+    return blockedBlocks;
+  }
+
+  // Sort by start time
+  blockedBlocks.sort((a, b) => a.start - b.start);
+
+  const merged: BlockedBlock[] = [blockedBlocks[0]];
+
+  for (let i = 1; i < blockedBlocks.length; i++) {
+    const current = blockedBlocks[i];
+    const last = merged[merged.length - 1];
+
+    // Check if current block overlaps or touches the last merged block
+    // Two blocks overlap/touch if current.start <= last.end
+    if (current.start <= last.end) {
+      // Merge: extend end time and combine entries
+      last.end = Math.max(last.end, current.end);
+      last.entries = last.entries.concat(current.entries);
+    } else {
+      // No overlap, add as new block
+      merged.push(current);
     }
   }
-  return blockedBlocks;
+
+  // Sort entries within each merged block by start time for consistent ordering
+  for (const block of merged) {
+    block.entries.sort((a, b) => a.start - b.start);
+  }
+
+  return merged;
 };
 
 const isOverlappingBlock = (

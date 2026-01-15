@@ -19,6 +19,14 @@
     font-size: 1.8rem;
     font-weight: 500;
   }
+
+  // Pause/Resume button inside the circle (top center)
+  .pause-resume-btn {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 .break-message {

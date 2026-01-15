@@ -1,5 +1,5 @@
 // TODO: Fix plugin tests after stabilizing task model changes
-/* eslint-disable */
+
 // TODO: These tests are disabled due to module resolution issues with @super-productivity/plugin-api
 describe('PluginService', () => {
   it('should pass placeholder test', () => {

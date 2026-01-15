@@ -13,7 +13,7 @@ export const mapGithubIssue = (issue: GithubOriginalIssue): GithubIssue => {
     comments_url: issue.comments_url,
     events_url: issue.events_url,
     html_url: issue.html_url,
-    // eslint-disable-next-line id-blacklist
+
     number: issue.number,
     state: issue.state,
     title: issue.title,

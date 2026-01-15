@@ -12,14 +12,17 @@ import {
   switchMap,
   take,
   tap,
+  throttleTime,
   withLatestFrom,
 } from 'rxjs/operators';
 import { SyncTriggerService } from './sync-trigger.service';
 import {
+  INITIAL_SYNC_DELAY_MS,
   SYNC_BEFORE_CLOSE_ID,
   SYNC_INITIAL_SYNC_TRIGGER,
 } from '../../imex/sync/sync.const';
-import { combineLatest, EMPTY, merge, Observable, of } from 'rxjs';
+import { SyncProviderId } from '../../op-log/sync-exports';
+import { asyncScheduler, combineLatest, EMPTY, merge, Observable, of } from 'rxjs';
 import { isOnline$ } from '../../util/is-online';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -62,6 +65,7 @@ export class SyncEffects {
             filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
             tap(() => {
               this._taskService.setCurrentId(null);
+              this._simpleCounterService.flushAccumulatedTime();
               this._simpleCounterService.turnOffAll();
             }),
             // minimally hacky delay to wait for inMemoryDatabase update...
@@ -118,22 +122,31 @@ export class SyncEffects {
             this._initialPwaUpdateCheckService.afterInitialUpdateCheck$.pipe(
               concatMap(() => this._syncWrapperService.isEnabledAndReady$),
               take(1),
-              switchMap((isEnabledAndReady) => {
-                if (isEnabledAndReady) {
-                  return of(SYNC_INITIAL_SYNC_TRIGGER);
-                } else {
+              withLatestFrom(this._syncWrapperService.syncProviderId$),
+              switchMap(([isEnabledAndReady, providerId]) => {
+                if (!isEnabledAndReady) {
                   this._syncTriggerService.setInitialSyncDone(true);
                   return EMPTY;
                 }
+                // SuperSync can be delayed - data is already local, just needs upload/download
+                // Other providers (Dropbox, WebDAV, LocalFile) need sync first to download data
+                if (providerId === SyncProviderId.SuperSync) {
+                  return of(SYNC_INITIAL_SYNC_TRIGGER).pipe(delay(INITIAL_SYNC_DELAY_MS));
+                }
+                return of(SYNC_INITIAL_SYNC_TRIGGER);
               }),
             ),
 
-            // initial after enabling it,
-            // TODO maybe re-enable
-            // this._wasJustEnabled$.pipe(take(1), mapTo('SYNC_DBX_AFTER_ENABLE')),
+            // initial after enabling it
+            this._wasJustEnabled$.pipe(
+              take(1),
+              map(() => 'SYNC_AFTER_ENABLE'),
+            ),
           ),
         ),
         tap((x) => SyncLog.log('sync(effect).....', x)),
+        // Limit sync frequency to prevent rapid consecutive syncs (e.g., blur event right after initial sync)
+        throttleTime(2000, asyncScheduler, { leading: true, trailing: false }),
         withLatestFrom(isOnline$),
         // don't run multiple after each other when dialog is open
         exhaustMap(([trigger, isOnline]) => {

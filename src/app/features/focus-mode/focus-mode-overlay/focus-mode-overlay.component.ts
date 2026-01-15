@@ -116,7 +116,11 @@ export class FocusModeOverlayComponent implements OnDestroy {
         progress$ = isCountTimeUp ? undefined : this.focusModeService.sessionProgress$;
       }
 
-      const translateParams = mode === 'Pomodoro' ? { cycleNr: cycle || 1 } : undefined;
+      // Bug #5954 fix: For breaks, use cycle - 1 since cycle is incremented on session complete
+      const translateParams =
+        mode === 'Pomodoro'
+          ? { cycleNr: isOnBreak ? Math.max(1, (cycle || 1) - 1) : cycle || 1 }
+          : undefined;
 
       this.bannerService.open({
         id: BannerId.FocusMode,

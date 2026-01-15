@@ -10,8 +10,6 @@ import {
 } from '@angular/core';
 import { combineLatest, from, Subscription } from 'rxjs';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-// @ts-ignore
-import Clipboard from 'clipboard';
 import { SnackService } from '../../../core/snack/snack.service';
 import { WorklogService } from '../worklog.service';
 import {
@@ -234,16 +232,6 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
           }
         }),
     );
-
-    // dirty but good enough for now
-    const clipboard = new Clipboard('#clipboard-btn');
-    clipboard.on('success', (e: any) => {
-      this._snackService.open({
-        msg: T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD,
-        type: 'SUCCESS',
-      });
-      e.clearSelection();
-    });
   }
 
   ngOnDestroy(): void {
@@ -261,5 +249,21 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
 
   addCol(colOpt: WorklogColTypes): void {
     this.options.cols.push(colOpt);
+  }
+
+  async copyToClipboard(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.txt);
+      this._snackService.open({
+        msg: T.GLOBAL_SNACK.COPY_TO_CLIPPBOARD,
+        type: 'SUCCESS',
+      });
+    } catch (err) {
+      this._snackService.open({
+        msg: 'Failed to copy to clipboard',
+        type: 'ERROR',
+        isSkipTranslate: true,
+      });
+    }
   }
 }

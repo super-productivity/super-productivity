@@ -2,7 +2,10 @@ import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
 import { Update } from '@ngrx/entity';
 import { RootState } from '../../root-state';
 import { TaskSharedActions } from '../task-shared.actions';
-import { PROJECT_FEATURE_NAME } from '../../../features/project/store/project.reducer';
+import {
+  PROJECT_FEATURE_NAME,
+  projectAdapter,
+} from '../../../features/project/store/project.reducer';
 import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import {
   TASK_FEATURE_NAME,
@@ -16,6 +19,7 @@ import {
   updateTimeSpentForTask,
 } from '../../../features/tasks/store/task.reducer.util';
 import { Tag } from '../../../features/tag/tag.model';
+import { Project } from '../../../features/project/project.model';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../../features/tasks/util/calc-total-time-spent';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
@@ -57,16 +61,18 @@ const removeConflictingTasksFromTag = (
   if (!task) return state;
 
   const tag = getTag(state, tagId);
+  // PERF: Use Set for O(1) lookups instead of O(n) Array.includes()
+  const tagTaskIdSet = new Set(tag.taskIds);
   const conflictingTaskIds: string[] = [];
 
   // If this is a sub-task, check if parent is in the tag
-  if (task.parentId && tag.taskIds.includes(task.parentId)) {
+  if (task.parentId && tagTaskIdSet.has(task.parentId)) {
     conflictingTaskIds.push(task.parentId);
   }
 
   // If this is a parent task, check if any sub-tasks are in the tag
   if (task.subTaskIds && task.subTaskIds.length > 0) {
-    const subTasksInTag = task.subTaskIds.filter((subId) => tag.taskIds.includes(subId));
+    const subTasksInTag = task.subTaskIds.filter((subId) => tagTaskIdSet.has(subId));
     conflictingTaskIds.push(...subTasksInTag);
   }
 
@@ -91,11 +97,12 @@ const removeConflictingTasksFromTag = (
     [TASK_FEATURE_NAME]: taskAdapter.updateMany(taskUpdates, state[TASK_FEATURE_NAME]),
   };
 
-  // Update the tag to remove conflicting tasks
+  // PERF: Use Set for O(1) lookups when filtering
+  const conflictingSet = new Set(conflictingTaskIds);
   const tagUpdate: Update<Tag> = {
     id: tagId,
     changes: {
-      taskIds: tag.taskIds.filter((id) => !conflictingTaskIds.includes(id)),
+      taskIds: tag.taskIds.filter((id) => !conflictingSet.has(id)),
     },
   };
 
@@ -114,10 +121,19 @@ const handleAddTask = (
 ): RootState => {
   let updatedState = state;
 
+  // Determine if task should be added to Today tag
+  const shouldAddToToday = task.dueDay === getDbDateStr();
+
   // Add task to task state
+  // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
+  // Membership is determined by task.dueDay, TODAY_TAG.taskIds only stores ordering
+  // See: docs/ai/today-tag-architecture.md
+  const taskTagIds = task.tagIds.filter((id) => id !== TODAY_TAG.id);
+
   const newTask: Task = {
     ...DEFAULT_TASK,
     ...task,
+    tagIds: taskTagIds,
     timeSpent: calcTotalTimeSpent(task.timeSpentOnDay || {}),
     projectId: task.projectId || '',
   };
@@ -141,12 +157,11 @@ const handleAddTask = (
     });
   }
 
-  // Update tags - only update tags that exist
-  const shouldAddToToday = task.dueDay === getDbDateStr();
-
+  // Update tags - only update regular tags that exist (not TODAY_TAG which is virtual)
+  // If shouldAddToToday, also add to TODAY_TAG's taskIds
   const tagIdsToUpdate = [
-    ...task.tagIds,
-    ...(shouldAddToToday ? [TODAY_TAG.id] : []),
+    ...newTask.tagIds, // Regular tags from task.tagIds
+    ...(shouldAddToToday ? [TODAY_TAG.id] : []), // Add TODAY_TAG if task is for today
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
   // First, handle conflicts for all tags
@@ -215,7 +230,9 @@ const handleConvertToMainTask = (
       id: task.id,
       changes: {
         parentId: undefined,
-        tagIds: [...parentTask.tagIds],
+        // Filter out TODAY_TAG.id - it's a virtual tag where membership is
+        // determined by task.dueDay, not by being in tagIds
+        tagIds: parentTask.tagIds.filter((id) => id !== TODAY_TAG.id),
         modified: Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
@@ -338,13 +355,14 @@ const handleDeleteTask = (
   }
 
   // Update tags - collect all affected tags and tasks to remove
-  // Only include tags that actually exist in the state to prevent errors
+  // Include TODAY_TAG.id explicitly since it's not stored in task.tagIds by design
   const potentialTagIds = [
-    TODAY_TAG.id, // always check today list
+    TODAY_TAG.id,
     ...task.tagIds,
     ...(task.subTasks || []).flatMap((st) => st.tagIds || []),
   ];
 
+  // Only include tags that actually exist in the state to prevent errors
   const affectedTagIds = unique(
     potentialTagIds.filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]),
   );
@@ -366,10 +384,17 @@ const handleDeleteTask = (
 const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
   let updatedState = state;
 
-  // Get all task IDs including subtasks
+  // Get all task IDs including subtasks, and collect project associations
+  const projectIdsSet = new Set<string>();
   const allIds = taskIds.reduce((acc: string[], id: string) => {
     const task = state[TASK_FEATURE_NAME].entities[id] as Task;
-    return task ? [...acc, id, ...task.subTaskIds] : [...acc, id];
+    if (task) {
+      if (task.projectId) {
+        projectIdsSet.add(task.projectId);
+      }
+      return [...acc, id, ...task.subTaskIds];
+    }
+    return [...acc, id];
   }, []);
 
   // Remove tasks from task state
@@ -385,23 +410,208 @@ const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
     },
   };
 
+  // Clean up projects - remove task IDs from all affected projects
+  const projectIds = Array.from(projectIdsSet);
+  if (projectIds.length > 0) {
+    const projectUpdates = projectIds
+      .filter((pid) => !!state[PROJECT_FEATURE_NAME].entities[pid])
+      .map((pid) => {
+        const project = getProject(state, pid);
+        return {
+          id: pid,
+          changes: {
+            taskIds: removeTasksFromList(project.taskIds, allIds),
+            backlogTaskIds: removeTasksFromList(project.backlogTaskIds, allIds),
+          },
+        };
+      });
+
+    if (projectUpdates.length > 0) {
+      updatedState = {
+        ...updatedState,
+        [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
+          projectUpdates,
+          updatedState[PROJECT_FEATURE_NAME],
+        ),
+      };
+    }
+  }
+
   // Only update tags that actually contain at least one of the tasks being deleted
+  // Use allIds (includes subtasks) to ensure subtask IDs are also removed from tags
+  // PERF: Use Set for O(1) lookup instead of O(n) Array.includes() - fixes O(n³) bottleneck
+  const allIdsSet = new Set(allIds);
   const affectedTags = (state[TAG_FEATURE_NAME].ids as string[]).filter((tagId) => {
     const tag = state[TAG_FEATURE_NAME].entities[tagId];
     if (!tag) return false;
-    return taskIds.some((taskId) => tag.taskIds.includes(taskId));
+    return tag.taskIds.some((taskId) => allIdsSet.has(taskId));
   });
 
   const tagUpdates = affectedTags.map(
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIds),
+        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, allIds),
       },
     }),
   );
 
   return updateTags(updatedState, tagUpdates);
+};
+
+/**
+ * Merges restored task IDs into a current array at their original positions.
+ * This preserves any new tasks added after the delete while restoring the
+ * deleted tasks at their original positions.
+ */
+const mergeTaskIdsAtPositions = (
+  capturedArray: string[],
+  currentArray: string[],
+  taskIdsToRestore: string[],
+): string[] => {
+  const result = [...currentArray];
+  // PERF: Use Set for O(1) lookup instead of O(n) Array.includes()
+  const resultSet = new Set(currentArray);
+
+  for (const taskId of taskIdsToRestore) {
+    // Skip if already in current array
+    if (resultSet.has(taskId)) {
+      continue;
+    }
+
+    // Find original position in captured array
+    const capturedIndex = capturedArray.indexOf(taskId);
+    if (capturedIndex === -1) {
+      // Not found in captured array, append to end
+      result.push(taskId);
+    } else {
+      // Insert at the original position, clamped to array bounds
+      const insertIndex = Math.min(capturedIndex, result.length);
+      result.splice(insertIndex, 0, taskId);
+    }
+    // Track the added ID for subsequent iterations
+    resultSet.add(taskId);
+  }
+
+  return result;
+};
+
+/**
+ * Restores a deleted task with all its associations.
+ * This is the sync-aware version of undo delete - the payload contains
+ * all data needed to restore the task on any device.
+ *
+ * IMPORTANT: This uses MERGE semantics, not REPLACE. Any tasks added
+ * between delete and restore are preserved.
+ */
+const handleRestoreDeletedTask = (
+  state: RootState,
+  payload: ReturnType<typeof TaskSharedActions.restoreDeletedTask>,
+): RootState => {
+  const { deletedTaskEntities, tagTaskIdMap, projectContext, parentContext } = payload;
+  const restoredTaskIds = Object.keys(deletedTaskEntities);
+  let updatedState = state;
+
+  // 1. Restore task entities with updated modified timestamp
+  const tasksToRestore = Object.values(deletedTaskEntities)
+    .filter((task): task is Task => !!task)
+    .map((task) => ({
+      ...task,
+      modified: Date.now(),
+    }));
+
+  updatedState = {
+    ...updatedState,
+    [TASK_FEATURE_NAME]: taskAdapter.addMany(
+      tasksToRestore,
+      updatedState[TASK_FEATURE_NAME],
+    ),
+  };
+
+  // 2. Restore parent-child relationships (if task was a subtask)
+  if (parentContext) {
+    const parent = updatedState[TASK_FEATURE_NAME].entities[parentContext.parentTaskId];
+    if (parent) {
+      const currentSubTaskIds = parent.subTaskIds || [];
+      const mergedSubTaskIds = mergeTaskIdsAtPositions(
+        parentContext.subTaskIds,
+        currentSubTaskIds,
+        restoredTaskIds,
+      );
+      updatedState = {
+        ...updatedState,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: parentContext.parentTaskId,
+            changes: { subTaskIds: mergedSubTaskIds },
+          },
+          updatedState[TASK_FEATURE_NAME],
+        ),
+      };
+    }
+  }
+
+  // 3. Restore tag associations (only for tags that still exist)
+  const tagUpdates = Object.entries(tagTaskIdMap)
+    .filter(([tagId]) => !!updatedState[TAG_FEATURE_NAME].entities[tagId])
+    .map(([tagId, capturedTaskIds]): Update<Tag> => {
+      const currentTag = updatedState[TAG_FEATURE_NAME].entities[tagId] as Tag;
+      const currentTaskIds = currentTag?.taskIds || [];
+      // Only restore task IDs that were actually in this tag at delete time
+      const taskIdsToRestoreForTag = restoredTaskIds.filter((id) =>
+        capturedTaskIds.includes(id),
+      );
+      const mergedTaskIds = mergeTaskIdsAtPositions(
+        capturedTaskIds,
+        currentTaskIds,
+        taskIdsToRestoreForTag,
+      );
+      return {
+        id: tagId,
+        changes: { taskIds: mergedTaskIds },
+      };
+    });
+
+  if (tagUpdates.length > 0) {
+    updatedState = updateTags(updatedState, tagUpdates);
+  }
+
+  // 4. Restore project associations (if project still exists)
+  if (projectContext) {
+    const project = updatedState[PROJECT_FEATURE_NAME].entities[
+      projectContext.projectId
+    ] as Project;
+    if (project) {
+      const currentTaskIds = project.taskIds || [];
+      const currentBacklogTaskIds = project.backlogTaskIds || [];
+
+      // Only restore to one list - check which one the task was in
+      const mainTaskId = payload.task.id;
+      const wasInBacklog = projectContext.taskIdsForProjectBacklog.includes(mainTaskId);
+
+      if (wasInBacklog) {
+        const mergedBacklogTaskIds = mergeTaskIdsAtPositions(
+          projectContext.taskIdsForProjectBacklog,
+          currentBacklogTaskIds,
+          [mainTaskId],
+        );
+        updatedState = updateProject(updatedState, projectContext.projectId, {
+          backlogTaskIds: mergedBacklogTaskIds,
+        });
+      } else {
+        const mergedTaskIds = mergeTaskIdsAtPositions(
+          projectContext.taskIdsForProject,
+          currentTaskIds,
+          [mainTaskId],
+        );
+        updatedState = updateProject(updatedState, projectContext.projectId, {
+          taskIds: mergedTaskIds,
+        });
+      }
+    }
+  }
+
+  return updatedState;
 };
 
 const handleUpdateTask = (
@@ -458,12 +668,17 @@ const handleTagUpdates = (
   oldTagIds: string[],
   newTagIds: string[],
 ): RootState => {
+  // PERF: Use Sets for O(1) lookups instead of O(n) Array.includes()
+  const oldTagIdSet = new Set(oldTagIds);
+  const newTagIdSet = new Set(newTagIds);
+  // Filter TODAY_TAG from both sides - it's a virtual tag where membership is
+  // determined by task.dueDay, not by being in tagIds
   const tagsToRemoveFrom = oldTagIds
-    .filter((oldId) => !newTagIds.includes(oldId))
+    .filter((oldId) => !newTagIdSet.has(oldId))
+    .filter((oldId) => oldId !== TODAY_TAG.id)
     .filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]); // Only existing tags
   const tagsToAddTo = newTagIds
-    .filter((newId) => !oldTagIds.includes(newId))
-    // always filter TODAY_TAG
+    .filter((newId) => !oldTagIdSet.has(newId))
     .filter((newId) => newId !== TODAY_TAG.id)
     .filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]); // Only existing tags
 
@@ -519,6 +734,12 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   [TaskSharedActions.deleteTasks.type]: () => {
     const { taskIds } = action as ReturnType<typeof TaskSharedActions.deleteTasks>;
     return handleDeleteTasks(state, taskIds);
+  },
+  [TaskSharedActions.restoreDeletedTask.type]: () => {
+    return handleRestoreDeletedTask(
+      state,
+      action as ReturnType<typeof TaskSharedActions.restoreDeletedTask>,
+    );
   },
   [TaskSharedActions.updateTask.type]: () => {
     const { task, isIgnoreShortSyntax } = action as ReturnType<

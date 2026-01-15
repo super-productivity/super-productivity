@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import { ConfigFormSection, DominaModeConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 import { speak } from '../../../util/speak';

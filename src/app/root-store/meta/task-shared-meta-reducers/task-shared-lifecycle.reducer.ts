@@ -32,48 +32,63 @@ import {
 const handleMoveToArchive = (state: RootState, tasks: TaskWithSubTasks[]): RootState => {
   const taskIdsToArchive = tasks.flatMap((t) => [t.id, ...t.subTasks.map((st) => st.id)]);
 
-  // Update projects
+  // Get tag/project associations from CURRENT STATE, not payload.
+  // This is critical for remote sync: the payload reflects the originating client's
+  // state, but this client may have different tag/project associations for the same tasks.
+  // Using current state ensures we clean up all references on THIS client.
   const projectIds = unique(
-    tasks.map((t) => t.projectId).filter((pid): pid is string => !!pid),
+    taskIdsToArchive
+      .map((taskId) => state[TASK_FEATURE_NAME].entities[taskId]?.projectId)
+      .filter((pid): pid is string => !!pid),
   );
 
   let updatedState = state;
 
   if (projectIds.length > 0) {
-    const projectUpdates = projectIds.map((pid): Update<Project> => {
-      const project = getProject(state, pid);
-      return {
-        id: pid,
-        changes: {
-          taskIds: removeTasksFromList(project.taskIds, taskIdsToArchive),
-          backlogTaskIds: removeTasksFromList(project.backlogTaskIds, taskIdsToArchive),
-        },
-      };
-    });
+    const projectUpdates = projectIds
+      .filter((pid) => !!state[PROJECT_FEATURE_NAME].entities[pid])
+      .map((pid): Update<Project> => {
+        const project = getProject(state, pid);
+        return {
+          id: pid,
+          changes: {
+            taskIds: removeTasksFromList(project.taskIds, taskIdsToArchive),
+            backlogTaskIds: removeTasksFromList(project.backlogTaskIds, taskIdsToArchive),
+          },
+        };
+      });
 
-    updatedState = {
-      ...updatedState,
-      [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
-        projectUpdates,
-        updatedState[PROJECT_FEATURE_NAME],
-      ),
-    };
+    if (projectUpdates.length > 0) {
+      updatedState = {
+        ...updatedState,
+        [PROJECT_FEATURE_NAME]: projectAdapter.updateMany(
+          projectUpdates,
+          updatedState[PROJECT_FEATURE_NAME],
+        ),
+      };
+    }
   }
 
-  // Update tags
+  // Get tag associations from CURRENT STATE for the same reason as above.
+  // Always include TODAY_TAG to ensure cleanup even if tasks aren't in it.
   const affectedTagIds = unique([
-    TODAY_TAG.id, // always cleanup today tag
-    ...tasks.flatMap((t) => [...t.tagIds, ...t.subTasks.flatMap((st) => st.tagIds)]),
+    TODAY_TAG.id,
+    ...taskIdsToArchive.flatMap((taskId) => {
+      const task = state[TASK_FEATURE_NAME].entities[taskId];
+      return task?.tagIds ?? [];
+    }),
   ]);
 
-  const tagUpdates = affectedTagIds.map(
-    (tagId): Update<Tag> => ({
-      id: tagId,
-      changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIdsToArchive),
-      },
-    }),
-  );
+  const tagUpdates = affectedTagIds
+    .filter((tagId) => !!state[TAG_FEATURE_NAME].entities[tagId])
+    .map(
+      (tagId): Update<Tag> => ({
+        id: tagId,
+        changes: {
+          taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIdsToArchive),
+        },
+      }),
+    );
 
   return updateTags(updatedState, tagUpdates);
 };

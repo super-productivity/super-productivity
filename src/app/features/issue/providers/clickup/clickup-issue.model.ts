@@ -11,7 +11,7 @@ export type ClickUpStatus = Readonly<{
 
 export type ClickUpUser = Readonly<{
   id: number;
-  username: string;
+  username?: string | null;
   color: string;
   email: string;
   profilePicture: string | null;
@@ -69,7 +69,7 @@ export type ClickUpTeamsResponse = Readonly<{
 export type ClickUpUserResponse = Readonly<{
   user: {
     id: number;
-    username: string;
+    username?: string | null;
     color: string;
     profilePicture: string | null;
   };

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { filter, map, switchMap, tap, withLatestFrom } from 'rxjs/operators';
+import { filter, map, mergeMap, switchMap, withLatestFrom } from 'rxjs/operators';
 import { Task } from '../task.model';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -9,29 +9,22 @@ import { TaskService } from '../task.service';
 import { EMPTY, Observable } from 'rxjs';
 import { moveProjectTaskToRegularList } from '../../project/store/project.actions';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
-import { TaskArchiveService } from '../../time-tracking/task-archive.service';
 import { Store } from '@ngrx/store';
-import { selectTodayTagTaskIds } from '../../tag/store/tag.reducer';
+import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 @Injectable()
 export class TaskRelatedModelEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
   private _globalConfigService = inject(GlobalConfigService);
   private _store = inject(Store);
-  private _taskArchiveService = inject(TaskArchiveService);
+  private _hydrationState = inject(HydrationStateService);
 
   // EFFECTS ===> EXTERNAL
   // ---------------------
-
-  restoreTask$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.restoreTask),
-        tap(({ task }) => this._removeFromArchive(task)),
-      ),
-    { dispatch: false },
-  );
 
   ifAutoAddTodayEnabled$ = <T>(obs: Observable<T>): Observable<T> =>
     this._globalConfigService.misc$.pipe(
@@ -42,7 +35,9 @@ export class TaskRelatedModelEffects {
     this.ifAutoAddTodayEnabled$(
       this._actions$.pipe(
         ofType(TimeTrackingActions.addTimeSpent),
-        withLatestFrom(this._store.select(selectTodayTagTaskIds)),
+        // PERF: Skip during hydration/sync to avoid selector evaluation overhead
+        filter(() => !this._hydrationState.isApplyingRemoteOps()),
+        withLatestFrom(this._store.select(selectTodayTaskIds)),
         filter(
           ([{ task }, todayTaskIds]) =>
             !todayTaskIds.includes(task.id) &&
@@ -62,8 +57,16 @@ export class TaskRelatedModelEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
         filter((a) => a.task.changes.isDone === true),
-        switchMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
-        filter((task: Task) => !task.parentId),
+        // PERF: Skip during hydration/sync to avoid service calls
+        filter(() => !this._hydrationState.isApplyingRemoteOps()),
+        // Use mergeMap instead of switchMap to ensure ALL mark-as-done actions
+        // trigger planTasksForToday, not just the last one. switchMap would cancel
+        // previous inner subscriptions when new actions arrive quickly.
+        mergeMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
+        // Skip if task is already scheduled for today (avoids no-op dispatch)
+        filter(
+          (task: Task) => !!task && !task.parentId && task.dueDay !== getDbDateStr(),
+        ),
         map((task) =>
           TaskSharedActions.planTasksForToday({
             taskIds: [task.id],
@@ -127,9 +130,4 @@ export class TaskRelatedModelEffects {
   //     }),
   //   ),
   // );
-
-  private async _removeFromArchive(task: Task): Promise<unknown> {
-    const taskIds = [task.id, ...task.subTaskIds];
-    return this._taskArchiveService.deleteTasks(taskIds);
-  }
 }

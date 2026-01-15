@@ -133,6 +133,26 @@ describe('ClickUpApiService', () => {
       expect(req.request.headers.get('Authorization')).toBe(mockCfg.apiKey!);
       req.flush(mockUserResponse);
     });
+
+    it('should handle null username correctly', () => {
+      const mockUserResponse = {
+        user: {
+          ...typia.random<ClickUpUserResponse['user']>(),
+          id: 124,
+          username: null,
+        },
+      };
+
+      service.getCurrentUser$(mockCfg).subscribe((user) => {
+        expect(user.user.username).toBeNull();
+        expect(user.user.id).toBe(124);
+      });
+
+      const req = httpMock.expectOne(
+        (request) => request.url === `${CLICKUP_API_URL}/user`,
+      );
+      req.flush(mockUserResponse);
+    });
   });
 
   describe('searchTasks$', () => {

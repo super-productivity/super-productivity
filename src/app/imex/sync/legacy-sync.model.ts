@@ -2,8 +2,6 @@ import { GlobalConfigState } from '../../features/config/global-config.model';
 import { TaskArchive, TaskState } from '../../features/tasks/task.model';
 import { Reminder } from '../../features/reminder/reminder.model';
 import { MetricState } from '../../features/metric/metric.model';
-import { ImprovementState } from '../../features/metric/improvement/improvement.model';
-import { ObstructionState } from '../../features/metric/obstruction/obstruction.model';
 import { TaskRepeatCfgState } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { TagState } from '../../features/tag/tag.model';
 import { SimpleCounterState } from '../../features/simple-counter/simple-counter.model';
@@ -22,10 +20,7 @@ export interface LegacyAppBaseData {
   globalConfig: GlobalConfigState;
   reminders: Reminder[];
 
-  // Metric models
   metric: MetricState;
-  improvement: ImprovementState;
-  obstruction: ObstructionState;
 
   task: TaskState;
   tag: TagState;
@@ -48,13 +43,11 @@ export interface LegacyAppDataForProjects {
 }
 
 export interface LegacyAppDataCompleteOptionalSyncModelChange
-  extends LegacyAppBaseData,
-    LegacyAppDataForProjects {
+  extends LegacyAppBaseData, LegacyAppDataForProjects {
   lastLocalSyncModelChange?: number | null;
 }
 
 export interface LegacyAppDataComplete
-  extends LegacyAppBaseData,
-    LegacyAppDataForProjects {
+  extends LegacyAppBaseData, LegacyAppDataForProjects {
   lastLocalSyncModelChange: number | null;
 }

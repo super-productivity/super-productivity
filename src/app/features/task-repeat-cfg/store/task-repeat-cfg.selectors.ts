@@ -89,6 +89,11 @@ export const selectTaskRepeatCfgsForExactDay = createSelector(
     return (
       taskRepeatCfgs &&
       taskRepeatCfgs.filter((taskRepeatCfg: TaskRepeatCfg) => {
+        // Skip paused repeat configs - they should not generate task instances
+        if (taskRepeatCfg.isPaused) {
+          return false;
+        }
+
         const effectiveLastDay = getEffectiveLastTaskCreationDay(taskRepeatCfg);
         if (
           effectiveLastDay === dateStr ||
@@ -124,6 +129,11 @@ export const selectAllUnprocessedTaskRepeatCfgs = createSelector(
     return (
       taskRepeatCfgs &&
       taskRepeatCfgs.filter((taskRepeatCfg: TaskRepeatCfg) => {
+        // Skip paused repeat configs - they should not generate task instances
+        if (taskRepeatCfg.isPaused) {
+          return false;
+        }
+
         const effectiveLastDay = getEffectiveLastTaskCreationDay(taskRepeatCfg);
         if (
           effectiveLastDay === dateStr ||

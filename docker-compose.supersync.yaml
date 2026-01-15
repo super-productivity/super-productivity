@@ -1,0 +1,7 @@
+# Docker Compose override for SuperSync E2E tests
+# Uses port 1901 so tests can run while dev server uses 1900
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d supersync
+services:
+  supersync:
+    ports: !override
+      - '1901:1900'

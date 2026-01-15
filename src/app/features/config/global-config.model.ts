@@ -107,6 +107,14 @@ export interface WebDavConfig {
   syncFolderPath?: string | null;
 }
 
+export interface SuperSyncConfig extends WebDavConfig {
+  accessToken?: string | null;
+  /** Whether E2E encryption is enabled (SuperSync-specific setting) */
+  isEncryptionEnabled?: boolean;
+  /** Encryption password (SuperSync-specific, stored in private config) */
+  encryptKey?: string | null;
+}
+
 export interface LocalFileSyncConfig {
   // TODO remove and migrate
   syncFilePath?: string | null;
@@ -145,11 +153,14 @@ export type SyncConfig = Readonly<{
   // TODO migrate to SyncProviderId
   syncProvider: LegacySyncProvider | null;
   syncInterval: number;
+  isManualSyncOnly?: boolean;
 
   /* NOTE: view model for form only*/
   encryptKey?: string | null;
   /* NOTE: view model for form only*/
   webDav?: WebDavConfig;
+  /* NOTE: view model for form only*/
+  superSync?: SuperSyncConfig;
   /* NOTE: view model for form only*/
   localFileSync?: LocalFileSyncConfig;
 }>;
@@ -169,6 +180,8 @@ export type ReminderConfig = Readonly<{
   defaultTaskRemindOption?: TaskReminderOptionId;
   disableReminders?: boolean;
   isFocusWindow?: boolean;
+  // Android only: use alarm-style notifications (louder, more intrusive)
+  useAlarmStyleReminders?: boolean;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{
@@ -234,14 +247,15 @@ export type GlobalSectionConfig =
   | SyncConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
-export interface LimitedFormlyFieldConfig<FormModel>
-  extends Omit<FormlyFieldConfig, 'key'> {
+export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
+  FormlyFieldConfig,
+  'key'
+> {
   key?: keyof FormModel;
 }
 
 export type CustomCfgSection =
   | 'FILE_IMPORT_EXPORT'
-  | 'SYNC_SAFETY_BACKUPS'
   | 'JIRA_CFG'
   | 'SIMPLE_COUNTER_CFG'
   | 'OPENPROJECT_CFG'
@@ -259,8 +273,10 @@ export interface ConfigFormSection<FormModel> {
   isHideForAndroidApp?: boolean;
 }
 
-export interface GenericConfigFormSection
-  extends Omit<ConfigFormSection<unknown>, 'items'> {
+export interface GenericConfigFormSection extends Omit<
+  ConfigFormSection<unknown>,
+  'items'
+> {
   items?: FormlyFieldConfig[];
 }
 

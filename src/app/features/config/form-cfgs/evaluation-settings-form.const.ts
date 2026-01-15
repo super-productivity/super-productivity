@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import { ConfigFormSection, EvaluationConfig } from '../global-config.model';
 import { T } from '../../../t.const';
 

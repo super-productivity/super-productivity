@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 import { TaskService } from '../../../tasks/task.service';
 import { concatMap, filter, map } from 'rxjs/operators';
 import { IssueService } from '../../issue.service';
@@ -15,7 +16,7 @@ import { assertTruthy } from '../../../../util/assert-truthy';
 
 @Injectable()
 export class CaldavIssueEffects {
-  private readonly _actions$ = inject(Actions);
+  private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _caldavClientService = inject(CaldavClientService);
   private readonly _issueService = inject(IssueService);
   private readonly _issueProviderService = inject(IssueProviderService);

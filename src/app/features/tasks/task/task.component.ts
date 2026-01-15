@@ -149,7 +149,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
   isTaskOnTodayList = computed(() =>
-    this._taskService.todayList().includes(this.task().id),
+    this._taskService.todayListSet().has(this.task().id),
   );
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
@@ -301,10 +301,11 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    // TODO remove
+    // Dev-time sanity check: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
+    // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
     if (!environment.production) {
       if (this.task().tagIds.includes(TODAY_TAG.id)) {
-        throw new Error('Task should not have today tag');
+        throw new Error('Task should not have TODAY_TAG in tagIds - it is a virtual tag');
       }
     }
 
@@ -678,7 +679,6 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this._store.dispatch(
       TaskSharedActions.unscheduleTask({
         id: this.task().id,
-        reminderId: this.task().reminderId,
       }),
     );
   }

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type,@typescript-eslint/naming-convention */
+/* eslint-disable @typescript-eslint/naming-convention */
 import { taskBatchUpdateMetaReducer } from './task-batch-update.reducer';
 import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';

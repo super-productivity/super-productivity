@@ -37,7 +37,6 @@ const maskString = (key: string, val: string, counter: number): string => {
 const recurse = (obj: unknown): void => {
   if (typeof obj !== 'object' || obj === null) return;
 
-  // eslint-disable-next-line guard-for-in
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       const val = (obj as Record<string, unknown>)[key];

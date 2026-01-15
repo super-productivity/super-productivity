@@ -15,7 +15,6 @@ const observableProto = (Observable as unknown as { prototype: ObservablePrototy
   .prototype;
 
 if (!observableProto.toPromise) {
-  // eslint-disable-next-line @typescript-eslint/unbound-method
   observableProto.toPromise = function <T>(this: Observable<T>): Promise<T> {
     return lastValueFrom(this);
   };

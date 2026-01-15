@@ -1,63 +1,72 @@
 import { RootState } from '../root-state';
 import { Dictionary } from '@ngrx/entity';
 import { Task, TaskWithSubTasks } from '../../features/tasks/task.model';
-import { undoDeleteTask } from '../../features/tasks/store/task.actions';
 import { TaskSharedActions } from './task-shared.actions';
-import {
-  PROJECT_FEATURE_NAME,
-  projectAdapter,
-} from '../../features/project/store/project.reducer';
+import { PROJECT_FEATURE_NAME } from '../../features/project/store/project.reducer';
 import { TASK_FEATURE_NAME } from '../../features/tasks/store/task.reducer';
-import { TAG_FEATURE_NAME, tagAdapter } from '../../features/tag/store/tag.reducer';
-import { taskAdapter } from '../../features/tasks/store/task.adapter';
+import { TAG_FEATURE_NAME } from '../../features/tag/store/tag.reducer';
 import { Project } from '../../features/project/project.model';
-import { Action, ActionReducer } from '@ngrx/store/src/models';
+import { Action, ActionReducer } from '@ngrx/store';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { Log } from '../../core/log';
 
-interface UndoTaskDeleteState {
-  // Project context
-  projectId?: string;
-  taskIdsForProject?: string[];
-  taskIdsForProjectBacklog?: string[];
+/**
+ * Payload structure for restoring a deleted task.
+ * Contains all data needed to restore task entities and their associations.
+ */
+export interface RestoreDeletedTaskPayload {
+  // The deleted task with its subtasks
+  task: TaskWithSubTasks;
 
-  // Parent-child relationship
-  parentTaskId?: string;
-  subTaskIds?: string[];
+  // Project context (if task was in a project)
+  projectContext?: {
+    projectId: string;
+    taskIdsForProject: string[];
+    taskIdsForProjectBacklog: string[];
+  };
 
-  // Tag associations (tagId -> taskIds)
+  // Parent-child relationship (if task was a subtask)
+  parentContext?: {
+    parentTaskId: string;
+    subTaskIds: string[];
+  };
+
+  // Tag associations (tagId -> taskIds array at time of deletion)
   tagTaskIdMap: Record<string, string[]>;
 
-  // Deleted tasks data
+  // All deleted task entities (main task + subtasks)
   deletedTaskEntities: Dictionary<Task>;
 }
 
-let undoState: UndoTaskDeleteState | null = null;
+let lastDeletePayload: RestoreDeletedTaskPayload | null = null;
 
+/**
+ * Gets and clears the last captured delete payload.
+ * Used by the snackbar effect to dispatch restoreDeletedTask with full data.
+ */
+export const getLastDeletePayload = (): RestoreDeletedTaskPayload | null => {
+  const payload = lastDeletePayload;
+  lastDeletePayload = null;
+  return payload;
+};
+
+/**
+ * Meta-reducer that captures task state before deletion.
+ * This runs before the main reducer, allowing us to capture project/tag context
+ * that would be lost after the delete reducer runs.
+ *
+ * The captured payload is retrieved via getLastDeletePayload() and used
+ * by the snackbar effect to dispatch restoreDeletedTask with full data.
+ */
 export const undoTaskDeleteMetaReducer = (
   reducer: ActionReducer<any, any>,
 ): ActionReducer<any, any> => {
   return (state: RootState, action: Action) => {
-    switch (action.type) {
-      case TaskSharedActions.deleteTask.type: {
-        const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
-        undoState = captureTaskDeleteState(state, task);
-        return reducer(state, action);
-      }
-
-      case undoDeleteTask.type: {
-        if (!undoState) {
-          return reducer(state, action);
-        }
-
-        const restoredState = restoreDeletedTasks(state, undoState);
-        undoState = null; // Clear after use
-        return reducer(restoredState, action);
-      }
-
-      default:
-        return reducer(state, action);
+    if (action.type === TaskSharedActions.deleteTask.type) {
+      const { task } = action as ReturnType<typeof TaskSharedActions.deleteTask>;
+      lastDeletePayload = captureTaskDeletePayload(state, task);
     }
+    return reducer(state, action);
   };
 };
 
@@ -105,20 +114,17 @@ const buildTagTaskIdMap = (
 /**
  * Captures project-specific data for a task deletion
  */
-const captureProjectData = (
+const captureProjectContext = (
   state: RootState,
   projectId: string | null,
-): Pick<
-  UndoTaskDeleteState,
-  'projectId' | 'taskIdsForProject' | 'taskIdsForProjectBacklog'
-> => {
+): RestoreDeletedTaskPayload['projectContext'] | undefined => {
   if (!projectId) {
-    return {};
+    return undefined;
   }
 
   const project = state[PROJECT_FEATURE_NAME].entities[projectId] as Project | undefined;
   if (!project) {
-    return {};
+    return undefined;
   }
 
   if (!project.taskIds || !project.backlogTaskIds) {
@@ -134,110 +140,36 @@ const captureProjectData = (
 };
 
 /**
- * Captures the complete state needed to undo a task deletion
+ * Captures the complete payload needed to restore a deleted task.
+ * Called by the meta-reducer before the delete reducer runs.
  */
-const captureTaskDeleteState = (
+const captureTaskDeletePayload = (
   state: RootState,
   task: TaskWithSubTasks,
-): UndoTaskDeleteState => {
+): RestoreDeletedTaskPayload => {
   const deletedTaskEntities = createDeletedTaskEntities(task);
   const allDeletedTasks = [task, ...(task.subTasks || [])];
   const tagTaskIdMap = buildTagTaskIdMap(state, allDeletedTasks);
 
-  // Handle subtask deletion
+  // Handle subtask deletion - capture parent context
   if (task.parentId) {
     const parentTask = state[TASK_FEATURE_NAME].entities[task.parentId];
     return {
-      parentTaskId: task.parentId,
-      subTaskIds: parentTask?.subTaskIds || [],
+      task,
+      parentContext: {
+        parentTaskId: task.parentId,
+        subTaskIds: parentTask?.subTaskIds || [],
+      },
       tagTaskIdMap,
       deletedTaskEntities,
     };
   }
 
-  // Handle main task deletion
+  // Handle main task deletion - capture project context
   return {
-    ...captureProjectData(state, task.projectId),
+    task,
+    projectContext: captureProjectContext(state, task.projectId),
     tagTaskIdMap,
     deletedTaskEntities,
   };
-};
-
-/**
- * Restores deleted tasks to the state
- */
-const restoreDeletedTasks = (
-  state: RootState,
-  savedState: UndoTaskDeleteState,
-): RootState => {
-  let updatedState = state;
-
-  // 1. Restore task entities
-  const tasksToRestore = Object.values(savedState.deletedTaskEntities).filter(
-    (task): task is Task => !!task,
-  );
-
-  updatedState = {
-    ...updatedState,
-    [TASK_FEATURE_NAME]: taskAdapter.addMany(
-      tasksToRestore,
-      updatedState[TASK_FEATURE_NAME],
-    ),
-  };
-
-  // 2. Restore parent-child relationships
-  if (savedState.parentTaskId && savedState.subTaskIds) {
-    updatedState = {
-      ...updatedState,
-      [TASK_FEATURE_NAME]: taskAdapter.updateOne(
-        {
-          id: savedState.parentTaskId,
-          changes: { subTaskIds: savedState.subTaskIds },
-        },
-        updatedState[TASK_FEATURE_NAME],
-      ),
-    };
-  }
-
-  // 3. Restore tag associations
-  const tagUpdates = Object.entries(savedState.tagTaskIdMap).map(([tagId, taskIds]) => ({
-    id: tagId,
-    changes: { taskIds },
-  }));
-
-  if (tagUpdates.length > 0) {
-    updatedState = {
-      ...updatedState,
-      [TAG_FEATURE_NAME]: tagAdapter.updateMany(
-        tagUpdates,
-        updatedState[TAG_FEATURE_NAME],
-      ),
-    };
-  }
-
-  // 4. Restore project associations
-  if (savedState.projectId) {
-    const projectChanges: { taskIds?: string[]; backlogTaskIds?: string[] } = {};
-    if (savedState.taskIdsForProject) {
-      projectChanges.taskIds = savedState.taskIdsForProject;
-    }
-    if (savedState.taskIdsForProjectBacklog) {
-      projectChanges.backlogTaskIds = savedState.taskIdsForProjectBacklog;
-    }
-
-    if (Object.keys(projectChanges).length > 0) {
-      updatedState = {
-        ...updatedState,
-        [PROJECT_FEATURE_NAME]: projectAdapter.updateOne(
-          {
-            id: savedState.projectId,
-            changes: projectChanges,
-          },
-          updatedState[PROJECT_FEATURE_NAME],
-        ),
-      };
-    }
-  }
-
-  return updatedState;
 };

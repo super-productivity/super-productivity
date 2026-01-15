@@ -117,6 +117,14 @@ test.describe('WebDAV Sync Error Handling', () => {
       await pageA.waitForTimeout(500);
     }
 
+    // Dismiss any open dialogs that might be blocking
+    const dialogBackdrop = pageA.locator('.cdk-overlay-backdrop');
+    if (await dialogBackdrop.isVisible({ timeout: 500 }).catch(() => false)) {
+      // Press Escape to close any open dialogs
+      await pageA.keyboard.press('Escape');
+      await pageA.waitForTimeout(500);
+    }
+
     // Sync should work again
     await syncPageA.triggerSync();
 

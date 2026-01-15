@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { PlannerActions } from './planner.actions';
 import { filter, tap } from 'rxjs/operators';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -11,7 +12,7 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 
 @Injectable()
 export class PlannerEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _snackService = inject(SnackService);
   private _plannerService = inject(PlannerService);
   private _datePipe = inject(LocaleDatePipe);

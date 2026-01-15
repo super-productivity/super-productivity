@@ -194,7 +194,8 @@ class JavaScriptInterface(
         relatedId: String,
         title: String,
         reminderType: String,
-        triggerAtMs: Long
+        triggerAtMs: Long,
+        useAlarmStyle: Boolean
     ) {
         safeCall("Failed to schedule native reminder") {
             ReminderNotificationHelper.scheduleReminder(
@@ -204,7 +205,8 @@ class JavaScriptInterface(
                 relatedId,
                 title,
                 reminderType,
-                triggerAtMs
+                triggerAtMs,
+                useAlarmStyle
             )
         }
     }

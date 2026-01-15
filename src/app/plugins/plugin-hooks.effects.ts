@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
 import { filter, map, switchMap, take, tap, withLatestFrom } from 'rxjs/operators';
 import { EMPTY } from 'rxjs';
@@ -33,11 +33,12 @@ import {
   moveTaskToTopInTodayList,
   moveTaskUpInTodayList,
 } from '../features/work-context/store/work-context-meta.actions';
+import { LOCAL_ACTIONS } from '../util/local-actions.token';
 import { PlannerActions } from '../features/planner/store/planner.actions';
 
 @Injectable()
 export class PluginHooksEffects {
-  private readonly actions$ = inject(Actions);
+  private readonly actions$ = inject(LOCAL_ACTIONS);
   private readonly store = inject(Store);
   private readonly pluginService = inject(PluginService);
 

@@ -11,6 +11,7 @@ import {
 import { MatMenuTrigger } from '@angular/material/menu';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { Subscription } from 'rxjs';
+import { lastMenuOpenTime, setLastMenuOpenTime } from './mat-menu-touch-monkey-patch';
 
 /**
  * Directive to fix Angular Material menu submenu automatic selection on touch devices.
@@ -38,6 +39,7 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   private _subscription?: Subscription;
   private _touchStartX: number = 0;
   private _touchStartY: number = 0;
+  private _capturingClickHandler?: (event: MouseEvent) => void;
 
   ngOnInit(): void {
     if (!this._isTouchDevice) {
@@ -59,10 +61,48 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
     if (element.hasAttribute('matMenuTriggerFor')) {
       this._renderer.setStyle(element, 'touch-action', 'manipulation');
     }
+
+    // CRITICAL: Add capturing phase listener to intercept clicks BEFORE Angular template bindings
+    // This is necessary because Angular's (click) bindings fire before @HostListener('click')
+    this._capturingClickHandler = this._onCapturingClick.bind(this);
+    element.addEventListener('click', this._capturingClickHandler, true); // true = capturing phase
   }
 
   ngOnDestroy(): void {
     this._subscription?.unsubscribe();
+
+    // Clean up capturing phase listener
+    if (this._capturingClickHandler) {
+      this._elementRef.nativeElement.removeEventListener(
+        'click',
+        this._capturingClickHandler,
+        true,
+      );
+    }
+  }
+
+  /**
+   * Capturing phase click handler - runs BEFORE Angular template bindings.
+   * This is the key to preventing immediate clicks when submenu opens under finger.
+   */
+  private _onCapturingClick(event: MouseEvent): void {
+    const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
+    const timeSinceTouchStart = Date.now() - this._touchStartTime;
+
+    // Block clicks that happen too quickly after any menu/submenu opened
+    // This prevents accidental selection when submenu appears under finger
+    if (event.isTrusted && lastMenuOpenTime > 0 && timeSinceMenuOpen < 350) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    // Also block if touch just started (immediate taps)
+    if (event.isTrusted && timeSinceTouchStart < 100) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
   }
 
   @HostListener('touchstart', ['$event'])
@@ -136,6 +176,9 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   }
 
   private _applyTouchFix(): void {
+    // Record when the menu opened - shared via monkey patch module
+    setLastMenuOpenTime(Date.now());
+
     // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
       // Find the menu panel that just opened

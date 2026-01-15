@@ -209,4 +209,50 @@ export class TagPage extends BasePage {
     const tag = this.getTagOnTask(task, tagName);
     return tag.isVisible({ timeout: 2000 }).catch(() => false);
   }
+
+  /**
+   * Deletes a tag via the sidebar context menu
+   */
+  async deleteTag(tagName: string): Promise<void> {
+    // Ensure Tags section is expanded
+    const tagsGroupBtn = this.tagsGroup
+      .locator('.g-multi-btn-wrapper nav-item button')
+      .first();
+    await tagsGroupBtn.waitFor({ state: 'visible', timeout: 5000 });
+
+    const isExpanded = await tagsGroupBtn.getAttribute('aria-expanded');
+    if (isExpanded !== 'true') {
+      await tagsGroupBtn.click();
+      await this.page.waitForTimeout(500);
+    }
+
+    // Find the tag in the sidebar
+    const tagTreeItem = this.tagsGroup
+      .locator('[role="treeitem"]')
+      .filter({ hasText: tagName })
+      .first();
+    await tagTreeItem.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Right-click to open context menu
+    await tagTreeItem.click({ button: 'right' });
+
+    // Click delete option - look for "Delete Tag" text
+    const deleteBtn = this.page
+      .locator('.mat-mdc-menu-content button')
+      .filter({ hasText: /delete/i })
+      .first();
+    await deleteBtn.waitFor({ state: 'visible', timeout: 3000 });
+    await deleteBtn.click();
+
+    // Handle confirmation dialog
+    const confirmDialog = this.page.locator('dialog-confirm');
+    await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
+    // Click "Ok" button to confirm deletion
+    const confirmBtn = confirmDialog.locator('button').filter({ hasText: /ok/i });
+    await confirmBtn.click();
+    await confirmDialog.waitFor({ state: 'hidden', timeout: 3000 });
+
+    // Wait for tag to be removed from sidebar
+    await tagTreeItem.waitFor({ state: 'hidden', timeout: 5000 });
+  }
 }

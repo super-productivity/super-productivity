@@ -29,7 +29,8 @@ export const CLICKUP_ISSUE_CONTENT_CONFIG: IssueContentConfig<ClickUpTask> = {
     {
       label: T.F.ISSUE.ISSUE_CONTENT.ASSIGNEE,
       type: IssueFieldType.TEXT,
-      value: (issue: ClickUpTask) => issue.assignees?.map((a) => a.username).join(', '),
+      value: (issue: ClickUpTask) =>
+        issue.assignees?.map((a) => a.username || a.email || 'Unknown').join(', '),
       isVisible: (issue: ClickUpTask) => (issue.assignees?.length ?? 0) > 0,
     },
     {

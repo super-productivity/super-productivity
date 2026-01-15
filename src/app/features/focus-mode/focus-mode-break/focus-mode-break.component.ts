@@ -1,10 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { MatButtonModule } from '@angular/material/button';
+import { MatButtonModule, MatIconButton } from '@angular/material/button';
+import { MatTooltip } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FocusModeService } from '../focus-mode.service';
 import { MsToClockStringPipe } from '../../../ui/duration/ms-to-clock-string.pipe';
 import { Store } from '@ngrx/store';
-import { completeBreak, skipBreak } from '../store/focus-mode.actions';
+import {
+  completeBreak,
+  exitBreakToPlanning,
+  pauseFocusSession,
+  skipBreak,
+  unPauseFocusSession,
+} from '../store/focus-mode.actions';
 import { selectPausedTaskId } from '../store/focus-mode.selectors';
 import { MatIcon } from '@angular/material/icon';
 import { T } from '../../../t.const';
@@ -17,7 +24,9 @@ import { toSignal } from '@angular/core/rxjs-interop';
   standalone: true,
   imports: [
     MatButtonModule,
+    MatIconButton,
     MatProgressSpinnerModule,
+    MatTooltip,
     MsToClockStringPipe,
     MatIcon,
     TranslatePipe,
@@ -49,11 +58,25 @@ export class FocusModeBreakComponent {
       : T.F.FOCUS_MODE.SHORT_BREAK,
   );
 
+  readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
+
   skipBreak(): void {
     this._store.dispatch(skipBreak({ pausedTaskId: this._pausedTaskId() }));
   }
 
   completeBreak(): void {
     this._store.dispatch(completeBreak({ pausedTaskId: this._pausedTaskId() }));
+  }
+
+  pauseBreak(): void {
+    this._store.dispatch(pauseFocusSession({ pausedTaskId: this._pausedTaskId() }));
+  }
+
+  resumeBreak(): void {
+    this._store.dispatch(unPauseFocusSession());
+  }
+
+  exitToPlanning(): void {
+    this._store.dispatch(exitBreakToPlanning({ pausedTaskId: this._pausedTaskId() }));
   }
 }

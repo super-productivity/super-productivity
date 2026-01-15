@@ -51,8 +51,19 @@ export const completeBreak = createAction(
   props<{ pausedTaskId?: string | null }>(),
 );
 
+export const exitBreakToPlanning = createAction(
+  '[FocusMode] Exit Break To Planning',
+  props<{ pausedTaskId?: string | null }>(),
+);
+
 export const incrementCycle = createAction('[FocusMode] Next Cycle');
 export const resetCycles = createAction('[FocusMode] Reset Cycles');
+
+// Store pausedTaskId without pausing the session (for manual break scenarios)
+export const setPausedTaskId = createAction(
+  '[FocusMode] Set Paused Task Id',
+  props<{ pausedTaskId: string | null }>(),
+);
 
 // Additional compatibility actions
 export const setFocusSessionDuration = createAction(

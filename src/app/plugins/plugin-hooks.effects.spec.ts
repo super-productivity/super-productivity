@@ -141,7 +141,6 @@ describe('PluginHooksEffects', () => {
       actions$ = of(
         TaskSharedActions.unscheduleTask({
           id: mockTask.id,
-          reminderId: 'reminder-1',
         }),
       );
 

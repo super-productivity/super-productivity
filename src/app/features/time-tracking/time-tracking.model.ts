@@ -1,5 +1,7 @@
 // Base mapped types with clearer names
-import { TaskArchive } from '../tasks/task.model';
+
+// Re-export ArchiveModel for backward compatibility
+export { ArchiveModel } from '../archive/archive.model';
 
 export type TTModelId = string;
 export type TTDate = string;
@@ -53,14 +55,6 @@ export interface TimeTrackingState {
   project: TTWorkContextSessionMap;
   tag: TTWorkContextSessionMap;
   // somehow can't be optional for ngrx
-}
-
-// Archive model
-export interface ArchiveModel {
-  // should not be written apart from flushing!
-  timeTracking: TimeTrackingState;
-  task: TaskArchive;
-  lastTimeTrackingFlush: number;
 }
 
 export const isWorkContextData = (obj: unknown): obj is TTWorkContextData =>

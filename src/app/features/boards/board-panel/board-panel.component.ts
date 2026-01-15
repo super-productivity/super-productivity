@@ -333,15 +333,9 @@ export class BoardPanelComponent {
       }
     }
     if (panelCfg.scheduledState === BoardPanelCfgScheduledState.NotScheduled) {
-      const task = await this.store
-        .select(selectTaskById, { id: taskId })
-        .pipe(first())
-        .toPromise();
-
       this.store.dispatch(
         TaskSharedActions.unscheduleTask({
           id: taskId,
-          reminderId: task.reminderId,
           isSkipToast: false,
         }),
       );

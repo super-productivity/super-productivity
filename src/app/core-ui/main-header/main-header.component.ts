@@ -33,7 +33,7 @@ import { LongPressDirective } from '../../ui/longpress/longpress.directive';
 import { isOnline$ } from '../../util/is-online';
 import { Store } from '@ngrx/store';
 import { showFocusOverlay } from '../../features/focus-mode/store/focus-mode.actions';
-import { SyncStatus } from '../../pfapi/api';
+import { SyncStatus } from '../../op-log/sync-exports';
 import { PluginHeaderBtnsComponent } from '../../plugins/ui/plugin-header-btns.component';
 import { PluginSidePanelBtnsComponent } from '../../plugins/ui/plugin-side-panel-btns.component';
 import { PageTitleComponent } from './page-title/page-title.component';
@@ -141,6 +141,13 @@ export class MainHeaderComponent implements OnDestroy {
   syncIsEnabledAndReady = toSignal(this.syncWrapperService.isEnabledAndReady$);
   syncState = toSignal(this.syncWrapperService.syncState$);
   isSyncInProgress = toSignal(this.syncWrapperService.isSyncInProgress$);
+  hasNoPendingOps = toSignal(this.syncWrapperService.hasNoPendingOps$, {
+    initialValue: false,
+  });
+  superSyncIsConfirmedInSync = toSignal(
+    this.syncWrapperService.superSyncIsConfirmedInSync$,
+    { initialValue: false },
+  );
   focusModeConfig = toSignal(
     this.globalConfigService.cfg$.pipe(map((cfg) => cfg?.focusMode)),
   );

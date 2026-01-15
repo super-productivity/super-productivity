@@ -45,3 +45,13 @@
   <mat-icon>cloud_download</mat-icon>
   {{ T.FILE_IMEX.OPEN_IMPORT_FROM_URL_DIALOG | translate }}
 </button>
+
+<button
+  (click)="openArchiveCompression()"
+  color="primary"
+  mat-stroked-button
+  type="button"
+>
+  <mat-icon>compress</mat-icon>
+  {{ T.FILE_IMEX.BTN_COMPRESS_ARCHIVE | translate }}
+</button>

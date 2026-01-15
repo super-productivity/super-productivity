@@ -1,13 +1,12 @@
 import { inject, Injectable } from '@angular/core';
-import { NoteService } from './note.service';
 import { BannerService } from '../../core/banner/banner.service';
 import { BannerId } from '../../core/banner/banner.model';
 import { take } from 'rxjs/operators';
-import { Note } from './note.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { devError } from '../../util/dev-error';
 import { T } from '../../t.const';
+import { MetricService } from '../metric/metric.service';
 
 interface LastViewedNote {
   noteId: string;
@@ -16,34 +15,29 @@ interface LastViewedNote {
 
 @Injectable({ providedIn: 'root' })
 export class NoteStartupBannerService {
-  private readonly _noteService = inject(NoteService);
+  private readonly _metricService = inject(MetricService);
   private readonly _bannerService = inject(BannerService);
 
   async showLastNoteIfNeeded(): Promise<void> {
-    const notes = await this._noteService.notes$.pipe(take(1)).toPromise();
-    if (!notes?.length) {
-      return;
-    }
-
-    const latestNote = this._getLatestNote(notes);
-    if (!latestNote) {
-      return;
-    }
-
     const todayStr = getDbDateStr();
-    const createdDay = getDbDateStr(latestNote.created);
+    const metric = await this._metricService
+      .getMetricForDay$(todayStr)
+      .pipe(take(1))
+      .toPromise();
 
-    if (todayStr > createdDay) {
+    const reflection = metric?.reflections?.[0];
+    if (!reflection?.text?.trim()) {
       return;
     }
 
     const lastViewed = this._getLastViewedNote();
-    if (lastViewed?.noteId === latestNote.id && lastViewed.day === todayStr) {
+    // Use metric.id (date string) as the identifier for tracking
+    if (lastViewed?.noteId === metric.id && lastViewed.day === todayStr) {
       return;
     }
 
-    const content = this._getContent(latestNote.content);
-    const createdDate = new Date(latestNote.created).toLocaleDateString();
+    const content = this._getContent(reflection.text);
+    const createdDate = new Date(reflection.created).toLocaleDateString();
 
     this._bannerService.open({
       id: BannerId.StartupNote,
@@ -55,7 +49,7 @@ export class NoteStartupBannerService {
       },
       action: {
         label: T.F.REFLECTION_NOTE.ACTION_DISMISS,
-        fn: () => this._setLastViewed(latestNote.id, todayStr),
+        fn: () => this._setLastViewed(metric.id, todayStr),
       },
       isHideDismissBtn: true,
     });
@@ -63,15 +57,6 @@ export class NoteStartupBannerService {
 
   private _getContent(content: string): string {
     return content.replace(/\s+/g, ' ').trim();
-  }
-
-  private _getLatestNote(notes: Note[]): Note | undefined {
-    return notes.reduce<Note | undefined>((acc, note) => {
-      if (!acc) {
-        return note;
-      }
-      return note.created > acc.created ? note : acc;
-    }, undefined);
   }
 
   private _getLastViewedNote(): LastViewedNote | null {

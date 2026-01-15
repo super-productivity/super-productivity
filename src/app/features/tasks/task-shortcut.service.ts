@@ -116,6 +116,11 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskUnschedule)) {
+      this._handleTaskShortcut(focusedTaskId, 'unschedule');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskToggleDone)) {
       this._handleTaskShortcut(focusedTaskId, 'toggleDoneKeyboard');
       ev.preventDefault();

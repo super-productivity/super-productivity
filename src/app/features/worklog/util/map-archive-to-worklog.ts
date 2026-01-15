@@ -13,6 +13,7 @@ import {
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { WorkStartEnd } from '../../work-context/work-context.model';
 import { formatDayStr } from '../../../util/format-day-str';
+import { sortWorklogEntriesAlphabetically } from './sort-worklog-entries';
 
 // Provides defaults to display tasks without time spent on them
 const _getTimeSpentOnDay = (entities: any, task: Task): { [key: string]: number } => {
@@ -119,6 +120,19 @@ export const mapArchiveToWorklog = (
       } else {
         worklog[year].ent[month].ent[day].logEntries.push(newItem);
       }
+    });
+  });
+
+  // Sort log entries alphabetically with parent/subtask grouping
+  Object.keys(worklog).forEach((yearIN: string) => {
+    const year: WorklogYear = worklog[yearIN as any];
+    Object.keys(year.ent).forEach((monthIN: string) => {
+      const month: WorklogMonth = year.ent[monthIN as any];
+      Object.keys(month.ent).forEach((dayIN: string) => {
+        month.ent[dayIN as any].logEntries = sortWorklogEntriesAlphabetically(
+          month.ent[dayIN as any].logEntries,
+        );
+      });
     });
   });
 

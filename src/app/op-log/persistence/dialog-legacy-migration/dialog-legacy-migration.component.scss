@@ -1,0 +1,45 @@
+.intro {
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.status-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--mdc-dialog-subhead-color, rgba(0, 0, 0, 0.04));
+  border-radius: 8px;
+}
+
+.status-text {
+  font-size: 1rem;
+}
+
+.success-icon {
+  color: var(--palette-green-500, #4caf50);
+  font-size: 32px;
+  width: 32px;
+  height: 32px;
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 1rem;
+
+  mat-icon {
+    color: var(--palette-red-500, #f44336);
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+  }
+}
+
+.error-message {
+  color: var(--palette-red-700, #d32f2f);
+  line-height: 1.5;
+}

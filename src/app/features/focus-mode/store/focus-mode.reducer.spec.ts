@@ -384,6 +384,74 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
     });
+
+    it('should exit break to planning', () => {
+      const breakState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now(),
+          elapsed: 120000,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+        currentScreen: FocusScreen.Break,
+        pausedTaskId: 'task-123',
+      };
+
+      const action = a.exitBreakToPlanning({ pausedTaskId: 'task-123' });
+      const result = focusModeReducer(breakState, action);
+
+      expect(result.currentScreen).toBe(FocusScreen.Main);
+      expect(result.mainState).toBe(FocusMainUIState.Preparation);
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.purpose).toBeNull();
+      expect(result.pausedTaskId).toBeNull();
+    });
+
+    it('should exit paused break to planning', () => {
+      const pausedBreakState = {
+        ...initialState,
+        timer: {
+          isRunning: false,
+          startedAt: Date.now() - 60000,
+          elapsed: 60000,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+        currentScreen: FocusScreen.Break,
+        pausedTaskId: 'task-456',
+      };
+
+      const action = a.exitBreakToPlanning({ pausedTaskId: 'task-456' });
+      const result = focusModeReducer(pausedBreakState, action);
+
+      expect(result.currentScreen).toBe(FocusScreen.Main);
+      expect(result.mainState).toBe(FocusMainUIState.Preparation);
+      expect(result.timer.isRunning).toBe(false);
+      expect(result.timer.purpose).toBeNull();
+      expect(result.pausedTaskId).toBeNull();
+    });
+
+    it('should clear pausedTaskId when exiting break to planning', () => {
+      const breakState = {
+        ...initialState,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now(),
+          elapsed: 0,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+        currentScreen: FocusScreen.Break,
+        pausedTaskId: 'some-task',
+      };
+
+      const action = a.exitBreakToPlanning({ pausedTaskId: null });
+      const result = focusModeReducer(breakState, action);
+
+      expect(result.pausedTaskId).toBeNull();
+    });
   });
 
   describe('timer tick action', () => {
@@ -570,6 +638,32 @@ describe('FocusModeReducer', () => {
       const result = focusModeReducer(state, action);
 
       expect(result.currentCycle).toBe(1);
+    });
+  });
+
+  describe('setPausedTaskId (Bug #5954)', () => {
+    it('should set pausedTaskId', () => {
+      const action = a.setPausedTaskId({ pausedTaskId: 'task-123' });
+      const result = focusModeReducer(initialState, action);
+
+      expect(result.pausedTaskId).toBe('task-123');
+    });
+
+    it('should clear pausedTaskId when set to null', () => {
+      const state = { ...initialState, pausedTaskId: 'task-123' };
+      const action = a.setPausedTaskId({ pausedTaskId: null });
+      const result = focusModeReducer(state, action);
+
+      expect(result.pausedTaskId).toBeNull();
+    });
+
+    it('should preserve other state when setting pausedTaskId', () => {
+      const state = { ...initialState, currentCycle: 3, pausedTaskId: 'old-task' };
+      const action = a.setPausedTaskId({ pausedTaskId: 'new-task' });
+      const result = focusModeReducer(state, action);
+
+      expect(result.pausedTaskId).toBe('new-task');
+      expect(result.currentCycle).toBe(3);
     });
   });
 

@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -43,7 +44,7 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
     TranslatePipe,
   ],
 })
-export class DialogFullscreenMarkdownComponent {
+export class DialogFullscreenMarkdownComponent implements AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
   data: { content: string } = inject(MAT_DIALOG_DATA) || { content: '' };
@@ -88,6 +89,11 @@ export class DialogFullscreenMarkdownComponent {
           this.close();
         }
       });
+  }
+
+  ngAfterViewInit(): void {
+    // Focus textarea if present (not in PARSED view mode)
+    this.textareaEl()?.nativeElement?.focus();
   }
 
   keydownHandler(ev: KeyboardEvent): void {

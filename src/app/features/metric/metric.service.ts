@@ -15,7 +15,6 @@ import {
   selectMetricHasData,
   selectFocusSessionLineChartData,
   selectFocusSessionsByDay,
-  selectProductivityHappinessLineChartData,
   selectSimpleCounterClickCounterLineChartData,
   selectSimpleCounterStopWatchLineChartData,
   selectLastNDaysMetrics,
@@ -129,10 +128,6 @@ export class MetricService {
   }
 
   // STATISTICS
-  getProductivityHappinessChartData$(howMany: number = 60): Observable<LineChartData> {
-    return this._store$.select(selectProductivityHappinessLineChartData, { howMany });
-  }
-
   getSimpleClickCounterMetrics$(howMany: number = 60): Observable<LineChartData> {
     return this._store$.select(selectSimpleCounterClickCounterLineChartData, { howMany });
   }

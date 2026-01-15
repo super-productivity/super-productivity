@@ -19,6 +19,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { CdkDrag, CdkDragDrop, CdkDragStart, CdkDropList } from '@angular/cdk/drag-drop';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { moveTaskInTodayList } from '../../work-context/store/work-context-meta.actions';
+import { getAnchorFromDragDrop } from '../../work-context/store/work-context-meta.helper';
 import {
   moveProjectTaskInBacklogList,
   moveProjectTaskToBacklogList,
@@ -289,10 +290,11 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       // move inside today
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
         moveTaskInTodayList({
           taskId,
-          newOrderedIds,
+          afterTaskId,
           src,
           target,
           workContextId,
@@ -304,11 +306,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     } else if (src === 'OVERDUE' && (target === 'UNDONE' || target === 'DONE')) {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(TaskSharedActions.planTasksForToday({ taskIds: [taskId] }));
       this._store.dispatch(
         moveTaskInTodayList({
           taskId,
-          newOrderedIds,
+          afterTaskId,
           src,
           target,
           workContextId,
@@ -324,15 +327,17 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       }
     } else if (src === 'BACKLOG' && target === 'BACKLOG') {
       // move inside backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveProjectTaskInBacklogList({ taskId, newOrderedIds, workContextId }),
+        moveProjectTaskInBacklogList({ taskId, afterTaskId, workContextId }),
       );
     } else if (src === 'BACKLOG' && isTargetRegularList) {
       // move from backlog to today
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
         moveProjectTaskToRegularList({
           taskId,
-          newOrderedIds,
+          afterTaskId,
           src,
           target,
           workContextId,
@@ -340,13 +345,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       );
     } else if (isSrcRegularList && target === 'BACKLOG') {
       // move from today to backlog
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveProjectTaskToBacklogList({ taskId, newOrderedIds, workContextId }),
+        moveProjectTaskToBacklogList({ taskId, afterTaskId, workContextId }),
       );
     } else {
       // move sub task
+      const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
       this._store.dispatch(
-        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, newOrderedIds }),
+        moveSubTask({ taskId, srcTaskId: src, targetTaskId: target, afterTaskId }),
       );
     }
   }

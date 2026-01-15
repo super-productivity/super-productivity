@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask, unsetCurrentTask } from './task.actions';
 import { select, Store } from '@ngrx/store';
 import { filter, startWith, take, tap, withLatestFrom } from 'rxjs/operators';
@@ -21,12 +21,13 @@ import { IPC } from '../../../../../electron/shared-with-frontend/ipc-events.con
 import { ipcAddTaskFromAppUri$ } from '../../../core/ipc-events';
 import { TaskService } from '../task.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 
 // TODO send message to electron when current task changes here
 
 @Injectable()
 export class TaskElectronEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject<Store<any>>(Store);
   private _configService = inject(GlobalConfigService);
   private _focusModeService = inject(FocusModeService);
@@ -37,7 +38,13 @@ export class TaskElectronEffects {
   // -----------------------------------------------------------------------------------
 
   constructor() {
-    // Listen for overlay request and send current task state
+    /**
+     * SYNC-SAFE: This IPC listener is safe during sync/hydration because:
+     * - Read-only operation - only reads current state and sends to Electron
+     * - No store mutations or action dispatches
+     * - Responds to explicit IPC request, not store-change driven
+     * - take(1) ensures single response per request
+     */
     window.ea.on(IPC.REQUEST_CURRENT_TASK_FOR_OVERLAY, () => {
       this._store$
         .pipe(

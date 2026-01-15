@@ -2,11 +2,40 @@ import { MatMenuTrigger, MatMenuItem } from '@angular/material/menu';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 
 /**
+ * Shared timestamp tracking when any menu opens.
+ * Used by both the monkey patch and MenuTouchFixDirective.
+ */
+export let lastMenuOpenTime = 0;
+
+/**
+ * Update the shared menu open timestamp. Called by the monkey patch.
+ */
+export const setLastMenuOpenTime = (time: number): void => {
+  lastMenuOpenTime = time;
+};
+
+/**
  * Monkey patch for Angular Material menu to fix automatic selection issue on touch devices
  * when submenu opens under user's finger near screen edges.
  *
  * Issue: https://github.com/super-productivity/super-productivity/issues/4436
  * Related: https://github.com/angular/components/issues/27508
+ *
+ * IMPORTANT: This patch depends on Angular Material internal APIs that may change between versions.
+ * If Angular Material is updated and menus break on touch devices, check:
+ *
+ * 1. Run: npm run test:file src/app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch.spec.ts
+ *    - If tests fail, the internal APIs have changed
+ *
+ * 2. Current API dependencies (as of @angular/material 21.x):
+ *    - MatMenuItem.prototype._checkDisabled(event) - click handler we override
+ *    - MatMenuTrigger.prototype.openMenu() - we intercept to track timing
+ *    - MatMenu._allItems - QueryList of menu items
+ *    - MatMenuItem._elementRef.nativeElement - DOM element access
+ *
+ * 3. History of API changes:
+ *    - Pre-21.x: Used MatMenuItem.prototype._handleClick
+ *    - 21.x+: Changed to MatMenuItem.prototype._checkDisabled
  */
 export const applyMatMenuTouchMonkeyPatch = (): void => {
   if (!IS_TOUCH_PRIMARY) {
@@ -15,15 +44,13 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
 
   // Store original methods
   const originalOpenMenu = MatMenuTrigger.prototype.openMenu;
-  const originalHandleClick = (MatMenuItem.prototype as any)._handleClick;
+  const originalCheckDisabled = (MatMenuItem.prototype as any)._checkDisabled;
 
-  // Track touch interactions
-  let menuOpenTime = 0;
   const TOUCH_DELAY_MS = 300;
 
   // Override MatMenuTrigger.openMenu
   MatMenuTrigger.prototype.openMenu = function (this: MatMenuTrigger): void {
-    menuOpenTime = Date.now();
+    setLastMenuOpenTime(Date.now());
 
     // Call original method
     originalOpenMenu.call(this);
@@ -47,47 +74,72 @@ export const applyMatMenuTouchMonkeyPatch = (): void => {
     }
   };
 
-  // Override MatMenuItem._handleClick
-  (MatMenuItem.prototype as any)._handleClick = function (
+  // Override MatMenuItem._checkDisabled (was _handleClick in older Angular Material versions)
+  (MatMenuItem.prototype as any)._checkDisabled = function (
     this: MatMenuItem,
     event: MouseEvent,
   ): void {
-    const currentTime = Date.now();
-    const timeSinceMenuOpen = currentTime - menuOpenTime;
+    const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
 
     // On touch devices, prevent clicks that happen too quickly after menu opens
     if (event.isTrusted && timeSinceMenuOpen < TOUCH_DELAY_MS) {
       event.preventDefault();
-      // Don't call stopPropagation() - we need the event to bubble for menu closing
-
-      // Retry the click after the delay period
-      const element = (this as any)._elementRef?.nativeElement;
-      setTimeout(() => {
-        if (!this.disabled && element) {
-          // Create a new click event that can properly bubble
-          const newEvent = new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-          });
-          element.dispatchEvent(newEvent);
-        }
-      }, TOUCH_DELAY_MS - timeSinceMenuOpen);
-
+      // stopImmediatePropagation prevents OTHER handlers on the SAME element from firing
+      // (stopPropagation only prevents bubbling UP to parent elements)
+      event.stopImmediatePropagation();
       return;
     }
 
-    // Call original method
-    originalHandleClick.call(this, event);
+    // Call original method for disabled check
+    originalCheckDisabled.call(this, event);
   };
 
-  // Add global touch event listener to track touch timing
+  // Use MutationObserver to detect when ANY menu panel appears (including submenus)
+  // This is necessary because Angular Material 21 may not call openMenu() for submenus
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      const addedNodes = Array.from(mutation.addedNodes);
+      for (const node of addedNodes) {
+        if (node instanceof HTMLElement) {
+          // Check if a menu panel was added (directly or as descendant)
+          const menuPanel =
+            node.classList?.contains('mat-mdc-menu-panel') ||
+            node.querySelector?.('.mat-mdc-menu-panel');
+          if (menuPanel) {
+            setLastMenuOpenTime(Date.now());
+          }
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  // CRITICAL: Add document-level capturing listener to intercept clicks on menu items
+  // BEFORE they reach Angular's event handlers. Adding capturing listener to the
+  // target element itself doesn't work because Angular's handlers run at the same phase.
   document.addEventListener(
-    'touchstart',
-    () => {
-      menuOpenTime = Date.now();
+    'click',
+    (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target) return;
+
+      // Check if click is on a menu item (or inside one)
+      const menuItem = target.closest('.mat-mdc-menu-item');
+      if (!menuItem) return;
+
+      const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
+
+      // Block clicks that happen too quickly after menu opened
+      if (event.isTrusted && lastMenuOpenTime > 0 && timeSinceMenuOpen < TOUCH_DELAY_MS) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
     },
-    { passive: true },
+    true, // CAPTURING phase - runs before target's handlers
   );
 
   // Note: Menu positioning edge fixes are handled by the CSS touch fixes instead

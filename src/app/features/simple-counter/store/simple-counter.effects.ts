@@ -1,64 +1,35 @@
 import { inject, Injectable } from '@angular/core';
 
-import { EMPTY, Observable } from 'rxjs';
-import { map, mergeMap, switchMap, tap } from 'rxjs/operators';
-import { DateService } from 'src/app/core/date/date.service';
+import { Observable } from 'rxjs';
+import { switchMap, tap } from 'rxjs/operators';
 
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { select, Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 
 import { ConfettiService } from '../../../core/confetti/confetti.service';
-import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { PfapiService } from '../../../pfapi/pfapi.service';
 import { T } from '../../../t.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { GlobalConfigService } from '../../config/global-config.service';
 import { getSimpleCounterStreakDuration } from '../get-simple-counter-streak-duration';
-import { SimpleCounterType } from '../simple-counter.model';
-import { SimpleCounterService } from '../simple-counter.service';
 import {
-  increaseSimpleCounterCounterToday,
+  tickSimpleCounterLocal,
   updateAllSimpleCounters,
 } from './simple-counter.actions';
 import { selectSimpleCounterById } from './simple-counter.reducer';
 
 @Injectable()
 export class SimpleCounterEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject<Store<any>>(Store);
-  private _timeTrackingService = inject(GlobalTrackingIntervalService);
-  private _dateService = inject(DateService);
-  private _pfapiService = inject(PfapiService);
-  private _simpleCounterService = inject(SimpleCounterService);
   private _snackService = inject(SnackService);
   private _translateService = inject(TranslateService);
-  private _configService = inject(GlobalConfigService);
   private readonly _confettiService = inject(ConfettiService);
 
   successFullCountersMap: { [key: string]: boolean } = {};
 
-  checkTimedCounters$: Observable<unknown> = createEffect(() =>
-    this._simpleCounterService.enabledAndToggledSimpleCounters$.pipe(
-      switchMap((itemsI) => {
-        const items = itemsI.filter((item) => item.type === SimpleCounterType.StopWatch);
-        return items && items.length
-          ? this._timeTrackingService.tick$.pipe(map((tick) => ({ tick, items })))
-          : EMPTY;
-      }),
-      mergeMap(({ items, tick }) => {
-        const today = this._dateService.todayStr();
-        return items.map((item) =>
-          increaseSimpleCounterCounterToday({
-            id: item.id,
-            increaseBy: tick.duration,
-            today,
-          }),
-        );
-      }),
-    ),
-  );
+  // Note: StopWatch tick handling moved to SimpleCounterService for batched sync
 
   updateCfgSuccessSnack$: Observable<unknown> = createEffect(
     () =>
@@ -78,7 +49,7 @@ export class SimpleCounterEffects {
   streakSuccessSnack$: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(increaseSimpleCounterCounterToday),
+        ofType(tickSimpleCounterLocal),
         switchMap((a) =>
           this._store$.pipe(select(selectSimpleCounterById, { id: a.id })),
         ),

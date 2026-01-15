@@ -1,18 +1,24 @@
 import { Observable, Subject, timer } from 'rxjs';
-import { filter, first, map, takeUntil, tap } from 'rxjs/operators';
+import { filter, first, map, take, takeUntil, tap } from 'rxjs/operators';
 import { ShepherdService } from './shepherd.service';
 import Step from 'shepherd.js/src/types/step';
 import StepOptionsWhen = Step.StepOptionsWhen;
 import { TourId } from './shepherd-steps.const';
 import { Log } from '../../core/log';
 
+const MAX_WAIT_TIME = 10000; // 10 seconds max wait
+
 export const waitForEl = (selector: string, cb: () => void): number => {
+  const startTime = Date.now();
   const int = window.setInterval(() => {
     Log.log('INT');
 
     if (document.querySelector(selector)) {
       window.clearInterval(int);
       cb();
+    } else if (Date.now() - startTime > MAX_WAIT_TIME) {
+      window.clearInterval(int);
+      Log.warn(`waitForEl: Timeout waiting for selector "${selector}"`);
     }
   }, 50);
   return int;
@@ -22,6 +28,7 @@ export const waitForElObs$ = (selector: string): Observable<any> => {
   return timer(50, 50).pipe(
     map(() => document.querySelector(selector)),
     filter((el) => !!el),
+    take(1),
   );
 };
 

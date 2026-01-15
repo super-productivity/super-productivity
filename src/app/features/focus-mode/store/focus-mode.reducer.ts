@@ -192,6 +192,15 @@ export const focusModeReducer = createReducer(
     pausedTaskId: null,
   })),
 
+  // Exit break to planning - same as skip/complete but doesn't trigger auto-start effect
+  on(a.exitBreakToPlanning, (state) => ({
+    ...state,
+    timer: createIdleTimer(),
+    currentScreen: FocusScreen.Main,
+    mainState: FocusMainUIState.Preparation,
+    pausedTaskId: null,
+  })),
+
   // Timer updates - much simpler!
   on(a.tick, (state) => {
     if (!state.timer.isRunning || !state.timer.purpose) {
@@ -249,6 +258,12 @@ export const focusModeReducer = createReducer(
   on(a.resetCycles, (state) => ({
     ...state,
     currentCycle: 1,
+  })),
+
+  // Store pausedTaskId without pausing the session
+  on(a.setPausedTaskId, (state, { pausedTaskId }) => ({
+    ...state,
+    pausedTaskId,
   })),
 
   // Adjust remaining time by modifying goal duration (work sessions only)

@@ -30,7 +30,7 @@ export const taskDataToPartialTaskCopy = (updates: Partial<Task>): Partial<TaskC
       const value = (updates as Record<string, unknown>)[key];
       if (
         value === null &&
-        ['projectId', 'doneOn', 'parentId', 'reminderId', 'repeatCfgId'].includes(key)
+        ['projectId', 'doneOn', 'parentId', 'repeatCfgId', 'remindAt'].includes(key)
       ) {
         result[key] = undefined;
       } else {

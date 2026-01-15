@@ -216,7 +216,7 @@ export interface Task {
   timeSpentOnDay?: { [key: string]: number };
   doneOn?: number | null;
   attachments?: any[];
-  reminderId?: string | null;
+  remindAt?: number | null;
   repeatCfgId?: string | null;
 
   // Issue tracking fields (optional)

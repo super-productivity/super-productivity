@@ -42,7 +42,17 @@
             "browser": "src/main.ts",
             "stylePreprocessorOptions": {
               "includePaths": [".", "src", "src/styles"]
-            }
+            },
+            "allowedCommonJsDependencies": [
+              "typia",
+              "electron-log",
+              "stacktrace-js",
+              "spark-md5",
+              "chrono-node",
+              "dayjs",
+              "jira2md",
+              "query-string"
+            ]
           },
           "configurations": {
             "development": {
@@ -62,6 +72,11 @@
             "production": {
               "baseHref": "",
               "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "5.5mb",
+                  "maximumError": "6mb"
+                },
                 {
                   "type": "anyComponentStyle",
                   "maximumWarning": "20kb"
@@ -95,6 +110,11 @@
               },
               "budgets": [
                 {
+                  "type": "initial",
+                  "maximumWarning": "5.5mb",
+                  "maximumError": "6mb"
+                },
+                {
                   "type": "anyComponentStyle",
                   "maximumWarning": "20kb"
                 }
@@ -123,6 +143,11 @@
             "stage": {
               "baseHref": "",
               "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "5.5mb",
+                  "maximumError": "6mb"
+                },
                 {
                   "type": "anyComponentStyle",
                   "maximumWarning": "20kb"

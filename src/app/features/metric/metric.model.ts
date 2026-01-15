@@ -11,17 +11,6 @@ export interface MetricCopy {
   // string date of day
   id: string;
 
-  // TODO remove
-  obstructions: string[];
-  // TODO remove
-  improvements: string[];
-  // TODO remove
-  improvementsTomorrow: string[];
-  // TODO remove
-  mood?: number | null;
-  // TODO remove
-  productivity?: number | null;
-
   focusSessions?: number[];
 
   // Evaluation fields
@@ -40,9 +29,6 @@ export interface MetricCopy {
   // Optional task completion tracking (for future use in productivity)
   completedTasks?: number | null;
   plannedTasks?: number | null;
-
-  // Deprecated fields (v1, kept for backward compatibility)
-  focusQuality?: number | null; // Replaced by density calculation in v2.4
 }
 
 export type Metric = Readonly<MetricCopy>;

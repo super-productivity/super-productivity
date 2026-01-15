@@ -81,12 +81,11 @@ export class PlannerService {
   );
   tomorrow$ = this.days$.pipe(
     map((days) => {
-      const tomorrow = new Date(this._dateService.todayStr());
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      if (days[1]?.dayDate === getDbDateStr(tomorrow)) {
-        return days[1];
-      }
-      return null;
+      const todayMs = Date.now() - this._dateService.startOfNextDayDiff;
+      // eslint-disable-next-line no-mixed-operators
+      const tomorrowMs = todayMs + 24 * 60 * 60 * 1000;
+      const tomorrowStr = getDbDateStr(tomorrowMs);
+      return days.find((d) => d.dayDate === tomorrowStr) ?? null;
     }),
   );
 

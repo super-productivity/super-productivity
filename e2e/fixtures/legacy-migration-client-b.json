@@ -1,0 +1,396 @@
+{
+  "timestamp": 1733000000000,
+  "lastUpdate": 1733000000000,
+  "crossModelVersion": 4.5,
+  "data": {
+    "project": {
+      "ids": ["INBOX_PROJECT", "PROJECT_B"],
+      "entities": {
+        "INBOX_PROJECT": {
+          "id": "INBOX_PROJECT",
+          "title": "Inbox",
+          "isHiddenFromMenu": false,
+          "taskIds": [],
+          "backlogTaskIds": [],
+          "noteIds": [],
+          "theme": {
+            "primary": "#607d8b",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "inbox",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "PROJECT_B": {
+          "id": "PROJECT_B",
+          "title": "Client B Project",
+          "isHiddenFromMenu": false,
+          "taskIds": ["task-b-1", "task-b-2"],
+          "backlogTaskIds": [],
+          "noteIds": [],
+          "theme": {
+            "primary": "#2196f3",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "icon": "folder",
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "isArchived": false,
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "menuTree": {
+      "tagTree": [],
+      "projectTree": []
+    },
+    "globalConfig": {
+      "misc": {
+        "isConfirmBeforeExit": false,
+        "isConfirmBeforeExitWithoutFinishDay": true,
+        "isNotifyWhenTimeEstimateExceeded": false,
+        "isAutMarkParentAsDone": true,
+        "isAutoStartNextTask": true,
+        "isTurnOffMarkdown": false,
+        "isAutoAddWorkedOnToToday": true,
+        "isDisableInitialDialog": true,
+        "firstDayOfWeek": 1,
+        "startOfNextDay": 0,
+        "daysToShowForPastDates": 14,
+        "isMinimizeToTray": false,
+        "isEnableAdvanced": false,
+        "isTrayShowCurrentTask": true,
+        "taskNotesTpl": "",
+        "isDisableAnimations": false
+      },
+      "appFeatures": {
+        "isTimeTrackingEnabled": true,
+        "isFocusModeEnabled": true,
+        "isSchedulerEnabled": true,
+        "isPlannerEnabled": true,
+        "isBoardsEnabled": true,
+        "isScheduleDayPanelEnabled": true,
+        "isIssuesPanelEnabled": true,
+        "isProjectNotesEnabled": true,
+        "isSyncIconEnabled": true,
+        "isDonatePageEnabled": true,
+        "isEnableUserProfiles": false
+      },
+      "localization": {},
+      "evaluation": {
+        "isHideEvaluationSheet": false
+      },
+      "idle": {
+        "isEnableIdleTimeTracking": false,
+        "isUnTrackedIdleResetsBreakTimer": false,
+        "minIdleTime": 60000,
+        "isOnlyOpenIdleWhenCurrentTask": false
+      },
+      "takeABreak": {
+        "isTakeABreakEnabled": false,
+        "takeABreakMinWorkingTime": 60,
+        "takeABreakSnoozeTime": 15,
+        "motivationalImgs": [],
+        "isLockScreen": false,
+        "isTimedFullScreenBlocker": false,
+        "timedFullScreenBlockerDuration": 8000,
+        "isFocusWindow": false,
+        "takeABreakMessage": "Take a break!"
+      },
+      "pomodoro": {
+        "isEnabled": false,
+        "duration": 1500000,
+        "breakDuration": 300000,
+        "longerBreakDuration": 900000,
+        "cyclesBeforeLongerBreak": 4,
+        "isStopTrackingOnBreak": true,
+        "isStopTrackingOnLongBreak": true,
+        "isManualContinue": false,
+        "isPlaySound": true,
+        "isPlaySoundAfterBreak": false,
+        "isEnabled2": false
+      },
+      "keyboard": {},
+      "localBackup": {
+        "isEnabled": false
+      },
+      "lang": {},
+      "sync": {
+        "isEnabled": false,
+        "isCompressionEnabled": true,
+        "syncInterval": 30000,
+        "isEncryptionEnabled": false,
+        "syncProvider": null,
+        "webDav": {
+          "baseUrl": null,
+          "userName": null,
+          "password": null,
+          "syncFilePath": null,
+          "syncFolderPath": null
+        },
+        "superSync": {
+          "baseUrl": null,
+          "userName": null,
+          "password": null,
+          "syncFilePath": null,
+          "syncFolderPath": null,
+          "accessToken": null,
+          "isEncryptionEnabled": false,
+          "encryptKey": null
+        },
+        "localFileSync": {
+          "syncFilePath": null,
+          "syncFolderPath": null
+        }
+      },
+      "timeline": {
+        "isWorkStartEndEnabled": false,
+        "workStart": "9:00",
+        "workEnd": "17:00"
+      },
+      "reminder": {
+        "isCountdownBannerEnabled": true,
+        "countdownDuration": 600000
+      },
+      "focusMode": {
+        "isAlwaysUseFocusMode": false,
+        "isSkipPreparation": false
+      },
+      "sound": {
+        "volume": 70,
+        "isPlayDoneSound": true,
+        "doneSound": "done2.mp3",
+        "isPlayTickSound": false,
+        "isIncreaseDoneSoundPitch": true,
+        "breakReminderSound": null
+      },
+      "timeTracking": {
+        "trackingInterval": 1000,
+        "defaultEstimate": 0,
+        "defaultEstimateSubTasks": 0,
+        "isNotifyWhenTimeEstimateExceeded": true,
+        "isAutoStartNextTask": false,
+        "isTrackingReminderEnabled": false,
+        "isTrackingReminderShowOnMobile": false,
+        "trackingReminderMinTime": 300000
+      },
+      "quickNotes": {},
+      "dominaMode": {
+        "isEnabled": false,
+        "text": "Your current task is: ${currentTaskTitle}",
+        "interval": 300000,
+        "volume": 75
+      },
+      "shortSyntax": {
+        "isEnableProject": true,
+        "isEnableDue": true,
+        "isEnableTag": true
+      },
+      "schedule": {
+        "isWorkStartEndEnabled": true,
+        "workStart": "9:00",
+        "workEnd": "17:00",
+        "isLunchBreakEnabled": false,
+        "lunchBreakStart": "13:00",
+        "lunchBreakEnd": "14:00"
+      }
+    },
+    "task": {
+      "ids": ["task-b-1", "task-b-2"],
+      "entities": {
+        "task-b-1": {
+          "id": "task-b-1",
+          "title": "Task B1 - Client B",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 3600000,
+          "isDone": false,
+          "notes": "First task from Client B",
+          "tagIds": ["tag-b"],
+          "created": 1733000000001,
+          "attachments": [],
+          "projectId": "PROJECT_B"
+        },
+        "task-b-2": {
+          "id": "task-b-2",
+          "title": "Task B2 - Client B",
+          "subTaskIds": [],
+          "timeSpentOnDay": {},
+          "timeSpent": 0,
+          "timeEstimate": 1800000,
+          "isDone": false,
+          "notes": "Second task from Client B",
+          "tagIds": [],
+          "created": 1733000000002,
+          "attachments": [],
+          "projectId": "PROJECT_B"
+        }
+      },
+      "currentTaskId": null,
+      "selectedTaskId": null,
+      "lastCurrentTaskId": null,
+      "isDataLoaded": false
+    },
+    "tag": {
+      "ids": ["TODAY", "tag-b"],
+      "entities": {
+        "TODAY": {
+          "id": "TODAY",
+          "title": "Today",
+          "taskIds": [],
+          "icon": "wb_sunny",
+          "created": 1733000000000,
+          "theme": {
+            "primary": "#ffa726",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        },
+        "tag-b": {
+          "id": "tag-b",
+          "title": "Tag B",
+          "taskIds": ["task-b-1"],
+          "icon": "label",
+          "created": 1733000000003,
+          "theme": {
+            "primary": "#ff5722",
+            "accent": "#ff4081",
+            "warn": "#e91e63",
+            "isAutoContrast": true
+          },
+          "workStart": {},
+          "workEnd": {},
+          "breakNr": {},
+          "breakTime": {},
+          "advancedCfg": {
+            "worklogExportSettings": {
+              "cols": ["DATE", "START", "END", "TIME_CLOCK", "TITLES_INCLUDING_SUB"],
+              "roundWorkTimeTo": null,
+              "roundStartTimeTo": null,
+              "roundEndTimeTo": null,
+              "groupBy": "DATE",
+              "separateTasksBy": ""
+            }
+          }
+        }
+      }
+    },
+    "simpleCounter": {
+      "ids": [],
+      "entities": {}
+    },
+    "taskRepeatCfg": {
+      "ids": [],
+      "entities": {}
+    },
+    "reminders": [],
+    "note": {
+      "ids": [],
+      "entities": {},
+      "todayOrder": []
+    },
+    "metric": {
+      "ids": [],
+      "entities": {}
+    },
+    "planner": {
+      "days": {}
+    },
+    "issueProvider": {
+      "ids": [],
+      "entities": {}
+    },
+    "boards": {
+      "boardCfgs": []
+    },
+    "timeTracking": {
+      "project": {},
+      "tag": {}
+    },
+    "archiveYoung": {
+      "task": {
+        "ids": ["archived-b"],
+        "entities": {
+          "archived-b": {
+            "id": "archived-b",
+            "title": "Archived Task B - Client B",
+            "subTaskIds": [],
+            "timeSpentOnDay": {
+              "2024-11-16": 7200000
+            },
+            "timeSpent": 7200000,
+            "timeEstimate": 7200000,
+            "isDone": true,
+            "doneOn": 1731801600000,
+            "notes": "Archived task from Client B",
+            "tagIds": [],
+            "created": 1731715200000,
+            "attachments": [],
+            "projectId": "PROJECT_B"
+          }
+        }
+      },
+      "timeTracking": {
+        "project": {},
+        "tag": {}
+      },
+      "lastTimeTrackingFlush": 1732233600000
+    },
+    "archiveOld": {
+      "task": {
+        "ids": [],
+        "entities": {}
+      },
+      "timeTracking": {
+        "project": {},
+        "tag": {}
+      }
+    },
+    "pluginMetadata": [],
+    "pluginUserData": []
+  }
+}

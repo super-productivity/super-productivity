@@ -172,7 +172,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         display: flex;
         background: var(--bg-lighter);
 
-        @media (max-width: 599px) {
+        @media (max-width: 865px) {
           display: none;
         }
 
@@ -184,10 +184,6 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
 
         .project {
           padding-right: 0;
-        }
-
-        ::ng-deep .action-nav:hover & {
-          visibility: hidden;
         }
       }
     `,

@@ -19,7 +19,7 @@ import {
   GlobalConfigState,
   GlobalSectionConfig,
 } from '../../features/config/global-config.model';
-import { combineLatest, Observable, Subscription } from 'rxjs';
+import { combineLatest, firstValueFrom, Observable, Subscription } from 'rxjs';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
 import { T } from '../../t.const';
 import { versions } from '../../../environments/versions';
@@ -31,10 +31,10 @@ import { ConfigSectionComponent } from '../../features/config/config-section/con
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SYNC_FORM } from '../../features/config/form-cfgs/sync-form.const';
-import { PfapiService } from '../../pfapi/pfapi.service';
-import { map, tap } from 'rxjs/operators';
+import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
+import { map } from 'rxjs/operators';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
-import { WebdavApi } from '../../pfapi/api/sync/providers/webdav/webdav-api';
+import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
@@ -49,6 +49,12 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
+import { SuperSyncRestoreService } from '../../imex/sync/super-sync-restore.service';
+import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
+import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { DialogChangeEncryptionPasswordComponent } from '../../imex/sync/dialog-change-encryption-password/dialog-change-encryption-password.component';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 @Component({
   selector: 'config-page',
@@ -67,7 +73,7 @@ import { DialogDisableProfilesConfirmationComponent } from '../../features/user-
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _cd = inject(ChangeDetectorRef);
-  private readonly _pfapiService = inject(PfapiService);
+  private readonly _providerManager = inject(SyncProviderManager);
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
@@ -75,6 +81,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _snackService = inject(SnackService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _superSyncRestoreService = inject(SuperSyncRestoreService);
 
   T: typeof T = T;
   globalConfigFormCfg: ConfigFormConfig;
@@ -90,21 +97,19 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   // TODO needs to contain all sync providers....
   // TODO maybe handling this in an effect would be better????
   syncFormCfg$: Observable<any> = combineLatest([
-    this._pfapiService.currentProviderPrivateCfg$,
+    this._providerManager.currentProviderPrivateCfg$,
     this.configService.sync$,
-  ])
-    .pipe(
-      map(([currentProviderCfg, syncCfg]) => {
-        if (!currentProviderCfg) {
-          return syncCfg;
-        }
-        return {
-          ...syncCfg,
-          [currentProviderCfg.providerId]: currentProviderCfg.privateCfg,
-        };
-      }),
-    )
-    .pipe(tap((v) => Log.log('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXA', v)));
+  ]).pipe(
+    map(([currentProviderCfg, syncCfg]) => {
+      if (!currentProviderCfg) {
+        return syncCfg;
+      }
+      return {
+        ...syncCfg,
+        [currentProviderCfg.providerId]: currentProviderCfg.privateCfg,
+      };
+    }),
+  );
 
   private _subs: Subscription = new Subscription();
 
@@ -235,23 +240,73 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                     return;
                   }
 
-                  // Create a temporary WebdavApi instance for testing
-                  const api = new WebdavApi(async () => webDavCfg);
-                  const result = await api.testConnection(webDavCfg);
+                  try {
+                    // Create a temporary WebdavApi instance for testing
+                    const api = new WebdavApi(async () => webDavCfg);
+                    const result = await api.testConnection(webDavCfg);
 
-                  if (result.success) {
-                    this._snackService.open({
-                      type: 'SUCCESS',
-                      msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
-                      translateParams: { url: result.fullUrl },
-                    });
-                  } else {
+                    if (result.success) {
+                      this._snackService.open({
+                        type: 'SUCCESS',
+                        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
+                        translateParams: { url: result.fullUrl },
+                      });
+
+                      // Test conditional header support
+                      const testPath = `${webDavCfg.syncFolderPath || '/'}/.sp-header-test-${Date.now()}`;
+                      try {
+                        const supportsHeaders =
+                          await api.testConditionalHeaders(testPath);
+
+                        if (
+                          !supportsHeaders &&
+                          !localStorage.getItem(
+                            LS.WEBDAV_CONDITIONAL_HEADER_WARNING_DISMISSED,
+                          )
+                        ) {
+                          const dialogRef = this._matDialog.open(DialogConfirmComponent, {
+                            data: {
+                              title:
+                                T.F.SYNC.FORM.WEB_DAV.CONDITIONAL_HEADER_WARNING_TITLE,
+                              message:
+                                T.F.SYNC.FORM.WEB_DAV.CONDITIONAL_HEADER_WARNING_MSG,
+                              okTxt: T.G.OK,
+                              hideCancelButton: true,
+                              showDontShowAgain: true,
+                            },
+                          });
+                          const res = await firstValueFrom(dialogRef.afterClosed());
+                          if (res?.dontShowAgain) {
+                            localStorage.setItem(
+                              LS.WEBDAV_CONDITIONAL_HEADER_WARNING_DISMISSED,
+                              'true',
+                            );
+                          }
+                        }
+                      } catch (headerTestError) {
+                        // Ignore header test errors - connection test was successful
+                        Log.warn(
+                          'WebDAV conditional header test failed:',
+                          headerTestError,
+                        );
+                      }
+                    } else {
+                      this._snackService.open({
+                        type: 'ERROR',
+                        msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
+                        translateParams: {
+                          error: result.error || 'Unknown error',
+                          url: result.fullUrl,
+                        },
+                      });
+                    }
+                  } catch (e) {
                     this._snackService.open({
                       type: 'ERROR',
                       msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
                       translateParams: {
-                        error: result.error || 'Unknown error',
-                        url: result.fullUrl,
+                        error: e instanceof Error ? e.message : 'Unexpected error',
+                        url: webDavCfg.baseUrl || 'N/A',
                       },
                     });
                   }
@@ -278,6 +333,36 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
             required: false,
             onClick: () => {
               this._syncWrapperService.sync();
+            },
+          },
+        },
+        {
+          hideExpression: (m: any) =>
+            !m.isEnabled || m.syncProvider !== LegacySyncProvider.SuperSync,
+          type: 'btn',
+          className: 'mt2 block',
+          templateOptions: {
+            text: T.F.SYNC.BTN_RESTORE_FROM_HISTORY,
+            btnType: 'stroked',
+            required: false,
+            onClick: () => {
+              this._openRestoreDialog();
+            },
+          },
+        },
+        {
+          hideExpression: (m: any) =>
+            !m.isEnabled ||
+            m.syncProvider !== LegacySyncProvider.SuperSync ||
+            !m.superSync?.isEncryptionEnabled,
+          type: 'btn',
+          className: 'mt2 block',
+          templateOptions: {
+            text: T.F.SYNC.FORM.SUPER_SYNC.L_CHANGE_ENCRYPTION_PASSWORD,
+            btnType: 'stroked',
+            required: false,
+            onClick: () => {
+              this._openChangePasswordDialog();
             },
           },
         },
@@ -355,5 +440,19 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     } catch (error) {
       this._snackService.open('Failed to download logs');
     }
+  }
+
+  private _openRestoreDialog(): void {
+    this._matDialog.open(DialogRestorePointComponent, {
+      width: '500px',
+      maxWidth: '90vw',
+    });
+  }
+
+  private _openChangePasswordDialog(): void {
+    this._matDialog.open(DialogChangeEncryptionPasswordComponent, {
+      width: '400px',
+      disableClose: true,
+    });
   }
 }

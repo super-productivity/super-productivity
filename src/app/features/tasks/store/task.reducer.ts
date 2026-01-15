@@ -1,13 +1,12 @@
+import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import {
   __updateMultipleTaskSimple,
-  addReminderIdToTask,
   addSubTask,
   moveSubTask,
   moveSubTaskDown,
   moveSubTaskToBottom,
   moveSubTaskToTop,
   moveSubTaskUp,
-  removeReminderFromTask,
   removeTimeSpent,
   roundTimeSpentForDay,
   setCurrentTask,
@@ -28,7 +27,7 @@ import {
   updateTimeSpentForTask,
 } from './task.reducer.util';
 import { taskAdapter } from './task.adapter';
-import { moveItemInList } from '../../work-context/store/work-context-meta.helper';
+import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 import {
   arrayMoveLeft,
   arrayMoveRight,
@@ -48,7 +47,10 @@ import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { createReducer, on } from '@ngrx/store';
 import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
+import {
+  TimeTrackingActions,
+  syncTimeSpent,
+} from '../../time-tracking/store/time-tracking.actions';
 import { TaskLog } from '../../../core/log';
 import { devError } from '../../../util/dev-error';
 
@@ -84,7 +86,7 @@ export const taskReducer = createReducer<TaskState>(
       : state,
   ),
 
-  on(TaskSharedActions.deleteProject, (state, { project, allTaskIds }) => {
+  on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
     return taskAdapter.removeMany(allTaskIds, {
       ...state,
       currentTaskId:
@@ -102,6 +104,34 @@ export const taskReducer = createReducer<TaskState>(
       {
         ...task.timeSpentOnDay,
         [date]: currentTimeSpentForTickDay + duration,
+      },
+      state,
+    );
+  }),
+
+  // Sync time spent from remote clients
+  // Local: no-op (state already updated by addTimeSpent ticks)
+  // Remote: apply the batched duration
+  on(syncTimeSpent, (state, action) => {
+    // Only apply for remote actions - local state is already up-to-date
+    if (!(action.meta as PersistentActionMeta).isRemote) {
+      return state;
+    }
+
+    const { taskId, date, duration } = action;
+    const task = state.entities[taskId];
+    if (!task) {
+      TaskLog.warn(`[syncTimeSpent] Task ${taskId} not found, skipping`);
+      return state;
+    }
+
+    const currentTimeSpentForDay =
+      (task.timeSpentOnDay && +task.timeSpentOnDay[date]) || 0;
+    return updateTimeSpentForTask(
+      taskId,
+      {
+        ...task.timeSpentOnDay,
+        [date]: currentTimeSpentForDay + duration,
       },
       state,
     );
@@ -182,6 +212,11 @@ export const taskReducer = createReducer<TaskState>(
     return taskAdapter.updateOne(task, state);
   }),
 
+  // Bulk task updates - used for archive task batch operations
+  on(TaskSharedActions.updateTasks, (state, { tasks }) => {
+    return taskAdapter.updateMany(tasks, state);
+  }),
+
   // TODO simplify
   on(toggleTaskHideSubTasks, (state, { taskId, isShowLess, isEndless }) => {
     const task = getTaskById(taskId, state);
@@ -225,7 +260,7 @@ export const taskReducer = createReducer<TaskState>(
     );
   }),
 
-  on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, newOrderedIds }) => {
+  on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
     let newState = state;
     const oldPar = getTaskById(srcTaskId, state);
     const newPar = getTaskById(targetTaskId, state);
@@ -242,12 +277,13 @@ export const taskReducer = createReducer<TaskState>(
     );
     newState = reCalcTimesForParentIfParent(oldPar.id, newState);
 
-    // for new parent add and move
+    // for new parent add using anchor-based positioning
+    const newParSubTaskIds = (newState.entities[newPar.id] as Task).subTaskIds;
     newState = taskAdapter.updateOne(
       {
         id: newPar.id,
         changes: {
-          subTaskIds: unique(moveItemInList(taskId, newPar.subTaskIds, newOrderedIds)),
+          subTaskIds: moveItemAfterAnchor(taskId, afterTaskId, newParSubTaskIds),
         },
       },
       newState,
@@ -482,6 +518,22 @@ export const taskReducer = createReducer<TaskState>(
     );
   }),
 
+  // TAG STUFF
+  // ---------
+  on(TaskSharedActions.addTagToTask, (state, { taskId, tagId }) => {
+    const task = state.entities[taskId];
+    if (!task) return state;
+    return taskAdapter.updateOne(
+      {
+        id: taskId,
+        changes: {
+          tagIds: unique([...task.tagIds, tagId]),
+        },
+      },
+      state,
+    );
+  }),
+
   // TASK ARCHIVE STUFF
   // ------------------
   on(TaskSharedActions.moveToArchive, (state, { tasks }) => {
@@ -598,36 +650,5 @@ export const taskReducer = createReducer<TaskState>(
       // we do this to maintain the order of tasks when they are moved to overdue
       ids: [...taskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
     };
-  }),
-
-  // REMINDER STUFF
-  // --------------
-  on(addReminderIdToTask, (state, { taskId, reminderId }) => {
-    return taskAdapter.updateOne(
-      {
-        id: taskId,
-        changes: {
-          reminderId,
-        },
-      },
-      state,
-    );
-  }),
-
-  on(removeReminderFromTask, (state, { id, isLeaveDueTime }) => {
-    return taskAdapter.updateOne(
-      {
-        id,
-        changes: {
-          reminderId: undefined,
-          ...(isLeaveDueTime
-            ? {}
-            : {
-                dueWithTime: undefined,
-              }),
-        },
-      },
-      state,
-    );
   }),
 );

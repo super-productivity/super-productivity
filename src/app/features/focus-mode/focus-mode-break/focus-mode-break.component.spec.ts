@@ -2,7 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { Store } from '@ngrx/store';
 import { FocusModeBreakComponent } from './focus-mode-break.component';
 import { FocusModeService } from '../focus-mode.service';
-import { skipBreak, completeBreak } from '../store/focus-mode.actions';
+import {
+  skipBreak,
+  completeBreak,
+  pauseFocusSession,
+  unPauseFocusSession,
+  exitBreakToPlanning,
+} from '../store/focus-mode.actions';
 import {
   EnvironmentInjector,
   runInInjectionContext,
@@ -19,6 +25,7 @@ describe('FocusModeBreakComponent', () => {
     timeRemaining: Signal<number>;
     progress: Signal<number>;
     isBreakLong: Signal<boolean>;
+    isSessionPaused: Signal<boolean>;
   };
   let environmentInjector: EnvironmentInjector;
   const mockPausedTaskId = 'test-task-id';
@@ -31,6 +38,7 @@ describe('FocusModeBreakComponent', () => {
       timeRemaining: signal(300000),
       progress: signal(0.5),
       isBreakLong: signal(false),
+      isSessionPaused: signal(false),
     };
 
     TestBed.configureTestingModule({
@@ -97,6 +105,45 @@ describe('FocusModeBreakComponent', () => {
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         completeBreak({ pausedTaskId: mockPausedTaskId }),
       );
+    });
+  });
+
+  describe('pauseBreak', () => {
+    it('should dispatch pauseFocusSession action with pausedTaskId', () => {
+      component.pauseBreak();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        pauseFocusSession({ pausedTaskId: mockPausedTaskId }),
+      );
+    });
+  });
+
+  describe('resumeBreak', () => {
+    it('should dispatch unPauseFocusSession action', () => {
+      component.resumeBreak();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(unPauseFocusSession());
+    });
+  });
+
+  describe('exitToPlanning', () => {
+    it('should dispatch exitBreakToPlanning action with pausedTaskId', () => {
+      component.exitToPlanning();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        exitBreakToPlanning({ pausedTaskId: mockPausedTaskId }),
+      );
+    });
+  });
+
+  describe('isBreakPaused', () => {
+    it('should return false when break is not paused', () => {
+      expect(component.isBreakPaused()).toBe(false);
+    });
+
+    it('should return true when break is paused', () => {
+      (mockFocusModeService.isSessionPaused as any).set(true);
+      expect(component.isBreakPaused()).toBe(true);
     });
   });
 });

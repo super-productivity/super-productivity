@@ -1,0 +1,18 @@
+$ico-size: 13px;
+
+.tag-ico {
+  margin-right: 4px !important;
+}
+
+.tag-ico-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+  width: $ico-size;
+  height: $ico-size;
+  margin-right: 4px !important;
+}

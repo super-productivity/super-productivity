@@ -6,8 +6,9 @@ import {
   MenuTreeTreeNode,
 } from './menu-tree.model';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { createMockProject } from '../../../root-store/meta/task-shared-meta-reducers/test-utils';
-import { deleteTag, deleteTags } from '../../tag/store/tag.actions';
+import { addTag, deleteTag, deleteTags } from '../../tag/store/tag.actions';
+import { DEFAULT_TAG } from '../../tag/tag.const';
+import { Tag } from '../../tag/tag.model';
 
 describe('menuTreeReducer', () => {
   const createFolderNode = (
@@ -43,7 +44,8 @@ describe('menuTreeReducer', () => {
     const result = menuTreeReducer(
       state,
       TaskSharedActions.deleteProject({
-        project: createMockProject({ id: 'project-remove' }),
+        projectId: 'project-remove',
+        noteIds: [],
         allTaskIds: [],
       }),
     );
@@ -66,7 +68,8 @@ describe('menuTreeReducer', () => {
     const result = menuTreeReducer(
       state,
       TaskSharedActions.deleteProject({
-        project: createMockProject({ id: 'project-nested-remove' }),
+        projectId: 'project-nested-remove',
+        noteIds: [],
         allTaskIds: [],
       }),
     );
@@ -130,5 +133,71 @@ describe('menuTreeReducer', () => {
     expect(updatedFolder.children[0].id).toBe('tag-keep-nested');
     expect(updatedFolder.children[0]).toBe(nestedKeep);
     expect(result.tagTree.find((node) => node.id === 'tag-keep-root')).toBe(keepRoot);
+  });
+
+  describe('addTag', () => {
+    const createMockTag = (id: string): Tag => ({
+      ...DEFAULT_TAG,
+      id,
+      title: `Tag ${id}`,
+    });
+
+    it('should add a new tag to tagTree when tag does not exist', () => {
+      const existingTag = createTagNode('existing-tag');
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [existingTag],
+      };
+
+      const newTag = createMockTag('new-tag');
+      const result = menuTreeReducer(state, addTag({ tag: newTag }));
+
+      expect(result.tagTree.length).toBe(2);
+      expect(result.tagTree[0]).toBe(existingTag);
+      expect(result.tagTree[1]).toEqual({ k: MenuTreeKind.TAG, id: 'new-tag' });
+    });
+
+    it('should not add duplicate tag to tagTree when tag already exists', () => {
+      const existingTag = createTagNode('existing-tag');
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [existingTag],
+      };
+
+      const tag = createMockTag('existing-tag');
+      const result = menuTreeReducer(state, addTag({ tag }));
+
+      expect(result.tagTree.length).toBe(1);
+      expect(result).toBe(state);
+    });
+
+    it('should not add duplicate when tag exists inside folder', () => {
+      const nestedTag = createTagNode('nested-tag');
+      const folder = createFolderNode('folder-1', [nestedTag]);
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [folder],
+      };
+
+      const tag = createMockTag('nested-tag');
+      const result = menuTreeReducer(state, addTag({ tag }));
+
+      // Should not add since tag exists in folder
+      expect(result.tagTree.length).toBe(1);
+      expect(result).toBe(state);
+    });
+
+    it('should add tag when tagTree is empty', () => {
+      const state: MenuTreeState = {
+        projectTree: [],
+        tagTree: [],
+      };
+
+      const newTag = createMockTag('first-tag');
+      const result = menuTreeReducer(state, addTag({ tag: newTag }));
+
+      expect(result.tagTree.length).toBe(1);
+      expect(result.tagTree[0]).toEqual({ k: MenuTreeKind.TAG, id: 'first-tag' });
+    });
   });
 });

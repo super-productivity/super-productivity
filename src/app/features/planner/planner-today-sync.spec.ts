@@ -187,10 +187,11 @@ describe('Planner Today Sync Integration', () => {
     });
 
     it('should remove task from TODAY tag when planning for future day', (done) => {
-      const task = createMockTask();
+      const todayStr = getDbDateStr();
+      const task = createMockTask({ dueDay: todayStr }); // Task initially scheduled for today
       const futureDay = '2025-12-25';
 
-      // Set initial state with task in TODAY
+      // Set initial state with task in TODAY (has dueDay = today)
       currentState = {
         ...initialState,
         tag: {
@@ -211,6 +212,10 @@ describe('Planner Today Sync Integration', () => {
       };
       store.setState(currentState);
 
+      // Override selector to return task in TODAY initially
+      store.overrideSelector(selectTodayTaskIds, [task.id]);
+      store.refreshState();
+
       // Dispatch planTaskForDay action for future day
       store.dispatch(
         PlannerActions.planTaskForDay({
@@ -221,6 +226,7 @@ describe('Planner Today Sync Integration', () => {
       );
 
       // Simulate meta-reducer behavior: remove task from TODAY tag when planning for future day
+      // Also update task.dueDay to the future day
       currentState = {
         ...currentState,
         tag: {
@@ -233,8 +239,22 @@ describe('Planner Today Sync Integration', () => {
             },
           },
         },
+        task: {
+          ...currentState.task,
+          entities: {
+            ...currentState.task.entities,
+            [task.id]: {
+              ...task,
+              dueDay: futureDay, // Virtual tag pattern: membership determined by dueDay
+            },
+          },
+        },
       };
       store.setState(currentState);
+
+      // Override selector to return empty array after removal
+      store.overrideSelector(selectTodayTaskIds, []);
+      store.refreshState();
 
       // Check that task was removed from TODAY tag
       store

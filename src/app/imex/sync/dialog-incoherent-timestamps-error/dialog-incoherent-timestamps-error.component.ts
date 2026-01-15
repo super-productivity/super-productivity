@@ -13,7 +13,7 @@ import { IS_ELECTRON } from '../../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton } from '@angular/material/button';
-import { PfapiService } from '../../../pfapi/pfapi.service';
+import { BackupService } from '../../../op-log/backup/backup.service';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
 
@@ -38,7 +38,7 @@ export interface DialogIncompleteSyncData {
 export class DialogIncoherentTimestampsErrorComponent {
   private _matDialogRef =
     inject<MatDialogRef<DialogIncoherentTimestampsErrorComponent>>(MatDialogRef);
-  private _pfapiService = inject(PfapiService);
+  private _backupService = inject(BackupService);
 
   data = inject<DialogIncompleteSyncData>(MAT_DIALOG_DATA);
 
@@ -51,7 +51,7 @@ export class DialogIncoherentTimestampsErrorComponent {
   }
 
   async downloadBackup(): Promise<void> {
-    const data = await this._pfapiService.pf.loadCompleteBackup();
+    const data = await this._backupService.loadCompleteBackup(true);
     try {
       await download('super-productivity-backup.json', JSON.stringify(data));
     } catch (e) {

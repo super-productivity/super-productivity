@@ -8,7 +8,7 @@
 <p align="center">
 <strong>An advanced todo list app with timeboxing & time tracking capabilities that supports importing tasks from your calendar, Jira, GitHub and others</strong>
 <p>
-  
+
 <p align="center">:globe_with_meridians: <a href="https://app.super-productivity.com">Open Web App</a> or :computer: <a href="https://github.com/super-productivity/super-productivity/releases">Download</a></p>
 
 <br>
@@ -68,7 +68,7 @@
 </p>
 
 <p align="center" style="text-align: center;">
-  
+
 <a href='https://flathub.org/apps/com.super_productivity.SuperProductivity' target="_blank">
   <img alt='Get it on Flathub'
        src='https://flathub.org/api/badge?locale=en'
@@ -76,7 +76,7 @@
        style="height: 50px"
        height="50" />
   </a>
-  
+
 <a href="https://snapcraft.io/superproductivity" target="_blank">
   <img alt="Get it from the Snap Store"
        src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg"
@@ -91,7 +91,7 @@
        style="height: 50px"
        height="50" />
 </a>
-<a href='//apps.apple.com/de/app/super-productivity/id1482572463?l=en&mt=12' target="_blank">
+<a href='//apps.apple.com/app/super-productivity/id1482572463?l=en&mt=12' target="_blank">
   <img src='docs/screens/app-store-badge.svg'
        align="center"
        alt='App Store Badge'
@@ -141,7 +141,7 @@
 
 And much more!
 
-<a href="https://youtu.be/_mvMXWLsL-8"><img alt="Work View with global links" src="screens/screen_standard.png" width="100%"></a>
+<a href="https://youtu.be/_mvMXWLsL-8"><img alt="Work View with global links" src="docs/screens/screen_standard.png" width="100%"></a>
 
 ## :question: How to use it
 
@@ -175,13 +175,13 @@ There is another older – the app looks and feels much better now ;) – [artic
 
 Can be used when adding a task. <strong>(Each of these can be disabled in settings->short syntax)</strong>
 
-- `# <tag-name>`: add a tag to the task  
+- `# <tag-name>`: add a tag to the task
   (`"task-description #tag1"`)
-- `<number>m` or `<number>h`: set time-estimate for the task  
+- `<number>m` or `<number>h`: set time-estimate for the task
   (`"task-description 10m"` or `"task-description 5h"`)
 - `@<time>`: add due time to the task
   (`"task-description @fri 10pm"`)
-- `+ <project-name>`: add the task to an existing project  
+- `+ <project-name>`: add the task to an existing project
   (`"task-description +Important Project"`)
 - `Ctr + 2`: toggle between moving the new task to the bottom and top of the list
 
@@ -277,7 +277,7 @@ Install via [homebrew cask](https://github.com/caskroom/homebrew-cask):
 brew install --cask superproductivity
 ```
 
-<a href='//apps.apple.com/de/app/super-productivity/id1482572463?l=en&mt=12' target="_blank">
+<a href='//apps.apple.com/app/super-productivity/id1482572463?l=en&mt=12' target="_blank">
   <img src='docs/screens/app-store-badge.svg'
        alt='App Store Badge'
        height="50" />
@@ -347,7 +347,7 @@ There are several ways to help.
 
 Recently support for Super Productivity has been growing! A big thank you to all our sponsors, especially the ones below!
 
-<p style="font-size:21px; color:black;">Browser testing via 
+<p style="font-size:21px; color:black;">Browser testing via
         <a href="https://www.lambdatest.com/?utm_source=superproductivity&utm_medium=sponsor" target="_blank">
             <img src="https://www.lambdatest.com/blue-logo.png" style="vertical-align: middle;" width="250" height="45" />
         </a>
@@ -383,7 +383,7 @@ npm run env
 ng serve
 ```
 
-Afterwards you can open http://localhost:4200 in your browser. For most adjustments this should be enough and also enables you to use the [redux dev tools](https://chrome.google.com/webstore/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpmmfibljd?hl=de).
+Afterwards you can open http://localhost:4200 in your browser. For most adjustments this should be enough and also enables you to use the [Redux DevTools](https://chrome.google.com/webstore/detail/redux-devtools/lmhkpmbekcpmknklioeibfkpmmfibljd).
 
 If you want to run the app standalone do the following:
 

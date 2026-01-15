@@ -2,10 +2,11 @@ import { test, expect } from '../../fixtures/test.fixture';
 import { scheduleTaskViaDetailPanel } from '../../utils/schedule-task-helper';
 
 const TASK = 'task';
-const TASK_SCHEDULE_BTN = '.ico-btn.schedule-btn';
 const SCHEDULE_ROUTE_BTN = 'magic-side-nav a[href="#/scheduled-list"]';
 const SCHEDULE_PAGE_CMP = 'scheduled-list-page';
-const SCHEDULE_PAGE_TASKS = `${SCHEDULE_PAGE_CMP} .tasks planner-task`;
+// Target only the first .tasks container (scheduled with time, not planned for days)
+const SCHEDULE_PAGE_FIRST_TASKS_CONTAINER = `${SCHEDULE_PAGE_CMP} .component-wrapper:nth-of-type(2) .tasks`;
+const SCHEDULE_PAGE_TASKS = `${SCHEDULE_PAGE_FIRST_TASKS_CONTAINER} planner-task`;
 const SCHEDULE_PAGE_TASK_1 = `${SCHEDULE_PAGE_TASKS}:first-of-type`;
 const SCHEDULE_PAGE_TASK_1_TITLE_EL = `${SCHEDULE_PAGE_TASK_1} .title`;
 
@@ -27,10 +28,9 @@ test.describe('Reminders Schedule Page', () => {
     // Open detail panel to access schedule action
     await scheduleTaskViaDetailPanel(page, targetTask, scheduleTime);
 
-    // Wait for schedule indicator to appear on the task
-    await targetTask
-      .locator(TASK_SCHEDULE_BTN)
-      .waitFor({ state: 'visible', timeout: 10000 });
+    // Note: After scheduling with time, task may disappear from Today view
+    // because scheduleTaskWithTime sets dueDay: undefined.
+    // We skip checking for schedule button visibility and go directly to scheduled list.
 
     // Navigate to scheduled page
     try {
@@ -69,10 +69,9 @@ test.describe('Reminders Schedule Page', () => {
 
       await scheduleTaskViaDetailPanel(page, task, scheduleTime);
 
-      await task
-        .locator(TASK_SCHEDULE_BTN)
-        .first()
-        .waitFor({ state: 'visible', timeout: 10000 });
+      // Note: After scheduling with time, task may disappear from Today view
+      // because scheduleTaskWithTime sets dueDay: undefined.
+      // We skip checking for schedule button visibility.
     };
 
     // Add and schedule first task
@@ -105,12 +104,9 @@ test.describe('Reminders Schedule Page', () => {
 
     await scheduleTask(title2, scheduleTime2);
 
-    // Verify both tasks have schedule indicators
-    const task1 = page.locator(TASK).filter({ hasText: title1 }).first();
-    const task2 = page.locator(TASK).filter({ hasText: title2 }).first();
-
-    await expect(task1.locator(TASK_SCHEDULE_BTN).first()).toBeVisible();
-    await expect(task2.locator(TASK_SCHEDULE_BTN).first()).toBeVisible();
+    // Note: After scheduling with time, tasks disappear from Today view
+    // (scheduleTaskWithTime sets dueDay: undefined).
+    // We verify tasks in the scheduled list instead.
 
     // Navigate to scheduled page
     try {

@@ -1,5 +1,5 @@
-import { Injectable, signal } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { DestroyRef, inject, Injectable, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, of, timer } from 'rxjs';
 import {
   delay,
@@ -26,6 +26,8 @@ interface CountUpOptions {
 
 @Injectable({ providedIn: 'root' })
 export class GlobalProgressBarService {
+  private _destroyRef = inject(DestroyRef);
+
   // Use signals internally
   private _nrOfRequests = signal(0);
   private _label = signal<GlobalProgressBarLabel | null>(null);
@@ -66,7 +68,7 @@ export class GlobalProgressBarService {
   );
 
   constructor() {
-    this._dirtyCountdown$.subscribe();
+    this._dirtyCountdown$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe();
   }
 
   countUp(url: string, options?: CountUpOptions): void {

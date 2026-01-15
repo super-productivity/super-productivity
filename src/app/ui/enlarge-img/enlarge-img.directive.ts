@@ -29,7 +29,7 @@ export class EnlargeImgDirective {
     this.imageEl = this._el.nativeElement;
   }
 
-  @HostListener('click', ['$event']) onClick(): void {
+  @HostListener('click') onClick(): void {
     this.isImg = this.imageEl.tagName.toLowerCase() === 'img';
 
     if (this.isImg || this.enlargeImg()) {

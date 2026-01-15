@@ -15,7 +15,6 @@ export type GithubPullRequest = GithubOriginalPullRequest;
 export type GithubComment = GithubOriginalComment;
 
 export type GithubIssueReduced = Readonly<{
-  // eslint-disable-next-line id-blacklist
   state: GithubState;
   title: string;
   // to make it consistent with non reduced issue

@@ -3,10 +3,10 @@ import { first } from 'rxjs/operators';
 import { SHEPHERD_STEPS, TourId } from './shepherd-steps.const';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskService } from '../tasks/task.service';
-import { Actions } from '@ngrx/effects';
 import { GlobalConfigService } from '../config/global-config.service';
 import { Router } from '@angular/router';
 import { WorkContextService } from '../work-context/work-context.service';
+import { LOCAL_ACTIONS } from '../../util/local-actions.token';
 
 @Injectable({
   providedIn: 'root',
@@ -14,7 +14,7 @@ import { WorkContextService } from '../work-context/work-context.service';
 export class ShepherdService {
   private layoutService = inject(LayoutService);
   private taskService = inject(TaskService);
-  private actions$ = inject(Actions);
+  private actions$ = inject(LOCAL_ACTIONS);
   private globalConfigService = inject(GlobalConfigService);
   private _router = inject(Router);
   private workContextService = inject(WorkContextService);

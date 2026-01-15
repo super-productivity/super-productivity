@@ -44,6 +44,18 @@ test.describe('WebDAV Sync Full Flow', () => {
     const { context: contextA, page: pageA } = await setupSyncClient(browser, url);
     const syncPageA = new SyncPage(pageA);
     const workViewPageA = new WorkViewPage(pageA);
+
+    // Add console logging for debugging
+    pageA.on('console', (msg) => {
+      if (
+        msg.text().includes('FileBasedSyncAdapter') ||
+        msg.text().includes('OperationLogSyncService') ||
+        msg.text().includes('SyncService')
+      ) {
+        console.log(`[Client A Console] ${msg.type()}: ${msg.text()}`);
+      }
+    });
+
     await workViewPageA.waitForTaskList();
 
     // Configure Sync on Client A
@@ -54,24 +66,57 @@ test.describe('WebDAV Sync Full Flow', () => {
     const taskName = 'Task from Client A';
     await workViewPageA.addTask(taskName);
     await expect(pageA.locator('task')).toHaveCount(1);
+    console.log('[Test] Task created on Client A');
+
+    // Wait for state to persist before syncing
+    await waitForStatePersistence(pageA);
+    console.log('[Test] State persisted on Client A');
 
     // Sync Client A (Upload)
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
+    console.log('[Test] Sync completed on Client A');
 
     // --- Client B ---
     const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
+
+    // Add console logging for debugging
+    pageB.on('console', (msg) => {
+      if (
+        msg.text().includes('FileBasedSyncAdapter') ||
+        msg.text().includes('OperationLogSyncService') ||
+        msg.text().includes('SyncService') ||
+        msg.text().includes('RemoteOpsProcessingService') ||
+        msg.text().includes('OperationApplierService')
+      ) {
+        console.log(`[Client B Console] ${msg.type()}: ${msg.text()}`);
+      }
+    });
+
     await workViewPageB.waitForTaskList();
 
     // Configure Sync on Client B (Same path)
     await syncPageB.setupWebdavSync(WEBDAV_CONFIG);
     await expect(syncPageB.syncBtn).toBeVisible();
+    console.log('[Test] Sync configured on Client B');
 
     // Sync Client B (Download)
     await syncPageB.triggerSync();
     await waitForSyncComplete(pageB, syncPageB);
+    console.log('[Test] Sync completed on Client B');
+
+    // Debug: Check task count
+    const taskCountB = await pageB.locator('task').count();
+    console.log(`[Test] Task count on Client B: ${taskCountB}`);
+
+    // Debug: Check for any tasks in DOM
+    const taskHTML = await pageB
+      .locator('task-list')
+      .innerHTML()
+      .catch(() => 'N/A');
+    console.log(`[Test] TaskList HTML length: ${taskHTML.length}`);
 
     // Verify Task appears on Client B
     await expect(pageB.locator('task')).toHaveCount(1);
@@ -143,13 +188,52 @@ test.describe('WebDAV Sync Full Flow', () => {
 
     // --- Conflict Resolution ---
     console.log('Testing Conflict Resolution...');
+
+    // Close old Client B context - it may have stale sync state after multiple reloads
+    await contextB.close();
+
     // Create new task "Conflict Task" on A
     await workViewPageA.addTask('Conflict Task');
+
+    // Wait for state persistence before syncing
+    await waitForStatePersistence(pageA);
+
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
 
-    await syncPageB.triggerSync();
-    await waitForSyncComplete(pageB, syncPageB);
+    // Wait for WebDAV server to process A's upload
+    await pageA.waitForTimeout(2000);
+
+    // Create a fresh Client B for conflict test
+    console.log('Creating fresh Client B for conflict test...');
+    const { context: contextB2, page: pageB2 } = await setupSyncClient(browser, url);
+    const syncPageB2 = new SyncPage(pageB2);
+    const workViewPageB2 = new WorkViewPage(pageB2);
+    await workViewPageB2.waitForTaskList();
+
+    // Setup sync on fresh Client B
+    await syncPageB2.setupWebdavSync(WEBDAV_CONFIG);
+    await syncPageB2.triggerSync();
+    await waitForSyncComplete(pageB2, syncPageB2);
+
+    // Wait for state persistence
+    await waitForStatePersistence(pageB2);
+
+    // Reload to ensure UI reflects synced state
+    await pageB2.reload();
+    await waitForAppReady(pageB2);
+    await dismissTourIfVisible(pageB2);
+    await workViewPageB2.waitForTaskList();
+
+    // Final assertion - should have 2 tasks now
+    const taskCount = await pageB2.locator('task').count();
+    console.log(`After conflict sync: ${taskCount} tasks on Client B`);
+
+    // Debug: List all task titles
+    const taskTitles = await pageB2.locator('.task-title').allInnerTexts();
+    console.log(`Task titles on B: ${JSON.stringify(taskTitles)}`);
+
+    await expect(pageB2.locator('task')).toHaveCount(2, { timeout: 5000 });
 
     // Edit on A: "Conflict Task A"
     const taskA = pageA.locator('task', { hasText: 'Conflict Task' }).first();
@@ -162,28 +246,32 @@ test.describe('WebDAV Sync Full Flow', () => {
     // Wait for state persistence and ensure timestamps differ between edits
     await waitForStatePersistence(pageA);
 
-    // Edit on B: "Conflict Task B"
-    const taskB = pageB.locator('task', { hasText: 'Conflict Task' }).first();
-    await taskB.click();
-    const titleB = taskB.locator('.task-title');
-    await titleB.click();
-    await titleB.locator('input, textarea').fill('Conflict Task B');
-    await pageB.keyboard.press('Enter');
+    // Edit on B2: "Conflict Task B"
+    const taskB2 = pageB2.locator('task', { hasText: 'Conflict Task' }).first();
+    await taskB2.click();
+    const titleB2 = taskB2.locator('.task-title');
+    await titleB2.click();
+    await titleB2.locator('input, textarea').fill('Conflict Task B');
+    await pageB2.keyboard.press('Enter');
 
     // Sync A (Uploads "A")
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
 
-    // Sync B (Downloads "A" but has "B") -> Conflict
-    await syncPageB.triggerSync();
-    const result = await waitForSyncComplete(pageB, syncPageB);
+    // Sync B2 (Downloads "A" but has "B") -> Conflict
+    await syncPageB2.triggerSync();
+    const result = await waitForSyncComplete(pageB2, syncPageB2);
 
     if (result === 'success') {
       console.log(
         'Warning: No conflict detected (Auto-merged or overwrite). Checking content...',
       );
-      const isA = await pageB.locator('task', { hasText: 'Conflict Task A' }).isVisible();
-      const isB = await pageB.locator('task', { hasText: 'Conflict Task B' }).isVisible();
+      const isA = await pageB2
+        .locator('task', { hasText: 'Conflict Task A' })
+        .isVisible();
+      const isB = await pageB2
+        .locator('task', { hasText: 'Conflict Task B' })
+        .isVisible();
       console.log(`Content on B: A=${isA}, B=${isB}`);
       // If it was merged/overwritten, we skip the resolution steps
     } else {
@@ -191,10 +279,10 @@ test.describe('WebDAV Sync Full Flow', () => {
 
       // Resolve conflict: Use Remote (A)
       console.log('Resolving conflict with Remote...');
-      await pageB.locator('dialog-sync-conflict button', { hasText: /Remote/i }).click();
+      await pageB2.locator('dialog-sync-conflict button', { hasText: /Remote/i }).click();
 
       // Handle potential confirmation dialog
-      const confirmDialog = pageB.locator('dialog-confirm');
+      const confirmDialog = pageB2.locator('dialog-confirm');
       try {
         await confirmDialog.waitFor({ state: 'visible', timeout: 3000 });
         await confirmDialog.locator('button[color="warn"]').click();
@@ -202,16 +290,16 @@ test.describe('WebDAV Sync Full Flow', () => {
         // Confirmation might not appear
       }
 
-      await waitForSyncComplete(pageB, syncPageB);
+      await waitForSyncComplete(pageB2, syncPageB2);
 
-      await expect(pageB.locator('task', { hasText: 'Conflict Task A' })).toBeVisible();
+      await expect(pageB2.locator('task', { hasText: 'Conflict Task A' })).toBeVisible();
       await expect(
-        pageB.locator('task', { hasText: 'Conflict Task B' }),
+        pageB2.locator('task', { hasText: 'Conflict Task B' }),
       ).not.toBeVisible();
     }
 
     // Cleanup
     await contextA.close();
-    await contextB.close();
+    await contextB2.close();
   });
 });

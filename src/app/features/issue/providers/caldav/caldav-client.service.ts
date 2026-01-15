@@ -163,9 +163,9 @@ export class CaldavClientService {
     }
     for (i = 0; i < etag.length; i++) {
       chr = etag.charCodeAt(i);
-      hash = (hash << 5) - hash + chr; //eslint-disable-line no-bitwise
+      hash = (hash << 5) - hash + chr;
       // Convert to 32bit integer
-      hash |= 0; //eslint-disable-line no-bitwise
+      hash |= 0;
     }
     return hash;
   }
@@ -295,7 +295,7 @@ export class CaldavClientService {
       const oldOpen = xhr.open;
 
       // override open() method to add headers
-      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+
       xhr.open = function (): void {
         // @ts-ignore
         // eslint-disable-next-line prefer-rest-params

@@ -1,4 +1,63 @@
 services:
+  # PostgreSQL database for SuperSync
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: supersync
+      POSTGRES_PASSWORD: superpassword
+      POSTGRES_DB: supersync_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U supersync']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # SuperSync server for E2E testing
+  # Start with: docker compose up -d supersync
+  # Required for @supersync e2e tests
+  supersync:
+    build:
+      context: .
+      dockerfile: packages/super-sync-server/Dockerfile.test
+    env_file: .env
+    ports:
+      - '1900:1900'
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - PORT=1900
+      - TEST_MODE=true
+      - TEST_MODE_CONFIRM=yes-i-understand-the-risks
+      - JWT_SECRET=e2e-test-secret-minimum-32-chars-long-for-security
+      - CORS_ORIGINS=*
+      - DATA_DIR=/data
+      # Prisma connection string
+      - DATABASE_URL=postgresql://supersync:superpassword@db:5432/supersync_db
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1:1900/health',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   # Super Productivity app
   app:
     image: super-productivity/super-productivity:latest
@@ -29,4 +88,5 @@ services:
       start_period: 10s
 
 volumes:
+  db_data:
   webdav_data:

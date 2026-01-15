@@ -33,18 +33,12 @@
         }
       </mat-select>
     </mat-form-field>
-    <mat-form-field class="width100">
-      <input
-        hidden="true"
-        matInput
-      />
-      <mat-slide-toggle
-        matInput
-        [checked]="this.config?.isIncreaseDoneSoundPitch"
-        formControlName="isIncreaseDoneSoundPitch"
-        >{{ T.GCF.SOUND.IS_INCREASE_DONE_PITCH | translate }}</mat-slide-toggle
-      >
-    </mat-form-field>
+    <mat-slide-toggle
+      class="width100"
+      [checked]="this.config?.isIncreaseDoneSoundPitch"
+      formControlName="isIncreaseDoneSoundPitch"
+      >{{ T.GCF.SOUND.IS_INCREASE_DONE_PITCH | translate }}</mat-slide-toggle
+    >
     <mat-form-field class="width100">
       <mat-label>{{ T.GCF.SOUND.BREAK_REMINDER_SOUND | translate }}</mat-label>
       <mat-select formControlName="breakReminderSound">

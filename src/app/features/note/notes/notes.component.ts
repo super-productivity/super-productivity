@@ -89,6 +89,7 @@ export class NotesComponent {
       minWidth: '100vw',
       height: '100vh',
       restoreFocus: true,
+      autoFocus: 'textarea',
     });
   }
 

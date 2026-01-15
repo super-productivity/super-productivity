@@ -16,7 +16,6 @@ export const mapScheduleDaysToScheduleEvents = (
 
   days.forEach((day, dayIndex) => {
     beyondBudgetDays[dayIndex] = day.beyondBudgetTasks.map((taskPlannedForDay) => {
-      // eslint-disable-next-line no-mixed-operators
       const timeLeft = getTimeLeftForTask(taskPlannedForDay);
       const timeLeftInHours = timeLeft / 1000 / 60 / 60;
       const rowSpan = Math.max(Math.round(timeLeftInHours * FH), 1);

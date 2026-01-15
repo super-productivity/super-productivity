@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { merge, Observable, timer } from 'rxjs';
 import {
   catchError,
@@ -25,7 +26,7 @@ import { IssueLog } from '../../../core/log';
 @Injectable()
 export class PollToBacklogEffects {
   private readonly _issueService = inject(IssueService);
-  private readonly _actions$ = inject(Actions);
+  private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _syncTriggerService = inject(SyncTriggerService);
   private readonly _snackService = inject(SnackService);

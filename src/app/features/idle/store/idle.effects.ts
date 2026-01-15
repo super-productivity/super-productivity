@@ -1,5 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { ChromeExtensionInterfaceService } from '../../../core/chrome-extension-interface/chrome-extension-interface.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
@@ -58,7 +60,7 @@ const IDLE_POLL_INTERVAL = 1000;
 
 @Injectable()
 export class IdleEffects {
-  private actions$ = inject(Actions);
+  private actions$ = inject(LOCAL_ACTIONS);
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _workContextService = inject(WorkContextService);
   private _taskService = inject(TaskService);
@@ -105,6 +107,7 @@ export class IdleEffects {
   // while the dialog is open, preventing the flickering between two different values.
   triggerIdleWhenEnabled$ = createEffect(() =>
     this._store.select(selectIdleConfig).pipe(
+      skipWhileApplyingRemoteOps(),
       switchMap(
         ({
           isEnableIdleTimeTracking,
@@ -142,6 +145,9 @@ export class IdleEffects {
 
   handleIdleInit$ = createEffect(() =>
     this._store.select(selectIsIdle).pipe(
+      // Guard: skip idle state changes during sync - CRITICAL because this effect
+      // has data mutations (removeTimeSpent, setCurrentId, decreaseCounterToday)
+      skipWhileApplyingRemoteOps(),
       distinctUntilChanged(),
       switchMap((isIdle) => iif(() => isIdle, of(isIdle), EMPTY)),
       withLatestFrom(

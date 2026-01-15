@@ -1,8 +1,6 @@
 import { mapToScheduleDays } from './map-to-schedule-days';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 
-/* eslint-disable @typescript-eslint/naming-convention */
-
 // Helper function to conditionally skip tests that are timezone-dependent
 // These tests were written with hardcoded expectations for Europe/Berlin timezone
 const TZ_OFFSET = new Date('1970-01-01').getTimezoneOffset() * 60000;

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { Action } from '@ngrx/store';
 import { addNewTagsFromShortSyntax } from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -23,7 +24,6 @@ import { shortSyntax } from '../short-syntax';
 import { remindOptionToMilliseconds } from '../util/remind-option-to-milliseconds';
 import { environment } from '../../../../environments/environment';
 import { SnackService } from '../../../core/snack/snack.service';
-import { PlannerActions } from '../../planner/store/planner.actions';
 import { T } from '../../../t.const';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
@@ -38,7 +38,7 @@ import { TaskLog } from '../../../core/log';
 
 @Injectable()
 export class ShortSyntaxEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _taskService = inject(TaskService);
   private _tagService = inject(TagService);
   private _projectService = inject(ProjectService);
@@ -135,42 +135,44 @@ export class ShortSyntaxEffects {
         }
 
         const actions: Action[] = [];
-        const tagIds: string[] = [...(r.taskChanges.tagIds || task.tagIds)];
         const { taskChanges } = r;
 
-        actions.push(
-          TaskSharedActions.updateTask({
-            task: {
-              id: task.id,
-              changes: r.taskChanges,
-            },
-            isIgnoreShortSyntax: true,
-          }),
-        );
-        if (taskChanges.dueWithTime && !taskChanges.reminderId) {
+        // Build scheduling info from parsed short syntax
+        let schedulingInfo:
+          | {
+              day?: string;
+              isAddToTop?: boolean;
+              dueWithTime?: number;
+              remindAt?: number | null;
+              isMoveToBacklog?: boolean;
+            }
+          | undefined;
+
+        if (taskChanges.dueWithTime && !taskChanges.remindAt) {
           const { dueWithTime } = taskChanges;
           if (taskChanges.hasPlannedTime === false) {
+            // Plan for day only (no specific time)
             const plannedDay = new Date(dueWithTime);
-            const plannedDayInIsoFormat = getDbDateStr(plannedDay);
-            const plan = PlannerActions.planTaskForDay({
-              task,
-              day: plannedDayInIsoFormat,
-            });
-            actions.push(plan);
+            schedulingInfo = {
+              day: getDbDateStr(plannedDay),
+              isAddToTop: false,
+            };
           } else {
-            const schedule = TaskSharedActions.scheduleTaskWithTime({
-              task,
-              dueWithTime: dueWithTime,
+            // Schedule with specific time
+            schedulingInfo = {
+              dueWithTime,
               remindAt: remindOptionToMilliseconds(
                 dueWithTime,
                 this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
                   DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
               ),
               isMoveToBacklog: false,
-            });
-            actions.push(schedule);
+            };
           }
         }
+
+        // Determine target project
+        let targetProjectId: string | undefined;
         if (r.projectId && r.projectId !== task.projectId && !task.parentId) {
           if (task.repeatCfgId) {
             this._snackService.open({
@@ -178,45 +180,35 @@ export class ShortSyntaxEffects {
               msg: T.F.TASK.S.CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK,
             });
           } else {
-            actions.push(
-              TaskSharedActions.moveToOtherProject({
-                task: { ...task, subTasks: [] },
-                targetProjectId: r.projectId,
-              }),
-            );
+            targetProjectId = r.projectId;
           }
         } else if (isAddDefaultProjectIfNecessary) {
-          actions.push(
-            TaskSharedActions.moveToOtherProject({
-              task: { ...task, subTasks: [] },
-              targetProjectId: defaultProjectId as string,
-            }),
-          );
+          targetProjectId = defaultProjectId as string;
         }
 
+        // Build task changes including tagIds update
+        const tagIds: string[] = [...(r.taskChanges.tagIds || task.tagIds)];
+        const isEqualTags = JSON.stringify(tagIds) === JSON.stringify(task.tagIds);
+        const finalTaskChanges = { ...taskChanges };
+        if (tagIds && tagIds.length && !isEqualTags) {
+          finalTaskChanges.tagIds = unique(tagIds);
+        }
+
+        // Use compound action for atomic state update
+        actions.push(
+          TaskSharedActions.applyShortSyntax({
+            task,
+            taskChanges: finalTaskChanges,
+            targetProjectId,
+            schedulingInfo,
+          }),
+        );
+
+        // New tag creation requires user confirmation, so remains separate
         if (r.newTagTitles.length) {
           actions.push(
             addNewTagsFromShortSyntax({ taskId: task.id, newTitles: r.newTagTitles }),
           );
-        }
-
-        if (tagIds && tagIds.length) {
-          const isEqualTags = JSON.stringify(tagIds) === JSON.stringify(task.tagIds);
-          if (!task.tagIds) {
-            throw new Error('Task Old TagIds need to be passed');
-          }
-          if (!isEqualTags) {
-            actions.push(
-              TaskSharedActions.updateTask({
-                task: {
-                  id: task.id,
-                  changes: {
-                    tagIds: unique(tagIds),
-                  },
-                },
-              }),
-            );
-          }
         }
 
         return actions;

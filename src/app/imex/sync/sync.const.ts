@@ -6,8 +6,6 @@ import { createEmptyEntity } from '../../util/create-empty-entity';
 import { TaskArchive } from '../../features/tasks/task.model';
 import { initialTaskRepeatCfgState } from '../../features/task-repeat-cfg/store/task-repeat-cfg.reducer';
 import { initialMetricState } from '../../features/metric/store/metric.reducer';
-import { initialImprovementState } from '../../features/metric/improvement/store/improvement.reducer';
-import { initialObstructionState } from '../../features/metric/obstruction/store/obstruction.reducer';
 import { AppBaseData } from './sync.model';
 import { initialNoteState } from '../../features/note/store/note.reducer';
 import { initialGlobalConfigState } from '../../features/config/store/global-config.reducer';
@@ -24,6 +22,27 @@ export const SYNC_BEFORE_GOING_TO_SLEEP_THROTTLE_TIME = 1000 * 60 * 5;
 
 export const SYNC_BEFORE_CLOSE_ID = 'SYNC_BEFORE_CLOSE_ID';
 export const SYNC_MIN_INTERVAL = 5000;
+
+/**
+ * Maximum time to wait for an ongoing sync to complete before considering it timed out.
+ * Used by `afterCurrentSyncDoneOrSyncDisabled$` to prevent indefinite waiting.
+ */
+export const SYNC_WAIT_TIMEOUT_MS = 40000;
+
+/**
+ * Small delay after data re-initialization to allow Angular change detection
+ * and prevent potential follow-up timing issues.
+ */
+export const SYNC_REINIT_DELAY_MS = 100;
+
+/**
+ * Delay before triggering the initial sync for SuperSync provider.
+ * This allows the UI to render and become interactive first.
+ * Only applies to SuperSync because:
+ * - SuperSync uses operation-based sync where data is already local
+ * - Other providers (Dropbox, WebDAV, LocalFile) may need to download data before user can work
+ */
+export const INITIAL_SYNC_DELAY_MS = 500;
 
 export const DEFAULT_APP_BASE_DATA: AppBaseData = {
   project: initialProjectState,
@@ -44,13 +63,7 @@ export const DEFAULT_APP_BASE_DATA: AppBaseData = {
   taskRepeatCfg: initialTaskRepeatCfgState,
   note: initialNoteState,
 
-  // metric
   metric: initialMetricState,
-
-  // TODO remove completely
-  improvement: initialImprovementState,
-  // TODO remove completely
-  obstruction: initialObstructionState,
 };
 
 // NOTE: they should never be changed

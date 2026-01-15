@@ -1,0 +1,81 @@
+h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.warning-icon {
+  color: var(--palette-warn-500);
+}
+
+.message {
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.explanation {
+  margin-bottom: 16px;
+  color: var(--text-color-secondary);
+  font-size: 0.9em;
+}
+
+.import-info {
+  background: var(--background-color-lighter);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+
+  .label {
+    color: var(--text-color-secondary);
+  }
+
+  .value {
+    font-weight: 500;
+
+    &.highlight {
+      color: var(--palette-warn-500);
+      font-weight: 700;
+    }
+  }
+}
+
+.wrap-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+// Mobile responsiveness
+@media (max-width: 600px) {
+  .wrap-buttons {
+    width: 100%;
+    flex-direction: column;
+
+    button {
+      width: 100%;
+    }
+  }
+}
+
+:host ::ng-deep {
+  .mat-mdc-dialog-container {
+    @media (max-width: 600px) {
+      max-width: calc(100vw - 32px);
+      margin: 16px;
+    }
+  }
+
+  .mat-mdc-dialog-content {
+    @media (max-width: 600px) {
+      padding: 0 16px;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+  }
+}

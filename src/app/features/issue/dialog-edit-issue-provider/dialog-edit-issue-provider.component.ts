@@ -47,6 +47,9 @@ import { devError } from '../../../util/dev-error';
 import { IssueLog } from '../../../core/log';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 import { ClickUpAdditionalCfgComponent } from '../providers/clickup/clickup-view-components/clickup-cfg/clickup-additional-cfg.component';
+import { TaskService } from '../../tasks/task.service';
+import { firstValueFrom } from 'rxjs';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -115,6 +118,7 @@ export class DialogEditIssueProviderComponent {
   private _store = inject(Store);
   private _issueService = inject(IssueService);
   private _snackService = inject(SnackService);
+  private _taskService = inject(TaskService);
 
   submit(isSkipClose = false): void {
     if (this.form.valid) {
@@ -220,11 +224,20 @@ export class DialogEditIssueProviderComponent {
         },
       })
       .afterClosed()
-      .subscribe((isConfirm: boolean) => {
+      .subscribe(async (isConfirm: boolean) => {
         if (isConfirm) {
+          const providerId = this.issueProvider!.id;
+
+          // Gather task IDs to unlink - this ensures atomic sync
+          const allTasks = await firstValueFrom(this._taskService.allTasks$);
+          const taskIdsToUnlink = allTasks
+            .filter((task) => task.issueProviderId === providerId)
+            .map((task) => task.id);
+
           this._store.dispatch(
-            IssueProviderActions.deleteIssueProvider({
-              id: this.issueProvider!.id,
+            TaskSharedActions.deleteIssueProvider({
+              issueProviderId: providerId,
+              taskIdsToUnlink,
             }),
           );
           this._matDialogRef.close();

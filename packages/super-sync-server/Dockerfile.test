@@ -1,0 +1,54 @@
+# Dockerfile for running super-sync-server in test mode
+# Used for E2E tests that need a real sync server
+#
+# Build from repo root (to include workspace deps):
+#   docker build -f packages/super-sync-server/Dockerfile.test .
+#
+# Run:
+#   docker run -p 1900:1900 supersync-test
+
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Install required system dependencies for Prisma
+RUN apk add --no-cache openssl libc6-compat
+
+# Copy package files for workspace setup
+COPY package.json package-lock.json ./
+COPY packages/shared-schema/package.json ./packages/shared-schema/
+COPY packages/super-sync-server/package.json ./packages/super-sync-server/
+
+# Install dependencies (ignore scripts to skip husky/prepare from root)
+# Using npm install instead of npm ci due to workspace lock file sync issues
+RUN npm install --workspace=packages/shared-schema --workspace=packages/super-sync-server --ignore-scripts
+
+# Copy source files
+COPY packages/shared-schema/ ./packages/shared-schema/
+COPY packages/super-sync-server/ ./packages/super-sync-server/
+
+# Build shared-schema first (it's a dependency)
+WORKDIR /app/packages/shared-schema
+RUN npm run build
+
+# Build super-sync-server
+WORKDIR /app/packages/super-sync-server
+# Generate Prisma Client
+RUN npx prisma generate
+# Clean dist folder to remove any stale files that might conflict
+RUN rm -rf dist && npm run build
+
+# Copy public files to dist
+RUN cp -r public dist/
+
+EXPOSE 1900
+
+# Run in test mode
+ENV PORT=1900
+ENV TEST_MODE=true
+ENV TEST_MODE_CONFIRM=yes-i-understand-the-risks
+ENV CORS_ORIGINS=*
+ENV JWT_SECRET=e2e-test-secret-minimum-32-chars-long-for-security
+
+# Push schema to DB and start server
+CMD sh -c "npx prisma db push && node dist/src/index.js"

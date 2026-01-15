@@ -1,9 +1,11 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { undoDeleteTask } from './task.actions';
+import { createEffect, ofType } from '@ngrx/effects';
+import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { getLastDeletePayload } from '../../../root-store/meta/undo-task-delete.meta-reducer';
 import { select, Store } from '@ngrx/store';
 import {
+  delay,
   distinctUntilChanged,
   filter,
   first,
@@ -34,7 +36,7 @@ import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigat
 
 @Injectable()
 export class TaskUiEffects {
-  private _actions$ = inject(Actions);
+  private _actions$ = inject(LOCAL_ACTIONS);
   private _store$ = inject<Store<any>>(Store);
   private _notifyService = inject(NotifyService);
   private _taskService = inject(TaskService);
@@ -62,6 +64,8 @@ export class TaskUiEffects {
             return [{ project: null, task, activeContextTaskIds }];
           }
         }),
+        // Defer snackbar to next microtask so task add completes first
+        delay(0),
         tap(({ project, task, activeContextTaskIds }) => {
           const isTaskVisibleOnCurrentPage = activeContextTaskIds.includes(task.id);
 
@@ -102,7 +106,12 @@ export class TaskUiEffects {
             msg: T.F.TASK.S.DELETED,
             config: { duration: 5000 },
             actionStr: T.G.UNDO,
-            actionId: undoDeleteTask.type,
+            actionFn: () => {
+              const payload = getLastDeletePayload();
+              if (payload) {
+                this._store$.dispatch(TaskSharedActions.restoreDeletedTask(payload));
+              }
+            },
           });
         }),
       ),
@@ -116,6 +125,7 @@ export class TaskUiEffects {
           globalCfg && globalCfg.timeTracking.isNotifyWhenTimeEstimateExceeded
             ? // reset whenever the current taskId changes (but no the task data, which is polled afterwards)
               this._store$.pipe(select(selectCurrentTaskId)).pipe(
+                // currentTaskId is local UI state (not synced), so distinctUntilChanged is sufficient
                 distinctUntilChanged(),
                 switchMap(() =>
                   this._store$.pipe(
@@ -150,6 +160,7 @@ export class TaskUiEffects {
                   activeBanner?.id === BannerId.TimeEstimateExceeded
                     ? this._store$.pipe(
                         select(selectCurrentTaskId),
+                        // currentTaskId is local UI state (not synced), so distinctUntilChanged is sufficient
                         distinctUntilChanged(),
                         skip(1),
                       )

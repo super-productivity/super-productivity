@@ -1,8 +1,12 @@
-import { TimeTrackingActions } from './time-tracking.actions';
+import {
+  TimeTrackingActions,
+  updateWorkContextData,
+  syncTimeTracking,
+} from './time-tracking.actions';
 import { createFeature, createReducer, on } from '@ngrx/store';
 import { TimeTrackingState } from '../time-tracking.model';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { AppDataCompleteNew } from '../../../pfapi/pfapi-config';
+import { AppDataComplete } from '../../../op-log/model/model-config';
 import { roundTsToMinutes } from '../../../util/round-ts-to-minutes';
 import { TODAY_TAG } from '../../tag/tag.const';
 
@@ -19,8 +23,8 @@ export const timeTrackingReducer = createReducer(
   initialTimeTrackingState,
 
   on(loadAllData, (state, { appDataComplete }) =>
-    (appDataComplete as AppDataCompleteNew).timeTracking
-      ? (appDataComplete as AppDataCompleteNew).timeTracking
+    (appDataComplete as AppDataComplete).timeTracking
+      ? (appDataComplete as AppDataComplete).timeTracking
       : state,
   ),
   on(TimeTrackingActions.updateWholeState, (state, { newState }) => newState),
@@ -49,7 +53,7 @@ export const timeTrackingReducer = createReducer(
         : {}),
       tag: {
         ...state.tag,
-        ...([TODAY_TAG.id, ...task.tagIds] as string[]).reduce((acc, tagId) => {
+        ...([TODAY_TAG.id, ...(task.tagIds || [])] as string[]).reduce((acc, tagId) => {
           acc[tagId] = {
             ...state.tag[tagId],
             [date]: {
@@ -64,7 +68,7 @@ export const timeTrackingReducer = createReducer(
     };
   }),
 
-  on(TimeTrackingActions.updateWorkContextData, (state, { ctx, date, updates }) => {
+  on(updateWorkContextData, (state, { ctx, date, updates }) => {
     const prop = ctx.type === 'TAG' ? 'tag' : 'project';
 
     return {
@@ -77,6 +81,21 @@ export const timeTrackingReducer = createReducer(
             ...(state[prop]?.[ctx.id]?.[date] || {}),
             ...updates,
           },
+        },
+      },
+    };
+  }),
+
+  on(syncTimeTracking, (state, { contextType, contextId, date, data }) => {
+    const prop = contextType === 'TAG' ? 'tag' : 'project';
+
+    return {
+      ...state,
+      [prop]: {
+        ...state[prop],
+        [contextId]: {
+          ...(state[prop]?.[contextId] || {}),
+          [date]: data,
         },
       },
     };

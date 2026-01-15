@@ -14,7 +14,11 @@
     (contextmenu)="openFocusSessionDialog(); $event.preventDefault()"
     (longPress)="openFocusSessionDialog()"
   >
-    <mat-icon>center_focus_strong</mat-icon>
+    @if (isBreakActive()) {
+      <mat-icon>free_breakfast</mat-icon>
+    } @else {
+      <mat-icon>center_focus_strong</mat-icon>
+    }
   </button>
 
   @if (runningTimeMs(); as runningMs) {

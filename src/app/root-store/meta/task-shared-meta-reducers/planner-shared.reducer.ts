@@ -5,7 +5,13 @@ import { Task } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { unique } from '../../../util/unique';
-import { ActionHandlerMap, getTag, updateTags } from './task-shared-helpers';
+import {
+  ActionHandlerMap,
+  filterOutTodayTag,
+  getTag,
+  hasInvalidTodayTag,
+  updateTags,
+} from './task-shared-helpers';
 import {
   TASK_FEATURE_NAME,
   taskAdapter,
@@ -49,11 +55,11 @@ const handleTransferTask = (
   const daysCopy = { ...plannerState.days };
 
   // Update previous day (remove task)
+  // Note: We intentionally DO remove from planner.days[today] when transferring away,
+  // so that AddTasksForTomorrowService doesn't find stale tasks in planner.days[today].
+  // TODAY_TAG.taskIds handles today's task ordering, but planner.days[today] should stay consistent.
   const updatePrevDay =
-    prevDay === ADD_TASK_PANEL_ID ||
-    prevDay === OVERDUE_LIST_ID ||
-    !daysCopy[prevDay] ||
-    prevDay === today;
+    prevDay === ADD_TASK_PANEL_ID || prevDay === OVERDUE_LIST_ID || !daysCopy[prevDay];
 
   if (!updatePrevDay && daysCopy[prevDay]) {
     daysCopy[prevDay] = daysCopy[prevDay].filter((id: string) => id !== task.id);
@@ -83,9 +89,14 @@ const handleTransferTask = (
 
   // Then handle today tag updates (from tag.reducer)
   const todayTag = getTag(state, TODAY_TAG.id);
+  // Get current task's tagIds from the updated state
+  const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
+  const currentTagIds = currentTask?.tagIds || [];
+  const hasTaskTodayTag = hasInvalidTodayTag(currentTagIds);
 
   if (prevDay === today && newDay !== today) {
-    return updateTags(state, [
+    // Moving away from today - update both tag.taskIds and task.tagIds (board-style pattern)
+    state = updateTags(state, [
       {
         id: TODAY_TAG.id,
         changes: {
@@ -93,16 +104,35 @@ const handleTransferTask = (
         },
       },
     ]);
+
+    // Remove TODAY from task.tagIds if present
+    if (hasTaskTodayTag) {
+      state = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: { tagIds: filterOutTodayTag(currentTagIds) },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+    }
+
+    return state;
   }
 
   if (prevDay !== today && newDay === today) {
+    // Moving to today - update TODAY_TAG.taskIds for ordering
+    // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
+    // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
     const taskIds = [...todayTag.taskIds];
     const targetIndexToUse = targetTaskId
       ? todayTag.taskIds.findIndex((id) => id === targetTaskId)
       : targetIndex;
     taskIds.splice(targetIndexToUse, 0, task.id);
 
-    return updateTags(state, [
+    state = updateTags(state, [
       {
         id: TODAY_TAG.id,
         changes: {
@@ -110,6 +140,22 @@ const handleTransferTask = (
         },
       },
     ]);
+
+    // Ensure TODAY_TAG is NOT in task.tagIds (cleanup if present from legacy data)
+    if (hasTaskTodayTag) {
+      state = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: { tagIds: filterOutTodayTag(currentTagIds) },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+    }
+
+    return state;
   }
 
   return state;
@@ -123,31 +169,71 @@ const handlePlanTaskForDay = (
 ): RootState => {
   const todayStr = getDbDateStr();
   const todayTag = getTag(state, TODAY_TAG.id);
+  const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
+  const currentTagIds = currentTask?.tagIds || [];
+  const hasTaskTodayTag = hasInvalidTodayTag(currentTagIds);
 
-  if (day === todayStr && !todayTag.taskIds.includes(task.id)) {
-    const newTaskIds = unique(
+  if (day === todayStr) {
+    // Adding to today - update TODAY_TAG.taskIds for ordering
+    // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
+    // Membership is determined by task.dueDay. See: docs/ai/today-tag-architecture.md
+    const newTagTaskIds = unique(
       isAddToTop
-        ? [task.id, ...todayTag.taskIds]
+        ? [task.id, ...todayTag.taskIds.filter((tid) => tid !== task.id)]
         : [...todayTag.taskIds.filter((tid) => tid !== task.id), task.id],
     );
-    return updateTags(state, [
+
+    state = updateTags(state, [
       {
         id: todayTag.id,
         changes: {
-          taskIds: newTaskIds,
+          taskIds: newTagTaskIds,
         },
       },
     ]);
-  } else if (day !== todayStr && todayTag.taskIds.includes(task.id)) {
-    const newTaskIds = todayTag.taskIds.filter((id) => id !== task.id);
-    return updateTags(state, [
+
+    // Ensure TODAY_TAG is NOT in task.tagIds (cleanup if present from legacy data)
+    if (hasTaskTodayTag) {
+      state = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: { tagIds: filterOutTodayTag(currentTagIds) },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+    }
+
+    return state;
+  } else if (todayTag.taskIds.includes(task.id)) {
+    // Moving away from today - update both tag.taskIds and task.tagIds
+    const newTagTaskIds = todayTag.taskIds.filter((id) => id !== task.id);
+    state = updateTags(state, [
       {
         id: todayTag.id,
         changes: {
-          taskIds: newTaskIds,
+          taskIds: newTagTaskIds,
         },
       },
     ]);
+
+    // Remove TODAY from task.tagIds if present
+    if (hasTaskTodayTag) {
+      state = {
+        ...state,
+        [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+          {
+            id: task.id,
+            changes: { tagIds: filterOutTodayTag(currentTagIds) },
+          },
+          state[TASK_FEATURE_NAME],
+        ),
+      };
+    }
+
+    return state;
   }
 
   return state;
@@ -161,11 +247,18 @@ const handleMoveBeforeTask = (
   const todayTag = getTag(state, TODAY_TAG.id);
 
   if (todayTag.taskIds.includes(toTaskId)) {
+    // Moving to today (target is in today list)
+    // Note: TODAY_TAG is a virtual tag and should NOT be in task.tagIds
     const taskIds = todayTag.taskIds.filter((id) => id !== fromTask.id);
     const targetIndex = taskIds.indexOf(toTaskId);
-    taskIds.splice(targetIndex, 0, fromTask.id);
+    if (targetIndex === -1) {
+      // Edge case: toTaskId was filtered out (e.g., moving task before itself)
+      taskIds.push(fromTask.id);
+    } else {
+      taskIds.splice(targetIndex, 0, fromTask.id);
+    }
 
-    return updateTags(state, [
+    state = updateTags(state, [
       {
         id: todayTag.id,
         changes: {
@@ -173,8 +266,12 @@ const handleMoveBeforeTask = (
         },
       },
     ]);
+
+    return state;
   } else if (todayTag.taskIds.includes(fromTask.id)) {
-    return updateTags(state, [
+    // Moving away from today
+    // Note: TODAY_TAG is a virtual tag and should NOT be in task.tagIds
+    state = updateTags(state, [
       {
         id: todayTag.id,
         changes: {
@@ -182,6 +279,8 @@ const handleMoveBeforeTask = (
         },
       },
     ]);
+
+    return state;
   }
 
   return state;

@@ -64,6 +64,12 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     url: 'assets/themes/nord-snow-storm.css',
     requiredMode: 'light',
   },
+  {
+    id: 'catppuccin-mocha',
+    name: 'Catppuccin Mocha',
+    url: 'assets/themes/catppuccin-mocha.css',
+    requiredMode: 'dark',
+  },
 ];
 
 @Injectable({ providedIn: 'root' })

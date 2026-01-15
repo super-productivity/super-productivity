@@ -24,7 +24,7 @@ describe('getSimpleCounterStreakDuration()', () => {
       countOnDay: { [getDbDateStr()]: 1 },
       isTrackStreaks: true,
       streakMinValue: 2,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
+
       streakWeekDays: { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
     },
     {

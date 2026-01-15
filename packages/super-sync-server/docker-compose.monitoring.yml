@@ -1,0 +1,39 @@
+# Monitoring stack for SuperSync Server
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+#
+# Access via SSH tunnel (from local machine):
+#   ssh -L 8080:localhost:8080 -L 3001:localhost:3001 yourserver
+#
+# Then open:
+#   - Dozzle (logs): http://localhost:8080
+#   - Uptime Kuma (uptime): http://localhost:3001
+
+services:
+  # Real-time log viewer (~40MB RAM)
+  # Read-only Docker socket access for viewing container logs
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:8080'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - DOZZLE_NO_ANALYTICS=true
+
+  # Uptime monitoring + alerts (~120MB RAM)
+  # Provides health check monitoring and notifications
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3001:3001'
+    volumes:
+      - uptime-kuma-data:/app/data
+
+volumes:
+  uptime-kuma-data:
