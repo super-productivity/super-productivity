@@ -5,7 +5,7 @@ export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
   apiUrl: 'http://localhost:12315/api',
   authToken: null,
   queryFilter:
-    '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING"} ?m)]]',
+    '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING" "LATER" "NOW"} ?m)]]',
   isUpdateBlockOnTaskDone: true,
   linkFormat: 'logseq-url',
   taskWorkflow: 'TODO_DOING',
@@ -13,7 +13,7 @@ export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
   superProdReferenceProperty: 'superProductivity',
 };
 
-export const LOGSEQ_POLL_INTERVAL = 2 * 60 * 1000; // 2 minutes
+export const LOGSEQ_POLL_INTERVAL = 0.5 * 60 * 1000; // half a minute (it's usually local)
 export const LOGSEQ_TYPE /* : IssueProviderKey */ = 'LOGSEQ';
 
 // Form config will be exported after it's created

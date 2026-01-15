@@ -1,6 +1,14 @@
 import { Injectable, inject } from '@angular/core';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { filter, concatMap, withLatestFrom, mergeMap, switchMap } from 'rxjs/operators';
+import {
+  filter,
+  concatMap,
+  withLatestFrom,
+  mergeMap,
+  switchMap,
+  take,
+  throttleTime,
+} from 'rxjs/operators';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { setCurrentTask, unsetCurrentTask } from '../../../tasks/store/task.actions';
 import { PlannerActions } from '../../../planner/store/planner.actions';
@@ -252,12 +260,46 @@ export class LogseqIssueEffects {
   );
 
   // Effect: Show dialog when there's a discrepancy between SuperProd and Logseq
+  // This effect triggers when a task is updated, started, or stopped
+  // Throttled to avoid too many dialogs opening at once
   promptActivateTaskWhenMarkerChanges$ = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => task.changes.issueWasUpdated === true),
-        concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
+        ofType(
+          TaskSharedActions.updateTask,
+          // Add other relevant actions that might indicate a status change
+          setCurrentTask,
+          unsetCurrentTask,
+        ),
+        // Throttle to avoid too many checks in quick succession
+        throttleTime(2000),
+        concatMap((action) => {
+          // Handle different action types
+          if (action.type === TaskSharedActions.updateTask.type) {
+            const updateAction = action as ReturnType<
+              typeof TaskSharedActions.updateTask
+            >;
+            // Check if this is an issue update or if issueWasUpdated flag is set
+            // Also check if task has Logseq issue data (might be a status update from Logseq)
+            // Include all task updates to catch issue refreshes
+            return this._taskService
+              .getByIdOnce$(updateAction.task.id as string)
+              .pipe(filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId));
+          } else if (action.type === setCurrentTask.type) {
+            const setAction = action as ReturnType<typeof setCurrentTask>;
+            if (setAction.id) {
+              return this._taskService.getByIdOnce$(setAction.id);
+            }
+          } else if (action.type === unsetCurrentTask.type) {
+            // When task is unset, check if previous task was a Logseq task
+            return this._taskService.currentTaskId$.pipe(
+              take(1),
+              filter((id): id is string => !!id),
+              concatMap((id) => this._taskService.getByIdOnce$(id)),
+            );
+          }
+          return EMPTY;
+        }),
         filter((task) => {
           const isLogseqTask = task.issueType === LOGSEQ_TYPE && !!task.issueId;
           // Validate UUID format (must be string with UUID format, not a number)

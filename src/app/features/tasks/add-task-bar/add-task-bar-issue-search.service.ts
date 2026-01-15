@@ -8,6 +8,7 @@ import {
   switchMap,
   take,
   tap,
+  withLatestFrom,
 } from 'rxjs/operators';
 import { TaskService } from '../task.service';
 import { WorkContextService } from '../../work-context/work-context.service';
@@ -42,50 +43,57 @@ export class AddTaskBarIssueSearchService {
     isSearchIssueProviders$: Observable<boolean>,
     isLoading: WritableSignal<boolean>,
   ): Observable<AddTaskSuggestion[]> {
-    return combineLatest([
-      inputText$.pipe(debounceTime(300)),
-      isSearchIssueProviders$,
-      this._workContextService.activeWorkContextTypeAndId$,
-    ]).pipe(
+    return inputText$.pipe(
+      tap(() => {
+        isLoading.set(false);
+      }),
+      debounceTime(300),
       tap(() => {
         isLoading.set(true);
       }),
-      switchMap(([searchTerm, isSearchMode, { activeType, activeId }]) => {
-        if (!isSearchMode) {
-          // When search mode is OFF, don't search anything
-          isLoading.set(false);
-          return of([]);
-        }
+      withLatestFrom(this._workContextService.activeWorkContextTypeAndId$),
+      switchMap(([searchTerm, { activeType, activeId }]) =>
+        isSearchIssueProviders$.pipe(
+          switchMap((isSearchMode) => {
+            if (!isSearchMode) {
+              // When search mode is OFF, don't search anything
+              return of([]);
+            }
 
-        // When search mode is ON, search both archived tasks and issues
-        // Note: Some providers (like Logseq) support empty search to show all available issues
-        const archivedTasksSearch$ =
-          activeType === WorkContextType.PROJECT
-            ? this._searchForProject$(searchTerm, activeId)
-            : this._searchForTag$(searchTerm, activeId);
+            if (!searchTerm?.length) {
+              return of([]);
+            }
 
-        const issueSearch$ = this._issueService
-          .searchAllEnabledIssueProviders$(searchTerm)
-          .pipe(
-            map((issueSuggestions) =>
-              issueSuggestions.map(
-                (issueSuggestion) =>
-                  ({
-                    title: issueSuggestion.title,
-                    titleHighlighted: issueSuggestion.titleHighlighted,
-                    issueData: issueSuggestion.issueData,
-                    issueType: issueSuggestion.issueType,
-                    issueProviderId: issueSuggestion.issueProviderId,
-                  }) as AddTaskSuggestion,
-              ),
-            ),
-            catchError(() => of([])),
-          );
+            // When search mode is ON, search both archived tasks and issues
+            const archivedTasksSearch$ =
+              activeType === WorkContextType.PROJECT
+                ? this._searchForProject$(searchTerm, activeId)
+                : this._searchForTag$(searchTerm, activeId);
 
-        return combineLatest([archivedTasksSearch$, issueSearch$]).pipe(
-          map(([tasks, issues]) => [...tasks, ...issues]),
-        );
-      }),
+            const issueSearch$ = this._issueService
+              .searchAllEnabledIssueProviders$(searchTerm)
+              .pipe(
+                map((issueSuggestions) =>
+                  issueSuggestions.map(
+                    (issueSuggestion) =>
+                      ({
+                        title: issueSuggestion.title,
+                        titleHighlighted: issueSuggestion.titleHighlighted,
+                        issueData: issueSuggestion.issueData,
+                        issueType: issueSuggestion.issueType,
+                        issueProviderId: issueSuggestion.issueProviderId,
+                      }) as AddTaskSuggestion,
+                  ),
+                ),
+                catchError(() => of([])),
+              );
+
+            return combineLatest([archivedTasksSearch$, issueSearch$]).pipe(
+              map(([tasks, issues]) => [...tasks, ...issues]),
+            );
+          }),
+        ),
+      ),
       tap(() => {
         isLoading.set(false);
       }),

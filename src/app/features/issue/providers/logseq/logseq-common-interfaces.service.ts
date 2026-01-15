@@ -9,6 +9,7 @@ import { LogseqCfg } from './logseq.model';
 import { LogseqBlock, LogseqBlockReduced } from './logseq-issue.model';
 import { isLogseqEnabled } from './is-logseq-enabled.util';
 import {
+  DEFAULT_LOGSEQ_CFG,
   LOGSEQ_POLL_INTERVAL,
   LOGSEQ_SEARCH_WILDCARD,
   LOGSEQ_TYPE,
@@ -90,9 +91,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
             searchTerm.trim().length === 0;
 
           // Use custom query from config or default
-          const baseQuery =
-            cfg.queryFilter ||
-            '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING"} ?m)]]';
+          const baseQuery = cfg.queryFilter || DEFAULT_LOGSEQ_CFG.queryFilter;
 
           // If showing all OR empty, use base query without filter
           // Otherwise, add content search filter
@@ -262,9 +261,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     }
 
     // Use custom query from config or default query
-    const query =
-      cfg.queryFilter ||
-      '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING"} ?m)]]';
+    const query = cfg.queryFilter || DEFAULT_LOGSEQ_CFG.queryFilter;
 
     const blocks = await this._logseqApiService
       .queryBlocks$(cfg, query)
