@@ -1,4 +1,4 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { effect, inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PluginLog } from '../core/log';
@@ -29,13 +29,14 @@ export class PluginI18nService {
   readonly currentLanguage = this._currentLanguage.asReadonly();
 
   constructor() {
-    // Initialize current language from global config
-    // Note: Language changes are handled via setCurrentLanguage() which should
-    // be called when the LANGUAGE_CHANGE hook fires or when global config updates
-    const lng = this._globalConfigService.localization()?.lng;
-    if (lng) {
-      this._currentLanguage.set(lng);
-    }
+    // Reactively sync with global config language
+    effect(() => {
+      const lng = this._globalConfigService.localization()?.lng;
+      if (lng && lng !== this._currentLanguage()) {
+        this._currentLanguage.set(lng);
+        PluginLog.log(`[PluginI18n] Language initialized/updated to: ${lng}`);
+      }
+    });
   }
 
   /**
