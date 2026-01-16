@@ -28,20 +28,25 @@ const App: Component = () => {
   const [actionButton, setActionButton] = createSignal('');
   const [actionButtonTitle, setActionButtonTitle] = createSignal('');
 
-  // Load translations
-  onMount(async () => {
-    // Load UI translations
-    setHomeTitle(await t('HOME.TITLE'));
-    setHomeSubtitle(await t('HOME.SUBTITLE'));
-    setLearnMoreButton(await t('HOME.LEARN_MORE_BUTTON'));
-    setBackButton(await t('NAVIGATION.BACK'));
-    setStrategiesTitle(await t('STRATEGIES.TITLE'));
-    setActionButton(await t('STRATEGIES.ACTION_BUTTON'));
-    setActionButtonTitle(await t('STRATEGIES.ACTION_BUTTON_TITLE'));
+  // Load translations and reload when language changes
+  createEffect(() => {
+    // Watch for language changes by accessing the currentLanguage signal
+    const lang = t.currentLanguage();
 
-    // Load procrastination types with translations
-    const types = await getProcrastinationTypes(t);
-    setProcrastinationTypes(types);
+    // Load all translations (this runs on mount AND when language changes)
+    (async () => {
+      setHomeTitle(await t('HOME.TITLE'));
+      setHomeSubtitle(await t('HOME.SUBTITLE'));
+      setLearnMoreButton(await t('HOME.LEARN_MORE_BUTTON'));
+      setBackButton(await t('NAVIGATION.BACK'));
+      setStrategiesTitle(await t('STRATEGIES.TITLE'));
+      setActionButton(await t('STRATEGIES.ACTION_BUTTON'));
+      setActionButtonTitle(await t('STRATEGIES.ACTION_BUTTON_TITLE'));
+
+      // Load procrastination types with translations
+      const types = await getProcrastinationTypes(t);
+      setProcrastinationTypes(types);
+    })();
   });
 
   const handleSelectType = (type: ProcrastinationType) => {

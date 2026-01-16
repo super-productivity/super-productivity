@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount } from 'solid-js';
+import { Component, createSignal, createEffect } from 'solid-js';
 import { useTranslate } from './utils/useTranslate';
 import './App.css';
 
@@ -36,33 +36,39 @@ export const ProcrastinationInfo: Component<ProcrastinationInfoProps> = (props) 
   const [triggersText, setTriggersText] = createSignal('');
   const [backToWork, setBackToWork] = createSignal('');
 
-  // Load translations
-  onMount(async () => {
-    setTitle(await t('INFO.TITLE'));
-    setIntro(await t('INFO.INTRO'));
-    setCycleTitle(await t('INFO.CYCLE_TITLE'));
-    setCycleIntro(await t('INFO.CYCLE_INTRO'));
-    setCycleStep1(await t('INFO.CYCLE_STEP_1'));
-    setCycleStep2(await t('INFO.CYCLE_STEP_2'));
-    setCycleStep3(await t('INFO.CYCLE_STEP_3'));
-    setCycleStep4(await t('INFO.CYCLE_STEP_4'));
-    setBreakingTitle(await t('INFO.BREAKING_TITLE'));
-    setBreakingIntro(await t('INFO.BREAKING_INTRO'));
-    setBreakingQ1(await t('INFO.BREAKING_Q1'));
-    setBreakingQ2(await t('INFO.BREAKING_Q2'));
-    setBreakingQ3(await t('INFO.BREAKING_Q3'));
-    setStrategiesTitle(await t('INFO.STRATEGIES_TITLE'));
-    setStrategyStartSmall(await t('INFO.STRATEGY_START_SMALL'));
-    setStrategyStartSmallDesc(await t('INFO.STRATEGY_START_SMALL_DESC'));
-    setStrategyTimebox(await t('INFO.STRATEGY_TIMEBOX'));
-    setStrategyTimeboxDesc(await t('INFO.STRATEGY_TIMEBOX_DESC'));
-    setStrategyReframe(await t('INFO.STRATEGY_REFRAME'));
-    setStrategyReframeDesc(await t('INFO.STRATEGY_REFRAME_DESC'));
-    setStrategyCompassion(await t('INFO.STRATEGY_COMPASSION'));
-    setStrategyCompassionDesc(await t('INFO.STRATEGY_COMPASSION_DESC'));
-    setTriggersTitle(await t('INFO.TRIGGERS_TITLE'));
-    setTriggersText(await t('INFO.TRIGGERS_TEXT'));
-    setBackToWork(await t('INFO.BACK_TO_WORK'));
+  // Load translations and reload when language changes
+  createEffect(() => {
+    // Watch for language changes by accessing the currentLanguage signal
+    const lang = t.currentLanguage();
+
+    // Load all translations (this runs on mount AND when language changes)
+    (async () => {
+      setTitle(await t('INFO.TITLE'));
+      setIntro(await t('INFO.INTRO'));
+      setCycleTitle(await t('INFO.CYCLE_TITLE'));
+      setCycleIntro(await t('INFO.CYCLE_INTRO'));
+      setCycleStep1(await t('INFO.CYCLE_STEP_1'));
+      setCycleStep2(await t('INFO.CYCLE_STEP_2'));
+      setCycleStep3(await t('INFO.CYCLE_STEP_3'));
+      setCycleStep4(await t('INFO.CYCLE_STEP_4'));
+      setBreakingTitle(await t('INFO.BREAKING_TITLE'));
+      setBreakingIntro(await t('INFO.BREAKING_INTRO'));
+      setBreakingQ1(await t('INFO.BREAKING_Q1'));
+      setBreakingQ2(await t('INFO.BREAKING_Q2'));
+      setBreakingQ3(await t('INFO.BREAKING_Q3'));
+      setStrategiesTitle(await t('INFO.STRATEGIES_TITLE'));
+      setStrategyStartSmall(await t('INFO.STRATEGY_START_SMALL'));
+      setStrategyStartSmallDesc(await t('INFO.STRATEGY_START_SMALL_DESC'));
+      setStrategyTimebox(await t('INFO.STRATEGY_TIMEBOX'));
+      setStrategyTimeboxDesc(await t('INFO.STRATEGY_TIMEBOX_DESC'));
+      setStrategyReframe(await t('INFO.STRATEGY_REFRAME'));
+      setStrategyReframeDesc(await t('INFO.STRATEGY_REFRAME_DESC'));
+      setStrategyCompassion(await t('INFO.STRATEGY_COMPASSION'));
+      setStrategyCompassionDesc(await t('INFO.STRATEGY_COMPASSION_DESC'));
+      setTriggersTitle(await t('INFO.TRIGGERS_TITLE'));
+      setTriggersText(await t('INFO.TRIGGERS_TEXT'));
+      setBackToWork(await t('INFO.BACK_TO_WORK'));
+    })();
   });
 
   return (

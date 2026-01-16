@@ -57,6 +57,18 @@ const sendMessage = async (type: string, payload?: any): Promise<any> => {
 export function useTranslate() {
   const [currentLanguage, setCurrentLanguage] = createSignal<string>('en');
 
+  // Initialize current language on mount
+  createEffect(() => {
+    (async () => {
+      try {
+        const lang = await sendMessage('getCurrentLanguage');
+        setCurrentLanguage(lang);
+      } catch (error) {
+        console.error('[useTranslate] Failed to get current language:', error);
+      }
+    })();
+  });
+
   // Listen for language change events
   createEffect(() => {
     const handleLanguageChange = (event: MessageEvent) => {
