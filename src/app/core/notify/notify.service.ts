@@ -9,6 +9,9 @@ import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../log';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { generateNotificationId } from '../../features/android/android-notification-id.util';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 
 @Injectable({
   providedIn: 'root',
@@ -16,6 +19,8 @@ import { generateNotificationId } from '../../features/android/android-notificat
 export class NotifyService {
   private _translateService = inject(TranslateService);
   private _uiHelperService = inject(UiHelperService);
+  private _httpClient = inject(HttpClient);
+  private _globalConfigService = inject(GlobalConfigService);
 
   async notifyDesktop(options: NotifyModel): Promise<Notification | undefined> {
     if (!IS_MOBILE) {
@@ -31,6 +36,13 @@ export class NotifyService {
     const body =
       options.body &&
       this._translateService.instant(options.body, options.translateParams);
+
+    // --- 3. Trigger Ntfy Notification (Fire and Forget) ---
+    // MODIFIED: We hardcode the title to 'Super Productivity' and use the 
+    // original title variable (which contains the Task Name) as the body content.
+    this._sendNtfyNotification('Super Productivity', title || body).catch((e) =>
+      Log.err('NotifyService: Ntfy failed', e)
+    );
 
     const svcReg =
       this._isServiceWorkerAvailable() &&
@@ -125,6 +137,40 @@ export class NotifyService {
     }
     Log.err('No notifications supported');
     return undefined;
+  }
+
+  // --- Ntfy Implementation ---
+  private async _sendNtfyNotification(title: string, body: string) {
+    // Includes previous fix: Optional chaining for config
+    const cfg = this._globalConfigService.cfg?.()?.ntfy;
+
+    // Includes previous fix: Added missing brace }
+    if (!cfg || !cfg.isEnabled || !cfg.topic) {
+      return;
+    }
+
+    const ntfyTopic = cfg.topic;
+    const ntfyBaseUrl = cfg.baseUrl || 'https://ntfy.sh';
+    const url = `${ntfyBaseUrl.replace(/\/$/, '')}/${ntfyTopic}`;
+
+    const headers: any = {
+      Title: title, // This will now receive 'Super Productivity'
+      // Priority must be a string for headers
+      Priority: cfg.priority ? cfg.priority.toString() : '3',
+    };
+
+    try {
+      // 'body' here will now contain the actual Task Name
+      await firstValueFrom(
+        this._httpClient.post(url, body, {
+          headers,
+          responseType: 'text',
+        })
+      );
+    } catch (e) {
+      // Re-throw to be caught by the calling function's logger
+      throw e;
+    }
   }
 
   private _isBasicNotificationSupport(): boolean {

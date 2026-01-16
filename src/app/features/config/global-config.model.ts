@@ -45,6 +45,13 @@ export type MiscConfig = Readonly<{
   unsplashApiKey?: string | null;
 }>;
 
+export type NtfyConfig = Readonly<{
+  isEnabled: boolean;
+  topic: string;
+  baseUrl: string;
+  priority: number;
+}>;
+
 export type ShortSyntaxConfig = Readonly<{
   isEnableProject: boolean;
   isEnableDue: boolean;
@@ -230,7 +237,7 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
-
+  ntfy: NtfyConfig;
   sync: SyncConfig;
   dailySummaryNote?: DailySummaryNote;
 }>;
@@ -244,7 +251,8 @@ export type GlobalSectionConfig =
   | ScheduleConfig
   | ReminderConfig
   | DailySummaryNote
-  | SyncConfig;
+  | SyncConfig
+  | NtfyConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<

@@ -1,7 +1,8 @@
 import { MISC_SETTINGS_FORM_CFG } from './form-cfgs/misc-settings-form.const';
 import { APP_FEATURES_FORM_CFG } from './form-cfgs/app-features-form.const';
 import { KEYBOARD_SETTINGS_FORM_CFG } from './form-cfgs/keyboard-form.const';
-import { ConfigFormConfig, ConfigFormSection } from './global-config.model';
+// FIX: Added GlobalConfigSectionKey to the imports
+import { ConfigFormConfig, ConfigFormSection, GlobalConfigSectionKey } from './global-config.model';
 import { IDLE_FORM_CFG } from './form-cfgs/idle-form.const';
 import { TAKE_A_BREAK_FORM_CFG } from './form-cfgs/take-a-break-form.const';
 import { IMEX_FORM } from './form-cfgs/imex-form.const';
@@ -16,6 +17,7 @@ import { DOMINA_MODE_FORM } from './form-cfgs/domina-mode-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
+import { NTFY_FORM_CFG } from './form-cfgs/ntfy-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -34,6 +36,7 @@ export const GLOBAL_CONFIG_FORM_CONFIG: ConfigFormConfig = [
   TIME_TRACKING_FORM_CFG,
   REMINDER_FORM_CFG,
   SCHEDULE_FORM_CFG,
+  NTFY_FORM_CFG,
 ].filter(filterGlobalConfigForm);
 
 export const GLOBAL_IMEX_FORM_CONFIG: ConfigFormConfig = [
