@@ -32,7 +32,15 @@
     matSuffix
     type="button"
     [matTooltip]="'Open system emoji picker if any'"
-    (click)="openEmojiPicker()"
+    (click)="openEmojiPicker($event)"
+    >add_reaction</mat-icon
+  >
+} @else if (!IS_ELECTRON) {
+  <mat-icon
+    matSuffix
+    type="button"
+    [matTooltip]="'Open emoji picker'"
+    (click)="openEmojiPicker($event)"
     >add_reaction</mat-icon
   >
 }

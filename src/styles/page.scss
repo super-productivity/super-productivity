@@ -187,3 +187,17 @@ img {
   height: auto;
   display: block;
 }
+
+// Fix emoji picker dialog z-index to appear above autocomplete panel
+.cdk-overlay-pane.emoji-picker-dialog {
+  z-index: 1100 !important;
+}
+
+.emoji-picker-dialog .mat-mdc-dialog-container {
+  z-index: 1100 !important;
+}
+
+// Also ensure any autocomplete panel has lower z-index
+.mat-mdc-autocomplete-panel {
+  z-index: 1000 !important;
+}

@@ -5,6 +5,7 @@ import {
   OnInit,
   inject,
   signal,
+  ViewChild,
 } from '@angular/core';
 import { FieldType } from '@ngx-formly/material';
 import { MATERIAL_ICONS } from '../../../ui/material-icons.const';
@@ -20,6 +21,9 @@ import { containsEmoji, extractFirstEmoji } from '../../../util/extract-first-em
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
 import { startWith } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatDialog } from '@angular/material/dialog';
+import { EmojiPickerDialogComponent } from './emoji-picker-dialog/emoji-picker-dialog.component';
+import '@ctrl/ngx-emoji-mart/picker';
 
 @Component({
   selector: 'icon-input',
@@ -36,6 +40,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     MatOption,
     MatSuffix,
     MatTooltip,
+    EmojiPickerDialogComponent,
   ],
 })
 export class IconInputComponent extends FieldType<FormlyFieldConfig> implements OnInit {
@@ -47,6 +52,10 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
 
   protected readonly IS_ELECTRON = IS_ELECTRON;
   isLinux = IS_ELECTRON && window.ea.isLinux();
+
+  private _dialog = inject(MatDialog);
+  @ViewChild(MatAutocompleteTrigger)
+  private _autocompleteTrigger!: MatAutocompleteTrigger;
 
   get type(): string {
     return this.to.type || 'text';
@@ -76,6 +85,30 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
         this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
       }
     }
+
+    // Debug logging to verify z-index when autocomplete opens
+    setTimeout(() => {
+      const autocompletePanel = document.querySelector('.mat-mdc-autocomplete-panel');
+      const dialogOverlayPane = document.querySelector(
+        '.cdk-overlay-pane.emoji-picker-dialog',
+      );
+      const dialogContainer = document.querySelector(
+        '.emoji-picker-dialog .mat-mdc-dialog-container',
+      );
+
+      console.log(
+        'Autocomplete Panel z-index on focus:',
+        autocompletePanel ? getComputedStyle(autocompletePanel).zIndex : 'not found',
+      );
+      console.log(
+        'Emoji Picker Overlay Pane z-index on focus:',
+        dialogOverlayPane ? getComputedStyle(dialogOverlayPane).zIndex : 'not found',
+      );
+      console.log(
+        'Emoji Picker Dialog Container z-index on focus:',
+        dialogContainer ? getComputedStyle(dialogContainer).zIndex : 'not found',
+      );
+    }, 100);
   }
 
   onInputValueChange(val: string): void {
@@ -121,9 +154,62 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
     this.isEmoji.set(emojiCheck && !this.filteredIcons().includes(icon));
   }
 
-  openEmojiPicker(): void {
+  openEmojiPicker(event?: Event): void {
+    // Prevent event propagation to avoid triggering input focus
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
     if (IS_ELECTRON) {
       window.ea.showEmojiPanel();
+    } else {
+      // Close any open autocomplete panel before opening emoji picker
+      const autocompletePanel = document.querySelector('.mat-mdc-autocomplete-panel');
+      if (autocompletePanel) {
+        autocompletePanel.remove();
+      }
+
+      // Small delay to ensure autocomplete is fully closed before opening dialog
+      setTimeout(() => {
+        const dialogRef = this._dialog.open(EmojiPickerDialogComponent, {
+          width: '350px',
+          data: { selectedEmoji: this.formControl.value },
+          panelClass: 'emoji-picker-dialog',
+        });
+
+        // Debug logging to verify z-index
+        setTimeout(() => {
+          const dialogOverlayPane = document.querySelector(
+            '.cdk-overlay-pane.emoji-picker-dialog',
+          );
+          const dialogContainer = document.querySelector(
+            '.emoji-picker-dialog .mat-mdc-dialog-container',
+          );
+          const autocompletePanel = document.querySelector('.mat-mdc-autocomplete-panel');
+
+          console.log(
+            'Emoji Picker Overlay Pane z-index:',
+            dialogOverlayPane ? getComputedStyle(dialogOverlayPane).zIndex : 'not found',
+          );
+          console.log(
+            'Emoji Picker Dialog Container z-index:',
+            dialogContainer ? getComputedStyle(dialogContainer).zIndex : 'not found',
+          );
+          console.log(
+            'Autocomplete Panel z-index:',
+            autocompletePanel ? getComputedStyle(autocompletePanel).zIndex : 'not found',
+          );
+        }, 100);
+
+        dialogRef.afterClosed().subscribe((selectedEmoji: string | undefined) => {
+          if (selectedEmoji) {
+            this._lastSetValue = selectedEmoji;
+            this.formControl.setValue(selectedEmoji);
+            this.isEmoji.set(true);
+          }
+        });
+      }, 50);
     }
   }
 
