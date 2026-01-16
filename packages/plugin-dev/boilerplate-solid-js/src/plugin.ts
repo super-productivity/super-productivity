@@ -83,12 +83,12 @@ if (plugin.onMessage) {
         };
       case 'createTask': {
         const newTask = await plugin.addTask({
-          title: message.data.title,
-          projectId: message.data.projectId,
+          title: message.payload.title,
+          projectId: message.payload.projectId,
         });
 
         plugin.showSnack({
-          msg: `Task "${message.data.title}" created!`,
+          msg: `Task "${message.payload.title}" created!`,
           type: 'SUCCESS',
         });
 
@@ -100,7 +100,7 @@ if (plugin.onMessage) {
         return await plugin.getAllProjects();
       // Example: Persist plugin data
       case 'saveSettings':
-        await plugin.persistDataSynced(JSON.stringify(message.data));
+        await plugin.persistDataSynced(JSON.stringify(message.payload));
         return { success: true };
       // Example: Load plugin data
       case 'loadSettings': {
@@ -109,9 +109,9 @@ if (plugin.onMessage) {
       }
       // i18n support
       case 'translate':
-        return plugin.translate(message.data.key, message.data.params);
+        return await plugin.translate(message.payload.key, message.payload.params);
       case 'getCurrentLanguage':
-        return plugin.getCurrentLanguage();
+        return await plugin.getCurrentLanguage();
       default:
         return { error: 'Unknown message type' };
     }

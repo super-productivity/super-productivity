@@ -12,12 +12,21 @@ plugin.log.info('Procrastination Buster plugin initialized');
 // i18n support - handle translation requests from iframe
 if (plugin.onMessage) {
   plugin.onMessage(async (message: any) => {
+    plugin.log.info('[plugin.ts] Received message:', message);
     switch (message?.type) {
       case 'translate':
-        return plugin.translate(message.payload.key, message.payload.params);
+        const translation = await plugin.translate(
+          message.payload.key,
+          message.payload.params,
+        );
+        plugin.log.info('[plugin.ts] Returning translation:', translation);
+        return translation;
       case 'getCurrentLanguage':
-        return plugin.getCurrentLanguage();
+        const lang = await plugin.getCurrentLanguage();
+        plugin.log.info('[plugin.ts] Returning language:', lang);
+        return lang;
       default:
+        plugin.log.info('[plugin.ts] Unknown message type:', message?.type);
         return { error: 'Unknown message type' };
     }
   });
