@@ -14,7 +14,7 @@ if (plugin.onMessage) {
   plugin.onMessage(async (message: any) => {
     switch (message?.type) {
       case 'translate':
-        return plugin.translate(message.data.key, message.data.params);
+        return plugin.translate(message.payload.key, message.payload.params);
       case 'getCurrentLanguage':
         return plugin.getCurrentLanguage();
       default:
