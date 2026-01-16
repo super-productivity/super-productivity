@@ -21,7 +21,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { BackupService } from '../../op-log/backup/backup.service';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { first } from 'rxjs/operators';
 import {
   ConfirmUrlImportDialogComponent,
@@ -211,7 +211,7 @@ export class FileImexComponent implements OnInit {
   async downloadBackup(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
     const result = await download('super-productivity-backup.json', JSON.stringify(data));
-    if ((IS_ANDROID_WEB_VIEW && !result.wasCanceled) || result.isSnap) {
+    if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
         type: 'SUCCESS',
         msg: result.path
@@ -225,7 +225,7 @@ export class FileImexComponent implements OnInit {
   async privacyAppDataDownload(): Promise<void> {
     const data = await this._backupService.loadCompleteBackup(true);
     const result = await download('super-productivity-backup.json', privacyExport(data));
-    if ((IS_ANDROID_WEB_VIEW && !result.wasCanceled) || result.isSnap) {
+    if ((IS_NATIVE_PLATFORM && !result.wasCanceled) || result.isSnap) {
       this._snackService.open({
         type: 'SUCCESS',
         msg: result.path

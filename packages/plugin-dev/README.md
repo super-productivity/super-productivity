@@ -42,7 +42,6 @@ npm run list
    ```
 
 3. **Update plugin metadata**:
-
    - Edit `manifest.json` with your plugin details
    - Update `package.json` with your plugin name and description
 
@@ -155,6 +154,14 @@ The plugin receives a global `PluginAPI` object with these capabilities:
 - `persistDataSynced()` - Save plugin data
 - `loadSyncedData()` - Load saved data
 
+### Internationalization (i18n)
+
+- `translate(key, params?)` - Get translated text
+- `formatDate(date, format)` - Format dates with locale
+- `getCurrentLanguage()` - Get current language code
+
+See [PLUGIN_I18N.md](PLUGIN_I18N.md) for the complete i18n guide.
+
 ### Hooks
 
 Register handlers for lifecycle events:
@@ -163,6 +170,7 @@ Register handlers for lifecycle events:
 - `taskUpdate` - Task modified
 - `taskDelete` - Task removed
 - `currentTaskChange` - Active task changed
+- `languageChange` - App language changed
 - `finishDay` - End of day
 
 ### Example Usage
@@ -187,6 +195,11 @@ PluginAPI.registerShortcut({
     console.log(`You have ${tasks.length} tasks`);
   },
 });
+
+// Use translations (if plugin has i18n support)
+const greeting = PluginAPI.translate('MESSAGES.GREETING');
+const taskCount = PluginAPI.translate('TASK_COUNT', { count: tasks.length });
+const dueDate = PluginAPI.formatDate(task.dueDate, 'short');
 ```
 
 ## Building for Distribution
@@ -218,6 +231,7 @@ Optional files:
 
 - `index.html` - UI for iframe plugins
 - `icon.svg` - Plugin icon
+- `i18n/*.json` - Translation files for multi-language support
 
 ## Publishing Your Plugin
 
@@ -331,6 +345,7 @@ PluginAPI.registerHook('taskUpdate', (data: unknown) => {
 4. **User Experience**: Provide clear feedback with snack messages
 5. **Permissions**: Only request permissions you actually need
 6. **Version Compatibility**: Set appropriate `minSupVersion`
+7. **Internationalization**: Add i18n support to reach more users (see [PLUGIN_I18N.md](PLUGIN_I18N.md))
 
 ## Troubleshooting
 

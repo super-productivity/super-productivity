@@ -381,25 +381,27 @@
   (closed)="focusRelatedTaskOrNext()"
 >
   <ng-template matMenuContent>
-    @for (tag of toggleTagList(); track $index) {
-      <button
-        (click)="toggleTag(tag.id)"
-        mat-menu-item
-        menuTouchFix
-      >
-        @if (task.tagIds.includes(tag.id)) {
-          <mat-icon class="check-ico">check_box</mat-icon>
-        } @else {
-          <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-        }
-        <mat-icon
-          [style.color]="tag.color || tag.theme.primary"
-          class="tag-ico"
-          >{{ tag.icon || 'label' }}</mat-icon
+    <div (click)="$event.stopPropagation()">
+      @for (tag of toggleTagList(); track $index) {
+        <button
+          (click)="toggleTag(tag.id)"
+          mat-menu-item
+          menuTouchFix
         >
-        {{ tag.title }}
-      </button>
-    }
+          @if (task.tagIds.includes(tag.id)) {
+            <mat-icon class="check-ico">check_box</mat-icon>
+          } @else {
+            <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
+          }
+          <mat-icon
+            [style.color]="tag.color || tag.theme.primary"
+            class="tag-ico"
+            >{{ tag.icon || 'label' }}</mat-icon
+          >
+          {{ tag.title }}
+        </button>
+      }
+    </div>
     <button
       mat-menu-item
       (click)="openAddNewTag()"

@@ -1,7 +1,15 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { select, Store } from '@ngrx/store';
-import { filter, map, switchMap, take, tap, withLatestFrom } from 'rxjs/operators';
+import {
+  distinctUntilChanged,
+  filter,
+  map,
+  switchMap,
+  take,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
 import { EMPTY } from 'rxjs';
 
 import {
@@ -9,10 +17,12 @@ import {
   selectTaskFeatureState,
 } from '../features/tasks/store/task.selectors';
 import { selectProjectFeatureState } from '../features/project/store/project.selectors';
+import { selectLocalizationConfig } from '../features/config/store/global-config.reducer';
+import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
 import { Task } from '../features/tasks/task.model';
 import { PluginService } from './plugin.service';
 import { PluginHooks } from './plugin-api.model';
-import { setActiveWorkContext } from '../features/work-context/store/work-context.actions';
+import { PluginI18nService } from './plugin-i18n.service';
 import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import {
   setCurrentTask,
@@ -35,12 +45,14 @@ import {
 } from '../features/work-context/store/work-context-meta.actions';
 import { LOCAL_ACTIONS } from '../util/local-actions.token';
 import { PlannerActions } from '../features/planner/store/planner.actions';
+import { LanguageCode } from '../core/locale.constants';
 
 @Injectable()
 export class PluginHooksEffects {
   private readonly actions$ = inject(LOCAL_ACTIONS);
   private readonly store = inject(Store);
   private readonly pluginService = inject(PluginService);
+  private readonly pluginI18nService = inject(PluginI18nService);
 
   taskComplete$ = createEffect(
     () =>
@@ -191,14 +203,23 @@ export class PluginHooksEffects {
     { dispatch: false },
   );
 
-  workContextChange$ = createEffect(
+  // Language change effect - listens to actual language config changes
+  languageChange$ = createEffect(
     () =>
       this.actions$.pipe(
-        ofType(setActiveWorkContext),
-        tap((action) => {
+        ofType(updateGlobalConfigSection),
+        filter((action) => action.sectionKey === 'localization'),
+        withLatestFrom(this.store.pipe(select(selectLocalizationConfig))),
+        map(([_, localizationConfig]) => localizationConfig.lng),
+        filter((lng): lng is LanguageCode => typeof lng === 'string' && lng.length > 0),
+        distinctUntilChanged(),
+        tap((newLanguage) => {
+          // Update plugin i18n service with new language
+          this.pluginI18nService.setCurrentLanguage(newLanguage);
+
+          // Dispatch hook to notify plugins
           this.pluginService.dispatchHook(PluginHooks.LANGUAGE_CHANGE, {
-            activeId: action.activeId,
-            activeType: action.activeType,
+            newLanguage,
           });
         }),
       ),

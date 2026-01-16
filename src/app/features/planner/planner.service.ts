@@ -87,6 +87,7 @@ export class PlannerService {
       const tomorrowStr = getDbDateStr(tomorrowMs);
       return days.find((d) => d.dayDate === tomorrowStr) ?? null;
     }),
+    shareReplay(1),
   );
 
   // plannedTaskDayMap$: Observable<{ [taskId: string]: string }> = this._store

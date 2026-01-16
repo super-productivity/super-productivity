@@ -116,6 +116,9 @@ export interface PluginManifest {
   nodeScriptConfig?: PluginNodeScriptConfig;
   sidePanel?: boolean; // If true, plugin loads in right panel instead of route
   jsonSchemaCfg?: string; // Path to JSON schema file for plugin configuration relative to plugin root
+  i18n?: {
+    languages: string[]; // Array of supported language codes (e.g., ['en', 'de', 'fr'])
+  };
 }
 
 // Hook payload types

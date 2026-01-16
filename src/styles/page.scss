@@ -21,6 +21,16 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 
+  // Set html background for iOS safe area (home indicator)
+  // Uses :has() to match body theme class since --bg is defined on body
+  &:has(body.isLightTheme) {
+    background: #f8f8f7;
+  }
+
+  &:has(body.isDarkTheme) {
+    background: #131314;
+  }
+
   button,
   a {
     -webkit-app-region: no-drag !important;

@@ -43,6 +43,7 @@ jest.mock('../../../shared/logger', () => ({
   },
   persistDataSynced: jest.fn(),
   loadSyncedData: jest.fn(),
+  showSnack: jest.fn(),
 };
 
 describe('Sync Manager - Edge Cases', () => {
@@ -75,6 +76,7 @@ describe('Sync Manager - Edge Cases', () => {
         .fn()
         .mockResolvedValue([{ id: 'test-project', title: 'Test Project' }]),
       batchUpdateForProject: jest.fn().mockResolvedValue(undefined),
+      showSnack: jest.fn(),
     };
   });
 

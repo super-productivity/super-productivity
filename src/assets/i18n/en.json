@@ -2125,6 +2125,7 @@
     "INSTALLING": "Installing...",
     "INSTALL_PLUGIN": "Install Plugin",
     "INSTALL_WARNING": "Before installing a plugin, ensure you trust its source and understand the permissions it requests.",
+    "LANGUAGES": "Languages:",
     "LOADING_INTERFACE": "Loading plugin interface...",
     "LOADING_PLUGIN": "Loading...",
     "MANIFEST_NOT_FOUND": "Plugin manifest (manifest.json) not found in ZIP file",
@@ -2172,7 +2173,8 @@
     "VALIDATION_FAILED": "Validation failed"
   },
   "PM": {
-    "TITLE": "Project Metrics"
+    "TITLE": "Project Metrics",
+    "ALL_TASKS_TITLE": "Metrics (all tasks)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "Global Settings",

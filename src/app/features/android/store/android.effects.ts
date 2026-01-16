@@ -1,8 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect } from '@ngrx/effects';
 import { switchMap, tap } from 'rxjs/operators';
-import { combineLatest, timer } from 'rxjs';
-import { LocalNotifications } from '@capacitor/local-notifications';
+import { timer } from 'rxjs';
 import { SnackService } from '../../../core/snack/snack.service';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { DroidLog } from '../../../core/log';
@@ -12,7 +11,8 @@ import { TaskService } from '../../tasks/task.service';
 import { TaskAttachmentService } from '../../tasks/task-attachment/task-attachment.service';
 import { Store } from '@ngrx/store';
 import { selectAllTasksWithReminder } from '../../tasks/store/task.selectors';
-import { selectReminderConfig } from '../../config/store/global-config.reducer';
+import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
+import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
 
 // TODO send message to electron when current task changes here
 
@@ -25,28 +25,29 @@ export class AndroidEffects {
   private _taskService = inject(TaskService);
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _store = inject(Store);
+  private _reminderService = inject(CapacitorReminderService);
+  private _platformService = inject(CapacitorPlatformService);
   // Single-shot guard so we don't spam the user with duplicate warnings.
   private _hasShownNotificationWarning = false;
-  private _hasCheckedExactAlarm = false;
   // Track scheduled reminder IDs to cancel removed ones
   private _scheduledReminderIds = new Set<string>();
 
+  /**
+   * Check notification permissions on startup for mobile platforms.
+   * Shows a warning if permissions are not granted.
+   */
   askPermissionsIfNotGiven$ =
-    IS_ANDROID_WEB_VIEW &&
+    this._platformService.isNative &&
     createEffect(
       () =>
         timer(DELAY_PERMISSIONS).pipe(
-          tap(async (v) => {
+          tap(async () => {
             try {
-              const checkResult = await LocalNotifications.checkPermissions();
-              DroidLog.log('AndroidEffects: initial permission check', checkResult);
-              const displayPermissionGranted = checkResult.display === 'granted';
-              if (displayPermissionGranted) {
-                await this._ensureExactAlarmAccess();
-                return;
+              const hasPermission = await this._reminderService.ensurePermissions();
+              DroidLog.log('MobileEffects: initial permission check', { hasPermission });
+              if (!hasPermission) {
+                this._notifyPermissionIssue();
               }
-              // Surface a gentle warning early, but defer the actual permission prompt until we truly need it.
-              this._notifyPermissionIssue();
             } catch (error) {
               DroidLog.err(error);
               this._notifyPermissionIssue(error?.toString());
@@ -59,26 +60,22 @@ export class AndroidEffects {
     );
 
   /**
-   * Schedule native Android reminders for tasks with remindAt set.
+   * Schedule reminders for tasks with remindAt set.
+   * Works on both iOS and Android.
    *
    * SYNC-SAFE: This effect is intentionally safe during sync/hydration because:
-   * - dispatch: false - no store mutations, only native Android API calls
+   * - dispatch: false - no store mutations, only native API calls
    * - We WANT notifications scheduled for synced tasks (user-facing functionality)
-   * - Native AlarmManager calls are idempotent - rescheduling the same reminder is harmless
+   * - Native scheduling calls are idempotent - rescheduling the same reminder is harmless
    * - Cancellation of removed reminders correctly handles tasks deleted via sync
    */
   scheduleNotifications$ =
-    IS_ANDROID_WEB_VIEW &&
+    this._platformService.isNative &&
     createEffect(
       () =>
         timer(DELAY_SCHEDULE).pipe(
-          switchMap(() =>
-            combineLatest([
-              this._store.select(selectAllTasksWithReminder),
-              this._store.select(selectReminderConfig),
-            ]),
-          ),
-          tap(async ([tasksWithReminders, reminderConfig]) => {
+          switchMap(() => this._store.select(selectAllTasksWithReminder)),
+          tap(async (tasksWithReminders) => {
             try {
               const currentReminderIds = new Set(
                 (tasksWithReminders || []).map((t) => t.id),
@@ -88,11 +85,11 @@ export class AndroidEffects {
               for (const previousId of this._scheduledReminderIds) {
                 if (!currentReminderIds.has(previousId)) {
                   const notificationId = generateNotificationId(previousId);
-                  DroidLog.log('AndroidEffects: cancelling removed reminder', {
+                  DroidLog.log('MobileEffects: cancelling removed reminder', {
                     relatedId: previousId,
                     notificationId,
                   });
-                  androidInterface.cancelNativeReminder?.(notificationId);
+                  await this._reminderService.cancelReminder(notificationId);
                 }
               }
 
@@ -100,47 +97,44 @@ export class AndroidEffects {
                 this._scheduledReminderIds.clear();
                 return;
               }
-              DroidLog.log('AndroidEffects: scheduling reminders natively', {
+
+              DroidLog.log('MobileEffects: scheduling reminders', {
                 reminderCount: tasksWithReminders.length,
+                platform: this._platformService.platform,
               });
 
-              // Check permissions first
-              const checkResult = await LocalNotifications.checkPermissions();
-              let displayPermissionGranted = checkResult.display === 'granted';
-              if (!displayPermissionGranted) {
-                const requestResult = await LocalNotifications.requestPermissions();
-                displayPermissionGranted = requestResult.display === 'granted';
-                if (!displayPermissionGranted) {
-                  this._notifyPermissionIssue();
-                  return;
-                }
+              // Ensure permissions are granted
+              const hasPermission = await this._reminderService.ensurePermissions();
+              if (!hasPermission) {
+                this._notifyPermissionIssue();
+                return;
               }
-              await this._ensureExactAlarmAccess();
 
-              const useAlarmStyle = reminderConfig.useAlarmStyleReminders ?? false;
-
-              // Schedule each reminder using native Android AlarmManager
+              // Schedule each reminder using the platform-appropriate method
               for (const task of tasksWithReminders) {
-                const id = generateNotificationId(task.id);
-                const now = Date.now();
-                const scheduleAt = task.remindAt! <= now ? now + 1000 : task.remindAt!;
+                // Skip reminders that are already in the past (already fired)
+                // These will be handled by the dialog when the user opens the app
+                if (task.remindAt! < Date.now()) {
+                  continue;
+                }
 
-                androidInterface.scheduleNativeReminder?.(
-                  id,
-                  task.id,
-                  task.id,
-                  task.title,
-                  'TASK',
-                  scheduleAt,
-                  useAlarmStyle,
-                );
+                const id = generateNotificationId(task.id);
+                await this._reminderService.scheduleReminder({
+                  notificationId: id,
+                  reminderId: task.id,
+                  relatedId: task.id,
+                  title: task.title,
+                  reminderType: 'TASK',
+                  triggerAtMs: task.remindAt!,
+                });
               }
 
               // Update tracked IDs
               this._scheduledReminderIds = currentReminderIds;
 
-              DroidLog.log('AndroidEffects: scheduled native reminders', {
+              DroidLog.log('MobileEffects: scheduled reminders', {
                 reminderCount: tasksWithReminders.length,
+                platform: this._platformService.platform,
               });
             } catch (error) {
               DroidLog.err(error);
@@ -218,23 +212,6 @@ export class AndroidEffects {
         ),
       { dispatch: false },
     );
-
-  private async _ensureExactAlarmAccess(): Promise<void> {
-    try {
-      if (this._hasCheckedExactAlarm) {
-        return;
-      }
-      // Android 12+ gates exact alarms behind a separate toggle; surface the settings screen if needed.
-      const exactAlarmStatus = await LocalNotifications.checkExactNotificationSetting();
-      if (exactAlarmStatus?.exact_alarm !== 'granted') {
-        DroidLog.log(await LocalNotifications.changeExactNotificationSetting());
-      } else {
-        this._hasCheckedExactAlarm = true;
-      }
-    } catch (error) {
-      DroidLog.warn(error);
-    }
-  }
 
   private _notifyPermissionIssue(message?: string): void {
     if (this._hasShownNotificationWarning) {

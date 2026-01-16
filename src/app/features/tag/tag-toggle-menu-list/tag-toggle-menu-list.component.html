@@ -6,36 +6,38 @@
 
 <mat-menu
   #menuEl="matMenu"
-  (closed)="afterClose.emit()"
+  (closed)="onMenuClosed()"
 >
   <ng-template matMenuContent>
-    @for (tag of toggleTagList(); track $index) {
-      <button
-        (click)="toggleTag.emit(tag.id)"
-        (keydown)="onTagMenuKeydown($event, tag.id)"
-        mat-menu-item
-      >
-        @if (task().tagIds.includes(tag.id)) {
-          <mat-icon>check_box</mat-icon>
-        } @else {
-          <mat-icon>check_box_outline_blank</mat-icon>
-        }
-        @if (tag.icon && tag.isEmojiIcon) {
-          <span
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico tag-ico-emoji"
-            >{{ tag.icon }}</span
-          >
-        } @else {
-          <mat-icon
-            [style.color]="tag.color || tag.theme.primary"
-            class="tag-ico"
-            >{{ tag.icon || 'label' }}</mat-icon
-          >
-        }
-        {{ tag.title }}
-      </button>
-    }
+    <div (click)="$event.stopPropagation()">
+      @for (tag of toggleTagList(); track $index) {
+        <button
+          (click)="toggleTag.emit(tag.id)"
+          (keydown)="onTagMenuKeydown($event, tag.id)"
+          mat-menu-item
+        >
+          @if (task().tagIds.includes(tag.id)) {
+            <mat-icon>check_box</mat-icon>
+          } @else {
+            <mat-icon>check_box_outline_blank</mat-icon>
+          }
+          @if (tag.icon && tag.isEmojiIcon) {
+            <span
+              [style.color]="tag.color || tag.theme.primary"
+              class="tag-ico tag-ico-emoji"
+              >{{ tag.icon }}</span
+            >
+          } @else {
+            <mat-icon
+              [style.color]="tag.color || tag.theme.primary"
+              class="tag-ico"
+              >{{ tag.icon || 'label' }}</mat-icon
+            >
+          }
+          {{ tag.title }}
+        </button>
+      }
+    </div>
     <button
       mat-menu-item
       (click)="openAddNewTag()"

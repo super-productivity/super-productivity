@@ -11,7 +11,6 @@ import { BannerService } from '../banner/banner.service';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
 import { ProjectService } from '../../features/project/project.service';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../log';
 import { T } from '../../t.const';
@@ -32,6 +31,7 @@ import { IPC } from '../../../../electron/shared-with-frontend/ipc-events.const'
 import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
+import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -57,6 +57,7 @@ export class StartupService {
   private _trackingReminderService = inject(TrackingReminderService);
   private _opLogStore = inject(OperationLogStoreService);
   private _store = inject(Store);
+  private _platformService = inject(CapacitorPlatformService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -83,7 +84,8 @@ export class StartupService {
   }
 
   async init(): Promise<void> {
-    if (!IS_ANDROID_WEB_VIEW && !IS_ELECTRON) {
+    // Skip single instance check for native mobile apps and Electron
+    if (!this._platformService.isNative && !IS_ELECTRON) {
       const isSingle = await this._checkIsSingleInstance();
       if (!isSingle) {
         this._showMultiInstanceBlocker();
@@ -146,7 +148,8 @@ export class StartupService {
         }
       });
 
-      if (!IS_ANDROID_WEB_VIEW) {
+      // Chrome extension only works in web browser, not native mobile apps
+      if (!this._platformService.isNative) {
         this._chromeExtensionInterfaceService.init();
       }
     }
@@ -154,7 +157,8 @@ export class StartupService {
 
   private async _initBackups(): Promise<void> {
     // if completely fresh instance check for local backups
-    if (IS_ELECTRON || IS_ANDROID_WEB_VIEW) {
+    // Local backups are available on Electron and native mobile (iOS/Android)
+    if (IS_ELECTRON || this._platformService.isNative) {
       const stateCache = await this._opLogStore.loadStateCache();
       // If no state cache exists, this is a fresh instance - offer to restore from backup
       if (!stateCache) {
@@ -277,8 +281,8 @@ export class StartupService {
               if (granted) {
                 Log.log('Persistent store granted');
               }
-              // NOTE: we never execute for android web view, because it is always true
-              else if (!IS_ANDROID_WEB_VIEW) {
+              // NOTE: we never show this warning for native mobile apps, because persistence is always granted
+              else if (!this._platformService.isNative) {
                 const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
                 Log.warn('Persistence not allowed');
                 this._snackService.open({ msg });

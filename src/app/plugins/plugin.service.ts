@@ -31,6 +31,7 @@ import { validatePluginManifest } from './util/validate-manifest.util';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../t.const';
 import { PluginLog } from '../core/log';
+import { PluginI18nService } from './plugin-i18n.service';
 
 @Injectable({
   providedIn: 'root',
@@ -48,6 +49,7 @@ export class PluginService implements OnDestroy {
   private readonly _cleanupService = inject(PluginCleanupService);
   private readonly _pluginLoader = inject(PluginLoaderService);
   private readonly _translateService = inject(TranslateService);
+  private readonly _pluginI18nService = inject(PluginI18nService);
 
   private _isInitialized = false;
   private _loadedPlugins: PluginInstance[] = [];
@@ -373,11 +375,19 @@ export class PluginService implements OnDestroy {
   private async _loadPluginLazy(state: PluginState): Promise<PluginInstance> {
     // Load the plugin code and assets
     const assets = await this._pluginLoader.loadPluginAssets(state.path);
-    const { code: pluginCode, indexHtml } = assets;
+    const { code: pluginCode, indexHtml, translations } = assets;
 
     // Store assets
     if (indexHtml) {
       this._pluginIndexHtml.set(state.manifest.id, indexHtml);
+    }
+
+    // Load translations into i18n service
+    if (translations && Object.keys(translations).length > 0) {
+      this._pluginI18nService.loadPluginTranslationsFromContent(
+        state.manifest.id,
+        translations,
+      );
     }
 
     // Create base config
@@ -454,7 +464,7 @@ export class PluginService implements OnDestroy {
     try {
       // Use the loader service for lazy loading
       const assets = await this._pluginLoader.loadPluginAssets(pluginPath);
-      const { manifest, code: pluginCode, indexHtml, icon } = assets;
+      const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
 
       // Store assets if loaded
       if (indexHtml) {
@@ -464,6 +474,14 @@ export class PluginService implements OnDestroy {
         this._pluginIcons.set(manifest.id, icon);
         this._registerPluginIcon(manifest.id, icon);
         this._pluginIconsSignal.set(new Map(this._pluginIcons));
+      }
+
+      // Load translations into i18n service
+      if (translations && Object.keys(translations).length > 0) {
+        this._pluginI18nService.loadPluginTranslationsFromContent(
+          manifest.id,
+          translations,
+        );
       }
 
       // Check if plugin should be loaded based on persisted enabled state
@@ -1210,7 +1228,7 @@ export class PluginService implements OnDestroy {
     try {
       // Use the loader service for uploaded plugins
       const assets = await this._pluginLoader.loadUploadedPluginAssets(pluginId);
-      const { manifest, code: pluginCode, indexHtml, icon } = assets;
+      const { manifest, code: pluginCode, indexHtml, icon, translations } = assets;
 
       // Store assets if loaded
       if (indexHtml) {
@@ -1220,6 +1238,14 @@ export class PluginService implements OnDestroy {
         this._pluginIcons.set(manifest.id, icon);
         this._registerPluginIcon(manifest.id, icon);
         this._pluginIconsSignal.set(new Map(this._pluginIcons));
+      }
+
+      // Load translations into i18n service
+      if (translations && Object.keys(translations).length > 0) {
+        this._pluginI18nService.loadPluginTranslationsFromContent(
+          manifest.id,
+          translations,
+        );
       }
 
       // Validate manifest

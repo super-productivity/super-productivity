@@ -191,6 +191,52 @@ describe('Error Scenarios and Boundary Conditions', () => {
       expect(createOps.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('should convert orphaned subtasks to root tasks and warn', () => {
+      const mdTasks: ParsedTask[] = [
+        {
+          id: 'orphan',
+          title: 'Orphan Subtask',
+          parentId: 'non-existent-parent',
+          completed: false,
+          isSubtask: true,
+          depth: 1,
+          indent: 2,
+          line: 1,
+          originalLine: '  - [ ] Orphan Subtask',
+        },
+        {
+          id: 'normal',
+          title: 'Normal Task',
+          parentId: null,
+          completed: false,
+          isSubtask: false,
+          depth: 0,
+          indent: 0,
+          line: 2,
+          originalLine: '- [ ] Normal Task',
+        },
+      ];
+
+      const consoleWarnSpy = jest.spyOn(console, 'warn');
+      const operations = generateTaskOperations(mdTasks, [], projectId);
+
+      // Orphan should be created as root task (no parentId in create operation)
+      const createOps = operations.filter((op) => op.type === 'create');
+      const orphanCreate = createOps.find(
+        (op) => op.type === 'create' && op.data.title === 'Orphan Subtask',
+      );
+
+      expect(orphanCreate).toBeDefined();
+      expect(orphanCreate?.data.parentId).toBeUndefined();
+
+      // Should have logged warning
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Orphaned subtask detected'),
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should handle duplicate operations gracefully', () => {
       const mdTasks = [
         { id: 'dup', title: 'Task 1', completed: false },
@@ -318,6 +364,80 @@ describe('Error Scenarios and Boundary Conditions', () => {
         // Should not hang or take excessive time
         expect(duration).toBeLessThan(100);
       });
+    });
+  });
+
+  describe('Operation Validation', () => {
+    it('should validate operations and catch invalid parent references', () => {
+      const mdTasks: ParsedTask[] = [
+        {
+          id: 'child',
+          title: 'Child Task',
+          parentId: 'invalid-parent',
+          completed: false,
+          isSubtask: true,
+          depth: 1,
+          indent: 2,
+          line: 0,
+          originalLine: '  - [ ] Child',
+        },
+      ];
+
+      const consoleWarnSpy = jest.spyOn(console, 'warn');
+
+      // Should not throw, but should log warnings
+      expect(() => {
+        generateTaskOperations(mdTasks, [], 'test-project');
+      }).not.toThrow();
+
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should handle null parent IDs safely', () => {
+      const mdTasks: ParsedTask[] = [
+        {
+          id: 'task1',
+          title: 'Task 1',
+          parentId: null,
+          completed: false,
+          isSubtask: false,
+          depth: 0,
+          indent: 0,
+          line: 0,
+          originalLine: '- [ ] Task 1',
+        },
+      ];
+
+      expect(() => {
+        generateTaskOperations(mdTasks, [], 'test-project');
+      }).not.toThrow();
+    });
+
+    it('should handle subtasks with missing parent gracefully', () => {
+      const mdTasks: ParsedTask[] = [
+        {
+          id: 'subtask-without-parent',
+          title: 'Orphaned Subtask',
+          parentId: 'missing-parent-id',
+          completed: false,
+          isSubtask: true,
+          depth: 1,
+          indent: 2,
+          line: 5,
+          originalLine: '  - [ ] Orphaned Subtask',
+        },
+      ];
+
+      // Should create as root task, not crash
+      const operations = generateTaskOperations(mdTasks, [], 'test-project');
+
+      const createOp = operations.find(
+        (op) => op.type === 'create' && op.data.title === 'Orphaned Subtask',
+      );
+
+      expect(createOp).toBeDefined();
+      expect(createOp?.data.parentId).toBeUndefined();
     });
   });
 });

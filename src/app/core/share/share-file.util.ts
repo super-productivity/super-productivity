@@ -1,6 +1,5 @@
-import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { ShareResult } from './share.model';
 
 /**
@@ -95,7 +94,7 @@ export const canOpenDownloadResult = (result: ShareResult): boolean => {
     return true;
   }
 
-  if (Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW) {
+  if (IS_NATIVE_PLATFORM) {
     return false;
   }
 

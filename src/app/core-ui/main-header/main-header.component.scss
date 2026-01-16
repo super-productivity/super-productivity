@@ -62,9 +62,17 @@
   align-items: center;
   padding: 4px 8px;
   min-height: var(--bar-height-large);
+
   @include mq(xs) {
     min-height: var(--bar-height);
     padding: 4px 16px;
+  }
+
+  &:has(page-title:hover) ::ng-deep .current-task-title,
+  &:has(page-title [aria-expanded='true']) ::ng-deep .current-task-title {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
   }
 }
 
@@ -96,7 +104,27 @@ button.isActive2 {
   transition: background var(--transition-standard);
 }
 
-.action-nav {
+.counters-action-group {
+  display: flex;
+  align-items: center;
+  gap: var(--header-nav-button-gap);
+  flex-shrink: 0;
+  margin-right: calc(var(--s) * 1.5);
+
+  ::ng-deep button {
+    width: 36px;
+    height: 36px;
+
+    .mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+    }
+  }
+}
+
+.action-nav-right {
   margin-right: 0;
   margin-left: auto;
   display: flex;
@@ -107,6 +135,10 @@ button.isActive2 {
     margin-left: 0;
     margin-right: auto;
   }
+}
+
+page-title {
+  position: relative;
 }
 
 .mobile-dropdown-wrapper {

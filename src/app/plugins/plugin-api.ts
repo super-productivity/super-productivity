@@ -23,6 +23,8 @@ import {
 } from '@super-productivity/plugin-api';
 import { PluginBridgeService } from './plugin-bridge.service';
 import { PluginLog } from '../core/log';
+import { PluginI18nService } from './plugin-i18n.service';
+import { formatDateForPlugin } from './plugin-i18n-date.util';
 import {
   projectCopyToProjectData,
   projectDataToPartialProjectCopy,
@@ -62,6 +64,7 @@ export class PluginAPI implements PluginAPIInterface {
     public cfg: PluginBaseCfg,
     private _pluginId: string,
     private _pluginBridge: PluginBridgeService,
+    private _pluginI18nService: PluginI18nService,
     private _manifest?: PluginManifest,
   ) {
     // Get bound methods for this plugin
@@ -474,6 +477,33 @@ export class PluginAPI implements PluginAPIInterface {
       `Plugin ${this._pluginId} requested to set simple counter ${id} on ${date} to ${value}`,
     );
     return this._pluginBridge.setSimpleCounterDate(id, date, value);
+  }
+
+  /**
+   * Translate a key using plugin's translation files
+   * Falls back to English, then to the key itself if not found
+   */
+  translate(key: string, params?: Record<string, string | number>): string {
+    return this._pluginI18nService.translate(this._pluginId, key, params);
+  }
+
+  /**
+   * Format a date according to predefined format and current locale
+   * Supports: 'short', 'medium', 'long', 'time', 'datetime'
+   */
+  formatDate(
+    date: Date | string | number,
+    format: 'short' | 'medium' | 'long' | 'time' | 'datetime',
+  ): string {
+    const locale = this._pluginI18nService.getCurrentLanguage();
+    return formatDateForPlugin(date, format, locale);
+  }
+
+  /**
+   * Get the current app language code
+   */
+  getCurrentLanguage(): string {
+    return this._pluginI18nService.getCurrentLanguage();
   }
 
   /**

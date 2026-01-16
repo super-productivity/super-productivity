@@ -2,6 +2,7 @@ import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { LineChartData, Metric, MetricState } from '../metric.model';
 import { sortWorklogDates } from '../../../util/sortWorklogDates';
 import { METRIC_FEATURE_NAME, metricAdapter } from './metric.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   selectAllSimpleCounters,
   selectSimpleCounterFeatureState,
@@ -56,7 +57,7 @@ export const selectLastNDaysMetrics = createSelector(
     const sorted = sortWorklogDates(ids);
 
     // Find the index of the end date (or use today if not specified)
-    const endDate = props.endDate || new Date().toISOString().split('T')[0];
+    const endDate = props.endDate || getDbDateStr();
     const endIndex = sorted.indexOf(endDate);
 
     // If end date not found, use the latest date

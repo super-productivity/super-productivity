@@ -12,6 +12,7 @@ interface PluginAssets {
   code: string;
   indexHtml?: string;
   icon?: string;
+  translations?: Record<string, string>; // language code -> JSON string
 }
 
 /**
@@ -51,6 +52,13 @@ export class PluginLoaderService {
         throw new Error(`Invalid manifest: ${validation.errors.join(', ')}`);
       }
 
+      // Log validation warnings
+      if (validation.warnings.length > 0) {
+        validation.warnings.forEach((warning) => {
+          PluginLog.warn(`[PluginLoader] ${manifest.id}: ${warning}`);
+        });
+      }
+
       // Load plugin code
       const codeUrl = `${pluginPath}/plugin.js`;
       const code = await this._http
@@ -86,7 +94,34 @@ export class PluginLoaderService {
         }
       }
 
-      return { manifest, code, indexHtml, icon };
+      // Load translation files if i18n is configured
+      let translations: Record<string, string> | undefined;
+      if (manifest.i18n?.languages && manifest.i18n.languages.length > 0) {
+        translations = {};
+        for (const lang of manifest.i18n.languages) {
+          try {
+            const translationUrl = `${pluginPath}/i18n/${lang}.json`;
+            const translationContent = await this._http
+              .get(translationUrl, { responseType: 'text' })
+              .pipe(first())
+              .toPromise();
+
+            if (translationContent) {
+              translations[lang] = translationContent;
+              PluginLog.log(
+                `[PluginLoader] Loaded ${lang} translations for ${manifest.id}`,
+              );
+            }
+          } catch (e) {
+            PluginLog.err(
+              `[PluginLoader] Failed to load ${lang} translations for ${manifest.id}:`,
+              e,
+            );
+          }
+        }
+      }
+
+      return { manifest, code, indexHtml, icon, translations };
     } catch (error) {
       PluginLog.err(`Failed to load plugin from ${pluginPath}:`, error);
       throw error;
@@ -108,6 +143,7 @@ export class PluginLoaderService {
       code: cached.code,
       indexHtml: cached.indexHtml,
       icon: cached.icon,
+      translations: cached.translations,
     };
   }
 

@@ -1,0 +1,214 @@
+name: iOS App Store Release on Release
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs: {}
+
+jobs:
+  ios-app-store-release:
+    runs-on: macos-latest
+    env:
+      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
+      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+
+    # TODO: Re-enable pre-release skip once workflow is tested
+    # if: '!github.event.release.prerelease'
+
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Check out Git repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Install Apple WWDR intermediate certificate
+        run: |
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer -o /tmp/AppleWWDRCAG4.cer
+          sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/AppleWWDRCAG4.cer
+
+      - name: Configure signing keychain
+        env:
+          # Reuse mac_certs - "Apple Distribution" certificate works for both macOS and iOS
+          MAC_CERTS: ${{ secrets.mac_certs }}
+          MAC_CERTS_PASSWORD: ${{ secrets.mac_certs_password }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/dist-cert.p12"
+          KEYCHAIN_NAME="build.keychain"
+          KEYCHAIN_PATH="$HOME/Library/Keychains/${KEYCHAIN_NAME}-db"
+          echo "$MAC_CERTS" | base64 --decode > "$CERT_PATH"
+          echo "=== DIAGNOSTIC: Decoded .p12 SHA256 ==="
+          shasum -a 256 "$CERT_PATH"
+          echo "========================================"
+          security create-keychain -p "" "$KEYCHAIN_NAME"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "" "$KEYCHAIN_PATH"
+          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer -o "$RUNNER_TEMP/AppleWWDRCAG4.cer"
+          security import "$RUNNER_TEMP/AppleWWDRCAG4.cer" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MAC_CERTS_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security list-keychains -s "$KEYCHAIN_PATH" "$HOME/Library/Keychains/login.keychain-db"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: List available signing identities
+        run: security find-identity -v -p codesigning
+
+      - name: Install provisioning profile
+        env:
+          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/ios-provisioning.mobileprovision"
+          echo "$IOS_PROVISION_PROFILE" | base64 --decode > "$PROFILE_PATH"
+          # Get the UUID from the provisioning profile
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(security cms -D -i "$PROFILE_PATH"))
+          echo "Profile UUID: $PROFILE_UUID"
+          # Create the provisioning profiles directory if it doesn't exist
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          # Copy the profile with its UUID as the filename
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID}.mobileprovision"
+          echo "PROVISIONING_PROFILE_UUID=$PROFILE_UUID" >> "$GITHUB_ENV"
+
+      - name: Verify provisioning profile
+        run: |
+          security cms -D -i "$HOME/Library/MobileDevice/Provisioning Profiles/${PROVISIONING_PROFILE_UUID}.mobileprovision" > /tmp/profile.plist
+          echo "=== PROVISIONING PROFILE INFO ==="
+          echo "Name: $(/usr/libexec/PlistBuddy -c "Print Name" /tmp/profile.plist)"
+          echo "Team: $(/usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" /tmp/profile.plist)"
+          PROFILE_APP_ID=$(/usr/libexec/PlistBuddy -c "Print Entitlements:application-identifier" /tmp/profile.plist | sed 's/^[A-Z0-9]*\.//')
+          echo "App ID: $PROFILE_APP_ID"
+          echo "=================================="
+          # Verify bundle ID matches
+          EXPECTED_BUNDLE_ID="com.super-productivity.app"
+          if [ "$PROFILE_APP_ID" != "$EXPECTED_BUNDLE_ID" ]; then
+            echo "ERROR: Provisioning profile app ID ($PROFILE_APP_ID) does not match expected bundle ID ($EXPECTED_BUNDLE_ID)"
+            echo "Please create a new provisioning profile with the correct bundle ID"
+            exit 1
+          fi
+          echo "Bundle ID verification passed!"
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: |
+          echo "::set-output name=dir::$(npm config get cache)"
+
+      - uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install npm Packages
+        run: npm i
+
+      - name: Generate environment
+        run: npm run env
+
+      - name: Set iOS version from package.json
+        run: |
+          FULL_VERSION=$(node -p "require('./package.json').version")
+          # Strip pre-release suffix (e.g., "17.0.0-RC.3" -> "17.0.0")
+          # App Store requires X.Y.Z format; build number differentiates uploads
+          VERSION=$(echo "$FULL_VERSION" | sed 's/-.*//')
+          BUILD_NUMBER=$(date +%Y%m%d%H%M)
+          echo "Setting iOS version to $VERSION (build $BUILD_NUMBER) [from $FULL_VERSION]"
+
+          cd ios/App
+          xcrun agvtool new-marketing-version "$VERSION"
+          xcrun agvtool new-version -all "$BUILD_NUMBER"
+
+      - name: Build Angular frontend
+        run: npm run buildFrontend:prodWeb
+
+      - name: Sync Capacitor iOS
+        run: npm run sync:ios
+
+      - name: Install CocoaPods
+        run: |
+          cd ios/App
+          pod install
+
+      - name: Archive iOS app
+        run: |
+          cd ios/App
+          # Archive without code signing - signing is handled during export
+          # This avoids conflicts with CocoaPods frameworks
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Create ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <key>uploadSymbols</key>
+              <true/>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.super-productivity.app</key>
+                  <string>${{ env.PROVISIONING_PROFILE_UUID }}</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ipa-output" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: List exported files
+        run: ls -la "$RUNNER_TEMP/ipa-output"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: sup-ios-release
+          path: ${{ runner.temp }}/ipa-output/*.ipa
+
+      - name: Validate App
+        run: |
+          xcrun altool --type ios --validate-app \
+            -f "$RUNNER_TEMP/ipa-output/"*.ipa \
+            -u "${{ secrets.APPLE_ID }}" \
+            -p "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+
+      - name: Upload to App Store Connect
+        run: |
+          xcrun altool --type ios --upload-app \
+            -f "$RUNNER_TEMP/ipa-output/"*.ipa \
+            -u "${{ secrets.APPLE_ID }}" \
+            -p "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}"
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

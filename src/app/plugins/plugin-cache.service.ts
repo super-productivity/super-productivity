@@ -7,6 +7,7 @@ export interface CachedPlugin {
   code: string;
   indexHtml?: string;
   icon?: string;
+  translations?: Record<string, string>; // language code -> JSON string
   uploadDate: number;
 }
 
@@ -55,13 +56,22 @@ export class PluginCacheService {
     code: string,
     indexHtml?: string,
     icon?: string,
+    translations?: Record<string, string>,
   ): Promise<void> {
     // Log plugin data sizes for debugging
+    const translationsSize = translations
+      ? Object.values(translations).reduce((sum, content) => {
+          const sizeKB = new Blob([content]).size / 1024;
+          return sum + sizeKB;
+        }, 0)
+      : 0;
+
     const sizes = {
       manifest: new Blob([manifest]).size / 1024,
       code: new Blob([code]).size / 1024,
       indexHtml: indexHtml ? new Blob([indexHtml]).size / 1024 : 0,
       icon: icon ? new Blob([icon]).size / 1024 : 0,
+      translations: translationsSize,
     };
     const totalSizeKB = Object.values(sizes).reduce((sum, size) => sum + size, 0);
 
@@ -71,6 +81,8 @@ export class PluginCacheService {
     if (indexHtml)
       PluginLog.log(`[PluginCache] - IndexHtml: ${sizes.indexHtml.toFixed(2)}KB`);
     if (icon) PluginLog.log(`[PluginCache] - Icon: ${sizes.icon.toFixed(2)}KB`);
+    if (translations)
+      PluginLog.log(`[PluginCache] - Translations: ${sizes.translations.toFixed(2)}KB`);
     PluginLog.log(
       `[PluginCache] - Total size: ${totalSizeKB.toFixed(2)}KB (${(totalSizeKB / 1024).toFixed(2)}MB)`,
     );
@@ -92,6 +104,7 @@ export class PluginCacheService {
       code,
       indexHtml,
       icon,
+      translations,
       uploadDate: Date.now(),
     };
 

@@ -216,3 +216,18 @@ collapsible {
     font-size: 14px;
   }
 }
+
+// Language support indicators
+.current-lang-supported {
+  font-weight: 500;
+  color: var(--c-primary);
+}
+
+.lang-check {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--c-primary);
+  vertical-align: middle;
+  margin-left: 4px;
+}

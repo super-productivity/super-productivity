@@ -25,6 +25,7 @@ const mockPluginAPI = {
   },
   persistDataSynced: jest.fn(),
   loadSyncedData: jest.fn(),
+  showSnack: jest.fn(),
 };
 
 (global as any).PluginAPI = mockPluginAPI;
@@ -40,7 +41,10 @@ describe('MD to SP Sync - Complete Tests', () => {
 
     // Setup default mocks
     mockPluginAPI.getTasks.mockResolvedValue([]);
-    mockPluginAPI.batchUpdateForProject.mockResolvedValue(undefined);
+    mockPluginAPI.batchUpdateForProject.mockResolvedValue({
+      success: true,
+      createdTaskIds: {},
+    });
     mockPluginAPI.getAllProjects.mockResolvedValue([
       { id: mockProjectId, title: 'Test Project' },
     ]);
@@ -182,18 +186,19 @@ describe('MD to SP Sync - Complete Tests', () => {
     });
 
     it('should handle project not found', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
       mockPluginAPI.getAllProjects.mockResolvedValue([]);
 
-      await mdToSp(mockMarkdownContent, mockProjectId);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Project test-project not found'),
+      await expect(mdToSp(mockMarkdownContent, mockProjectId)).rejects.toThrow(
+        'Project test-project not found',
       );
-      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
 
-      consoleWarnSpy.mockRestore();
+      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
+      expect(mockPluginAPI.showSnack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ERROR',
+          msg: expect.stringContaining('Project test-project not found'),
+        }),
+      );
     });
 
     it('should handle getTasks error', async () => {
@@ -405,29 +410,31 @@ describe('MD to SP Sync - Complete Tests', () => {
     });
 
     it('should handle null projectId gracefully', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
-      await mdToSp(mockMarkdownContent, null as any);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Project null not found'),
+      await expect(mdToSp(mockMarkdownContent, null as any)).rejects.toThrow(
+        'Project null not found',
       );
-      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
 
-      consoleWarnSpy.mockRestore();
+      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
+      expect(mockPluginAPI.showSnack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ERROR',
+          msg: expect.stringContaining('Project null not found'),
+        }),
+      );
     });
 
     it('should handle undefined projectId gracefully', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
-      await mdToSp(mockMarkdownContent, undefined as any);
-
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Project undefined not found'),
+      await expect(mdToSp(mockMarkdownContent, undefined as any)).rejects.toThrow(
+        'Project undefined not found',
       );
-      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
 
-      consoleWarnSpy.mockRestore();
+      expect(mockPluginAPI.batchUpdateForProject).not.toHaveBeenCalled();
+      expect(mockPluginAPI.showSnack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ERROR',
+          msg: expect.stringContaining('Project undefined not found'),
+        }),
+      );
     });
   });
 });

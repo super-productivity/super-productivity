@@ -44,22 +44,37 @@ const performInitialSync = async (config: LocalUserCfg): Promise<void> => {
 
     // Determine sync direction
     if (!fileStats) {
-      // No file exists, create from SP
       await spToMd(config);
     } else {
-      // File is newer, sync to SP
       const content = await readTasksFile(config.filePath);
       if (content) {
         const projectId = config.projectId;
-        await mdToSp(content, projectId);
+
+        try {
+          await mdToSp(content, projectId);
+        } catch (syncError) {
+          console.error('[sync-md] Initial sync failed:', syncError);
+
+          PluginAPI.showSnack({
+            msg: 'Sync.md: Initial sync failed. Plugin is still active.',
+            type: 'WARNING',
+          });
+
+          // Don't throw - allow plugin to continue running
+        }
       }
     }
-    // TODO there is no proper way to check for a newer state from SP
-    // TODO we should persist the last modified timestamp from the file when syncing and check if it changed. if not we always update from SP to MD
 
     // Verify sync state after initial sync
     const verificationResult = await verifySyncState(config);
     logSyncVerification(verificationResult, 'initial sync');
+  } catch (outerError) {
+    console.error('[sync-md] Fatal error in initial sync:', outerError);
+
+    PluginAPI.showSnack({
+      msg: 'Sync.md: Plugin started but sync failed. Check console.',
+      type: 'ERROR',
+    });
   } finally {
     syncInProgress = false;
   }
@@ -106,38 +121,63 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
   try {
     const content = await readTasksFile(config.filePath);
     if (content) {
-      // Use the project ID from config, fallback to default
       const projectId = config.projectId;
       console.log(`[sync-md] Executing mdToSp for project: ${projectId}`);
-      await mdToSp(content, projectId);
 
-      // Verify sync state after file change sync
-      const verificationResult = await verifySyncState(config);
-      logSyncVerification(verificationResult, 'MD to SP sync (file change)');
+      try {
+        await mdToSp(content, projectId);
 
-      // If there are still differences after MD→SP sync, trigger SP→MD sync to resolve them
-      if (!verificationResult.isInSync) {
-        console.log(
-          '[sync-md] MD to SP sync incomplete, triggering SP to MD sync to resolve remaining differences',
-        );
+        // Show success notification (optional, can be removed if too noisy)
+        PluginAPI.showSnack({
+          msg: 'Sync.md: Synced successfully',
+          type: 'SUCCESS',
+        });
 
-        // Temporarily disable file watcher to prevent triggering another MD→SP sync
-        stopFileWatcher();
+        // Verify sync state after file change sync
+        const verificationResult = await verifySyncState(config);
+        logSyncVerification(verificationResult, 'MD to SP sync (file change)');
 
-        try {
-          await spToMd(config);
+        // If there are still differences, trigger SP→MD sync
+        if (!verificationResult.isInSync) {
+          console.log(
+            '[sync-md] MD to SP sync incomplete, triggering SP to MD sync to resolve remaining differences',
+          );
 
-          // Verify again after SP→MD sync
-          const finalVerification = await verifySyncState(config);
-          logSyncVerification(finalVerification, 'SP to MD sync (resolving differences)');
-        } finally {
-          // Re-enable file watcher
-          startFileWatcher(config.filePath, () => {
-            handleFileChange(config);
-          });
+          stopFileWatcher();
+
+          try {
+            await spToMd(config);
+
+            const finalVerification = await verifySyncState(config);
+            logSyncVerification(
+              finalVerification,
+              'SP to MD sync (resolving differences)',
+            );
+          } finally {
+            startFileWatcher(config.filePath, () => {
+              handleFileChange(config);
+            });
+          }
         }
+      } catch (syncError) {
+        console.error('[sync-md] Sync failed:', syncError);
+
+        // Error already shown by mdToSp, but add guidance
+        PluginAPI.showSnack({
+          msg: 'Sync.md: Check markdown file for orphaned subtasks or formatting issues',
+          type: 'WARNING',
+        });
+
+        // Don't re-throw - keep plugin running
       }
     }
+  } catch (fileError) {
+    console.error('[sync-md] Failed to read markdown file:', fileError);
+
+    PluginAPI.showSnack({
+      msg: `Sync.md: Cannot read file ${config.filePath}. Check permissions.`,
+      type: 'ERROR',
+    });
   } finally {
     syncInProgress = false;
   }

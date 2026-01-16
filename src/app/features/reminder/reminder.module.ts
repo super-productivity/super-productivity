@@ -3,7 +3,11 @@ import { CommonModule } from '@angular/common';
 import { ReminderService } from './reminder.service';
 import { MatDialog } from '@angular/material/dialog';
 import { IS_ELECTRON } from '../../app.constants';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import {
+  IS_NATIVE_PLATFORM,
+  IS_IOS_NATIVE,
+  IS_ANDROID_NATIVE,
+} from '../../util/is-native-platform';
 import {
   concatMap,
   delay,
@@ -28,6 +32,15 @@ import { TaskWithReminderData } from '../tasks/task.model';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigService } from '../config/global-config.service';
+import { CapacitorReminderService } from '../../core/platform/capacitor-reminder.service';
+import {
+  NOTIFICATION_ACTION,
+  NotificationActionEvent,
+} from '../../core/platform/capacitor-notification.service';
+import { Log } from '../../core/log';
+
+const IOS_SNOOZE_MINUTES = 10;
+const MINUTES_TO_MILLISECONDS = 60 * 1000;
 
 @NgModule({
   declarations: [],
@@ -44,10 +57,14 @@ export class ReminderModule {
   private readonly _syncTriggerService = inject(SyncTriggerService);
   private readonly _store = inject(Store);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _capacitorReminderService = inject(CapacitorReminderService);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
     this._reminderService.init();
+
+    // Initialize iOS notification actions
+    this._initIOSNotificationActions();
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
       .pipe(
@@ -96,7 +113,7 @@ export class ReminderModule {
         //    app state. The reminder will be cancelled when the task is marked done in the app.
         // To fully fix: Add onReminderDone$ subject to android-interface.ts and wire it up
         // in the Kotlin ReminderBroadcastReceiver to call dismissReminderOnly action.
-        if (IS_ANDROID_WEB_VIEW) {
+        if (IS_ANDROID_NATIVE) {
           return;
         }
 
@@ -139,7 +156,7 @@ export class ReminderModule {
   @throttle(60000)
   private _showNotification(reminders: TaskWithReminderData[]): void {
     // Skip on Android - we use native notifications with snooze button instead
-    if (IS_ANDROID_WEB_VIEW) {
+    if (IS_NATIVE_PLATFORM) {
       return;
     }
 
@@ -161,5 +178,72 @@ export class ReminderModule {
         requireInteraction: true,
       })
       .then();
+  }
+
+  /**
+   * Initialize iOS notification action handling.
+   * Registers action types and subscribes to action events.
+   */
+  private _initIOSNotificationActions(): void {
+    if (!IS_IOS_NATIVE) {
+      return;
+    }
+
+    // Initialize the Capacitor reminder service (registers action types)
+    this._capacitorReminderService.initialize().then(() => {
+      Log.log('ReminderModule: iOS notification actions initialized');
+    });
+
+    // Handle notification action events
+    this._capacitorReminderService.action$.subscribe((event: NotificationActionEvent) => {
+      this._handleIOSNotificationAction(event);
+    });
+  }
+
+  /**
+   * Handle iOS notification action (Snooze or Done).
+   */
+  private async _handleIOSNotificationAction(
+    event: NotificationActionEvent,
+  ): Promise<void> {
+    const taskId = event.extra?.['relatedId'] as string | undefined;
+    if (!taskId) {
+      Log.warn('ReminderModule: No task ID in notification action', event);
+      return;
+    }
+
+    Log.log('ReminderModule: Handling iOS notification action', {
+      actionId: event.actionId,
+      taskId,
+    });
+
+    if (event.actionId === NOTIFICATION_ACTION.SNOOZE) {
+      // Snooze: Reschedule the reminder for 10 minutes later
+      const task = await this._taskService.getByIdOnce$(taskId).toPromise();
+      if (task) {
+        const snoozeMs = IOS_SNOOZE_MINUTES * MINUTES_TO_MILLISECONDS;
+        const newRemindAt = Date.now() + snoozeMs;
+        this._store.dispatch(
+          TaskSharedActions.reScheduleTaskWithTime({
+            task,
+            remindAt: newRemindAt,
+            dueWithTime: task.dueWithTime ?? newRemindAt,
+            isMoveToBacklog: false,
+          }),
+        );
+        Log.log('ReminderModule: Task snoozed via iOS notification', {
+          taskId,
+          newRemindAt: new Date(newRemindAt).toISOString(),
+        });
+      }
+    } else if (event.actionId === NOTIFICATION_ACTION.DONE) {
+      // Done: Dismiss the reminder only (don't mark task as done)
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({
+          id: taskId,
+        }),
+      );
+      Log.log('ReminderModule: Reminder dismissed via iOS notification', { taskId });
+    }
   }
 }

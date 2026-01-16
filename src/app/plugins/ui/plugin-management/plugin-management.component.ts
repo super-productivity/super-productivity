@@ -35,6 +35,8 @@ import { PluginConfigDialogComponent } from '../plugin-config-dialog/plugin-conf
 import { IS_ELECTRON } from '../../../app.constants';
 import { PluginLog } from '../../../core/log';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
+import { LanguageCode } from '../../../core/locale.constants';
+import { GlobalConfigService } from '../../../features/config/global-config.service';
 
 interface CommunityPlugin {
   name: string;
@@ -73,8 +75,40 @@ export class PluginManagementComponent {
   private readonly _pluginCacheService = inject(PluginCacheService);
   private readonly _pluginConfigService = inject(PluginConfigService);
   private readonly _translateService = inject(TranslateService);
+  private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dialog = inject(MatDialog);
   private readonly _http = inject(HttpClient);
+
+  // Language code to human-readable name mapping
+  /* eslint-disable @typescript-eslint/naming-convention */
+  private readonly _languageNames: Record<string, string> = {
+    ar: 'Arabic',
+    de: 'German',
+    cz: 'Czech',
+    en: 'English',
+    es: 'Spanish',
+    fa: 'Persian',
+    fi: 'Finnish',
+    fr: 'French',
+    hr: 'Croatian',
+    id: 'Indonesian',
+    it: 'Italian',
+    ja: 'Japanese',
+    ko: 'Korean',
+    nl: 'Dutch',
+    nb: 'Norwegian',
+    pl: 'Polish',
+    pt: 'Portuguese',
+    'pt-br': 'Portuguese (Brazil)',
+    ru: 'Russian',
+    sk: 'Slovak',
+    sv: 'Swedish',
+    tr: 'Turkish',
+    uk: 'Ukrainian',
+    zh: 'Chinese (Simplified)',
+    'zh-tw': 'Chinese (Traditional)',
+  } as const;
+  /* eslint-enable @typescript-eslint/naming-convention */
 
   readonly communityPlugins = toSignal(
     this._http.get<CommunityPlugin[]>('assets/community-plugins.json'),
@@ -387,5 +421,47 @@ export class PluginManagementComponent {
           : this._translateService.instant(T.PLUGINS.FAILED_TO_LOAD_CONFIG),
       );
     }
+  }
+
+  /**
+   * Get formatted language string for display
+   * Returns "English only" if no i18n or only English
+   * Returns comma-separated language names otherwise
+   */
+  getPluginLanguages(plugin: PluginInstance): string {
+    const languages = plugin.manifest.i18n?.languages;
+
+    if (!languages || languages.length === 0) {
+      return 'English only';
+    }
+
+    if (languages.length === 1 && languages[0] === 'en') {
+      return 'English only';
+    }
+
+    // Map language codes to names and join with commas
+    const languageNames = languages
+      .map((code) => this._languageNames[code] || code)
+      .join(', ');
+
+    return languageNames;
+  }
+
+  /**
+   * Check if plugin supports the current app language
+   */
+  supportsCurrentLanguage(plugin: PluginInstance): boolean {
+    const currentLang = this._globalConfigService.localization()?.lng;
+    if (!currentLang) {
+      return false;
+    }
+
+    const languages = plugin.manifest.i18n?.languages;
+    if (!languages || languages.length === 0) {
+      // English-only plugins support English
+      return currentLang === LanguageCode.en;
+    }
+
+    return languages.includes(currentLang);
   }
 }

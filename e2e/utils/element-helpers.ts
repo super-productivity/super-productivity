@@ -1,4 +1,4 @@
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /**
  * Safely checks if an element is visible, returning false on any error.
@@ -32,4 +32,27 @@ export const safeIsEnabled = async (locator: Locator): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+/**
+ * Ensures the global add task bar is open and returns the input locator.
+ * If the bar is closed, it will click the add button to open it.
+ * Uses proper condition-based waiting to avoid race conditions.
+ *
+ * @param page - Playwright page object
+ * @returns Promise<Locator> - The add task input locator, ready for interaction
+ */
+export const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> => {
+  const ADD_TASK_INPUT = 'add-task-bar.global input';
+  const addTaskInput = page.locator(ADD_TASK_INPUT).first();
+  const isVisible = await addTaskInput.isVisible().catch(() => false);
+
+  if (!isVisible) {
+    const addBtn = page.locator('.tour-addBtn').first();
+    await addBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await addBtn.click();
+  }
+
+  await addTaskInput.waitFor({ state: 'visible', timeout: 10000 });
+  return addTaskInput;
 };

@@ -175,7 +175,10 @@ export const createMockPluginAPI = (): any => {
     getAllProjects: jest
       .fn()
       .mockResolvedValue([{ id: 'test-project', title: 'Test Project' }]),
-    batchUpdateForProject: jest.fn().mockResolvedValue(undefined),
+    batchUpdateForProject: jest.fn().mockResolvedValue({
+      success: true,
+      createdTaskIds: {},
+    }),
     log: {
       critical: jest.fn(),
       err: jest.fn(),
@@ -189,6 +192,7 @@ export const createMockPluginAPI = (): any => {
     },
     persistDataSynced: jest.fn(),
     loadSyncedData: jest.fn(),
+    showSnack: jest.fn(),
   };
 
   (global as any).PluginAPI = mockAPI;

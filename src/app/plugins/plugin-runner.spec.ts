@@ -5,6 +5,7 @@ import { PluginSecurityService } from './plugin-security';
 import { SnackService } from '../core/snack/snack.service';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginManifest, PluginBaseCfg } from './plugin-api.model';
+import { PluginI18nService } from './plugin-i18n.service';
 
 describe('PluginRunner', () => {
   let service: PluginRunner;
@@ -12,6 +13,7 @@ describe('PluginRunner', () => {
   let mockSecurityService: jasmine.SpyObj<PluginSecurityService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockCleanupService: jasmine.SpyObj<PluginCleanupService>;
+  let mockI18nService: jasmine.SpyObj<PluginI18nService>;
 
   const mockManifest: PluginManifest = {
     id: 'test-plugin',
@@ -45,6 +47,14 @@ describe('PluginRunner', () => {
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockCleanupService = jasmine.createSpyObj('PluginCleanupService', ['cleanupPlugin']);
+    mockI18nService = jasmine.createSpyObj('PluginI18nService', [
+      'translate',
+      'getCurrentLanguage',
+      'loadPluginTranslationsFromPath',
+      'loadPluginTranslationsFromContent',
+      'unloadPluginTranslations',
+    ]);
+    mockI18nService.getCurrentLanguage.and.returnValue('en');
 
     TestBed.configureTestingModule({
       providers: [
@@ -53,6 +63,7 @@ describe('PluginRunner', () => {
         { provide: PluginSecurityService, useValue: mockSecurityService },
         { provide: SnackService, useValue: mockSnackService },
         { provide: PluginCleanupService, useValue: mockCleanupService },
+        { provide: PluginI18nService, useValue: mockI18nService },
       ],
     });
     service = TestBed.inject(PluginRunner);

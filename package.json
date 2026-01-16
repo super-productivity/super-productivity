@@ -99,6 +99,8 @@
     "startFrontend:prod": "npm run env && ng serve --configuration production",
     "startFrontend:stage": "npm run env && ng serve --configuration stage",
     "sync:android": "npx cap sync android",
+    "sync:ios": "npx cap sync ios",
+    "dist:ios:prod": "npm run buildFrontend:prodWeb && npm run sync:ios",
     "stats": "ng build --configuration production --source-map --stats-json && npx esbuild-visualizer --metadata .tmp/angular-dist/stats.json && xdg-open stats.html",
     "test": "cross-env TZ='Europe/Berlin' ng test --watch=false && npm run test:tz:ci",
     "test:once": "cross-env TZ='Europe/Berlin' ng test --watch=false",
@@ -136,6 +138,9 @@
     "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
+    "@capacitor/ios": "^7.4.4",
+    "@capacitor/keyboard": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.4",
     "electron-dl": "^3.5.2",
     "electron-localshortcut": "^3.2.1",
     "electron-log": "^5.4.3",

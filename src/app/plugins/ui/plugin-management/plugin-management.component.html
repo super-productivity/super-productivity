@@ -151,6 +151,17 @@
             <td>{{ plugin.manifest.minSupVersion }}</td>
           </tr>
         }
+        <tr>
+          <th>{{ T.PLUGINS.LANGUAGES | translate }}</th>
+          <td>
+            <span [class.current-lang-supported]="supportsCurrentLanguage(plugin)">
+              {{ getPluginLanguages(plugin) }}
+            </span>
+            @if (supportsCurrentLanguage(plugin)) {
+              <mat-icon class="lang-check">check_circle</mat-icon>
+            }
+          </td>
+        </tr>
       </table>
 
       @if (

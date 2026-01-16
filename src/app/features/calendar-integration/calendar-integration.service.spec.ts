@@ -16,6 +16,7 @@ import {
 import { SnackService } from '../../core/snack/snack.service';
 import { take } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 describe('CalendarIntegrationService', () => {
   let service: CalendarIntegrationService;
@@ -728,7 +729,7 @@ END:VCALENDAR`;
   describe('constructor', () => {
     it('should load skipped events from localStorage on init', () => {
       const skippedIds = ['event-1', 'event-2'];
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
 
       localStorage.setItem(
         'SUP_CALENDER_EVENTS_SKIPPED_TODAY',
@@ -758,7 +759,7 @@ END:VCALENDAR`;
 
     it('should not load skipped events from different day', () => {
       const skippedIds = ['event-1', 'event-2'];
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      const yesterday = getDbDateStr(Date.now() - 86400000);
 
       localStorage.setItem(
         'SUP_CALENDER_EVENTS_SKIPPED_TODAY',
@@ -787,7 +788,7 @@ END:VCALENDAR`;
     });
 
     it('should handle invalid JSON in localStorage gracefully', () => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
 
       localStorage.setItem('SUP_CALENDER_EVENTS_SKIPPED_TODAY', 'invalid json');
       localStorage.setItem('SUP_CALENDER_EVENTS_LAST_SKIP_DAY', today);

@@ -1,8 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { SnackService } from '../snack/snack.service';
 import {
   ShareCanvasImageParams,
@@ -629,7 +628,7 @@ export class ShareService {
     filename: string;
     dataUrl: string;
   }): Promise<ShareResult> {
-    if (base64 && (Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW)) {
+    if (base64 && IS_NATIVE_PLATFORM) {
       const sanitizedName = ShareFileUtil.sanitizeFilename(filename);
       const relativePath = `shared-images/${Date.now()}-${sanitizedName}`;
       try {

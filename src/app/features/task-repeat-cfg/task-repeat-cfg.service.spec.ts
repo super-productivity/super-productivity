@@ -37,8 +37,7 @@ describe('TaskRepeatCfgService', () => {
   let taskService: jasmine.SpyObj<TaskService>;
   let dispatchSpy: jasmine.Spy;
 
-  const formatIsoDate = (d: Date): string =>
-    `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+  const formatIsoDate = (d: Date): string => getDbDateStr(d);
 
   const mockTaskRepeatCfg: TaskRepeatCfg = {
     ...DEFAULT_TASK_REPEAT_CFG,
@@ -783,13 +782,9 @@ describe('TaskRepeatCfgService', () => {
       const testTaskRepeatCfg = {
         ...mockTaskRepeatCfg,
         // eslint-disable-next-line no-mixed-operators
-        startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split('T')[0], // 7 days ago
+        startDate: getDbDateStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)), // 7 days ago
         // eslint-disable-next-line no-mixed-operators
-        lastTaskCreationDay: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split('T')[0], // 2 days ago
+        lastTaskCreationDay: getDbDateStr(new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)), // 2 days ago
       };
 
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));

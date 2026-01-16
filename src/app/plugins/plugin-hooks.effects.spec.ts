@@ -56,7 +56,17 @@ describe('PluginHooksEffects', () => {
       providers: [
         PluginHooksEffects,
         provideMockActions(() => actions$),
-        provideMockStore({}),
+        provideMockStore({
+          initialState: {
+            globalConfig: {
+              localization: {
+                lng: 'en',
+                dateTimeLocale: undefined,
+                firstDayOfWeek: undefined,
+              },
+            },
+          },
+        }),
         { provide: PluginService, useValue: pluginServiceMock },
       ],
     });

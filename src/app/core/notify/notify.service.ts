@@ -5,10 +5,10 @@ import { IS_ELECTRON } from '../../app.constants';
 import { IS_MOBILE } from '../../util/is-mobile';
 import { TranslateService } from '@ngx-translate/core';
 import { UiHelperService } from '../../features/ui-helper/ui-helper.service';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../log';
-import { LocalNotifications } from '@capacitor/local-notifications';
 import { generateNotificationId } from '../../features/android/android-notification-id.util';
+import { CapacitorNotificationService } from '../platform/capacitor-notification.service';
+import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 
 @Injectable({
   providedIn: 'root',
@@ -16,6 +16,8 @@ import { generateNotificationId } from '../../features/android/android-notificat
 export class NotifyService {
   private _translateService = inject(TranslateService);
   private _uiHelperService = inject(UiHelperService);
+  private _platformService = inject(CapacitorPlatformService);
+  private _notificationService = inject(CapacitorNotificationService);
 
   async notifyDesktop(options: NotifyModel): Promise<Notification | undefined> {
     if (!IS_MOBILE) {
@@ -53,48 +55,29 @@ export class NotifyService {
           body,
         });
       }
-    } else if (IS_ANDROID_WEB_VIEW) {
+    } else if (this._platformService.isNative) {
+      // Use Capacitor LocalNotifications for iOS and Android
       try {
-        // Check permissions
-        const checkResult = await LocalNotifications.checkPermissions();
-        let displayPermissionGranted = checkResult.display === 'granted';
-
-        // Request permissions if not granted
-        if (!displayPermissionGranted) {
-          const requestResult = await LocalNotifications.requestPermissions();
-          displayPermissionGranted = requestResult.display === 'granted';
-          if (!displayPermissionGranted) {
-            Log.warn('NotifyService: Notification permission not granted');
-            return;
-          }
-        }
-
         // Generate a deterministic notification ID from title and body
         // Use a prefix to distinguish plugin notifications from reminders
         const notificationKey = `plugin-notification:${title}:${body}`;
         const notificationId = generateNotificationId(notificationKey);
 
-        // Schedule an immediate notification
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              id: notificationId,
-              title,
-              body,
-              schedule: {
-                at: new Date(Date.now() + 1000), // Show after 1 second
-                allowWhileIdle: true,
-              },
-            },
-          ],
-        });
-
-        Log.log('NotifyService: Android notification scheduled successfully', {
+        const success = await this._notificationService.schedule({
           id: notificationId,
           title,
+          body,
         });
+
+        if (success) {
+          Log.log('NotifyService: Mobile notification scheduled successfully', {
+            id: notificationId,
+            title,
+            platform: this._platformService.platform,
+          });
+        }
       } catch (error) {
-        Log.err('NotifyService: Failed to show Android notification', error);
+        Log.err('NotifyService: Failed to show mobile notification', error);
       }
     } else if (this._isBasicNotificationSupport()) {
       const permission = await Notification.requestPermission();
@@ -122,8 +105,14 @@ export class NotifyService {
         }, options.duration || 10000);
         return instance;
       }
+    } else {
+      Log.warn('NotifyService: No notification method available', {
+        platform: this._platformService.platform,
+        isNative: this._platformService.isNative,
+        hasServiceWorker: this._isServiceWorkerAvailable(),
+        hasBasicNotification: this._isBasicNotificationSupport(),
+      });
     }
-    Log.err('No notifications supported');
     return undefined;
   }
 

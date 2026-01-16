@@ -6,6 +6,7 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../../app.constants';
 import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
 import { FormlyFieldConfig } from '@ngx-formly/core';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -19,7 +20,8 @@ const createWebdavFormFields = (options: {
   baseUrlDescription: string;
 }): FormlyFieldConfig[] => {
   return [
-    ...(!IS_ELECTRON && !IS_ANDROID_WEB_VIEW
+    // Hide CORS info for Electron and native mobile apps (iOS/Android) since they handle CORS natively
+    ...(!IS_ELECTRON && !IS_NATIVE_PLATFORM
       ? [
           {
             type: 'tpl',

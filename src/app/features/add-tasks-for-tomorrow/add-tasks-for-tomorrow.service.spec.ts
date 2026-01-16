@@ -30,11 +30,11 @@ describe('AddTasksForTomorrowService', () => {
 
   // Sample test data
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = getDbDateStr(today);
 
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowStr = getDbDateStr(tomorrow);
 
   const mockTaskWithDueTimeTomorrow: TaskWithDueTime = {
     id: 'task1',
@@ -440,9 +440,7 @@ describe('AddTasksForTomorrowService', () => {
         repeatCycle: 'DAILY',
         repeatEvery: 1,
         // eslint-disable-next-line no-mixed-operators
-        lastTaskCreationDay: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split('T')[0], // 4 days ago
+        lastTaskCreationDay: getDbDateStr(new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)), // 4 days ago
       };
 
       const overdueMonthly: TaskRepeatCfg = {
@@ -451,10 +449,10 @@ describe('AddTasksForTomorrowService', () => {
         title: 'Monthly task from last month',
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        // eslint-disable-next-line no-mixed-operators
-        lastTaskCreationDay: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split('T')[0], // 35 days ago
+        lastTaskCreationDay: getDbDateStr(
+          // eslint-disable-next-line no-mixed-operators
+          new Date(Date.now() - 35 * 24 * 60 * 60 * 1000),
+        ), // 35 days ago
       };
 
       taskRepeatCfgServiceMock.getAllUnprocessedRepeatableTasks$.and.returnValue(

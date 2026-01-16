@@ -52,13 +52,17 @@ describe('Header Preservation Integration', () => {
             }
           }
         });
-        return Promise.resolve();
+        return Promise.resolve({
+          success: true,
+          createdTaskIds: {},
+        });
       }),
       persistDataSynced: jest.fn().mockImplementation((data) => {
         Object.assign(mockSyncedData, data);
         return Promise.resolve();
       }),
       loadSyncedData: jest.fn().mockResolvedValue(mockSyncedData),
+      showSnack: jest.fn(),
     };
   });
 

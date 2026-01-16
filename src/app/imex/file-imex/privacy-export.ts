@@ -24,6 +24,14 @@ const KEY_TO_REPLACE = [
   'filterUserName',
   'caldavUrl',
   'api_key',
+
+  // Issue #6020: Additional PII fields
+  'resourceName',
+  'name',
+  'description',
+  'location',
+  'calProviderId',
+  'summary',
 ];
 
 const maskString = (key: string, val: string, counter: number): string => {

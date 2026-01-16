@@ -30,6 +30,9 @@ import { ChartConfiguration } from 'chart.js';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { HttpClient } from '@angular/common/http';
+import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
+import { Keyboard } from '@capacitor/keyboard';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { LS } from '../persistence/storage-keys.const';
 import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
@@ -52,6 +55,7 @@ export class GlobalThemeService {
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
   private _customThemeService = inject(CustomThemeService);
+  private _platformService = inject(CapacitorPlatformService);
   private _environmentInjector = inject(EnvironmentInjector);
   private _destroyRef = inject(DestroyRef);
   private _hasInitialized = false;
@@ -279,6 +283,22 @@ export class GlobalThemeService {
       });
     }
 
+    // Add native mobile platform classes
+    if (this._platformService.isNative) {
+      this.document.body.classList.add(BodyClass.isNativeMobile);
+
+      if (this._platformService.isIOS()) {
+        this.document.body.classList.add(BodyClass.isIOS);
+        this._initIOSKeyboardHandling();
+        this._initIOSStatusBar();
+
+        // Add iPad-specific class for tablet optimizations
+        if (this._platformService.isIPad()) {
+          this.document.body.classList.add(BodyClass.isIPad);
+        }
+      }
+    }
+
     if (IS_ANDROID_WEB_VIEW) {
       androidInterface.isKeyboardShown$
         .pipe(takeUntilDestroyed(this._destroyRef))
@@ -287,11 +307,15 @@ export class GlobalThemeService {
 
           this.document.body.classList.remove(BodyClass.isAndroidKeyboardHidden);
           this.document.body.classList.remove(BodyClass.isAndroidKeyboardShown);
+          this.document.body.classList.remove(BodyClass.isKeyboardVisible);
           this.document.body.classList.add(
             isShown
               ? BodyClass.isAndroidKeyboardShown
               : BodyClass.isAndroidKeyboardHidden,
           );
+          if (isShown) {
+            this.document.body.classList.add(BodyClass.isKeyboardVisible);
+          }
         });
     }
 
@@ -404,6 +428,42 @@ export class GlobalThemeService {
         this._customThemeService.loadTheme(themeId);
         previousThemeId = themeId;
       }
+    });
+  }
+
+  /**
+   * Initialize iOS keyboard visibility tracking using Capacitor Keyboard plugin.
+   * Adds/removes CSS classes when keyboard shows/hides.
+   */
+  private _initIOSKeyboardHandling(): void {
+    Keyboard.addListener('keyboardWillShow', (info) => {
+      Log.log('iOS keyboard will show', info);
+      this.document.body.classList.add(BodyClass.isKeyboardVisible);
+      // Set CSS variable for keyboard height to adjust layout
+      this.document.documentElement.style.setProperty(
+        '--keyboard-height',
+        `${info.keyboardHeight}px`,
+      );
+    });
+
+    Keyboard.addListener('keyboardWillHide', () => {
+      Log.log('iOS keyboard will hide');
+      this.document.body.classList.remove(BodyClass.isKeyboardVisible);
+      this.document.documentElement.style.setProperty('--keyboard-height', '0px');
+    });
+  }
+
+  /**
+   * Initialize iOS status bar styling.
+   * Syncs status bar style with app dark/light mode.
+   */
+  private _initIOSStatusBar(): void {
+    // Set initial status bar style based on current theme
+    effect(() => {
+      const isDark = this.isDarkTheme();
+      StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch((err) => {
+        Log.warn('Failed to set iOS status bar style', err);
+      });
     });
   }
 }

@@ -113,7 +113,12 @@ export class TagPage extends BasePage {
       await tagNameInput.waitFor({ state: 'hidden', timeout: 3000 });
     }
 
-    // Wait for menu to close
+    // Wait for menu to close and overlay to disappear
+    // The stopPropagation wrapper can prevent proper menu closing, so explicitly wait for overlay removal
+    await this.page
+      .locator('.cdk-overlay-backdrop')
+      .waitFor({ state: 'detached', timeout: 3000 })
+      .catch(() => {});
     await this.page.waitForTimeout(300);
   }
 
@@ -145,7 +150,12 @@ export class TagPage extends BasePage {
     await tagOption.waitFor({ state: 'visible', timeout: 3000 });
     await tagOption.click();
 
-    // Wait for menu to close
+    // Wait for menu to close and overlay to disappear
+    // The stopPropagation wrapper can prevent proper menu closing, so explicitly wait for overlay removal
+    await this.page
+      .locator('.cdk-overlay-backdrop')
+      .waitFor({ state: 'detached', timeout: 3000 })
+      .catch(() => {});
     await this.page.waitForTimeout(300);
   }
 
@@ -214,6 +224,12 @@ export class TagPage extends BasePage {
    * Deletes a tag via the sidebar context menu
    */
   async deleteTag(tagName: string): Promise<void> {
+    // Ensure any open menus/overlays are closed before starting
+    await this.page
+      .locator('.cdk-overlay-backdrop')
+      .waitFor({ state: 'detached', timeout: 3000 })
+      .catch(() => {});
+
     // Ensure Tags section is expanded
     const tagsGroupBtn = this.tagsGroup
       .locator('.g-multi-btn-wrapper nav-item button')
