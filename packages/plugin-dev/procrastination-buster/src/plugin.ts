@@ -1,6 +1,5 @@
 // Procrastination Buster Plugin for Super Productivity
 import { PluginAPI } from '@super-productivity/plugin-api';
-import type { PluginHooks } from '@super-productivity/plugin-api';
 
 declare const plugin: PluginAPI;
 
@@ -31,7 +30,7 @@ if (plugin.onMessage) {
 }
 
 // Listen for language changes and notify iframe
-plugin.registerHook(PluginHooks.LANGUAGE_CHANGE, (language: string) => {
+plugin.registerHook('languageChange', (language: string) => {
   // Notify the iframe about language change
   const iframe = document.querySelector('iframe[data-plugin-iframe]');
   if (iframe && (iframe as HTMLIFrameElement).contentWindow) {
