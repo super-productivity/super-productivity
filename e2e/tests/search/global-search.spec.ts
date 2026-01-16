@@ -1,4 +1,5 @@
 import { expect, test } from '../../fixtures/test.fixture';
+import { ensureGlobalAddTaskBarOpen } from '../../utils/element-helpers';
 
 /**
  * Global Search E2E Tests
@@ -77,22 +78,15 @@ test.describe('Global Search', () => {
     await workViewPage.addTask(taskName);
     await expect(page.locator('task').filter({ hasText: taskName })).toBeVisible();
 
-    // Try to focus on add task input if visible
-    const addTaskInput = page.locator('add-task-bar.global input');
-    const isInputVisible = await addTaskInput
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
+    // Ensure the add task bar is open and get the input
+    const addTaskInput = await ensureGlobalAddTaskBarOpen(page);
 
-    if (isInputVisible) {
-      await addTaskInput.click();
+    // Type part of the task name
+    await addTaskInput.fill(testPrefix);
+    await page.waitForTimeout(500);
 
-      // Type part of the task name
-      await addTaskInput.fill(testPrefix);
-      await page.waitForTimeout(500);
-
-      // Clear the input
-      await addTaskInput.clear();
-    }
+    // Clear the input
+    await addTaskInput.clear();
 
     await page.keyboard.press('Escape');
 

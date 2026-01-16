@@ -2172,7 +2172,8 @@
     "VALIDATION_FAILED": "Validation failed"
   },
   "PM": {
-    "TITLE": "Project Metrics"
+    "TITLE": "Project Metrics",
+    "ALL_TASKS_TITLE": "Metrics (all tasks)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "Global Settings",

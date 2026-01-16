@@ -94,6 +94,16 @@
     </div>
 
     <script>
+      // Format date to YYYY-MM-DD in local timezone
+      // Note: This matches the getDbDateStr() utility used in the main app
+      function formatDateStr(date) {
+        const d = date || new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
       // Helper function to get date range for a specific day
       function getDateRange(daysBack = 1) {
         const now = new Date();
@@ -112,7 +122,7 @@
           start: startOfDay.getTime(),
           end: endOfDay.getTime(),
           date: targetDate,
-          dateKey: targetDate.toISOString().split('T')[0],
+          dateKey: formatDateStr(targetDate),
         };
       }
 

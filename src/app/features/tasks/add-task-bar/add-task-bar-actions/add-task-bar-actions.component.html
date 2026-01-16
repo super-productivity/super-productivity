@@ -157,33 +157,35 @@
 </mat-menu>
 
 <mat-menu #tagsMenu="matMenu">
-  @for (tag of allTags(); track tag.id) {
-    <button
-      mat-menu-item
-      (click)="toggleTagWithSyntax(tag)"
-      [class.selected]="hasSelectedTag(tag.id)"
-    >
-      @if (hasSelectedTag(tag.id)) {
-        <mat-icon class="check-ico">check_box</mat-icon>
-      } @else {
-        <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
-      }
-      @if (isTagEmojiIcon(tag)) {
-        <span
-          [style.color]="tag.color || tag.theme.primary"
-          class="tag-ico tag-ico-emoji"
-          >{{ tag.icon || 'label' }}
-        </span>
-      } @else {
-        <mat-icon
-          [style.color]="tag.color || tag.theme.primary"
-          class="tag-ico"
-          >{{ tag.icon || 'label' }}
-        </mat-icon>
-      }
-      {{ tag.title }}
-    </button>
-  }
+  <div (click)="$event.stopPropagation()">
+    @for (tag of allTags(); track tag.id) {
+      <button
+        mat-menu-item
+        (click)="toggleTagWithSyntax(tag)"
+        [class.selected]="hasSelectedTag(tag.id)"
+      >
+        @if (hasSelectedTag(tag.id)) {
+          <mat-icon class="check-ico">check_box</mat-icon>
+        } @else {
+          <mat-icon class="check-ico">check_box_outline_blank</mat-icon>
+        }
+        @if (isTagEmojiIcon(tag)) {
+          <span
+            [style.color]="tag.color || tag.theme.primary"
+            class="tag-ico tag-ico-emoji"
+            >{{ tag.icon || 'label' }}
+          </span>
+        } @else {
+          <mat-icon
+            [style.color]="tag.color || tag.theme.primary"
+            class="tag-ico"
+            >{{ tag.icon || 'label' }}
+          </mat-icon>
+        }
+        {{ tag.title }}
+      </button>
+    }
+  </div>
 </mat-menu>
 
 <mat-menu #estimateMenu="matMenu">

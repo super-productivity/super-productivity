@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -53,6 +59,9 @@ export class DialogCreateTagComponent {
   color: string = DEFAULT_TAG_COLOR;
   filteredIcons = signal<string[]>([]);
 
+  // Get reference to autocomplete trigger for explicit cleanup
+  private _iconAutoTrigger = viewChild(MatAutocompleteTrigger);
+
   onIconFocus(): void {
     if (this.filteredIcons().length === 0) {
       this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
@@ -68,6 +77,10 @@ export class DialogCreateTagComponent {
   }
 
   close(isSave: boolean): void {
+    // Explicitly close autocomplete overlay before closing dialog
+    // to prevent CDK backdrop from being left behind
+    this._iconAutoTrigger()?.closePanel();
+
     if (isSave && this.title.trim()) {
       this._matDialogRef.close({
         title: this.title.trim(),

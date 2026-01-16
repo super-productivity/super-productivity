@@ -167,11 +167,9 @@ export class GitlabApiService {
     total_time_spent: null | number;
   }*/
 
-    const { projectIssueId } = getPartsFromGitlabIssueId(issueId);
-
     return this._sendRawRequest$(
       {
-        url: `${this._apiLink(cfg)}/issues/${projectIssueId}/add_spent_time`,
+        url: `${this._issueApiLink(cfg, issueId)}/add_spent_time`,
         method: 'POST',
         data: {
           duration: duration,
@@ -191,10 +189,9 @@ export class GitlabApiService {
     time_estimate: null | number;
     total_time_spent: null | number;
   }> {
-    const { projectIssueId } = getPartsFromGitlabIssueId(issueId);
     return this._sendRawRequest$(
       {
-        url: `${this._apiLink(cfg)}/issues/${projectIssueId}/time_stats`,
+        url: `${this._issueApiLink(cfg, issueId)}/time_stats`,
       },
       cfg,
     ).pipe(map((res) => (res as any).body));
@@ -328,11 +325,11 @@ export class GitlabApiService {
 
   private _issueApiLink(cfg: GitlabCfg, issueId: string): string {
     IssueLog.log(issueId);
-    const { projectIssueId } = getPartsFromGitlabIssueId(issueId);
-    return `${this._apiLink(cfg)}/issues/${projectIssueId}`;
+    const { project, projectIssueId } = getPartsFromGitlabIssueId(issueId);
+    return `${this._projectApiLink(cfg, project)}/issues/${projectIssueId}`;
   }
 
-  private _apiLink(cfg: GitlabCfg): string {
+  private _projectApiLink(cfg: GitlabCfg, project: string): string {
     let apiURL: string = '';
 
     if (cfg.gitlabBaseUrl) {
@@ -344,8 +341,12 @@ export class GitlabApiService {
       apiURL = GITLAB_API_BASE_URL + '/';
     }
 
-    const projectURL = assertTruthy(cfg.project).toString().replace(/\//gi, '%2F');
+    const projectURL = assertTruthy(project).toString().replace(/\//gi, '%2F');
     apiURL += 'projects/' + projectURL;
     return apiURL;
+  }
+
+  private _apiLink(cfg: GitlabCfg): string {
+    return this._projectApiLink(cfg, cfg.project);
   }
 }

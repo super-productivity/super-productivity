@@ -13,5 +13,10 @@
     "name": "QuestArc",
     "shortDescription": "Turn your workflow into an adventure! Gamify your tasks with Atomic Habit quests, epic boss fights, earnable badges, and a customizable hero profile.",
     "url": "https://codeberg.org/Nexumia/QuestArc"
+  },
+  {
+    "name": "AutoPlan",
+    "shortDescription": "Smart non-AI plugin for the automatic scheduling of tasks using priorities assigned automatically base on tags, projects, and time estimation.",
+    "url": "https://github.com/00sapo/sp-autoplan"    
   }
 ]

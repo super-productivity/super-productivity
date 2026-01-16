@@ -29,7 +29,12 @@ const bridgeConfig: UiBridgeConfig = {
         console.log('[sync-md] Sync manager initialized successfully');
       } catch (error) {
         console.error('[sync-md] Failed to initialize sync manager:', error);
-        throw error;
+
+        // Show error but DON'T throw - keep plugin running
+        PluginAPI.showSnack({
+          msg: 'Sync.md: Failed to initialize. Check file path and permissions.',
+          type: 'ERROR',
+        });
       }
     }
   },

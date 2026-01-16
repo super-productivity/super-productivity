@@ -67,6 +67,10 @@ export class TagToggleMenuListComponent {
     }
   }
 
+  onMenuClosed(): void {
+    this.afterClose.emit();
+  }
+
   openMenu(ev?: MouseEvent | KeyboardEvent | TouchEvent): void {
     this.tagMenuTriggerEl()?.openMenu();
   }

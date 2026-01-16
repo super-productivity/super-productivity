@@ -22,6 +22,7 @@ import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { TranslateService } from '@ngx-translate/core';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
 import { Injector } from '@angular/core';
+import { getDbDateStr } from '../util/get-db-date-str';
 
 /* eslint-disable @typescript-eslint/naming-convention */
 describe('PluginBridgeService.setCounter()', () => {
@@ -40,7 +41,7 @@ describe('PluginBridgeService.setCounter()', () => {
     countOnDay,
   });
 
-  const getToday = (): string => new Date().toISOString().split('T')[0];
+  const getToday = (): string => getDbDateStr();
 
   beforeEach(() => {
     const storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);

@@ -66,6 +66,7 @@ import {
   deleteSimpleCounter,
   toggleSimpleCounterCounter,
 } from '../features/simple-counter/store/simple-counter.actions';
+import { getDbDateStr } from '../util/get-db-date-str';
 
 /**
  * PluginBridge acts as an intermediary layer between plugins and the main application services.
@@ -1227,7 +1228,7 @@ export class PluginBridgeService implements OnDestroy {
    * Gets all simple counters as { [key: string]: number }.
    */
   async getAllCounters(): Promise<{ [key: string]: number }> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getDbDateStr();
     const countersArray = await this._store
       .select(selectAllSimpleCounters)
       .pipe(
@@ -1267,7 +1268,7 @@ export class PluginBridgeService implements OnDestroy {
     if (typeof value !== 'number' || !isFinite(value) || value < 0) {
       throw new Error('Invalid counter value: must be a non-negative number');
     }
-    const today = new Date().toISOString().split('T')[0];
+    const today = getDbDateStr();
 
     // Check if counter already exists
     const existingCounter = await this.getSimpleCounter(id);
@@ -1392,7 +1393,7 @@ export class PluginBridgeService implements OnDestroy {
    * @param value The numeric value.
    */
   async setSimpleCounterToday(id: string, value: number): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getDbDateStr();
     return this.setSimpleCounterDate(id, today, value);
   }
 

@@ -24,16 +24,36 @@
     </div>
   }
 
-  <nav class="action-nav">
-    @if (isTimeTrackingEnabled()) {
-      <play-button
-        [currentTask]="currentTask()"
-        [currentTaskId]="currentTaskId()"
-        [currentTaskContext]="currentTaskContext()"
-        [hasTrackableTasks]="hasTrackableTasks()"
-      ></play-button>
-    }
+  <nav class="action-nav-right">
+    <div class="counters-action-group">
+      @if (isTimeTrackingEnabled()) {
+        <play-button
+          [currentTask]="currentTask()"
+          [currentTaskId]="currentTaskId()"
+          [currentTaskContext]="currentTaskContext()"
+          [hasTrackableTasks]="hasTrackableTasks()"
+        ></play-button>
+      }
 
+      <!-- Desktop: Counters action group (focus, counters) -->
+      @if (showDesktopButtons()) {
+        @if (isFocusModeEnabled() && !isXxxs()) {
+          <focus-button></focus-button>
+        }
+
+        @for (
+          simpleCounter of enabledSimpleCounters();
+          track trackById($index, simpleCounter)
+        ) {
+          <simple-counter-button
+            [matTooltip]="simpleCounter.title"
+            [simpleCounter]="simpleCounter"
+          ></simple-counter-button>
+        }
+      }
+    </div>
+
+    <!-- Desktop: Secondary action group -->
     @if (showDesktopButtons()) {
       <button
         (click)="layoutService.showAddTaskBar()"
@@ -85,23 +105,8 @@
       <user-profile-button></user-profile-button>
     }
 
-    @if (isFocusModeEnabled() && !isXxxs()) {
-      <focus-button></focus-button>
-    }
-
     <!-- Desktop: Show all buttons inline -->
     @if (showDesktopButtons()) {
-      <!-- Simple counter buttons -->
-      @for (
-        simpleCounter of enabledSimpleCounters();
-        track trackById($index, simpleCounter)
-      ) {
-        <simple-counter-button
-          [matTooltip]="simpleCounter.title"
-          [simpleCounter]="simpleCounter"
-        ></simple-counter-button>
-      }
-
       <plugin-side-panel-btns></plugin-side-panel-btns>
 
       <desktop-panel-buttons

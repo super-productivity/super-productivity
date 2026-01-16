@@ -13,6 +13,7 @@ import { IS_ELECTRON } from './app/app.constants';
 import { DEFAULT_LANGUAGE, LocalesImports } from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
+import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from './app/util/is-native-platform';
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
@@ -131,7 +132,7 @@ bootstrapApplication(AppComponent, {
       ServiceWorkerModule.register('ngsw-worker.js', {
         enabled:
           !IS_ELECTRON &&
-          !IS_ANDROID_WEB_VIEW &&
+          !IS_NATIVE_PLATFORM &&
           (environment.production || environment.stage),
         // Register the ServiceWorker as soon as the application is stable
         // or after 30 seconds (whichever comes first).
@@ -226,14 +227,14 @@ bootstrapApplication(AppComponent, {
     'serviceWorker' in navigator &&
     (environment.production || environment.stage) &&
     !IS_ELECTRON &&
-    !IS_ANDROID_WEB_VIEW
+    !IS_NATIVE_PLATFORM
   ) {
     Log.log('Registering Service worker');
     return navigator.serviceWorker.register('ngsw-worker.js').catch((err: unknown) => {
       Log.log('Service Worker Registration Error');
       Log.err(err);
     });
-  } else if ('serviceWorker' in navigator && (IS_ELECTRON || IS_ANDROID_WEB_VIEW)) {
+  } else if ('serviceWorker' in navigator && (IS_ELECTRON || IS_NATIVE_PLATFORM)) {
     navigator.serviceWorker
       .getRegistrations()
       .then((registrations) => {
@@ -259,8 +260,10 @@ if (!(environment.production || environment.stage) && IS_ANDROID_WEB_VIEW) {
   }, 1000);
 }
 
-// CAPICATOR STUFF
+// CAPACITOR STUFF
 // ---------------
+
+// Android-specific: Handle back button
 if (IS_ANDROID_WEB_VIEW) {
   CapacitorApp.addListener('backButton', ({ canGoBack }) => {
     if (!canGoBack) {
@@ -269,7 +272,10 @@ if (IS_ANDROID_WEB_VIEW) {
       window.history.back();
     }
   });
+}
 
+// Android: Handle app state changes with background task for sync completion
+if (IS_ANDROID_WEB_VIEW) {
   CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
     if (isActive) {
       return;
@@ -284,5 +290,25 @@ if (IS_ANDROID_WEB_VIEW) {
       Log.log('Time window for completing sync ended. Closing app!');
       BackgroundTask.finish({ taskId });
     });
+  });
+}
+
+// iOS: Handle app state changes (limited background time)
+if (IS_IOS_NATIVE) {
+  CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
+    if (isActive) {
+      Log.log('iOS app became active');
+      return;
+    }
+    // iOS has limited background execution time (~30 seconds)
+    // Log state change but don't attempt long-running tasks
+    Log.log('iOS app going to background');
+  });
+
+  // Handle app URL open (for OAuth callbacks, deep links, etc.)
+  CapacitorApp.addListener('appUrlOpen', (event) => {
+    Log.log('iOS app URL open', event.url);
+    // Handle OAuth callbacks or deep links here
+    // The URL will be passed to the app when opened via custom scheme
   });
 }

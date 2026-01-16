@@ -49,6 +49,7 @@ import { verifySyncState, logSyncVerification } from '../../sync/verify-sync';
   },
   persistDataSynced: jest.fn(),
   loadSyncedData: jest.fn(),
+  showSnack: jest.fn(),
 };
 
 // Mock console to reduce noise
@@ -109,6 +110,7 @@ describe('Sync Manager Debounce Behavior', () => {
         .fn()
         .mockResolvedValue([{ id: 'test-project', title: 'Test Project' }]),
       batchUpdateForProject: jest.fn().mockResolvedValue(undefined),
+      showSnack: jest.fn(),
     };
   });
 

@@ -2188,6 +2188,7 @@ const T = {
   },
   PM: {
     TITLE: 'PM.TITLE',
+    ALL_TASKS_TITLE: 'PM.ALL_TASKS_TITLE',
   },
   PS: {
     GLOBAL_SETTINGS: 'PS.GLOBAL_SETTINGS',

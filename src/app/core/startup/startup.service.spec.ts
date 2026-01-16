@@ -19,6 +19,7 @@ import { LS } from '../persistence/storage-keys.const';
 import { provideMockStore } from '@ngrx/store/testing';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { selectEnabledIssueProviders } from '../../features/issue/store/issue-provider.selectors';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 describe('StartupService', () => {
   let service: StartupService;
@@ -210,7 +211,7 @@ describe('StartupService', () => {
     });
 
     it('should not increment count if same day', () => {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getDbDateStr();
       (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
         if (key === LS.APP_START_COUNT) return '10';
         if (key === LS.APP_START_COUNT_LAST_START_DAY) return todayStr;

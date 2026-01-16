@@ -1,4 +1,5 @@
 import { getRelevantEventsForCalendarIntegrationFromIcal } from './get-relevant-events-from-ical';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('getRelevantEventsForCalendarIntegrationFromIcal - EXDATE Support', () => {
   const calProviderId = 'test-provider';
@@ -29,9 +30,7 @@ END:VCALENDAR`;
     // Should have 2 events (Jan 1 and Jan 3), skipping Jan 2
     expect(events.length).toBe(2);
 
-    const eventDates = events
-      .map((e) => new Date(e.start).toISOString().split('T')[0])
-      .sort();
+    const eventDates = events.map((e) => getDbDateStr(new Date(e.start))).sort();
     expect(eventDates).toEqual(['2025-01-01', '2025-01-03']);
   });
 
@@ -61,9 +60,7 @@ END:VCALENDAR`;
     // Skipped: Jan 2, Jan 4
     expect(events.length).toBe(3);
 
-    const eventDates = events
-      .map((e) => new Date(e.start).toISOString().split('T')[0])
-      .sort();
+    const eventDates = events.map((e) => getDbDateStr(new Date(e.start))).sort();
     expect(eventDates).toEqual(['2025-01-01', '2025-01-03', '2025-01-05']);
   });
 
@@ -92,9 +89,7 @@ END:VCALENDAR`;
     // Skipped: Jan 2, Jan 4
     expect(events.length).toBe(3);
 
-    const eventDates = events
-      .map((e) => new Date(e.start).toISOString().split('T')[0])
-      .sort();
+    const eventDates = events.map((e) => getDbDateStr(new Date(e.start))).sort();
     expect(eventDates).toEqual(['2025-01-01', '2025-01-03', '2025-01-05']);
   });
 });

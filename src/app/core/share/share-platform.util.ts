@@ -1,6 +1,5 @@
-import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 
 export type ShareSupport = 'native' | 'web' | 'none';
 
@@ -9,10 +8,6 @@ export type ShareSupport = 'native' | 'web' | 'none';
  */
 export const detectShareSupport = async (): Promise<ShareSupport> => {
   if (isCapacitorShareAvailable()) {
-    return 'native';
-  }
-
-  if (IS_ANDROID_WEB_VIEW) {
     return 'native';
   }
 
@@ -28,10 +23,6 @@ export const detectShareSupport = async (): Promise<ShareSupport> => {
  */
 export const isSystemShareAvailable = async (): Promise<boolean> => {
   if (isCapacitorShareAvailable()) {
-    return true;
-  }
-
-  if (IS_ANDROID_WEB_VIEW) {
     return true;
   }
 
@@ -54,7 +45,7 @@ export const isCapacitorShareAvailable = (): boolean => {
  * Get Capacitor Share plugin if available.
  */
 export const getCapacitorSharePlugin = (): typeof Share | null => {
-  if (Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW) {
+  if (IS_NATIVE_PLATFORM) {
     return Share;
   }
 

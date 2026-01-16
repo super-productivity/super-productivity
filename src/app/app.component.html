@@ -12,6 +12,7 @@
       (done)="layoutService.hideAddTaskBar()"
       (afterTaskAdd)="onTaskAdded($event)"
       [isGlobalBarVariant]="true"
+      [isDisableAutoFocus]="shepherdService.isActive"
       class="global"
     ></add-task-bar>
   }

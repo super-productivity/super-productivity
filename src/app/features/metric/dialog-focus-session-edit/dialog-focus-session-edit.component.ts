@@ -28,6 +28,7 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { LazyChartComponent } from '../lazy-chart/lazy-chart.component';
 import { MatList, MatListItem } from '@angular/material/list';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 const CHART_DAYS = 28;
 const CHART_COLOR = '#4bc0c0';
@@ -186,7 +187,7 @@ export class DialogFocusSessionEditComponent {
     for (let i = CHART_DAYS - 1; i >= 0; i--) {
       const d = new Date(endDate);
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]);
+      dates.push(getDbDateStr(d));
     }
 
     return dates;

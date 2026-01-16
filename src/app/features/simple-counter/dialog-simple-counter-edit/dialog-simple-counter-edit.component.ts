@@ -35,6 +35,7 @@ import { LazyChartComponent } from '../../metric/lazy-chart/lazy-chart.component
 import { MatDialog } from '@angular/material/dialog';
 import { DialogSimpleCounterEditSettingsComponent } from '../dialog-simple-counter-edit-settings/dialog-simple-counter-edit-settings.component';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 const CHART_DAYS = 28;
 const CHART_COLOR = '#4bc0c0';
@@ -256,7 +257,7 @@ export class DialogSimpleCounterEditComponent {
     const dates: string[] = [];
 
     for (const d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
+      dates.push(getDbDateStr(d));
     }
 
     // Return last 28 days

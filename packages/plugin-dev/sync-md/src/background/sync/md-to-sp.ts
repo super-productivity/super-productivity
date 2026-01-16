@@ -10,36 +10,70 @@ export const mdToSp = async (
   markdownContent: string,
   projectId: string,
 ): Promise<void> => {
-  // Use parseMarkdownWithHeader to get header, but handle backward compatibility
-  const parseResult = parseMarkdownWithHeader(markdownContent);
-  const parsedTasks = parseResult.tasks;
+  try {
+    // Parse markdown with error tracking
+    const parseResult = parseMarkdownWithHeader(markdownContent);
+    const parsedTasks = parseResult.tasks;
 
-  // Get current state
-  const currentTasks = await PluginAPI.getTasks();
-  const currentProjects = await PluginAPI.getAllProjects();
+    // Report parse errors to user if any
+    if (parseResult.errors && parseResult.errors.length > 0) {
+      const errorMsg = `Found ${parseResult.errors.length} issue(s) in markdown:\n${parseResult.errors.slice(0, 3).join('\n')}`;
+      console.warn('[sync-md]', errorMsg);
 
-  if (!currentProjects.find((p) => p.id === projectId)) {
-    console.warn(`[sync-md] Project ${projectId} not found, skipping sync`);
-    return;
-  }
+      PluginAPI.showSnack({
+        msg: `Sync.md: ${parseResult.errors.length} parsing issue(s). Check console for details.`,
+        type: 'WARNING',
+      });
+    }
 
-  // Filter tasks for the specific project
-  const projectTasks = currentTasks.filter((task) => task.projectId === projectId);
+    // Get current state
+    const currentTasks = await PluginAPI.getTasks();
+    const currentProjects = await PluginAPI.getAllProjects();
 
-  // Generate operations using the new sync logic
-  const operations = generateTaskOperations(parsedTasks, projectTasks, projectId);
+    if (!currentProjects.find((p) => p.id === projectId)) {
+      throw new Error(`Project ${projectId} not found`);
+    }
 
-  // Execute batch operations
-  if (operations.length > 0) {
-    console.log(
-      `[sync-md] Executing ${operations.length} sync operations for project ${projectId}`,
-      operations,
-    );
+    // Filter tasks for the specific project
+    const projectTasks = currentTasks.filter((task) => task.projectId === projectId);
 
-    // Use the operations directly - they already match the expected BatchOperation format
-    await PluginAPI.batchUpdateForProject({
-      projectId,
-      operations,
+    // Generate operations with validation
+    const operations = generateTaskOperations(parsedTasks, projectTasks, projectId);
+
+    // Execute batch operations
+    if (operations.length > 0) {
+      console.log(
+        `[sync-md] Executing ${operations.length} sync operations for project ${projectId}`,
+        operations,
+      );
+
+      const result = await PluginAPI.batchUpdateForProject({
+        projectId,
+        operations,
+      });
+
+      // Handle batch operation errors
+      if (!result.success && result.errors && result.errors.length > 0) {
+        const errorSummary = result.errors
+          .map((e) => `Op ${e.operationIndex}: ${e.message}`)
+          .slice(0, 3)
+          .join('; ');
+
+        throw new Error(`Batch operations failed: ${errorSummary}`);
+      }
+
+      console.log('[sync-md] Sync operations completed successfully');
+    }
+  } catch (error) {
+    console.error('[sync-md] Error in mdToSp:', error);
+
+    // Show user-friendly error notification
+    PluginAPI.showSnack({
+      msg: `Sync.md: Failed to sync markdown to SP. ${error instanceof Error ? error.message : 'Unknown error'}`,
+      type: 'ERROR',
     });
+
+    // Re-throw to allow caller to handle if needed
+    throw error;
   }
 };

@@ -1536,4 +1536,116 @@ describe('createBlockerBlocks()', () => {
       expect(r[0].entries.length).toEqual(2);
     });
   });
+
+  describe('Performance Tests', () => {
+    /**
+     * Generates random blocked blocks for performance testing
+     */
+    const generateRandomBlocks = (count: number, startDate: number): any[] => {
+      const blocks: any[] = [];
+      for (let i = 0; i < count; i++) {
+        // eslint-disable-next-line no-mixed-operators
+        const start = startDate + Math.random() * hours(24);
+        const duration = Math.random() * hours(2); // 0-2 hours duration
+        blocks.push({
+          id: `task-${i}`,
+          subTaskIds: [],
+          timeSpent: 0,
+          timeEstimate: duration,
+          reminderId: `reminder-${i}`,
+          dueWithTime: start,
+        });
+      }
+      return blocks;
+    };
+
+    it('should merge 1000 blocks in < 100ms (O(n log n) algorithm)', () => {
+      const startDate = getDateTimeFromClockString('08:00', 0);
+      const blocks = generateRandomBlocks(1000, startDate);
+
+      const start = performance.now();
+      const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
+      const duration = performance.now() - start;
+
+      expect(duration).toBeLessThan(100);
+      expect(result.length).toBeGreaterThan(0);
+      // Verify result is sorted
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i].start).toBeGreaterThanOrEqual(result[i - 1].start);
+      }
+    });
+
+    it('should handle 10,000 blocks without timeout (ensures O(n log n) scaling)', () => {
+      const startDate = getDateTimeFromClockString('08:00', 0);
+      const blocks = generateRandomBlocks(10000, startDate);
+
+      const start = performance.now();
+      const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
+      const duration = performance.now() - start;
+
+      // Should complete in reasonable time (< 1 second for 10k blocks)
+      expect(duration).toBeLessThan(1000);
+      expect(result.length).toBeGreaterThan(0);
+      // Verify result is sorted
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i].start).toBeGreaterThanOrEqual(result[i - 1].start);
+      }
+    });
+
+    it('should correctly merge overlapping blocks at scale', () => {
+      const startDate = getDateTimeFromClockString('08:00', 0);
+      // Create blocks that intentionally overlap
+      const blocks: any[] = [];
+      for (let i = 0; i < 1000; i++) {
+        // eslint-disable-next-line no-mixed-operators
+        const start = startDate + i * hours(1); // Each starts 1 hour apart
+        blocks.push({
+          id: `task-${i}`,
+          subTaskIds: [],
+          timeSpent: 0,
+          timeEstimate: hours(2), // 2 hour duration causes overlap
+          reminderId: `reminder-${i}`,
+          dueWithTime: start,
+        });
+      }
+
+      const start = performance.now();
+      const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
+      const duration = performance.now() - start;
+
+      expect(duration).toBeLessThan(100);
+      // Should merge many overlapping blocks
+      expect(result.length).toBeLessThan(blocks.length);
+      // Verify no gaps between merged blocks
+      for (let i = 1; i < result.length; i++) {
+        expect(result[i].start).toBeGreaterThanOrEqual(result[i - 1].end);
+      }
+    });
+
+    it('should maintain performance with mostly non-overlapping blocks', () => {
+      const startDate = getDateTimeFromClockString('08:00', 0);
+      // Create blocks that mostly don't overlap
+      const blocks: any[] = [];
+      for (let i = 0; i < 1000; i++) {
+        // eslint-disable-next-line no-mixed-operators
+        const start = startDate + i * hours(3); // 3 hours apart
+        blocks.push({
+          id: `task-${i}`,
+          subTaskIds: [],
+          timeSpent: 0,
+          timeEstimate: hours(1), // 1 hour duration - no overlap
+          reminderId: `reminder-${i}`,
+          dueWithTime: start,
+        });
+      }
+
+      const start = performance.now();
+      const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
+      const duration = performance.now() - start;
+
+      expect(duration).toBeLessThan(100);
+      // Should have minimal merging
+      expect(result.length).toBe(blocks.length);
+    });
+  });
 });

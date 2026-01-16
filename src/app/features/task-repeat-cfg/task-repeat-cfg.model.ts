@@ -1,5 +1,6 @@
 import { EntityState } from '@ngrx/entity';
 import { TaskReminderOptionId } from '../tasks/task.model';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 export const TASK_REPEAT_WEEKDAY_MAP: (keyof TaskRepeatCfg)[] = [
   'sunday',
@@ -72,7 +73,7 @@ export type TaskRepeatCfgState = EntityState<TaskRepeatCfg>;
 
 export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   lastTaskCreation: Date.now(),
-  lastTaskCreationDay: new Date().toISOString().split('T')[0],
+  lastTaskCreationDay: getDbDateStr(),
   title: null,
   defaultEstimate: undefined,
 

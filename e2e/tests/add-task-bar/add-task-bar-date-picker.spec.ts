@@ -1,5 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from '../../fixtures/test.fixture';
+import { ensureGlobalAddTaskBarOpen } from '../../utils/element-helpers';
 
 const ADD_TASK_BAR = 'add-task-bar.global';
 const ADD_TASK_INPUT = `${ADD_TASK_BAR} input`;
@@ -7,20 +8,6 @@ const DUE_BUTTON = `${ADD_TASK_BAR} [data-test="add-task-bar-due-btn"]`;
 const CLEAR_DUE_BUTTON = `${ADD_TASK_BAR} [data-test="add-task-bar-clear-due-btn"]`;
 const SCHEDULE_DIALOG = 'dialog-schedule-task';
 const QUICK_ACCESS_BTN = '.quick-access button';
-
-const ensureGlobalAddTaskBarOpen = async (page: Page): Promise<Locator> => {
-  const addTaskInput = page.locator(ADD_TASK_INPUT).first();
-  const isVisible = await addTaskInput.isVisible().catch(() => false);
-
-  if (!isVisible) {
-    const addBtn = page.locator('.tour-addBtn').first();
-    await addBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await addBtn.click();
-  }
-
-  await addTaskInput.waitFor({ state: 'visible', timeout: 10000 });
-  return addTaskInput;
-};
 
 const openScheduleDialogFromBar = async (
   page: Page,

@@ -54,8 +54,8 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         <svg
           class="circle-svg"
           focusable="false"
-          height="40"
-          width="40"
+          height="36"
+          width="36"
         >
           <circle
             #circleSvg
@@ -114,11 +114,11 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         margin: 0 6px;
 
         .pulse-circle {
-          width: 48px;
-          height: 48px;
+          width: 42px;
+          height: 42px;
           position: absolute;
           top: 0;
-          left: -4px;
+          left: -3px;
           right: 0;
           bottom: 0;
           border-radius: 50%;
@@ -145,7 +145,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         .play-btn {
           position: relative;
           margin-left: 0;
-          z-index: 2;
+          z-index: 6;
           box-shadow: var(--whiteframe-shadow-2dp);
 
           .mat-icon {
@@ -159,31 +159,44 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         position: absolute;
         right: 100%;
         width: auto;
-        border: 2px solid var(--c-accent);
-        border-radius: 12px;
-        min-width: 50px;
+        border: 1.5px solid var(--c-accent);
+        border-radius: 10px;
+        min-width: 40px;
         white-space: nowrap;
-        padding: var(--s-half) var(--s2);
-        padding-right: calc(var(--s) * 2.5);
-        margin-right: calc(-1 * var(--s) * 2);
+        padding: calc(var(--s-half) * 0.75) var(--s);
+        padding-right: calc(var(--s) * 2.25);
+        margin-right: calc(-1 * var(--s) * 1.75);
         top: 50%;
         transform: translateY(-50%);
-        transition: var(--transition-standard);
+        transition: opacity 0.3s ease-out;
         display: flex;
         background: var(--bg-lighter);
+        font-size: 13px;
+        z-index: 5;
 
-        @media (max-width: 865px) {
+        @media (max-width: 1080px) {
           display: none;
         }
 
         .title {
-          max-width: 250px;
+          max-width: 200px;
           text-overflow: ellipsis;
           overflow: hidden;
         }
 
         .project {
+          max-width: 130px;
           padding-right: 0;
+          padding-left: var(--s-half);
+          font-size: 12px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+
+          ::ng-deep .tag-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+          }
         }
       }
     `,

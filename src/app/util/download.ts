@@ -1,6 +1,6 @@
 import { Directory, Encoding, Filesystem, WriteFileResult } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { IS_ANDROID_WEB_VIEW } from './is-android-web-view';
+import { IS_NATIVE_PLATFORM } from './is-native-platform';
 import { Log } from '../core/log';
 // Type definitions for window.ea are in ../core/window-ea.d.ts
 
@@ -12,7 +12,8 @@ export const download = async (
   filename: string,
   stringData: string,
 ): Promise<{ isSnap?: boolean; path?: string; wasCanceled?: boolean }> => {
-  if (IS_ANDROID_WEB_VIEW) {
+  // Use Capacitor Filesystem + Share for native mobile platforms (Android and iOS)
+  if (IS_NATIVE_PLATFORM) {
     try {
       const fileResult = await Filesystem.writeFile({
         path: filename,

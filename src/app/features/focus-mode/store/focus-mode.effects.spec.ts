@@ -2116,7 +2116,7 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('_getIconButtonActions banner button behavior (issue #5889)', () => {
+  describe('_getBannerActions banner button behavior with icons (issue #5889)', () => {
     let dispatchSpy: jasmine.Spy;
 
     beforeEach(() => {
@@ -2140,12 +2140,14 @@ describe('FocusModeEffects', () => {
       };
 
       // Access private method via bracket notation
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         true, // isSessionCompleted
         false, // isBreakTimeUp
         focusModeConfig,
+        true, // useIcons
+        true, // useIcons
       );
 
       // Verify play button exists
@@ -2181,12 +2183,13 @@ describe('FocusModeEffects', () => {
         isManualBreakStart: false, // Disabled
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2226,12 +2229,13 @@ describe('FocusModeEffects', () => {
         isManualBreakStart: true, // Even if set, should not start break
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2269,12 +2273,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: true, // Should pause tracking
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2320,12 +2325,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false,
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2352,7 +2358,7 @@ describe('FocusModeEffects', () => {
         elapsed: 25 * 60 * 1000,
       });
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
@@ -2391,12 +2397,13 @@ describe('FocusModeEffects', () => {
         isManualBreakStart: true,
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         true, // isOnBreak
         false, // isSessionCompleted
         true, // isBreakTimeUp
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2433,12 +2440,14 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false, // User wants tracking during breaks
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         true, // isSessionCompleted
         false, // isBreakTimeUp
         focusModeConfig,
+        true, // useIcons
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2481,12 +2490,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false,
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2528,12 +2538,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false,
       };
 
-      const buttonActions = (effects as any)._getIconButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        true, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2555,7 +2566,7 @@ describe('FocusModeEffects', () => {
     });
   });
 
-  describe('_getTextButtonActions banner button behavior (issue #6000)', () => {
+  describe('_getBannerActions banner button behavior with text (issue #6000)', () => {
     let dispatchSpy: jasmine.Spy;
 
     beforeEach(() => {
@@ -2570,7 +2581,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         false, // isSessionCompleted
@@ -2591,7 +2602,7 @@ describe('FocusModeEffects', () => {
         isRunning: false,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         false, // isSessionCompleted
@@ -2615,7 +2626,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         false,
@@ -2643,7 +2654,7 @@ describe('FocusModeEffects', () => {
         isRunning: false,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         false,
@@ -2670,7 +2681,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         false, // isSessionCompleted
@@ -2690,7 +2701,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         false,
@@ -2718,7 +2729,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         true, // isOnBreak
         false, // isSessionCompleted
@@ -2741,7 +2752,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         true, // isOnBreak
         false,
@@ -2769,7 +2780,7 @@ describe('FocusModeEffects', () => {
         isRunning: false,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         true, // isSessionCompleted
@@ -2791,7 +2802,7 @@ describe('FocusModeEffects', () => {
         isRunning: false,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         true, // isOnBreak
         false, // isSessionCompleted
@@ -2812,7 +2823,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         false,
@@ -2832,7 +2843,7 @@ describe('FocusModeEffects', () => {
         isRunning: true,
       });
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         false,
@@ -2866,12 +2877,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false,
       };
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         true, // isSessionCompleted
         false, // isBreakTimeUp
         focusModeConfig,
+        false, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2923,12 +2935,13 @@ describe('FocusModeEffects', () => {
         isPauseTrackingDuringBreak: false,
       };
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false, // isOnBreak
         true, // isSessionCompleted
         false, // isBreakTimeUp
         focusModeConfig,
+        false, // useIcons
       );
 
       buttonActions.action.fn();
@@ -2962,12 +2975,13 @@ describe('FocusModeEffects', () => {
         isManualBreakStart: false,
       };
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         false,
         true,
         false,
         focusModeConfig,
+        false, // useIcons
       );
 
       buttonActions.action.fn();
@@ -3000,12 +3014,13 @@ describe('FocusModeEffects', () => {
         isManualBreakStart: true,
       };
 
-      const buttonActions = (effects as any)._getTextButtonActions(
+      const buttonActions = (effects as any)._getBannerActions(
         timer,
         true, // isOnBreak
         false, // isSessionCompleted
         true, // isBreakTimeUp
         focusModeConfig,
+        false, // useIcons
       );
 
       buttonActions.action.fn();

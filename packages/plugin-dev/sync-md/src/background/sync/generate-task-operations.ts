@@ -8,6 +8,77 @@ import {
 } from '@super-productivity/plugin-api';
 import { ParsedTask } from './markdown-parser';
 
+interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Validate that operations are safe to execute
+ * Catches invalid parent references and missing task IDs
+ */
+const validateOperations = (
+  operations: BatchOperation[],
+  mdTasks: ParsedTask[],
+  spTasks: Task[],
+): ValidationResult => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const spTaskIds = new Set(spTasks.map((t) => t.id));
+  const tempIds = new Set<string>();
+
+  operations.forEach((op, index) => {
+    switch (op.type) {
+      case 'create':
+        tempIds.add(op.tempId);
+        if (op.data.parentId) {
+          const parentExists =
+            spTaskIds.has(op.data.parentId) || tempIds.has(op.data.parentId);
+          if (!parentExists) {
+            warnings.push(
+              `Operation ${index}: Create task "${op.data.title}" references ` +
+                `non-existent parent "${op.data.parentId}"`,
+            );
+          }
+        }
+        break;
+
+      case 'update':
+        if (!spTaskIds.has(op.taskId)) {
+          errors.push(
+            `Operation ${index}: Update references non-existent task "${op.taskId}"`,
+          );
+        }
+        if (op.updates.parentId !== undefined && op.updates.parentId !== null) {
+          const parentExists =
+            spTaskIds.has(op.updates.parentId) || tempIds.has(op.updates.parentId);
+          if (!parentExists) {
+            warnings.push(
+              `Operation ${index}: Update task "${op.taskId}" to non-existent parent "${op.updates.parentId}"`,
+            );
+          }
+        }
+        break;
+
+      case 'delete':
+        if (!spTaskIds.has(op.taskId)) {
+          warnings.push(
+            `Operation ${index}: Delete references non-existent task "${op.taskId}"`,
+          );
+        }
+        break;
+    }
+  });
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+  };
+};
+
 /**
  * Generate batch operations to sync markdown tasks to Super Productivity
  */
@@ -65,6 +136,41 @@ export const generateTaskOperations = (
     newParentId: string | null;
   }> = [];
 
+  // Build set of valid parent IDs BEFORE processing tasks
+  const validParentIds = new Set<string>();
+
+  // Add all root-level MD tasks as valid parents (including temp IDs)
+  mdTasks
+    .filter((t) => !t.isSubtask)
+    .forEach((t) => {
+      if (t.id && !duplicateIds.has(t.id)) {
+        validParentIds.add(t.id);
+      } else {
+        // Tasks without IDs will get temp IDs - add them too
+        validParentIds.add(`temp_${t.line}`);
+      }
+    });
+
+  // Add all root-level SP tasks as valid parents
+  spTasks.forEach((t) => {
+    if (!t.parentId && t.id) validParentIds.add(t.id);
+  });
+
+  // Helper function to get validated parent ID
+  const getValidatedParentId = (mdTask: ParsedTask): string | null => {
+    if (!mdTask.parentId) return null;
+
+    if (!validParentIds.has(mdTask.parentId)) {
+      console.warn(
+        `[sync-md] Orphaned subtask detected: "${mdTask.title}" (line ${mdTask.line}) ` +
+          `references non-existent parent "${mdTask.parentId}". Converting to root task.`,
+      );
+      return null;
+    }
+
+    return mdTask.parentId;
+  };
+
   // First pass: process MD tasks
   mdTasks.forEach((mdTask) => {
     // Check if this task has a duplicate ID
@@ -93,14 +199,14 @@ export const generateTaskOperations = (
         // Handle parent relationship
         // Normalize undefined and null to null for comparison
         const spParentId = spTask.parentId || null;
-        const mdParentId = mdTask.parentId || null;
+        const mdParentId = getValidatedParentId(mdTask);
         if (spParentId !== mdParentId) {
-          updates.parentId = mdTask.parentId;
+          updates.parentId = mdParentId;
           // Track this parent change for cleanup
           tasksWithChangedParents.push({
             taskId: spTask.id!,
             oldParentId: spTask.parentId || null,
-            newParentId: mdTask.parentId || null,
+            newParentId: mdParentId,
           });
         }
 
@@ -119,9 +225,10 @@ export const generateTaskOperations = (
           notes: mdTask.notes,
         };
 
-        // Only include parentId if it's not null
-        if (mdTask.parentId) {
-          createData.parentId = mdTask.parentId;
+        // Only include parentId if it's valid (not null and parent exists)
+        const validatedParentId = getValidatedParentId(mdTask);
+        if (validatedParentId) {
+          createData.parentId = validatedParentId;
         }
 
         operations.push({
@@ -151,14 +258,14 @@ export const generateTaskOperations = (
         // Handle parent relationship
         // Normalize undefined and null to null for comparison
         const spParentId = spTask.parentId || null;
-        const mdParentId = mdTask.parentId || null;
+        const mdParentId = getValidatedParentId(mdTask);
         if (spParentId !== mdParentId) {
-          updates.parentId = mdTask.parentId;
+          updates.parentId = mdParentId;
           // Track this parent change for cleanup
           tasksWithChangedParents.push({
             taskId: spTask.id!,
             oldParentId: spTask.parentId || null,
-            newParentId: mdTask.parentId || null,
+            newParentId: mdParentId,
           });
         }
 
@@ -177,9 +284,10 @@ export const generateTaskOperations = (
           notes: mdTask.notes,
         };
 
-        // Only include parentId if it's not null
-        if (mdTask.parentId) {
-          createData.parentId = mdTask.parentId;
+        // Only include parentId if it's valid (not null and parent exists)
+        const validatedParentId = getValidatedParentId(mdTask);
+        if (validatedParentId) {
+          createData.parentId = validatedParentId;
         }
 
         operations.push({
@@ -309,14 +417,22 @@ export const generateTaskOperations = (
 
   // Fourth pass: handle subtask ordering
   // Group subtasks by parent, maintaining their order from the markdown file
+  // Note: validParentIds and getValidatedParentId() already filter out invalid parents
   const subtasksByParent = new Map<string, ParsedTask[]>();
   mdTasks
     .filter((t) => t.isSubtask && t.parentId)
     .forEach((subtask) => {
-      if (!subtasksByParent.has(subtask.parentId!)) {
-        subtasksByParent.set(subtask.parentId!, []);
+      const validatedParentId = getValidatedParentId(subtask);
+
+      // Skip if parent is invalid (warning already logged by getValidatedParentId)
+      if (!validatedParentId) {
+        return;
       }
-      subtasksByParent.get(subtask.parentId!)!.push(subtask);
+
+      if (!subtasksByParent.has(validatedParentId)) {
+        subtasksByParent.set(validatedParentId, []);
+      }
+      subtasksByParent.get(validatedParentId)!.push(subtask);
     });
 
   // Sort subtasks by line number to maintain order from file
@@ -377,6 +493,17 @@ export const generateTaskOperations = (
   // This is important so that newly created tasks are ordered correctly
   const reorderOps = operations.filter((op) => op.type === 'reorder');
   const otherOps = operations.filter((op) => op.type !== 'reorder');
+
+  // Validate operations before returning
+  const validation = validateOperations(operations, mdTasks, spTasks);
+  if (!validation.isValid) {
+    console.error('[sync-md] Invalid operations generated:', validation.errors);
+    validation.errors.forEach((err) => console.error(`  - ${err}`));
+  }
+  if (validation.warnings.length > 0) {
+    console.warn('[sync-md] Operation warnings:', validation.warnings);
+    validation.warnings.forEach((warn) => console.warn(`  - ${warn}`));
+  }
 
   return [...otherOps, ...reorderOps];
 };

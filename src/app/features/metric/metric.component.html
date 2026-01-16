@@ -1,12 +1,12 @@
 <div class="wrapper">
-  @if (projectMetricsService.simpleMetrics(); as sm) {
+  @if (simpleMetrics(); as sm) {
     <section
       class="basic-stats"
       [@fade]
     >
       <div class="metrics-header">
         <h1 class="mat-h1">
-          {{ T.PM.TITLE | translate }}
+          {{ metricsTitle() | translate }}
         </h1>
         <share-button
           [payload]="sharePayload()"
