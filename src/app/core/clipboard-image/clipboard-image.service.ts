@@ -439,6 +439,13 @@ export class ClipboardImageService {
   }
 
   private async _deleteImageWeb(id: string): Promise<boolean> {
+    // Revoke cached blob URL to prevent memory leak
+    const cachedUrl = this._blobUrlCache.get(id);
+    if (cachedUrl) {
+      URL.revokeObjectURL(cachedUrl);
+      this._blobUrlCache.delete(id);
+    }
+
     const db = await this._getDb();
 
     return new Promise<boolean>((resolve, reject) => {
@@ -528,6 +535,9 @@ export class ClipboardImageService {
   }
 
   private async _deleteImageElectron(id: string): Promise<boolean> {
+    // Clean up cache entry (file:// URLs don't need revocation)
+    this._blobUrlCache.delete(id);
+
     const basePath = await this._getElectronImagePath();
     return window.ea.deleteClipboardImage(basePath, id);
   }
