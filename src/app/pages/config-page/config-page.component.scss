@@ -3,14 +3,59 @@
 .page-settings {
   text-align: start;
 
-  collapsible {
-    position: relative;
+  .settings-container {
+    max-width: 100%;
   }
 
-  .section-wrapper {
-    //display: grid;
-    //grid-template-columns: 50% 50%;
-    //grid-gap: 0 var(--s2);
+  .settings-title {
+    margin-bottom: var(--s2);
+  }
+
+  .settings-tabs {
+    ::ng-deep .mat-mdc-tab-header {
+      border-bottom: 1px solid var(--divider-color);
+      margin-bottom: var(--s2);
+    }
+
+    ::ng-deep .mat-mdc-tab {
+      min-width: 120px;
+
+      @include mq(xs, max) {
+        min-width: 90px;
+        padding: 0 8px;
+      }
+    }
+
+    .tab-icon {
+      margin-inline-end: 8px;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+
+      @include mq(xs, max) {
+        margin-inline-end: 4px;
+        font-size: 18px;
+        width: 18px;
+        height: 18px;
+      }
+    }
+
+    .tab-label {
+      @include mq(xs, max) {
+        font-size: 12px;
+      }
+    }
+  }
+
+  .tab-content {
+    padding-top: var(--s2);
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  collapsible {
+    position: relative;
   }
 
   .config-section {
@@ -21,7 +66,6 @@
     background: var(--card-bg);
 
     background-color: var(--card-bg);
-    //background-color: var(--bg-slightly-lighter);
 
     .md-title {
       margin-top: 0;
@@ -70,15 +114,9 @@
   }
 
   .collapsible-panel {
-    //border-top: 1px solid black;
     overflow: visible;
 
     > * {
-      // for help icon positioning
-      // does not work because of translate on the slide down ani element
-      // position: static;
-
-      // add a padding
       padding: 0 $this-panel-padding-left-right;
     }
   }

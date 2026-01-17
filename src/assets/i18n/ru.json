@@ -1979,11 +1979,19 @@
     "NO_PLUGINS_INSTALLED": "Нет установленных плагинов",
     "PLUGINS": "Плагины",
     "PRIVACY_POLICY": "Политика конфиденциальности",
-    "PRODUCTIVITY_HELPER": "Помощник производительности",
     "PROJECT_SETTINGS": "Настройки проекта",
     "PROVIDE_FEEDBACK": "Обратная связь",
     "SYNC_EXPORT": "Синхронизация и экспорт",
-    "TAG_SETTINGS": "Специальные настройки тегов"
+    "TABS": {
+      "GENERAL": "Общие",
+      "TIME_TRACKING": "Время и отслеживание",
+      "PRODUCTIVITY": "Продуктивность",
+      "PLUGINS": "Плагины",
+      "SYNC_BACKUP": "Синхронизация и резервирование"
+    },
+    "TAG_SETTINGS": "Специальные настройки тега",
+    "TOGGLE_DARK_MODE": "Переключить темный режим",
+    "UPDATE_APP": "Обновить приложение"
   },
   "SCHEDULE": {
     "LAST": "Прошедшие:",

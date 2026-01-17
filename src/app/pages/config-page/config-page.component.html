@@ -1,90 +1,132 @@
 <div class="page-settings page-wrapper">
   @if (globalCfg) {
-    <div>
-      <div class="section-wrapper component-wrapper">
-        <h1 class="mat-h1">{{ T.PS.GLOBAL_SETTINGS | translate }}</h1>
-        <theme-selector></theme-selector>
-        @for (section of globalConfigFormCfg; track section.key) {
-          <section class="config-section section-{{ section.key }}">
-            <config-section
-              (save)="saveGlobalCfg($event)"
-              [cfg]="getGlobalCfgSection(section.key)"
-              [section]="section"
-            ></config-section>
-          </section>
-        }
-        <section class="config-section">
-          <config-sound-form
-            [cfg]="getGlobalCfgSection('sound')"
-            (save)="saveGlobalCfg($event)"
-          ></config-sound-form>
-        </section>
+    <div class="settings-container">
+      <h1 class="mat-h1 settings-title">{{ T.PS.GLOBAL_SETTINGS | translate }}</h1>
 
-        <div>
-          <h2
-            class="mat-h2"
-            style="margin-top: 32px"
-          >
-            {{ T.PS.PLUGINS | translate }}
-          </h2>
-          <section class="config-section plugin-section">
-            <collapsible
-              [isIconBefore]="true"
-              [isExpanded]="false"
-              [title]="T.PS.PLUGINS | translate"
-            >
-              <plugin-management></plugin-management>
-            </collapsible>
-          </section>
-        </div>
-
-        <div class="tour-productivityHelper">
-          <h2
-            class="mat-h2"
-            style="margin-top: 32px"
-          >
-            {{ T.PS.PRODUCTIVITY_HELPER | translate }}
-          </h2>
-          @for (section of globalProductivityConfigFormCfg; track section.key) {
+      <mat-tab-group
+        class="settings-tabs"
+        [(selectedIndex)]="selectedTabIndex"
+        animationDuration="200ms"
+      >
+        <!-- Tab: General -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">settings</mat-icon>
+            <span class="tab-label">{{ 'PS.TABS.GENERAL' | translate }}</span>
+          </ng-template>
+          <div class="tab-content">
+            <theme-selector></theme-selector>
+            @for (section of generalFormCfg; track section.key) {
+              <section class="config-section section-{{ section.key }}">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+            <!-- @todo: Create a single style for forming all the settings elements.
+                        Make all as "sections" or as "forms" consistently.
+            -->
             <section class="config-section">
-              <config-section
+              <config-sound-form
+                [cfg]="getGlobalCfgSection('sound')"
                 (save)="saveGlobalCfg($event)"
-                [cfg]="getGlobalCfgSection(section.key)"
-                [section]="section"
-              ></config-section>
+              ></config-sound-form>
             </section>
-          }
-        </div>
+          </div>
+        </mat-tab>
 
-        <h2
-          class="mat-h2"
-          style="margin-top: 32px"
-        >
-          {{ T.PS.SYNC_EXPORT | translate }}
-        </h2>
+        <!-- Tab: Time & Tracking -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">timer</mat-icon>
+            <span class="tab-label">{{ 'PS.TABS.TIME_TRACKING' | translate }}</span>
+          </ng-template>
+          <div class="tab-content">
+            @for (section of timeTrackingFormCfg; track section.key) {
+              <section class="config-section section-{{ section.key }}">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+          </div>
+        </mat-tab>
 
-        <section class="config-section tour-syncSection">
-          <!-- NOTE: we need to debounce, as external updates end us in an endless loop -->
-          @let syncSettingsForm = syncSettingsService.syncSettingsForm$ | async;
-          @if (syncSettingsForm) {
-            <config-section
-              (save)="syncSettingsService.updateSettingsFromForm($event.config)"
-              [cfg]="syncSettingsForm"
-              [section]="globalSyncConfigFormCfg"
-            ></config-section>
-          }
-        </section>
+        <!-- Tab: Productivity -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">trending_up</mat-icon>
+            <span class="tab-label">{{ 'PS.TABS.PRODUCTIVITY' | translate }}</span>
+          </ng-template>
+          <div class="tab-content tour-productivityHelper">
+            @for (section of globalProductivityConfigFormCfg; track section.key) {
+              <section class="config-section">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+          </div>
+        </mat-tab>
 
-        @for (section of globalImexFormCfg; track section.key) {
-          <section class="config-section imex-section">
-            <config-section
-              (save)="saveGlobalCfg($event)"
-              [cfg]="getGlobalCfgSection(section.key)"
-              [section]="section"
-            ></config-section>
-          </section>
-        }
-      </div>
+        <!-- Tab: Plugins -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">extension</mat-icon>
+            <span class="tab-label">{{ 'PS.TABS.PLUGINS' | translate }}</span>
+          </ng-template>
+          <div class="tab-content">
+            <section class="config-section plugin-section">
+              <plugin-management></plugin-management>
+            </section>
+            @for (section of pluginsShortcutsFormCfg; track section.key) {
+              <section class="config-section section-{{ section.key }}">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+          </div>
+        </mat-tab>
+
+        <!-- Tab: Sync & Backup -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon class="tab-icon">cloud_sync</mat-icon>
+            <span class="tab-label">{{ 'PS.TABS.SYNC_BACKUP' | translate }}</span>
+          </ng-template>
+          <div class="tab-content">
+            <section class="config-section tour-syncSection">
+              @let syncSettingsForm = syncSettingsService.syncSettingsForm$ | async;
+              @if (syncSettingsForm) {
+                <config-section
+                  (save)="syncSettingsService.updateSettingsFromForm($event.config)"
+                  [cfg]="syncSettingsForm"
+                  [section]="globalSyncConfigFormCfg"
+                ></config-section>
+              }
+            </section>
+
+            @for (section of globalImexFormCfg; track section.key) {
+              <section class="config-section imex-section">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+          </div>
+        </mat-tab>
+      </mat-tab-group>
     </div>
   }
 </div>

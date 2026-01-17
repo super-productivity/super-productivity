@@ -25,18 +25,28 @@ const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   );
 };
 
-export const GLOBAL_CONFIG_FORM_CONFIG: ConfigFormConfig = [
+// Tab: General - Language, App Features, Misc, Short Syntax, Sound (specified separately in html)
+export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   LANGUAGE_SELECTION_FORM_FORM,
   APP_FEATURES_FORM_CFG,
   MISC_SETTINGS_FORM_CFG,
   SHORT_SYNTAX_FORM_CFG,
-  IDLE_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
   CLIPBOARD_IMAGES_FORM,
-  TIME_TRACKING_FORM_CFG,
-  REMINDER_FORM_CFG,
-  SCHEDULE_FORM_CFG,
 ].filter(filterGlobalConfigForm);
+
+// Tab: Time & Tracking - Time Tracking, Idle, Schedule, Reminder
+export const GLOBAL_TIME_TRACKING_FORM_CONFIG: ConfigFormConfig = [
+  TIME_TRACKING_FORM_CFG,
+  IDLE_FORM_CFG,
+  SCHEDULE_FORM_CFG,
+  REMINDER_FORM_CFG,
+].filter(filterGlobalConfigForm);
+
+// Tab: Plugins
+export const GLOBAL_PLUGINS_FORM_CONFIG: ConfigFormConfig = [].filter(
+  filterGlobalConfigForm,
+);
 
 export const GLOBAL_IMEX_FORM_CONFIG: ConfigFormConfig = [
   // NOTE: the backup form is added dynamically due to async prop required

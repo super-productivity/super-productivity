@@ -1,24 +1,15 @@
 import {
   AfterViewInit,
-  ChangeDetectionStrategy,
   ChangeDetectorRef,
-  Component,
   DestroyRef,
   ElementRef,
   inject,
-  OnInit,
   output,
   signal,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
-import { MatButton, MatIconButton } from '@angular/material/button';
-import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatIcon } from '@angular/material/icon';
-import { MatTooltip } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
 import { MarkdownComponent } from 'ngx-markdown';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -27,30 +18,11 @@ import { T } from '../../t.const';
 import { isSmallScreen } from '../../util/is-small-screen';
 import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
-import { AsyncPipe } from '@angular/common';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
 
-@Component({
-  selector: 'dialog-fullscreen-markdown',
-  templateUrl: './dialog-fullscreen-markdown.component.html',
-  styleUrls: ['./dialog-fullscreen-markdown.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    FormsModule,
-    MarkdownComponent,
-    MatButtonToggleGroup,
-    MatButtonToggle,
-    MatTooltip,
-    MatIcon,
-    MatButton,
-    MatIconButton,
-    TranslatePipe,
-    AsyncPipe,
-  ],
-})
-export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit {
+export class DialogFullscreenMarkdownComponent implements AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _clipboardImageService = inject(ClipboardImageService);
   private readonly _cdr = inject(ChangeDetectorRef);
@@ -86,6 +58,11 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
       }
     }
 
+    // Initialize resolved content after this.data might have been modified by subclass
+    this.resolvedContent.set(this.data?.content || '');
+    // Then start async resolution
+    this._updateResolvedContent(this.data?.content || '');
+
     // Auto-save with debounce
     this._contentChanges$
       .pipe(debounceTime(500), takeUntilDestroyed(this._destroyRef))
@@ -112,14 +89,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
         }
       });
   }
-
-  ngOnInit(): void {
-    // Initialize resolved content after this.data might have been modified by subclass
-    this.resolvedContent.set(this.data?.content || '');
-    // Then start async resolution
-    this._updateResolvedContent(this.data?.content || '');
-  }
-
   ngAfterViewInit(): void {
     // Focus textarea if present (not in PARSED view mode)
     this.textareaEl()?.nativeElement?.focus();

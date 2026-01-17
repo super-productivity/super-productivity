@@ -9,9 +9,11 @@ import {
 } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
-  GLOBAL_CONFIG_FORM_CONFIG,
+  GLOBAL_GENERAL_FORM_CONFIG,
   GLOBAL_IMEX_FORM_CONFIG,
+  GLOBAL_PLUGINS_FORM_CONFIG,
   GLOBAL_PRODUCTIVITY_FORM_CONFIG,
+  GLOBAL_TIME_TRACKING_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
@@ -55,6 +57,8 @@ import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
 import { DialogChangeEncryptionPasswordComponent } from '../../imex/sync/dialog-change-encryption-password/dialog-change-encryption-password.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { MatIcon } from '@angular/material/icon';
 
 @Component({
   selector: 'config-page',
@@ -69,13 +73,15 @@ import { LS } from '../../core/persistence/storage-keys.const';
     AsyncPipe,
     PluginManagementComponent,
     CollapsibleComponent,
+    MatTabGroup,
+    MatTab,
+    MatTabLabel,
+    MatIcon,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _cd = inject(ChangeDetectorRef);
   private readonly _providerManager = inject(SyncProviderManager);
-  readonly configService = inject(GlobalConfigService);
-  readonly syncSettingsService = inject(SyncConfigService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _pluginBridgeService = inject(PluginBridgeService);
   private readonly _snackService = inject(SnackService);
@@ -83,8 +89,18 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _matDialog = inject(MatDialog);
   private readonly _superSyncRestoreService = inject(SuperSyncRestoreService);
 
+  readonly configService = inject(GlobalConfigService);
+  readonly syncSettingsService = inject(SyncConfigService);
+
   T: typeof T = T;
-  globalConfigFormCfg: ConfigFormConfig;
+
+  selectedTabIndex = 0;
+
+  // @todo - find better names for tabs configs forms
+  // Tab-specific form configurations
+  generalFormCfg: ConfigFormConfig;
+  timeTrackingFormCfg: ConfigFormConfig;
+  pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
   globalSyncConfigFormCfg = this._buildSyncFormConfig();
@@ -114,8 +130,10 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private _subs: Subscription = new Subscription();
 
   constructor() {
-    // somehow they are only unproblematic if assigned here
-    this.globalConfigFormCfg = GLOBAL_CONFIG_FORM_CONFIG.slice();
+    // Initialize tab-specific form configurations
+    this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.slice();
+    this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
+    this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
 
@@ -150,8 +168,9 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   }
 
   private _updateKeyboardFormWithPluginShortcuts(shortcuts: PluginShortcutCfg[]): void {
-    // Find keyboard form section
-    const keyboardFormIndex = this.globalConfigFormCfg.findIndex(
+    // @todo - make separate core shortcuts and plugins shortcuts settings
+    // Find keyboard form section in general tab configuration
+    const keyboardFormIndex = this.generalFormCfg.findIndex(
       (section) => section.key === 'keyboard',
     );
 
@@ -160,7 +179,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const keyboardSection = this.globalConfigFormCfg[keyboardFormIndex];
+    const keyboardSection = this.generalFormCfg[keyboardFormIndex];
 
     // Remove existing plugin shortcuts and header from the form
     const filteredItems = (keyboardSection.items || []).filter((item) => {
@@ -196,10 +215,10 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     };
 
     // Create a new config array to ensure Angular detects the change
-    this.globalConfigFormCfg = [
-      ...this.globalConfigFormCfg.slice(0, keyboardFormIndex),
+    this.generalFormCfg = [
+      ...this.generalFormCfg.slice(0, keyboardFormIndex),
       newKeyboardSection,
-      ...this.globalConfigFormCfg.slice(keyboardFormIndex + 1),
+      ...this.generalFormCfg.slice(keyboardFormIndex + 1),
     ];
 
     // Trigger change detection
