@@ -114,3 +114,14 @@ playwright-report/
 electron-builder-appx.yaml
 test-results/
 data/
+savepoint-before-reorg.json
+start-tunnel.sh
+simple-tunnel.sh
+tasks.md
+ceo-tasks.md
+cto-tasks.md
+ceo.md
+cto.md
+create-psych-flow-manual-v4.js
+arbor-*.json
+clean-slate.json

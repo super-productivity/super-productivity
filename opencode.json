@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "super-productivity": {
+      "type": "local",
+      "command": [
+        "/home/mchang/repos/SP-MCP/venv/bin/python3",
+        "/home/mchang/repos/SP-MCP/mcp_server.py"
+      ]
+    }
+  },
+  "$schema": "https://opencode.ai/config.json"
+}

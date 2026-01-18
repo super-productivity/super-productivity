@@ -160,3 +160,15 @@ Run these commands to verify your changes before finishing a task.
 - **Forks vs Upstream**: This repository is a fork.
   - `origin`: Points to the user's fork (`git@github.com:mycochang/super-productivity.git`). Push your changes here.
   - `upstream`: Points to the official repository (`git@github.com:super-productivity/super-productivity.git`). Pull updates from here.
+
+## 10. Process Management & Safety
+
+- **Killing the App**: When killing the Super Productivity process (e.g. via `kill -9` or `pkill`), you MUST ensure ALL related processes are terminated, especially the GUI/Renderer processes.
+  - **Command**: Use `pkill -9 -f superproductivity` to ensure a clean slate.
+  - **Why**: Zombie renderer processes can hold file locks or keep the UI visible but frozen.
+
+## 11. OpenCode & MCP Specifics
+
+- **No `mcp remove` Command**: OpenCode does **NOT** support a `remove` command for MCP servers (e.g., `opencode mcp remove`).
+  - **Workaround**: To restart or reconfigure an MCP server, you must kill the server process manually (e.g., `kill <pid>`) or modify the OpenCode configuration files directly if necessary. OpenCode will typically restart the server automatically or upon the next `add` attempt if the previous one is dead.
+  - **Best Practice**: Treat MCP server configuration as persistent. If you need to change arguments, you may need to rely on the `add` command overwriting the existing entry or manual process management.

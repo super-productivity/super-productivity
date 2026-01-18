@@ -9,6 +9,12 @@ import {
 } from '../features/focus-mode/store/focus-mode.actions';
 import { setActiveWorkContext } from '../features/work-context/store/work-context.actions';
 import { updateGlobalConfigSection } from '../features/config/store/global-config.actions';
+import { deleteTag } from '../features/tag/store/tag.actions';
+import {
+  addBoard,
+  updateBoard,
+  removeBoard,
+} from '../features/boards/store/boards.actions';
 import {
   hideAddTaskBar,
   hideNonTaskSidePanelContent,
@@ -60,7 +66,12 @@ export const ALLOWED_PLUGIN_ACTIONS = [
   // Tag Management
   // addTag,
   // updateTag,
-  // deleteTag,
+  deleteTag,
+
+  // Board Management
+  addBoard,
+  updateBoard,
+  removeBoard,
 
   // Note Management
   // addNote,
