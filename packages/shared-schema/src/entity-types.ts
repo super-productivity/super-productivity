@@ -27,6 +27,7 @@ export const ENTITY_TYPES = [
   'MENU_TREE',
   'METRIC',
   'BOARD',
+  'SECTION',
   'REMINDER',
   'PLUGIN_USER_DATA',
   'PLUGIN_METADATA',
