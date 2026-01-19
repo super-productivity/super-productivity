@@ -329,7 +329,17 @@
       }
     </div>
   }
-  @if (isDragOver) {
+  @if (isDragOverBlocked()) {
+    <div class="bgc-warn drag-over-msg">
+      <mat-icon>block</mat-icon>
+      {{ T.F.TASK.CMP.DROP_BLOCKED | translate }}
+    </div>
+  } @else if (isDragOverSubTaskZone()) {
+    <div class="bgc-accent drag-over-msg">
+      <mat-icon>add</mat-icon>
+      {{ T.F.TASK.CMP.DROP_SUB_TASK | translate }}
+    </div>
+  } @else if (isDragOver) {
     <div class="bgc-accent drag-over-msg">
       <mat-icon>add</mat-icon>
       {{ T.F.TASK.CMP.DROP_ATTACHMENT | translate: { title: t.title } }}

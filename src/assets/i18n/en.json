@@ -1317,6 +1317,8 @@
         "DELETE": "Delete Task",
         "DELETE_REPEAT_INSTANCE": "Delete repeated Task Instance",
         "DROP_ATTACHMENT": "Drop here to attach to \"{{title}}\"",
+        "DROP_BLOCKED": "Drop here to blocked",
+        "DROP_SUB_TASK": "Drop here to make subtask",
         "DUPLICATE": "Duplicate",
         "EDIT_SCHEDULED": "Reschedule",
         "EDIT_TAGS": "Edit tags",

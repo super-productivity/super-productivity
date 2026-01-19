@@ -250,6 +250,20 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
+  public isDragOverSubTaskZone = computed(() => {
+    const isOver = this.taskDragStateService.hoverTargetId() === this.task().id &&
+      this.taskDragStateService.dropType() === 'SUBTASK';
+    if (isOver) console.log('TaskComponent: isDragOverSubTaskZone TRUE for', this.task().id);
+    return isOver;
+  });
+
+  public isDragOverBlocked = computed(() => {
+    return (
+      this.taskDragStateService.hoverTargetId() === this.task().id &&
+      this.taskDragStateService.dropType() === 'BLOCKED'
+    );
+  });
+
   parentTask = toSignal(
     this._task$.pipe(
       switchMap((task) =>
