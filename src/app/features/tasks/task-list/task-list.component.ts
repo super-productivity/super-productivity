@@ -24,6 +24,7 @@ import {
   moveProjectTaskInBacklogList,
   moveProjectTaskToBacklogList,
   moveProjectTaskToRegularList,
+  moveProjectTaskToSection,
 } from '../../project/store/project.actions';
 import { moveSubTask } from '../store/task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -49,6 +50,7 @@ export type ListModelId = DropListModelSource | string;
 const PARENT_ALLOWED_LISTS = ['DONE', 'UNDONE', 'OVERDUE', 'BACKLOG', 'ADD_TASK_PANEL'];
 
 export interface DropModelDataForList {
+  listId: TaskListId;
   listModelId: ListModelId;
   allTasks: TaskWithSubTasks[];
   filteredTasks: TaskWithSubTasks[];
@@ -99,6 +101,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   currentTaskId = toSignal(this._taskService.currentTaskId$);
   dropModelDataForList = computed<DropModelDataForList>(() => {
     return {
+      listId: this.listId(),
       listModelId: this.listModelId(),
       allTasks: this.tasks(),
       filteredTasks: this.filteredTasks(),
@@ -173,18 +176,19 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         return false;
       }
 
-      // Subtasks can move within subtask lists (where listModelId is a task ID)
+      // Subtasks can move within subtask lists (listModelId is a parent task
+      // id) and — at this commit — also into section drop-lists. A later
+      // commit tightens this by keying on listId.
       if (!PARENT_ALLOWED_LISTS.includes(targetModelId)) {
         return true;
       }
       return false;
     }
 
-    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS
-    if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
-      return true;
-    }
-    return false;
+    // Parent tasks: allow PARENT_ALLOWED_LISTS or section drop-lists. The
+    // top-level OVERDUE/LATER_TODAY guard above already rejects the only
+    // restricted parent destinations, so any remaining target is acceptable.
+    return true;
   };
 
   async drop(
@@ -306,6 +310,24 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     // Handle LATER_TODAY - prevent any moves to or from this list
     if (src === 'LATER_TODAY' || target === 'LATER_TODAY') {
       return;
+    }
+
+    if (workContextId && this._workContextService.activeWorkContextType === WorkContextType.PROJECT) {
+      // NOTE: sections are not sub task lists
+      const targetIsSection = !['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(target);
+      const srcIsSection = !['DONE', 'UNDONE', 'BACKLOG', 'OVERDUE', 'LATER_TODAY'].includes(src);
+
+      if (targetIsSection || srcIsSection) {
+        const sectionId = targetIsSection ? target : null;
+        const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);
+        this._store.dispatch(moveProjectTaskToSection({
+          taskId,
+          sectionId,
+          afterTaskId,
+          workContextId,
+        }));
+        return;
+      }
     }
 
     if (isSrcRegularList && isTargetRegularList) {
