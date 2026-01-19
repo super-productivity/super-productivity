@@ -30,6 +30,22 @@ export class SectionService {
         }));
     }
 
+    // Generate a section ID without dispatching
+    generateSectionId(): string {
+        return nanoid();
+    }
+
+    // Add section with a pre-generated ID
+    addSectionWithId(id: string, title: string, projectId: string | null = null): void {
+        this._store.dispatch(addSection({
+            section: {
+                id,
+                title,
+                projectId,
+            }
+        }));
+    }
+
     deleteSection(id: string): void {
         this._store.dispatch(deleteSection({ id }));
     }
