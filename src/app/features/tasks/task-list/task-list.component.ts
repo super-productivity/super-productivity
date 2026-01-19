@@ -153,7 +153,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragEnded(): void {
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setPromotionMode(false);
-    this._taskDragStateService.clear();
+    // Delay clearing the state to ensure the drop event has a chance to read it
+    setTimeout(() => {
+      this._taskDragStateService.clear();
+    });
   }
 
   @throttle(100)
@@ -300,6 +303,33 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     }
 
     // NOTE: draggedTask is now guaranteed to be a Task
+    // Fix: Redetermine targetTask based on visual drop point to match onDragMoved logic
+    const task = draggedTask as TaskWithSubTasks;
+
+    // Trust the visual indicator state: if the user saw "Drop to make subtask", execute it.
+    const stateDropType = this._taskDragStateService.dropType();
+    const stateTargetId = this._taskDragStateService.hoverTargetId();
+    if (stateDropType === 'SUBTASK' && stateTargetId) {
+      this.dropListService.blockAniTrigger$.next();
+      this._taskDragDropService.makeSubtask(task.id, stateTargetId);
+      this._taskViewCustomizerService.setSort(DEFAULT_OPTIONS.sort);
+      return;
+    }
+
+    // Try to find target task via elementFromPoint if list index resolution is ambiguous
+    const dropPoint = ev.dropPoint;
+    const element = document.elementFromPoint(dropPoint.x, dropPoint.y) as Element;
+    const taskEl = element?.closest('task');
+    if (taskEl) {
+      const targetId = taskEl.getAttribute('id')?.replace('t-', '');
+      if (targetId) {
+        const foundTask = this._taskService.allTasks().find((t) => t.id === targetId);
+        if (foundTask) {
+          targetTask = foundTask as TaskCopy;
+        }
+      }
+    }
+
     if (targetTask && targetTask.id === draggedTask.id) {
       targetTask = targetListData.filteredTasks[ev.currentIndex - 1] as TaskCopy;
     }
@@ -309,7 +339,6 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     }
 
     // At this point draggedTask is a TaskWithSubTasks (not SearchResultItem)
-    const task = draggedTask as TaskWithSubTasks;
 
     // Detect drop zone: top, bottom-left (reorder), or bottom-right (convert to subtask)
     const dropZoneType = this._getDropZoneType(ev, 'DROP');
@@ -465,21 +494,22 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     let rect: DOMRect;
     let element: Element | null = null;
 
-    if (isDragMove) {
-      // Logic for drag move: use elementFromPoint
-      const element = document.elementFromPoint(dropPointX, dropPointY) as Element;
-      // find parent task element
-      const taskEl = element?.closest('task');
-      if (!taskEl) {
-        return 'bottom-left';
-      }
+    // Always try to use elementFromPoint first for consistent behavior with onDragMoved
+    element = document.elementFromPoint(dropPointX, dropPointY) as Element;
+    const taskEl = element?.closest('task');
+
+    if (taskEl) {
       rect = taskEl.getBoundingClientRect();
     } else {
+      // Fallback logic for when we can't find a task element (e.g. dropping in empty space)
+      if (isDragMove) {
+        return 'bottom-left';
+      }
+
       const sortedItems = event.container.getSortedItems();
       const targetDragItem = sortedItems[event.currentIndex];
 
       if (!targetDragItem) {
-        // Fallback for drops at the end of the list, though less precise
         const dropElement = event.container.element.nativeElement;
         rect = dropElement.getBoundingClientRect();
         const relativeY = dropPointY - rect.top;
@@ -644,6 +674,10 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     }
 
     if (draggedTask.parentId === targetTask.id) {
+      return false;
+    }
+
+    if (targetTask.parentId) {
       return false;
     }
 
