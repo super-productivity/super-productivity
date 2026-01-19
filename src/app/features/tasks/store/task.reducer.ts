@@ -261,6 +261,12 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
+    // Guard against invalid moves (e.g. 'UNDONE' passed as ID) which might be in the op log
+    if (!state.entities[srcTaskId] || !state.entities[targetTaskId]) {
+      console.warn('Ignoring invalid moveSubTask action', { taskId, srcTaskId, targetTaskId });
+      return state;
+    }
+
     let newState = state;
     const oldPar = getTaskById(srcTaskId, state);
     const newPar = getTaskById(targetTaskId, state);
