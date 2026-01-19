@@ -66,6 +66,13 @@
     <span class="text">{{ T.MH.DELETE_TAG | translate }}</span>
   </button>
 }
+@if (isForProject) {
+<button (click)="addSection()" mat-menu-item>
+  <mat-icon>list</mat-icon>
+  <span class="text">{{ T.MH.ADD_SECTION | translate }}</span>
+</button>
+
+}
 @if (isForProject && contextId !== INBOX_PROJECT.id) {
   <button
     (click)="duplicateProject()"

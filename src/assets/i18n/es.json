@@ -20,6 +20,7 @@
     "SHOW_NOTES": "Mostrar notas del proyecto"
   },
   "CONFIRM": {
+    "ADD_SECTION": "Añadir Sección",
     "AUTO_FIX": "Tus datos parecen estar dañados (\"{{validityError}}\"). ¿Quieres intentar arreglarlos automáticamente? Esto podría resultar en una pérdida parcial de datos.",
     "RELOAD_AFTER_IDB_ERROR": "No se puede acceder a la base de datos :( Las causas posibles son una actualización de la aplicación en segundo plano o poco espacio en disco. Si instalaste la aplicación en Linux como snap, también querrás habilitar 'snap set core experimental.refresh-app-awareness=true' hasta que arreglen este problema por su parte. Pulsa OK para recargar la aplicación (puede requerir reiniciar manualmente la aplicación en algunas plataformas).",
     "RESTORE_FILE_BACKUP": "Parece que NO HAY DATOS, pero hay copias de seguridad disponibles en \"{{dir}}\". ¿Quieres restaurar la última copia de seguridad de {{from}}?",
