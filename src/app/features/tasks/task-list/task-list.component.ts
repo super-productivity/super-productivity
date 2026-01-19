@@ -48,6 +48,7 @@ import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
 import { TaskDragDropService } from '../task-drag-drop.service';
+import { TaskDragStateService } from '../task-drag-state.service';
 import { throttle } from '../../../util/decorators';
 
 export type TaskListId = 'PARENT' | 'SUB';
@@ -83,6 +84,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   private _taskDragDropService = inject(TaskDragDropService);
+  private _taskDragStateService = inject(TaskDragStateService);
   dropListService = inject(DropListService);
 
   tasks = input<TaskWithSubTasks[]>([]);
@@ -151,6 +153,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   onDragEnded(): void {
     this._scheduleExternalDragService.setActiveTask(null);
     this.dropListService.setPromotionMode(false);
+    this._taskDragStateService.clear();
   }
 
   @throttle(100)

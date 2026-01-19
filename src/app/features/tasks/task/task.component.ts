@@ -85,6 +85,7 @@ import { TaskFocusService } from '../task-focus.service';
 import { CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { TaskDragDropService } from '../task-drag-drop.service';
 import { DropListService } from '../../../core-ui/drop-list/drop-list.service';
+import { TaskDragStateService } from '../task-drag-state.service';
 
 @Component({
   selector: 'task',
@@ -146,6 +147,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   readonly dropListService = inject(DropListService);
+  readonly taskDragStateService = inject(TaskDragStateService);
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);

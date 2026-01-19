@@ -134,7 +134,9 @@ export class TaskService {
     { initialValue: null },
   );
 
-  // Shared signal to avoid creating 200+ subscriptions in task components
+  allTasks = toSignal(this._store.select(selectAllTasks), { initialValue: [] as Task[] });
+
+  // NOTE: the order is important, as the actions are created in the order of subscriptions in task components
   todayList = toSignal(this._store.pipe(select(selectTodayTagTaskIds)), {
     initialValue: [] as string[],
   });
