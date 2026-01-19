@@ -312,7 +312,7 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const task = draggedTask as TaskWithSubTasks;
 
     // Detect drop zone: top, bottom-left (reorder), or bottom-right (convert to subtask)
-    const dropZoneType = this._getDropZoneType(ev);
+    const dropZoneType = this._getDropZoneType(ev, 'DROP');
 
     // If drop is bottom-right AND target is valid, convert to subtask
     if (

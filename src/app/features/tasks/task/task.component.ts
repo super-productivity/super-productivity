@@ -210,10 +210,10 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return this.isTodayListActive()
       ? (task.dueWithTime && !isToday(task.dueWithTime)) ||
-          (task.dueDay && task.dueDay !== todayStr)
+      (task.dueDay && task.dueDay !== todayStr)
       : !this.isShowRemoveFromToday() &&
-          task.dueDay !== todayStr &&
-          (!task.dueWithTime || !isToday(task.dueWithTime));
+      task.dueDay !== todayStr &&
+      (!task.dueWithTime || !isToday(task.dueWithTime));
   });
 
   isPanHelperVisible = signal(false);
@@ -342,7 +342,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           Array.from(otherTaskEl).findIndex(
             (item) => item === this._elementRef.nativeElement,
           ) ===
-            otherTaskEl.length - 1
+          otherTaskEl.length - 1
         ) {
           this.focusTitleForEdit();
         }
@@ -1013,15 +1013,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const currentIndex = taskEls.findIndex((el) => el === activeEl);
     const nextEl = isTaskMovedInList
       ? (() => {
-          // if a parent task is moved in list, as it is for when toggling done,
-          // we don't want to focus the next sub-task, but the next main task instead
-          if (this.task().subTaskIds.length) {
-            return taskEls.find((el, i) => {
-              return i > currentIndex && el.parentElement?.closest('task');
-            }) as HTMLElement | undefined;
-          }
-          return taskEls[currentIndex + 1] as HTMLElement;
-        })()
+        // if a parent task is moved in list, as it is for when toggling done,
+        // we don't want to focus the next sub-task, but the next main task instead
+        if (this.task().subTaskIds.length) {
+          return taskEls.find((el, i) => {
+            return i > currentIndex && el.parentElement?.closest('task');
+          }) as HTMLElement | undefined;
+        }
+        return taskEls[currentIndex + 1] as HTMLElement;
+      })()
       : (taskEls[currentIndex + 1] as HTMLElement);
     return nextEl;
   }

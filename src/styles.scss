@@ -30,10 +30,16 @@ pre,
 }
 
 body.isDisableAnimations {
+
   *,
   *:after,
   *:before {
     transition: none !important;
     animation: none !important;
   }
+}
+
+.cdk-drag-preview,
+.cdk-drag-placeholder {
+  pointer-events: none !important;
 }

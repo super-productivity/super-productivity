@@ -41,13 +41,24 @@
     z-index: var(--z-focus-host);
     outline: none;
   }
+
+  // Extend hit area downwards to catch "Slightly below" drops
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    height: 10px;
+    z-index: 1;
+    // background: rgba(255, 0, 0, 0.2); // Debug visualization
+  }
 }
 
 .inner-wrapper {
   position: relative;
   // NOTE: -1 px because we move the box slightly up
-  padding: calc(var(--task-inner-padding-top-bottom) - 1px) 0
-    var(--task-inner-padding-top-bottom);
+  padding: calc(var(--task-inner-padding-top-bottom) - 1px) 0 var(--task-inner-padding-top-bottom);
   margin-bottom: 0;
 }
 
@@ -82,7 +93,7 @@
     background: var(--task-c-selected-bg);
   }
 
-  :host.isSelected.isSelected > .inner-wrapper > & {
+  :host.isSelected.isSelected>.inner-wrapper>& {
     transition: var(--transition-enter);
     transition-property: left, right, box-shadow;
     box-shadow: var(--task-selected-shadow);
@@ -100,16 +111,14 @@
       border-bottom-left-radius: var(--task-border-radius);
     }
 
-    @at-root :host-context(.isDarkTheme).isSelected.isSelected.isSelected
-        .sub-tasks
-        ::ng-deep
-        .box {
+    @at-root :host-context(.isDarkTheme).isSelected.isSelected.isSelected .sub-tasks ::ng-deep .box {
       background: var(--sub-task-c-bg-in-selected);
     }
   }
 
-  :host:focus > .inner-wrapper > & {
+  :host:focus>.inner-wrapper>& {
     border-radius: var(--task-border-radius);
+
     // we don't want focus borders for touch only devices
     @include noTouchOnly() {
       border-color: var(--palette-primary-400);
@@ -118,7 +127,7 @@
     }
   }
 
-  :host:focus.mobile-highlight-searched-item > .inner-wrapper > & {
+  :host:focus.mobile-highlight-searched-item>.inner-wrapper>& {
     border-color: var(--palette-primary-400);
     border-width: 1px;
     border-style: solid !important;
@@ -137,14 +146,16 @@
     }
   }
 
-  :host.isSelected.isSelected > .inner-wrapper > &,
+  :host.isSelected.isSelected>.inner-wrapper>&,
   :host.isSelected.isCurrent.isCurrent.isCurrent.isCurrent & {
     @include mq(xs) {
       right: -34px;
     }
+
     @include mq(md) {
       right: -234px;
     }
+
     @include mq(xl) {
       right: calc(-1 * var(--task-border-radius));
     }
@@ -161,12 +172,12 @@
     box-shadow: var(--task-current-shadow);
   }
 
-  :host:first-child > .inner-wrapper > & {
+  :host:first-child>.inner-wrapper>& {
     border-top-left-radius: var(--task-border-radius);
     border-top-right-radius: var(--task-border-radius);
   }
 
-  :host:last-child > .inner-wrapper > & {
+  :host:last-child>.inner-wrapper>& {
     border-bottom-left-radius: var(--task-border-radius);
     border-bottom-right-radius: var(--task-border-radius);
   }
@@ -204,7 +215,8 @@
   align-items: stretch;
   flex-wrap: nowrap;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
+  -webkit-user-select: none;
+  /* Safari */
   justify-content: space-between;
   min-height: var(--task-first-line-min-height);
   touch-action: pan-y;

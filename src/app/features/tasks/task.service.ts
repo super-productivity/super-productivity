@@ -331,8 +331,8 @@ export class TaskService {
       task,
       due,
       remindCfg ??
-        this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-        DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+      this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
     );
     return id;
   }
@@ -1109,14 +1109,14 @@ export class TaskService {
 
         return archiveTaskWithSameIssue
           ? {
-              task: archiveTaskWithSameIssue as Task,
-              subTasks: archiveTaskWithSameIssue.subTaskIds
-                ? (archiveTaskWithSameIssue.subTaskIds.map(
-                    (id) => archiveTaskState.entities[id],
-                  ) as Task[])
-                : null,
-              isFromArchive: true,
-            }
+            task: archiveTaskWithSameIssue as Task,
+            subTasks: archiveTaskWithSameIssue.subTaskIds
+              ? (archiveTaskWithSameIssue.subTaskIds.map(
+                (id) => archiveTaskState.entities[id],
+              ) as Task[])
+              : null,
+            isFromArchive: true,
+          }
           : null;
       }
       return null;
@@ -1144,21 +1144,21 @@ export class TaskService {
       ...(workContextType === WorkContextType.PROJECT
         ? { projectId: workContextId }
         : {
-            projectId:
-              this._globalConfigService.cfg()?.misc.defaultProjectId || INBOX_PROJECT.id,
-          }),
+          projectId:
+            this._globalConfigService.cfg()?.misc.defaultProjectId || INBOX_PROJECT.id,
+        }),
 
       tagIds:
         workContextType === WorkContextType.TAG &&
-        !additional.parentId &&
-        workContextId !== TODAY_TAG.id
+          !additional.parentId &&
+          workContextId !== TODAY_TAG.id
           ? [workContextId]
           : [],
 
       ...(workContextId === TODAY_TAG.id &&
-      !additional.parentId &&
-      !additional.dueWithTime &&
-      !('dueDay' in additional)
+        !additional.parentId &&
+        !additional.dueWithTime &&
+        !('dueDay' in additional)
         ? { dueDay: getDbDateStr() }
         : {}),
 
