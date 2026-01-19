@@ -13,7 +13,12 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { MatMenu, MatMenuTrigger, MatMenuItem, MatMenuModule } from '@angular/material/menu';
+
 import { TaskService } from '../tasks/task.service';
+import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import { expandAnimation, expandFadeAnimation } from '../../ui/animations/expand.ani';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TakeABreakService } from '../take-a-break/take-a-break.service';
@@ -30,6 +35,7 @@ import {
 } from 'rxjs';
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
+import { of } from 'rxjs';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
@@ -37,7 +43,16 @@ import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
 import { TaskViewCustomizerService } from '../task-view-customizer/task-view-customizer.service';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { CdkDropListGroup } from '@angular/cdk/drag-drop';
+import { SectionService } from '../section/section.service';
+import { Section } from '../section/section.model';
+import {
+  CdkDrag,
+  CdkDragDrop,
+  CdkDragHandle,
+  CdkDropList,
+  CdkDropListGroup,
+  moveItemInArray,
+} from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
@@ -82,6 +97,9 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CdkDropListGroup,
+    CdkDropList,
+    CdkDrag,
+    CdkDragHandle,
     CdkScrollable,
     MatTooltip,
     MatIcon,
@@ -95,11 +113,13 @@ import { recordSearchNavDebug } from '../../util/search-nav-debug';
     TranslatePipe,
     CollapsibleComponent,
     CommonModule,
+    MatMenuModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
   ],
 })
+
 export class WorkViewComponent implements OnInit, OnDestroy {
   private static readonly _FOCUS_ITEM_RETRY_DELAY = 250;
   private static readonly _FOCUS_ITEM_MAX_RETRIES = 20;
@@ -107,6 +127,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
   layoutService = inject(LayoutService);
+  sectionService = inject(SectionService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
   private _activatedRoute = inject(ActivatedRoute);
@@ -115,6 +136,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _store = inject(Store);
   private _snackService = inject(SnackService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _matDialog = inject(MatDialog);
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,
@@ -169,6 +191,34 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     () =>
       !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
   );
+
+  // Section Logic
+  sections = toSignal(
+    this.workContextService.activeWorkContextId$.pipe(
+      switchMap((id) => (id ? this.sectionService.getSectionsByProjectId$(id) : of([]))),
+    ),
+    { initialValue: [] },
+  );
+
+  undoneTasksBySection = computed(() => {
+    const tasks = this.undoneTasks();
+    const sections = this.sections();
+
+    const dict: Record<string, TaskWithSubTasks[]> = {};
+    const noSection: TaskWithSubTasks[] = [];
+
+    tasks.forEach((task) => {
+      if (task.sectionId && sections.find((s) => s.id === task.sectionId)) {
+        if (!dict[task.sectionId]) dict[task.sectionId] = [];
+        dict[task.sectionId].push(task);
+      } else {
+        noSection.push(task);
+      }
+    });
+
+    return { dict, noSection };
+  });
+
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -324,6 +374,55 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this.layoutService.isWorkViewScrolled.set(false);
   }
 
+  addSection(): void {
+    this._matDialog
+      .open(DialogPromptComponent, {
+        data: {
+          placeholder: T.WW.ADD_SECTION_TITLE,
+        },
+      })
+      .afterClosed()
+      .subscribe((title: string | undefined) => {
+        if (title) {
+          this.sectionService.addSection(
+            title,
+            this.workContextService.activeWorkContextId,
+          );
+        }
+      });
+  }
+
+  deleteSection(id: string): void {
+    this._matDialog
+      .open(DialogConfirmComponent, {
+        data: {
+          message: T.CONFIRM.DELETE_SECTION_CASCADE,
+        },
+      })
+      .afterClosed()
+      .subscribe((isConfirm: boolean) => {
+        if (isConfirm) {
+          this.sectionService.deleteSection(id);
+        }
+      });
+  }
+
+  editSection(id: string, title: string): void {
+    this._matDialog
+      .open(DialogPromptComponent, {
+        data: {
+          placeholder: T.WW.ADD_SECTION_TITLE,
+          val: title,
+        },
+      })
+      .afterClosed()
+      .subscribe((newTitle: string | undefined) => {
+        if (newTitle) {
+          this.sectionService.updateSection(id, { title: newTitle });
+        }
+      });
+  }
+
   resetBreakTimer(): void {
     this.takeABreakService.resetTimer();
   }
@@ -355,9 +454,26 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     );
   }
 
+  dropSection(event: CdkDragDrop<Section[]>): void {
+    const sections = this.sections();
+    if (event.previousIndex === event.currentIndex) {
+      return;
+    }
+
+    // We can't mutate the array directly as it is from a signal/store
+    // So we copy it, move the item, and then extract the IDs
+    const newSections = [...sections];
+    moveItemInArray(newSections, event.previousIndex, event.currentIndex);
+
+    // Update the section order in the store
+    this.sectionService.updateSectionOrder(newSections.map((s) => s.id));
+  }
+
   private _initScrollTracking(): void {
     this._subs.add(
-      this.upperContainerScroll$.subscribe(({ target }) => {
+      this.upperContainerScroll$.subscribe(({
+        target
+      }) => {
         if ((target as HTMLElement).scrollTop !== 0) {
           this.layoutService.isWorkViewScrolled.set(true);
         } else {
