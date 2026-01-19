@@ -20,11 +20,14 @@
     "SHOW_NOTES": "Show Project Notes"
   },
   "CONFIRM": {
+    "ADD_SECTION": "Add Section",
     "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This might result in partial data loss.",
     "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data. This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
-    "RESTORE_STRAY_BACKUP": "During last sync there might have been some error. Do you want to restore the last backup?"
+    "RESTORE_STRAY_BACKUP": "During last sync there might have been some error. Do you want to restore the last backup?",
+    "DELETE_SECTION": "Are you sure you want to delete this section? Tasks in it will be moved to the task list.",
+    "DELETE_SECTION_CASCADE": "Are you sure you want to delete this section? All tasks in this section will also be deleted."
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Press enter again to save"
@@ -1986,6 +1989,7 @@
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
+    "ADD_SECTION": "Add Section",
     "ALL_PLANNED_LIST": "Planned / Repeat",
     "BOARDS": "Boards",
     "COPY_TASK_LIST_MARKDOWN": "Copy to Clipboard",
@@ -2257,6 +2261,7 @@
   "WW": {
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",
+    "ADD_SECTION_TITLE": "Add Section",
     "ADD_SOME_TASKS": "Add some tasks to plan your day!",
     "DONE_TASKS": "Done Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no done tasks here, but there are some already archived.",
