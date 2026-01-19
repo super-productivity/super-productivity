@@ -16,6 +16,17 @@ export interface MarkdownTaskStructure {
   totalSubTasks: number;
 }
 
+export interface SectionWithTasks {
+  sectionTitle: string | null; // null for "No Section"
+  tasks: ParsedMarkdownTask[];
+}
+
+export interface MarkdownWithSections {
+  sections: SectionWithTasks[];
+  hasHeaders: boolean;
+}
+
+
 interface ParsedLine {
   indentLevel: number;
   content: string;
