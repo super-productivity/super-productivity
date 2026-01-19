@@ -254,6 +254,13 @@ export class MarkdownPasteService {
   }
 
   isMarkdownTaskList(text: string): boolean {
+    // Check for sections (H1 headers)
+    const sectionsData = parseMarkdownWithSections(text);
+    if (sectionsData && sectionsData.hasHeaders) {
+      return true;
+    }
+
+    // Check for regular task lists
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
   }
