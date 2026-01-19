@@ -173,6 +173,33 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         this.dropListService.setPromotionMode(true);
       }
     }
+
+    const dropPointY = event.pointerPosition.y;
+    const dropPointX = event.pointerPosition.x;
+    const element = document.elementFromPoint(dropPointX, dropPointY) as Element;
+    const taskEl = element?.closest('task');
+
+    if (taskEl) {
+      const targetId = taskEl.getAttribute('id')?.replace('t-', '');
+      if (targetId) {
+        const type = this._getDropZoneType(event);
+        const allTasks = this._taskService.allTasks();
+        const targetTask = allTasks.find((t) => t.id === targetId) as TaskWithSubTasks;
+
+        if (targetTask && type === 'bottom-right') {
+          const canDrop = this.canDropOnTask(task, targetTask);
+          if (canDrop) {
+            this._taskDragStateService.setDragState(task, targetId, 'SUBTASK');
+          } else {
+            this._taskDragStateService.setDragState(task, targetId, 'BLOCKED');
+          }
+        } else {
+          this._taskDragStateService.setDragState(task, null, 'NONE');
+        }
+      } else {
+        this._taskDragStateService.setDragState(task, null, 'NONE');
+      }
+    }
   }
 
   enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
@@ -422,31 +449,47 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   }
 
   private _getDropZoneType(
-    event: CdkDragDrop<
-      DropModelDataForList,
-      DropModelDataForList | string,
-      TaskWithSubTasks | SearchResultItem
-    >,
+    event:
+      | CdkDragDrop<
+          DropModelDataForList,
+          DropModelDataForList | string,
+          TaskWithSubTasks | SearchResultItem
+        >
+      | CdkDragMove<TaskWithSubTasks>,
+    source: 'MOVE' | 'DROP' = 'DROP',
   ): 'top' | 'bottom-left' | 'bottom-right' {
-    const sortedItems = event.container.getSortedItems();
-    const targetDragItem = sortedItems[event.currentIndex];
+    const isDragMove = 'pointerPosition' in event;
+    const dropPointY = isDragMove ? event.pointerPosition.y : event.dropPoint.y;
+    const dropPointX = isDragMove ? event.pointerPosition.x : event.dropPoint.x;
 
-    if (!targetDragItem) {
-      // Fallback for drops at the end of the list, though less precise
-      const dropElement = event.container.element.nativeElement;
-      const rect = dropElement.getBoundingClientRect();
-      const dropPointY = event.dropPoint.y;
-      const relativeY = dropPointY - rect.top;
-      const topThreshold = rect.height * 0.5;
-      return relativeY < topThreshold ? 'top' : 'bottom-left';
+    let rect: DOMRect;
+    let element: Element | null = null;
+
+    if (isDragMove) {
+      // Logic for drag move: use elementFromPoint
+      const element = document.elementFromPoint(dropPointX, dropPointY) as Element;
+      // find parent task element
+      const taskEl = element?.closest('task');
+      if (!taskEl) {
+        return 'bottom-left';
+      }
+      rect = taskEl.getBoundingClientRect();
+    } else {
+      const sortedItems = event.container.getSortedItems();
+      const targetDragItem = sortedItems[event.currentIndex];
+
+      if (!targetDragItem) {
+        // Fallback for drops at the end of the list, though less precise
+        const dropElement = event.container.element.nativeElement;
+        rect = dropElement.getBoundingClientRect();
+        const relativeY = dropPointY - rect.top;
+        const topThreshold = rect.height * 0.5;
+        return relativeY < topThreshold ? 'top' : 'bottom-left';
+      }
+
+      element = targetDragItem.element.nativeElement;
+      rect = element.getBoundingClientRect();
     }
-
-    const dropElement = targetDragItem.element.nativeElement;
-    const rect = dropElement.getBoundingClientRect();
-
-    // Use dropPoint which is the actual drop position from CDK
-    const dropPointX = event.dropPoint.x;
-    const dropPointY = event.dropPoint.y;
 
     // Calculate relative position within the drop element
     const relativeY = dropPointY - rect.top;
@@ -456,8 +499,19 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     const elementWidth = rect.width;
 
     // Threshold: 50% from top is "top", rest is "bottom"
-    const topThreshold = elementHeight * 0.5;
-    const rightThreshold = elementWidth * 0.66;
+    // width threshold to determine if we are on the left or right
+    const rightThreshold = elementWidth * 0.5;
+
+    // We only want to be generous with the subtask drop zone if the target is NOT a sub task itself
+    // (because sub tasks can't have sub tasks)
+    const isSubTask = !!element?.closest('.sub-tasks');
+    const isRight = relativeX >= rightThreshold;
+    const useGenerousTopThreshold = !isSubTask && isRight;
+
+    // we want to be generous with the subtask drop zone on the right, so we use 25% for the top threshold
+    const topThreshold = useGenerousTopThreshold
+      ? elementHeight * 0.25
+      : elementHeight * 0.5;
 
     const zone =
       relativeY < topThreshold
@@ -593,7 +647,15 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
       return false;
     }
 
-    return targetTask.projectId === draggedTask.projectId;
+    if (targetTask.projectId !== draggedTask.projectId) {
+      return false;
+    }
+
+    if (draggedTask.repeatCfgId) {
+      return false;
+    }
+
+    return true;
   }
 
   private _isTaskAncestorOf(potentialAncestorId: string, taskId: string): boolean {
