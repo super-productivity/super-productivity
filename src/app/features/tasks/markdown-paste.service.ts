@@ -5,11 +5,14 @@ import {
   parseMarkdownTasks,
   convertToMarkdownNotes,
   parseMarkdownTasksWithStructure,
+  parseMarkdownWithSections,
 } from '../../util/parse-markdown-tasks';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
 import { TaskService } from './task.service';
 import { addSubTask } from './store/task.actions';
+import { SectionService } from '../section/section.service';
+import { WorkContextService } from '../work-context/work-context.service';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +21,8 @@ export class MarkdownPasteService {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _store = inject(Store);
+  private _sectionService = inject(SectionService);
+  private _workContextService = inject(WorkContextService);
 
   async handleMarkdownPaste(
     pastedText: string,
