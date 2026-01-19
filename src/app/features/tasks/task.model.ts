@@ -131,6 +131,7 @@ export interface TaskCopy
   deadlineRemindAt?: number | null;
   attachments: TaskAttachment[];
   reminderId?: string | null;
+  sectionId?: string | null;
 
   // Ensure type compatibility for internal fields
   modified?: number;
