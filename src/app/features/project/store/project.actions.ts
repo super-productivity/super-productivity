@@ -265,3 +265,13 @@ export const moveAllProjectBacklogTasksToRegularList = createAction(
     } satisfies PersistentActionMeta,
   }),
 );
+
+export const moveProjectTaskToSection = createAction(
+  '[Project] Move Project Task to Section',
+  props<{
+    taskId: string;
+    sectionId: string | null;
+    afterTaskId: string | null;
+    workContextId: string;
+  }>(),
+);
