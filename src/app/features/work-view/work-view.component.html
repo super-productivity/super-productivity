@@ -185,6 +185,40 @@
                 ></task-list>
               </collapsible>
             }
+          } @else if (sections().length) {
+            <div class="sections-wrapper" cdkDropList (cdkDropListDropped)="dropSection($event)">
+              <div class="no-section" style="margin-bottom: 24px;">
+                <task-list [tasks]="undoneTasksBySection().noSection" [listId]="'PARENT'"
+                  [listModelId]="'UNDONE'"></task-list>
+              </div>
+              @for (section of sections(); track section.id) {
+              <div class="section-container" style="margin-bottom: 24px;" cdkDrag [cdkDragLockAxis]="'y'">
+                <collapsible [title]="section.title" [isIconBefore]="true" [isExpanded]="true">
+                  <ng-container actions>
+                    <div class="drag-handle" cdkDragHandle>
+                      <mat-icon>drag_indicator</mat-icon>
+                    </div>
+                    <button mat-icon-button [matMenuTriggerFor]="sectionMenu" (click)="$event.stopPropagation()">
+                      <mat-icon>more_vert</mat-icon>
+                    </button>
+                    <mat-menu #sectionMenu="matMenu">
+                      <button mat-menu-item (click)="editSection(section.id, section.title)">
+                        <mat-icon>edit</mat-icon>
+                        {{ T.G.EDIT | translate }}
+                      </button>
+                      <button mat-menu-item (click)="deleteSection(section.id)">
+                        <mat-icon>delete</mat-icon>
+                        {{ T.G.DELETE | translate }}
+                      </button>
+                    </mat-menu>
+                  </ng-container>
+
+                  <task-list [tasks]="undoneTasksBySection().dict[section.id] || []" [listId]="'PARENT'"
+                    [listModelId]="section.id"></task-list>
+                </collapsible>
+              </div>
+              }
+            </div>
           } @else {
             <task-list
               class="tour-undoneList"
