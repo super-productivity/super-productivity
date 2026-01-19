@@ -521,6 +521,7 @@
       "CONFIRM_PARENT_TASKS_WITH_SUBS": "Create <strong>{{tasksCount}} new tasks and {{subTasksCount}} sub-tasks</strong> from the pasted markdown list?",
       "CONFIRM_SUB_TASKS": "Create {{tasksCount}} new sub-tasks from the pasted markdown list?",
       "CONFIRM_SUB_TASKS_WITH_PARENT": "Create <strong>{{tasksCount}} new sub-tasks under \"{{parentTaskTitle}}\"</strong> from the pasted markdown list?",
+      "CONFIRM_SECTIONS": "Create {{sectionsCount}} section(s) with {{tasksCount}} task(s)?",
       "DIALOG_TITLE": "Pasted Markdown List detected!"
     },
     "METRIC": {
