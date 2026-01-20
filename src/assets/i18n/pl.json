@@ -267,7 +267,7 @@
       "START_FOCUS_SESSION": "Rozpoczęcie sesji skupienia",
       "START_NEXT_FOCUS_SESSION": "Rozpoczęcie następnej sesji fokusowej",
       "SWITCH_TASK": "Zmień zadanie",
-      "WORKED_FOR": "Pracowałeś dla"
+      "WORKED_FOR": "Pracowałeś/aś dla"
     },
     "GITEA": {
       "FORM": {
@@ -549,14 +549,14 @@
     },
     "METRIC": {
       "CMP": {
-        "ACTIVITY_HEATMAP": "Mapa ciepła aktywności",
-        "AVG_BREAKS_PER_DAY": "Avg. breaks per day",
-        "AVG_TASKS_PER_DAY_WORKED": "Avg. tasks per day worked",
-        "AVG_TIME_SPENT_ON_BREAKS": "Avg. time spent on breaks",
-        "AVG_TIME_SPENT_PER_DAY": "Avg. time spent per day",
-        "AVG_TIME_SPENT_PER_TASK": "Avg. time spent per task",
-        "COUNTING_SUBTASKS": "(counting subtasks)",
-        "DAYS_WORKED": "Days worked",
+        "ACTIVITY_HEATMAP": "Mapa termiczna aktywności",
+        "AVG_BREAKS_PER_DAY": "Średnia przerw w ciągu dnia",
+        "AVG_TASKS_PER_DAY_WORKED": "Średnia liczba wykonywanych zadań w ciągu dnia",
+        "AVG_TIME_SPENT_ON_BREAKS": "Średni czas spędzony podczas przerw",
+        "AVG_TIME_SPENT_PER_DAY": "Średni czas spędzony w ciągu dnia",
+        "AVG_TIME_SPENT_PER_TASK": "Średni czas spędzony podczas zadań",
+        "COUNTING_SUBTASKS": "(liczenie podzadań)",
+        "DAYS_WORKED": "Przepracowane dni",
         "FOCUS_SESSION_TRENDS": "Sesje skupienia w czasie",
         "GLOBAL_METRICS": "Global Metrics",
         "NO_ADDITIONAL_DATA_YET": "Nie zebrano jeszcze dodatkowych danych. Użyj formularza w panelu „Ocena” w podsumowaniu dnia, aby je dodać.",
@@ -565,12 +565,12 @@
         "SIMPLE_COUNTERS": "Proste liczniki",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Stoper odlicza czas",
         "TASKS_DONE_CREATED": "Tasks (done/created)",
-        "TIME_ESTIMATED": "Time Estimated",
+        "TIME_ESTIMATED": "Zaplanowany czas",
         "TIME_FRAME_1_MONTH": "1 miesiąc",
         "TIME_FRAME_2_WEEKS": "2 tygodnie",
         "TIME_FRAME_LABEL": "Okres czasu",
         "TIME_FRAME_MAX": "MAKS",
-        "TIME_SPENT": "Time Spent"
+        "TIME_SPENT": "Czas spędzony"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "Stan dzienny",
@@ -1567,7 +1567,7 @@
       "L_SKIP_PREPARATION_SCREEN": "Pomiń ekran przygotowania (rozciąganie itp.)",
       "L_START_IN_BACKGROUND": "Rozpocznij sesje skupienia tylko z banerem (bez nakładki)",
       "L_SYNC_SESSION_WITH_TRACKING": "Synchronizuj sesję skupienia ze śledzeniem czasu",
-      "TITLE": "Tryb ostrości"
+      "TITLE": "Tryb skupienia"
     },
     "IDLE": {
       "HELP": "Pokaż okno dialogowe, gdy wykryto bezczynność (brak aktywności) podczas śledzenia czasu.",
@@ -1685,12 +1685,9 @@
       "DARK_MODE_DARK": "Ciemny",
       "DARK_MODE_LIGHT": "Światło",
       "DARK_MODE_SYSTEM": "System",
-      "DEFAULT_PROJECT": "Domyślny projekt dla niezdefiniowanych zadań",
       "DEFAULT_START_PAGE": "Domyślna strona startowa",
       "FIRST_DAY_OF_WEEK": "Pierwszy dzień tygodnia",
       "HELP": "<p><strong>Nie widzisz powidomień na pulpicie?</strong> Dla windowsa sprawdź czy w Ustawienia > System > Powiadomienia i akcje zaznaczone zostały odpowiednie opcje.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Dodaj automatycznie tag dzisiejszy do zadania",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Zaznacz zadanie główne jako ukończone, jeżeli wszystkie podrzędne zostały ukończone",
       "IS_CONFIRM_BEFORE_EXIT": "Pytaj o potwierdzenie przed zamknięciem aplikacji",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Potwierdź przed opuszczeniem aplikacji bez wcześniejszego zakończenia dnia.",
       "IS_DARK_MODE": "Dark Mode",
@@ -1700,17 +1697,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Włącz okno wskaźnika nakładki (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Pokaż wskazówkę dotyczącą produktywności przy starcie aplikacji nieco dłużej",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Pokaż aktualne odliczanie w zasobniku / menu statusu (tylko na desktopie Mac)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Pokazuj bieżące zadanie w zasobniku / menu statusu (tylkoტერესო macOS/Windows)",
-      "IS_TURN_OFF_MARKDOWN": "Turn off markdown parsing for notes",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Użyj niestandardowego paska tytułu (tylko Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Wymaga ponownego uruchomienia, aby zmiany weszły w życie",
       "START_OF_NEXT_DAY": "Godzina rozpoczęcia następnego dnia",
       "START_OF_NEXT_DAY_HINT": "od kiedy (w godzinach) ma być liczony następny dzień. domyślnie jest to północ, czyli 0.",
-      "TASK_NOTES_TPL": "Task description template",
       "THEME": "Motyw",
       "THEME_EXPERIMENTAL": "Motyw (eksperymentalny)",
       "THEME_SELECT_LABEL": "Wybierz motyw",
       "TITLE": "Ustawienia różne"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Domyślny projekt dla nowych zadań",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatycznie dodaj zadania, nad którymi pracowano, do dzisiaj",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automatycznie oznaczaj zadanie nadrzędne jako ukończone, gdy wszystkie zadania podrzędne są ukończone",
+      "IS_CONFIRM_BEFORE_DELETE": "Potwierdź przed usunięciem zadań",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Włącz formatowanie Markdown w notatkach zadań",
+      "IS_TRAY_SHOW_CURRENT": "Pokaż bieżące zadanie w zasobniku / menu statusu (tylko desktop mac/windows)",
+      "NOTES_TEMPLATE": "Domyślny szablon notatek zadania",
+      "TITLE": "Zadania"
     },
     "POMODORO": {
       "BREAK_DURATION": "Duration of short breaks",
@@ -2020,7 +2024,7 @@
     "TITLE": "Metryki Projektu"
   },
   "PS": {
-    "GLOBAL_SETTINGS": "Ustawienia Globalne",
+    "GLOBAL_SETTINGS": "Ustawienia globalne",
     "NO_PLUGINS_INSTALLED": "Obecnie nie ma zainstalowanych wtyczek",
     "PLUGINS": "Wtyczki",
     "PRIVACY_POLICY": "Polityka Prywatności",
@@ -2072,7 +2076,7 @@
     "DONE_TASKS": "Wykonane zadania",
     "DONE_TASKS_IN_ARCHIVE": "Obecnie nie ma tutaj żadnych zakończonych zadań, ale są już archiwizowane.",
     "ESTIMATE_REMAINING": "Pozostało zaplanowanego czasu:",
-    "FINISH_DAY": "Zakończ Dzień",
+    "FINISH_DAY": "Zakończ dzień",
     "FINISH_DAY_TOOLTIP": "Oceń swój dzień, przenieś wszystkie wykonane zadania do archiwum (opcjonalnie) i/lub zaplanuj następny dzień.",
     "LATER_TODAY": "Później dziś",
     "MOVE_DONE_TO_ARCHIVE": "Przenieś gotowe do archiwum",
@@ -2081,9 +2085,9 @@
     "NO_PLANNED_TASKS": "Nie zaplanowano zadań",
     "READY_TO_WORK": "Gotowy do Pracy!",
     "RESET_BREAK_TIMER": "Zresetuj bez czasu przerwy",
-    "TIME_ESTIMATED": "Zaplanowany Czas:",
+    "TIME_ESTIMATED": "Zaplanowany czas:",
     "TODAY_REMAINING": "Dziś pozostało:",
-    "WITHOUT_BREAK": "Bez Przerwy:",
+    "WITHOUT_BREAK": "Bez przerwy:",
     "WORKING_TODAY": "Czas pracy:",
     "WORKING_TODAY_ARCHIVED": "Czas przepracowany dzisiaj nad zarchiwizowanymi zadaniami"
   }

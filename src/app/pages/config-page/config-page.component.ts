@@ -15,6 +15,7 @@ import {
   GLOBAL_PLUGINS_FORM_CONFIG,
   GLOBAL_PRODUCTIVITY_FORM_CONFIG,
   GLOBAL_TIME_TRACKING_FORM_CONFIG,
+  GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
@@ -59,6 +60,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'config-page',
@@ -77,6 +79,7 @@ import { MatIcon } from '@angular/material/icon';
     MatTab,
     MatTabLabel,
     MatIcon,
+    MatTooltip,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
@@ -99,6 +102,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   // @todo - find better names for tabs configs forms
   // Tab-specific form configurations
   generalFormCfg: ConfigFormConfig;
+  globalTasksFormCfg: ConfigFormConfig;
   timeTrackingFormCfg: ConfigFormConfig;
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
@@ -136,6 +140,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
+    this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
     // NOTE: needs special handling cause of the async stuff
     if (IS_ANDROID_WEB_VIEW) {
@@ -365,6 +370,20 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
             required: false,
             onClick: () => {
               this._syncWrapperService.sync();
+            },
+          },
+        },
+        {
+          hideExpression: (m: any, _v: any, field: any) =>
+            !m.isEnabled || !field?.form?.valid,
+          type: 'btn',
+          className: 'mt2 block',
+          templateOptions: {
+            text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+            btnType: 'warn',
+            required: false,
+            onClick: () => {
+              this._syncWrapperService.forceUpload();
             },
           },
         },

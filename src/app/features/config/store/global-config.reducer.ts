@@ -15,6 +15,7 @@ import {
   SoundConfig,
   SyncConfig,
   TakeABreakConfig,
+  TasksConfig,
 } from '../global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
@@ -25,61 +26,67 @@ export const selectConfigFeatureState =
   createFeatureSelector<GlobalConfigState>(CONFIG_FEATURE_NAME);
 export const selectLocalizationConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): LocalizationConfig => cfg.localization,
+  (cfg): LocalizationConfig => cfg?.localization ?? DEFAULT_GLOBAL_CONFIG.localization,
+);
+export const selectTasksConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): TasksConfig => cfg.tasks ?? DEFAULT_GLOBAL_CONFIG.tasks,
 );
 export const selectMiscConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): MiscConfig => cfg.misc,
+  (cfg): MiscConfig => cfg?.misc ?? DEFAULT_GLOBAL_CONFIG.misc,
 );
 export const selectShortSyntaxConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): ShortSyntaxConfig => cfg.shortSyntax,
+  (cfg): ShortSyntaxConfig => cfg?.shortSyntax ?? DEFAULT_GLOBAL_CONFIG.shortSyntax,
 );
 export const selectSoundConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): SoundConfig => cfg.sound,
+  (cfg): SoundConfig => cfg?.sound ?? DEFAULT_GLOBAL_CONFIG.sound,
 );
 export const selectEvaluationConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): EvaluationConfig => cfg.evaluation,
+  (cfg): EvaluationConfig => cfg?.evaluation ?? DEFAULT_GLOBAL_CONFIG.evaluation,
 );
 export const selectIdleConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): IdleConfig => cfg.idle,
+  (cfg): IdleConfig => cfg?.idle ?? DEFAULT_GLOBAL_CONFIG.idle,
 );
 export const selectSyncConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): SyncConfig => cfg.sync,
+  (cfg): SyncConfig => cfg?.sync ?? DEFAULT_GLOBAL_CONFIG.sync,
 );
 export const selectTakeABreakConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): TakeABreakConfig => cfg.takeABreak,
+  (cfg): TakeABreakConfig => cfg?.takeABreak ?? DEFAULT_GLOBAL_CONFIG.takeABreak,
 );
 export const selectTimelineConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): ScheduleConfig => cfg.schedule,
+  (cfg): ScheduleConfig => cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule,
 );
 
 export const selectIsDominaModeConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): DominaModeConfig => cfg.dominaMode,
+  (cfg): DominaModeConfig => cfg?.dominaMode ?? DEFAULT_GLOBAL_CONFIG.dominaMode,
 );
 
 export const selectFocusModeConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): FocusModeConfig => cfg.focusMode,
+  (cfg): FocusModeConfig => cfg?.focusMode ?? DEFAULT_GLOBAL_CONFIG.focusMode,
 );
 export const selectPomodoroConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): PomodoroConfig => cfg.pomodoro,
+  (cfg): PomodoroConfig => cfg?.pomodoro ?? DEFAULT_GLOBAL_CONFIG.pomodoro,
 );
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): ReminderConfig => cfg.reminder,
+  (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
 );
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,
-  (cfg): boolean => cfg.appFeatures.isFocusModeEnabled,
+  (cfg): boolean =>
+    cfg?.appFeatures.isFocusModeEnabled ??
+    DEFAULT_GLOBAL_CONFIG.appFeatures.isFocusModeEnabled,
 );
 
 export const initialGlobalConfigState: GlobalConfigState = {
@@ -140,12 +147,13 @@ export const selectTimelineWorkStartEndHours = createSelector(
     workStart: number;
     workEnd: number;
   } | null => {
-    if (!cfg.schedule.isWorkStartEndEnabled) {
+    const schedule = cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule;
+    if (!schedule.isWorkStartEndEnabled) {
       return null;
     }
     return {
-      workStart: getHoursFromClockString(cfg.schedule.workStart),
-      workEnd: getHoursFromClockString(cfg.schedule.workEnd),
+      workStart: getHoursFromClockString(schedule.workStart),
+      workEnd: getHoursFromClockString(schedule.workEnd),
     };
   },
 );

@@ -118,9 +118,9 @@ export class SuperSyncPage extends BasePage {
       await this.syncBtn.waitFor({ state: 'visible', timeout: syncBtnTimeout });
     } catch {
       // If sync button not visible, the app might not be fully loaded
-      // Wait a bit more and try once more
+      // Wait a bit more and try once more (reduced from 2000ms - rare fallback)
       console.log('[SuperSyncPage] Sync button not found initially, waiting longer...');
-      await this.page.waitForTimeout(2000);
+      await this.page.waitForTimeout(1000);
       await this.syncBtn.waitFor({ state: 'visible', timeout: syncBtnTimeout });
     }
 
@@ -402,8 +402,8 @@ export class SuperSyncPage extends BasePage {
           '[SuperSyncPage] Warning: Timed out waiting for previous sync to finish',
         );
       });
-      // Add a small buffer after spinner disappears
-      await this.page.waitForTimeout(500);
+      // Add a small buffer after spinner disappears (reduced from 500ms)
+      await this.page.waitForTimeout(200);
     }
 
     // Use force:true to bypass any tooltip overlays that might be in the way
@@ -437,7 +437,7 @@ export class SuperSyncPage extends BasePage {
         console.log('[SuperSyncPage] Fresh client dialog detected, confirming...');
         try {
           await this.freshClientConfirmBtn.click({ timeout: 2000 });
-          await this.page.waitForTimeout(500);
+          await this.page.waitForTimeout(200); // Reduced from 500ms
         } catch (e) {
           // Dialog may have auto-closed or been detached - that's OK
           console.log(
@@ -452,8 +452,8 @@ export class SuperSyncPage extends BasePage {
       if (await this.conflictDialog.isVisible()) {
         console.log('[SuperSyncPage] Conflict dialog detected, using remote...');
         await this.conflictUseRemoteBtn.click();
-        // Wait for selection to be applied and Apply to be enabled
-        await this.page.waitForTimeout(500);
+        // Wait for selection to be applied and Apply to be enabled (reduced from 500ms)
+        await this.page.waitForTimeout(200);
 
         // Wait for Apply button to be enabled (with retry)
         // Increase retries to allow for processing time (50 * 200ms = 10s)
@@ -480,7 +480,7 @@ export class SuperSyncPage extends BasePage {
         await this.conflictDialog
           .waitFor({ state: 'hidden', timeout: 5000 })
           .catch(() => {});
-        await this.page.waitForTimeout(500);
+        await this.page.waitForTimeout(200); // Reduced from 500ms (dialog already confirmed hidden)
         stableCount = 0;
         continue;
       }
@@ -496,7 +496,7 @@ export class SuperSyncPage extends BasePage {
         await this.syncImportConflictDialog
           .waitFor({ state: 'hidden', timeout: 10000 })
           .catch(() => {});
-        await this.page.waitForTimeout(500);
+        await this.page.waitForTimeout(200); // Reduced from 500ms (dialog already confirmed hidden)
         stableCount = 0;
         continue;
       }
@@ -538,7 +538,7 @@ export class SuperSyncPage extends BasePage {
           if (isRateLimitError) {
             console.log('[SuperSyncPage] Rate limited, waiting for automatic retry...');
             stableCount = 0;
-            await this.page.waitForTimeout(1000);
+            await this.page.waitForTimeout(500); // Reduced from 1000ms (rare error condition)
             continue;
           }
           // Not a real error, just an informational snackbar - continue checking
@@ -662,8 +662,8 @@ export class SuperSyncPage extends BasePage {
       // Otherwise ignore - dialog closed = success
     }
 
-    // Small wait for UI to settle
-    await this.page.waitForTimeout(500);
+    // Small wait for UI to settle (reduced from 500ms)
+    await this.page.waitForTimeout(200);
 
     // Close the sync settings dialog if still open
     const dialogContainer = this.page.locator('mat-dialog-container');

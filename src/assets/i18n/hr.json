@@ -1304,11 +1304,8 @@
       "ZH_TW": "中文(繁體)"
     },
     "MISC": {
-      "DEFAULT_PROJECT": "Standardno korišteni projekt za zadatke ako nijedan nije određen",
       "FIRST_DAY_OF_WEEK": "Prvi dan u tjednu",
       "HELP": "<p><strong>Ne vidiš obavijesti na radnoj površini?</strong> Za Windows provjeri Sustav > Obavijesti i radnje te provjeri jesu li potrebne obavijesti aktivirane.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatski dodaj oznaku danas zadacima koje si obrađivao/la",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Označi nadređeni zadatak kao obavljen kad se obave svi podzadaci",
       "IS_CONFIRM_BEFORE_EXIT": "Potvrdi prije zatvaranja programa",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Potvrdi prije zatvaranja programa bez prethodnog završavanja dana",
       "IS_DARK_MODE": "Tamni modus",
@@ -1317,12 +1314,19 @@
       "IS_MINIMIZE_TO_TRAY": "Sklopi u programsku traku (samo za desktop računala)",
       "IS_SHOW_TIP_LONGER": "Montre konsèy pwodiktivite sou app kòmanse yon ti tan ankò",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Montre dekont aktyèl la nan meni an plato / estati (Desktop mac sèlman)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Prikaži trenutačni zadatak u donjoj traci sustava / u izborniku stanja (samo mac/windows desktop računala)",
-      "IS_TURN_OFF_MARKDOWN": "Isključi markdown obradu za bilješke",
       "START_OF_NEXT_DAY": "Vrijeme početka sljedećeg dana",
       "START_OF_NEXT_DAY_HINT": "U koje vrijeme (sat) želiš brojiti početak sljedećeg dana. Standardno je postavljena ponoć, što je 0.",
-      "TASK_NOTES_TPL": "Predložak za opis zadatka",
       "TITLE": "Razne postavke"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Standardni projekt za nove zadatke",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatski dodaj oznaku danas zadacima koje si obrađivao/la",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automatski označi nadređeni zadatak kao obavljen kada su sve podzadatke obavljene",
+      "IS_CONFIRM_BEFORE_DELETE": "Potvrdi prije brisanja zadataka",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Omogući Markdown formatiranje u bilješkama zadataka",
+      "IS_TRAY_SHOW_CURRENT": "Prikaži trenutni zadatak u donjoj traci sustava / izborniku stanja (samo desktop mac/windows računala)",
+      "NOTES_TEMPLATE": "Predložak za opis zadatka",
+      "TITLE": "Zadaci"
     },
     "POMODORO": {
       "BREAK_DURATION": "Trajanje kratkih pauza",

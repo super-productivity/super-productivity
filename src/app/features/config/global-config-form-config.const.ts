@@ -16,6 +16,7 @@ import { DOMINA_MODE_FORM } from './form-cfgs/domina-mode-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
+import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -29,7 +30,6 @@ export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   LANGUAGE_SELECTION_FORM_FORM,
   APP_FEATURES_FORM_CFG,
   MISC_SETTINGS_FORM_CFG,
-  SHORT_SYNTAX_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
 ].filter(filterGlobalConfigForm);
 
@@ -57,4 +57,9 @@ export const GLOBAL_PRODUCTIVITY_FORM_CONFIG: ConfigFormConfig = [
   EVALUATION_SETTINGS_FORM_CFG,
   SIMPLE_COUNTER_FORM,
   ...(!window.ea?.isSnap() && !!window.speechSynthesis ? [DOMINA_MODE_FORM] : []),
+].filter(filterGlobalConfigForm);
+
+export const GLOBAL_TASKS_FORM_CONFIG: ConfigFormConfig = [
+  TASKS_SETTINGS_FORM_CFG,
+  SHORT_SYNTAX_FORM_CFG,
 ].filter(filterGlobalConfigForm);

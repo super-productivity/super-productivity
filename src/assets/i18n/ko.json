@@ -1325,11 +1325,8 @@
     "MISC": {
       "DARK_MODE": "다크 모드",
       "DARK_MODE_DARK": "어둠",
-      "DEFAULT_PROJECT": "지정되지 않은 경우 작업에 사용할 기본 프로젝트",
       "FIRST_DAY_OF_WEEK": "주의 첫 요일",
       "HELP": "<p><strong>데스크톱 알림이 표시되지 않습니까?</strong> 창의 경우 시스템 > 알림 및 작업을 확인하고 필요한 알림이 활성화되었는지 확인할 수 있습니다.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "작업에 사용할 오늘 태그를 자동으로 추가",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "모든 하위 작업이 완료되면 상위 작업을 완료로 표시합니다.",
       "IS_CONFIRM_BEFORE_EXIT": "앱을 종료하기 전에 확인",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "하루를 먼저 끝내지 않고 앱을 종료하기 전에 확인",
       "IS_DARK_MODE": "다크 모드",
@@ -1338,12 +1335,19 @@
       "IS_MINIMIZE_TO_TRAY": "트레이로 최소화 (데스크탑만 해당)",
       "IS_SHOW_TIP_LONGER": "앱 시작 시 생산성 팁 표시좀 더 오래",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "트레이/상태 메뉴에 현재 카운트다운 표시(데스크톱 Mac만 해당)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "트레이 / 상태 메뉴에 현재 작업 표시 (데스크톱 전용)",
-      "IS_TURN_OFF_MARKDOWN": "노트에 대한 마크 다운 파싱 끄기",
       "START_OF_NEXT_DAY": "다음 날 시작 시간",
       "START_OF_NEXT_DAY_HINT": "다음 날을 계산하려는 시점(시간 단위)부터 시작됩니다. 기본값은 0인 자정입니다.",
-      "TASK_NOTES_TPL": "작업 설명 템플릿",
       "TITLE": "기타 설정"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "지정되지 않은 경우 작업에 사용할 기본 프로젝트",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "자동으로 오늘 작업 중인 태스크를 추가합니다.",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "모든 하위 작업이 완료되면 부모 작업을 완료로 표시합니다.",
+      "IS_CONFIRM_BEFORE_DELETE": "작업 삭제 전에 확인합니다.",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "작업 노트에서 Markdown 형식을 사용하도록 설정합니다.",
+      "IS_TRAY_SHOW_CURRENT": "트레이/상태 메뉴에 현재 작업을 표시합니다(데스크톱 Mac/Windows 전용).",
+      "NOTES_TEMPLATE": "작업 설명 템플릿",
+      "TITLE": "작업"
     },
     "POMODORO": {
       "BREAK_DURATION": "짧은 휴식 시간",

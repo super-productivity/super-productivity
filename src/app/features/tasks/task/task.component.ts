@@ -371,7 +371,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     const isConfirmBeforeTaskDelete =
-      this._configService.cfg()?.misc?.isConfirmBeforeTaskDelete ?? true;
+      this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
     if (isConfirmBeforeTaskDelete) {
       this._matDialog

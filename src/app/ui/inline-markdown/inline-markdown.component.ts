@@ -60,9 +60,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   isShowEdit = signal(false);
   modelCopy = signal<string | undefined>(undefined);
 
-  isTurnOffMarkdownParsing = computed(() => {
-    const misc = this._globalConfigService.misc();
-    return misc?.isTurnOffMarkdown ?? false;
+  isMarkdownFormattingEnabled = computed(() => {
+    const tasks = this._globalConfigService.tasks();
+    return tasks?.isMarkdownFormattingInNotesEnabled ?? true;
   });
   private _hideOverFlowTimeout: number | undefined;
 

@@ -15,6 +15,7 @@ import { TaskService } from '../../tasks/task.service';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
+import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
 
 describe('FocusMode Flowtime behavior', () => {
   describe('Reducer: startFocusSession', () => {
@@ -159,6 +160,10 @@ describe('FocusMode Flowtime behavior', () => {
 
       store.overrideSelector(selectors.selectTimer, timer as any);
       store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isManualBreakStart: false,
+      });
       store.refreshState();
 
       const sub = effects.detectSessionCompletion$.pipe(take(1)).subscribe({
@@ -184,6 +189,10 @@ describe('FocusMode Flowtime behavior', () => {
 
       store.overrideSelector(selectors.selectTimer, timer as any);
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isManualBreakStart: false,
+      });
       store.refreshState();
 
       effects.detectSessionCompletion$.pipe(take(1)).subscribe((action: any) => {

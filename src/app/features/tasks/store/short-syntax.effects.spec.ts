@@ -33,7 +33,7 @@ describe('ShortSyntaxEffects', () => {
     getByIdOnce$: jasmine.Spy;
   };
   let globalConfigServiceMock: {
-    misc$: BehaviorSubject<any>;
+    tasks$: BehaviorSubject<any>;
     cfg: jasmine.Spy;
   };
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
@@ -85,8 +85,8 @@ describe('ShortSyntaxEffects', () => {
     };
 
     globalConfigServiceMock = {
-      misc$: new BehaviorSubject({
-        ...DEFAULT_GLOBAL_CONFIG.misc,
+      tasks$: new BehaviorSubject({
+        ...DEFAULT_GLOBAL_CONFIG.tasks,
         defaultProjectId: null,
       }),
       cfg: jasmine.createSpy('cfg').and.returnValue(DEFAULT_GLOBAL_CONFIG),

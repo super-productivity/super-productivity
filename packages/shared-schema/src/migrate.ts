@@ -98,16 +98,17 @@ export function migrateState(
 /**
  * Migrate a single operation from its version to targetVersion.
  * Returns null if the operation should be dropped (e.g., removed feature).
+ * Returns an array if the operation should be split into multiple operations.
  * Pure function - no side effects.
  *
  * @param op - The operation to migrate
  * @param targetVersion - Target version (defaults to CURRENT_SCHEMA_VERSION)
- * @returns Migration result with transformed operation, null, or error
+ * @returns Migration result with transformed operation(s), null, or error
  */
 export function migrateOperation(
   op: OperationLike,
   targetVersion: number = CURRENT_SCHEMA_VERSION,
-): MigrationResult<OperationLike | null> {
+): MigrationResult<OperationLike | OperationLike[] | null> {
   const sourceVersion = op.schemaVersion ?? 1;
 
   // Validate source version
@@ -123,11 +124,12 @@ export function migrateOperation(
     return { success: true, data: op };
   }
 
-  let currentOp: OperationLike | null = { ...op };
+  // Start with an array containing the single operation
+  let currentOps: OperationLike[] = [{ ...op }];
   let version = sourceVersion;
 
   // Apply migrations sequentially
-  while (version < targetVersion && currentOp !== null) {
+  while (version < targetVersion && currentOps.length > 0) {
     const migration = findMigration(version);
     if (!migration) {
       return {
@@ -139,18 +141,30 @@ export function migrateOperation(
     }
 
     try {
-      if (migration.migrateOperation) {
-        currentOp = migration.migrateOperation(currentOp);
-        if (currentOp !== null) {
-          // Update version on the migrated operation
-          currentOp = { ...currentOp, schemaVersion: migration.toVersion };
+      const nextOps: OperationLike[] = [];
+
+      for (const currentOp of currentOps) {
+        if (migration.migrateOperation) {
+          const result = migration.migrateOperation(currentOp);
+          if (result === null) {
+            // Operation dropped, don't add to nextOps
+            continue;
+          } else if (Array.isArray(result)) {
+            // Operation split into multiple
+            for (const r of result) {
+              nextOps.push({ ...r, schemaVersion: migration.toVersion });
+            }
+          } else {
+            // Single operation returned
+            nextOps.push({ ...result, schemaVersion: migration.toVersion });
+          }
+        } else {
+          // No operation migration defined - just update version
+          nextOps.push({ ...currentOp, schemaVersion: migration.toVersion });
         }
-      } else {
-        // No operation migration defined - just update version
-        currentOp = { ...currentOp, schemaVersion: migration.toVersion };
       }
-      // Track version even if operation was dropped (null)
-      // This ensures migratedToVersion reflects where we actually stopped
+
+      currentOps = nextOps;
       version = migration.toVersion;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -163,17 +177,35 @@ export function migrateOperation(
     }
   }
 
-  return {
-    success: true,
-    data: currentOp,
-    migratedFromVersion: sourceVersion,
-    migratedToVersion: version,
-  };
+  // Return based on the number of resulting operations
+  if (currentOps.length === 0) {
+    return {
+      success: true,
+      data: null,
+      migratedFromVersion: sourceVersion,
+      migratedToVersion: version,
+    };
+  } else if (currentOps.length === 1) {
+    return {
+      success: true,
+      data: currentOps[0],
+      migratedFromVersion: sourceVersion,
+      migratedToVersion: version,
+    };
+  } else {
+    return {
+      success: true,
+      data: currentOps,
+      migratedFromVersion: sourceVersion,
+      migratedToVersion: version,
+    };
+  }
 }
 
 /**
  * Migrate an array of operations.
  * Drops operations that return null from migration.
+ * Handles operations that are split into multiple operations.
  *
  * @param ops - Array of operations to migrate
  * @param targetVersion - Target version (defaults to CURRENT_SCHEMA_VERSION)
@@ -195,10 +227,14 @@ export function migrateOperations(
       };
     }
 
-    if (result.data !== null && result.data !== undefined) {
-      migrated.push(result.data);
-    } else {
+    if (result.data === null || result.data === undefined) {
       droppedCount++;
+    } else if (Array.isArray(result.data)) {
+      // Operation was split into multiple operations
+      migrated.push(...result.data);
+    } else {
+      // Single operation
+      migrated.push(result.data);
     }
   }
 

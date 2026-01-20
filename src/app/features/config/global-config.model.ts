@@ -21,18 +21,10 @@ export type AppFeaturesConfig = Readonly<{
 }>;
 
 export type MiscConfig = Readonly<{
-  isAutMarkParentAsDone: boolean;
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
-  isConfirmBeforeTaskDelete?: boolean;
-  isTurnOffMarkdown: boolean;
-  isAutoAddWorkedOnToToday: boolean;
   isMinimizeToTray: boolean;
-  isTrayShowCurrentTask: boolean;
-  // allow also false because of #569
-  defaultProjectId?: string | null | false;
   startOfNextDay: number;
-  taskNotesTpl: string;
   isDisableAnimations: boolean;
   // optional because it was added later
   isDisableCelebration?: boolean;
@@ -43,6 +35,25 @@ export type MiscConfig = Readonly<{
   customTheme?: string;
   defaultStartPage?: number;
   unsplashApiKey?: string | null;
+
+  // @todo: remove deprecated items in future major releases, after giving users time to migrate
+  isConfirmBeforeTaskDelete?: boolean; // Deprecated
+  isAutoAddWorkedOnToToday?: boolean; // Deprecated
+  isAutMarkParentAsDone?: boolean; // Deprecated
+  isTrayShowCurrentTask?: boolean; // Deprecated
+  isTurnOffMarkdown?: boolean; // Deprecated
+  defaultProjectId?: string | null | false; // Deprecated
+  taskNotesTpl?: string; // Deprecated
+}>;
+
+export type TasksConfig = Readonly<{
+  isAutoMarkParentAsDone: boolean;
+  isAutoAddWorkedOnToToday: boolean;
+  isConfirmBeforeDelete?: boolean;
+  isTrayShowCurrent: boolean;
+  isMarkdownFormattingInNotesEnabled: boolean;
+  defaultProjectId?: string | null | false; // allow 'false' because of #569
+  notesTemplate: string;
 }>;
 
 export type ShortSyntaxConfig = Readonly<{
@@ -217,6 +228,7 @@ export type GlobalConfigState = Readonly<{
   appFeatures: AppFeaturesConfig;
   localization: LocalizationConfig;
   misc: MiscConfig;
+  tasks: TasksConfig;
   shortSyntax: ShortSyntaxConfig;
   evaluation: EvaluationConfig;
   idle: IdleConfig;
@@ -239,6 +251,7 @@ export type GlobalConfigSectionKey = keyof GlobalConfigState | 'EMPTY';
 
 export type GlobalSectionConfig =
   | MiscConfig
+  | TasksConfig
   | PomodoroConfig
   | KeyboardConfig
   | ScheduleConfig

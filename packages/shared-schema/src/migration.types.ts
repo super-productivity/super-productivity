@@ -50,9 +50,11 @@ export interface SchemaMigration {
   /**
    * Transform an individual operation payload.
    * Return null to drop the operation entirely (e.g., for removed features).
+   * Return an array to split one operation into multiple (e.g., when moving
+   * settings from one config section to another).
    * Only required for non-additive changes (renames, removals, type changes).
    */
-  migrateOperation?: (op: OperationLike) => OperationLike | null;
+  migrateOperation?: (op: OperationLike) => OperationLike | OperationLike[] | null;
 
   /**
    * Explicit declaration that forces migration authors to think about

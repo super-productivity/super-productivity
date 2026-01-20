@@ -7,6 +7,13 @@ import { GlobalConfigState } from './global-config.model';
 const minute = 60 * 1000;
 const defaultVoice = getDefaultVoice();
 
+const defaultTaskNotesTemplate = `**How can I best achieve it now?**
+
+**What do I want?**
+
+**Why do I want it?**
+`;
+
 export const DEFAULT_DAY_START = '9:00';
 export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
   appFeatures: {
@@ -27,27 +34,24 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     dateTimeLocale: undefined,
     firstDayOfWeek: undefined,
   },
+  tasks: {
+    isConfirmBeforeDelete: true,
+    isAutoAddWorkedOnToToday: true,
+    isAutoMarkParentAsDone: false,
+    isTrayShowCurrent: true,
+    defaultProjectId: null,
+    isMarkdownFormattingInNotesEnabled: true,
+    notesTemplate: defaultTaskNotesTemplate,
+  },
   misc: {
     isConfirmBeforeExit: false,
     isConfirmBeforeExitWithoutFinishDay: true,
-    isConfirmBeforeTaskDelete: true,
-    isAutMarkParentAsDone: false,
-    isTurnOffMarkdown: false,
-    isAutoAddWorkedOnToToday: true,
     isMinimizeToTray: false,
-    isTrayShowCurrentTask: true,
     isTrayShowCurrentCountdown: true,
-    defaultProjectId: null,
     startOfNextDay: 0,
     isDisableAnimations: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
-    taskNotesTpl: `**How can I best achieve it now?**
-
-**What do I want?**
-
-**Why do I want it?**
-`,
     isOverlayIndicatorEnabled: false,
     customTheme: 'default',
     defaultStartPage: 0,

@@ -180,6 +180,7 @@ describe('AddTaskBarComponent', () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       lang$: new BehaviorSubject<LocalizationConfig>(mockLocalizationConfig),
       misc$: new BehaviorSubject<MiscConfig>(mockMiscConfig),
+      tasks$: new BehaviorSubject({ defaultProjectId: null }),
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
     });
@@ -286,15 +287,10 @@ describe('AddTaskBarComponent', () => {
         mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
       ).next(mockTagWorkContext);
 
-      // Set default project in config
-      const configWithDefault: MiscConfig = {
-        ...mockLocalizationConfig,
-        ...mockMiscConfig,
+      // Set default project in tasks config
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
         defaultProjectId: 'default-project',
-      };
-      (mockGlobalConfigService.misc$ as BehaviorSubject<MiscConfig>).next(
-        configWithDefault,
-      );
+      });
 
       const defaultProject = await component.defaultProject$.pipe(first()).toPromise();
 
@@ -397,15 +393,10 @@ describe('AddTaskBarComponent', () => {
         mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
       ).next(mockTagWorkContext);
 
-      // Set default project
-      const configWithDefault: MiscConfig = {
-        ...mockLocalizationConfig,
-        ...mockMiscConfig,
+      // Set default project in tasks config
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
         defaultProjectId: 'default-project',
-      };
-      (mockGlobalConfigService.misc$ as BehaviorSubject<MiscConfig>).next(
-        configWithDefault,
-      );
+      });
 
       let defaultProject = await component.defaultProject$.pipe(first()).toPromise();
       expect(defaultProject?.id).toBe('default-project');
@@ -426,27 +417,17 @@ describe('AddTaskBarComponent', () => {
       ).next(mockTagWorkContext);
 
       // Start with no default project
-      const configWithoutDefault: MiscConfig = {
-        ...mockLocalizationConfig,
-        ...mockMiscConfig,
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
         defaultProjectId: null,
-      };
-      (mockGlobalConfigService.misc$ as BehaviorSubject<MiscConfig>).next(
-        configWithoutDefault,
-      );
+      });
 
       let defaultProject = await component.defaultProject$.pipe(first()).toPromise();
       expect(defaultProject?.id).toBe('INBOX_PROJECT');
 
       // Change to configured default project
-      const configWithDefault: MiscConfig = {
-        ...mockLocalizationConfig,
-        ...mockMiscConfig,
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
         defaultProjectId: 'default-project',
-      };
-      (mockGlobalConfigService.misc$ as BehaviorSubject<MiscConfig>).next(
-        configWithDefault,
-      );
+      });
 
       defaultProject = await component.defaultProject$.pipe(first()).toPromise();
       expect(defaultProject?.id).toBe('default-project');
@@ -458,15 +439,10 @@ describe('AddTaskBarComponent', () => {
         mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
       ).next(null);
 
-      // Set default project
-      const configWithDefault: MiscConfig = {
-        ...mockLocalizationConfig,
-        ...mockMiscConfig,
+      // Set default project in tasks config
+      (mockGlobalConfigService.tasks$ as BehaviorSubject<any>).next({
         defaultProjectId: 'default-project',
-      };
-      (mockGlobalConfigService.misc$ as BehaviorSubject<MiscConfig>).next(
-        configWithDefault,
-      );
+      });
 
       const defaultProject = await component.defaultProject$.pipe(first()).toPromise();
 

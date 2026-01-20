@@ -20,9 +20,9 @@
     ::ng-deep .mat-mdc-tab {
       min-width: 120px;
 
-      @include mq(xs, max) {
-        min-width: 90px;
-        padding: 0 8px;
+      @include mq(md, max) {
+        min-width: 48px;
+        padding: 0 12px;
       }
     }
 
@@ -32,17 +32,17 @@
       width: 20px;
       height: 20px;
 
-      @include mq(xs, max) {
-        margin-inline-end: 4px;
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
+      @include mq(md, max) {
+        margin-inline-end: 0;
+        font-size: 24px;
+        width: 24px;
+        height: 24px;
       }
     }
 
     .tab-label {
-      @include mq(xs, max) {
-        font-size: 12px;
+      @include mq(md, max) {
+        display: none;
       }
     }
   }

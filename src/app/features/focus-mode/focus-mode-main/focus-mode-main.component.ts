@@ -228,9 +228,9 @@ export class FocusModeMainComponent {
 
     // Use effect to reactively update defaultTaskNotes
     effect(() => {
-      const misc = this._globalConfigService.misc();
-      if (misc) {
-        this.defaultTaskNotes.set(misc.taskNotesTpl);
+      const tasks = this._globalConfigService.tasks();
+      if (tasks) {
+        this.defaultTaskNotes.set(tasks.notesTemplate);
       }
     });
 

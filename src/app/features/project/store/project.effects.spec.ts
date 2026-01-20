@@ -26,8 +26,8 @@ describe('ProjectEffects', () => {
 
   const createConfigState = (): GlobalConfigState => ({
     ...DEFAULT_GLOBAL_CONFIG,
-    misc: {
-      ...DEFAULT_GLOBAL_CONFIG.misc,
+    tasks: {
+      ...DEFAULT_GLOBAL_CONFIG.tasks,
       defaultProjectId: 'project-1',
     },
   });
@@ -65,14 +65,14 @@ describe('ProjectEffects', () => {
       // Set up config where project-1 is the default
       globalConfigServiceMock.cfg.and.returnValue({
         ...DEFAULT_GLOBAL_CONFIG,
-        misc: {
-          ...DEFAULT_GLOBAL_CONFIG.misc,
+        tasks: {
+          ...DEFAULT_GLOBAL_CONFIG.tasks,
           defaultProjectId: 'project-1',
         },
       });
 
       effects.deleteProjectRelatedData.subscribe(() => {
-        expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('misc', {
+        expect(globalConfigServiceMock.updateSection).toHaveBeenCalledWith('tasks', {
           defaultProjectId: null,
         });
         done();
@@ -91,8 +91,8 @@ describe('ProjectEffects', () => {
       // Set up config where project-1 is the default, but we delete project-2
       globalConfigServiceMock.cfg.and.returnValue({
         ...DEFAULT_GLOBAL_CONFIG,
-        misc: {
-          ...DEFAULT_GLOBAL_CONFIG.misc,
+        tasks: {
+          ...DEFAULT_GLOBAL_CONFIG.tasks,
           defaultProjectId: 'project-1',
         },
       });
@@ -114,8 +114,8 @@ describe('ProjectEffects', () => {
     it('should NOT clear defaultProjectId when there is no default', (done) => {
       globalConfigServiceMock.cfg.and.returnValue({
         ...DEFAULT_GLOBAL_CONFIG,
-        misc: {
-          ...DEFAULT_GLOBAL_CONFIG.misc,
+        tasks: {
+          ...DEFAULT_GLOBAL_CONFIG.tasks,
           defaultProjectId: null,
         },
       });

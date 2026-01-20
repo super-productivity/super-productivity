@@ -54,9 +54,9 @@ describe('SchemaMigrationService', () => {
       expect(service.getCurrentVersion()).toBe(CURRENT_SCHEMA_VERSION);
     });
 
-    it('should return 1 as the initial version', () => {
-      // Current implementation starts at version 1
-      expect(service.getCurrentVersion()).toBe(1);
+    it('should return 2 as the current version', () => {
+      // Current implementation is at version 2 after migration from MiscConfig to TasksConfig
+      expect(service.getCurrentVersion()).toBe(2);
     });
   });
 
@@ -68,7 +68,7 @@ describe('SchemaMigrationService', () => {
 
     it('should return empty array for initial version', () => {
       // No migrations defined yet for version 1
-      const migrations = service.getMigrations();
+      const migrations = service.getMigrations(1, 1);
       expect(migrations.length).toBe(0);
     });
   });
@@ -79,17 +79,15 @@ describe('SchemaMigrationService', () => {
       expect(service.needsMigration(cache)).toBeFalse();
     });
 
-    it('should return false for cache with undefined schemaVersion (defaults to 1)', () => {
+    it('should return true for cache with undefined schemaVersion (defaults to 1)', () => {
       const cache = createMockCache(undefined);
       // When schemaVersion is undefined, it defaults to 1
-      // Since CURRENT_SCHEMA_VERSION is 1, no migration needed
-      expect(service.needsMigration(cache)).toBeFalse();
+      // Since CURRENT_SCHEMA_VERSION is 2, migration is needed
+      expect(service.needsMigration(cache)).toBeTrue();
     });
 
     it('should return true for cache with older version', () => {
-      // This test will only make sense when we have migrations
-      // For now, since CURRENT_SCHEMA_VERSION is 1, there's no "older" version
-      const cache = createMockCache(0); // Version 0 is older
+      const cache = createMockCache(1); // Version 1 is older than current version 2
       expect(service.needsMigration(cache)).toBeTrue();
     });
   });
@@ -100,14 +98,15 @@ describe('SchemaMigrationService', () => {
       expect(service.operationNeedsMigration(op)).toBeFalse();
     });
 
-    it('should return false for operation with undefined schemaVersion (defaults to 1)', () => {
+    it('should return true for operation with undefined schemaVersion (defaults to 1)', () => {
       const op = createMockOperation('op-1');
       op.schemaVersion = undefined as any;
-      expect(service.operationNeedsMigration(op)).toBeFalse();
+      // Since CURRENT_SCHEMA_VERSION is 2, migration is needed
+      expect(service.operationNeedsMigration(op)).toBeTrue();
     });
 
     it('should return true for operation with older version', () => {
-      const op = createMockOperation('op-1', 0);
+      const op = createMockOperation('op-1', 1);
       expect(service.operationNeedsMigration(op)).toBeTrue();
     });
   });

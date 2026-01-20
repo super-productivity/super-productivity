@@ -13,7 +13,7 @@ describe('InlineMarkdownComponent', () => {
 
   beforeEach(async () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
+      tasks: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
     });
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
 

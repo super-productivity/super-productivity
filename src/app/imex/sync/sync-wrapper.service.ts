@@ -311,7 +311,7 @@ export class SyncWrapperService {
           // TODO translate
           msg: T.F.SYNC.S.ERROR_DATA_IS_CURRENTLY_WRITTEN,
           type: 'ERROR',
-          actionFn: async () => this._forceUpload(),
+          actionFn: async () => this.forceUpload(),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -357,7 +357,7 @@ export class SyncWrapperService {
     }
   }
 
-  private async _forceUpload(): Promise<void> {
+  async forceUpload(): Promise<void> {
     if (!this._c(this._translateService.instant(T.F.SYNC.C.FORCE_UPLOAD))) {
       return;
     }
@@ -462,7 +462,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this._forceUpload();
+          await this.forceUpload();
         } else if (res === 'FORCE_UPDATE_LOCAL') {
           // Op-log architecture handles this differently
           SyncLog.log(
@@ -490,7 +490,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this._forceUpload();
+          await this.forceUpload();
         }
       })
       .catch((err) => {
@@ -530,7 +530,7 @@ export class SyncWrapperService {
           this.sync();
         }
         if (isForceUpload) {
-          this._forceUpload();
+          this.forceUpload();
         }
       });
   }

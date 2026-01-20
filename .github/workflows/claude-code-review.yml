@@ -1,7 +1,12 @@
 name: Claude Code Review
 
+# Using pull_request_target to grant write permissions for fork PRs.
+# This is safe because:
+# 1. We use a trusted action from Anthropic
+# 2. The action only reads PR content and posts comments
+# 3. No code from the PR is executed
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, ready_for_review, reopened]
     # Optional: Only run on specific file changes
     # paths:
@@ -17,6 +22,9 @@ jobs:
     #   github.event.pull_request.user.login == 'external-contributor' ||
     #   github.event.pull_request.user.login == 'new-developer' ||
     #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    # Skip draft PRs to reduce API usage
+    if: github.event.pull_request.draft == false
 
     runs-on: ubuntu-latest
     permissions:

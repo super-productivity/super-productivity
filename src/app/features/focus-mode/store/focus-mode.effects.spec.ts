@@ -2790,8 +2790,9 @@ describe('FocusModeEffects', () => {
 
       expect(buttonActions.action).toBeDefined();
       expect(buttonActions.action.label).toBe('F.FOCUS_MODE.B.START');
-      // action2 should be undefined when start button is shown
-      expect(buttonActions.action2).toBeUndefined();
+      // action2 should show "End Focus Session" button when session is completed
+      expect(buttonActions.action2).toBeDefined();
+      expect(buttonActions.action2.label).toBe('F.FOCUS_MODE.B.END_FOCUS_SESSION');
     });
 
     it('should have start button when break time is up', () => {

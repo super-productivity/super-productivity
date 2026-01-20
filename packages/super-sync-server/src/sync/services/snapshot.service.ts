@@ -537,6 +537,15 @@ export class SnapshotService {
       let payload = row.payload;
 
       const opSchemaVersion = row.schemaVersion ?? 1;
+
+      // Prepare list of operations to process (may be expanded by migration)
+      let opsToProcess: Array<{
+        opType: string;
+        entityType: string;
+        entityId: string | null;
+        payload: unknown;
+      }> = [{ opType, entityType, entityId, payload }];
+
       if (opSchemaVersion < CURRENT_SCHEMA_VERSION) {
         const opLike: OperationLike = {
           id: row.id,
@@ -554,71 +563,109 @@ export class SnapshotService {
         const migratedOp = migrationResult.data;
         if (!migratedOp) continue;
 
-        opType = migratedOp.opType as Operation['opType'];
-        entityType = migratedOp.entityType;
-        entityId = migratedOp.entityId ?? null;
-        payload = migratedOp.payload as any;
-      }
-
-      // Handle full-state operations BEFORE entity type check
-      // These operations replace the entire state and don't use a specific entity type
-      if (opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR') {
-        if (payload && typeof payload === 'object' && 'appDataComplete' in payload) {
-          Object.assign(state, (payload as { appDataComplete: unknown }).appDataComplete);
+        // Handle array result (operation was split into multiple)
+        if (Array.isArray(migratedOp)) {
+          opsToProcess = migratedOp.map((op) => ({
+            opType: op.opType,
+            entityType: op.entityType,
+            entityId: op.entityId ?? null,
+            payload: op.payload,
+          }));
         } else {
-          Object.assign(state, payload);
+          opsToProcess = [
+            {
+              opType: migratedOp.opType,
+              entityType: migratedOp.entityType,
+              entityId: migratedOp.entityId ?? null,
+              payload: migratedOp.payload,
+            },
+          ];
         }
-        continue;
       }
 
-      if (!ALLOWED_ENTITY_TYPES.has(entityType)) continue;
+      // Process all operations (original or migrated)
+      for (const opToProcess of opsToProcess) {
+        const {
+          opType: processOpType,
+          entityType: processEntityType,
+          entityId: processEntityId,
+          payload: processPayload,
+        } = opToProcess;
 
-      if (!state[entityType]) {
-        state[entityType] = {};
-      }
+        // Handle full-state operations BEFORE entity type check
+        // These operations replace the entire state and don't use a specific entity type
+        if (
+          processOpType === 'SYNC_IMPORT' ||
+          processOpType === 'BACKUP_IMPORT' ||
+          processOpType === 'REPAIR'
+        ) {
+          if (
+            processPayload &&
+            typeof processPayload === 'object' &&
+            'appDataComplete' in processPayload
+          ) {
+            Object.assign(
+              state,
+              (processPayload as { appDataComplete: unknown }).appDataComplete,
+            );
+          } else {
+            Object.assign(state, processPayload);
+          }
+          continue;
+        }
 
-      switch (opType) {
-        case 'CRT':
-        case 'UPD':
-          if (entityId) {
-            state[entityType][entityId] = {
-              ...(state[entityType][entityId] as Record<string, unknown>),
-              ...(payload as Record<string, unknown>),
-            };
-          }
-          break;
-        case 'DEL':
-          if (entityId) {
-            delete state[entityType][entityId];
-          }
-          break;
-        case 'MOV':
-          if (entityId && payload) {
-            state[entityType][entityId] = {
-              ...(state[entityType][entityId] as Record<string, unknown>),
-              ...(payload as Record<string, unknown>),
-            };
-          }
-          break;
-        case 'BATCH':
-          if (payload && typeof payload === 'object') {
-            const batchPayload = payload as Record<string, unknown>;
-            if (batchPayload.entities && typeof batchPayload.entities === 'object') {
-              const entities = batchPayload.entities as Record<string, unknown>;
-              for (const [id, entity] of Object.entries(entities)) {
-                state[entityType][id] = {
-                  ...(state[entityType][id] as Record<string, unknown>),
-                  ...(entity as Record<string, unknown>),
-                };
-              }
-            } else if (entityId) {
-              state[entityType][entityId] = {
-                ...(state[entityType][entityId] as Record<string, unknown>),
-                ...batchPayload,
+        if (!ALLOWED_ENTITY_TYPES.has(processEntityType)) continue;
+
+        if (!state[processEntityType]) {
+          state[processEntityType] = {};
+        }
+
+        switch (processOpType) {
+          case 'CRT':
+          case 'UPD':
+            if (processEntityId) {
+              state[processEntityType][processEntityId] = {
+                ...(state[processEntityType][processEntityId] as Record<string, unknown>),
+                ...(processPayload as Record<string, unknown>),
               };
             }
-          }
-          break;
+            break;
+          case 'DEL':
+            if (processEntityId) {
+              delete state[processEntityType][processEntityId];
+            }
+            break;
+          case 'MOV':
+            if (processEntityId && processPayload) {
+              state[processEntityType][processEntityId] = {
+                ...(state[processEntityType][processEntityId] as Record<string, unknown>),
+                ...(processPayload as Record<string, unknown>),
+              };
+            }
+            break;
+          case 'BATCH':
+            if (processPayload && typeof processPayload === 'object') {
+              const batchPayload = processPayload as Record<string, unknown>;
+              if (batchPayload.entities && typeof batchPayload.entities === 'object') {
+                const entities = batchPayload.entities as Record<string, unknown>;
+                for (const [id, entity] of Object.entries(entities)) {
+                  state[processEntityType][id] = {
+                    ...(state[processEntityType][id] as Record<string, unknown>),
+                    ...(entity as Record<string, unknown>),
+                  };
+                }
+              } else if (processEntityId) {
+                state[processEntityType][processEntityId] = {
+                  ...(state[processEntityType][processEntityId] as Record<
+                    string,
+                    unknown
+                  >),
+                  ...batchPayload,
+                };
+              }
+            }
+            break;
+        }
       }
     }
     return state;

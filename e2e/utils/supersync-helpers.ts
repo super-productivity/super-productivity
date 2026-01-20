@@ -536,11 +536,20 @@ export const deleteTask = async (
 
   // Confirm deletion if dialog appears
   const confirmBtn = client.page.locator('mat-dialog-actions button:has-text("Delete")');
-  if (
-    await confirmBtn.isVisible({ timeout: UI_VISIBLE_TIMEOUT_SHORT }).catch(() => false)
-  ) {
+  const dialogAppeared = await confirmBtn
+    .isVisible({ timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .catch(() => false);
+
+  if (dialogAppeared) {
     await confirmBtn.click();
+    // Wait for dialog to close (not just click the button)
+    // This ensures the close animation completes before continuing
+    await client.page
+      .locator('mat-dialog-container')
+      .waitFor({ state: 'hidden', timeout: UI_VISIBLE_TIMEOUT });
   }
+
+  // Wait for UI to settle after deletion
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 };
 

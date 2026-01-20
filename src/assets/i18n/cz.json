@@ -1002,23 +1002,28 @@
       "ZOOM_OUT": "Oddálit (pouze pro desktop)"
     },
     "MISC": {
-      "DEFAULT_PROJECT": "Výchozí projekt pro použití pro úkoly, pokud není žádný určen",
       "FIRST_DAY_OF_WEEK": "První den týdne",
       "HELP": "<p><strong>Desktopová upozornění se nezobrazují?</strong> Pro systém Windows byste mohli zkontrolovat Systém > Upozornění a akce a zkontrolovat, zda jsou vyžadovaná upozornění povolena.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automaticky přidat značku 'Dnes' k úkolům, na kterých jste pracovali",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Označit nadřazený úkol jako hotový, když jsou hotovy všechny podúkoly",
       "IS_CONFIRM_BEFORE_EXIT": "Potvrdit před ukončením aplikace",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Potvrdit před ukončením aplikace bez dokončení dne",
       "IS_DARK_MODE": "Temný režim",
       "IS_DISABLE_ANIMATIONS": "Vypnout všechny animace",
       "IS_DISABLE_CELEBRATION": "Vypnout oslavy v denním přehledu",
       "IS_MINIMIZE_TO_TRAY": "Minimalizovat do oznamovací oblasti (pouze pro desktop)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Zobrazit aktuální úkol v oznamovací oblasti/menu stavu (pouze pro desktop Mac/Windows)",
-      "IS_TURN_OFF_MARKDOWN": "Vypnout zpracování markdown pro poznámky k úkolům",
+      "IS_TRAY_SHOW_CURRENT": "Zobrazit aktuální úkol v oznamovací oblasti/menu stavu (pouze pro desktop Mac/Windows)",
       "START_OF_NEXT_DAY": "Začátek dalšího dne",
       "START_OF_NEXT_DAY_HINT": "od kdy (v hodinách) chcete počítat, že další den začal. Výchozí hodnota je půlnoc, což je 0.",
-      "TASK_NOTES_TPL": "Šablona popisu úkolu",
       "TITLE": "Různá nastavení"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Výchozí projekt pro použití pro úkoly, pokud není žádný určen",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automaticky přidat úkoly, na kterých jste pracovali, k dnešku",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automaticky označit nadřazený úkol jako hotový, když jsou všechny podúkoly hotové",
+      "IS_CONFIRM_BEFORE_DELETE": "Potvrdit před smazáním úkolů",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Povolit Markdown formátování v poznámkách k úkolům",
+      "IS_TRAY_SHOW_CURRENT": "Zobrazit aktuální úkol v oznamovací oblasti / menu stavu (pouze pro desktop Mac/Windows)",
+      "NOTES_TEMPLATE": "Šablona popisu úkolu",
+      "TITLE": "Úkoly"
     },
     "POMODORO": {
       "BREAK_DURATION": "Délka krátkých přestávek",
