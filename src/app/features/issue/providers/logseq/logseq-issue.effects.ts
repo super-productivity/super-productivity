@@ -25,6 +25,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { PluginDialogComponent } from '../../../../plugins/ui/plugin-dialog/plugin-dialog.component';
 import { Store } from '@ngrx/store';
 import { Task } from '../../../tasks/task.model';
+import { encodeMarkerWithHash } from './logseq-marker-hash.util';
 
 type DiscrepancyType =
   | 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
@@ -117,52 +118,70 @@ export class LogseqIssueEffects {
     discrepancyType: DiscrepancyType,
     task: Task,
   ): Promise<void> {
+    if (!task.issueId || !task.issueProviderId) {
+      return;
+    }
+
+    let updatedMarker: string | null = null;
+
     switch (discrepancyType) {
       case 'LOGSEQ_DONE_SUPERPROD_NOT_DONE':
       case 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE':
         // Reset Logseq block to TODO/LATER
-        if (task.issueId && task.issueProviderId) {
-          const cfg = await this._issueProviderService
-            .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
-            .toPromise();
-          if (cfg) {
-            const markers = this._getMarkers((cfg as LogseqCfg).taskWorkflow);
-            await this._logseqCommonService.updateBlockMarker(
-              task.issueId as string,
-              task.issueProviderId,
-              markers.stopped,
-            );
-          }
+        const cfg1 = await this._issueProviderService
+          .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
+          .toPromise();
+        if (cfg1) {
+          const markers = this._getMarkers((cfg1 as LogseqCfg).taskWorkflow);
+          updatedMarker = markers.stopped;
+          await this._logseqCommonService.updateBlockMarker(
+            task.issueId as string,
+            task.issueProviderId,
+            markers.stopped,
+          );
         }
         break;
 
       case 'SUPERPROD_DONE_LOGSEQ_NOT_DONE':
         // Mark block as DONE in Logseq
-        if (task.issueId && task.issueProviderId) {
-          await this._logseqCommonService.updateBlockMarker(
-            task.issueId as string,
-            task.issueProviderId,
-            'DONE',
-          );
-        }
+        updatedMarker = 'DONE';
+        await this._logseqCommonService.updateBlockMarker(
+          task.issueId as string,
+          task.issueProviderId,
+          'DONE',
+        );
         break;
 
       case 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE':
         // Set block to NOW/DOING in Logseq
-        if (task.issueId && task.issueProviderId) {
-          const cfg = await this._issueProviderService
-            .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
-            .toPromise();
-          if (cfg) {
-            const markers = this._getMarkers((cfg as LogseqCfg).taskWorkflow);
-            await this._logseqCommonService.updateBlockMarker(
-              task.issueId as string,
-              task.issueProviderId,
-              markers.active,
-            );
-          }
+        const cfg2 = await this._issueProviderService
+          .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
+          .toPromise();
+        if (cfg2) {
+          const markers = this._getMarkers((cfg2 as LogseqCfg).taskWorkflow);
+          updatedMarker = markers.active;
+          await this._logseqCommonService.updateBlockMarker(
+            task.issueId as string,
+            task.issueProviderId,
+            markers.active,
+          );
         }
         break;
+    }
+
+    // Update task with new marker to prevent false positives on next poll
+    if (updatedMarker !== null) {
+      // Fetch updated block to get current content for hash
+      const updatedBlock = await this._logseqCommonService.getById(
+        task.issueId as string,
+        task.issueProviderId,
+      );
+
+      this._taskService.update(task.id, {
+        issueMarker: encodeMarkerWithHash(updatedMarker, updatedBlock.content),
+        isDone: updatedMarker === 'DONE',
+        issueWasUpdated: true,
+      });
     }
   }
 
@@ -209,7 +228,7 @@ export class LogseqIssueEffects {
     // User has acknowledged the discrepancy and chosen to ignore it
     // IMPORTANT: Set issueWasUpdated to prevent other effects from syncing to Logseq
     this._taskService.update(task.id, {
-      issueMarker: block.marker,
+      issueMarker: encodeMarkerWithHash(block.marker, block.content),
       isDone: block.marker === 'DONE',
       issueWasUpdated: true,
     });

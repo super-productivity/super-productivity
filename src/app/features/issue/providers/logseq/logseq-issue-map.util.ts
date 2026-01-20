@@ -233,7 +233,7 @@ export const mapBlockToIssueReduced = (block: any): LogseqBlockReduced => {
   return {
     id: block.uuid, // Use UUID as id so tasks store UUID as issueId
     uuid: block.uuid,
-    content: extractFirstLine(content),
+    content: content, // Store full content for hash calculation
     marker: block.marker || null,
     updatedAt: block.updatedAt || block['updated-at'] || Date.now(),
     properties: block.properties || {},

@@ -25,6 +25,7 @@ import {
 } from './logseq-issue-map.util';
 import { TaskAttachment } from '../../../tasks/task-attachment/task-attachment.model';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
+import { decodeMarker, encodeMarkerWithHash, hashCode } from './logseq-marker-hash.util';
 
 @Injectable({
   providedIn: 'root',
@@ -115,14 +116,19 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   getAddTaskData(block: LogseqBlockReduced): Partial<Task> & { title: string } {
     const todayStr = getDbDateStr();
 
+    // Base data that's always included
+    const baseData = {
+      title: extractFirstLine(block.content),
+      issueLastUpdated: block.updatedAt,
+      isDone: block.marker === 'DONE',
+      issueMarker: encodeMarkerWithHash(block.marker, block.content),
+    };
+
     // If time is specified, use dueWithTime, otherwise use dueDay
     if (block.scheduledDateTime) {
       return {
-        title: extractFirstLine(block.content),
+        ...baseData,
         issueWasUpdated: false,
-        issueLastUpdated: block.updatedAt,
-        isDone: block.marker === 'DONE',
-        issueMarker: block.marker,
         dueWithTime: block.scheduledDateTime,
         dueDay: undefined, // Clear dueDay when time is set
       };
@@ -136,32 +142,23 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
         });
         // Don't import old dates - let them be treated as overdue in SuperProd
         return {
-          title: extractFirstLine(block.content),
+          ...baseData,
           issueWasUpdated: true, // Prevent auto-sync of this old date back to Logseq
-          issueLastUpdated: block.updatedAt,
-          isDone: block.marker === 'DONE',
-          issueMarker: block.marker,
           dueDay: undefined,
           dueWithTime: undefined,
         };
       }
 
       return {
-        title: extractFirstLine(block.content),
+        ...baseData,
         issueWasUpdated: false,
-        issueLastUpdated: block.updatedAt,
-        isDone: block.marker === 'DONE',
-        issueMarker: block.marker,
         dueDay: block.scheduledDate,
         dueWithTime: undefined, // Clear dueWithTime when only date is set
       };
     } else {
       return {
-        title: extractFirstLine(block.content),
+        ...baseData,
         issueWasUpdated: false,
-        issueLastUpdated: block.updatedAt,
-        isDone: block.marker === 'DONE',
-        issueMarker: block.marker,
       };
     }
   }
@@ -193,7 +190,13 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     const blockTitle = extractFirstLine(block.content);
     const isTitleChanged = blockTitle !== task.title;
     const isDoneChanged = (block.marker === 'DONE') !== task.isDone;
-    const isMarkerChanged = block.marker !== task.issueMarker;
+
+    // Decode stored marker and hash
+    const storedData = decodeMarker(task.issueMarker);
+    const currentHash = hashCode(block.content);
+    const isMarkerChanged = block.marker !== storedData.marker;
+    const isContentChanged =
+      storedData.contentHash !== null && storedData.contentHash !== currentHash;
 
     // Check if scheduled date/time changed
     const blockScheduledDate = extractScheduledDate(block.content);
@@ -211,11 +214,14 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       isTitleChanged,
       isDoneChanged,
       isMarkerChanged,
+      isContentChanged,
       isDueDateChanged,
       isDueTimeChanged,
       blockTitle,
       blockMarker: block.marker,
-      taskIssueMarker: task.issueMarker,
+      storedMarker: storedData.marker,
+      storedHash: storedData.contentHash,
+      currentHash,
       taskIsDone: task.isDone,
       blockScheduledDate,
       taskDueDay: task.dueDay,
@@ -228,6 +234,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       isTitleChanged ||
       isDoneChanged ||
       isMarkerChanged ||
+      isContentChanged ||
       isDueDateChanged ||
       isDueTimeChanged
     ) {
