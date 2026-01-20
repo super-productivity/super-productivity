@@ -24,6 +24,7 @@ import {
   updateScheduledInContent,
 } from './logseq-issue-map.util';
 import { TaskAttachment } from '../../../tasks/task-attachment/task-attachment.model';
+import { getDbDateStr } from '../../../../util/get-db-date-str';
 
 @Injectable({
   providedIn: 'root',
@@ -112,6 +113,8 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   getAddTaskData(block: LogseqBlockReduced): Partial<Task> & { title: string } {
+    const todayStr = getDbDateStr();
+
     // If time is specified, use dueWithTime, otherwise use dueDay
     if (block.scheduledDateTime) {
       return {
@@ -124,6 +127,25 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
         dueDay: undefined, // Clear dueDay when time is set
       };
     } else if (block.scheduledDate) {
+      // Check if scheduled date is in the past (overdue)
+      if (block.scheduledDate < todayStr) {
+        console.log('[LOGSEQ OVERDUE] Detected overdue task:', {
+          blockContent: block.content,
+          scheduledDate: block.scheduledDate,
+          today: todayStr,
+        });
+        // Don't import old dates - let them be treated as overdue in SuperProd
+        return {
+          title: extractFirstLine(block.content),
+          issueWasUpdated: true, // Prevent auto-sync of this old date back to Logseq
+          issueLastUpdated: block.updatedAt,
+          isDone: block.marker === 'DONE',
+          issueMarker: block.marker,
+          dueDay: undefined,
+          dueWithTime: undefined,
+        };
+      }
+
       return {
         title: extractFirstLine(block.content),
         issueWasUpdated: false,
@@ -168,20 +190,42 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return null;
     }
 
-    const wasUpdated = block.updatedAt > (task.issueLastUpdated || 0);
+    const blockTitle = extractFirstLine(block.content);
+    const isTitleChanged = blockTitle !== task.title;
     const isDoneChanged = (block.marker === 'DONE') !== task.isDone;
     const isMarkerChanged = block.marker !== task.issueMarker;
 
     // Check if scheduled date/time changed
     const blockScheduledDate = extractScheduledDate(block.content);
     const blockScheduledDateTime = extractScheduledDateTime(block.content);
-    // Normalize null/undefined comparison (treat them as equivalent)
+
+    // Simple comparison: trust the bidirectional sync
+    // Any timing discrepancies will be corrected on next poll
     const isDueDateChanged = (blockScheduledDate ?? null) !== (task.dueDay ?? null);
     const isDueTimeChanged =
       (blockScheduledDateTime ?? null) !== (task.dueWithTime ?? null);
 
+    console.log('[LOGSEQ UPDATE CHECK]', {
+      taskId: task.id,
+      taskTitle: task.title,
+      isTitleChanged,
+      isDoneChanged,
+      isMarkerChanged,
+      isDueDateChanged,
+      isDueTimeChanged,
+      blockTitle,
+      blockMarker: block.marker,
+      taskIssueMarker: task.issueMarker,
+      taskIsDone: task.isDone,
+      blockScheduledDate,
+      taskDueDay: task.dueDay,
+      blockScheduledDateTime,
+      taskDueWithTime: task.dueWithTime,
+    });
+
+    // Trigger update if there's a substantive change
     if (
-      wasUpdated ||
+      isTitleChanged ||
       isDoneChanged ||
       isMarkerChanged ||
       isDueDateChanged ||
@@ -313,6 +357,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     }
 
     const block = await this.getById(task.issueId as string, task.issueProviderId);
+    const todayStr = getDbDateStr();
 
     let updatedContent = block.content;
     let hasChanges = false;
@@ -340,8 +385,26 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
         shouldUpdateScheduled = true;
       }
     } else if (task.dueDay) {
-      // Task has only date - check if it differs from current
-      if (currentScheduledDate !== task.dueDay || currentScheduledDateTime !== null) {
+      // Smart Reschedule: If task was overdue in Logseq and is now set to today
+      // Update SCHEDULED in Logseq to today as well
+      const wasOverdueInLogseq =
+        currentScheduledDate !== null && currentScheduledDate < todayStr;
+      const isNowScheduledForToday = task.dueDay === todayStr;
+
+      if (wasOverdueInLogseq && isNowScheduledForToday) {
+        console.log('[LOGSEQ SMART RESCHEDULE] Updating overdue task to today:', {
+          taskTitle: task.title,
+          oldScheduledDate: currentScheduledDate,
+          newScheduledDate: todayStr,
+        });
+        updatedContent = updateScheduledInContent(updatedContent, todayStr);
+        shouldUpdateScheduled = true;
+      }
+      // Normal case: Task has only date - check if it differs from current
+      else if (
+        currentScheduledDate !== task.dueDay ||
+        currentScheduledDateTime !== null
+      ) {
         updatedContent = updateScheduledInContent(updatedContent, task.dueDay);
         shouldUpdateScheduled = true;
       }

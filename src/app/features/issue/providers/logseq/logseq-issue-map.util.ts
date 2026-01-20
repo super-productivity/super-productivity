@@ -1,17 +1,29 @@
 import { LogseqBlock, LogseqBlockReduced } from './logseq-issue.model';
 import { SearchResultItem } from '../../issue.model';
 
+/**
+ * Remove Logseq-specific formatting (page links and tags)
+ * [[Page Link]] -> Page Link
+ * #tag -> tag
+ */
+export const removeLogseqFormatting = (text: string): string => {
+  return text
+    .replace(/\[\[([^\]]+)\]\]/g, '$1') // Remove page link brackets [[...]]
+    .replace(/#(\w+)/g, '$1'); // Remove tag hashes #...
+};
+
 export const extractBlockText = (content: string): string => {
-  return content
-    .replace(/^(TODO|DONE|DOING|WAITING|LATER|NOW)\s+/i, '') // Remove marker
-    .replace(/\n.*::.*/g, '') // Remove properties
-    .trim();
+  return removeLogseqFormatting(
+    content
+      .replace(/^(TODO|DONE|DOING|WAITING|LATER|NOW)\s+/i, '') // Remove marker
+      .replace(/\n.*::.*/g, ''), // Remove properties
+  ).trim();
 };
 
 export const extractFirstLine = (content: string): string => {
   const withoutMarker = content.replace(/^(TODO|DONE|DOING|WAITING|LATER|NOW)\s+/i, '');
   const firstLine = withoutMarker.split('\n')[0];
-  return firstLine.trim();
+  return removeLogseqFormatting(firstLine).trim();
 };
 
 export const extractRestOfContent = (content: string): string => {
@@ -70,7 +82,7 @@ export const extractRestOfContent = (content: string): string => {
     contentLines.push(line);
   }
 
-  return contentLines.join('\n');
+  return removeLogseqFormatting(contentLines.join('\n'));
 };
 
 export const extractPropertiesFromContent = (content: string): Record<string, string> => {
