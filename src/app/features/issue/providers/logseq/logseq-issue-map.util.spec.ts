@@ -6,6 +6,11 @@ import {
   getContentWithoutSpDrawer,
   updateSpDrawerInContent,
   calculateContentHash,
+  extractScheduledDate,
+  extractScheduledDateTime,
+  formatLogseqDate,
+  updateScheduledInContent,
+  extractRestOfContent,
 } from './logseq-issue-map.util';
 
 describe('logseq-issue-map.util', () => {
@@ -118,7 +123,7 @@ superprod-last-sync:: 1705766400000
   });
 
   describe('getContentWithoutSpDrawer', () => {
-    it('should remove :SP: drawer from content', () => {
+    it('should remove :SP: drawer and marker from content', () => {
       const content = `TODO My Task
 SCHEDULED: <2026-01-20 Mon>
 :SP:
@@ -131,16 +136,37 @@ Some notes`;
 
       expect(result).not.toContain(':SP:');
       expect(result).not.toContain('superprod-last-sync');
-      expect(result).toContain('TODO My Task');
+      expect(result).not.toContain('TODO'); // Marker is also removed
+      expect(result).toContain('My Task');
       expect(result).toContain('Some notes');
     });
 
-    it('should return content unchanged when no drawer present', () => {
+    it('should remove marker when no drawer present', () => {
       const content = 'TODO Simple task';
 
       const result = getContentWithoutSpDrawer(content);
 
-      expect(result).toBe('TODO Simple task');
+      // Function removes both drawers AND marker (for hash calculation)
+      expect(result).toBe('Simple task');
+    });
+
+    it('should remove all drawer types (LOGBOOK, PROPERTIES, SP)', () => {
+      const content = `DOING Task with multiple drawers
+:LOGBOOK:
+CLOCK: [2026-01-20 Mon 10:00]--[2026-01-20 Mon 11:00] => 01:00
+:END:
+:SP:
+superprod-last-sync:: 1705766400000
+:END:
+Actual content here`;
+
+      const result = getContentWithoutSpDrawer(content);
+
+      expect(result).not.toContain(':LOGBOOK:');
+      expect(result).not.toContain(':SP:');
+      expect(result).not.toContain('CLOCK:');
+      expect(result).toContain('Task with multiple drawers');
+      expect(result).toContain('Actual content here');
     });
   });
 
@@ -219,6 +245,163 @@ superprod-content-hash:: -123456
       const hash2 = calculateContentHash(content2);
 
       expect(hash1).not.toBe(hash2);
+    });
+  });
+
+  // ============================================================
+  // Scheduling Functions
+  // ============================================================
+
+  describe('extractScheduledDate', () => {
+    it('should extract date from SCHEDULED line', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-20 Mon>';
+
+      const result = extractScheduledDate(content);
+
+      expect(result).toBe('2026-01-20');
+    });
+
+    it('should extract date when time is also present', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-20 Mon 14:30>';
+
+      const result = extractScheduledDate(content);
+
+      expect(result).toBe('2026-01-20');
+    });
+
+    it('should return null when no SCHEDULED present', () => {
+      const content = 'TODO Simple task without schedule';
+
+      const result = extractScheduledDate(content);
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('extractScheduledDateTime', () => {
+    it('should extract timestamp when time is present', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-20 Mon 14:30>';
+
+      const result = extractScheduledDateTime(content);
+
+      expect(result).not.toBeNull();
+      const date = new Date(result!);
+      expect(date.getHours()).toBe(14);
+      expect(date.getMinutes()).toBe(30);
+    });
+
+    it('should return null when only date is present (no time)', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-20 Mon>';
+
+      const result = extractScheduledDateTime(content);
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when no SCHEDULED present', () => {
+      const content = 'TODO Simple task';
+
+      const result = extractScheduledDateTime(content);
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('formatLogseqDate', () => {
+    it('should format date string without time', () => {
+      const result = formatLogseqDate('2026-01-20');
+
+      expect(result).toMatch(/^<2026-01-20 \w{3}>$/);
+      expect(result).not.toMatch(/\d{2}:\d{2}/);
+    });
+
+    it('should format timestamp with time', () => {
+      const timestamp = new Date('2026-01-20T15:30:00').getTime();
+
+      const result = formatLogseqDate(timestamp);
+
+      expect(result).toMatch(/^<2026-01-20 \w{3} 15:30>$/);
+    });
+  });
+
+  describe('updateScheduledInContent', () => {
+    it('should add SCHEDULED line when none exists', () => {
+      const content = 'TODO My Task';
+
+      const result = updateScheduledInContent(content, '2026-01-20');
+
+      expect(result).toContain('SCHEDULED:');
+      expect(result).toContain('2026-01-20');
+    });
+
+    it('should replace existing SCHEDULED line', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-15 Wed>';
+
+      const result = updateScheduledInContent(content, '2026-01-20');
+
+      expect(result).toContain('2026-01-20');
+      expect(result).not.toContain('2026-01-15');
+    });
+
+    it('should add time when timestamp is provided', () => {
+      const content = 'TODO My Task';
+      const timestamp = new Date('2026-01-20T14:30:00').getTime();
+
+      const result = updateScheduledInContent(content, timestamp);
+
+      expect(result).toContain('SCHEDULED:');
+      expect(result).toMatch(/14:30/);
+    });
+
+    it('should remove SCHEDULED when null is provided', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-15 Wed>';
+
+      const result = updateScheduledInContent(content, null);
+
+      expect(result).not.toContain('SCHEDULED:');
+      expect(result).toContain('TODO My Task');
+    });
+  });
+
+  describe('extractRestOfContent', () => {
+    it('should extract content after first line', () => {
+      const content = 'TODO My Task\nSome additional notes\nMore details';
+
+      const result = extractRestOfContent(content);
+
+      expect(result).toContain('Some additional notes');
+      expect(result).toContain('More details');
+    });
+
+    it('should skip SCHEDULED line', () => {
+      const content = 'TODO My Task\nSCHEDULED: <2026-01-20 Mon>\nActual notes';
+
+      const result = extractRestOfContent(content);
+
+      expect(result).not.toContain('SCHEDULED');
+      expect(result).toContain('Actual notes');
+    });
+
+    it('should skip property blocks like :LOGBOOK:', () => {
+      const content = `TODO My Task
+:LOGBOOK:
+CLOCK: [2026-01-20 Mon 10:00]
+:END:
+Actual content`;
+
+      const result = extractRestOfContent(content);
+
+      expect(result).not.toContain(':LOGBOOK:');
+      expect(result).not.toContain('CLOCK:');
+      expect(result).toContain('Actual content');
+    });
+
+    it('should return empty string for single-line content', () => {
+      const content = 'TODO Simple task';
+
+      const result = extractRestOfContent(content);
+
+      expect(result).toBe('');
     });
   });
 });
