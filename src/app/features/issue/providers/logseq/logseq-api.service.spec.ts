@@ -21,11 +21,9 @@ describe('LogseqCommonInterfacesService', () => {
     authToken: 'test-token',
     queryFilter:
       '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING"} ?m)]]',
-    isUpdateBlockOnTaskDone: true,
     linkFormat: 'logseq-url',
     taskWorkflow: 'TODO_DOING',
-    superProdReferenceMode: 'property',
-    superProdReferenceProperty: 'superProductivity',
+    isIncludeMarkerInUpdateDetection: false,
   };
 
   beforeEach(() => {
@@ -74,7 +72,6 @@ describe('LogseqCommonInterfacesService', () => {
       expect(result.dueDay).toBeUndefined();
       expect(result.dueWithTime).toBeUndefined();
       expect(result.isDone).toBe(false);
-      expect(result.issueMarker).toBe('TODO');
     });
 
     it('should import task with SCHEDULED date only', () => {
@@ -371,7 +368,6 @@ describe('LogseqCommonInterfacesService', () => {
         issueId: 'block-uuid-1',
         issueProviderId: 'provider-1',
         isDone: false,
-        issueMarker: 'TODO',
         issueLastUpdated: Date.now() - 10000,
       };
 
@@ -382,13 +378,20 @@ describe('LogseqCommonInterfacesService', () => {
     });
 
     it('should return null when no changes detected', async () => {
+      // Use a fixed lastSync time that's after the block's updatedAt
+      const blockUpdatedAt = Date.now() - 20000;
+      const lastSyncTime = blockUpdatedAt + 5000; // Synced after last update
+      const blockContent = 'TODO Task\nSCHEDULED: <2026-01-15 Wed>';
+      // Calculate hash of content without drawer (same as what calculateContentHash does)
+      const contentHash = -1863127520; // Pre-calculated hash of "TODO Task\nSCHEDULED: <2026-01-15 Wed>"
+
       const block: LogseqBlock = {
         id: 'block-uuid-1',
         uuid: 'block-uuid-1',
-        content: 'TODO Task\nSCHEDULED: <2026-01-15 Wed>',
+        content: `${blockContent}\n:SP:\nsuperprod-last-sync:: ${lastSyncTime}\nsuperprod-content-hash:: ${contentHash}\n:END:`,
         marker: 'TODO',
-        createdAt: Date.now() - 20000,
-        updatedAt: Date.now() - 20000,
+        createdAt: blockUpdatedAt - 10000,
+        updatedAt: blockUpdatedAt,
         page: { id: 123 },
         parent: null,
         properties: {},
@@ -397,11 +400,11 @@ describe('LogseqCommonInterfacesService', () => {
 
       const task: Partial<Task> = {
         id: 'task-1',
+        title: 'Task',
         issueId: 'block-uuid-1',
         issueProviderId: 'provider-1',
         dueDay: '2026-01-15',
         isDone: false,
-        issueMarker: 'TODO',
         issueLastUpdated: Date.now() - 10000,
       };
 
@@ -543,40 +546,6 @@ describe('LogseqCommonInterfacesService', () => {
   // ============================================================
 
   describe('Configuration', () => {
-    it('should respect isUpdateBlockOnTaskDone setting', async () => {
-      const disabledCfg: IssueProviderLogseq = {
-        ...mockCfg,
-        isUpdateBlockOnTaskDone: false,
-      };
-      mockIssueProviderService.getCfgOnce$.and.returnValue(of(disabledCfg));
-
-      const block: LogseqBlock = {
-        id: 'block-uuid-1',
-        uuid: 'block-uuid-1',
-        content: 'TODO Test Task',
-        marker: 'TODO',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        page: { id: 123 },
-        parent: null,
-        properties: {},
-      };
-      mockApiService.getBlockByUuid$.and.returnValue(of(block));
-      mockApiService.updateBlock$.and.returnValue(of(void 0));
-
-      const task: Partial<Task> = {
-        id: 'task-1',
-        issueId: 'block-uuid-1',
-        issueProviderId: 'provider-1',
-        isDone: true,
-      };
-
-      await service.updateIssueFromTask(task as Task);
-
-      // Should NOT update marker to DONE when setting is disabled
-      expect(mockApiService.updateBlock$).not.toHaveBeenCalled();
-    });
-
     it('should be enabled when all config is provided', () => {
       const result = service.isEnabled(mockCfg);
 

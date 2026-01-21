@@ -6,38 +6,28 @@ import {
   withLatestFrom,
   mergeMap,
   switchMap,
-  take,
-  bufferTime,
+  debounceTime,
   tap,
+  buffer,
 } from 'rxjs/operators';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { setCurrentTask, unsetCurrentTask } from '../../../tasks/store/task.actions';
 import { PlannerActions } from '../../../planner/store/planner.actions';
 import { TaskService } from '../../../tasks/task.service';
-import { LogseqCommonInterfacesService } from './logseq-common-interfaces.service';
+import {
+  LogseqCommonInterfacesService,
+  DiscrepancyItem,
+  DiscrepancyType,
+} from './logseq-common-interfaces.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
-import { EMPTY, concat, of, from, Observable, Subject } from 'rxjs';
+import { EMPTY, concat, of, Observable } from 'rxjs';
 import { LogseqTaskWorkflow, LogseqCfg } from './logseq.model';
-import { LogseqBlock } from './logseq-issue.model';
 import { LOGSEQ_TYPE } from './logseq.const';
 import { MatDialog } from '@angular/material/dialog';
 import { PluginDialogComponent } from '../../../../plugins/ui/plugin-dialog/plugin-dialog.component';
 import { Store } from '@ngrx/store';
 import { Task } from '../../../tasks/task.model';
-import { encodeMarkerWithHash } from './logseq-marker-hash.util';
-
-type DiscrepancyType =
-  | 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
-  | 'SUPERPROD_DONE_LOGSEQ_NOT_DONE'
-  | 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE'
-  | 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
-
-interface DiscrepancyItem {
-  task: Task;
-  block: LogseqBlock;
-  discrepancyType: DiscrepancyType;
-}
 
 @Injectable()
 export class LogseqIssueEffects {
@@ -49,7 +39,6 @@ export class LogseqIssueEffects {
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _previousTaskId: string | null = null;
-  private _discrepancies$ = new Subject<DiscrepancyItem>();
   private _isDialogOpen = false;
 
   private _getMarkers(workflow: LogseqTaskWorkflow): {
@@ -169,18 +158,33 @@ export class LogseqIssueEffects {
         break;
     }
 
-    // Update task with new marker to prevent false positives on next poll
+    // Update :SP: drawer and task state to prevent false positives on next poll
     if (updatedMarker !== null) {
-      // Fetch updated block to get current content for hash
+      // Update :SP: drawer with current sync state
+      await this._logseqCommonService.updateSpDrawer(
+        task.issueId as string,
+        task.issueProviderId,
+      );
+
+      // Fetch updated block to refresh task details display
       const updatedBlock = await this._logseqCommonService.getById(
         task.issueId as string,
         task.issueProviderId,
       );
 
+      // Refresh issue data in task detail panel
+      if (updatedBlock) {
+        this._issueService.refreshIssueData(
+          task.issueProviderId,
+          task.issueId as string,
+          updatedBlock,
+        );
+      }
+
       this._taskService.update(task.id, {
-        issueMarker: encodeMarkerWithHash(updatedMarker, updatedBlock.content),
         isDone: updatedMarker === 'DONE',
-        issueWasUpdated: true,
+        // Don't mark as "updated" for marker-only changes
+        issueWasUpdated: false,
       });
     }
   }
@@ -221,17 +225,6 @@ export class LogseqIssueEffects {
         this._store.dispatch(unsetCurrentTask());
         break;
     }
-  }
-
-  private _saveCurrentLogseqState(task: Task, block: LogseqBlock): void {
-    // Save current Logseq state to prevent dialog from reappearing
-    // User has acknowledged the discrepancy and chosen to ignore it
-    // IMPORTANT: Set issueWasUpdated to prevent other effects from syncing to Logseq
-    this._taskService.update(task.id, {
-      issueMarker: encodeMarkerWithHash(block.marker, block.content),
-      isDone: block.marker === 'DONE',
-      issueWasUpdated: true,
-    });
   }
 
   // Effect: Start a new task (and stop previous task if any)
@@ -359,8 +352,8 @@ export class LogseqIssueEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === true),
-        // Only sync manual changes, not issue updates
-        filter(({ task }) => task.changes.issueWasUpdated !== true),
+        // Only sync manual changes, not issue/polling updates
+        filter(({ task }) => task.changes.issueWasUpdated === undefined),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId),
         concatMap((task) => {
@@ -393,9 +386,10 @@ export class LogseqIssueEffects {
             >;
             const hasDueDateChange = updateAction.task.changes.dueDay !== undefined;
             const hasDueTimeChange = updateAction.task.changes.dueWithTime !== undefined;
+            // Skip if no due date change, or if this is an issue/polling update
             if (
               (!hasDueDateChange && !hasDueTimeChange) ||
-              updateAction.task.changes.issueWasUpdated === true
+              updateAction.task.changes.issueWasUpdated !== undefined
             ) {
               return EMPTY;
             }
@@ -420,8 +414,9 @@ export class LogseqIssueEffects {
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
         filter(({ task }) => task.changes.isDone === false),
-        // Only sync manual changes, not issue updates
-        filter(({ task }) => task.changes.issueWasUpdated !== true),
+        // Only sync manual changes, not issue/polling updates
+        // issueWasUpdated is undefined for manual actions, false for marker polling, true for content polling
+        filter(({ task }) => task.changes.issueWasUpdated === undefined),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId),
         withLatestFrom(this._taskService.currentTaskId$),
@@ -449,132 +444,13 @@ export class LogseqIssueEffects {
     { dispatch: false },
   );
 
-  // Effect: Show dialog when there's a discrepancy between SuperProd and Logseq
-  // This effect triggers when a task is updated, started, or stopped
-  promptActivateTaskWhenMarkerChanges$ = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask, setCurrentTask, unsetCurrentTask),
-        concatMap((action) => {
-          // Handle different action types
-          if (action.type === TaskSharedActions.updateTask.type) {
-            const updateAction = action as ReturnType<
-              typeof TaskSharedActions.updateTask
-            >;
-            return this._taskService
-              .getByIdOnce$(updateAction.task.id as string)
-              .pipe(filter((task) => task.issueType === LOGSEQ_TYPE && !!task.issueId));
-          } else if (action.type === setCurrentTask.type) {
-            const setAction = action as ReturnType<typeof setCurrentTask>;
-            if (setAction.id) {
-              return this._taskService.getByIdOnce$(setAction.id);
-            }
-          } else if (action.type === unsetCurrentTask.type) {
-            // When task is unset, check if previous task was a Logseq task
-            return this._taskService.currentTaskId$.pipe(
-              take(1),
-              filter((id): id is string => !!id),
-              concatMap((id) => this._taskService.getByIdOnce$(id)),
-            );
-          }
-          return EMPTY;
-        }),
-        filter((task) => {
-          const isLogseqTask = task.issueType === LOGSEQ_TYPE && !!task.issueId;
-          // Validate UUID format (must be string with UUID format, not a number)
-          const isValidUuid =
-            typeof task.issueId === 'string' &&
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-              task.issueId,
-            );
-          return isLogseqTask && isValidUuid;
-        }),
-        withLatestFrom(this._taskService.currentTaskId$),
-        mergeMap(([task, currentTaskId]) =>
-          from(
-            this._issueService.getById(
-              LOGSEQ_TYPE,
-              task.issueId as string,
-              task.issueProviderId || '',
-            ),
-          ).pipe(
-            mergeMap((issue) => {
-              console.log('[LOGSEQ DETECT] Checking task:', task.id, task.title);
-
-              if (!issue) {
-                console.log('[LOGSEQ DETECT] No issue found for task:', task.id);
-                return EMPTY;
-              }
-              const block = issue as LogseqBlock;
-
-              const isTaskActive = currentTaskId === task.id;
-              const isBlockActive = block.marker === 'NOW' || block.marker === 'DOING';
-              const isTaskDone = task.isDone;
-              const isBlockDone = block.marker === 'DONE';
-
-              console.log('[LOGSEQ DETECT] Status:', {
-                taskId: task.id,
-                taskTitle: task.title,
-                isTaskActive,
-                isBlockActive,
-                isTaskDone,
-                isBlockDone,
-                blockMarker: block.marker,
-                currentTaskId,
-              });
-
-              // Detect discrepancies
-              let discrepancyType: DiscrepancyType | null = null;
-
-              if (isBlockDone && !isTaskDone) {
-                discrepancyType = 'LOGSEQ_DONE_SUPERPROD_NOT_DONE';
-              } else if (!isBlockDone && isTaskDone) {
-                discrepancyType = 'SUPERPROD_DONE_LOGSEQ_NOT_DONE';
-              } else if (isBlockActive && !isTaskActive) {
-                discrepancyType = 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE';
-              } else if (isTaskActive && !isBlockActive && !isTaskDone) {
-                discrepancyType = 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
-              }
-
-              console.log('[LOGSEQ DETECT] Discrepancy type:', discrepancyType);
-
-              if (!discrepancyType) {
-                console.log(
-                  '[LOGSEQ DETECT] No discrepancy found, skipping task:',
-                  task.id,
-                );
-                return EMPTY;
-              }
-
-              console.log('[LOGSEQ DETECT] Pushing to buffer:', {
-                taskId: task.id,
-                taskTitle: task.title,
-                discrepancyType,
-              });
-
-              // Push discrepancy to subject for buffering
-              // Note: Don't check _openDialogTaskIds here, as it would block multiple tasks
-              // from being collected in the buffer. The dialog itself prevents duplicates.
-              this._discrepancies$.next({
-                task,
-                block,
-                discrepancyType,
-              });
-
-              return EMPTY;
-            }),
-          ),
-        ),
-      ),
-    { dispatch: false },
-  );
-
-  // Effect: Buffer discrepancies and show them in a single dialog
-  // Note: Uses 2000ms buffer to catch all discrepancies from polling updates
+  // Effect: Buffer discrepancies from polling and show them in a single dialog
+  // Discrepancies are emitted by LogseqCommonInterfacesService.discrepancies$
+  // Uses debounce to collect all discrepancies from a poll cycle before showing dialog
   showDiscrepancyDialog$ = createEffect(
     () =>
-      this._discrepancies$.pipe(
-        bufferTime(2000),
+      this._logseqCommonService.discrepancies$.pipe(
+        buffer(this._logseqCommonService.discrepancies$.pipe(debounceTime(500))),
         tap((discrepancies) => {
           console.log('[LOGSEQ BUFFER] Buffered discrepancies:', discrepancies.length);
         }),
@@ -635,6 +511,7 @@ export class LogseqIssueEffects {
     const buttons = this._buildDiscrepancyButtons(
       uniqueDiscrepancies,
       activeDiscrepancies,
+      doneDiscrepancies,
     );
 
     // Show dialog
@@ -665,23 +542,34 @@ export class LogseqIssueEffects {
   ): string {
     let html = '<div style="margin-bottom: 16px;">';
 
-    // Special case: Multiple active tasks
-    if (activeDiscrepancies.length > 1) {
-      const logseqActiveCount = activeDiscrepancies.filter(
-        (d) => d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
-      ).length;
+    // Check for active tasks in Logseq (DOING/NOW)
+    const logseqActiveDiscrepancies = activeDiscrepancies.filter(
+      (d) => d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
+    );
+    const hasLogseqActive = logseqActiveDiscrepancies.length >= 1;
 
-      if (logseqActiveCount > 1) {
-        html +=
-          '<p><strong>Mehrere Tasks sind in Logseq als NOW/DOING markiert:</strong></p>';
-        html +=
-          '<p style="margin-bottom: 12px;">In Super Productivity kann nur ein Task aktiv sein. Welchen möchten Sie aktivieren?</p>';
-        html += '<div id="active-task-list" style="margin-left: 16px;">';
+    // Active tasks in Logseq - show radio selection (always, even for single task)
+    if (hasLogseqActive) {
+      const headerText =
+        logseqActiveDiscrepancies.length > 1
+          ? 'Mehrere Tasks sind in Logseq als NOW/DOING markiert:'
+          : 'Ein Task ist in Logseq als NOW/DOING markiert:';
+      html += `<p><strong>${headerText}</strong></p>`;
+      html += '<p style="margin-bottom: 12px;">Welchen Task möchten Sie aktivieren?</p>';
+      html += '<div id="active-task-list" style="margin-left: 16px;">';
 
-        activeDiscrepancies
-          .filter((d) => d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE')
-          .forEach((d, index) => {
-            html += `
+      // Option to activate none
+      html += `
+            <div style="margin-bottom: 8px;">
+              <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="activeTask" value="__none__" style="margin-right: 8px;">
+                <span style="font-style: italic; color: #888;">Keinen aktivieren (alle in Logseq deaktivieren)</span>
+              </label>
+            </div>
+          `;
+
+      logseqActiveDiscrepancies.forEach((d, index) => {
+        html += `
             <div style="margin-bottom: 8px;">
               <label style="display: flex; align-items: center; cursor: pointer;">
                 <input type="radio" name="activeTask" value="${d.task.id}" ${index === 0 ? 'checked' : ''} style="margin-right: 8px;">
@@ -689,30 +577,115 @@ export class LogseqIssueEffects {
               </label>
             </div>
           `;
-          });
+      });
 
-        html += '</div>';
-        return html + '</div>';
-      }
+      html += '</div>';
     }
 
-    // Standard case: Show all discrepancies grouped
-    if (activeDiscrepancies.length > 0) {
-      html += `<p><strong>🟢 Aktive Tasks (${activeDiscrepancies.length}):</strong></p>`;
-      html += '<ul style="margin-left: 20px; margin-bottom: 12px;">';
+    // Add CSS for toggle button styling (used by both ACTIVE and DONE)
+    if (activeDiscrepancies.length > 0 || doneDiscrepancies.length > 0) {
+      html += `<style>
+        .toggle-label { padding:4px 10px;cursor:pointer;background:transparent;color:inherit; }
+        .toggle-label-right { border-left:1px solid #666; }
+        input:checked + .toggle-label { background:#1976d2;color:white; }
+      </style>`;
+    }
+
+    // Single/few active discrepancies with per-task toggle (not multiple DOING from Logseq)
+    if (!hasLogseqActive && activeDiscrepancies.length > 0) {
+      html += `<p><strong>Aktive Tasks (${activeDiscrepancies.length}):</strong></p>`;
+      html += '<div style="margin-bottom: 12px;">';
+
       activeDiscrepancies.forEach((d) => {
-        html += `<li>${this._escapeHtml(d.task.title)} - ${this._getDialogMessage(d.discrepancyType, d.task.title)}</li>`;
+        const isActiveInLogseq =
+          d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE';
+        const statusText = isActiveInLogseq
+          ? 'Logseq: DOING, SuperProd: inaktiv'
+          : 'SuperProd: aktiv, Logseq: TODO';
+        const title = this._escapeHtml(d.task.title);
+        const taskId = d.task.id;
+
+        const rowStyle =
+          'display:flex;align-items:center;justify-content:space-between;' +
+          'padding:8px 0;border-bottom:1px solid #ccc';
+        const toggleStyle =
+          'display:flex;border:1px solid #666;border-radius:4px;overflow:hidden';
+
+        // Default: accept Logseq value (activate if Logseq is DOING, deactivate if Logseq is TODO)
+        const spChecked = 'checked';
+        const lqChecked = '';
+        const spLabel = isActiveInLogseq ? 'Aktivieren' : 'Deaktivieren';
+        const lqLabel = isActiveInLogseq ? 'Logseq: TODO' : 'Logseq: DOING';
+
+        html += `<div style="${rowStyle}">`;
+        html += `<div style="flex:1;min-width:0;margin-right:12px">`;
+        html +=
+          `<strong style="display:block;overflow:hidden;text-overflow:ellipsis;` +
+          `white-space:nowrap">${title}</strong>`;
+        html += `<small style="color:#666">${statusText}</small></div>`;
+
+        html += `<div class="toggle-group" data-task-id="${taskId}" style="${toggleStyle}">`;
+        html +=
+          `<input type="radio" name="active-action-${taskId}" value="superprod" ` +
+          `id="active-sp-${taskId}" ${spChecked} style="display:none">`;
+        html += `<label for="active-sp-${taskId}" class="toggle-label">${spLabel}</label>`;
+        html +=
+          `<input type="radio" name="active-action-${taskId}" value="logseq" ` +
+          `id="active-lq-${taskId}" ${lqChecked} style="display:none">`;
+        html +=
+          `<label for="active-lq-${taskId}" class="toggle-label toggle-label-right">` +
+          `${lqLabel}</label>`;
+        html += `</div></div>`;
       });
-      html += '</ul>';
+
+      html += '</div>';
     }
 
+    // DONE discrepancies with per-task action selection
     if (doneDiscrepancies.length > 0) {
-      html += `<p><strong>✅ Abgeschlossene Tasks (${doneDiscrepancies.length}):</strong></p>`;
-      html += '<ul style="margin-left: 20px; margin-bottom: 12px;">';
+      html += `<p><strong>DONE Status (${doneDiscrepancies.length}):</strong></p>`;
+      html += '<div style="margin-bottom: 12px;">';
+
       doneDiscrepancies.forEach((d) => {
-        html += `<li>${this._escapeHtml(d.task.title)} - ${this._getDialogMessage(d.discrepancyType, d.task.title)}</li>`;
+        const isDoneInLogseq = d.discrepancyType === 'LOGSEQ_DONE_SUPERPROD_NOT_DONE';
+        const statusText = isDoneInLogseq
+          ? 'Logseq: DONE, SuperProd: offen'
+          : 'SuperProd: DONE, Logseq: offen';
+        const logseqLabel = isDoneInLogseq ? 'TODO' : 'DONE';
+        const title = this._escapeHtml(d.task.title);
+        const taskId = d.task.id;
+
+        const rowStyle =
+          'display:flex;align-items:center;justify-content:space-between;' +
+          'padding:8px 0;border-bottom:1px solid #ccc';
+        const toggleStyle =
+          'display:flex;border:1px solid #666;border-radius:4px;overflow:hidden';
+
+        html += `<div style="${rowStyle}">`;
+        html += `<div style="flex:1;min-width:0;margin-right:12px">`;
+        html +=
+          `<strong style="display:block;overflow:hidden;text-overflow:ellipsis;` +
+          `white-space:nowrap">${title}</strong>`;
+        html += `<small style="color:#666">${statusText}</small></div>`;
+        // Always default to accepting Logseq value
+        const spChecked = 'checked';
+        const lqChecked = '';
+
+        html += `<div class="toggle-group" data-task-id="${taskId}" style="${toggleStyle}">`;
+        html +=
+          `<input type="radio" name="action-${taskId}" value="superprod" ` +
+          `id="sp-${taskId}" ${spChecked} style="display:none">`;
+        html += `<label for="sp-${taskId}" class="toggle-label">Abschließen</label>`;
+        html +=
+          `<input type="radio" name="action-${taskId}" value="logseq" ` +
+          `id="lq-${taskId}" ${lqChecked} style="display:none">`;
+        html +=
+          `<label for="lq-${taskId}" class="toggle-label toggle-label-right">` +
+          `Logseq: ${logseqLabel}</label>`;
+        html += `</div></div>`;
       });
-      html += '</ul>';
+
+      html += '</div>';
     }
 
     html += '</div>';
@@ -722,92 +695,159 @@ export class LogseqIssueEffects {
   private _buildDiscrepancyButtons(
     allDiscrepancies: DiscrepancyItem[],
     activeDiscrepancies: DiscrepancyItem[],
+    doneDiscrepancies: DiscrepancyItem[],
   ): any[] {
-    const logseqActiveCount = activeDiscrepancies.filter(
+    const logseqActiveDiscrepancies = activeDiscrepancies.filter(
       (d) => d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
-    ).length;
+    );
+    const hasLogseqActive = logseqActiveDiscrepancies.length >= 1;
+    const hasDoneDiscrepancies = doneDiscrepancies.length > 0;
 
-    // Special buttons for multiple active tasks
-    if (logseqActiveCount > 1) {
+    // Helper function to handle active task selection
+    const handleActiveTaskSelection = async (): Promise<void> => {
+      const selectedRadio = document.querySelector<HTMLInputElement>(
+        'input[name="activeTask"]:checked',
+      );
+      if (selectedRadio) {
+        const selectedTaskId = selectedRadio.value;
+        if (selectedTaskId === '__none__') {
+          // Deactivate all in Logseq, don't activate any in SuperProd
+          for (const d of logseqActiveDiscrepancies) {
+            await this._performLogseqAction(d.discrepancyType, d.task);
+          }
+        } else {
+          // Activate selected task in SuperProd
+          this._store.dispatch(setCurrentTask({ id: selectedTaskId }));
+          // Deactivate all others in Logseq
+          for (const d of logseqActiveDiscrepancies) {
+            if (d.task.id !== selectedTaskId) {
+              await this._performLogseqAction(
+                'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
+                d.task,
+              );
+            }
+          }
+        }
+      }
+    };
+
+    // Combined case: Multiple active tasks AND done discrepancies
+    if (hasLogseqActive && hasDoneDiscrepancies) {
       return [
         {
-          label: 'Ausgewählten aktivieren, andere deaktivieren',
+          label: 'Anwenden',
           color: 'primary',
           onClick: async () => {
-            const selectedRadio = document.querySelector<HTMLInputElement>(
-              'input[name="activeTask"]:checked',
-            );
-            if (selectedRadio) {
-              const selectedTaskId = selectedRadio.value;
-              const selectedTask = activeDiscrepancies.find(
-                (d) => d.task.id === selectedTaskId,
+            // Handle active task selection
+            await handleActiveTaskSelection();
+
+            // Process DONE discrepancies based on individual radio selections
+            for (const d of doneDiscrepancies) {
+              const radio = document.querySelector<HTMLInputElement>(
+                `input[name="action-${d.task.id}"]:checked`,
               );
+              if (!radio) continue;
 
-              if (selectedTask) {
-                // Activate selected task in SuperProd
-                this._store.dispatch(setCurrentTask({ id: selectedTaskId }));
-
-                // Deactivate all others in Logseq
-                for (const d of activeDiscrepancies) {
-                  if (d.task.id !== selectedTaskId) {
-                    await this._performLogseqAction(
-                      'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
-                      d.task,
-                    );
-                  }
-                }
+              const action = radio.value;
+              if (action === 'superprod') {
+                this._performSuperProdAction(d.discrepancyType, d.task);
+              } else if (action === 'logseq') {
+                await this._performLogseqAction(d.discrepancyType, d.task);
               }
             }
-          },
-        },
-        {
-          label: 'Alle in Logseq deaktivieren (TODO/LATER)',
-          color: 'accent',
-          onClick: async () => {
-            for (const d of activeDiscrepancies.filter(
-              (item) => item.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE',
-            )) {
-              await this._performLogseqAction(d.discrepancyType, d.task);
-            }
-          },
-        },
-        {
-          label: 'Alle ignorieren',
-          onClick: () => {
-            allDiscrepancies.forEach((d) => {
-              this._saveCurrentLogseqState(d.task, d.block);
-            });
           },
         },
       ];
     }
 
-    // Standard buttons for mixed or single discrepancies
-    return [
-      {
-        label: 'Alle in Logseq synchronisieren',
-        color: 'accent',
+    // Active tasks in Logseq only (no done discrepancies)
+    if (hasLogseqActive) {
+      return [
+        {
+          label: 'Anwenden',
+          color: 'primary',
+          onClick: handleActiveTaskSelection,
+        },
+      ];
+    }
+
+    // DONE discrepancies (possibly with single active discrepancy)
+    if (hasDoneDiscrepancies) {
+      const buttons: any[] = [];
+
+      // Quick action: Sync all to Logseq (primary action)
+      buttons.push({
+        label: 'Alle in Logseq syncen',
+        color: 'primary',
         onClick: async () => {
-          for (const d of allDiscrepancies) {
+          for (const d of doneDiscrepancies) {
+            await this._performLogseqAction(d.discrepancyType, d.task);
+          }
+          for (const d of activeDiscrepancies) {
             await this._performLogseqAction(d.discrepancyType, d.task);
           }
         },
-      },
-      {
-        label: 'Alle in SuperProd synchronisieren',
-        color: 'primary',
-        onClick: () => {
-          allDiscrepancies.forEach((d) => {
-            this._performSuperProdAction(d.discrepancyType, d.task);
-          });
+      });
+
+      // Secondary action: Process individual selections
+      buttons.push({
+        label: 'Anwenden',
+        onClick: async () => {
+          // Process active discrepancies based on individual radio selections
+          for (const d of activeDiscrepancies) {
+            const radio = document.querySelector<HTMLInputElement>(
+              `input[name="active-action-${d.task.id}"]:checked`,
+            );
+            if (!radio) continue;
+
+            const action = radio.value;
+            if (action === 'superprod') {
+              this._performSuperProdAction(d.discrepancyType, d.task);
+            } else if (action === 'logseq') {
+              await this._performLogseqAction(d.discrepancyType, d.task);
+            }
+          }
+
+          // Process DONE discrepancies based on individual radio selections
+          for (const d of doneDiscrepancies) {
+            const radio = document.querySelector<HTMLInputElement>(
+              `input[name="action-${d.task.id}"]:checked`,
+            );
+            if (!radio) continue;
+
+            const action = radio.value;
+            if (action === 'superprod') {
+              this._performSuperProdAction(d.discrepancyType, d.task);
+            } else if (action === 'logseq') {
+              await this._performLogseqAction(d.discrepancyType, d.task);
+            }
+          }
         },
-      },
+      });
+
+      return buttons;
+    }
+
+    // Standard buttons for active-only discrepancies (with toggle selection)
+    return [
       {
-        label: 'Alle ignorieren',
-        onClick: () => {
-          allDiscrepancies.forEach((d) => {
-            this._saveCurrentLogseqState(d.task, d.block);
-          });
+        label: 'Anwenden',
+        color: 'primary',
+        onClick: async () => {
+          // Process active discrepancies based on individual radio selections
+          for (const d of activeDiscrepancies) {
+            const radio = document.querySelector<HTMLInputElement>(
+              `input[name="active-action-${d.task.id}"]:checked`,
+            );
+            if (!radio) continue;
+
+            const action = radio.value;
+            if (action === 'superprod') {
+              this._performSuperProdAction(d.discrepancyType, d.task);
+            } else if (action === 'logseq') {
+              await this._performLogseqAction(d.discrepancyType, d.task);
+            }
+          }
         },
       },
     ];

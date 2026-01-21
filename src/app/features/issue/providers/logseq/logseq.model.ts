@@ -11,11 +11,7 @@ export interface LogseqCfg extends BaseIssueProviderCfg {
   queryFilter: string;
 
   // Sync
-  isUpdateBlockOnTaskDone: boolean;
+  isIncludeMarkerInUpdateDetection: boolean;
   linkFormat: 'logseq-url' | 'http-url';
   taskWorkflow: LogseqTaskWorkflow;
-
-  // Reference
-  superProdReferenceMode: 'property' | 'child-block' | 'none';
-  superProdReferenceProperty: string;
 }

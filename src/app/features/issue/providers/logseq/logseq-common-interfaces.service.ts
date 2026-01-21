@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { Task } from '../../../tasks/task.model';
 import { concatMap, first, map, switchMap } from 'rxjs/operators';
 import { IssueServiceInterface } from '../../issue-service-interface';
@@ -15,17 +15,32 @@ import {
   LOGSEQ_TYPE,
 } from './logseq.const';
 import { IssueProviderService } from '../../issue-provider.service';
+import { TaskService } from '../../../tasks/task.service';
 import {
   extractFirstLine,
   extractScheduledDate,
   extractScheduledDateTime,
+  extractSpDrawerData,
+  calculateContentHash,
+  updateSpDrawerInContent,
   mapBlockToIssueReduced,
   mapBlockToSearchResult,
   updateScheduledInContent,
 } from './logseq-issue-map.util';
 import { TaskAttachment } from '../../../tasks/task-attachment/task-attachment.model';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
-import { decodeMarker, encodeMarkerWithHash, hashCode } from './logseq-marker-hash.util';
+
+export type DiscrepancyType =
+  | 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
+  | 'SUPERPROD_DONE_LOGSEQ_NOT_DONE'
+  | 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE'
+  | 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
+
+export interface DiscrepancyItem {
+  task: Task;
+  block: LogseqBlock;
+  discrepancyType: DiscrepancyType;
+}
 
 @Injectable({
   providedIn: 'root',
@@ -33,8 +48,16 @@ import { decodeMarker, encodeMarkerWithHash, hashCode } from './logseq-marker-ha
 export class LogseqCommonInterfacesService implements IssueServiceInterface {
   private readonly _logseqApiService = inject(LogseqApiService);
   private readonly _issueProviderService = inject(IssueProviderService);
+  private readonly _taskService = inject(TaskService);
 
   pollInterval: number = LOGSEQ_POLL_INTERVAL;
+
+  // Write-mutex: Set of blockUuids currently being written to
+  // Used to skip discrepancy detection during writes
+  private _blocksBeingWritten = new Set<string>();
+
+  // Subject for emitting discrepancies detected during polling
+  discrepancies$ = new Subject<DiscrepancyItem>();
 
   isEnabled(cfg: LogseqCfg): boolean {
     return isLogseqEnabled(cfg);
@@ -121,7 +144,6 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       title: extractFirstLine(block.content),
       issueLastUpdated: block.updatedAt,
       isDone: block.marker === 'DONE',
-      issueMarker: encodeMarkerWithHash(block.marker, block.content),
     };
 
     // If time is specified, use dueWithTime, otherwise use dueDay
@@ -159,6 +181,8 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return {
         ...baseData,
         issueWasUpdated: false,
+        dueDay: undefined, // Clear dueDay when no SCHEDULED
+        dueWithTime: undefined, // Clear dueWithTime when no SCHEDULED
       };
     }
   }
@@ -175,6 +199,13 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       throw new Error('No issueId');
     }
 
+    // Skip if this block is currently being written to (write-mutex)
+    // This prevents race conditions where polling sees stale data during a write
+    if (this._blocksBeingWritten.has(task.issueId as string)) {
+      console.log('[LOGSEQ POLL] Skipping - block is being written:', task.issueId);
+      return null;
+    }
+
     const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
     if (!cfg) {
       throw new Error('No config found for issueProviderId');
@@ -188,65 +219,146 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     }
 
     const blockTitle = extractFirstLine(block.content);
-    const isTitleChanged = blockTitle !== task.title;
-    const isDoneChanged = (block.marker === 'DONE') !== task.isDone;
+    // Note: We don't compare titles directly anymore.
+    // Title changes in Logseq are detected via content hash change.
+    // This allows users to rename tasks in SuperProd without triggering updates.
 
-    // Decode stored marker and hash
-    const storedData = decodeMarker(task.issueMarker);
-    const currentHash = hashCode(block.content);
-    const isMarkerChanged = block.marker !== storedData.marker;
+    // Check for marker discrepancy (triggers discrepancy dialog, but NOT "updated" badge)
+    // Get current task ID to check active status discrepancy
+    const currentTaskId = this._taskService.currentTaskId();
+    const isTaskActive = currentTaskId === task.id;
+    const isBlockActive = block.marker === 'NOW' || block.marker === 'DOING';
+    const isBlockDone = block.marker === 'DONE';
+
+    // Detect all marker discrepancies:
+    // 1. DONE status differs
+    // 2. Active status differs (block is active but task not, or vice versa)
+    const isDoneDiscrepancy = isBlockDone !== task.isDone;
+    const isActiveDiscrepancy = !task.isDone && isBlockActive !== isTaskActive;
+    const isMarkerDiscrepancy = isDoneDiscrepancy || isActiveDiscrepancy;
+
+    // Read stored sync data from :SP: drawer in block content
+    const spDrawerData = extractSpDrawerData(block.content);
+    const currentHash = calculateContentHash(block.content);
+
+    // Initialize :SP: drawer if it doesn't exist yet
+    // This ensures we can detect future changes
+    // Do this BEFORE checking for updates so it always happens
+    if (spDrawerData.contentHash === null) {
+      console.log('[LOGSEQ SP DRAWER] Initializing drawer for task:', task.id);
+      await this.updateSpDrawer(task.issueId as string, task.issueProviderId);
+    }
+
+    // Check for content changes using drawer data
+    // Only consider it changed if we have a stored hash AND it differs from current
+    // If no stored hash exists, we can't detect content changes yet
     const isContentChanged =
-      storedData.contentHash !== null && storedData.contentHash !== currentHash;
+      spDrawerData.contentHash !== null && spDrawerData.contentHash !== currentHash;
 
     // Check if scheduled date/time changed
     const blockScheduledDate = extractScheduledDate(block.content);
     const blockScheduledDateTime = extractScheduledDateTime(block.content);
 
-    // Simple comparison: trust the bidirectional sync
-    // Any timing discrepancies will be corrected on next poll
-    const isDueDateChanged = (blockScheduledDate ?? null) !== (task.dueDay ?? null);
+    // Only detect date/time changes if block content actually changed (hash differs)
+    // This prevents overwriting SuperProd changes before they're synced to Logseq
+    // If hash is same or no drawer exists, SuperProd has authority
+    const isDueDateChanged =
+      isContentChanged && (blockScheduledDate ?? null) !== (task.dueDay ?? null);
     const isDueTimeChanged =
-      (blockScheduledDateTime ?? null) !== (task.dueWithTime ?? null);
+      isContentChanged && (blockScheduledDateTime ?? null) !== (task.dueWithTime ?? null);
+
+    // Determine if this is a content change (should mark as "updated")
+    // vs just a marker discrepancy (should show dialog but not mark as "updated")
+    const hasContentChange = isContentChanged || isDueDateChanged || isDueTimeChanged;
 
     console.log('[LOGSEQ UPDATE CHECK]', {
       taskId: task.id,
       taskTitle: task.title,
-      isTitleChanged,
-      isDoneChanged,
-      isMarkerChanged,
+      isMarkerDiscrepancy,
+      isDoneDiscrepancy,
+      isActiveDiscrepancy,
+      isTaskActive,
+      isBlockActive,
+      hasContentChange,
       isContentChanged,
       isDueDateChanged,
       isDueTimeChanged,
       blockTitle,
       blockMarker: block.marker,
-      storedMarker: storedData.marker,
-      storedHash: storedData.contentHash,
+      spDrawerData,
       currentHash,
       taskIsDone: task.isDone,
       blockScheduledDate,
       taskDueDay: task.dueDay,
       blockScheduledDateTime,
       taskDueWithTime: task.dueWithTime,
+      blockContent: block.content,
     });
 
-    // Trigger update if there's a substantive change
-    if (
-      isTitleChanged ||
-      isDoneChanged ||
-      isMarkerChanged ||
-      isContentChanged ||
-      isDueDateChanged ||
-      isDueTimeChanged
-    ) {
+    // Emit marker discrepancies to Subject for dialog handling
+    // This is done separately from content changes to allow the dialog to handle them
+    if (isMarkerDiscrepancy) {
+      let discrepancyType: DiscrepancyType;
+      if (isDoneDiscrepancy) {
+        discrepancyType = isBlockDone
+          ? 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
+          : 'SUPERPROD_DONE_LOGSEQ_NOT_DONE';
+      } else {
+        // isActiveDiscrepancy
+        discrepancyType = isBlockActive
+          ? 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE'
+          : 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
+      }
+
+      console.log('[LOGSEQ DISCREPANCY] Emitting:', {
+        taskId: task.id,
+        discrepancyType,
+      });
+
+      this.discrepancies$.next({
+        task,
+        block,
+        discrepancyType,
+      });
+    }
+
+    // Trigger update if there's a marker discrepancy OR content change
+    // - Marker discrepancy: triggers discrepancy dialog (emitted above)
+    // - Content change: triggers "updated" badge
+    if (isMarkerDiscrepancy || hasContentChange) {
+      // Update :SP: drawer with new hash so next poll won't trigger false positive
+      if (hasContentChange) {
+        await this.updateSpDrawer(task.issueId as string, task.issueProviderId);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { title, isDone, ...taskDataWithoutTitleAndDone } = this.getAddTaskData(
+        mapBlockToIssueReduced(block),
+      );
+
+      // For marker discrepancy without content change, we need to force an update
+      // by changing issueLastUpdated. Otherwise, if all task properties are the same,
+      // no update action is dispatched and the discrepancy dialog won't appear.
+      const forceUpdate = isMarkerDiscrepancy && !hasContentChange;
+
       return {
         taskChanges: {
-          ...this.getAddTaskData(mapBlockToIssueReduced(block)),
-          issueWasUpdated: true,
+          // Don't update title - it's only set on task creation
+          // Users can rename tasks in SuperProd without it being overwritten
+          ...taskDataWithoutTitleAndDone,
+          // Don't update isDone for marker discrepancies - let the discrepancy dialog handle it
+          // Only update isDone for content changes when there's no DONE discrepancy
+          ...(hasContentChange && !isDoneDiscrepancy ? { isDone } : {}),
+          // Force update by setting issueLastUpdated to now if only marker changed
+          ...(forceUpdate ? { issueLastUpdated: Date.now() } : {}),
+          // Only mark as "updated" for content changes, not marker discrepancies
+          issueWasUpdated: hasContentChange,
         },
         issue: block,
         issueTitle: extractFirstLine(block.content),
       };
     }
+
     return null;
   }
 
@@ -336,21 +448,29 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     newMarker: 'TODO' | 'DOING' | 'LATER' | 'NOW' | 'DONE',
   ): Promise<void> {
     const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
-    if (!cfg || !cfg.isUpdateBlockOnTaskDone) {
+    if (!cfg) {
       return;
     }
 
-    const block = await this.getById(blockUuid, issueProviderId);
+    // Set write-mutex to prevent discrepancy detection during write
+    this._blocksBeingWritten.add(blockUuid);
 
-    // Update marker in content
-    const updatedContent = block.content.replace(
-      /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
-      `${newMarker} `,
-    );
+    try {
+      const block = await this.getById(blockUuid, issueProviderId);
 
-    await this._logseqApiService
-      .updateBlock$(block.uuid, updatedContent, cfg)
-      .toPromise();
+      // Update marker in content
+      const updatedContent = block.content.replace(
+        /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
+        `${newMarker} `,
+      );
+
+      await this._logseqApiService
+        .updateBlock$(block.uuid, updatedContent, cfg)
+        .toPromise();
+    } finally {
+      // Clear write-mutex after write completes
+      this._blocksBeingWritten.delete(blockUuid);
+    }
   }
 
   async updateIssueFromTask(task: Task): Promise<void> {
@@ -363,75 +483,121 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return;
     }
 
-    const block = await this.getById(task.issueId as string, task.issueProviderId);
-    const todayStr = getDbDateStr();
+    // Set write-mutex to prevent discrepancy detection during write
+    this._blocksBeingWritten.add(task.issueId as string);
 
-    let updatedContent = block.content;
-    let hasChanges = false;
+    try {
+      const block = await this.getById(task.issueId as string, task.issueProviderId);
+      const todayStr = getDbDateStr();
 
-    // Update marker if task done status changed
-    if (cfg.isUpdateBlockOnTaskDone && task.isDone && block.marker !== 'DONE') {
-      updatedContent = updatedContent.replace(
-        /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
-        'DONE ',
-      );
-      hasChanges = true;
+      let updatedContent = block.content;
+      let hasChanges = false;
+
+      // Update marker if task done status changed
+      if (task.isDone && block.marker !== 'DONE') {
+        updatedContent = updatedContent.replace(
+          /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
+          'DONE ',
+        );
+        hasChanges = true;
+      }
+
+      // Update SCHEDULED - use dueWithTime if available, otherwise dueDay
+      const currentScheduledDate = extractScheduledDate(block.content);
+      const currentScheduledDateTime = extractScheduledDateTime(block.content);
+
+      // Determine what should be in Logseq
+      let shouldUpdateScheduled = false;
+
+      if (task.dueWithTime) {
+        // Task has time - check if it differs from current
+        if (currentScheduledDateTime !== task.dueWithTime) {
+          updatedContent = updateScheduledInContent(updatedContent, task.dueWithTime);
+          shouldUpdateScheduled = true;
+        }
+      } else if (task.dueDay) {
+        // Smart Reschedule: If task was overdue in Logseq and is now set to today
+        // Update SCHEDULED in Logseq to today as well
+        const wasOverdueInLogseq =
+          currentScheduledDate !== null && currentScheduledDate < todayStr;
+        const isNowScheduledForToday = task.dueDay === todayStr;
+
+        if (wasOverdueInLogseq && isNowScheduledForToday) {
+          console.log('[LOGSEQ SMART RESCHEDULE] Updating overdue task to today:', {
+            taskTitle: task.title,
+            oldScheduledDate: currentScheduledDate,
+            newScheduledDate: todayStr,
+          });
+          updatedContent = updateScheduledInContent(updatedContent, todayStr);
+          shouldUpdateScheduled = true;
+        }
+        // Normal case: Task has only date - check if it differs from current
+        else if (
+          currentScheduledDate !== task.dueDay ||
+          currentScheduledDateTime !== null
+        ) {
+          updatedContent = updateScheduledInContent(updatedContent, task.dueDay);
+          shouldUpdateScheduled = true;
+        }
+      } else {
+        // Task has no due date - remove SCHEDULED if present
+        if (currentScheduledDate !== null || currentScheduledDateTime !== null) {
+          updatedContent = updateScheduledInContent(updatedContent, null);
+          shouldUpdateScheduled = true;
+        }
+      }
+
+      if (shouldUpdateScheduled) {
+        hasChanges = true;
+      }
+
+      if (hasChanges) {
+        await this._logseqApiService
+          .updateBlock$(block.uuid, updatedContent, cfg)
+          .toPromise();
+
+        // Update :SP: drawer with new sync data
+        await this.updateSpDrawer(task.issueId as string, task.issueProviderId);
+      }
+    } finally {
+      // Clear write-mutex after write completes
+      this._blocksBeingWritten.delete(task.issueId as string);
+    }
+  }
+
+  /**
+   * Update the :SP: drawer in a block with current sync timestamp and content hash
+   * This should be called after any sync operation to track the synced state
+   */
+  async updateSpDrawer(blockUuid: string, issueProviderId: string): Promise<void> {
+    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    if (!cfg) {
+      return;
     }
 
-    // Update SCHEDULED - use dueWithTime if available, otherwise dueDay
-    const currentScheduledDate = extractScheduledDate(block.content);
-    const currentScheduledDateTime = extractScheduledDateTime(block.content);
-
-    // Determine what should be in Logseq
-    let shouldUpdateScheduled = false;
-
-    if (task.dueWithTime) {
-      // Task has time - check if it differs from current
-      if (currentScheduledDateTime !== task.dueWithTime) {
-        updatedContent = updateScheduledInContent(updatedContent, task.dueWithTime);
-        shouldUpdateScheduled = true;
-      }
-    } else if (task.dueDay) {
-      // Smart Reschedule: If task was overdue in Logseq and is now set to today
-      // Update SCHEDULED in Logseq to today as well
-      const wasOverdueInLogseq =
-        currentScheduledDate !== null && currentScheduledDate < todayStr;
-      const isNowScheduledForToday = task.dueDay === todayStr;
-
-      if (wasOverdueInLogseq && isNowScheduledForToday) {
-        console.log('[LOGSEQ SMART RESCHEDULE] Updating overdue task to today:', {
-          taskTitle: task.title,
-          oldScheduledDate: currentScheduledDate,
-          newScheduledDate: todayStr,
-        });
-        updatedContent = updateScheduledInContent(updatedContent, todayStr);
-        shouldUpdateScheduled = true;
-      }
-      // Normal case: Task has only date - check if it differs from current
-      else if (
-        currentScheduledDate !== task.dueDay ||
-        currentScheduledDateTime !== null
-      ) {
-        updatedContent = updateScheduledInContent(updatedContent, task.dueDay);
-        shouldUpdateScheduled = true;
-      }
-    } else {
-      // Task has no due date - remove SCHEDULED if present
-      if (currentScheduledDate !== null || currentScheduledDateTime !== null) {
-        updatedContent = updateScheduledInContent(updatedContent, null);
-        shouldUpdateScheduled = true;
-      }
+    const block = await this._logseqApiService
+      .getBlockByUuid$(blockUuid, cfg)
+      .toPromise();
+    if (!block) {
+      return;
     }
 
-    if (shouldUpdateScheduled) {
-      hasChanges = true;
-    }
+    // Calculate hash without the :SP: drawer to avoid self-referential hash
+    const contentHash = calculateContentHash(block.content);
+    const timestamp = Date.now();
 
-    if (hasChanges) {
-      await this._logseqApiService
-        .updateBlock$(block.uuid, updatedContent, cfg)
-        .toPromise();
-    }
+    // Update the block content with new :SP: drawer
+    const updatedContent = updateSpDrawerInContent(block.content, timestamp, contentHash);
+
+    await this._logseqApiService
+      .updateBlock$(block.uuid, updatedContent, cfg)
+      .toPromise();
+
+    console.log('[LOGSEQ SP DRAWER] Updated:', {
+      blockUuid,
+      timestamp,
+      contentHash,
+    });
   }
 
   private _getCfgOnce$(issueProviderId: string): Observable<LogseqCfg> {

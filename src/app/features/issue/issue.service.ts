@@ -142,6 +142,16 @@ export class IssueService {
     );
   }
 
+  /**
+   * Push updated issue data to refresh subscribers (e.g., task detail panel)
+   * Use this after updating an issue externally (e.g., syncing marker to Logseq)
+   */
+  refreshIssueData(issueProviderId: string, issueId: string, issueData: IssueData): void {
+    if (this.ISSUE_REFRESH_MAP[issueProviderId]?.[issueId]) {
+      this.ISSUE_REFRESH_MAP[issueProviderId][issueId].next(issueData);
+    }
+  }
+
   searchIssues(
     searchTerm: string,
     issueProviderId: string,

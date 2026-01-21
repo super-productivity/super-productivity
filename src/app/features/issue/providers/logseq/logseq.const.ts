@@ -6,11 +6,9 @@ export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
   authToken: null,
   queryFilter:
     '[:find (pull ?b [*]) :where [?b :block/marker ?m] [(contains? #{"TODO" "DOING" "LATER" "NOW"} ?m)]]',
-  isUpdateBlockOnTaskDone: true,
+  isIncludeMarkerInUpdateDetection: false,
   linkFormat: 'logseq-url',
   taskWorkflow: 'TODO_DOING',
-  superProdReferenceMode: 'property',
-  superProdReferenceProperty: 'superProductivity',
 };
 
 export const LOGSEQ_POLL_INTERVAL = 0.5 * 60 * 1000; // half a minute (it's usually local)

@@ -51,11 +51,13 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
         },
       },
       {
-        key: 'isUpdateBlockOnTaskDone',
+        key: 'isIncludeMarkerInUpdateDetection',
         type: 'checkbox',
-        defaultValue: true,
+        defaultValue: false,
         props: {
-          label: 'Update Logseq block to DONE when task is completed',
+          label: 'Include marker changes (TODO/DOING/NOW/LATER/DONE) in update detection',
+          description:
+            'When enabled, changes to the task marker in Logseq will trigger an update notification. When disabled (default), only content changes are detected.',
         },
       },
       {
@@ -82,32 +84,6 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
             { label: 'Logseq URL (logseq://graph/...)', value: 'logseq-url' },
             { label: 'HTTP URL (localhost:12315)', value: 'http-url' },
           ],
-        },
-      },
-      {
-        key: 'superProdReferenceMode',
-        type: 'select',
-        defaultValue: 'property',
-        props: {
-          label: 'Store SuperProductivity reference in Logseq as',
-          description: 'How to add a reference to the SuperProductivity task in Logseq',
-          options: [
-            { label: 'Block property', value: 'property' },
-            { label: 'Child block', value: 'child-block' },
-            { label: 'Do not store', value: 'none' },
-          ],
-        },
-      },
-      {
-        key: 'superProdReferenceProperty',
-        type: 'input',
-        defaultValue: 'superProductivity',
-        expressions: {
-          hide: 'model.superProdReferenceMode !== "property"',
-        },
-        props: {
-          label: 'Property name for SuperProductivity reference',
-          placeholder: 'superProductivity',
         },
       },
     ],
