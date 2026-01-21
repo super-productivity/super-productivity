@@ -323,23 +323,31 @@ export class DropboxApi {
   async getTokensFromAuthCode(
     authCode: string,
     codeVerifier: string,
+    redirectUri: string | null,
   ): Promise<{
     accessToken: string;
     refreshToken: string;
     expiresAt: number;
   } | null> {
     try {
+      const bodyParams: Record<string, string> = {
+        code: authCode,
+        grant_type: 'authorization_code',
+        client_id: this._appKey,
+        code_verifier: codeVerifier,
+      };
+
+      // Only include redirect_uri for mobile platforms
+      if (redirectUri) {
+        bodyParams.redirect_uri = redirectUri;
+      }
+
       const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
         },
-        body: stringify({
-          code: authCode,
-          grant_type: 'authorization_code',
-          client_id: this._appKey,
-          code_verifier: codeVerifier,
-        }),
+        body: stringify(bodyParams),
       });
 
       if (!response.ok) {

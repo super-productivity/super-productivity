@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
+import { createEffect } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
-import { concatMap, filter, tap } from 'rxjs/operators';
+import { concatMap, filter } from 'rxjs/operators';
 import {
   ArchiveOperationHandler,
   isArchiveAffectingAction,
@@ -9,8 +9,6 @@ import {
 import { devError } from '../../util/dev-error';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
-import { remoteArchiveDataApplied } from '../../features/archive/store/archive.actions';
-import { WorklogService } from '../../features/worklog/worklog.service';
 
 /**
  * Unified effect for all archive-affecting operations.
@@ -68,10 +66,8 @@ import { WorklogService } from '../../features/worklog/worklog.service';
 @Injectable()
 export class ArchiveOperationHandlerEffects {
   private _localActions$ = inject(LOCAL_ACTIONS);
-  private _allActions$ = inject(Actions);
   private _archiveOperationHandler = inject(ArchiveOperationHandler);
   private _snackService = inject(SnackService);
-  private _worklogService = inject(WorklogService);
 
   /**
    * Processes all archive-affecting local actions through the central handler.
@@ -104,18 +100,26 @@ export class ArchiveOperationHandlerEffects {
   /**
    * Refreshes the worklog UI when remote archive-affecting operations are applied.
    *
-   * This effect breaks the circular dependency between OperationApplierService
-   * and WorklogService by using NgRx actions instead of direct service injection.
+   * DISABLED: This effect was causing UI freezes during bulk archive sync.
+   * worklogService.refreshWorklog() triggers a full archive load from IndexedDB,
+   * which blocks the main thread if called immediately after bulk archive writes.
    *
-   * Note: Uses Actions (not LOCAL_ACTIONS) because remoteArchiveDataApplied is
-   * a non-persistent action that is only dispatched after applying remote operations.
+   * The worklog will still refresh when needed via:
+   * 1. Router navigation to worklog/daily-summary/quick-history pages
+   * 2. Manual refresh calls from worklog components
+   *
+   * This is acceptable because:
+   * - Most users won't be viewing worklog during sync
+   * - Worklog automatically refreshes on navigation
+   * - Avoiding the refresh prevents browser freezes during sync
    */
-  refreshWorklogAfterRemoteArchiveOps$ = createEffect(
-    () =>
-      this._allActions$.pipe(
-        ofType(remoteArchiveDataApplied),
-        tap(() => this._worklogService.refreshWorklog()),
-      ),
-    { dispatch: false },
-  );
+  // refreshWorklogAfterRemoteArchiveOps$ = createEffect(
+  //   () =>
+  //     this._allActions$.pipe(
+  //       ofType(remoteArchiveDataApplied),
+  //       debounceTime(2000), // Wait for IndexedDB to settle after archive writes
+  //       tap(() => this._worklogService.refreshWorklog()),
+  //     ),
+  //   { dispatch: false },
+  // );
 }

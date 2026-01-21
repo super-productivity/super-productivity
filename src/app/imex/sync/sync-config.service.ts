@@ -243,13 +243,28 @@ export class SyncConfigService {
     // then overlay user settings, and always include encryption key for data security
     // NOTE: that we need the old config here in order not to overwrite other private stuff like tokens
     const providerCfgAsRecord = privateConfigProviderSpecific as Record<string, unknown>;
+
+    // Filter out empty/undefined values from form to preserve existing credentials
+    // This prevents resetOnHide and other form behaviors from clearing saved tokens
+    // Empty credentials should be cleared by disabling the provider, not by form state
+    const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
+      (acc, [key, value]) => {
+        // Only include values that are truthy OR explicitly false/0
+        // Skip: undefined, null, empty string
+        if (value !== undefined && value !== null && value !== '') {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {} as Record<string, unknown>,
+    );
+
     const configWithDefaults = {
       ...PROVIDER_FIELD_DEFAULTS[providerId],
       ...oldConfig,
-      ...providerCfgAsRecord,
+      ...nonEmptyFormValues, // Only non-empty values overwrite saved config
       // Use provider specific key if available, otherwise fallback to root key
-      encryptKey:
-        (providerCfgAsRecord?.encryptKey as string) || settings.encryptKey || '',
+      encryptKey: (nonEmptyFormValues?.encryptKey as string) || settings.encryptKey || '',
     };
 
     await this._providerManager.setProviderConfig(

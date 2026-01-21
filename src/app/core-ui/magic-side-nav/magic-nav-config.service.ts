@@ -375,8 +375,7 @@ export class MagicNavConfigService {
         type: 'route',
         id: 'schedule',
         label: T.MH.SCHEDULE,
-        icon: 'early_on',
-        svgIcon: 'early_on',
+        icon: 'schedule',
         route: '/schedule',
       });
     }

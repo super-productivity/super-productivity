@@ -65,6 +65,7 @@
     "e2e:supersync:down": "docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync",
     "e2e:docker": "docker compose -f docker-compose.e2e.yaml up -d app && ./scripts/wait-for-app.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
     "e2e:docker:webdav": "docker compose -f docker-compose.e2e.yaml up -d app webdav && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
+    "e2e:docker:all": "docker compose -f docker-compose.e2e.yaml up -d app webdav && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e; docker compose -f docker-compose.e2e.yaml down",
     "electron": "NODE_ENV=PROD electron .",
     "electron:build": "tsc -p electron/tsconfig.electron.json",
     "electron:watch": "tsc -p electron/tsconfig.electron.json --watch",
@@ -142,6 +143,7 @@
     "@capacitor/ios": "^7.4.4",
     "@capacitor/keyboard": "^7.0.4",
     "@capacitor/status-bar": "^7.0.4",
+    "@material-symbols/font-400": "^0.40.2",
     "electron-dl": "^3.5.2",
     "electron-localshortcut": "^3.2.1",
     "electron-log": "^5.4.3",
@@ -209,7 +211,7 @@
     "@typescript-eslint/types": "^8.17.0",
     "@typescript-eslint/utils": "^8.51.0",
     "angular-eslint": "^21.1.0",
-    "angular-material-css-vars": "^9.1.1",
+    "angular-material-css-vars": "^10.0.0",
     "baseline-browser-mapping": "^2.9.14",
     "canvas-confetti": "^1.9.4",
     "chai": "^5.1.2",
@@ -279,7 +281,7 @@
     "@lmdb/lmdb-linux-x64": "^3.4.3",
     "@lmdb/lmdb-win32-x64": "^3.2.0",
     "@rollup/rollup-darwin-x64": "4.53.3",
-    "@rollup/rollup-linux-x64-gnu": "4.27.4",
+    "@rollup/rollup-linux-x64-gnu": "4.55.3",
     "@rollup/rollup-win32-x64-msvc": "4.52.3"
   },
   "workspaces": [

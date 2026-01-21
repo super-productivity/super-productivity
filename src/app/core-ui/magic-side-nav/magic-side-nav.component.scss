@@ -147,6 +147,10 @@
       left: 16px;
       right: auto;
     }
+
+    &.mobile {
+      box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+    }
   }
 
   // Note: Theme colors are handled by CSS variables above

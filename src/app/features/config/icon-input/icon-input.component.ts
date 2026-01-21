@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { FieldType } from '@ngx-formly/material';
-import { MATERIAL_ICONS } from '../../../ui/material-icons.const';
+import { MaterialIconsLoaderService } from '../../../ui/material-icons-loader.service';
 import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatInput, MatSuffix } from '@angular/material/input';
@@ -42,6 +42,7 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
   filteredIcons = signal<string[]>([]);
   isEmoji = signal(false);
   private readonly _destroyRef = inject(DestroyRef);
+  private _iconLoader = inject(MaterialIconsLoaderService);
   // Guards against duplicate processing when Windows emoji picker triggers multiple events
   private _lastSetValue: string | null = null;
 
@@ -64,53 +65,66 @@ export class IconInputComponent extends FieldType<FormlyFieldConfig> implements 
     return i;
   }
 
-  onFocus(): void {
+  async onFocus(): Promise<void> {
     // Show initial icons when field is focused and no filter applied yet
     if (this.filteredIcons().length === 0) {
       const currentValue = this.formControl.value || '';
-      if (currentValue) {
-        // If there's a current value, filter by it
-        this.onInputValueChange(currentValue);
-      } else {
-        // Show first 50 icons when empty
-        this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
+
+      try {
+        if (currentValue) {
+          // If there's a current value, filter by it
+          await this.onInputValueChange(currentValue);
+        } else {
+          // Show first 50 icons when empty
+          const icons = await this._iconLoader.loadIcons();
+          this.filteredIcons.set(icons.slice(0, 50));
+        }
+      } catch (error) {
+        console.error('Failed to load material icons:', error);
+        this.filteredIcons.set([]);
       }
     }
   }
 
-  onInputValueChange(val: string): void {
+  async onInputValueChange(val: string): Promise<void> {
     // Skip if this is the value we just set programmatically (prevents double processing)
     if (val === this._lastSetValue) {
       this._lastSetValue = null;
       return;
     }
 
-    const arr = MATERIAL_ICONS.filter(
-      (icoStr) => icoStr && icoStr.toLowerCase().includes(val.toLowerCase()),
-    );
-    arr.length = Math.min(150, arr.length);
-    this.filteredIcons.set(arr);
+    try {
+      const icons = await this._iconLoader.loadIcons();
+      const arr = icons.filter(
+        (icoStr) => icoStr && icoStr.toLowerCase().includes(val.toLowerCase()),
+      );
+      arr.length = Math.min(150, arr.length);
+      this.filteredIcons.set(arr);
 
-    const hasEmoji = containsEmoji(val);
+      const hasEmoji = containsEmoji(val);
 
-    if (hasEmoji) {
-      const firstEmoji = extractFirstEmoji(val);
+      if (hasEmoji) {
+        const firstEmoji = extractFirstEmoji(val);
 
-      if (firstEmoji) {
-        this._lastSetValue = firstEmoji;
-        this.formControl.setValue(firstEmoji);
-        this.isEmoji.set(true);
-      } else {
+        if (firstEmoji) {
+          this._lastSetValue = firstEmoji;
+          this.formControl.setValue(firstEmoji);
+          this.isEmoji.set(true);
+        } else {
+          this._lastSetValue = '';
+          this.formControl.setValue('');
+          this.isEmoji.set(false);
+        }
+      } else if (!val) {
         this._lastSetValue = '';
         this.formControl.setValue('');
         this.isEmoji.set(false);
+      } else {
+        this.isEmoji.set(false);
       }
-    } else if (!val) {
-      this._lastSetValue = '';
-      this.formControl.setValue('');
-      this.isEmoji.set(false);
-    } else {
-      this.isEmoji.set(false);
+    } catch (error) {
+      console.error('Failed to filter icons:', error);
+      this.filteredIcons.set([]);
     }
   }
 

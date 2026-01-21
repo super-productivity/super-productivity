@@ -31,10 +31,12 @@
   <!-- Main Navigation Sidebar -->
   <nav
     class="nav-sidenav"
-    [@mobileNav]
+    [@mobileNav]="isMobile() ? void 0 : true"
+    [@mobileNavRight]="isMobile() ? true : void 0"
     [class.fullMode]="isFullMode() || isMobile()"
     [class.compactMode]="!isFullMode() && !isMobile()"
     [class.mobile]="isMobile()"
+    [class.position-right]="isMobile()"
     [class.animate]="animateWidth()"
     [class.resizing]="isResizing()"
     [style.width.px]="sidenavWidth()"

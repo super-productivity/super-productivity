@@ -79,10 +79,7 @@
         (click)="focusSelf()"
         class="drag-handle"
       >
-        <mat-icon
-          class="drag-handle-ico"
-          svgIcon="drag_handle"
-        ></mat-icon>
+        <mat-icon class="drag-handle-ico">drag_indicator</mat-icon>
         @if (isCurrent()) {
           <mat-icon class="play-icon-indicator">play_arrow</mat-icon>
         }
@@ -171,10 +168,7 @@
               </div>
               <div class="separator">/</div>
               <div class="time-val">
-                <mat-icon
-                  svgIcon="estimate_remaining"
-                  inline="true"
-                ></mat-icon>
+                <mat-icon inline="true">hourglass_empty</mat-icon>
                 {{ t.timeEstimate | msToString }}
               </div>
             </div>

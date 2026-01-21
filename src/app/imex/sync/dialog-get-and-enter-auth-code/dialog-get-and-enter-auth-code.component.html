@@ -3,7 +3,13 @@
 </h1>
 
 <mat-dialog-content>
-  <p>{{ T.F.SYNC.D_AUTH_CODE.FOLLOW_LINK | translate }}</p>
+  @if (!isNativePlatform) {
+    <p>{{ T.F.SYNC.D_AUTH_CODE.FOLLOW_LINK | translate }}</p>
+  }
+  @if (isNativePlatform) {
+    <p>{{ T.F.SYNC.D_AUTH_CODE.FOLLOW_LINK_MOBILE | translate }}</p>
+  }
+
   <a
     mat-button
     color="primary"
@@ -14,16 +20,28 @@
     <mat-icon>open_in_new</mat-icon>
     {{ T.F.SYNC.D_AUTH_CODE.GET_AUTH_CODE | translate }}</a
   >
-  <br />
-  <br />
-  <mat-form-field>
-    <mat-label>{{ T.F.SYNC.D_AUTH_CODE.L_AUTH_CODE | translate }}</mat-label>
-    <mat-icon matPrefix>vpn_key</mat-icon>
-    <input
-      matInput
-      [(ngModel)]="token"
-    />
-  </mat-form-field>
+
+  @if (!isNativePlatform) {
+    <br />
+    <br />
+    <mat-form-field>
+      <mat-label>{{ T.F.SYNC.D_AUTH_CODE.L_AUTH_CODE | translate }}</mat-label>
+      <mat-icon matPrefix>vpn_key</mat-icon>
+      <input
+        matInput
+        [(ngModel)]="token"
+      />
+    </mat-form-field>
+  }
+
+  @if (isNativePlatform) {
+    <br />
+    <br />
+    <div class="oauth-waiting">
+      <mat-spinner diameter="24"></mat-spinner>
+      <span>{{ T.F.SYNC.D_AUTH_CODE.WAITING_FOR_AUTH | translate }}</span>
+    </div>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
@@ -35,14 +53,16 @@
     >
       {{ T.G.CANCEL | translate }}
     </button>
-    <button
-      (click)="close(token)"
-      [disabled]="!token"
-      color="primary"
-      mat-stroked-button
-    >
-      <mat-icon>save</mat-icon>
-      {{ T.G.SAVE | translate }}
-    </button>
+    @if (!isNativePlatform) {
+      <button
+        (click)="close(token)"
+        [disabled]="!token"
+        color="primary"
+        mat-stroked-button
+      >
+        <mat-icon>save</mat-icon>
+        {{ T.G.SAVE | translate }}
+      </button>
+    }
   </div>
 </mat-dialog-actions>

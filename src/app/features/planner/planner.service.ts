@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { combineLatest, Observable, of } from 'rxjs';
+import { BehaviorSubject, combineLatest, Observable, of } from 'rxjs';
 import { first, map, shareReplay, switchMap, tap } from 'rxjs/operators';
 import { selectAllTasksWithDueTime } from '../tasks/store/task.selectors';
 import { Store } from '@ngrx/store';
@@ -24,22 +24,43 @@ export class PlannerService {
   private _dateService = inject(DateService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
 
+  private _daysToShowCount$ = new BehaviorSubject<number>(15);
+  public isLoadingMore$ = new BehaviorSubject<boolean>(false);
+
   includedWeekDays$ = of([0, 1, 2, 3, 4, 5, 6]);
 
-  daysToShow$ = this._globalTrackingIntervalService.todayDateStr$.pipe(
-    tap((val) => Log.log('daysToShow$', val)),
-    switchMap(() => this.includedWeekDays$),
-    map((includedWeekDays) => {
-      const today = new Date().getTime();
-      const todayDayNr = new Date(today).getDay();
-      const nrOfDaysToShow = 15;
-      const daysToShow: string[] = [];
-      for (let i = 0; i < nrOfDaysToShow; i++) {
-        if (includedWeekDays.includes((i + todayDayNr) % 7)) {
-          // eslint-disable-next-line no-mixed-operators
-          daysToShow.push(this._dateService.todayStr(today + i * 24 * 60 * 60 * 1000));
-        }
+  daysToShow$ = combineLatest([
+    this._daysToShowCount$,
+    this._globalTrackingIntervalService.todayDateStr$,
+    this.includedWeekDays$,
+  ]).pipe(
+    tap(([count, todayStr]) => Log.log('daysToShow$', { count, todayStr })),
+    map(([count, _, includedWeekDays]) => {
+      // Guard against empty includedWeekDays to prevent infinite loop
+      if (includedWeekDays.length === 0) {
+        return [];
       }
+
+      const today = new Date().getTime();
+      const daysToShow: string[] = [];
+
+      // CRITICAL FIX: Loop until we have the required count of days
+      // (not just iterate N times which produces fewer days if weekends are excluded)
+      let daysAdded = 0;
+      let offset = 0;
+      while (daysAdded < count) {
+        // eslint-disable-next-line no-mixed-operators
+        const dayOfWeek = new Date(today + offset * 24 * 60 * 60 * 1000).getDay();
+        if (includedWeekDays.includes(dayOfWeek)) {
+          daysToShow.push(
+            // eslint-disable-next-line no-mixed-operators
+            this._dateService.todayStr(today + offset * 24 * 60 * 60 * 1000),
+          );
+          daysAdded++;
+        }
+        offset++;
+      }
+
       return daysToShow;
     }),
   );
@@ -117,5 +138,16 @@ export class PlannerService {
         }),
       )
       .toPromise();
+  }
+
+  loadMoreDays(): void {
+    this.isLoadingMore$.next(true);
+
+    // Yield to event loop to ensure loading state is visible
+    setTimeout(() => {
+      const currentCount = this._daysToShowCount$.value;
+      this._daysToShowCount$.next(currentCount + 7);
+      this.isLoadingMore$.next(false);
+    }, 0);
   }
 }

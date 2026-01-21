@@ -194,7 +194,6 @@ describe('TaskRepeatCfgService', () => {
         jasmine.objectContaining({
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: id,
-          taskIdsToUnlink: [mockTask.id],
         }),
       );
     });
@@ -300,7 +299,6 @@ describe('TaskRepeatCfgService', () => {
         jasmine.objectContaining({
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: 'cfg-123',
-          taskIdsToUnlink: [],
         }),
       );
     });

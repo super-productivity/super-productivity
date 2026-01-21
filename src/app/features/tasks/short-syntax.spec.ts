@@ -1224,7 +1224,6 @@ describe('shortSyntax', () => {
         isEnableDue: false,
         isEnableProject: false,
         isEnableTag: false,
-        isEnableUrl: false,
       });
       expect(r).toEqual(undefined);
     });
@@ -1466,15 +1465,6 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.dueWithTime).toBeDefined();
     });
 
-    it('should respect config flag and not extract when disabled', () => {
-      const t = {
-        ...TASK,
-        title: 'Task https://example.com',
-      };
-      const r = shortSyntax(t, { ...CONFIG, isEnableUrl: false });
-      expect(r).toBeUndefined();
-    });
-
     it('should clean URLs from title properly', () => {
       const t = {
         ...TASK,
@@ -1543,6 +1533,19 @@ describe('shortSyntax', () => {
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].title).toBe('file');
+    });
+
+    it('should extract basename correctly for URLs with trailing slash', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com/projects/',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com/projects/');
+      expect(r?.attachments[0].title).toBe('projects');
+      expect(r?.taskChanges.title).toBe('Task');
     });
   });
 });

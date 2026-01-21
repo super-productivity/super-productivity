@@ -154,15 +154,12 @@ export class GlobalThemeService {
   private _initIcons(): void {
     const icons: [string, string][] = [
       ['sp', 'assets/icons/sp.svg'],
-      ['play', 'assets/icons/play.svg'],
       ['github', 'assets/icons/github.svg'],
       ['gitlab', 'assets/icons/gitlab.svg'],
       ['jira', 'assets/icons/jira.svg'],
       ['caldav', 'assets/icons/caldav.svg'],
       ['open_project', 'assets/icons/open-project.svg'],
-      ['drag_handle', 'assets/icons/drag-handle.svg'],
       ['remove_today', 'assets/icons/remove-today-48px.svg'],
-      ['estimate_remaining', 'assets/icons/estimate-remaining.svg'],
       ['working_today', 'assets/icons/working-today.svg'],
       ['repeat', 'assets/icons/repeat.svg'],
       ['gitea', 'assets/icons/gitea.svg'],
@@ -171,12 +168,8 @@ export class GlobalThemeService {
       ['clickup', 'assets/icons/clickup.svg'],
       // trello icon
       ['trello', 'assets/icons/trello.svg'],
-      ['calendar', 'assets/icons/calendar.svg'],
-      ['early_on', 'assets/icons/early-on.svg'],
       ['tomorrow', 'assets/icons/tomorrow.svg'],
       ['next_week', 'assets/icons/next-week.svg'],
-      ['keep', 'assets/icons/keep.svg'],
-      ['keep_filled', 'assets/icons/keep-filled.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet

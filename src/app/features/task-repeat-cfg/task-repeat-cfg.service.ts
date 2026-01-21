@@ -19,7 +19,6 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { MatDialog } from '@angular/material/dialog';
 import { T } from '../../t.const';
 import { first, take } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
 import { TaskService } from '../tasks/task.service';
 import { Task } from '../tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
@@ -97,15 +96,10 @@ export class TaskRepeatCfgService {
     );
   }
 
-  async deleteTaskRepeatCfg(id: string): Promise<void> {
-    // Gather task IDs to unlink - this ensures atomic sync
-    const tasks = await firstValueFrom(this._taskService.getTasksByRepeatCfgId$(id));
-    const taskIdsToUnlink = tasks.map((task) => task.id);
-
+  deleteTaskRepeatCfg(id: string): void {
     this._store$.dispatch(
       TaskSharedActions.deleteTaskRepeatCfg({
         taskRepeatCfgId: id,
-        taskIdsToUnlink,
       }),
     );
   }

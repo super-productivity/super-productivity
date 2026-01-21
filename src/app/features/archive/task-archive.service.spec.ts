@@ -997,4 +997,141 @@ describe('TaskArchiveService', () => {
       expect(archiveDbAdapterMock.saveArchiveOld).toHaveBeenCalled();
     });
   });
+
+  describe('hasTasksBatch', () => {
+    it('should return existence map for multiple tasks', async () => {
+      // Arrange
+      const task1 = createMockTask('task1');
+      const task2 = createMockTask('task2');
+      const archiveYoung = createMockArchiveModel([task1]);
+      const archiveOld = createMockArchiveModel([task2]);
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(
+        Promise.resolve(archiveYoung),
+      );
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(Promise.resolve(archiveOld));
+
+      // Act
+      const result = await service.hasTasksBatch(['task1', 'task2', 'task3']);
+
+      // Assert
+      expect(result.get('task1')).toBe(true);
+      expect(result.get('task2')).toBe(true);
+      expect(result.get('task3')).toBe(false);
+
+      // CRITICAL: Verify loaded only once, not 3 times
+      expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalledTimes(1);
+      expect(archiveDbAdapterMock.loadArchiveOld).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle 50 tasks without performance degradation', async () => {
+      // Arrange
+      const taskIds = Array.from({ length: 50 }, (_, i) => `task${i}`);
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(
+        Promise.resolve(createMockArchiveModel([])),
+      );
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(
+        Promise.resolve(createMockArchiveModel([])),
+      );
+
+      // Act
+      await service.hasTasksBatch(taskIds);
+
+      // Assert - Should NOT scale with task count, always 2 loads
+      expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalledTimes(1);
+      expect(archiveDbAdapterMock.loadArchiveOld).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return empty map for empty input', async () => {
+      // Act
+      const result = await service.hasTasksBatch([]);
+
+      // Assert
+      expect(result.size).toBe(0);
+      expect(archiveDbAdapterMock.loadArchiveYoung).not.toHaveBeenCalled();
+      expect(archiveDbAdapterMock.loadArchiveOld).not.toHaveBeenCalled();
+    });
+
+    it('should handle undefined archives gracefully', async () => {
+      // Arrange
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(Promise.resolve(undefined));
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(Promise.resolve(undefined));
+
+      // Act
+      const result = await service.hasTasksBatch(['task1']);
+
+      // Assert
+      expect(result.get('task1')).toBe(false);
+    });
+  });
+
+  describe('getByIdBatch', () => {
+    it('should return task map for multiple IDs', async () => {
+      // Arrange
+      const task1 = createMockTask('task1', { title: 'Task 1' });
+      const task2 = createMockTask('task2', { title: 'Task 2' });
+      const archiveYoung = createMockArchiveModel([task1]);
+      const archiveOld = createMockArchiveModel([task2]);
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(
+        Promise.resolve(archiveYoung),
+      );
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(Promise.resolve(archiveOld));
+
+      // Act
+      const result = await service.getByIdBatch(['task1', 'task2', 'task3']);
+
+      // Assert
+      expect(result.get('task1')).toEqual(task1);
+      expect(result.get('task2')).toEqual(task2);
+      expect(result.get('task3')).toBeUndefined();
+      expect(result.size).toBe(2);
+
+      // Verify loaded only once
+      expect(archiveDbAdapterMock.loadArchiveYoung).toHaveBeenCalledTimes(1);
+      expect(archiveDbAdapterMock.loadArchiveOld).toHaveBeenCalledTimes(1);
+    });
+
+    it('should prefer young archive when task exists in both', async () => {
+      // Arrange
+      const taskInYoung = createMockTask('task1', { title: 'Young Version' });
+      const taskInOld = createMockTask('task1', { title: 'Old Version' });
+      const archiveYoung = createMockArchiveModel([taskInYoung]);
+      const archiveOld = createMockArchiveModel([taskInOld]);
+
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(
+        Promise.resolve(archiveYoung),
+      );
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(Promise.resolve(archiveOld));
+
+      // Act
+      const result = await service.getByIdBatch(['task1']);
+
+      // Assert
+      expect(result.get('task1')?.title).toBe('Young Version');
+    });
+
+    it('should return empty map for empty input', async () => {
+      // Act
+      const result = await service.getByIdBatch([]);
+
+      // Assert
+      expect(result.size).toBe(0);
+      expect(archiveDbAdapterMock.loadArchiveYoung).not.toHaveBeenCalled();
+      expect(archiveDbAdapterMock.loadArchiveOld).not.toHaveBeenCalled();
+    });
+
+    it('should handle undefined archives gracefully', async () => {
+      // Arrange
+      archiveDbAdapterMock.loadArchiveYoung.and.returnValue(Promise.resolve(undefined));
+      archiveDbAdapterMock.loadArchiveOld.and.returnValue(Promise.resolve(undefined));
+
+      // Act
+      const result = await service.getByIdBatch(['task1']);
+
+      // Assert
+      expect(result.size).toBe(0);
+    });
+  });
 });

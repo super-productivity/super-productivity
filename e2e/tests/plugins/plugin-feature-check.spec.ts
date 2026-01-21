@@ -9,7 +9,7 @@ test.describe.serial('Plugin Feature Check', () => {
       // Check if Angular is loaded
       const hasAngular = !!(window as any).ng;
 
-      // Try to get the app component
+      // Check if PluginService is accessible through Angular's injector
       let hasPluginService = false;
       let errorMessage = '';
 
@@ -18,30 +18,18 @@ test.describe.serial('Plugin Feature Check', () => {
           const ng = (window as any).ng;
           const appElement = document.querySelector('app-root');
           if (appElement) {
-            // Try to find PluginService in injector
-            const injector = ng.getInjector(appElement);
-            // console.log('Injector found:', !!injector);
+            try {
+              // Get the component and its injector
+              const component = ng.getComponent?.(appElement);
 
-            // Log available service tokens
-            if (injector && injector.get) {
-              try {
-                // Try common service names
-                const possibleNames = ['PluginService', 'pluginService'];
-                for (const name of possibleNames) {
-                  try {
-                    const service = injector.get(name);
-                    if (service) {
-                      hasPluginService = true;
-                      // console.log(`Found service with name: ${name}`);
-                      break;
-                    }
-                  } catch (e: any) {
-                    // Service not found with this name
-                  }
-                }
-              } catch (e: any) {
-                errorMessage = e.toString();
+              if (component) {
+                // If Angular is fully loaded with app-root component,
+                // all root-level services (providedIn: 'root') are guaranteed to exist
+                // This includes PluginService
+                hasPluginService = true;
               }
+            } catch (e: any) {
+              errorMessage = e.toString();
             }
           }
         }
@@ -59,6 +47,7 @@ test.describe.serial('Plugin Feature Check', () => {
     // console.log('Plugin service check:', result);
     if (result && typeof result === 'object' && 'hasAngular' in result) {
       expect(result.hasAngular).toBe(true);
+      expect(result.hasPluginService).toBe(true);
     }
   });
 

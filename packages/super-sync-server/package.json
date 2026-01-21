@@ -31,15 +31,15 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^7.0.11",
+    "nodemailer": "^7.0.12",
     "uuidv7": "^1.1.0",
-    "zod": "^4.1.13"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^18.0.0",
-    "@types/nodemailer": "^7.0.4",
+    "@types/nodemailer": "^7.0.5",
     "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.11",
     "prisma": "5.22.0",

@@ -6,4 +6,9 @@
   @for (day of days$ | async; track day.dayDate) {
     <planner-day [day]="day"></planner-day>
   }
+  @if (isLoadingMore$ | async) {
+    <div class="loading-more">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+  }
 </div>

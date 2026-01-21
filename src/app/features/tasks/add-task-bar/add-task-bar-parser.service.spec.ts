@@ -826,7 +826,6 @@ describe('AddTaskBarParserService', () => {
         isEnableProject: true,
         isEnableDue: true,
         isEnableTag: true,
-        isEnableUrl: true,
       } as ShortSyntaxConfig;
 
       mockDefaultProject = {
@@ -1011,45 +1010,6 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateDate).toHaveBeenCalled();
       expect(mockStateService.updateEstimate).toHaveBeenCalledWith(1800000); // 30m in ms
       expect(mockStateService.updateTagIdsFromTxt).toHaveBeenCalledWith(['urgent-id']);
-    });
-
-    it('should not extract URLs when config disabled', () => {
-      const disabledConfig = {
-        ...mockConfig,
-        isEnableUrl: false,
-      };
-
-      const mockState = {
-        projectId: 'default-project',
-        tagIds: [],
-        tagIdsFromTxt: [],
-        newTagTitles: [],
-        date: null,
-        time: null,
-        spent: null,
-        estimate: null,
-        cleanText: null,
-        remindOption: null,
-        attachments: [],
-      };
-      mockStateService.state.and.returnValue(mockState);
-
-      service.parseAndUpdateText(
-        'Task https://example.com',
-        disabledConfig,
-        mockProjects,
-        mockTags,
-        mockDefaultProject,
-      );
-
-      // Should call updateAttachments with empty array (no URLs extracted)
-      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
-      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
-      expect(attachments.length).toBe(0);
-      // Title should not be cleaned
-      expect(mockStateService.updateCleanText).toHaveBeenCalledWith(
-        'Task https://example.com',
-      );
     });
 
     it('should not extract URLs from empty text', () => {

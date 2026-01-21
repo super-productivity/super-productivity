@@ -898,9 +898,11 @@
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
+        "FOLLOW_LINK_MOBILE": "Please tap the button below to authorize. You will be automatically redirected back to the app.",
         "GET_AUTH_CODE": "Get Authorization Code",
         "L_AUTH_CODE": "Enter Auth Code",
-        "TITLE": "Login: {{provider}}"
+        "TITLE": "Login: {{provider}}",
+        "WAITING_FOR_AUTH": "Waiting for authentication..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Additional Info",

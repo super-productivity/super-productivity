@@ -41,7 +41,6 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
-import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { createPluginShortcutFormItems } from '../../features/config/form-cfgs/plugin-keyboard-shortcuts';
 import { PluginShortcutCfg } from '../../plugins/plugin-api.model';
@@ -74,7 +73,6 @@ import { MatTooltip } from '@angular/material/tooltip';
     TranslatePipe,
     AsyncPipe,
     PluginManagementComponent,
-    CollapsibleComponent,
     MatTabGroup,
     MatTab,
     MatTabLabel,

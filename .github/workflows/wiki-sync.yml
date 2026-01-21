@@ -1,0 +1,160 @@
+---
+name: GitHub Wiki - Lint and (r)Sync
+
+'on':
+  pull_request:
+    branches: [master, main]
+    paths:
+      - "docs/wiki/**"
+      - .github/workflows/wiki-sync.yml
+      - .github/annotations/wiki-lint-problem-matcher.json
+  push:
+    branches: [master, main]
+    paths:
+      - "docs/wiki/**"
+      - .github/workflows/wiki-sync.yml
+      - .github/annotations/wiki-lint-problem-matcher.json
+
+concurrency:
+  group: wiki
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    name: Lint YAML and Markdown
+    runs-on: ubuntu-latest
+    env:
+      GH_A9S: .github/annotations
+      GH_W7S: .github/workflows
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install yamllint pymarkdownlnt
+
+      - name: Add Problem Matcher (for Annotations)
+        id: problem_matcher
+        run: echo "::add-matcher::${GH_A9S}/wiki-lint-problem-matcher.json"
+
+      - name: Lint with yamllint
+        id: yamllint
+        run: |
+          yamllint \
+            --format github \
+          "${GH_W7S}/wiki-sync.yml"
+
+      - name: Lint with pymarkdownlnt
+        if: >
+          steps.yamllint.outcome == 'success' &&
+          steps.problem_matcher.outcome == 'success'
+        run: |
+          pymarkdownlnt \
+            --disable-rules line-length \
+            scan --recurse "docs/wiki"
+
+  sync:
+    name: Publish to GitHub Wiki
+    needs: lint
+    if: '!cancelled()'
+    # if: needs.lint.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      # Using [standard bot credentials](https://github.com/actions/checkout)
+      GIT_AUTHOR_NAME: github-actions[bot]
+      GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+      GIT_COMMITTER_NAME: github-actions[bot]
+      GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+
+      CODE_ROOT: code-root
+      WIKI_SRC: code-root/docs/wiki
+      WIKI_ROOT: wiki-root
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6.0.1
+        with:
+          repository: ${{ github.repository }}
+          path: ${{ env.CODE_ROOT }}
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v6.0.1
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: ${{ env.WIKI_ROOT }}
+
+      - name: Verify Source and Target Git Checkouts
+        run: |
+          # --------------------------------------------------------------------
+          echo "::group::File and Directory Checks for ${WIKI_SRC}"
+          if [ ! -d "${CODE_ROOT}/.git" ]; then
+            echo "::error::Git directory for ${CODE_ROOT} is absent."
+          else
+            echo "Git directory for ${CODE_ROOT} is present."
+          fi
+          ls -lAh "${WIKI_SRC}"
+          echo "::endgroup::"
+          # --------------------------------------------------------------------
+          echo "::group::File and Directory Checks for ${WIKI_ROOT}"
+          if [ ! -d "${WIKI_ROOT}/.git" ]; then
+            echo "::error::Git directory for ${WIKI_ROOT} is absent."
+          else
+            echo "Git directory for ${WIKI_ROOT} is present."
+          fi
+          ls -lAh "${WIKI_ROOT}"
+          echo "::endgroup::"
+          # --------------------------------------------------------------------
+
+      - name: Mirror docs/wiki to GitHub Wiki
+        run: |
+          # RSYNC Options: assume that the code is always the source of truth
+          # RSYNC_DRY_RUN: "0"
+          # Hard mirror: overwrite + delete removed files and delete empty dirs
+          # Preserve existing '.git' in GH Wiki
+          # Report on changes in case dry-run debugging is needed
+          RSYNC_OPTIONS=(
+            --archive
+            --delete
+            --prune-empty-dirs
+            --exclude='.git'
+            --itemize-changes
+            --stats
+          )
+
+          # Optional dry-run for testing.
+          if [[ "${RSYNC_DRY_RUN:-0}" == "1" ]]; then
+            echo "::warning::DRY RUN --- no changes will be written"
+            RSYNC_OPTIONS+=(--dry-run)
+          fi
+
+          # Debug mode (warning: does not do a dry-run on its own!)
+          if [[ "${ACTIONS_STEP_DEBUG:-}" == "true" ]]; then
+            RSYNC_OPTIONS+=(-vv)
+          fi
+
+          # Mirror the code to the wiki.
+          rsync "${RSYNC_OPTIONS[@]}" "${WIKI_SRC}"/ "${WIKI_ROOT}"
+
+      - name: Switch, Commit, and Push
+        working-directory: ${{ env.WIKI_ROOT }}
+        run: |
+          git add -A # preferred over `git add .` in order to include deletions
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "docs(wiki): auto-publish via wiki-sync.yml"
+            git push --force-with-lease # ensures edits in wiki don't block
+          else
+            # Expected if modifying only the YML and not the wiki content.
+            echo "::warning::No changes found to be committed."
+            echo "*No changes found to be committed.*" >> "$GITHUB_STEP_SUMMARY"
+          fi

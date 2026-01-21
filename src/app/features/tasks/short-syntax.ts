@@ -547,7 +547,7 @@ const _baseNameForUrl = (passedStr: string): string => {
   const str = passedStr.trim();
   let base;
   if (str[str.length - 1] === '/') {
-    const strippedStr = str.substring(0, str.length - 2);
+    const strippedStr = str.substring(0, str.length - 1);
     base = strippedStr.substring(strippedStr.lastIndexOf('/') + 1);
   } else {
     base = str.substring(str.lastIndexOf('/') + 1);

@@ -3,6 +3,55 @@
 
 :host {
   --schedule-time-width: 3em;
+  // Responsive day column widths
+  --schedule-day-width: 180px; // Default for desktop
+
+  @include mq(md, max) {
+    // Tablet
+    --schedule-day-width: 150px;
+  }
+
+  @include mq(xs, max) {
+    // Mobile
+    --schedule-day-width: 120px;
+  }
+
+  // Enable horizontal scroll when viewport is too small for 7 days
+  &[data-horizontal-scroll] {
+    .week-header {
+      // Remove left/right constraints to allow horizontal scrolling
+      left: auto;
+      right: auto;
+      // Force width to match grid width
+      width: fit-content;
+      min-width: 100%;
+    }
+
+    .grid-container {
+      // Allow columns to scale up when space available, but enforce minimum for scroll
+      grid-template-columns: var(--schedule-time-width) repeat(
+          var(--nr-of-days),
+          minmax(var(--schedule-day-width), 1fr)
+        );
+      // Force grid to size based on content, not container
+      width: fit-content;
+      min-width: 100%;
+      // Disable centering to allow proper overflow
+      place-content: start;
+    }
+
+    .days {
+      // Match grid-container column widths exactly
+      grid-template-columns: var(--schedule-time-width) repeat(
+          var(--nr-of-days),
+          minmax(var(--schedule-day-width), 1fr)
+        );
+      // Ensure days container matches grid width
+      width: fit-content;
+      // Disable centering
+      place-content: start;
+    }
+  }
 
   // State-based styles using host classes
   &.isCtrlKeyPressed {

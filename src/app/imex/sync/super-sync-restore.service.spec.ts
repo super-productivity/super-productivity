@@ -170,18 +170,38 @@ describe('SuperSyncRestoreService', () => {
     });
 
     it('should show error snack and rethrow on failure after retries', async () => {
+      jasmine.clock().install();
+
       const error = new Error('timeout error'); // Network error triggers retry logic
       mockProvider.getStateAtSeq.and.returnValue(Promise.reject(error));
 
-      await expectAsync(service.restoreToPoint(100)).toBeRejectedWith(error);
+      const restorePromise = service.restoreToPoint(100);
 
-      // Should have attempted 3 times (initial + 2 retries)
+      // First attempt (immediate)
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
+
+      // Second attempt (after 2s)
+      jasmine.clock().tick(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(2);
+
+      // Third attempt (after 4s more)
+      jasmine.clock().tick(4000);
+      await Promise.resolve();
+      await Promise.resolve();
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(3);
+
       expect(mockSnackService.open).toHaveBeenCalledWith({
         type: 'ERROR',
         msg: T.F.SYNC.S.RESTORE_ERROR,
       });
-    }, 10000); // Increase timeout to 10s to allow for retries (2s + 4s + overhead)
+
+      jasmine.clock().uninstall();
+      await expectAsync(restorePromise).toBeRejectedWith(error);
+    }, 15000);
 
     it('should use exponential backoff for retry delays', async () => {
       jasmine.clock().install();
@@ -250,26 +270,62 @@ describe('SuperSyncRestoreService', () => {
     });
 
     it('should retry on "failed to fetch" errors', async () => {
+      jasmine.clock().install();
+
       const error = new Error('Failed to fetch');
       mockProvider.getStateAtSeq.and.returnValue(Promise.reject(error));
 
-      await expectAsync(service.restoreToPoint(100)).toBeRejectedWith(error);
+      const restorePromise = service.restoreToPoint(100);
 
-      // Should have retried (failed to fetch is a network error)
+      // Tick through all 3 attempts
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
+
+      jasmine.clock().tick(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(2);
+
+      jasmine.clock().tick(4000);
+      await Promise.resolve();
+      await Promise.resolve();
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(3);
-    }, 10000);
+
+      jasmine.clock().uninstall();
+      await expectAsync(restorePromise).toBeRejectedWith(error);
+    }, 15000);
 
     it('should retry on 504 errors', async () => {
+      jasmine.clock().install();
+
       const error = new Error('504 Gateway Timeout');
       mockProvider.getStateAtSeq.and.returnValue(Promise.reject(error));
 
-      await expectAsync(service.restoreToPoint(100)).toBeRejectedWith(error);
+      const restorePromise = service.restoreToPoint(100);
 
-      // Should have retried (504 is a network/timeout error)
+      // Tick through all 3 attempts
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
+
+      jasmine.clock().tick(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(2);
+
+      jasmine.clock().tick(4000);
+      await Promise.resolve();
+      await Promise.resolve();
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(3);
-    }, 10000);
+
+      jasmine.clock().uninstall();
+      await expectAsync(restorePromise).toBeRejectedWith(error);
+    }, 15000);
 
     it('should succeed on second attempt after one failure', async () => {
+      jasmine.clock().install();
+
       let attemptCount = 0;
       mockProvider.getStateAtSeq.and.callFake(() => {
         attemptCount++;
@@ -283,16 +339,28 @@ describe('SuperSyncRestoreService', () => {
         });
       });
 
-      await service.restoreToPoint(100);
+      const restorePromise = service.restoreToPoint(100);
 
-      // Should have attempted twice (failed once, succeeded on retry)
+      // First attempt fails
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(1);
+
+      // Second attempt succeeds after 2s
+      jasmine.clock().tick(2000);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      jasmine.clock().uninstall();
+      await restorePromise;
+
       expect(mockProvider.getStateAtSeq).toHaveBeenCalledTimes(2);
       expect(mockBackupService.importCompleteBackup).toHaveBeenCalledTimes(1);
       expect(mockSnackService.open).toHaveBeenCalledWith({
         type: 'SUCCESS',
         msg: T.F.SYNC.S.RESTORE_SUCCESS,
       });
-    }, 10000);
+    }, 15000);
 
     it('should show error when import fails', async () => {
       const error = new Error('Import failed');
