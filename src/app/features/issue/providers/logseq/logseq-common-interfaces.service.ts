@@ -142,7 +142,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // Base data that's always included
     const baseData = {
       title: extractFirstLine(block.content),
-      issueLastUpdated: block.updatedAt,
+      issueLastUpdated: Date.now(),
       isDone: block.marker === 'DONE',
     };
 

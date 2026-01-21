@@ -3,8 +3,6 @@ export type LogseqBlock = Readonly<{
   uuid: string;
   content: string;
   marker: string | null;
-  createdAt: number;
-  updatedAt: number;
   page: { id: number };
   pageName?: string; // Page name fetched separately from API
   parent: { id: number } | null;
@@ -16,7 +14,6 @@ export type LogseqBlockReduced = Readonly<{
   uuid: string;
   content: string;
   marker: string | null;
-  updatedAt: number;
   properties: Record<string, any>;
   scheduledDate?: string | null; // Extracted YYYY-MM-DD from SCHEDULED: <date>
   scheduledDateTime?: number | null; // Extracted timestamp from SCHEDULED: <date time>

@@ -337,7 +337,6 @@ export const mapBlockToIssueReduced = (block: any): LogseqBlockReduced => {
     uuid: block.uuid,
     content: content, // Store full content for hash calculation
     marker: block.marker || null,
-    updatedAt: block.updatedAt || block['updated-at'] || Date.now(),
     properties: block.properties || {},
     scheduledDate: extractScheduledDate(content),
     scheduledDateTime: extractScheduledDateTime(content),
