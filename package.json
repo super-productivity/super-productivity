@@ -178,7 +178,7 @@
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.3",
     "@capacitor/filesystem": "^7.1.1",
-    "@capacitor/local-notifications": "^7.0.1",
+    "@capacitor/local-notifications": "^8.0.0",
     "@capacitor/share": "^7.0.2",
     "@capawesome/capacitor-android-dark-mode-support": "^7.0.0",
     "@capawesome/capacitor-background-task": "^7.0.1",
