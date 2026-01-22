@@ -95,7 +95,9 @@ export class PollIssueUpdatesEffects {
             (task) =>
               task.issueProviderId === provider.id &&
               // Safety: ensure task has valid issueId to prevent errors in refreshIssueTasks
-              !!task.issueId,
+              !!task.issueId &&
+              // Skip completed tasks - no need to poll for updates
+              !task.isDone,
           ),
         ),
       );
@@ -109,7 +111,9 @@ export class PollIssueUpdatesEffects {
           (task) =>
             task.issueProviderId === provider.id &&
             // Safety: ensure task has valid issueId
-            !!task.issueId,
+            !!task.issueId &&
+            // Skip completed tasks - no need to poll for updates
+            !task.isDone,
         ),
       ),
     );

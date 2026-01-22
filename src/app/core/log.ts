@@ -359,3 +359,4 @@ export const PluginLog = Log.withContext('plugin');
 export const IssueLog = Log.withContext('issue');
 export const DroidLog = Log.withContext('droid');
 export const TaskLog = Log.withContext('task');
+export const LogseqLog = Log.withContext('logseq');

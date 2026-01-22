@@ -24,6 +24,7 @@ import { IssueService } from '../../issue.service';
 import { EMPTY, concat, of, Observable } from 'rxjs';
 import { LogseqTaskWorkflow, LogseqCfg } from './logseq.model';
 import { LOGSEQ_TYPE } from './logseq.const';
+import { LogseqLog } from '../../../../core/log';
 import { MatDialog } from '@angular/material/dialog';
 import { PluginDialogComponent } from '../../../../plugins/ui/plugin-dialog/plugin-dialog.component';
 import { Store } from '@ngrx/store';
@@ -452,12 +453,15 @@ export class LogseqIssueEffects {
       this._logseqCommonService.discrepancies$.pipe(
         buffer(this._logseqCommonService.discrepancies$.pipe(debounceTime(500))),
         tap((discrepancies) => {
-          console.log('[LOGSEQ BUFFER] Buffered discrepancies:', discrepancies.length);
+          LogseqLog.debug(
+            '[LOGSEQ BUFFER] Buffered discrepancies:',
+            discrepancies.length,
+          );
         }),
         filter((discrepancies) => discrepancies.length > 0),
         filter(() => !this._isDialogOpen),
         tap((discrepancies) => {
-          console.log(
+          LogseqLog.debug(
             '[LOGSEQ BUFFER] Opening dialog with',
             discrepancies.length,
             'discrepancies',
@@ -470,7 +474,7 @@ export class LogseqIssueEffects {
   );
 
   private _showDiscrepancyDialog(discrepancies: DiscrepancyItem[]): void {
-    console.log('[LOGSEQ DIALOG] Show dialog with discrepancies:', discrepancies);
+    LogseqLog.debug('[LOGSEQ DIALOG] Show dialog with discrepancies:', discrepancies);
 
     // Group discrepancies by type
     const activeDiscrepancies = discrepancies.filter(
@@ -484,7 +488,7 @@ export class LogseqIssueEffects {
         d.discrepancyType === 'SUPERPROD_DONE_LOGSEQ_NOT_DONE',
     );
 
-    console.log(
+    LogseqLog.debug(
       '[LOGSEQ DIALOG] Active:',
       activeDiscrepancies.length,
       'Done:',
@@ -499,7 +503,7 @@ export class LogseqIssueEffects {
       return acc;
     }, [] as DiscrepancyItem[]);
 
-    console.log('[LOGSEQ DIALOG] Unique discrepancies:', uniqueDiscrepancies.length);
+    LogseqLog.debug('[LOGSEQ DIALOG] Unique discrepancies:', uniqueDiscrepancies.length);
 
     // Build HTML content
     const htmlContent = this._buildDiscrepancyHtmlContent(

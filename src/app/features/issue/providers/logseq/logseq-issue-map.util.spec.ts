@@ -90,8 +90,8 @@ describe('logseq-issue-map.util', () => {
       const content = `TODO My Task
 SCHEDULED: <2026-01-20 Mon>
 :SP:
-superprod-last-sync:: 1705766400000
-superprod-content-hash:: -1234567890
+superprod-last-sync: 1705766400000
+superprod-content-hash: -1234567890
 :END:`;
 
       const result = extractSpDrawerData(content);
@@ -112,7 +112,7 @@ superprod-content-hash:: -1234567890
     it('should handle partial drawer data', () => {
       const content = `TODO Task
 :SP:
-superprod-last-sync:: 1705766400000
+superprod-last-sync: 1705766400000
 :END:`;
 
       const result = extractSpDrawerData(content);
@@ -127,8 +127,8 @@ superprod-last-sync:: 1705766400000
       const content = `TODO My Task
 SCHEDULED: <2026-01-20 Mon>
 :SP:
-superprod-last-sync:: 1705766400000
-superprod-content-hash:: -1234567890
+superprod-last-sync: 1705766400000
+superprod-content-hash: -1234567890
 :END:
 Some notes`;
 
@@ -150,13 +150,13 @@ Some notes`;
       expect(result).toBe('Simple task');
     });
 
-    it('should remove all drawer types (LOGBOOK, PROPERTIES, SP)', () => {
+    it('should remove all drawer types (LOGBOOK, PROPERTIES)', () => {
       const content = `DOING Task with multiple drawers
 :LOGBOOK:
 CLOCK: [2026-01-20 Mon 10:00]--[2026-01-20 Mon 11:00] => 01:00
 :END:
 :SP:
-superprod-last-sync:: 1705766400000
+superprod-last-sync: 1705766400000
 :END:
 Actual content here`;
 
@@ -178,8 +178,8 @@ SCHEDULED: <2026-01-20 Mon>`;
       const result = updateSpDrawerInContent(content, 1705766400000, -123456);
 
       expect(result).toContain(':SP:');
-      expect(result).toContain('superprod-last-sync:: 1705766400000');
-      expect(result).toContain('superprod-content-hash:: -123456');
+      expect(result).toContain('superprod-last-sync: 1705766400000');
+      expect(result).toContain('superprod-content-hash: -123456');
       expect(result).toContain(':END:');
       // Drawer should be after SCHEDULED
       const schedIndex = result.indexOf('SCHEDULED:');
@@ -193,22 +193,40 @@ SCHEDULED: <2026-01-20 Mon>`;
       const result = updateSpDrawerInContent(content, 1705766400000, -123456);
 
       expect(result).toContain(':SP:');
-      expect(result).toContain('superprod-last-sync:: 1705766400000');
+      expect(result).toContain('superprod-last-sync: 1705766400000');
     });
 
     it('should replace existing :SP: drawer', () => {
       const content = `TODO My Task
 :SP:
-superprod-last-sync:: 1000000000000
-superprod-content-hash:: -999999
+superprod-last-sync: 1000000000000
+superprod-content-hash: -999999
 :END:`;
 
       const result = updateSpDrawerInContent(content, 1705766400000, -123456);
 
-      expect(result).toContain('superprod-last-sync:: 1705766400000');
-      expect(result).toContain('superprod-content-hash:: -123456');
+      expect(result).toContain('superprod-last-sync: 1705766400000');
+      expect(result).toContain('superprod-content-hash: -123456');
       expect(result).not.toContain('1000000000000');
       expect(result).not.toContain('-999999');
+    });
+
+    it('should work with blocks that have id:: property', () => {
+      const content = `TODO My Task
+id:: some-uuid`;
+
+      const result = updateSpDrawerInContent(content, 1705766400000, -123456);
+
+      expect(result).toContain(':SP:');
+      expect(result).toContain('superprod-last-sync: 1705766400000');
+      expect(result).toContain('superprod-content-hash: -123456');
+      expect(result).toContain(':END:');
+      expect(result).toContain('id:: some-uuid');
+
+      // Drawer should be after title
+      const titleIndex = result.indexOf('TODO My Task');
+      const drawerIndex = result.indexOf(':SP:');
+      expect(drawerIndex).toBeGreaterThan(titleIndex);
     });
   });
 
@@ -227,8 +245,8 @@ superprod-content-hash:: -999999
       const contentWithDrawer = `TODO My Task
 SCHEDULED: <2026-01-20 Mon>
 :SP:
-superprod-last-sync:: 1705766400000
-superprod-content-hash:: -123456
+superprod-last-sync: 1705766400000
+superprod-content-hash: -123456
 :END:`;
 
       const hashWithout = calculateContentHash(contentWithoutDrawer);

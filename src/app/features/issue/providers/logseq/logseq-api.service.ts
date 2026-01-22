@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { LogseqCfg } from './logseq.model';
 import { LogseqBlock } from './logseq-issue.model';
+import { LOGSEQ_MARKER_REGEX } from './logseq.const';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Observable, from, throwError } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
@@ -79,6 +80,23 @@ export class LogseqApiService {
     );
   }
 
+  /**
+   * Batch fetch multiple blocks by their UUIDs in a single request.
+   * Much more efficient than calling getBlockByUuid$ for each block.
+   */
+  getBlocksByUuids$(uuids: string[], cfg: LogseqCfg): Observable<LogseqBlock[]> {
+    if (uuids.length === 0) {
+      return from([[]]);
+    }
+
+    // Build a Datascript query using OR clauses with UUID literals
+    // Logseq uses #uuid "..." syntax for UUID matching
+    const orClauses = uuids.map((uuid) => `[?b :block/uuid #uuid "${uuid}"]`).join(' ');
+    const query = `[:find (pull ?b [*]) :where (or ${orClauses})]`;
+
+    return this.queryBlocks$(cfg, query);
+  }
+
   updateBlock$(uuid: string, content: string, cfg: LogseqCfg): Observable<void> {
     return this._sendRequest$<void>(cfg, 'logseq.Editor.updateBlock', [uuid, content]);
   }
@@ -133,7 +151,7 @@ export class LogseqApiService {
     let marker = raw.marker || null;
 
     if (!marker && raw.content) {
-      const markerMatch = raw.content.match(/^(TODO|DONE|DOING|WAITING|LATER|NOW)\s+/i);
+      const markerMatch = raw.content.match(LOGSEQ_MARKER_REGEX);
       if (markerMatch) {
         marker = markerMatch[1].toUpperCase();
       }

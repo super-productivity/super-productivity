@@ -10,6 +10,7 @@ import { LogseqBlock, LogseqBlockReduced } from './logseq-issue.model';
 import { isLogseqEnabled } from './is-logseq-enabled.util';
 import {
   DEFAULT_LOGSEQ_CFG,
+  LOGSEQ_MARKER_REGEX,
   LOGSEQ_POLL_INTERVAL,
   LOGSEQ_SEARCH_WILDCARD,
   LOGSEQ_TYPE,
@@ -29,6 +30,7 @@ import {
 } from './logseq-issue-map.util';
 import { TaskAttachment } from '../../../tasks/task-attachment/task-attachment.model';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
+import { LogseqLog } from '../../../../core/log';
 
 export type DiscrepancyType =
   | 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
@@ -157,7 +159,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     } else if (block.scheduledDate) {
       // Check if scheduled date is in the past (overdue)
       if (block.scheduledDate < todayStr) {
-        console.log('[LOGSEQ OVERDUE] Detected overdue task:', {
+        LogseqLog.debug('[LOGSEQ OVERDUE] Detected overdue task:', {
           blockContent: block.content,
           scheduledDate: block.scheduledDate,
           today: todayStr,
@@ -202,7 +204,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // Skip if this block is currently being written to (write-mutex)
     // This prevents race conditions where polling sees stale data during a write
     if (this._blocksBeingWritten.has(task.issueId as string)) {
-      console.log('[LOGSEQ POLL] Skipping - block is being written:', task.issueId);
+      LogseqLog.debug('[LOGSEQ POLL] Skipping - block is being written:', task.issueId);
       return null;
     }
 
@@ -245,7 +247,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // This ensures we can detect future changes
     // Do this BEFORE checking for updates so it always happens
     if (spDrawerData.contentHash === null) {
-      console.log('[LOGSEQ SP DRAWER] Initializing drawer for task:', task.id);
+      LogseqLog.debug('[LOGSEQ SP DRAWER] Initializing drawer for task:', task.id);
       await this.updateSpDrawer(task.issueId as string, task.issueProviderId);
     }
 
@@ -271,7 +273,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // vs just a marker discrepancy (should show dialog but not mark as "updated")
     const hasContentChange = isContentChanged || isDueDateChanged || isDueTimeChanged;
 
-    console.log('[LOGSEQ UPDATE CHECK]', {
+    LogseqLog.debug('[LOGSEQ UPDATE CHECK]', {
       taskId: task.id,
       taskTitle: task.title,
       isMarkerDiscrepancy,
@@ -310,7 +312,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
           : 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
       }
 
-      console.log('[LOGSEQ DISCREPANCY] Emitting:', {
+      LogseqLog.debug('[LOGSEQ DISCREPANCY] Emitting:', {
         taskId: task.id,
         discrepancyType,
       });
@@ -365,26 +367,199 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   async getFreshDataForIssueTasks(
     tasks: Task[],
   ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: LogseqBlock }[]> {
-    return Promise.all(
-      tasks.map((task) =>
-        this.getFreshDataForIssueTask(task).then((refreshDataForTask) => ({
+    if (tasks.length === 0) {
+      return [];
+    }
+
+    // All tasks should have the same issueProviderId
+    const issueProviderId = tasks[0].issueProviderId;
+    if (!issueProviderId) {
+      return [];
+    }
+
+    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    if (!cfg) {
+      return [];
+    }
+
+    // Filter out tasks that are being written (write-mutex)
+    const tasksToFetch = tasks.filter((task) => {
+      if (this._blocksBeingWritten.has(task.issueId as string)) {
+        LogseqLog.debug('[LOGSEQ POLL] Skipping - block is being written:', task.issueId);
+        return false;
+      }
+      return task.issueId;
+    });
+
+    if (tasksToFetch.length === 0) {
+      return [];
+    }
+
+    // Batch fetch all blocks in a single HTTP request
+    const uuids = tasksToFetch.map((task) => task.issueId as string);
+    const blocks = await this._logseqApiService
+      .getBlocksByUuids$(uuids, cfg)
+      .pipe(first())
+      .toPromise();
+
+    if (!blocks || blocks.length === 0) {
+      return [];
+    }
+
+    // Create a map for quick block lookup
+    const blockMap = new Map(blocks.map((block) => [block.uuid, block]));
+
+    // Process each task with its fetched block
+    const results: { task: Task; taskChanges: Partial<Task>; issue: LogseqBlock }[] = [];
+
+    for (const task of tasksToFetch) {
+      const block = blockMap.get(task.issueId as string);
+      if (!block) {
+        continue;
+      }
+
+      const refreshData = await this._processBlockForTask(task, block, cfg);
+      if (refreshData) {
+        results.push({
           task,
-          refreshDataForTask,
-        })),
-      ),
-    ).then((items) => {
-      return items
-        .filter(({ refreshDataForTask }) => !!refreshDataForTask)
-        .map(({ refreshDataForTask, task }) => {
-          if (!refreshDataForTask) {
-            throw new Error('No refresh data for task js error');
-          }
-          return {
-            task,
-            taskChanges: refreshDataForTask.taskChanges,
-            issue: refreshDataForTask.issue,
-          };
+          taskChanges: refreshData.taskChanges,
+          issue: refreshData.issue,
         });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Process a pre-fetched block to detect changes for a task.
+   * Extracted from getFreshDataForIssueTask to support batch processing.
+   */
+  private async _processBlockForTask(
+    task: Task,
+    block: LogseqBlock,
+    cfg: LogseqCfg,
+  ): Promise<{
+    taskChanges: Partial<Task>;
+    issue: LogseqBlock;
+    issueTitle: string;
+  } | null> {
+    const blockTitle = extractFirstLine(block.content);
+
+    // Check for marker discrepancy
+    const currentTaskId = this._taskService.currentTaskId();
+    const isTaskActive = currentTaskId === task.id;
+    const isBlockActive = block.marker === 'NOW' || block.marker === 'DOING';
+    const isBlockDone = block.marker === 'DONE';
+
+    const isDoneDiscrepancy = isBlockDone !== task.isDone;
+    const isActiveDiscrepancy = !task.isDone && isBlockActive !== isTaskActive;
+    const isMarkerDiscrepancy = isDoneDiscrepancy || isActiveDiscrepancy;
+
+    // Read stored sync data from :SP: drawer
+    const spDrawerData = extractSpDrawerData(block.content);
+    const currentHash = calculateContentHash(block.content);
+
+    // Initialize :SP: drawer if it doesn't exist yet
+    if (spDrawerData.contentHash === null) {
+      LogseqLog.debug('[LOGSEQ SP DRAWER] Initializing drawer for task:', task.id);
+      await this._updateSpDrawerWithCfg(task.issueId as string, cfg);
+    }
+
+    // Check for content changes
+    const isContentChanged =
+      spDrawerData.contentHash !== null && spDrawerData.contentHash !== currentHash;
+
+    // Check for scheduled date/time changes
+    const blockScheduledDate = extractScheduledDate(block.content);
+    const blockScheduledDateTime = extractScheduledDateTime(block.content);
+
+    const isDueDateChanged =
+      isContentChanged && (blockScheduledDate ?? null) !== (task.dueDay ?? null);
+    const isDueTimeChanged =
+      isContentChanged && (blockScheduledDateTime ?? null) !== (task.dueWithTime ?? null);
+
+    const hasContentChange = isContentChanged || isDueDateChanged || isDueTimeChanged;
+
+    LogseqLog.debug('[LOGSEQ UPDATE CHECK]', {
+      taskId: task.id,
+      taskTitle: task.title,
+      isMarkerDiscrepancy,
+      hasContentChange,
+      blockTitle,
+      blockMarker: block.marker,
+    });
+
+    // Emit marker discrepancies
+    if (isMarkerDiscrepancy) {
+      let discrepancyType: DiscrepancyType;
+      if (isDoneDiscrepancy) {
+        discrepancyType = isBlockDone
+          ? 'LOGSEQ_DONE_SUPERPROD_NOT_DONE'
+          : 'SUPERPROD_DONE_LOGSEQ_NOT_DONE';
+      } else {
+        discrepancyType = isBlockActive
+          ? 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE'
+          : 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE';
+      }
+
+      this.discrepancies$.next({
+        task,
+        block,
+        discrepancyType,
+      });
+    }
+
+    if (isMarkerDiscrepancy || hasContentChange) {
+      if (hasContentChange) {
+        await this._updateSpDrawerWithCfg(task.issueId as string, cfg);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { title, isDone, ...taskDataWithoutTitleAndDone } = this.getAddTaskData(
+        mapBlockToIssueReduced(block),
+      );
+
+      const forceUpdate = isMarkerDiscrepancy && !hasContentChange;
+
+      return {
+        taskChanges: {
+          ...taskDataWithoutTitleAndDone,
+          ...(hasContentChange && !isDoneDiscrepancy ? { isDone } : {}),
+          ...(forceUpdate ? { issueLastUpdated: Date.now() } : {}),
+          issueWasUpdated: hasContentChange,
+        },
+        issue: block,
+        issueTitle: extractFirstLine(block.content),
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Update :SP: drawer with config already available (for batch processing)
+   */
+  private async _updateSpDrawerWithCfg(blockUuid: string, cfg: LogseqCfg): Promise<void> {
+    const block = await this._logseqApiService
+      .getBlockByUuid$(blockUuid, cfg)
+      .toPromise();
+    if (!block) {
+      return;
+    }
+
+    const contentHash = calculateContentHash(block.content);
+    const timestamp = Date.now();
+    const updatedContent = updateSpDrawerInContent(block.content, timestamp, contentHash);
+
+    await this._logseqApiService
+      .updateBlock$(block.uuid, updatedContent, cfg)
+      .toPromise();
+
+    LogseqLog.debug('[LOGSEQ SP DRAWER] Updated:', {
+      blockUuid,
+      timestamp,
+      contentHash,
     });
   }
 
@@ -459,10 +634,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       const block = await this.getById(blockUuid, issueProviderId);
 
       // Update marker in content
-      const updatedContent = block.content.replace(
-        /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
-        `${newMarker} `,
-      );
+      const updatedContent = block.content.replace(LOGSEQ_MARKER_REGEX, `${newMarker} `);
 
       await this._logseqApiService
         .updateBlock$(block.uuid, updatedContent, cfg)
@@ -495,10 +667,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
 
       // Update marker if task done status changed
       if (task.isDone && block.marker !== 'DONE') {
-        updatedContent = updatedContent.replace(
-          /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i,
-          'DONE ',
-        );
+        updatedContent = updatedContent.replace(LOGSEQ_MARKER_REGEX, 'DONE ');
         hasChanges = true;
       }
 
@@ -523,7 +692,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
         const isNowScheduledForToday = task.dueDay === todayStr;
 
         if (wasOverdueInLogseq && isNowScheduledForToday) {
-          console.log('[LOGSEQ SMART RESCHEDULE] Updating overdue task to today:', {
+          LogseqLog.debug('[LOGSEQ SMART RESCHEDULE] Updating overdue task to today:', {
             taskTitle: task.title,
             oldScheduledDate: currentScheduledDate,
             newScheduledDate: todayStr,
@@ -593,7 +762,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       .updateBlock$(block.uuid, updatedContent, cfg)
       .toPromise();
 
-    console.log('[LOGSEQ SP DRAWER] Updated:', {
+    LogseqLog.debug('[LOGSEQ SP DRAWER] Updated:', {
       blockUuid,
       timestamp,
       contentHash,

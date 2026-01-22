@@ -320,7 +320,7 @@ describe('LogseqCommonInterfacesService', () => {
       const block: LogseqBlock = {
         id: 'block-uuid-1',
         uuid: 'block-uuid-1',
-        content: `TODO Updated Task Content\n:SP:\nsuperprod-last-sync:: ${Date.now() - 10000}\nsuperprod-content-hash:: ${oldHash}\n:END:`,
+        content: `TODO Updated Task Content\n:SP:\nsuperprod-last-sync: ${Date.now() - 10000}\nsuperprod-content-hash: ${oldHash}\n:END:`,
         marker: 'TODO',
         page: { id: 123 },
         parent: null,

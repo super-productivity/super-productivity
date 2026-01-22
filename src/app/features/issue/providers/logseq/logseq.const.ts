@@ -14,6 +14,20 @@ export const DEFAULT_LOGSEQ_CFG: LogseqCfg = {
 export const LOGSEQ_POLL_INTERVAL = 0.5 * 60 * 1000; // half a minute (it's usually local)
 export const LOGSEQ_TYPE /* : IssueProviderKey */ = 'LOGSEQ';
 
+// Valid Logseq task markers
+export const LOGSEQ_MARKERS = [
+  'TODO',
+  'DONE',
+  'DOING',
+  'LATER',
+  'WAITING',
+  'NOW',
+] as const;
+export type LogseqMarker = (typeof LOGSEQ_MARKERS)[number];
+
+// Regex to match and remove marker prefix from content
+export const LOGSEQ_MARKER_REGEX = /^(TODO|DONE|DOING|LATER|WAITING|NOW)\s+/i;
+
 // Form config will be exported after it's created
 export {
   LOGSEQ_CONFIG_FORM_SECTION,
