@@ -48,6 +48,27 @@ header p {
   margin-bottom: 2rem;
 }
 
+.eu-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 1rem;
+  background-color: #039;
+  border: 1px solid #002970;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fc0;
+  margin-top: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.eu-stars {
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -452,5 +473,11 @@ footer {
 
   .danger-zone h3 {
     color: #f77;
+  }
+
+  .eu-badge {
+    background-color: #039;
+    border-color: #002970;
+    color: #fc0;
   }
 }
