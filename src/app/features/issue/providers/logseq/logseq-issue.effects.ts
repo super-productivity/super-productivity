@@ -29,6 +29,8 @@ import { MatDialog } from '@angular/material/dialog';
 import { PluginDialogComponent } from '../../../../plugins/ui/plugin-dialog/plugin-dialog.component';
 import { Store } from '@ngrx/store';
 import { Task } from '../../../tasks/task.model';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../../../t.const';
 
 @Injectable()
 export class LogseqIssueEffects {
@@ -39,6 +41,7 @@ export class LogseqIssueEffects {
   private _issueService = inject(IssueService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private _translateService = inject(TranslateService);
   private _previousTaskId: string | null = null;
   private _isDialogOpen = false;
 
@@ -66,41 +69,56 @@ export class LogseqIssueEffects {
   }
 
   private _getDialogMessage(discrepancyType: DiscrepancyType, taskTitle: string): string {
+    const params = { title: taskTitle };
     switch (discrepancyType) {
       case 'LOGSEQ_DONE_SUPERPROD_NOT_DONE':
-        return `Der Task "${taskTitle}" wurde in Logseq als DONE markiert.`;
+        return this._translateService.instant(
+          T.F.LOGSEQ.DISCREPANCY.DONE_IN_LOGSEQ,
+          params,
+        );
       case 'SUPERPROD_DONE_LOGSEQ_NOT_DONE':
-        return `Der Task "${taskTitle}" wurde in Super Productivity abgeschlossen, ist aber in Logseq noch nicht DONE.`;
+        return this._translateService.instant(
+          T.F.LOGSEQ.DISCREPANCY.DONE_IN_SUPERPROD,
+          params,
+        );
       case 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE':
-        return `Der Task "${taskTitle}" wurde in Logseq gestartet (Marker auf NOW/DOING gesetzt).`;
+        return this._translateService.instant(
+          T.F.LOGSEQ.DISCREPANCY.ACTIVE_IN_LOGSEQ,
+          params,
+        );
       case 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE':
-        return `Der Task "${taskTitle}" ist in Super Productivity aktiv, aber in Logseq nicht als NOW/DOING markiert.`;
+        return this._translateService.instant(
+          T.F.LOGSEQ.DISCREPANCY.ACTIVE_IN_SUPERPROD,
+          params,
+        );
     }
   }
 
   private _getLogseqActionLabel(discrepancyType: DiscrepancyType): string {
     switch (discrepancyType) {
       case 'LOGSEQ_DONE_SUPERPROD_NOT_DONE':
-        return 'Logseq auf TODO/LATER setzen';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.SET_LOGSEQ_TODO);
       case 'SUPERPROD_DONE_LOGSEQ_NOT_DONE':
-        return 'Logseq auf DONE setzen';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.SET_LOGSEQ_DONE);
       case 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE':
-        return 'Logseq auf TODO/LATER setzen';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.SET_LOGSEQ_TODO);
       case 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE':
-        return 'Logseq auf NOW/DOING setzen';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.SET_LOGSEQ_DOING);
     }
   }
 
   private _getSuperProdActionLabel(discrepancyType: DiscrepancyType): string {
     switch (discrepancyType) {
       case 'LOGSEQ_DONE_SUPERPROD_NOT_DONE':
-        return 'Abschließen';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.COMPLETE);
       case 'SUPERPROD_DONE_LOGSEQ_NOT_DONE':
-        return 'SuperProd auf nicht-DONE setzen';
+        return this._translateService.instant(
+          T.F.LOGSEQ.DISCREPANCY.SET_SUPERPROD_NOT_DONE,
+        );
       case 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE':
-        return 'Aktivieren';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.ACTIVATE);
       case 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE':
-        return 'Task deaktivieren';
+        return this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.DEACTIVATE_TASK);
     }
   }
 
@@ -556,10 +574,20 @@ export class LogseqIssueEffects {
     if (hasLogseqActive) {
       const headerText =
         logseqActiveDiscrepancies.length > 1
-          ? 'Mehrere Tasks sind in Logseq als NOW/DOING markiert:'
-          : 'Ein Task ist in Logseq als NOW/DOING markiert:';
+          ? this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.MULTIPLE_ACTIVE_IN_LOGSEQ,
+            )
+          : this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.SINGLE_ACTIVE_IN_LOGSEQ,
+            );
+      const whichToActivate = this._translateService.instant(
+        T.F.LOGSEQ.DISCREPANCY.WHICH_TO_ACTIVATE,
+      );
+      const activateNone = this._translateService.instant(
+        T.F.LOGSEQ.DISCREPANCY.ACTIVATE_NONE,
+      );
       html += `<p><strong>${headerText}</strong></p>`;
-      html += '<p style="margin-bottom: 12px;">Welchen Task möchten Sie aktivieren?</p>';
+      html += `<p style="margin-bottom: 12px;">${whichToActivate}</p>`;
       html += '<div id="active-task-list" style="margin-left: 16px;">';
 
       // Option to activate none
@@ -567,7 +595,7 @@ export class LogseqIssueEffects {
             <div style="margin-bottom: 8px;">
               <label style="display: flex; align-items: center; cursor: pointer;">
                 <input type="radio" name="activeTask" value="__none__" style="margin-right: 8px;">
-                <span style="font-style: italic; color: #888;">Keinen aktivieren (alle in Logseq deaktivieren)</span>
+                <span style="font-style: italic; color: #888;">${activateNone}</span>
               </label>
             </div>
           `;
@@ -597,15 +625,22 @@ export class LogseqIssueEffects {
 
     // Single/few active discrepancies with per-task toggle (not multiple DOING from Logseq)
     if (!hasLogseqActive && activeDiscrepancies.length > 0) {
-      html += `<p><strong>Aktive Tasks (${activeDiscrepancies.length}):</strong></p>`;
+      const activeTasksLabel = this._translateService.instant(
+        T.F.LOGSEQ.DISCREPANCY.ACTIVE_TASKS,
+      );
+      html += `<p><strong>${activeTasksLabel} (${activeDiscrepancies.length}):</strong></p>`;
       html += '<div style="margin-bottom: 12px;">';
 
       activeDiscrepancies.forEach((d) => {
         const isActiveInLogseq =
           d.discrepancyType === 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE';
         const statusText = isActiveInLogseq
-          ? 'Logseq: DOING, SuperProd: inaktiv'
-          : 'SuperProd: aktiv, Logseq: TODO';
+          ? this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.STATUS_LOGSEQ_DOING_SP_INACTIVE,
+            )
+          : this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.STATUS_SP_ACTIVE_LOGSEQ_TODO,
+            );
         const title = this._escapeHtml(d.task.title);
         const taskId = d.task.id;
 
@@ -618,7 +653,9 @@ export class LogseqIssueEffects {
         // Default: accept Logseq value (activate if Logseq is DOING, deactivate if Logseq is TODO)
         const spChecked = 'checked';
         const lqChecked = '';
-        const spLabel = isActiveInLogseq ? 'Aktivieren' : 'Deaktivieren';
+        const spLabel = isActiveInLogseq
+          ? this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.ACTIVATE)
+          : this._translateService.instant(T.F.LOGSEQ.DISCREPANCY.DEACTIVATE);
         const lqLabel = isActiveInLogseq ? 'Logseq: TODO' : 'Logseq: DOING';
 
         html += `<div style="${rowStyle}">`;
@@ -650,11 +687,19 @@ export class LogseqIssueEffects {
       html += `<p><strong>DONE Status (${doneDiscrepancies.length}):</strong></p>`;
       html += '<div style="margin-bottom: 12px;">';
 
+      const completeLabel = this._translateService.instant(
+        T.F.LOGSEQ.DISCREPANCY.COMPLETE,
+      );
+
       doneDiscrepancies.forEach((d) => {
         const isDoneInLogseq = d.discrepancyType === 'LOGSEQ_DONE_SUPERPROD_NOT_DONE';
         const statusText = isDoneInLogseq
-          ? 'Logseq: DONE, SuperProd: offen'
-          : 'SuperProd: DONE, Logseq: offen';
+          ? this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.STATUS_LOGSEQ_DONE_SP_OPEN,
+            )
+          : this._translateService.instant(
+              T.F.LOGSEQ.DISCREPANCY.STATUS_SP_DONE_LOGSEQ_OPEN,
+            );
         const logseqLabel = isDoneInLogseq ? 'TODO' : 'DONE';
         const title = this._escapeHtml(d.task.title);
         const taskId = d.task.id;
@@ -679,7 +724,7 @@ export class LogseqIssueEffects {
         html +=
           `<input type="radio" name="action-${taskId}" value="superprod" ` +
           `id="sp-${taskId}" ${spChecked} style="display:none">`;
-        html += `<label for="sp-${taskId}" class="toggle-label">Abschließen</label>`;
+        html += `<label for="sp-${taskId}" class="toggle-label">${completeLabel}</label>`;
         html +=
           `<input type="radio" name="action-${taskId}" value="logseq" ` +
           `id="lq-${taskId}" ${lqChecked} style="display:none">`;

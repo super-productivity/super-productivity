@@ -492,6 +492,51 @@
         "TRANSITIONS_LOADED": "Jira: Übergänge geladen. Verwenden Sie die unten stehenden Auswahlmöglichkeiten, um sie zuzuweisen"
       }
     },
+    "LOGSEQ": {
+      "FORM": {
+        "API_URL": "API URL",
+        "AUTH_TOKEN": "API Token",
+        "ADVANCED_CONFIG": "Erweiterte Konfiguration",
+        "QUERY_FILTER": "Datascript Query Filter",
+        "QUERY_FILTER_PLACEHOLDER": "[:find (pull ?block [*]) :where [?block :block/marker ?marker] [(contains? #{\"TODO\" \"LATER\" \"NOW\" \"DOING\"} ?marker)]]",
+        "QUERY_FILTER_DESCRIPTION": "Benutzerdefinierte Datascript-Abfrage zum Filtern der zu importierenden Blöcke. Standardmäßig werden TODO- und DOING-Blöcke abgefragt.",
+        "INCLUDE_MARKER_IN_UPDATE": "Marker-Änderungen (TODO/DOING/NOW/LATER/DONE) in Update-Erkennung einbeziehen",
+        "INCLUDE_MARKER_IN_UPDATE_DESCRIPTION": "Wenn aktiviert, lösen Änderungen am Task-Marker in Logseq eine Update-Benachrichtigung aus. Wenn deaktiviert (Standard), werden nur Inhaltsänderungen erkannt.",
+        "TASK_WORKFLOW": "Task-Workflow-Muster",
+        "TASK_WORKFLOW_DESCRIPTION": "Wähle den Task-Marker-Workflow, der in deinem Logseq-Graph verwendet wird. TODO/DOING verwendet TODO (gestoppt) → DOING (aktiv) → DONE. NOW/LATER verwendet LATER (gestoppt) → NOW (aktiv) → DONE.",
+        "WORKFLOW_TODO_DOING": "TODO → DOING → DONE",
+        "WORKFLOW_NOW_LATER": "LATER → NOW → DONE",
+        "LINK_FORMAT": "Link-Format",
+        "LINK_FORMAT_LOGSEQ_URL": "Logseq URL (logseq://graph/...)",
+        "LINK_FORMAT_HTTP_URL": "HTTP URL (localhost:12315)"
+      },
+      "FORM_SECTION": {
+        "HELP": "<h3>Setup-Anleitung</h3><ol><li>HTTP API in Logseq aktivieren: <strong>Einstellungen → Features → HTTP API Server</strong></li><li>API Token generieren: <strong>Einstellungen → HTTP API Server → Authorization tokens</strong></li><li>Token oben einfügen</li></ol><p>Mehr Infos: <a href=\"https://docs.logseq.com/#/page/http%20api\" target=\"_blank\">Logseq HTTP API Dokumentation</a></p><h3>Issue Panel verwenden</h3><p>Um alle verfügbaren Logseq-Tasks im Issue Panel anzuzeigen:</p><ol><li><strong>&lt;all&gt;</strong> im Suchfeld eingeben</li><li>Den <strong>Pin-Button</strong> (📌) klicken, um die Suche zu speichern</li><li>Beim nächsten Öffnen des Issue Panels werden alle Tasks automatisch angezeigt</li></ol><p>Du kannst das Suchfeld jederzeit zum Filtern nach Inhalt verwenden.</p>"
+      },
+      "DISCREPANCY": {
+        "DONE_IN_LOGSEQ": "Der Task \"{{title}}\" wurde in Logseq als DONE markiert.",
+        "DONE_IN_SUPERPROD": "Der Task \"{{title}}\" wurde in Super Productivity abgeschlossen, ist aber in Logseq noch nicht DONE.",
+        "ACTIVE_IN_LOGSEQ": "Der Task \"{{title}}\" wurde in Logseq gestartet (Marker auf NOW/DOING gesetzt).",
+        "ACTIVE_IN_SUPERPROD": "Der Task \"{{title}}\" ist in Super Productivity aktiv, aber in Logseq nicht als NOW/DOING markiert.",
+        "SET_LOGSEQ_TODO": "Logseq auf TODO/LATER setzen",
+        "SET_LOGSEQ_DONE": "Logseq auf DONE setzen",
+        "SET_LOGSEQ_DOING": "Logseq auf NOW/DOING setzen",
+        "COMPLETE": "Abschließen",
+        "SET_SUPERPROD_NOT_DONE": "SuperProd auf nicht-DONE setzen",
+        "ACTIVATE": "Aktivieren",
+        "DEACTIVATE": "Deaktivieren",
+        "DEACTIVATE_TASK": "Task deaktivieren",
+        "MULTIPLE_ACTIVE_IN_LOGSEQ": "Mehrere Tasks sind in Logseq als NOW/DOING markiert:",
+        "SINGLE_ACTIVE_IN_LOGSEQ": "Ein Task ist in Logseq als NOW/DOING markiert:",
+        "WHICH_TO_ACTIVATE": "Welchen Task möchten Sie aktivieren?",
+        "ACTIVATE_NONE": "Keinen aktivieren (alle in Logseq deaktivieren)",
+        "ACTIVE_TASKS": "Aktive Tasks",
+        "STATUS_LOGSEQ_DOING_SP_INACTIVE": "Logseq: DOING, SuperProd: inaktiv",
+        "STATUS_SP_ACTIVE_LOGSEQ_TODO": "SuperProd: aktiv, Logseq: TODO",
+        "STATUS_LOGSEQ_DONE_SP_OPEN": "Logseq: DONE, SuperProd: offen",
+        "STATUS_SP_DONE_LOGSEQ_OPEN": "SuperProd: DONE, Logseq: offen"
+      }
+    },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Die eingefügte Markdown-Liste zu den Notizen der Unteraufgabe \"{{parentTaskTitle}}\" hinzufügen?",
       "CONFIRM_PARENT_TASKS": "Erstellen Sie <strong>{{tasksCount}} neue Aufgaben</strong> aus der eingefügten Markdown-Liste?",

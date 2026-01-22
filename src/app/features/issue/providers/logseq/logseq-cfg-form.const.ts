@@ -4,21 +4,16 @@ import {
 } from '../../../config/global-config.model';
 import { IssueProviderLogseq } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
+import { T } from '../../../../t.const';
 
 export const LOGSEQ_SEARCH_WILDCARD = '<all>'; // Shows all tasks
-
-const encodeHTML = (str): string => {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-};
 
 export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[] = [
   {
     key: 'apiUrl',
     type: 'input',
     props: {
-      label: 'API URL',
+      label: T.F.LOGSEQ.FORM.API_URL,
       type: 'url',
       placeholder: 'http://localhost:12315/api',
       required: true,
@@ -28,26 +23,24 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
     key: 'authToken',
     type: 'input',
     props: {
-      label: 'API Token',
+      label: T.F.LOGSEQ.FORM.AUTH_TOKEN,
       type: 'password',
       required: true,
     },
   },
   {
     type: 'collapsible',
-    props: { label: 'Advanced Config' },
+    props: { label: T.F.LOGSEQ.FORM.ADVANCED_CONFIG },
     fieldGroup: [
       ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
       {
         key: 'queryFilter',
         type: 'textarea',
         props: {
-          label: 'Datascript Query Filter',
-          placeholder:
-            '[:find (pull ?block [*]) :where [?block :block/marker ?marker] [(contains? #{"TODO" "LATER" "NOW" "DOING"} ?marker)]]',
+          label: T.F.LOGSEQ.FORM.QUERY_FILTER,
+          placeholder: T.F.LOGSEQ.FORM.QUERY_FILTER_PLACEHOLDER,
           rows: 3,
-          description:
-            'Custom Datascript query to filter which blocks to import. Default queries for TODO and DOING blocks.',
+          description: T.F.LOGSEQ.FORM.QUERY_FILTER_DESCRIPTION,
         },
       },
       {
@@ -55,9 +48,8 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
         type: 'checkbox',
         defaultValue: false,
         props: {
-          label: 'Include marker changes (TODO/DOING/NOW/LATER/DONE) in update detection',
-          description:
-            'When enabled, changes to the task marker in Logseq will trigger an update notification. When disabled (default), only content changes are detected.',
+          label: T.F.LOGSEQ.FORM.INCLUDE_MARKER_IN_UPDATE,
+          description: T.F.LOGSEQ.FORM.INCLUDE_MARKER_IN_UPDATE_DESCRIPTION,
         },
       },
       {
@@ -65,12 +57,11 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
         type: 'select',
         defaultValue: 'TODO_DOING',
         props: {
-          label: 'Task Workflow Pattern',
-          description:
-            'Choose the task marker workflow used in your Logseq graph. TODO/DOING uses TODO (stopped) → DOING (active) → DONE. NOW/LATER uses LATER (stopped) → NOW (active) → DONE.',
+          label: T.F.LOGSEQ.FORM.TASK_WORKFLOW,
+          description: T.F.LOGSEQ.FORM.TASK_WORKFLOW_DESCRIPTION,
           options: [
-            { label: 'TODO → DOING → DONE', value: 'TODO_DOING' },
-            { label: 'LATER → NOW → DONE', value: 'NOW_LATER' },
+            { label: T.F.LOGSEQ.FORM.WORKFLOW_TODO_DOING, value: 'TODO_DOING' },
+            { label: T.F.LOGSEQ.FORM.WORKFLOW_NOW_LATER, value: 'NOW_LATER' },
           ],
         },
       },
@@ -79,10 +70,10 @@ export const LOGSEQ_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderLogseq>[]
         type: 'select',
         defaultValue: 'logseq-url',
         props: {
-          label: 'Link Format',
+          label: T.F.LOGSEQ.FORM.LINK_FORMAT,
           options: [
-            { label: 'Logseq URL (logseq://graph/...)', value: 'logseq-url' },
-            { label: 'HTTP URL (localhost:12315)', value: 'http-url' },
+            { label: T.F.LOGSEQ.FORM.LINK_FORMAT_LOGSEQ_URL, value: 'logseq-url' },
+            { label: T.F.LOGSEQ.FORM.LINK_FORMAT_HTTP_URL, value: 'http-url' },
           ],
         },
       },
@@ -94,22 +85,5 @@ export const LOGSEQ_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderLogseq> 
   title: 'Logseq',
   key: 'LOGSEQ',
   items: LOGSEQ_CONFIG_FORM,
-  help: `
-    <h3>Setup Instructions</h3>
-    <ol>
-      <li>Enable HTTP API in Logseq: <strong>Settings → Features → HTTP API Server</strong></li>
-      <li>Generate an API token: <strong>Settings → HTTP API Server → Authorization tokens</strong></li>
-      <li>Paste the token above</li>
-    </ol>
-    <p>Learn more at <a href="https://docs.logseq.com/#/page/http%20api" target="_blank">Logseq HTTP API documentation</a></p>
-
-    <h3>Using the Issue Panel</h3>
-    <p>To show all available Logseq tasks in the Issue Panel:</p>
-    <ol>
-      <li>Enter <strong>${encodeHTML(LOGSEQ_SEARCH_WILDCARD)}</strong> in the search field</li>
-      <li>Click the <strong>pin button</strong> (📌) to save this search</li>
-      <li>Next time you open the Issue Panel, all tasks will be shown automatically</li>
-    </ol>
-    <p>You can use the search field to filter tasks by content at any time.</p>
-  `,
+  help: T.F.LOGSEQ.FORM_SECTION.HELP,
 };

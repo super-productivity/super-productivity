@@ -499,6 +499,51 @@
         "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
       }
     },
+    "LOGSEQ": {
+      "FORM": {
+        "API_URL": "API URL",
+        "AUTH_TOKEN": "API Token",
+        "ADVANCED_CONFIG": "Advanced Config",
+        "QUERY_FILTER": "Datascript Query Filter",
+        "QUERY_FILTER_PLACEHOLDER": "[:find (pull ?block [*]) :where [?block :block/marker ?marker] [(contains? #{\"TODO\" \"LATER\" \"NOW\" \"DOING\"} ?marker)]]",
+        "QUERY_FILTER_DESCRIPTION": "Custom Datascript query to filter which blocks to import. Default queries for TODO and DOING blocks.",
+        "INCLUDE_MARKER_IN_UPDATE": "Include marker changes (TODO/DOING/NOW/LATER/DONE) in update detection",
+        "INCLUDE_MARKER_IN_UPDATE_DESCRIPTION": "When enabled, changes to the task marker in Logseq will trigger an update notification. When disabled (default), only content changes are detected.",
+        "TASK_WORKFLOW": "Task Workflow Pattern",
+        "TASK_WORKFLOW_DESCRIPTION": "Choose the task marker workflow used in your Logseq graph. TODO/DOING uses TODO (stopped) → DOING (active) → DONE. NOW/LATER uses LATER (stopped) → NOW (active) → DONE.",
+        "WORKFLOW_TODO_DOING": "TODO → DOING → DONE",
+        "WORKFLOW_NOW_LATER": "LATER → NOW → DONE",
+        "LINK_FORMAT": "Link Format",
+        "LINK_FORMAT_LOGSEQ_URL": "Logseq URL (logseq://graph/...)",
+        "LINK_FORMAT_HTTP_URL": "HTTP URL (localhost:12315)"
+      },
+      "FORM_SECTION": {
+        "HELP": "<h3>Setup Instructions</h3><ol><li>Enable HTTP API in Logseq: <strong>Settings → Features → HTTP API Server</strong></li><li>Generate an API token: <strong>Settings → HTTP API Server → Authorization tokens</strong></li><li>Paste the token above</li></ol><p>Learn more at <a href=\"https://docs.logseq.com/#/page/http%20api\" target=\"_blank\">Logseq HTTP API documentation</a></p><h3>Using the Issue Panel</h3><p>To show all available Logseq tasks in the Issue Panel:</p><ol><li>Enter <strong>&lt;all&gt;</strong> in the search field</li><li>Click the <strong>pin button</strong> (📌) to save this search</li><li>Next time you open the Issue Panel, all tasks will be shown automatically</li></ol><p>You can use the search field to filter tasks by content at any time.</p>"
+      },
+      "DISCREPANCY": {
+        "DONE_IN_LOGSEQ": "The task \"{{title}}\" was marked as DONE in Logseq.",
+        "DONE_IN_SUPERPROD": "The task \"{{title}}\" was completed in Super Productivity, but is not yet marked as DONE in Logseq.",
+        "ACTIVE_IN_LOGSEQ": "The task \"{{title}}\" was started in Logseq (marker set to NOW/DOING).",
+        "ACTIVE_IN_SUPERPROD": "The task \"{{title}}\" is active in Super Productivity, but not marked as NOW/DOING in Logseq.",
+        "SET_LOGSEQ_TODO": "Set Logseq to TODO/LATER",
+        "SET_LOGSEQ_DONE": "Set Logseq to DONE",
+        "SET_LOGSEQ_DOING": "Set Logseq to NOW/DOING",
+        "COMPLETE": "Complete",
+        "SET_SUPERPROD_NOT_DONE": "Set SuperProd to not-DONE",
+        "ACTIVATE": "Activate",
+        "DEACTIVATE": "Deactivate",
+        "DEACTIVATE_TASK": "Deactivate task",
+        "MULTIPLE_ACTIVE_IN_LOGSEQ": "Multiple tasks are marked as NOW/DOING in Logseq:",
+        "SINGLE_ACTIVE_IN_LOGSEQ": "A task is marked as NOW/DOING in Logseq:",
+        "WHICH_TO_ACTIVATE": "Which task would you like to activate?",
+        "ACTIVATE_NONE": "Activate none (deactivate all in Logseq)",
+        "ACTIVE_TASKS": "Active Tasks",
+        "STATUS_LOGSEQ_DOING_SP_INACTIVE": "Logseq: DOING, SuperProd: inactive",
+        "STATUS_SP_ACTIVE_LOGSEQ_TODO": "SuperProd: active, Logseq: TODO",
+        "STATUS_LOGSEQ_DONE_SP_OPEN": "Logseq: DONE, SuperProd: open",
+        "STATUS_SP_DONE_LOGSEQ_OPEN": "SuperProd: DONE, Logseq: open"
+      }
+    },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted markdown list to the notes of sub-task \"{{parentTaskTitle}}\"?",
       "CONFIRM_PARENT_TASKS": "Create <strong>{{tasksCount}} new tasks</strong> from the pasted markdown list?",
