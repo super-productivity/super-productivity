@@ -1024,7 +1024,16 @@
           "L_CONFIRM_PASSWORD": "Confirm Password",
           "PASSWORDS_DONT_MATCH": "Passwords do not match",
           "PASSWORD_MIN_LENGTH": "Password must be at least 8 characters",
-          "BTN_CHANGE_PASSWORD": "Change Password"
+          "BTN_CHANGE_PASSWORD": "Change Password",
+          "DISABLE_ENCRYPTION_TITLE": "Disable Encryption?",
+          "DISABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL encrypted sync data on the server. This is necessary because encrypted operations cannot be mixed with unencrypted ones.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
+          "DISABLE_ENCRYPTION_ITEM_1": "All sync history and backups on the server will be deleted",
+          "DISABLE_ENCRYPTION_ITEM_2": "Your current data will be re-uploaded without encryption",
+          "DISABLE_ENCRYPTION_ITEM_3": "All other devices will sync the unencrypted data",
+          "DISABLE_ENCRYPTION_NOTE": "Your local data will NOT be deleted. You can re-enable encryption at any time.",
+          "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
+          "DISABLE_ENCRYPTION_SUCCESS": "Encryption disabled successfully"
         },
         "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",

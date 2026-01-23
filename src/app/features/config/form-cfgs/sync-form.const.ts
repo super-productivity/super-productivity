@@ -7,6 +7,7 @@ import { IS_ELECTRON } from '../../../app.constants';
 import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
+import { openDisableEncryptionDialog } from '../../../imex/sync/encryption-password-dialog-opener.service';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -237,6 +238,29 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               templateOptions: {
                 label: T.F.SYNC.FORM.SUPER_SYNC.L_ENABLE_E2E_ENCRYPTION,
                 description: T.F.SYNC.FORM.SUPER_SYNC.E2E_ENCRYPTION_DESCRIPTION,
+              },
+              hooks: {
+                onInit: (field: FormlyFieldConfig) => {
+                  // Track previous value to detect changes from true to false
+                  let previousValue = field?.formControl?.value;
+
+                  field?.formControl?.valueChanges.subscribe(async (newValue) => {
+                    // Only intercept when changing from true (enabled) to false (disabled)
+                    if (previousValue === true && newValue === false) {
+                      // Open confirmation dialog
+                      const result = await openDisableEncryptionDialog();
+
+                      if (!result?.success) {
+                        // User cancelled - reset to true
+                        field?.formControl?.setValue(true, { emitEvent: false });
+                        previousValue = true;
+                        return;
+                      }
+                      // User confirmed and encryption was disabled successfully
+                    }
+                    previousValue = newValue;
+                  });
+                },
               },
             },
             {
