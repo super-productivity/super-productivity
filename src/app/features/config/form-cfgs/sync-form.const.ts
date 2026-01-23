@@ -243,23 +243,44 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
                 onInit: (field: FormlyFieldConfig) => {
                   // Track previous value to detect changes from true to false
                   let previousValue = field?.formControl?.value;
+                  // Guard to prevent multiple dialogs opening simultaneously
+                  let isDialogOpen = false;
 
-                  field?.formControl?.valueChanges.subscribe(async (newValue) => {
-                    // Only intercept when changing from true (enabled) to false (disabled)
-                    if (previousValue === true && newValue === false) {
-                      // Open confirmation dialog
-                      const result = await openDisableEncryptionDialog();
+                  const subscription = field?.formControl?.valueChanges.subscribe(
+                    async (newValue) => {
+                      // Only intercept when changing from true (enabled) to false (disabled)
+                      if (previousValue === true && newValue === false && !isDialogOpen) {
+                        isDialogOpen = true;
+                        try {
+                          // Open confirmation dialog
+                          const result = await openDisableEncryptionDialog();
 
-                      if (!result?.success) {
-                        // User cancelled - reset to true
-                        field?.formControl?.setValue(true, { emitEvent: false });
-                        previousValue = true;
-                        return;
+                          if (!result?.success) {
+                            // User cancelled - reset to true
+                            field?.formControl?.setValue(true, { emitEvent: false });
+                            previousValue = true;
+                            return;
+                          }
+                          // User confirmed and encryption was disabled successfully
+                          previousValue = newValue;
+                        } finally {
+                          isDialogOpen = false;
+                        }
+                      } else if (!isDialogOpen) {
+                        previousValue = newValue;
                       }
-                      // User confirmed and encryption was disabled successfully
-                    }
-                    previousValue = newValue;
-                  });
+                    },
+                  );
+
+                  // Store subscription for cleanup
+                  (field as any)._encryptionToggleSubscription = subscription;
+                },
+                onDestroy: (field: FormlyFieldConfig) => {
+                  // Clean up subscription to prevent memory leaks
+                  const subscription = (field as any)._encryptionToggleSubscription;
+                  if (subscription) {
+                    subscription.unsubscribe();
+                  }
                 },
               },
             },

@@ -41,6 +41,7 @@ import { StoreModule } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
+import { EncryptionPasswordDialogOpenerInitService } from './app/imex/sync/encryption-password-dialog-opener-init.service';
 import { EffectsModule } from '@ngrx/effects';
 import { StoreDevtoolsModule } from '@ngrx/store-devtools';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -179,6 +180,16 @@ bootstrapApplication(AppComponent, {
         };
       },
       deps: [OperationCaptureService],
+      multi: true,
+    },
+    // Initialize encryption password dialog opener for static form config functions
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_initService: EncryptionPasswordDialogOpenerInitService) => {
+        // Service constructor initializes the module-level reference
+        return () => {};
+      },
+      deps: [EncryptionPasswordDialogOpenerInitService],
       multi: true,
     },
     // Note: ImmediateUploadService now initializes itself in constructor
