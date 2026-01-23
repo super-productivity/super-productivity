@@ -21,7 +21,7 @@ import {
 } from './logseq-common-interfaces.service';
 import { IssueProviderService } from '../../issue-provider.service';
 import { IssueService } from '../../issue.service';
-import { EMPTY, concat, of, Observable } from 'rxjs';
+import { EMPTY, concat, of, Observable, firstValueFrom } from 'rxjs';
 import { LogseqTaskWorkflow, LogseqCfg } from './logseq.model';
 import { LOGSEQ_TYPE } from './logseq.const';
 import { LogseqLog } from '../../../../core/log';
@@ -136,9 +136,9 @@ export class LogseqIssueEffects {
       case 'LOGSEQ_DONE_SUPERPROD_NOT_DONE':
       case 'LOGSEQ_ACTIVE_SUPERPROD_NOT_ACTIVE':
         // Reset Logseq block to TODO/LATER
-        const cfg1 = await this._issueProviderService
-          .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
-          .toPromise();
+        const cfg1 = await firstValueFrom(
+          this._issueProviderService.getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE),
+        );
         if (cfg1) {
           const markers = this._getMarkers((cfg1 as LogseqCfg).taskWorkflow);
           updatedMarker = markers.stopped;
@@ -162,9 +162,9 @@ export class LogseqIssueEffects {
 
       case 'SUPERPROD_ACTIVE_LOGSEQ_NOT_ACTIVE':
         // Set block to NOW/DOING in Logseq
-        const cfg2 = await this._issueProviderService
-          .getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE)
-          .toPromise();
+        const cfg2 = await firstValueFrom(
+          this._issueProviderService.getCfgOnce$(task.issueProviderId, LOGSEQ_TYPE),
+        );
         if (cfg2) {
           const markers = this._getMarkers((cfg2 as LogseqCfg).taskWorkflow);
           updatedMarker = markers.active;

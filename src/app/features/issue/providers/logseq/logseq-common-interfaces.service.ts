@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, of, Subject } from 'rxjs';
+import { Observable, of, Subject, firstValueFrom } from 'rxjs';
 import { Task } from '../../../tasks/task.model';
 import { concatMap, first, map, switchMap } from 'rxjs/operators';
 import { IssueServiceInterface } from '../../issue-service-interface';
@@ -66,46 +66,45 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
   }
 
   testConnection(cfg: LogseqCfg): Promise<boolean> {
-    return this._logseqApiService
-      .queryBlocks$(cfg, '[:find ?b :where [?b :block/uuid]]')
-      .pipe(
+    return firstValueFrom(
+      this._logseqApiService.queryBlocks$(cfg, '[:find ?b :where [?b :block/uuid]]').pipe(
         map((res) => Array.isArray(res)),
         first(),
-      )
-      .toPromise()
+      ),
+    )
       .then((result) => result ?? false)
       .catch(() => false);
   }
 
   issueLink(blockUuid: string, issueProviderId: string): Promise<string> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(
+    return firstValueFrom(
+      this._getCfgOnce$(issueProviderId).pipe(
         map((cfg) =>
           cfg.linkFormat === 'logseq-url'
             ? `logseq://graph/logseq?block-id=${blockUuid}`
             : `http://localhost:12315/#/page/${blockUuid}`,
         ),
-      )
-      .toPromise()
-      .then((result) => result ?? '');
+      ),
+    ).then((result) => result ?? '');
   }
 
   getById(uuid: string, issueProviderId: string): Promise<LogseqBlock> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(concatMap((cfg) => this._logseqApiService.getBlockByUuid$(uuid, cfg)))
-      .toPromise()
-      .then((result) => {
-        if (!result) {
-          throw new Error('Failed to get Logseq block');
-        }
+    return firstValueFrom(
+      this._getCfgOnce$(issueProviderId).pipe(
+        concatMap((cfg) => this._logseqApiService.getBlockByUuid$(uuid, cfg)),
+      ),
+    ).then((result) => {
+      if (!result) {
+        throw new Error('Failed to get Logseq block');
+      }
 
-        return result;
-      });
+      return result;
+    });
   }
 
   searchIssues(searchTerm: string, issueProviderId: string): Promise<SearchResultItem[]> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(
+    return firstValueFrom(
+      this._getCfgOnce$(issueProviderId).pipe(
         switchMap((cfg) => {
           if (!this.isEnabled(cfg)) {
             return of([]);
@@ -133,9 +132,8 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
             .queryBlocks$(cfg, query)
             .pipe(map((blocks) => blocks.map((block) => mapBlockToSearchResult(block))));
         }),
-      )
-      .toPromise()
-      .then((result) => result ?? []);
+      ),
+    ).then((result) => result ?? []);
   }
 
   getAddTaskData(block: LogseqBlockReduced): Partial<Task> & { title: string } {
@@ -208,14 +206,14 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return null;
     }
 
-    const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(task.issueProviderId));
     if (!cfg) {
       throw new Error('No config found for issueProviderId');
     }
 
-    const block = await this._logseqApiService
-      .getBlockByUuid$(task.issueId as string, cfg)
-      .toPromise();
+    const block = await firstValueFrom(
+      this._logseqApiService.getBlockByUuid$(task.issueId as string, cfg),
+    );
     if (!block) {
       return null;
     }
@@ -377,7 +375,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return [];
     }
 
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     if (!cfg) {
       return [];
     }
@@ -397,10 +395,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
 
     // Batch fetch all blocks in a single HTTP request
     const uuids = tasksToFetch.map((task) => task.issueId as string);
-    const blocks = await this._logseqApiService
-      .getBlocksByUuids$(uuids, cfg)
-      .pipe(first())
-      .toPromise();
+    const blocks = await firstValueFrom(
+      this._logseqApiService.getBlocksByUuids$(uuids, cfg).pipe(first()),
+    );
 
     if (!blocks || blocks.length === 0) {
       return [];
@@ -541,9 +538,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
    * Update :SP: drawer with config already available (for batch processing)
    */
   private async _updateSpDrawerWithCfg(blockUuid: string, cfg: LogseqCfg): Promise<void> {
-    const block = await this._logseqApiService
-      .getBlockByUuid$(blockUuid, cfg)
-      .toPromise();
+    const block = await firstValueFrom(
+      this._logseqApiService.getBlockByUuid$(blockUuid, cfg),
+    );
     if (!block) {
       return;
     }
@@ -552,9 +549,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     const timestamp = Date.now();
     const updatedContent = updateSpDrawerInContent(block.content, timestamp, contentHash);
 
-    await this._logseqApiService
-      .updateBlock$(block.uuid, updatedContent, cfg)
-      .toPromise();
+    await firstValueFrom(
+      this._logseqApiService.updateBlock$(block.uuid, updatedContent, cfg),
+    );
 
     LogseqLog.debug('[LOGSEQ SP DRAWER] Updated:', {
       blockUuid,
@@ -572,14 +569,14 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     blockUuid: string,
     issueProviderId: string,
   ): Promise<LogseqBlockReduced[]> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     if (!cfg) {
       return [];
     }
 
-    const children = await this._logseqApiService
-      .getBlockChildren$(blockUuid, cfg)
-      .toPromise();
+    const children = await firstValueFrom(
+      this._logseqApiService.getBlockChildren$(blockUuid, cfg),
+    );
     if (!children) {
       return [];
     }
@@ -593,7 +590,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     issueProviderId: string,
     allExistingIssueIds: number[] | string[],
   ): Promise<LogseqBlockReduced[]> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     if (!cfg || !this.isEnabled(cfg)) {
       return [];
     }
@@ -601,10 +598,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // Use custom query from config or default query
     const query = cfg.queryFilter || DEFAULT_LOGSEQ_CFG.queryFilter;
 
-    const blocks = await this._logseqApiService
-      .queryBlocks$(cfg, query)
-      .pipe(first())
-      .toPromise();
+    const blocks = await firstValueFrom(
+      this._logseqApiService.queryBlocks$(cfg, query).pipe(first()),
+    );
 
     if (!blocks) {
       return [];
@@ -622,7 +618,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     issueProviderId: string,
     newMarker: 'TODO' | 'DOING' | 'LATER' | 'NOW' | 'DONE',
   ): Promise<void> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     if (!cfg) {
       return;
     }
@@ -636,9 +632,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       // Update marker in content
       const updatedContent = block.content.replace(LOGSEQ_MARKER_REGEX, `${newMarker} `);
 
-      await this._logseqApiService
-        .updateBlock$(block.uuid, updatedContent, cfg)
-        .toPromise();
+      await firstValueFrom(
+        this._logseqApiService.updateBlock$(block.uuid, updatedContent, cfg),
+      );
     } finally {
       // Clear write-mutex after write completes
       this._blocksBeingWritten.delete(blockUuid);
@@ -650,7 +646,7 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       return;
     }
 
-    const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(task.issueProviderId));
     if (!cfg) {
       return;
     }
@@ -721,9 +717,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
       }
 
       if (hasChanges) {
-        await this._logseqApiService
-          .updateBlock$(block.uuid, updatedContent, cfg)
-          .toPromise();
+        await firstValueFrom(
+          this._logseqApiService.updateBlock$(block.uuid, updatedContent, cfg),
+        );
 
         // Update :SP: drawer with new sync data
         await this.updateSpDrawer(task.issueId as string, task.issueProviderId);
@@ -739,14 +735,14 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
    * This should be called after any sync operation to track the synced state
    */
   async updateSpDrawer(blockUuid: string, issueProviderId: string): Promise<void> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
     if (!cfg) {
       return;
     }
 
-    const block = await this._logseqApiService
-      .getBlockByUuid$(blockUuid, cfg)
-      .toPromise();
+    const block = await firstValueFrom(
+      this._logseqApiService.getBlockByUuid$(blockUuid, cfg),
+    );
     if (!block) {
       return;
     }
@@ -758,9 +754,9 @@ export class LogseqCommonInterfacesService implements IssueServiceInterface {
     // Update the block content with new :SP: drawer
     const updatedContent = updateSpDrawerInContent(block.content, timestamp, contentHash);
 
-    await this._logseqApiService
-      .updateBlock$(block.uuid, updatedContent, cfg)
-      .toPromise();
+    await firstValueFrom(
+      this._logseqApiService.updateBlock$(block.uuid, updatedContent, cfg),
+    );
 
     LogseqLog.debug('[LOGSEQ SP DRAWER] Updated:', {
       blockUuid,
