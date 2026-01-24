@@ -15,6 +15,7 @@ import { IS_ELECTRON } from '../../app.constants';
 import { Log } from '../log';
 import { T } from '../../t.const';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
+import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
 import { BannerId } from '../banner/banner.model';
 import { isOnline$ } from '../../util/is-online';
 import { LS } from '../persistence/storage-keys.const';
@@ -56,6 +57,7 @@ export class StartupService {
   private _projectService = inject(ProjectService);
   private _trackingReminderService = inject(TrackingReminderService);
   private _opLogStore = inject(OperationLogStoreService);
+  private _legacyPfDb = inject(LegacyPfDbService);
   private _store = inject(Store);
   private _platformService = inject(CapacitorPlatformService);
 
@@ -160,9 +162,26 @@ export class StartupService {
     // Local backups are available on Electron and native mobile (iOS/Android)
     if (IS_ELECTRON || this._platformService.isNative) {
       const stateCache = await this._opLogStore.loadStateCache();
-      // If no state cache exists, this is a fresh instance - offer to restore from backup
+      // If no state cache exists, check if this is truly a fresh instance
+      // or if there's legacy v16 data waiting to be migrated
       if (!stateCache) {
-        await this._localBackupService.askForFileStoreBackupIfAvailable();
+        // Check for legacy data - if it exists, don't show restore dialog
+        // The migration service will handle the legacy data
+        let hasLegacyData = false;
+        try {
+          hasLegacyData = await this._legacyPfDb.hasUsableEntityData();
+        } catch (e) {
+          // If legacy check fails, it means the database exists but can't be read
+          // The migration service will handle this error properly
+          Log.warn('StartupService: Legacy data check failed, skipping backup prompt', e);
+          hasLegacyData = true; // Assume there might be data, don't show backup dialog
+        }
+
+        // Only offer to restore from backup if this is truly a fresh install
+        // (no state cache AND no legacy data)
+        if (!hasLegacyData) {
+          await this._localBackupService.askForFileStoreBackupIfAvailable();
+        }
       }
       // trigger backup init after
       this._localBackupService.init();
