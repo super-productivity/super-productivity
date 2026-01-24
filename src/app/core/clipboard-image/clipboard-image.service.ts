@@ -4,6 +4,7 @@ import { SnackService } from '../snack/snack.service';
 import { T } from '../../t.const';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { getDefaultClipboardImagesPath } from '../../util/get-default-clipboard-images-path';
+import { MIME_TYPE_EXTENSIONS } from '../../../../electron/shared-with-frontend/mime-type-mapping.const';
 
 const DB_NAME = 'sp-clipboard-images';
 const DB_VERSION = 1;
@@ -566,22 +567,7 @@ export class ClipboardImageService {
   }
 
   private _getExtensionFromMimeType(mimeType: string): string {
-    switch (mimeType) {
-      case 'image/png':
-        return '.png';
-      case 'image/jpeg':
-        return '.jpg';
-      case 'image/gif':
-        return '.gif';
-      case 'image/webp':
-        return '.webp';
-      case 'image/svg+xml':
-        return '.svg';
-      case 'image/bmp':
-        return '.bmp';
-      default:
-        return '.png';
-    }
+    return MIME_TYPE_EXTENSIONS[mimeType as keyof typeof MIME_TYPE_EXTENSIONS] || '.png';
   }
 
   private _arrayBufferToBase64(buffer: ArrayBuffer): string {

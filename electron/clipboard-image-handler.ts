@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { createValidatedHandler } from './ipc-handler-wrapper';
+import { EXTENSION_MIME_TYPES } from './shared-with-frontend/mime-type-mapping.const';
 
 interface ClipboardImageMeta {
   id: string;
@@ -36,23 +37,9 @@ const ensureDir = (dirPath: string): void => {
  */
 const getMimeFromExt = (ext: string): string => {
   const extLower = ext.toLowerCase();
-  switch (extLower) {
-    case '.png':
-      return 'image/png';
-    case '.jpg':
-    case '.jpeg':
-      return 'image/jpeg';
-    case '.gif':
-      return 'image/gif';
-    case '.webp':
-      return 'image/webp';
-    case '.svg':
-      return 'image/svg+xml';
-    case '.bmp':
-      return 'image/bmp';
-    default:
-      return 'image/png';
-  }
+  return (
+    EXTENSION_MIME_TYPES[extLower as keyof typeof EXTENSION_MIME_TYPES] || 'image/png'
+  );
 };
 
 /**
