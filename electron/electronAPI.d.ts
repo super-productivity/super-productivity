@@ -58,6 +58,7 @@ export interface ElectronAPI {
   showOpenDialog(options: {
     properties: string[];
     title?: string;
+    defaultPath?: string;
   }): Promise<string[] | undefined>;
 
   // checkDirExists(dirPath: string): Promise<true | Error>;

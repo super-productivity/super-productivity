@@ -57,9 +57,11 @@ const ea: ElectronAPI = {
 
   pickDirectory: () => _invoke('PICK_DIRECTORY') as Promise<string | undefined>,
 
-  showOpenDialog: (options: { properties: string[]; title?: string }) =>
-    _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
-
+  showOpenDialog: (options: {
+    properties: string[];
+    title?: string;
+    defaultPath?: string;
+  }) => _invoke('SHOW_OPEN_DIALOG', options) as Promise<string[] | undefined>,
   // STANDARD
   // --------
   setZoomFactor: (zoomFactor: number) => {

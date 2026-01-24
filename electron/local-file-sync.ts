@@ -158,12 +158,13 @@ export const initLocalFileSyncAdapter = (): void => {
     IPC.SHOW_OPEN_DIALOG,
     async (
       _,
-      options: { properties: string[]; title?: string },
+      options: { properties: string[]; title?: string; defaultPath?: string },
     ): Promise<string[] | undefined> => {
       const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
         title: options.title || 'Select folder',
         buttonLabel: 'Select',
         properties: options.properties as any,
+        defaultPath: options.defaultPath,
       })) as unknown as { canceled: boolean; filePaths: string[] };
       if (canceled) {
         return undefined;

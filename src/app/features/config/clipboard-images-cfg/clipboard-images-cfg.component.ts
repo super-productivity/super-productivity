@@ -94,12 +94,18 @@ export class ClipboardImagesCfgComponent implements OnInit {
     });
   }
 
+  getImagePath(): string {
+    return this.imagePath || this.defaultImagePath;
+  }
+
   async selectImagePath(): Promise<void> {
     if (!IS_ELECTRON) return;
 
+    console.log(this.getImagePath());
     const path = await window.ea.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
       title: this.T.GCF.CLIPBOARD_IMAGES.SELECT_PATH_TITLE,
+      defaultPath: this.getImagePath(),
     });
 
     if (path && path.length > 0) {
