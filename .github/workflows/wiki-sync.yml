@@ -1,5 +1,5 @@
 ---
-name: GitHub Wiki - Lint and (r)Sync
+name: Wiki Update
 
 'on':
   pull_request:
@@ -21,10 +21,12 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
+  actions: write
 
 jobs:
   lint:
-    name: Lint YAML and Markdown
+    name: Lint
     runs-on: ubuntu-latest
     env:
       GH_A9S: .github/annotations
@@ -65,7 +67,7 @@ jobs:
             scan "docs/wiki"
 
   sync:
-    name: Publish to GitHub Wiki
+    name: (r)Sync
     needs: lint
     runs-on: ubuntu-latest
     env:

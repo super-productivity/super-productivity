@@ -3,7 +3,8 @@ name: PR Preview Deploy
 on:
   pull_request_target:
     types: [opened, synchronize, reopened]
-
+    paths-ignore:
+      - 'docs/wiki/**'
 permissions:
   contents: read
   pull-requests: write
