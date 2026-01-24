@@ -24,6 +24,12 @@ import { BackupService } from '../../op-log/backup/backup.service';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { first } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
+import {
+  DialogImportEncryptionWarningComponent,
+  ImportEncryptionWarningData,
+  ImportEncryptionWarningResult,
+} from '../sync/dialog-import-encryption-warning/dialog-import-encryption-warning.component';
 import {
   ConfirmUrlImportDialogComponent,
   DialogConfirmUrlImportData,
@@ -184,6 +190,33 @@ export class FileImexComponent implements OnInit {
     }
 
     try {
+      // Check if encryption state will change BEFORE importing
+      const encryptionCheck =
+        await this._importEncryptionHandler.checkEncryptionStateChange(
+          data as AppDataComplete,
+        );
+
+      // If encryption state will change, warn the user first
+      if (encryptionCheck.willChange) {
+        const dialogRef = this._matDialog.open<
+          DialogImportEncryptionWarningComponent,
+          ImportEncryptionWarningData,
+          ImportEncryptionWarningResult
+        >(DialogImportEncryptionWarningComponent, {
+          data: {
+            currentEncryptionEnabled: encryptionCheck.currentEnabled,
+            importedEncryptionEnabled: encryptionCheck.importedEnabled,
+          },
+        });
+
+        const result = await firstValueFrom(dialogRef.afterClosed());
+        if (!result?.confirmed) {
+          // User cancelled - don't import
+          Log.normal('Import cancelled by user due to encryption state change warning');
+          return;
+        }
+      }
+
       // Import first, then navigate (no page reload, state updates inline)
       // isForceConflict=true resets vector clock to prevent accumulation of old client IDs
       await this._backupService.importCompleteBackup(

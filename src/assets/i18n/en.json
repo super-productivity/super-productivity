@@ -1035,6 +1035,20 @@
           "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
           "DISABLE_ENCRYPTION_SUCCESS": "Encryption disabled successfully"
         },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "TITLE": "Encryption Settings Will Change",
+          "WARNING_TEXT": "The backup you are importing has different encryption settings than your current sync configuration. This will require deleting all server data.",
+          "CURRENT_STATE": "Current sync state:",
+          "IMPORTED_STATE": "Backup encryption state:",
+          "ENCRYPTION_ENABLED": "Encryption enabled",
+          "ENCRYPTION_DISABLED": "Encryption disabled",
+          "WHAT_HAPPENS": "What will happen if you continue:",
+          "ITEM_1": "All sync history and backups on the server will be deleted",
+          "ITEM_2": "Your imported data will be uploaded with the new encryption settings",
+          "ITEM_3": "All other devices will need to resync after this change",
+          "NOTE": "Your local data will be replaced with the imported data regardless of this choice.",
+          "BTN_CONTINUE": "Continue Import"
+        },
         "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",
         "L_ENABLE_SYNCING": "Enable Syncing",

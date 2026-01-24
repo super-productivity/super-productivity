@@ -1,0 +1,70 @@
+<h1 mat-dialog-title>
+  <mat-icon>warning</mat-icon>
+  {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.TITLE | translate }}
+</h1>
+
+<mat-dialog-content>
+  <div class="warning-box">
+    <mat-icon>warning</mat-icon>
+    <p>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.WARNING_TEXT | translate }}</p>
+  </div>
+
+  <div class="info-section">
+    <h3>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.CURRENT_STATE | translate }}</h3>
+    <p class="state-info">
+      @if (currentEncryptionEnabled) {
+        <mat-icon>lock</mat-icon>
+        {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ENCRYPTION_ENABLED | translate }}
+      } @else {
+        <mat-icon>lock_open</mat-icon>
+        {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ENCRYPTION_DISABLED | translate }}
+      }
+    </p>
+  </div>
+
+  <div class="info-section">
+    <h3>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.IMPORTED_STATE | translate }}</h3>
+    <p class="state-info">
+      @if (importedEncryptionEnabled) {
+        <mat-icon>lock</mat-icon>
+        {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ENCRYPTION_ENABLED | translate }}
+      } @else {
+        <mat-icon>lock_open</mat-icon>
+        {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ENCRYPTION_DISABLED | translate }}
+      }
+    </p>
+  </div>
+
+  <div class="info-section">
+    <h3>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.WHAT_HAPPENS | translate }}</h3>
+    <ul>
+      <li>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ITEM_1 | translate }}</li>
+      <li>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ITEM_2 | translate }}</li>
+      <li>{{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.ITEM_3 | translate }}</li>
+    </ul>
+  </div>
+
+  <p class="note">
+    <mat-icon>info</mat-icon>
+    {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.NOTE | translate }}
+  </p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    mat-button
+    type="button"
+    (click)="cancel()"
+  >
+    {{ T.G.CANCEL | translate }}
+  </button>
+  <button
+    mat-flat-button
+    color="warn"
+    type="button"
+    (click)="confirm()"
+  >
+    <mat-icon>import_export</mat-icon>
+    {{ T.F.SYNC.IMPORT_ENCRYPTION_WARNING.BTN_CONTINUE | translate }}
+  </button>
+</mat-dialog-actions>
