@@ -84,6 +84,8 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     const tasks = this._globalConfigService.tasks();
     return tasks?.isMarkdownFormattingInNotesEnabled ?? true;
   });
+
+  isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
   private _hideOverFlowTimeout: number | undefined;
 
   constructor() {
