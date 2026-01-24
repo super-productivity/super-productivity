@@ -117,7 +117,8 @@ describe('LegacyPfDbService', () => {
       mockDb.get.and.callFake((_store: string, key: string) => {
         if (key === 'task') return Promise.resolve({ ids: [], entities: {} });
         if (key === 'project') return Promise.resolve(null);
-        if (key === 'tag') return Promise.resolve({ ids: ['TODAY', 'tag1'], entities: {} });
+        if (key === 'tag')
+          return Promise.resolve({ ids: ['TODAY', 'tag1'], entities: {} });
         if (key === 'globalConfig') return Promise.resolve(null);
         return Promise.resolve(null);
       });

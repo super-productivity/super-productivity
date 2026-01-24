@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { OperationLogMigrationService } from './operation-log-migration.service';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
@@ -280,14 +281,10 @@ describe('OperationLogMigrationService', () => {
 
         const mockDialogRef = {
           componentInstance: { error: { set: jasmine.createSpy('set') } },
-          afterClosed: jasmine
-            .createSpy('afterClosed')
-            .and.returnValue({ toPromise: () => Promise.resolve() }),
+          afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
         };
         mockMatDialog.open.and.returnValue(mockDialogRef as any);
-        mockTranslateService.use = jasmine
-          .createSpy('use')
-          .and.returnValue({ toPromise: () => Promise.resolve() });
+        mockTranslateService.use = jasmine.createSpy('use').and.returnValue(of(undefined));
         (service as any).languageService = {
           detect: jasmine.createSpy('detect').and.returnValue('en'),
         };
