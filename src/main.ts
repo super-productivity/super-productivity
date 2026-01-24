@@ -88,12 +88,7 @@ bootstrapApplication(AppComponent, {
           provide: MARKED_OPTIONS,
           useFactory: markedOptionsFactory,
         },
-        // Don't sanitize in Electron - we trust local file:// URLs for clipboard images
-        // In web, use HTML sanitization for security
-        sanitize: {
-          provide: SANITIZE,
-          useValue: IS_ELECTRON ? SecurityContext.NONE : SecurityContext.HTML,
-        },
+        sanitize: { provide: SANITIZE, useValue: SecurityContext.HTML },
       }),
       MaterialCssVarsModule.forRoot(),
       MatSidenavModule,

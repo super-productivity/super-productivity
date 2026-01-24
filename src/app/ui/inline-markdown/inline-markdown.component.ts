@@ -484,21 +484,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     // First resolve all URLs in the markdown
     const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
-
-    // Only then update the model signal to trigger rendering
     this.resolvedModel.set(resolved);
-    this._cd.detectChanges();
-
-    // Manually trigger markdown render if component is ready
-    const markdownComponent = this.previewEl();
-    if (markdownComponent && resolved) {
-      try {
-        await markdownComponent.render(resolved);
-        this._cd.detectChanges();
-      } catch (error) {
-        console.error('[InlineMarkdown] Error rendering markdown:', error);
-        this._cd.markForCheck();
-      }
-    }
   }
 }

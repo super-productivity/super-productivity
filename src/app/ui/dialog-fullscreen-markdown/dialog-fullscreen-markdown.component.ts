@@ -20,15 +20,7 @@ import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
-import {
-  MarkdownComponent,
-  provideMarkdown,
-  MARKED_OPTIONS,
-  SANITIZE,
-} from 'ngx-markdown';
-import { SecurityContext } from '@angular/core';
-import { markedOptionsFactory } from '../marked-options-factory';
-import { IS_ELECTRON } from '../../app.constants';
+import { MarkdownComponent } from 'ngx-markdown';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
@@ -58,18 +50,6 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
     MatIconButton,
     MatTooltip,
     TranslatePipe,
-  ],
-  providers: [
-    provideMarkdown({
-      markedOptions: {
-        provide: MARKED_OPTIONS,
-        useFactory: markedOptionsFactory,
-      },
-      sanitize: {
-        provide: SANITIZE,
-        useValue: IS_ELECTRON ? SecurityContext.NONE : SecurityContext.HTML,
-      },
-    }),
   ],
 })
 export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit {
@@ -290,21 +270,6 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private async _updateResolvedContent(content: string): Promise<void> {
     const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
     this.resolvedContent.set(resolved);
-
-    // Manually render markdown using MarkdownComponent's render method
-    const markdownComponent = this.previewEl();
-    if (markdownComponent && resolved) {
-      try {
-        await markdownComponent.render(resolved);
-        // Force change detection after async render completes
-        this._cdr.detectChanges();
-      } catch (error) {
-        console.error('[DialogFullscreenMarkdown] Error rendering markdown:', error);
-        this._cdr.markForCheck();
-      }
-    } else {
-      this._cdr.markForCheck();
-    }
   }
 
   // =========================================================================

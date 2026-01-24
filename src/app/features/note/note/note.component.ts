@@ -1,6 +1,5 @@
 import {
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
   Component,
   inject,
   input,
@@ -64,7 +63,6 @@ export class NoteComponent implements OnChanges {
   private readonly _projectService = inject(ProjectService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _clipboardImageService = inject(ClipboardImageService);
-  private readonly _cdr = inject(ChangeDetectorRef);
 
   note!: Note;
 
@@ -219,6 +217,5 @@ export class NoteComponent implements OnChanges {
       );
       this.resolvedShortenedContent.set(resolvedShort);
     }
-    this._cdr.markForCheck();
   }
 }
