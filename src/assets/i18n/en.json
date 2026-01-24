@@ -514,7 +514,8 @@
     },
     "CLIPBOARD_IMAGE": {
       "PASTE_SUCCESS": "Image pasted successfully",
-      "SIZE_EXCEEDED": "Image size ({{actualSize}}) exceeds maximum allowed size ({{maxSize}})"
+      "SIZE_EXCEEDED": "Image size ({{actualSize}}) exceeds maximum allowed size ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Storage quota exceeded. Please free up space or reduce image sizes."
     },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted markdown list to the notes of sub-task \"{{parentTaskTitle}}\"?",

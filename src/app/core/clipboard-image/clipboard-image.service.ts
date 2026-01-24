@@ -418,7 +418,18 @@ export class ClipboardImageService {
       const request = store.put(entry);
 
       request.onsuccess = (): void => resolve(this.getImageUrl(id));
-      request.onerror = (): void => reject(new Error('Failed to save clipboard image'));
+      request.onerror = (): void => {
+        const error = request.error;
+        if (error?.name === 'QuotaExceededError') {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: T.F.CLIPBOARD_IMAGE.STORAGE_QUOTA_EXCEEDED,
+          });
+          reject(new Error('Storage quota exceeded'));
+        } else {
+          reject(new Error('Failed to save clipboard image'));
+        }
+      };
     });
   }
 
