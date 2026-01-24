@@ -29,6 +29,7 @@ import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
+import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -53,6 +54,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _matDialog = inject(MatDialog);
   private _clipboardImageService = inject(ClipboardImageService);
   private _taskAttachmentService = inject(TaskAttachmentService);
+  private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _currentPastePlaceholder: string | null = null;
 
   readonly isLock = input<boolean>(false);
@@ -180,96 +182,21 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   async pasteHandler(ev: ClipboardEvent): Promise<void> {
-    if (!ev.clipboardData) {
-      return;
-    }
-
-    // Check if clipboard contains an image
-    const progress = this._clipboardImageService.handlePasteWithProgress(ev);
-    if (progress) {
-      ev.preventDefault();
-
-      // Clean up old paste progress if it exists
-      if (this._currentPastePlaceholder) {
-        const cleanContent = (this._model || '').replace(
-          this._currentPastePlaceholder,
-          '',
-        );
-        this.modelCopy.set(cleanContent);
-        this._model = cleanContent;
-        this.changed.emit(cleanContent);
-      }
-
-      const textareaEl = this.textareaEl();
-      if (textareaEl) {
-        const { value, selectionStart, selectionEnd } = textareaEl.nativeElement;
-
-        // Track current placeholder
-        this._currentPastePlaceholder = progress.placeholderText;
-
-        // Insert placeholder text at cursor position
-        const newContent =
-          value.substring(0, selectionStart) +
-          progress.placeholderText +
-          value.substring(selectionEnd);
-
-        this.modelCopy.set(newContent);
-        this._model = newContent;
-        this.changed.emit(newContent);
-
-        // Wait for the image to be saved
-        const result = await progress.resultPromise;
-
-        // Only update if this is still the current paste operation
-        if (this._currentPastePlaceholder === progress.placeholderText) {
-          if (result.success && result.markdownText) {
-            // Replace placeholder with actual markdown
-            const finalContent = (this._model || '').replace(
-              progress.placeholderText,
-              result.markdownText,
-            );
-
-            this.modelCopy.set(finalContent);
-            this._model = finalContent;
-            this.changed.emit(finalContent);
-
-            // Add image to task attachments if taskId is provided
-            if (this.taskId() && result.imageUrl) {
-              this._taskAttachmentService.addAttachment(this.taskId()!, {
-                id: null,
-                type: 'IMG',
-                path: result.imageUrl,
-                title: 'Pasted image',
-              });
-            }
-
-            // Move cursor after the inserted text
-            const newCursorPos = selectionStart + result.markdownText.length;
-            setTimeout(async () => {
-              textareaEl.nativeElement.value = finalContent;
-              textareaEl.nativeElement.focus();
-              textareaEl.nativeElement.setSelectionRange(newCursorPos, newCursorPos);
-              this.resizeTextareaToFit();
-
-              // Prepare the resolved model and render markdown (ready for when preview shows)
-              await this._updateResolvedModel(finalContent);
-            });
-          } else {
-            // Remove placeholder on failure
-            const cleanContent = (this._model || '').replace(
-              progress.placeholderText,
-              '',
-            );
-            this.modelCopy.set(cleanContent);
-            this._model = cleanContent;
-            this.changed.emit(cleanContent);
-          }
-
-          // Clear tracking
-          this._currentPastePlaceholder = null;
-        }
-      }
-    }
+    await this._clipboardPasteHandler.handlePaste(ev, {
+      currentPlaceholder: this._currentPastePlaceholder,
+      getContent: () => this._model || '',
+      setContent: (content) => {
+        this.modelCopy.set(content);
+        this._model = content;
+        this.changed.emit(content);
+      },
+      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTaskId: () => this.taskId() || null,
+      onPasteComplete: async (content) => {
+        this.resizeTextareaToFit();
+        await this._updateResolvedModel(content);
+      },
+    });
   }
 
   clickPreview($event: MouseEvent): void {

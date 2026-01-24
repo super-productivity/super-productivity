@@ -30,6 +30,7 @@ import { isSmallScreen } from '../../util/is-small-screen';
 import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
+import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -56,6 +57,7 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   private readonly _destroyRef = inject(DestroyRef);
   private readonly _clipboardImageService = inject(ClipboardImageService);
   private readonly _taskAttachmentService = inject(TaskAttachmentService);
+  private readonly _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private readonly _cdr = inject(ChangeDetectorRef);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
   data: { content: string; taskId?: string } = inject(MAT_DIALOG_DATA) || { content: '' };
@@ -146,76 +148,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   async pasteHandler(ev: ClipboardEvent): Promise<void> {
-    if (!ev.clipboardData) {
-      return;
-    }
-
-    // Check if clipboard contains an image
-    const progress = this._clipboardImageService.handlePasteWithProgress(ev);
-    if (progress) {
-      ev.preventDefault();
-
-      // Clean up old paste progress if it exists
-      if (this._currentPastePlaceholder) {
-        this.data.content = this.data.content.replace(this._currentPastePlaceholder, '');
-        this._contentChanges$.next(this.data.content);
-      }
-
-      const textarea = this.textareaEl()?.nativeElement;
-      if (textarea) {
-        const { value, selectionStart, selectionEnd } = textarea;
-
-        // Track current placeholder
-        this._currentPastePlaceholder = progress.placeholderText;
-
-        // Insert placeholder text at cursor position
-        this.data.content =
-          value.substring(0, selectionStart) +
-          progress.placeholderText +
-          value.substring(selectionEnd);
-
-        this._contentChanges$.next(this.data.content);
-
-        // Wait for the image to be saved
-        const result = await progress.resultPromise;
-
-        // Only update if this is still the current paste operation
-        if (this._currentPastePlaceholder === progress.placeholderText) {
-          if (result.success && result.markdownText) {
-            // Replace placeholder with actual markdown
-            this.data.content = this.data.content.replace(
-              progress.placeholderText,
-              result.markdownText,
-            );
-            this._contentChanges$.next(this.data.content);
-
-            // Add image to task attachments if taskId is provided
-            if (this.data.taskId && result.imageUrl) {
-              this._taskAttachmentService.addAttachment(this.data.taskId, {
-                id: null,
-                type: 'IMG',
-                path: result.imageUrl,
-                title: 'Pasted image',
-              });
-            }
-
-            // Move cursor after the inserted text
-            const newCursorPos = selectionStart + result.markdownText.length;
-            setTimeout(() => {
-              textarea.focus();
-              textarea.setSelectionRange(newCursorPos, newCursorPos);
-            });
-          } else {
-            // Remove placeholder on failure
-            this.data.content = this.data.content.replace(progress.placeholderText, '');
-            this._contentChanges$.next(this.data.content);
-          }
-
-          // Clear tracking
-          this._currentPastePlaceholder = null;
-        }
-      }
-    }
+    await this._clipboardPasteHandler.handlePaste(ev, {
+      currentPlaceholder: this._currentPastePlaceholder,
+      getContent: () => this.data.content,
+      setContent: (content) => {
+        this.data.content = content;
+        this._contentChanges$.next(content);
+      },
+      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTaskId: () => this.data.taskId || null,
+    });
   }
 
   ngModelChange(content: string): void {
