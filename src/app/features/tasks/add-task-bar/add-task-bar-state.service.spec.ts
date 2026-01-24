@@ -20,10 +20,6 @@ describe('AddTaskBarStateService', () => {
   });
 
   describe('Service Creation', () => {
-    it('should be created', () => {
-      expect(service).toBeTruthy();
-    });
-
     it('should initialize with default state', () => {
       const state = service.state();
       expect(state).toEqual(INITIAL_ADD_TASK_BAR_STATE);
@@ -411,6 +407,222 @@ describe('AddTaskBarStateService', () => {
 
       // The signal should immediately reflect the change
       expect(service.state().projectId).toEqual(mockProject.id);
+    });
+  });
+
+  describe('updateAttachments', () => {
+    it('should update attachments in state', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+        {
+          id: 'att-2',
+          type: 'FILE' as const,
+          path: 'file:///path/to/doc.pdf',
+          title: 'Document',
+          icon: 'insert_drive_file',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+
+      expect(service.state().attachments).toEqual(mockAttachments);
+    });
+
+    it('should replace existing attachments', () => {
+      const firstAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://first.com',
+          title: 'First',
+          icon: 'bookmark',
+        },
+      ];
+
+      const secondAttachments = [
+        {
+          id: 'att-2',
+          type: 'LINK' as const,
+          path: 'https://second.com',
+          title: 'Second',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(firstAttachments);
+      expect(service.state().attachments).toEqual(firstAttachments);
+
+      service.updateAttachments(secondAttachments);
+      expect(service.state().attachments).toEqual(secondAttachments);
+    });
+
+    it('should handle empty attachments array', () => {
+      service.updateAttachments([]);
+      expect(service.state().attachments).toEqual([]);
+    });
+
+    it('should handle image type attachments', () => {
+      const imageAttachment = [
+        {
+          id: 'img-1',
+          type: 'IMG' as const,
+          path: 'https://example.com/image.png',
+          title: 'Image',
+          icon: 'image',
+        },
+      ];
+
+      service.updateAttachments(imageAttachment);
+      expect(service.state().attachments[0].type).toBe('IMG');
+      expect(service.state().attachments[0].icon).toBe('image');
+    });
+
+    it('should not affect other state properties', () => {
+      const initialState = service.state();
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+
+      const updatedState = service.state();
+      expect(updatedState.projectId).toEqual(initialState.projectId);
+      expect(updatedState.tagIds).toEqual(initialState.tagIds);
+      expect(updatedState.date).toEqual(initialState.date);
+      expect(updatedState.estimate).toEqual(initialState.estimate);
+    });
+  });
+
+  describe('clearAttachments', () => {
+    it('should clear attachments from state', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+      expect(service.state().attachments.length).toBe(1);
+
+      service.clearAttachments();
+      expect(service.state().attachments).toEqual([]);
+    });
+
+    it('should update input text if provided', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+      service.updateInputTxt('Task with URL https://example.com');
+
+      service.clearAttachments('Task with URL');
+
+      expect(service.state().attachments).toEqual([]);
+      expect(service.inputTxt()).toBe('Task with URL');
+    });
+
+    it('should not update input text if not provided', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+      service.updateInputTxt('Original text');
+
+      service.clearAttachments();
+
+      expect(service.state().attachments).toEqual([]);
+      expect(service.inputTxt()).toBe('Original text');
+    });
+
+    it('should work when attachments already empty', () => {
+      expect(service.state().attachments).toEqual([]);
+
+      service.clearAttachments();
+      expect(service.state().attachments).toEqual([]);
+    });
+  });
+
+  describe('resetAfterAdd', () => {
+    it('should clear attachments along with other fields', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateAttachments(mockAttachments);
+      service.updateInputTxt('Test task');
+
+      const mockTag: Tag = { id: 'tag-1', title: 'urgent' } as Tag;
+      service.toggleTag(mockTag);
+
+      expect(service.state().attachments.length).toBe(1);
+      expect(service.inputTxt()).toBe('Test task');
+      expect(service.state().tagIds.length).toBe(1);
+
+      service.resetAfterAdd();
+
+      expect(service.state().attachments).toEqual([]);
+      expect(service.inputTxt()).toBe('');
+      expect(service.state().tagIds).toEqual([]);
+    });
+
+    it('should preserve project, date, and estimate when clearing attachments', () => {
+      const mockAttachments = [
+        {
+          id: 'att-1',
+          type: 'LINK' as const,
+          path: 'https://example.com',
+          title: 'Example',
+          icon: 'bookmark',
+        },
+      ];
+
+      service.updateProjectId('project-1');
+      service.updateDate('2024-01-15', '14:00');
+      service.updateEstimate(3600000);
+      service.updateAttachments(mockAttachments);
+
+      service.resetAfterAdd();
+
+      expect(service.state().attachments).toEqual([]);
+      expect(service.state().projectId).toBe('project-1');
+      expect(service.state().date).toBe('2024-01-15');
+      expect(service.state().estimate).toBe(3600000);
     });
   });
 });

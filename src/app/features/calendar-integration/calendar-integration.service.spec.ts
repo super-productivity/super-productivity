@@ -96,10 +96,6 @@ END:VCALENDAR`;
     store.resetSelectors();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('icalEvents$', () => {
     describe('basic functionality', () => {
       it('should emit cached data immediately on first subscription', fakeAsync(() => {

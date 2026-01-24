@@ -7,6 +7,7 @@ import {
   AuthFailSPError,
 } from '../../core/errors/sync-errors';
 import { SyncOperation } from '../provider.interface';
+import { SyncLog } from '../../../core/log';
 
 // Helper to convert Blob to Uint8Array
 const blobToUint8Array = async (blob: Blob): Promise<Uint8Array> => {
@@ -1334,6 +1335,133 @@ describe('SuperSyncProvider', () => {
       expect(decompressedPayload.vectorClock).toEqual(vectorClock);
       expect(decompressedPayload.schemaVersion).toBe(2);
       expect(decompressedPayload.isPayloadEncrypted).toBe(true);
+    });
+  });
+
+  describe('Request timeout handling', () => {
+    beforeEach(() => {
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
+    });
+
+    it('should clear timeout on successful response', async () => {
+      const clearTimeoutSpy = spyOn(window, 'clearTimeout');
+
+      fetchSpy.and.returnValue(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ops: [], latestSeq: 100 }),
+        } as Response),
+      );
+
+      await provider.downloadOps(0, 'client-1');
+
+      // Verify timeout was cleared (prevents memory leaks)
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('should clear timeout on error response', async () => {
+      const clearTimeoutSpy = spyOn(window, 'clearTimeout');
+
+      fetchSpy.and.returnValue(
+        Promise.resolve({
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          text: () => Promise.resolve('Server error'),
+        } as Response),
+      );
+
+      await expectAsync(provider.downloadOps(0, 'client-1')).toBeRejected();
+
+      // Verify timeout was cleared even on error
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('should pass AbortSignal to fetch', async () => {
+      fetchSpy.and.returnValue(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ops: [], latestSeq: 0 }),
+        } as Response),
+      );
+
+      await provider.downloadOps(0, 'client-1');
+
+      const fetchCall = fetchSpy.calls.mostRecent();
+      const options = fetchCall.args[1];
+      expect(options.signal).toBeDefined();
+      expect(options.signal instanceof AbortSignal).toBe(true);
+    });
+
+    it('should handle AbortError and convert to timeout error', async () => {
+      const abortError = new DOMException('The operation was aborted', 'AbortError');
+      fetchSpy.and.returnValue(Promise.reject(abortError));
+
+      try {
+        await provider.downloadOps(0, 'client-1');
+        fail('Should have thrown timeout error');
+      } catch (error) {
+        expect((error as Error).message).toContain('timeout after 75s');
+        expect((error as Error).message).toContain('/api/sync/ops');
+      }
+    });
+  });
+
+  describe('Performance logging', () => {
+    let syncLogWarnSpy: jasmine.Spy;
+    let syncLogErrorSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
+      syncLogWarnSpy = spyOn(SyncLog, 'warn');
+      syncLogErrorSpy = spyOn(SyncLog, 'error');
+    });
+
+    it('should not log warning for fast requests', async () => {
+      fetchSpy.and.returnValue(
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ops: [], latestSeq: 100 }),
+        } as Response),
+      );
+
+      await provider.downloadOps(0, 'client-1');
+
+      // Should not have logged warning for fast request
+      expect(syncLogWarnSpy).not.toHaveBeenCalled();
+    });
+
+    it('should log error on fetch failure', async () => {
+      fetchSpy.and.returnValue(Promise.reject(new Error('Network error')));
+
+      await expectAsync(provider.downloadOps(0, 'client-1')).toBeRejected();
+
+      // Should have logged error
+      expect(syncLogErrorSpy).toHaveBeenCalledWith(
+        'SuperSyncProvider',
+        'SuperSync request failed',
+        jasmine.objectContaining({
+          path: '/api/sync/ops?sinceSeq=0&excludeClient=client-1',
+          error: 'Network error',
+        }),
+      );
+    });
+
+    it('should log timeout errors with path information', async () => {
+      const abortError = new DOMException('The operation was aborted', 'AbortError');
+      fetchSpy.and.returnValue(Promise.reject(abortError));
+
+      await expectAsync(provider.downloadOps(0, 'client-1')).toBeRejected();
+
+      // Should have logged timeout error with path
+      expect(syncLogErrorSpy).toHaveBeenCalledWith(
+        'SuperSyncProvider',
+        'SuperSync request timeout',
+        jasmine.objectContaining({
+          path: '/api/sync/ops?sinceSeq=0&excludeClient=client-1',
+          timeoutMs: 75000,
+        }),
+      );
     });
   });
 });

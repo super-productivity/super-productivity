@@ -6,6 +6,7 @@ import { SHORT_SYNTAX_TIME_REG_EX, shortSyntax } from '../short-syntax';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TimeSpentOnDay } from '../task.model';
+import { TaskAttachment } from '../task-attachment/task-attachment.model';
 
 interface PreviousParseResult {
   cleanText: string | null;
@@ -16,6 +17,7 @@ interface PreviousParseResult {
   timeEstimate: number | null;
   dueDate: string | null;
   dueTime: string | null;
+  attachments: TaskAttachment[];
 }
 
 @Injectable()
@@ -77,6 +79,7 @@ export class AddTaskBarParserService {
         // Preserve current date/time if user has selected them, otherwise use defaults
         dueDate: currentState.date || (defaultDate ? defaultDate : null),
         dueTime: currentState.time || defaultTime || null,
+        attachments: [],
       };
     } else {
       // Extract parsed values
@@ -113,6 +116,7 @@ export class AddTaskBarParserService {
         timeEstimate: parseResult.taskChanges.timeEstimate || null,
         dueDate: dueDate,
         dueTime: dueTime,
+        attachments: parseResult.attachments || [],
       };
     }
 
@@ -192,6 +196,13 @@ export class AddTaskBarParserService {
       this._stateService.updateDate(currentResult.dueDate, currentResult.dueTime);
     }
 
+    if (
+      !this._previousParseResult ||
+      !this._arraysEqual(this._previousParseResult.attachments, currentResult.attachments)
+    ) {
+      this._stateService.updateAttachments(currentResult.attachments);
+    }
+
     // Store current result as previous for next comparison
     this._previousParseResult = currentResult;
   }
@@ -202,7 +213,7 @@ export class AddTaskBarParserService {
 
   removeShortSyntaxFromInput(
     currentInput: string,
-    type: 'tags' | 'date' | 'estimate',
+    type: 'tags' | 'date' | 'estimate' | 'urls',
     specificTag?: string,
   ): string {
     if (!currentInput) return currentInput;
@@ -231,6 +242,14 @@ export class AddTaskBarParserService {
         cleanedInput = cleanedInput.replace(
           new RegExp(SHORT_SYNTAX_TIME_REG_EX.source, 'gi'),
           ' ',
+        );
+        break;
+
+      case 'urls':
+        // Remove URL syntax (e.g., https://example.com www.example.com file:///path)
+        cleanedInput = cleanedInput.replace(
+          /(?:(?:https?|file):\/\/\S+|www\.\S+?)(?=\s|$)/gi,
+          '',
         );
         break;
     }

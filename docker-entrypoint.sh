@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Set default port if not provided
+: "${APP_PORT:=80}"
+export APP_PORT
+
 # Generate ./assets/sync-config-default-override.json from environment variables
 JSON="{}"
 JSON_PATH=./assets/sync-config-default-override.json

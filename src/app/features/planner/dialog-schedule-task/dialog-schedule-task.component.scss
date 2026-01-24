@@ -111,3 +111,47 @@ mat-dialog-content {
     border-left: 1px solid var(--extra-border-color);
   }
 }
+
+:host ::ng-deep mat-dialog-actions {
+  padding: 0 0 16px 0 !important;
+}
+
+.schedule-actions {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 8px;
+}
+
+.schedule-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 38px;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+}
+
+.mat-stroked-button {
+  height: auto;
+}
+
+.schedule-actions button:not(:last-child) {
+  margin-right: 2px;
+}
+
+.dialog-cancel-btn {
+  display: block;
+  width: 100%;
+}
+
+.schedule-actions button,
+.dialog-cancel-btn {
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+}

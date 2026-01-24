@@ -1,4 +1,4 @@
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, signal, inject, effect } from '@angular/core';
 import { Observable, animationFrameScheduler, combineLatest } from 'rxjs';
 import { map, observeOn, take } from 'rxjs/operators';
 import { TaskWithSubTasks } from '../tasks/task.model';
@@ -28,6 +28,8 @@ import {
   FILTER_COMMON,
 } from './types';
 import { DateAdapter } from '@angular/material/core';
+import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
@@ -37,9 +39,18 @@ export class TaskViewCustomizerService {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
 
-  public selectedSort = signal<SortOption>(DEFAULT_OPTIONS.sort);
-  public selectedGroup = signal<GroupOption>(DEFAULT_OPTIONS.group);
-  public selectedFilter = signal<FilterOption>(DEFAULT_OPTIONS.filter);
+  public selectedSort = signal<SortOption>(
+    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort) ??
+      DEFAULT_OPTIONS.sort,
+  );
+  public selectedGroup = signal<GroupOption>(
+    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group) ??
+      DEFAULT_OPTIONS.group,
+  );
+  public selectedFilter = signal<FilterOption>(
+    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter) ??
+      DEFAULT_OPTIONS.filter,
+  );
 
   isCustomized = computed(() => {
     return [
@@ -52,6 +63,18 @@ export class TaskViewCustomizerService {
   constructor() {
     this._initProjects();
     this._initTags();
+
+    effect(() => {
+      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_SORT, this.selectedSort());
+    });
+
+    effect(() => {
+      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_GROUP, this.selectedGroup());
+    });
+
+    effect(() => {
+      lsSetJSON(LS.TASK_VIEW_CUSTOMIZER_FILTER, this.selectedFilter());
+    });
   }
 
   private _allProjects: Project[] = [];

@@ -70,8 +70,8 @@ export const RETRY_BASE_DELAY = 1000;
 /** Delay after sync to allow UI to update */
 export const POST_SYNC_UI_SETTLE = 1000;
 
-/** Polling interval for waiting for tasks */
-export const TASK_POLL_INTERVAL = 300;
+/** Polling interval for waiting for tasks (reduced from 300ms) */
+export const TASK_POLL_INTERVAL = 150;
 
 /** Default timeout for waiting for a task to appear */
 export const TASK_WAIT_TIMEOUT = 30000;

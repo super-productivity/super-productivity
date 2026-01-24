@@ -80,10 +80,6 @@ describe('ConflictResolutionService', () => {
     );
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('isIdenticalConflict', () => {
     it('should detect identical conflict when both sides DELETE', () => {
       const conflict: EntityConflict = {
@@ -715,6 +711,67 @@ describe('ConflictResolutionService', () => {
           jasmine.any(Object),
         );
         expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['local-del']);
+      });
+
+      it('should extract entity from DELETE payload when UPDATE wins but entity not in store', () => {
+        // This tests the helper method that extracts entity state from DELETE operations
+        // Used when remote DELETE is applied first, then local UPDATE wins LWW
+        const taskEntity = {
+          id: 'task-1',
+          title: 'Test Task',
+          projectId: 'project-1',
+          tagIds: [],
+        };
+
+        const conflict: EntityConflict = createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-upd', 'client-a', Date.now()),
+              opType: OpType.Update,
+              payload: { task: taskEntity },
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-del', 'client-b', Date.now() - 1000),
+              opType: OpType.Delete,
+              payload: { task: taskEntity }, // DELETE payload contains the deleted entity
+            },
+          ],
+        );
+
+        // Call the private extraction method
+        const extractedEntity = (service as any)._extractEntityFromDeleteOperation(
+          conflict,
+        );
+
+        // Verify it extracted the entity from the DELETE operation's payload
+        expect(extractedEntity).toEqual(taskEntity);
+      });
+
+      it('should return undefined when no DELETE operation in conflict', () => {
+        const conflict: EntityConflict = createConflict(
+          'task-1',
+          [
+            {
+              ...createOpWithTimestamp('local-upd', 'client-a', Date.now()),
+              opType: OpType.Update,
+            },
+          ],
+          [
+            {
+              ...createOpWithTimestamp('remote-upd', 'client-b', Date.now() - 1000),
+              opType: OpType.Update,
+            },
+          ],
+        );
+
+        const extractedEntity = (service as any)._extractEntityFromDeleteOperation(
+          conflict,
+        );
+
+        expect(extractedEntity).toBeUndefined();
       });
 
       it('should handle CREATE vs CREATE conflict using LWW', async () => {

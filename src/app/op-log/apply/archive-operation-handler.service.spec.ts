@@ -128,11 +128,13 @@ describe('ArchiveOperationHandler', () => {
       'updateTask',
       'updateTasks',
       'hasTask',
+      'hasTasksBatch',
       'removeAllArchiveTasksForProject',
       'removeTagsFromAllTasks',
       'removeRepeatCfgFromArchiveTasks',
       'unlinkIssueProviderFromArchiveTasks',
     ]);
+    mockTaskArchiveService.hasTasksBatch.and.returnValue(Promise.resolve(new Map()));
     mockTimeTrackingService = jasmine.createSpyObj('TimeTrackingService', [
       'cleanupDataEverywhereForProject',
       'cleanupArchiveDataForTag',
@@ -381,6 +383,16 @@ describe('ArchiveOperationHandler', () => {
 
     describe('updateTasks action (batch)', () => {
       it('should update multiple archived tasks for remote operations', async () => {
+        // Both tasks exist in archive
+        mockTaskArchiveService.hasTasksBatch.and.returnValue(
+          Promise.resolve(
+            new Map([
+              ['task-1', true],
+              ['task-2', true],
+            ]),
+          ),
+        );
+
         const action = {
           type: TaskSharedActions.updateTasks.type,
           tasks: [
@@ -415,8 +427,13 @@ describe('ArchiveOperationHandler', () => {
 
       it('should only update tasks that exist in archive', async () => {
         // Only task-1 is in archive, task-2 is not
-        mockTaskArchiveService.hasTask.and.callFake((id: string) =>
-          Promise.resolve(id === 'task-1'),
+        mockTaskArchiveService.hasTasksBatch.and.returnValue(
+          Promise.resolve(
+            new Map([
+              ['task-1', true],
+              ['task-2', false],
+            ]),
+          ),
         );
 
         const action = {
@@ -619,7 +636,6 @@ describe('ArchiveOperationHandler', () => {
         const action = {
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: 'repeat-cfg-1',
-          taskIdsToUnlink: ['task-1', 'task-2'],
           meta: { isPersistent: true, isRemote: true },
         } as unknown as PersistentAction;
 
@@ -634,7 +650,6 @@ describe('ArchiveOperationHandler', () => {
         const action = {
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: 'repeat-cfg-1',
-          taskIdsToUnlink: ['task-1'],
           meta: { isPersistent: true, isRemote: false },
         } as unknown as PersistentAction;
 
@@ -649,7 +664,6 @@ describe('ArchiveOperationHandler', () => {
         const action = {
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: 'repeat-cfg-1',
-          taskIdsToUnlink: [],
           meta: { isPersistent: true, isRemote: true },
         } as unknown as PersistentAction;
 

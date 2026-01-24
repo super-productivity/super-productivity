@@ -191,8 +191,8 @@ describe('BackupService', () => {
       expect(calledWith.task.ids).toContain('archived-task-1');
     });
 
-    it('should write archiveOld to IndexedDB when present in backup', async () => {
-      // Note: dataRepair merges archiveOld into archiveYoung, but both are still written
+    it('should write archiveOld separately to IndexedDB when present in backup', async () => {
+      // Note: Dual-archive architecture keeps archives separate (no merge)
       const archiveOld = createArchiveModel('archived-task-old', 'Archived Task Old');
       const backupData = {
         ...createMinimalValidBackup(),
@@ -202,15 +202,19 @@ describe('BackupService', () => {
 
       await service.importCompleteBackup(backupData as any, true, true);
 
-      // After dataRepair, archiveOld is empty (merged into archiveYoung)
-      // Both should be written
+      // Both archives should be written
       expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
       expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalled();
 
-      // The archiveOld task should have been merged into archiveYoung by dataRepair
+      // archiveOld remains separate - verify it was written to IndexedDB
+      const oldCalledWith =
+        mockArchiveDbAdapter.saveArchiveOld.calls.mostRecent().args[0];
+      expect(oldCalledWith.task.ids).toContain('archived-task-old');
+
+      // archiveYoung should remain empty (no merge happened)
       const youngCalledWith =
         mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
-      expect(youngCalledWith.task.ids).toContain('archived-task-old');
+      expect(youngCalledWith.task.ids).toEqual([]);
     });
 
     it('should write both archiveYoung and archiveOld when both present', async () => {
@@ -227,11 +231,16 @@ describe('BackupService', () => {
       expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
       expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalled();
 
-      // dataRepair merges archiveOld into archiveYoung
+      // Dual-archive architecture: verify both written separately (no merge)
       const youngCalledWith =
         mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
       expect(youngCalledWith.task.ids).toContain('young-task');
-      expect(youngCalledWith.task.ids).toContain('old-task');
+      expect(youngCalledWith.task.ids).not.toContain('old-task');
+
+      const oldCalledWith =
+        mockArchiveDbAdapter.saveArchiveOld.calls.mostRecent().args[0];
+      expect(oldCalledWith.task.ids).toContain('old-task');
+      expect(oldCalledWith.task.ids).not.toContain('young-task');
     });
 
     it('should write default empty archives when not present in backup (added by dataRepair)', async () => {

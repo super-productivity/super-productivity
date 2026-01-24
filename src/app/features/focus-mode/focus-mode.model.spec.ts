@@ -204,6 +204,7 @@ describe('FocusModeModel', () => {
         currentCycle: 0,
         lastCompletedDuration: 0,
         pausedTaskId: null,
+        _isResumingBreak: false,
       };
 
       expect(state.timer).toEqual(timer);

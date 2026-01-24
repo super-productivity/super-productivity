@@ -50,6 +50,8 @@ export const test = base.extend<TestFixtures>({
   // Override page to use isolated context
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
+    // Temporary diagnostic: Track 404 responses
+    const notFoundUrls = new Map<string, number>();
 
     try {
       // Set up error handling
@@ -62,6 +64,13 @@ export const test = base.extend<TestFixtures>({
           console.error('Console error:', msg.text());
         } else if (process.env.E2E_VERBOSE) {
           console.log(`Console ${msg.type()}:`, msg.text());
+        }
+      });
+
+      page.on('response', async (response) => {
+        if (response.status() === 404) {
+          const url = response.url();
+          notFoundUrls.set(url, (notFoundUrls.get(url) || 0) + 1);
         }
       });
 
@@ -88,6 +97,17 @@ export const test = base.extend<TestFixtures>({
 
       await use(page);
     } finally {
+      // Log 404 summary if any were found
+      if (notFoundUrls.size > 0) {
+        console.log('\n=== 404 Resources ===');
+        const sorted = Array.from(notFoundUrls.entries()).sort((a, b) => b[1] - a[1]); // Sort by count descending
+        sorted.forEach(([url, count]) => {
+          console.log(`[${count}x] ${url}`);
+        });
+        console.log(`Total unique 404s: ${notFoundUrls.size}`);
+        console.log('=====================\n');
+      }
+
       // Cleanup - make sure context is still available
       if (!page.isClosed()) {
         await page.close();

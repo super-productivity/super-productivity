@@ -1,6 +1,39 @@
 <!--  <div class="title">February 2019 Week 6</div>-->
 
-<div class="scroll-wrapper">
+<div class="schedule-nav-controls">
+  <button
+    mat-icon-button
+    (click)="goToPreviousPeriod()"
+    [disabled]="isViewingToday()"
+    [attr.aria-label]="isMonthView() ? 'Go to previous month' : 'Go to previous week'"
+    [matTooltip]="isMonthView() ? 'Previous Month' : 'Previous Week'"
+  >
+    <mat-icon>chevron_left</mat-icon>
+  </button>
+
+  <button
+    mat-button
+    (click)="goToToday()"
+    [disabled]="isViewingToday()"
+    aria-label="Go to today"
+  >
+    {{ T.F.SCHEDULE.NOW | translate }}
+  </button>
+
+  <button
+    mat-icon-button
+    (click)="goToNextPeriod()"
+    [attr.aria-label]="isMonthView() ? 'Go to next month' : 'Go to next week'"
+    [matTooltip]="isMonthView() ? 'Next Month' : 'Next Week'"
+  >
+    <mat-icon>chevron_right</mat-icon>
+  </button>
+</div>
+
+<div
+  class="scroll-wrapper"
+  [attr.data-horizontal-scroll]="shouldEnableHorizontalScroll() || null"
+>
   @if (isMonthView()) {
     <schedule-month
       [events]="events()"
@@ -15,6 +48,8 @@
       [daysToShow]="daysToShow()"
       [workStartEnd]="workStartEnd() || null"
       [currentTimeRow]="currentTimeRow()"
+      [todayDateStr]="_todayDateStr()"
+      [isHorizontalScrollMode]="shouldEnableHorizontalScroll()"
     ></schedule-week>
   }
 </div>

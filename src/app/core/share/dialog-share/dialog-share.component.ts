@@ -8,6 +8,8 @@ import { FormsModule } from '@angular/forms';
 import { ShareService } from '../share.service';
 import { ShareDialogOptions, ShareResult, ShareTarget } from '../share.model';
 import { ShareFormatter } from '../share-formatter';
+import { T } from '../../../t.const';
+import { TranslatePipe } from '@ngx-translate/core';
 
 interface ShareTargetButton {
   target: ShareTarget;
@@ -28,12 +30,15 @@ interface ShareTargetButton {
     MatInputModule,
     MatFormFieldModule,
     FormsModule,
+    TranslatePipe,
   ],
 })
 export class DialogShareComponent {
   private _dialogRef = inject(MatDialogRef<DialogShareComponent>);
   private _shareService = inject(ShareService);
+
   readonly data = inject<ShareDialogOptions>(MAT_DIALOG_DATA);
+  readonly T = T;
 
   mastodonInstance = this.data.mastodonInstance || 'mastodon.social';
 

@@ -233,10 +233,6 @@ describe('PluginBridgeService', () => {
     });
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('showSnack', () => {
     it('should show success snack', () => {
       service._setCurrentPlugin(mockPluginId, mockManifest);
@@ -596,6 +592,7 @@ import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
+import { getDbDateStr } from '../util/get-db-date-str';
 
 describe('PluginBridgeService - Counter Methods', () => {
   let service: PluginBridgeService;
@@ -651,7 +648,7 @@ describe('PluginBridgeService - Counter Methods', () => {
       // Arrange
       const counterId = 'new-counter';
       const value = 10;
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
 
       // Act
       await service.setCounter(counterId, value);
@@ -676,7 +673,7 @@ describe('PluginBridgeService - Counter Methods', () => {
       // Arrange
       const counterId = 'existing-counter';
       const value = 15;
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
 
       // Act
       await service.setCounter(counterId, value);
@@ -707,8 +704,8 @@ describe('PluginBridgeService - Counter Methods', () => {
 
   describe('incrementCounter', () => {
     it('should increment existing counter value', async () => {
-      // Arrange: existing counter has value 5 for 2025-12-30
-      const today = new Date().toISOString().split('T')[0];
+      // Arrange: existing counter has value 5 for today
+      const today = getDbDateStr();
       store.overrideSelector(selectAllSimpleCounters, [
         { ...mockExistingCounter, countOnDay: { [today]: 5 } },
       ]);
@@ -741,7 +738,7 @@ describe('PluginBridgeService - Counter Methods', () => {
   describe('decrementCounter', () => {
     it('should decrement existing counter value', async () => {
       // Arrange
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
       store.overrideSelector(selectAllSimpleCounters, [
         { ...mockExistingCounter, countOnDay: { [today]: 10 } },
       ]);
@@ -755,7 +752,7 @@ describe('PluginBridgeService - Counter Methods', () => {
 
     it('should not go below zero', async () => {
       // Arrange
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDbDateStr();
       store.overrideSelector(selectAllSimpleCounters, [
         { ...mockExistingCounter, countOnDay: { [today]: 2 } },
       ]);

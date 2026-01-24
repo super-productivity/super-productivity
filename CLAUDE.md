@@ -138,6 +138,8 @@ Use Angular commit message format: `type(scope): description`
   - `fix(sync): handle network timeout gracefully`
   - `refactor(projects): simplify project selector logic`
 
+**Note**: Use `test:` for test changes, not `fix(test):`.
+
 ## 🚫 Anti-Patterns → Do This Instead
 
 | Avoid                                | Do Instead                                                                          |

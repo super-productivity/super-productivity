@@ -17,10 +17,6 @@ describe('ShortTimeHtmlPipe', () => {
     shortTimePipe = TestBed.inject(ShortTimePipe) as jasmine.SpyObj<ShortTimePipe>;
   });
 
-  it('should create an instance', () => {
-    expect(pipe).toBeTruthy();
-  });
-
   it('should return null when ShortTimePipe returns null', () => {
     shortTimePipe.transform.and.returnValue(null);
 

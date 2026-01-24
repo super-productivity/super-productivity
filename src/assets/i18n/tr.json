@@ -143,7 +143,7 @@
       "TITLE": "🙈 Lütfen bizi affedin ama...",
       "TXT": "Beğenirseniz, <strong>iyi bir puan vererek projeye son derece yardımcı olursunuz!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Bir göreve ilişkin süreyi izlerken, yapılandırılmış cümleyi her X'te tekrarlar.",
         "L_INTERVAL": "İfadeyi tekrarlama aralığı",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "Örn.: \"${currentTaskTitle} üzerinde çalış!\"",
         "L_VOICE": "Bir Ses Seçin",
         "L_VOICE_DESCRIPTION": "Bir Ses Seçin",
-        "TITLE": "Domina Modu"
+        "TITLE": "Sesli hatırlatma"
       }
     },
     "DROPBOX": {
@@ -1602,12 +1602,9 @@
       "DARK_MODE_DARK": "Karanlık",
       "DARK_MODE_LIGHT": "Aydınlık",
       "DARK_MODE_SYSTEM": "Sistem",
-      "DEFAULT_PROJECT": "Proje belirtilmezse görevler için kullanılacak varsayılan proje",
       "DEFAULT_START_PAGE": "Varsayılan başlangıç sayfası",
       "FIRST_DAY_OF_WEEK": "Haftanın ilk günü",
       "HELP": "<p><strong>Masaüstü Bildirimleri'ni göremiyor musunuz?</strong> Pencereler için Sistem> Bildirimler ve eylemleri kontrol etmek ve gerekli bildirimlerin etkin olup olmadığını kontrol etmek isteyebilirsiniz.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Çalışılan görevlere bugün etiketini otomatik olarak ekle",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Tüm alt görevler tamamlandığında ana görevi yapıldığı gibi işaretle",
       "IS_CONFIRM_BEFORE_EXIT": "Uygulamadan çıkmadan önce onayla",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Uygulamadan çıkmadan önce günü bitirmeden çıkış yaptığınızı onaylayın",
       "IS_DARK_MODE": "Karanlık mod",
@@ -1617,17 +1614,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Panel gösterge penceresini etkinleştir (masaüstü linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Uygulamada üretkenlik ipucunu biraz daha uzun süre başlatın",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Mevcut geri sayımı tepsi / durum menüsünde göster (sadece masaüstü mac için)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Mevcut görevi tepsi / Durum menüsünde göster (yalnızca masaüstü)",
-      "IS_TURN_OFF_MARKDOWN": "Notlar için etiketleme ayrıştırmayı kapatın",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Özel başlık çubuğunu kullan (Windows/Linux için)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Etkin olması için yeniden başlatma gerektirir",
       "START_OF_NEXT_DAY": "Ertesi günün başlama saati",
       "START_OF_NEXT_DAY_HINT": "Ertesi günün başladığı saati saymak istediğiniz andan itibaren (saat cinsinden). Varsayılan gece yarısıdır, yani 0'dır.",
-      "TASK_NOTES_TPL": "Görev açıklama şablonu",
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (Deneysel)",
       "THEME_SELECT_LABEL": "Tema seç",
       "TITLE": "Diğer ayarlar"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Varsayılan proje (belirtilmemişse) için kullanılacak",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Üzerinde çalışılan görevleri otomatik olarak bugüne ekle",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Tüm alt görevler tamamlandığında ana görevi otomatik olarak tamamlandı olarak işaretle",
+      "IS_CONFIRM_BEFORE_DELETE": "Görevleri silmeden önce onayla",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Görev notlarında Markdown biçimlendirmesini etkinleştir",
+      "IS_TRAY_SHOW_CURRENT": "Mevcut görevi tepsi / durum menüsünde göster (yalnızca masaüstü Mac/Windows için)",
+      "NOTES_TEMPLATE": "Görev açıklama şablonu",
+      "TITLE": "Görevler"
     },
     "POMODORO": {
       "BREAK_DURATION": "Kısa molaların süresi",

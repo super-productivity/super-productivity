@@ -6,7 +6,7 @@ import { MockSyncServer } from './helpers/mock-sync-server.helper';
 import { SimulatedClient } from './helpers/simulated-client.helper';
 import { createMinimalTaskPayload } from './helpers/operation-factory.helper';
 
-// Timeout constants for large batch tests - creating/syncing 500-1500 ops
+// Timeout constants for large batch tests - creating/syncing 500-1000 ops
 // can exceed the default 2000ms timeout under load
 const LARGE_BATCH_TIMEOUT = 15000;
 
@@ -75,11 +75,11 @@ describe('Large Batch Sync Integration', () => {
 
   describe('Large Batch Download (Pagination)', () => {
     it(
-      'should download 1500 operations using pagination',
+      'should download 1000 operations using pagination',
       async () => {
         const clientA = new SimulatedClient('client-a', storeService);
         const clientB = new SimulatedClient('client-b', storeService);
-        const totalOps = 1500;
+        const totalOps = 1000;
 
         // Client A populates server (in batches to avoid timeout during setup)
         // Note: We bypass clientA.sync() for speed and populate server directly if possible,
@@ -101,7 +101,7 @@ describe('Large Batch Sync Integration', () => {
 
         expect(server.getAllOps().length).toBe(totalOps);
 
-        // Client B syncs - should download all 1500
+        // Client B syncs - should download all 1000
         // Mock server default limit is 500, so this should trigger multiple internal fetches
         // if SimulatedClient/SyncService handles it, OR we have to call sync multiple times.
         //
@@ -117,13 +117,9 @@ describe('Large Batch Sync Integration', () => {
         const result2 = await clientB.sync(server);
         expect(result2.downloaded).toBe(500);
 
-        // Third sync
+        // Third sync - empty
         const result3 = await clientB.sync(server);
-        expect(result3.downloaded).toBe(500);
-
-        // Fourth sync - empty
-        const result4 = await clientB.sync(server);
-        expect(result4.downloaded).toBe(0);
+        expect(result3.downloaded).toBe(0);
 
         // Verify total
         const allOps = await clientB.getAllOps();

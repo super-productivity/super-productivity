@@ -2,6 +2,7 @@ import { App, BrowserWindow } from 'electron';
 import { log } from 'electron-log/main';
 import * as path from 'path';
 import { IPC } from './shared-with-frontend/ipc-events.const';
+import { showOrFocus } from './various-shared';
 
 export const PROTOCOL_NAME = 'superproductivity';
 export const PROTOCOL_PREFIX = `${PROTOCOL_NAME}://`;
@@ -89,8 +90,7 @@ export const initializeProtocolHandling = (
 
     // Someone tried to run a second instance, we should focus our window instead.
     if (mainWin) {
-      if (mainWin.isMinimized()) mainWin.restore();
-      mainWin.focus();
+      showOrFocus(mainWin);
     }
 
     // Handle protocol url from second instance

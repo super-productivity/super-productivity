@@ -74,8 +74,8 @@ export class ShortSyntaxEffects {
       withLatestFrom(
         this._tagService.tagsNoMyDayAndNoList$,
         this._projectService.list$,
-        this._globalConfigService.misc$.pipe(
-          map((misc) => misc.defaultProjectId),
+        this._globalConfigService.tasks$.pipe(
+          map((tasks) => tasks.defaultProjectId),
 
           concatMap((defaultProjectId) => {
             if (this._workContextService.activeWorkContextId === INBOX_PROJECT.id) {

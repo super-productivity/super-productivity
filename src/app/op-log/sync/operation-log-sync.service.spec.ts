@@ -192,10 +192,6 @@ describe('OperationLogSyncService', () => {
     opLogStoreSpy.getUnsynced.and.resolveTo([]);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   // NOTE: Tests for processRemoteOps, detectConflicts, and applyNonConflictingOps
   // have been moved to remote-ops-processing.service.spec.ts
 

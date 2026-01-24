@@ -34,6 +34,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { DragDropRegistry } from '@angular/cdk/drag-drop';
 import { WorkContextType } from '../../features/work-context/work-context.model';
 import { HISTORY_STATE } from '../../app.constants';
+import { SwipeDirective } from '../../ui/swipe-gesture/swipe.directive';
 
 const COLLAPSED_WIDTH = 64;
 const MOBILE_NAV_WIDTH = 300;
@@ -48,6 +49,7 @@ const FOCUS_DELAY_MS = 10;
     NavListTreeComponent,
     MatMenuModule,
     NavMatMenuComponent,
+    SwipeDirective,
   ],
   templateUrl: './magic-side-nav.component.html',
   styleUrl: './magic-side-nav.component.scss',
@@ -234,6 +236,12 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleMobileNav(): void {
     this.showMobileMenuOverlay.update((show) => !show);
+  }
+
+  onMobileNavSwipeRight(): void {
+    if (this.isMobile() && this.showMobileMenuOverlay()) {
+      this.toggleMobileNav();
+    }
   }
 
   /** Handle "back" button to hide mobile menu overlay */

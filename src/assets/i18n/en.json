@@ -16,8 +16,8 @@
     "NO_TASKS": "There are currently no tasks in your backlog"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "Show Issue Panel",
-    "SHOW_NOTES": "Show Project Notes"
+    "SHOW_ISSUE_PANEL": "Issue Provider Panel",
+    "SHOW_NOTES": "Project Notes"
   },
   "CONFIRM": {
     "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This might result in partial data loss.",
@@ -144,7 +144,7 @@
         "UPDATE_SECTION": "Updated settings for <strong>{{sectionKey}}</strong>"
       }
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Repeats the configured phrase every X when tracking time to a task.",
         "L_INTERVAL": "Interval to repeat phrase",
@@ -152,14 +152,14 @@
         "L_TEXT_DESCRIPTION": "E.g.: \"Work on ${currentTaskTitle}!\"",
         "L_VOICE": "Select a Voice",
         "L_VOICE_DESCRIPTION": "Choose a voice",
-        "TITLE": "Domina Mode"
+        "TITLE": "Voice Reminder"
       }
     },
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: Unable to sync, because offline",
         "SYNC_ERROR": "Dropbox: Error while syncing",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox: Unable to generate PKCE challenge."
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable version."
       }
     },
     "D_RATE": {
@@ -177,6 +177,7 @@
       "ADD_TIME_MINUTE": "Add 1 minute",
       "B": {
         "BREAK_RUNNING": "Break is running",
+        "END_FOCUS_SESSION": "End Focus Session",
         "END_SESSION": "End session",
         "PAUSE": "Pause",
         "POMODORO_BREAK_RUNNING": "Break #{{cycleNr}} is running",
@@ -902,9 +903,11 @@
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
+        "FOLLOW_LINK_MOBILE": "Please tap the button below to authorize. You will be automatically redirected back to the app.",
         "GET_AUTH_CODE": "Get Authorization Code",
         "L_AUTH_CODE": "Enter Auth Code",
-        "TITLE": "Login: {{provider}}"
+        "TITLE": "Login: {{provider}}",
+        "WAITING_FOR_AUTH": "Waiting for authentication..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Additional Info",
@@ -1097,6 +1100,7 @@
         "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
         "RESTORE_SUCCESS": "Data restored successfully",
         "RESTORE_ERROR": "Failed to restore data",
+        "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
         "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
@@ -1796,7 +1800,7 @@
       "TASK_TOGGLE_DONE": "Toggle Done",
       "TITLE": "Keyboard Shortcuts",
       "TOGGLE_BACKLOG": "Show/Hide Task Backlog",
-      "TOGGLE_ISSUE_PANEL": "Show/Hide Issue Panel",
+      "TOGGLE_ISSUE_PANEL": "Show/Hide Issue Provider Panel",
       "TOGGLE_PLAY": "Start/Stop Task",
       "TOGGLE_SIDE_NAV": "Focus Sidenav",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle Filter/Group/Sort Panel",
@@ -1855,15 +1859,11 @@
       "DARK_MODE_DARK": "Dark",
       "DARK_MODE_LIGHT": "Light",
       "DARK_MODE_SYSTEM": "System",
-      "DEFAULT_PROJECT": "Default project to use for tasks if none is specified",
       "DEFAULT_START_PAGE": "Default start page",
       "FIRST_DAY_OF_WEEK": "First day of the week",
       "HELP": "<p><strong>Not seeing Desktop Notifications?</strong> For windows you might want to check System > Notifications & actions and check if the required notifications have been enabled.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatically add today tag to worked on tasks",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Mark parent task as done, when all sub tasks are done",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirm before exiting the app without finishing day first",
-      "IS_CONFIRM_BEFORE_TASK_DELETE": "Confirm before deleting tasks",
       "IS_DARK_MODE": "Dark Mode",
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
@@ -1871,17 +1871,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Enable overlay indicator window (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (desktop mac only)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Show current task in the tray / status menu (desktop mac/windows only)",
-      "IS_TURN_OFF_MARKDOWN": "Turn off markdown parsing for task notes",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect",
       "START_OF_NEXT_DAY": "Start time of the next day",
       "START_OF_NEXT_DAY_HINT": "From when (in hour) you want to count the next day has started. Default is midnight which is 0.",
-      "TASK_NOTES_TPL": "Task description template",
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
       "THEME_SELECT_LABEL": "Select Theme",
       "TITLE": "Misc Settings"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Default project to use for tasks if none is specified",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatically add worked on tasks to today",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automatically mark parent task as done, when all sub tasks are done",
+      "IS_CONFIRM_BEFORE_DELETE": "Confirm before deleting tasks",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
+      "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (desktop mac/windows only)",
+      "NOTES_TEMPLATE": "Task description template",
+      "TITLE": "Tasks"
     },
     "POMODORO": {
       "BREAK_DURATION": "Duration of short breaks",
@@ -2064,7 +2071,7 @@
     "TASKS": "Tasks",
     "TASK_LIST": "Task List",
     "TOGGLE_SHOW_BOOKMARKS": "Show/Hide Bookmarks",
-    "TOGGLE_SHOW_ISSUE_PANEL": "Show/Hide Issue Panel",
+    "TOGGLE_SHOW_ISSUE_PANEL": "Show/Hide Issue Provider Panel",
     "TOGGLE_SHOW_NOTES": "Show/Hide Project Notes",
     "TOGGLE_TRACK_TIME": "Start/Stop tracking time",
     "TRIGGER_SYNC": "Sync!",
@@ -2222,6 +2229,7 @@
     "SYNC_EXPORT": "Sync & Export",
     "TABS": {
       "GENERAL": "General",
+      "TASKS": "Tasks",
       "TIME_TRACKING": "Time & Tracking",
       "PRODUCTIVITY": "Productivity",
       "PLUGINS": "Plugins",

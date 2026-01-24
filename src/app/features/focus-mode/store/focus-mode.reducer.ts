@@ -33,6 +33,7 @@ export const initialState: FocusModeState = {
   currentCycle: 1,
   lastCompletedDuration: 0,
   pausedTaskId: null,
+  _isResumingBreak: false,
 };
 
 const createWorkTimer = (duration: number): TimerState => ({
@@ -144,8 +145,15 @@ export const focusModeReducer = createReducer(
         isRunning: true,
         startedAt: Date.now() - state.timer.elapsed,
       },
+      // Set flag ONLY when resuming a break (not work sessions)
+      _isResumingBreak: state.timer.purpose === 'break',
     };
   }),
+
+  on(a.clearResumingBreakFlag, (state) => ({
+    ...state,
+    _isResumingBreak: false,
+  })),
 
   on(a.completeFocusSession, (state, { isManual }) => {
     const duration = state.timer.elapsed;

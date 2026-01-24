@@ -1,10 +1,9 @@
 import { expect } from '@playwright/test';
-import { test } from '../../fixtures/test.fixture';
+import { test } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { TaskPage } from '../../pages/task.page';
 import { waitForStatePersistence, waitForAppReady } from '../../utils/waits';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   setupSyncClient,
@@ -27,14 +26,6 @@ import {
 
 test.describe('@webdav WebDAV TODAY Tag Sync', () => {
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV TODAY tag tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   /**
    * Test 2.1: Concurrent task reordering in TODAY view

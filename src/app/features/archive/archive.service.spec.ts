@@ -71,10 +71,6 @@ describe('ArchiveService', () => {
     mockArchiveDbAdapter.saveArchiveOld.and.returnValue(Promise.resolve());
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('moveTasksToArchiveAndFlushArchiveIfDue', () => {
     it('should save tasks to archiveYoung', async () => {
       const tasks = [createMockTask('task-1')];

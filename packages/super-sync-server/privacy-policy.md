@@ -47,6 +47,22 @@ Technisch bedingt beim Zugriff auf den Server:
 - Betriebssystem
 - Fehler- und Diagnoseinformationen
 
+### 3a. Datensicherheit und Verschlüsselung
+
+**Verschlüsselung während der Übertragung:**
+Alle Datenübertragungen zwischen Ihrer App und unserem Server erfolgen über HTTPS/TLS-Verschlüsselung.
+
+**Verschlüsselung im Ruhezustand:**
+
+- **Optional verfügbar:** Sie können End-to-End-Verschlüsselung (E2EE) in den Sync-Einstellungen aktivieren
+- **Wenn E2EE aktiviert:** Ihre Daten werden auf Ihrem Gerät verschlüsselt, bevor sie an unseren Server gesendet werden. Wir haben keinen Zugriff auf Ihre Verschlüsselungsschlüssel und können Ihre Daten nicht entschlüsseln.
+- **Wenn E2EE nicht aktiviert:** Ihre Synchronisationsdaten werden unverschlüsselt in unserer Datenbank gespeichert. Wir empfehlen dringend die Aktivierung von E2EE für sensible Daten.
+
+**Wichtiger Hinweis:** Ohne E2EE sind Ihre Daten nur durch physische und technische Zugriffskontrollen auf unserem Server geschützt, nicht jedoch durch Verschlüsselung im Ruhezustand. Bei einem Server-Kompromiss oder physischen Zugriff auf die Speichermedien könnten Ihre Daten eingesehen werden.
+
+**Passwortsicherheit:**
+Ihr Passwort wird niemals im Klartext gespeichert. Wir verwenden bcrypt-Hashing (12 Runden) zur sicheren Speicherung Ihres Passworts.
+
 ## 4. Rechtsgrundlagen der Verarbeitung
 
 Wir verarbeiten Ihre Daten auf Basis der folgenden Rechtsgrundlagen:
@@ -85,23 +101,58 @@ Die Verarbeitung erfolgt ausschließlich auf Servern in Deutschland.
 **(2) Auftragsverarbeitung**
 Mit der Alfahosting GmbH besteht ein Vertrag zur Auftragsverarbeitung (AVV) gemäß Art. 28 DSGVO. Alfahosting verarbeitet Ihre Daten nur nach unserer Weisung und nicht zu eigenen Zwecken. Eine Übermittlung in ein Drittland findet durch den Hoster nicht statt.
 
-## 6. Datenverarbeitung bei der Synchronisation
+## 6. Technische und organisatorische Maßnahmen (Art. 32 DSGVO)
 
-Dies ist der Kern unseres Dienstes. Wir unterscheiden hierbei zwei Sicherheitsstufen:
+Wir setzen folgende Sicherheitsmaßnahmen ein:
+
+**Zugriffssicherheit:**
+
+- HTTPS/TLS-Verschlüsselung für alle Datenübertragungen
+- JWT-basierte Authentifizierung mit Token-Versionierung
+- bcrypt Passwort-Hashing (12 Runden)
+- Rate-Limiting und Konto-Sperrung nach fehlgeschlagenen Login-Versuchen
+- E-Mail-Verifizierung vor Kontoaktivierung
+
+**Verschlüsselung:**
+
+- **Übertragung:** Vollständige HTTPS/TLS-Verschlüsselung
+- **Im Ruhezustand:** Optional verfügbare End-to-End-Verschlüsselung (E2EE)
+  - ⚠️ **WICHTIG:** E2EE ist nicht standardmäßig aktiviert
+  - ⚠️ Ohne E2EE werden Daten unverschlüsselt in der Datenbank gespeichert
+  - ✅ **Empfehlung:** Aktivieren Sie E2EE für maximalen Schutz
+
+**Datenverarbeitung bei der Synchronisation:**
 
 **A) Standard-Synchronisation (ohne E2EE)**
 
 - Ihre Inhaltsdaten werden über TLS/SSL transportverschlüsselt übertragen.
-- Auf dem Server werden sie in unserer Datenbank gespeichert. Hierbei kommt keine Ende-zu-Ende-Verschlüsselung zum Einsatz.
+- Auf dem Server werden sie **unverschlüsselt** in unserer PostgreSQL-Datenbank gespeichert.
 - Ein Zugriff durch den Anbieter ist technisch grundsätzlich möglich, erfolgt jedoch ausschließlich, wenn dies zur Wartung, Diagnose oder Abwehr technischer Störungen zwingend erforderlich ist.
 
 **B) Ende-zu-Ende-Verschlüsselung (E2EE – optional)**
 Wenn Sie E2EE in der App aktivieren:
 
 - Ihre Daten werden bereits lokal auf Ihrem Gerät verschlüsselt.
-- Der Server speichert ausschließlich verschlüsselte Datenblöcke („Blobs“).
+- Der Server speichert ausschließlich verschlüsselte Datenblöcke („Blobs").
 - Wir haben **keinen Zugriff** auf Ihre Schlüssel und können die Daten nicht wiederherstellen, entschlüsseln oder einsehen.
 - Ein Verlust des Schlüssels führt zum endgültigen Datenverlust.
+
+**Datensparsamkeit:**
+
+- Minimale Datenerfassung (nur für Sync-Funktionalität erforderlich)
+- Keine Analyse-Tools oder Tracking
+- Automatische Löschung alter Synchronisationsoperationen (45 Tage)
+
+**Verfügbarkeit und Belastbarkeit:**
+
+- Regelmäßige Backups (Sie verwalten Ihre eigenen Backups)
+- Monitoring und Fehlerprotokollierung
+
+**Einschränkungen:**
+
+- Keine Verschlüsselung der Datenbankdateien auf Festplattenebene
+- Schutz basiert auf physischen Sicherheitsmaßnahmen des Hostinganbieters
+- Bei Server-Kompromiss könnten unverschlüsselte Daten (ohne E2EE) eingesehen werden
 
 ## 7. E-Mail-Versand
 

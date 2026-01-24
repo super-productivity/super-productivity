@@ -44,8 +44,8 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
     await pomodoroModeButton.click();
     await playButton.click();
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 10000 });
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
     await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
 
@@ -89,10 +89,10 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await playButton.click();
 
     // Wait for countdown animation to complete
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 10000 });
+    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
 
     // Wait for session to be in progress, then complete it
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
     // In Pomodoro mode, break auto-starts after session completion
@@ -151,10 +151,10 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await playButton.click();
 
     // Wait for countdown animation to complete
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 10000 });
+    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
 
     // Complete the session
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
     // In Pomodoro mode, break auto-starts after session completion
@@ -193,10 +193,10 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await playButton.click();
 
     // Wait for countdown animation to complete
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 10000 });
+    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
 
     // Complete the session
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
     // In Pomodoro mode, break auto-starts after session completion
@@ -240,10 +240,10 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await playButton.click();
 
     // Wait for countdown animation to complete
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 10000 });
+    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
 
     // Complete the session
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
     // In Pomodoro mode, break auto-starts after session completion

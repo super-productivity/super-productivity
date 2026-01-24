@@ -1,0 +1,49 @@
+name: 💥 Internal app error
+description: Internal app error report
+title: '💥 '
+type: Bug
+
+body:
+  - type: input
+    id: environment-version
+    attributes:
+      label: Version Used
+      description: Version number and package type (e.g., exe, snap, deb, installer).
+      placeholder: "e.g. 'v7.12.0 snap' or 'v2.2.1 firefox'"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Provide a clear set of steps to reproduce this bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reliability
+    attributes:
+      label: Can you reproduce this reliably?
+      description: Was this a one-time occurrence, or can you make it happen every time by following the steps?
+      options:
+        - 'Yes, I can reproduce it reliably.'
+        - "Sometimes, it's intermittent."
+        - 'No, it only happened once.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: console-output
+    attributes:
+      label: Console Output
+      description: Is there any output if you press `Ctrl+Shift+i` (or `Cmd+Alt+i` on Mac) and check the 'Console' tab? If so, please paste it here.
+      placeholder: 'Paste any relevant console logs here...'
+      render: shell # Use 'shell' or 'log' for better formatting of code/logs
+    validations:
+      required: false

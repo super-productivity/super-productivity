@@ -1,0 +1,116 @@
+name: 'E2E Tests (Scheduled)'
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 2 AM UTC daily
+
+  workflow_dispatch:
+
+  push:
+    branches: [master, release/*]
+    paths:
+      - 'src/app/imex/sync/**'
+      - 'src/app/op-log/**'
+      - 'e2e/tests/**'
+      - 'docker-compose.yaml'
+      - 'docker-compose.supersync.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
+      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+
+    steps:
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: 20
+
+      - name: Check out Git repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: |
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+        id: npm-cache
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install npm Packages
+        run: npm i
+
+      - name: Install Playwright Browsers
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright install-deps chromium
+
+      - run: npm run env
+
+      - name: Create .env file for Docker Compose
+        run: |
+          cp .env.example .env
+
+      - name: Start Docker Services (WebDAV + SuperSync)
+        run: |
+          docker compose up -d webdav
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml up -d --build supersync
+
+          # Wait for WebDAV
+          chmod +x ./scripts/wait-for-webdav.sh
+          ./scripts/wait-for-webdav.sh
+
+          # Wait for SuperSync
+          echo "⏳ Waiting for SuperSync server..."
+          until curl -s http://localhost:1901/health > /dev/null 2>&1; do sleep 1; done
+          echo "✓ SuperSync server ready!"
+
+      - name: Build Frontend for E2E
+        run: npm run buildFrontend:e2e
+
+      - name: Verify Build Output
+        run: |
+          test -f .tmp/angular-dist/browser/index.html || (echo "Build output missing" && exit 1)
+          test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
+
+      - name: Run E2E Tests
+        run: npm run e2e:ci
+
+      - name: Stop Docker Services
+        if: always()
+        run: |
+          docker compose down
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml down supersync
+
+      - name: Print Docker Logs on Failure
+        if: ${{ failure() }}
+        run: |
+          echo "=== WebDAV Logs ==="
+          docker compose logs webdav
+          echo "=== SuperSync Logs ==="
+          docker compose -f docker-compose.yaml -f docker-compose.supersync.yaml logs supersync
+
+      - name: Upload E2E Results on Failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: e2e-results-${{ github.run_id }}
+          path: .tmp/e2e-test-results/**/*.*
+          retention-days: 30

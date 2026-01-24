@@ -27,6 +27,7 @@ import {
 } from './types';
 import { DateAdapter } from '@angular/material/core';
 import { DEFAULT_FIRST_DAY_OF_WEEK } from 'src/app/core/locale.constants';
+import { LS } from '../../core/persistence/storage-keys.const';
 
 describe('TaskViewCustomizerService', () => {
   let service: TaskViewCustomizerService;
@@ -114,6 +115,9 @@ describe('TaskViewCustomizerService', () => {
   ];
 
   beforeEach(() => {
+    // Clear localStorage before each test
+    localStorage.clear();
+
     mockWorkContextService = {
       activeWorkContextId: null,
       activeWorkContextType: null,
@@ -496,6 +500,178 @@ describe('TaskViewCustomizerService', () => {
       expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
       expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
       expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+    });
+  });
+
+  describe('localStorage persistence', () => {
+    it('should initialize with default values when localStorage is empty', () => {
+      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
+      expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+    });
+
+    it('should restore sort option from localStorage on initialization', () => {
+      const savedSort: SortOption = {
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+        label: 'Name',
+      };
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_SORT, JSON.stringify(savedSort));
+
+      // Reset TestBed to create a new service instance
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: mockProjects },
+              { selector: selectAllTags, value: mockTags },
+            ],
+          }),
+        ],
+      });
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+      (newService as any)._allProjects = mockProjects;
+      (newService as any)._allTags = mockTags;
+
+      expect(newService.selectedSort()).toEqual(savedSort);
+    });
+
+    it('should restore group option from localStorage on initialization', () => {
+      const savedGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_GROUP, JSON.stringify(savedGroup));
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: mockProjects },
+              { selector: selectAllTags, value: mockTags },
+            ],
+          }),
+        ],
+      });
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+      (newService as any)._allProjects = mockProjects;
+      (newService as any)._allTags = mockTags;
+
+      expect(newService.selectedGroup()).toEqual(savedGroup);
+    });
+
+    it('should restore filter option from localStorage on initialization', () => {
+      const savedFilter: FilterOption = {
+        type: FILTER_OPTION_TYPE.tag,
+        preset: 'Tag A',
+        label: 'Tag',
+      };
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_FILTER, JSON.stringify(savedFilter));
+
+      TestBed.resetTestingModule();
+      const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
+        getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
+      });
+
+      TestBed.configureTestingModule({
+        providers: [
+          TaskViewCustomizerService,
+          { provide: DateAdapter, useValue: dateAdapter },
+          { provide: WorkContextService, useValue: mockWorkContextService },
+          { provide: ProjectService, useValue: { update: projectUpdateSpy } },
+          { provide: TagService, useValue: { updateTag: tagUpdateSpy } },
+          provideMockStore({
+            selectors: [
+              { selector: selectAllProjects, value: mockProjects },
+              { selector: selectAllTags, value: mockTags },
+            ],
+          }),
+        ],
+      });
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+      (newService as any)._allProjects = mockProjects;
+      (newService as any)._allTags = mockTags;
+
+      expect(newService.selectedFilter()).toEqual(savedFilter);
+    });
+
+    it('should persist sort option to localStorage when changed', (done) => {
+      const newSort: SortOption = {
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+        label: 'Name',
+      };
+      service.setSort(newSort);
+
+      // Wait for effect to run
+      setTimeout(() => {
+        const stored = localStorage.getItem(LS.TASK_VIEW_CUSTOMIZER_SORT);
+        expect(stored).toBeTruthy();
+        expect(JSON.parse(stored!)).toEqual(newSort);
+        done();
+      }, 50);
+    });
+
+    it('should persist group option to localStorage when changed', (done) => {
+      const newGroup: GroupOption = { type: GROUP_OPTION_TYPE.tag, label: 'Tag' };
+      service.setGroup(newGroup);
+
+      setTimeout(() => {
+        const stored = localStorage.getItem(LS.TASK_VIEW_CUSTOMIZER_GROUP);
+        expect(stored).toBeTruthy();
+        expect(JSON.parse(stored!)).toEqual(newGroup);
+        done();
+      }, 50);
+    });
+
+    it('should persist filter option to localStorage when changed', (done) => {
+      const newFilter: FilterOption = {
+        type: FILTER_OPTION_TYPE.tag,
+        preset: 'Tag A',
+        label: 'Tag',
+      };
+      service.setFilter(newFilter);
+
+      setTimeout(() => {
+        const stored = localStorage.getItem(LS.TASK_VIEW_CUSTOMIZER_FILTER);
+        expect(stored).toBeTruthy();
+        expect(JSON.parse(stored!)).toEqual(newFilter);
+        done();
+      }, 50);
+    });
+
+    it('should fallback to defaults when localStorage contains invalid JSON', () => {
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_SORT, 'invalid json{');
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_GROUP, '{broken');
+      localStorage.setItem(LS.TASK_VIEW_CUSTOMIZER_FILTER, 'not json');
+
+      const newService = TestBed.inject(TaskViewCustomizerService);
+      (newService as any)._allProjects = mockProjects;
+      (newService as any)._allTags = mockTags;
+
+      expect(newService.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
+      expect(newService.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
+      expect(newService.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
   });
 });

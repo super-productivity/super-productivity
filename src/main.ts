@@ -41,7 +41,6 @@ import { StoreModule } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
-import { ImmediateUploadService } from './app/op-log/sync/immediate-upload.service';
 import { EffectsModule } from '@ngrx/effects';
 import { StoreDevtoolsModule } from '@ngrx/store-devtools';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -182,17 +181,9 @@ bootstrapApplication(AppComponent, {
       deps: [OperationCaptureService],
       multi: true,
     },
-    // Initialize immediate upload service for real-time sync to SuperSync
-    {
-      provide: APP_INITIALIZER,
-      useFactory: (immediateUploadService: ImmediateUploadService) => {
-        return () => {
-          immediateUploadService.initialize();
-        };
-      },
-      deps: [ImmediateUploadService],
-      multi: true,
-    },
+    // Note: ImmediateUploadService now initializes itself in constructor
+    // after DataInitStateService.isAllDataLoadedInitially$ fires to avoid
+    // race condition where upload attempts happen before sync config is loaded
   ],
 }).then(() => {
   // Initialize touch fix for Material menus

@@ -50,10 +50,6 @@ describe('TagService', () => {
     store.resetSelectors();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('tags$', () => {
     it('should return all tags from the store', (done) => {
       service.tags$.subscribe((tags) => {

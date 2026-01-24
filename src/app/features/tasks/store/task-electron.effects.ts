@@ -63,6 +63,7 @@ export class TaskElectronEffects {
             0, // currentPomodoroSessionTime - legacy, always 0
             isFocusModeEnabled,
             currentFocusSessionTime,
+            this._focusModeService.mode(),
           );
         });
     });
@@ -96,6 +97,7 @@ export class TaskElectronEffects {
             0, // currentPomodoroSessionTime - legacy, always 0
             isFocusModeEnabled,
             currentFocusSessionTime,
+            this._focusModeService.mode(),
           );
         }),
       ),

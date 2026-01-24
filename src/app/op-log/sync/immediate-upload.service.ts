@@ -1,11 +1,13 @@
 import { inject, Injectable, OnDestroy } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
-import { debounceTime, exhaustMap, filter } from 'rxjs/operators';
+import { debounceTime, exhaustMap, filter, take } from 'rxjs/operators';
 import { isOnline } from '../../util/is-online';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { isFileBasedProvider, isOperationSyncCapable } from './operation-sync.util';
 import { OpLog } from '../../core/log';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { handleStorageQuotaError } from './sync-error-utils';
 
 const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 
@@ -46,10 +48,23 @@ const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 export class ImmediateUploadService implements OnDestroy {
   private _providerManager = inject(SyncProviderManager);
   private _syncService = inject(OperationLogSyncService);
+  private _dataInitStateService = inject(DataInitStateService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
   private _isInitialized = false;
+  private _pendingTriggerCount = 0;
+
+  constructor() {
+    // Initialize only after data is loaded to avoid race condition where
+    // upload attempts happen before sync config is loaded from IndexedDB.
+    // This prevents 404 errors to default baseUrl during app startup.
+    this._dataInitStateService.isAllDataLoadedInitially$
+      .pipe(filter(Boolean), take(1))
+      .subscribe(() => {
+        this.initialize();
+      });
+  }
 
   /**
    * Initializes the immediate upload pipeline.
@@ -69,6 +84,15 @@ export class ImmediateUploadService implements OnDestroy {
       .subscribe();
 
     this._isInitialized = true;
+
+    if (this._pendingTriggerCount > 0) {
+      OpLog.verbose(
+        `ImmediateUploadService: Replaying ${this._pendingTriggerCount} queued trigger(s)`,
+      );
+      this._uploadTrigger$.next();
+      this._pendingTriggerCount = 0;
+    }
+
     OpLog.verbose('ImmediateUploadService: Initialized');
   }
 
@@ -79,6 +103,8 @@ export class ImmediateUploadService implements OnDestroy {
   trigger(): void {
     if (this._isInitialized) {
       this._uploadTrigger$.next();
+    } else {
+      this._pendingTriggerCount++;
     }
   }
 
@@ -187,7 +213,11 @@ export class ImmediateUploadService implements OnDestroy {
         );
       }
     } catch (e) {
-      // Silent failure - normal sync will pick up pending ops
+      // Check for storage quota exceeded - this requires user action
+      const message = e instanceof Error ? e.message : 'Unknown error';
+      handleStorageQuotaError(message);
+
+      // Silent failure for other errors - normal sync will pick up pending ops
       OpLog.warn(
         'ImmediateUploadService: Immediate upload failed, will retry on normal sync',
         e,

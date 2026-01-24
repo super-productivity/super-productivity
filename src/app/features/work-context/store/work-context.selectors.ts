@@ -53,7 +53,7 @@ const computeOrderedTaskIdsForToday = (
   const tasksForToday: string[] = [];
   for (const taskId of Object.keys(taskEntities)) {
     const task = taskEntities[taskId];
-    if (task && !task.parentId) {
+    if (task) {
       // Check dueDay first (primary source of truth)
       if (task.dueDay === todayStr) {
         tasksForToday.push(taskId);
@@ -70,14 +70,26 @@ const computeOrderedTaskIdsForToday = (
     return [];
   }
 
+  // Filter out subtasks whose parent is also in TODAY
+  // (subtasks should only appear nested under their parent, not as separate top-level items)
+  const tasksForTodaySet = new Set(tasksForToday);
+  const topLevelTasksForToday = tasksForToday.filter((taskId) => {
+    const task = taskEntities[taskId];
+    return !task?.parentId || !tasksForTodaySet.has(task.parentId);
+  });
+
+  if (topLevelTasksForToday.length === 0) {
+    return [];
+  }
+
   // Order tasks according to TODAY_TAG.taskIds, with unordered tasks appended
   // PERF: Use Map for O(1) lookup instead of indexOf which is O(n) per task
-  const tasksForTodaySet = new Set(tasksForToday);
+  const topLevelTasksSet = new Set(topLevelTasksForToday);
   const storedOrderMap = new Map(storedOrder.map((id, idx) => [id, idx]));
   const orderedTasks: (string | undefined)[] = [];
   const unorderedTasks: string[] = [];
 
-  for (const taskId of tasksForToday) {
+  for (const taskId of topLevelTasksForToday) {
     const orderIndex = storedOrderMap.get(taskId);
     if (orderIndex !== undefined) {
       orderedTasks[orderIndex] = taskId;
@@ -88,7 +100,7 @@ const computeOrderedTaskIdsForToday = (
 
   return [
     ...orderedTasks.filter(
-      (id): id is string => id !== undefined && tasksForTodaySet.has(id),
+      (id): id is string => id !== undefined && topLevelTasksSet.has(id),
     ),
     ...unorderedTasks,
   ];

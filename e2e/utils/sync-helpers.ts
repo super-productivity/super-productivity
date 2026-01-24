@@ -165,6 +165,8 @@ export const waitForSyncComplete = async (
     // The icon is small (10px) and absolutely positioned, so use count() check
     const syncStateIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
     if ((await syncStateIcon.count()) > 0) {
+      // Add extra wait to ensure IndexedDB writes complete and state settles
+      await page.waitForTimeout(500);
       return 'success';
     }
 
@@ -178,6 +180,8 @@ export const waitForSyncComplete = async (
         // Final check - make sure sync button is still there and no error shown
         const syncBtnVisible = await syncPage.syncBtn.isVisible().catch(() => false);
         if (syncBtnVisible) {
+          // Add extra wait to ensure IndexedDB writes complete and state settles
+          await page.waitForTimeout(500);
           return 'success';
         }
       }
@@ -216,6 +220,25 @@ export const waitForSync = async (
   page: Page,
   syncPage: SyncPage,
 ): Promise<'success' | 'conflict' | void> => waitForSyncComplete(page, syncPage);
+
+/**
+ * Waits for archive operations to complete and persist.
+ * Archive operations (finish day, archive task) involve async IndexedDB writes
+ * that may not complete immediately. This helper ensures state is stable before proceeding.
+ *
+ * @param page - Playwright page instance
+ * @param waitMs - Time to wait in milliseconds (default: 1000ms)
+ */
+export const waitForArchivePersistence = async (
+  page: Page,
+  waitMs: number = 1000,
+): Promise<void> => {
+  // Wait for IndexedDB operations to complete
+  await page.waitForTimeout(waitMs);
+
+  // Additional check: wait for any pending micro-tasks/animations
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
+};
 
 /**
  * Simulates network failure by aborting all WebDAV requests.

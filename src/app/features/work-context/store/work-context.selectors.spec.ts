@@ -350,7 +350,7 @@ describe('workContext selectors', () => {
       expect(result).toEqual(['task1', 'task2']);
     });
 
-    it('should exclude subtasks', () => {
+    it('should exclude subtasks when parent is also in TODAY', () => {
       const parentTask = {
         id: 'parent',
         tagIds: [],
@@ -374,7 +374,34 @@ describe('workContext selectors', () => {
       const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
 
       const result = selectTodayTaskIds.projector(tagState, taskState);
-      expect(result).toEqual(['parent']); // subtask excluded
+      expect(result).toEqual(['parent']); // subtask excluded - shown nested under parent
+    });
+
+    it('should include subtasks as top-level when parent is NOT in TODAY', () => {
+      const parentTask = {
+        id: 'parent',
+        tagIds: [],
+        dueDay: null, // Parent not in TODAY
+        subTaskIds: ['subtask1'],
+      } as Partial<TaskCopy> as TaskCopy;
+      const subtask = {
+        id: 'subtask1',
+        tagIds: [],
+        dueDay: todayStr, // Subtask in TODAY
+        subTaskIds: [],
+        parentId: 'parent',
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const todayTagWithTasks = {
+        ...TODAY_TAG,
+        taskIds: ['subtask1'],
+      };
+
+      const tagState = fakeEntityStateFromArray([todayTagWithTasks]);
+      const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
+
+      const result = selectTodayTaskIds.projector(tagState, taskState);
+      expect(result).toEqual(['subtask1']); // subtask included as top-level item
     });
 
     it('should filter out deleted tasks (taskIds referencing non-existent tasks)', () => {

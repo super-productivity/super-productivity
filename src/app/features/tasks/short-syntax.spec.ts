@@ -163,6 +163,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           // timeSpent: 7200000,
@@ -184,6 +185,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title whatever',
           // timeSpent: 7200000,
@@ -205,6 +207,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title whatever',
           timeEstimate: 5400000,
@@ -222,6 +225,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title whatever',
           // timeSpent: 7200000,
@@ -252,6 +256,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Task description',
           timeSpentOnDay: {
@@ -431,6 +436,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: '#134 Fun title',
           tagIds: ['blu_id'],
@@ -459,6 +465,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id'],
@@ -477,6 +484,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id', 'hihi_id'],
@@ -495,6 +503,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id', 'A_id'],
@@ -533,6 +542,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title#blu',
           tagIds: ['bla_id'],
@@ -552,6 +562,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id', 'A', 'multi_word_id', 'hihi_id'],
@@ -582,6 +593,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['idontexist'],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id'],
@@ -612,6 +624,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           tagIds: ['blu_id', 'bla_id'],
@@ -642,6 +655,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['asd'],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'asd',
         },
@@ -663,6 +677,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['someNewTag3'],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Test tag error',
           tagIds: ['testing_id'],
@@ -693,6 +708,7 @@ describe('shortSyntax', () => {
       expect(r).toEqual({
         newTagTitles: ['idontexist'],
         projectId: undefined,
+        attachments: [],
         remindAt: null,
         taskChanges: { tagIds: ['blu_id'], title: 'Fun title' },
       });
@@ -725,6 +741,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Test tag',
         },
@@ -746,6 +763,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['testing'],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Test tag',
         },
@@ -768,6 +786,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Test tag',
           tagIds: ['blu_id', 'testing_id'],
@@ -797,6 +816,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           // timeSpent: 7200000,
@@ -819,6 +839,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           timeSpentOnDay: {
@@ -840,6 +861,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title 10m/1h',
           tagIds: ['blu_id'],
@@ -857,6 +879,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title #blu',
           timeSpentOnDay: {
@@ -893,6 +916,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
         },
@@ -927,6 +951,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           // timeSpent: 7200000,
@@ -948,6 +973,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: undefined,
+        attachments: [],
         taskChanges: {
           title: 'Fun title +ProjectEasyShort',
           // timeSpent: 7200000,
@@ -969,6 +995,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title 10m/1h',
         },
@@ -985,6 +1012,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
         },
@@ -1001,6 +1029,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'SomeProjectID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
         },
@@ -1017,6 +1046,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'SomeProjectID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
         },
@@ -1033,6 +1063,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'SomeProjectID',
+        attachments: [],
         taskChanges: {
           title: 'Other fun title',
         },
@@ -1061,6 +1092,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'print',
+        attachments: [],
         taskChanges: {
           title: 'Task',
         },
@@ -1085,6 +1117,7 @@ describe('shortSyntax', () => {
         newTagTitles: [],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Fun title',
           // timeSpent: 7200000,
@@ -1112,6 +1145,7 @@ describe('shortSyntax', () => {
         newTagTitles: ['tag'],
         remindAt: null,
         projectId: 'ProjectEasyShortID',
+        attachments: [],
         taskChanges: {
           title: 'Some task',
           // timeSpent: 7200000,
@@ -1315,5 +1349,203 @@ describe('shortSyntax', () => {
         expect(result?.taskChanges.timeSpentOnDay?.[getDbDateStr()]).toBe(timeSpentOnDay);
       });
     }
+  });
+
+  describe('URL attachments', () => {
+    it('should extract single URL with https protocol', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.attachments[0].type).toBe('LINK');
+      expect(r?.attachments[0].icon).toBe('bookmark');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should extract single URL with http protocol', () => {
+      const t = {
+        ...TASK,
+        title: 'Task http://example.com',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('http://example.com');
+      expect(r?.attachments[0].type).toBe('LINK');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should extract single URL with file:// protocol', () => {
+      const t = {
+        ...TASK,
+        title: 'Task file:///path/to/document.pdf',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('file:///path/to/document.pdf');
+      expect(r?.attachments[0].type).toBe('FILE');
+      expect(r?.attachments[0].icon).toBe('insert_drive_file');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should extract single URL with www prefix', () => {
+      const t = {
+        ...TASK,
+        title: 'Task www.example.com',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('//www.example.com');
+      expect(r?.attachments[0].type).toBe('LINK');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should handle multiple URLs with mixed protocols', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com www.test.org file:///home/doc.txt',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(3);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.attachments[0].type).toBe('LINK');
+      expect(r?.attachments[1].path).toBe('//www.test.org');
+      expect(r?.attachments[1].type).toBe('LINK');
+      expect(r?.attachments[2].path).toBe('file:///home/doc.txt');
+      expect(r?.attachments[2].type).toBe('FILE');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should detect image URLs as IMG type for https', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com/image.png',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].type).toBe('IMG');
+      expect(r?.attachments[0].icon).toBe('image');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should detect image URLs as IMG type for file://', () => {
+      const t = {
+        ...TASK,
+        title: 'Task file:///path/to/image.jpg',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].type).toBe('IMG');
+      expect(r?.attachments[0].icon).toBe('image');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should work correctly with combined short syntax', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com @tomorrow #urgent 30m',
+      };
+      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.taskChanges.title).toBe('Task');
+      expect(r?.taskChanges.timeEstimate).toBe(1800000);
+      expect(r?.newTagTitles).toContain('urgent');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+    });
+
+    it('should clean URLs from title properly', () => {
+      const t = {
+        ...TASK,
+        title: 'Task with https://example.com in middle',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.taskChanges.title).toBe('Task with in middle');
+      expect(r?.attachments.length).toBe(1);
+    });
+
+    it('should handle Windows file paths', () => {
+      const t = {
+        ...TASK,
+        title: 'Task file:///C:/Users/name/document.pdf',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('file:///C:/Users/name/document.pdf');
+      expect(r?.attachments[0].type).toBe('FILE');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should handle Unix file paths', () => {
+      const t = {
+        ...TASK,
+        title: 'Task file:///home/user/document.txt',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('file:///home/user/document.txt');
+      expect(r?.attachments[0].type).toBe('FILE');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should not parse URLs for issue tasks', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+        issueId: 'ISSUE-123',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeUndefined();
+    });
+
+    it('should handle URLs with trailing punctuation', () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com.',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.taskChanges.title).toBe('Check .');
+    });
+
+    it('should extract basename as attachment title', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com/path/to/file.pdf',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].title).toBe('file');
+    });
+
+    it('should extract basename correctly for URLs with trailing slash', () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com/projects/',
+      };
+      const r = shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com/projects/');
+      expect(r?.attachments[0].title).toBe('projects');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
   });
 });

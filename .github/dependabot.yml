@@ -1,19 +1,67 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: 'npm' # See documentation for possible values
-    directory: '/' # Location of package manifests
+  # ==========================================
+  # npm Dependencies (Monthly Updates)
+  # ==========================================
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
       interval: 'monthly'
-  #  - package-ecosystem: "npm" # See documentation for possible values
-  #    directory: "/tools/schematics/" # Location of package manifests
-  #    schedule:
-  #      interval: "monthly"
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Europe/Berlin'
+
+    open-pull-requests-limit: 10
+
+    reviewers:
+      - 'johannesjo'
+
+    labels:
+      - 'dependencies'
+      - 'npm'
+
+    commit-message:
+      prefix: 'chore(deps)'
+
+  # ==========================================
+  # GitHub Actions (Weekly Updates - SECURITY)
+  # ==========================================
+  # Automatically updates pinned action SHAs when new versions release
+  # This is critical for security: keeps SHA pins up-to-date with patches
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
-      interval: monthly
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Europe/Berlin'
+
+    # Limit concurrent PRs to avoid overwhelming maintainers
+    open-pull-requests-limit: 5
+
+    # Require @johannesjo approval (matches CODEOWNERS)
+    reviewers:
+      - 'johannesjo'
+
+    # Label PRs for easy filtering and security awareness
+    labels:
+      - 'dependencies'
+      - 'security'
+      - 'github-actions'
+
+    # Consistent commit message format
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+
+    # Group minor and patch updates together to reduce PR noise
+    groups:
+      github-actions-minor:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'

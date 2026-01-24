@@ -49,6 +49,24 @@
       padding: 0;
       margin: 0;
     }
+
+    // Active state styling - reuse magic side nav theme variables
+    &.active {
+      background: var(--sidenav-item-active-bg);
+      color: var(--sidenav-active-text);
+      box-shadow: var(--whiteframe-shadow-1dp);
+
+      mat-icon {
+        color: var(--sidenav-active-text);
+      }
+
+      // Maintain active state on hover/focus
+      &:hover,
+      &:focus {
+        background: var(--sidenav-item-active-bg);
+        color: var(--sidenav-active-text);
+      }
+    }
   }
 
   .add-task-button {
@@ -84,6 +102,12 @@
       height: 28px;
     }
   }
+}
+
+// iOS-specific: remove double safe-area padding
+// Body already handles safe area, so nav doesn't need its own
+:host-context(.isIOS) .mobile-bottom-nav {
+  padding-bottom: 0;
 }
 
 // Material Design touch target improvements

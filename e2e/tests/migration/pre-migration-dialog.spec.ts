@@ -64,10 +64,7 @@ test.describe('@migration Pre-migration Dialog', () => {
     }
   });
 
-  test.skip('app should persist data across page reload', async ({
-    page,
-    workViewPage,
-  }) => {
+  test('app should persist data across page reload', async ({ page, workViewPage }) => {
     // FIXME: This test is skipped due to a known task persistence issue.
     // See work-view.spec.ts for the same skipped test with more details.
     //
@@ -85,18 +82,31 @@ test.describe('@migration Pre-migration Dialog', () => {
     await expect(page.locator('task-title').first()).toContainText(taskTitle);
 
     // Wait for persistence to complete before reloading
+    // NgRx effects write outside Angular's zone, so we need an explicit wait
     await page.waitForTimeout(1000);
 
     // Reload the page
     await page.reload();
-    await page.waitForLoadState('networkidle');
     await workViewPage.waitForTaskList();
 
-    // Wait for tasks to be visible
-    await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
+    // Re-define task locator after reload to avoid stale element reference
+    const allTasks = page.locator('task');
+    const taskCount = await allTasks.count();
 
-    // Verify task persisted
-    await expect(page.locator('task-title').first()).toContainText(taskTitle);
+    if (taskCount === 0) {
+      // If no active tasks, check if task might be in done section
+      const doneTasksToggle = page.locator('done-tasks');
+      if (await doneTasksToggle.isVisible()) {
+        await doneTasksToggle.click();
+        await page.waitForTimeout(500);
+      }
+    }
+
+    // Verify task persisted after reload
+    const finalTask = page.locator('task').first();
+    await expect(finalTask).toBeVisible({ timeout: 10000 });
+    const finalTaskTitle = finalTask.locator('task-title');
+    await expect(finalTaskTitle).toContainText(taskTitle);
   });
 
   test('app should handle fresh start correctly', async ({ browser, baseURL }) => {

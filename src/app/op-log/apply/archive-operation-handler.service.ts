@@ -1,8 +1,6 @@
 import { inject, Injectable, Injector } from '@angular/core';
-import { Update } from '@ngrx/entity';
 import { Action } from '@ngrx/store';
 import { PersistentAction } from '../core/persistent-action.interface';
-import { Task } from '../../features/tasks/task.model';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   compressArchive,
@@ -241,6 +239,10 @@ export class ArchiveOperationHandler {
       return;
     }
 
+    // Yield after hasTask() check to prevent blocking the main thread
+    // hasTask() loads the entire archive from IndexedDB
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     await taskArchiveService.updateTask(id as string, changes, {
       isSkipDispatch: true,
       isIgnoreDBLock: true,
@@ -262,15 +264,19 @@ export class ArchiveOperationHandler {
       .tasks;
     const taskArchiveService = this._getTaskArchiveService();
 
-    // Filter to only tasks that exist in archive
-    const archiveUpdates: Update<Task>[] = [];
-    for (const update of taskUpdates) {
-      if (await taskArchiveService.hasTask(update.id as string)) {
-        archiveUpdates.push(update);
-      }
-    }
+    // Use batch method - loads archives once for all tasks
+    // Performance: 50 tasks = 2 IndexedDB reads (vs 100 with per-task hasTask())
+    const taskIds = taskUpdates.map((u) => u.id as string);
+    const existenceMap = await taskArchiveService.hasTasksBatch(taskIds);
+
+    const archiveUpdates = taskUpdates.filter((update) =>
+      existenceMap.get(update.id as string),
+    );
 
     if (archiveUpdates.length > 0) {
+      // Yield before writing to prevent UI blocking
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
       await taskArchiveService.updateTasks(archiveUpdates, {
         isSkipDispatch: true,
         isIgnoreDBLock: true,

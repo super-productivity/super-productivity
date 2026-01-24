@@ -28,7 +28,7 @@ import { GlobalConfigService } from '../../../features/config/global-config.serv
         mat-icon-button
         matTooltip="{{ T.MH.SCHEDULE | translate }}"
       >
-        <mat-icon svgIcon="early_on"></mat-icon>
+        <mat-icon>schedule</mat-icon>
       </button>
     }
 

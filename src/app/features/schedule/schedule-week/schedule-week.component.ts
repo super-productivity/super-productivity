@@ -28,6 +28,7 @@ import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
@@ -57,6 +58,7 @@ const D_HOURS = 24;
     '[class.is-not-dragging]': '!isDragging()',
     '[class.is-resizing-event]': 'isAnyEventResizing()',
     '[class]': 'dragEventTypeClass()',
+    '[attr.data-horizontal-scroll]': 'isHorizontalScrollMode() || null',
   },
 })
 export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -65,11 +67,13 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
   private _translateService = inject(TranslateService);
 
   isInPanel = input<boolean>(false);
+  isHorizontalScrollMode = input<boolean>(false);
   events = input<ScheduleEvent[] | null>([]);
   beyondBudget = input<ScheduleEvent[][] | null>([]);
   daysToShow = input<string[]>([]);
   workStartEnd = input<{ workStartRow: number; workEndRow: number } | null>(null);
-  currentTimeRow = input<number>(0);
+  currentTimeRow = input<number | null>(null);
+  todayDateStr = input<string | undefined>(undefined);
   isCtrlPressed = signal<boolean>(false);
   isTaskDragActive = input<boolean>(false);
 
@@ -330,7 +334,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!dayStr) {
       return '';
     }
-    const date = new Date(dayStr);
+    const date = parseDbDateStr(dayStr);
     if (Number.isNaN(date.getTime())) {
       return dayStr;
     }

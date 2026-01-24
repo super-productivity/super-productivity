@@ -1,0 +1,78 @@
+# CODEOWNERS - Define code ownership for security-critical files
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Changes to files listed below require approval from @johannesjo
+# This protects against unauthorized workflow modifications and supply chain attacks
+
+# ==========================================
+# GitHub Actions Workflows (CRITICAL)
+# ==========================================
+# All workflow changes require owner approval to prevent:
+# - Secret exfiltration via workflow modification
+# - Malicious deployment to production
+# - Supply chain attacks on users
+/.github/workflows/*.yml @johannesjo
+/.github/workflows/*.yaml @johannesjo
+
+# CODEOWNERS file itself (prevent removal of protections)
+/.github/CODEOWNERS @johannesjo
+
+# ==========================================
+# Build & Deployment Configuration (HIGH)
+# ==========================================
+# Electron application entry point and build config
+/electron/ @johannesjo
+
+# Docker deployment configuration
+/Dockerfile @johannesjo
+/docker-entrypoint.sh @johannesjo
+/docker-compose*.yml @johannesjo
+/docker-compose*.yaml @johannesjo
+
+# Mobile app build configuration
+/android/ @johannesjo
+/ios/ @johannesjo
+/capacitor.config.ts @johannesjo
+
+# Electron Builder configuration (code signing, auto-update)
+/build/ @johannesjo
+/electron-builder*.yml @johannesjo
+/electron-builder*.yaml @johannesjo
+
+# ==========================================
+# Package Management (HIGH)
+# ==========================================
+# Dependencies and lock files (supply chain risk)
+/package.json @johannesjo
+/package-lock.json @johannesjo
+
+# ==========================================
+# Security & Environment (HIGH)
+# ==========================================
+# Security documentation
+/SECURITY.md @johannesjo
+
+# Environment configuration
+/.env.example @johannesjo
+/tools/load-env.js @johannesjo
+
+# ==========================================
+# Web Server Configuration (MEDIUM)
+# ==========================================
+# Nginx reverse proxy and web server config
+/nginx/ @johannesjo
+
+# ==========================================
+# Git Configuration (MEDIUM)
+# ==========================================
+# Git hooks and configuration
+/.husky/ @johannesjo
+/.gitignore @johannesjo
+
+# ==========================================
+# Documentation Changes (LOW - Optional)
+# ==========================================
+# Uncomment if you want to review all README changes
+# /README.md @johannesjo
+# /CLAUDE.md @johannesjo
+# /docs/ @johannesjo

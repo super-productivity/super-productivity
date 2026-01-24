@@ -289,10 +289,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
       return;
     }
 
-    const isConfirmBeforeTaskDelete =
-      this._globalConfigService.cfg()?.misc?.isConfirmBeforeTaskDelete ?? true;
+    const isConfirmBeforeDelete =
+      this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
-    if (isConfirmBeforeTaskDelete) {
+    if (isConfirmBeforeDelete) {
       this._matDialog
         .open(DialogConfirmComponent, {
           data: {

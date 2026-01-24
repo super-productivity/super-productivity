@@ -42,10 +42,6 @@ describe('DialogPomodoroSettingsComponent', () => {
     });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should initialize model with current pomodoro config', () => {
       expect(component.model.duration).toBe(defaultPomodoroConfig.duration);

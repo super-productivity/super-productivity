@@ -38,10 +38,6 @@ describe('CapacitorNotificationService', () => {
     service = TestBed.inject(CapacitorNotificationService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('isAvailable', () => {
     it('should return false when scheduledNotifications capability is false', () => {
       expect(service.isAvailable).toBe(false);

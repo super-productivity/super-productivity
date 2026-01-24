@@ -74,11 +74,18 @@ body.isDarkTheme {
 .cdk-overlay-pane.mat-mdc-dialog-panel {
   @include media-queries.mq(xs, max) {
     max-width: 96vw !important;
+    max-height: calc(
+      95vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    ) !important;
   }
 }
 
 body .mat-mdc-dialog-content {
   overflow: auto;
+  // Let content fill available space within the constrained panel
+  // Panel already has max-height, so content doesn't need its own
+  flex: 1 1 auto;
+  min-height: 0; // Important for flex scrolling to work
 
   mat-form-field {
     display: block;
@@ -87,6 +94,9 @@ body .mat-mdc-dialog-content {
 
 body .mat-mdc-dialog-surface {
   overflow: visible;
+  // Enable flex layout for proper content scrolling
+  display: flex;
+  flex-direction: column;
 }
 
 .mat-mdc-dialog-panel {
@@ -109,15 +119,15 @@ body .mat-mdc-dialog-surface {
 
 .big {
   height: auto;
-  max-height: 100vh !important;
-  // mobile viewport bug fix
-  max-height: -webkit-fill-available;
   width: 100% !important;
   max-width: none !important;
+  max-height: calc(
+    95vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  ) !important;
 
+  // Desktop gets some breathing room
   @include media-queries.mq(xs) {
     margin: var(--s2);
-    max-height: 95vh !important;
   }
 }
 

@@ -52,7 +52,11 @@ export class TagPage extends BasePage {
 
     // Wait for create tag dialog (uses "Tag Name" label in sidebar create dialog)
     const tagNameInput = this.page.getByRole('textbox', { name: 'Tag Name' });
-    await tagNameInput.waitFor({ state: 'visible', timeout: 5000 });
+    await tagNameInput.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Add a small delay for Angular form initialization
+    await this.page.waitForTimeout(500);
+
     await tagNameInput.fill(tagName);
 
     // Submit the form - click the Save button
@@ -81,8 +85,11 @@ export class TagPage extends BasePage {
     await toggleTagsBtn.waitFor({ state: 'visible', timeout: 5000 });
     await toggleTagsBtn.click();
 
-    // Wait for tag submenu to appear
-    await this.page.waitForTimeout(300);
+    // Wait for tag submenu to appear by waiting for any submenu button
+    await this.page
+      .locator('.mat-mdc-menu-panel')
+      .nth(1)
+      .waitFor({ state: 'visible', timeout: 3000 });
 
     // Find and click the tag in the submenu
     const tagOption = this.page.locator('.mat-mdc-menu-content button', {
@@ -115,6 +122,10 @@ export class TagPage extends BasePage {
 
     // Wait for all overlays to close to ensure clean state for next operation
     await this.ensureOverlaysClosed();
+
+    // Wait for the tag to actually appear on the task
+    const tagOnTask = this.getTagOnTask(task, tagName);
+    await tagOnTask.waitFor({ state: 'visible', timeout: 5000 });
   }
 
   /**

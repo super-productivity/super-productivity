@@ -23,7 +23,24 @@ test.describe.serial('Plugin Visibility', () => {
     await page.waitForSelector(ROUTER_WRAPPER, { state: 'visible' });
 
     const results = await page.evaluate(() => {
-      const pageResults: any = {};
+      const pageResults: {
+        hasPluginSection: boolean;
+        hasPluginManagement: boolean;
+        hasCollapsible: boolean;
+        pluginHeading?: Element;
+        headingText: string;
+        sectionCount: number;
+        sectionClasses: string[];
+        hasConfigPage: boolean;
+      } = {
+        hasPluginSection: false,
+        hasPluginManagement: false,
+        hasCollapsible: false,
+        headingText: '',
+        sectionCount: 0,
+        sectionClasses: [],
+        hasConfigPage: false,
+      };
 
       // Check for plugin section
       pageResults.hasPluginSection = !!document.querySelector('.plugin-section');

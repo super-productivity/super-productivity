@@ -70,11 +70,6 @@ describe('ReflectionNoteComponent', () => {
     });
   };
 
-  it('should create', () => {
-    createComponent();
-    expect(component).toBeTruthy();
-  });
-
   describe('trailing space bug fix', () => {
     it('should preserve trailing spaces in inputText while typing', fakeAsync(() => {
       createComponent();

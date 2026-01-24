@@ -88,10 +88,6 @@ describe('TaskShortcutService', () => {
     service = TestBed.inject(TaskShortcutService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('handleTaskShortcuts - togglePlay (Y key)', () => {
     describe('when focused task exists', () => {
       it('should delegate to focused task component togglePlayPause method', () => {

@@ -1,9 +1,8 @@
-import { expect, test } from '../../fixtures/test.fixture';
+import { expect, test } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { ProjectPage } from '../../pages/project.page';
 import { waitForStatePersistence } from '../../utils/waits';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   createSyncFolder,
   generateSyncFolderName,
@@ -16,17 +15,9 @@ import {
 
 const WEBDAV_TIMESTAMP_DELAY_MS = 2000;
 
-test.describe('WebDAV Sync Expansion', () => {
+test.describe('@webdav WebDAV Sync Expansion', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   test('should sync projects', async ({ browser, baseURL, request }) => {
     test.slow();

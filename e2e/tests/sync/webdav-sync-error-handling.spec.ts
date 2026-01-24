@@ -1,7 +1,6 @@
-import { test, expect } from '../../fixtures/test.fixture';
+import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   createUniqueSyncFolder,
@@ -13,17 +12,9 @@ import {
 } from '../../utils/sync-helpers';
 import { waitForStatePersistence } from '../../utils/waits';
 
-test.describe('WebDAV Sync Error Handling', () => {
+test.describe('@webdav WebDAV Sync Error Handling', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   test('should handle server unavailable during sync', async ({
     browser,

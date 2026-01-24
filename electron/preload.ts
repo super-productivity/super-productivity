@@ -191,6 +191,7 @@ const ea: ElectronAPI = {
     currentPomodoroSessionTime,
     isFocusModeEnabled?,
     currentFocusSessionTime?,
+    focusModeMode?,
   ) =>
     _send(
       'CURRENT_TASK_UPDATED',
@@ -199,6 +200,7 @@ const ea: ElectronAPI = {
       currentPomodoroSessionTime,
       isFocusModeEnabled,
       currentFocusSessionTime,
+      focusModeMode,
     ),
 
   exec: (command: string) => _send('EXEC', command),

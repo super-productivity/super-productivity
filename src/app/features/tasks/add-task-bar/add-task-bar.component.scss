@@ -33,7 +33,8 @@
 
 :host-context(.isTouchOnly).global {
   top: auto;
-  bottom: var(--s);
+  bottom: calc(var(--keyboard-height) + var(--s));
+  transition: bottom 0.3s ease-out;
 }
 
 .add-task-container {

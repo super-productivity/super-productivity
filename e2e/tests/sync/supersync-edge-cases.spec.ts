@@ -636,18 +636,20 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       // 4. Client A clicks Undo (snackbar should be visible)
       // The snackbar appears for 5 seconds with an "Undo" action
       // Use snack-custom .action selector (app uses custom snackbar component)
-      const undoButton = clientA.page.locator('snack-custom button.action');
-      await undoButton.waitFor({ state: 'visible', timeout: 5000 });
+      const undoButton = clientA.page.locator(
+        'snack-custom button.action, .mat-mdc-snack-bar-container button',
+      );
+      await undoButton.waitFor({ state: 'visible', timeout: 8000 });
       await undoButton.click();
 
-      // Wait for undo to complete
-      await clientA.page.waitForTimeout(500);
+      // Wait for undo to complete and persist
+      await clientA.page.waitForTimeout(1500);
 
       // Verify task is restored locally on A
       const restoredTaskA = clientA.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
-      await expect(restoredTaskA).toBeVisible({ timeout: 5000 });
+      await expect(restoredTaskA).toBeVisible({ timeout: 10000 });
 
       // 5. Client A syncs
       await clientA.sync.syncAndWait();
@@ -663,7 +665,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
-      await expect(taskLocatorB).toBeVisible({ timeout: 10000 });
+      await expect(taskLocatorB).toBeVisible({ timeout: 15000 });
 
       // Verify both clients have exactly the same task count
       const countA = await clientA.page.locator(`task:has-text("${taskName}")`).count();

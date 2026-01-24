@@ -35,6 +35,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      - NODE_ENV=development
       - PORT=1900
       - TEST_MODE=true
       - TEST_MODE_CONFIRM=yes-i-understand-the-risks

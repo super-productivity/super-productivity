@@ -90,11 +90,26 @@ export class CapacitorReminderService {
     const now = Date.now();
     const triggerAt = options.triggerAtMs <= now ? now + 1000 : options.triggerAtMs;
 
+    Log.log('📱 CapacitorReminderService.scheduleReminder called', {
+      notificationId: options.notificationId,
+      title: options.title.substring(0, 30),
+      triggerAt: new Date(triggerAt).toISOString(),
+      triggerInMs: triggerAt - now,
+      triggerInMinutes: Math.round((triggerAt - now) / 1000 / 60),
+      isAndroidWebView: IS_ANDROID_WEB_VIEW,
+      hasNativeScheduler: !!androidInterface?.scheduleNativeReminder,
+    });
+
     // On Android, use native AlarmManager for precision
     if (IS_ANDROID_WEB_VIEW && androidInterface.scheduleNativeReminder) {
       try {
         const useAlarmStyle =
           this._globalConfigService.cfg()?.reminder?.useAlarmStyleReminders ?? false;
+        Log.log('🔔 Calling androidInterface.scheduleNativeReminder', {
+          notificationId: options.notificationId,
+          useAlarmStyle,
+        });
+
         androidInterface.scheduleNativeReminder(
           options.notificationId,
           options.reminderId,
@@ -104,14 +119,18 @@ export class CapacitorReminderService {
           triggerAt,
           useAlarmStyle,
         );
-        Log.log('CapacitorReminderService: Android reminder scheduled', {
+
+        Log.log('✅ CapacitorReminderService: Android reminder scheduled successfully', {
           notificationId: options.notificationId,
           title: options.title,
           triggerAt: new Date(triggerAt).toISOString(),
         });
         return true;
       } catch (error) {
-        Log.err('CapacitorReminderService: Failed to schedule Android reminder', error);
+        Log.err(
+          '❌ CapacitorReminderService: Failed to schedule Android reminder',
+          error,
+        );
         return false;
       }
     }
@@ -174,16 +193,22 @@ export class CapacitorReminderService {
       return false;
     }
 
+    Log.log('🚫 CapacitorReminderService.cancelReminder called', {
+      notificationId,
+      isAndroidWebView: IS_ANDROID_WEB_VIEW,
+      hasNativeCanceller: !!androidInterface?.cancelNativeReminder,
+    });
+
     // On Android, use native cancellation
     if (IS_ANDROID_WEB_VIEW && androidInterface.cancelNativeReminder) {
       try {
         androidInterface.cancelNativeReminder(notificationId);
-        Log.log('CapacitorReminderService: Android reminder cancelled', {
+        Log.log('✅ CapacitorReminderService: Android reminder cancelled', {
           notificationId,
         });
         return true;
       } catch (error) {
-        Log.err('CapacitorReminderService: Failed to cancel Android reminder', error);
+        Log.err('❌ CapacitorReminderService: Failed to cancel Android reminder', error);
         return false;
       }
     }

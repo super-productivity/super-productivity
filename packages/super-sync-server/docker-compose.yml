@@ -16,7 +16,7 @@ x-logging: &default-logging
 
 services:
   supersync:
-    image: ${SUPERSYNC_IMAGE:-ghcr.io/johannesjo/supersync:latest}
+    image: ${SUPERSYNC_IMAGE:-ghcr.io/super-productivity/supersync:latest}
     container_name: supersync-server
     restart: always
     environment:

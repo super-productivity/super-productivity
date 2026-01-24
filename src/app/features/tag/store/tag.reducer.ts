@@ -107,11 +107,11 @@ export const computeOrderedTaskIdsForTag = (
   const storedOrder = tag.taskIds;
 
   // Find all tasks that have this tag in their tagIds (membership source of truth)
-  // Only include main tasks (not subtasks) since tag lists show parent tasks
+  // Include all tasks (including subtasks) that have this tag in their tagIds
   const tasksWithTag: string[] = [];
   for (const taskId of Object.keys(taskEntities)) {
     const task = taskEntities[taskId];
-    if (task && !task.parentId && task.tagIds?.includes(tagId)) {
+    if (task && task.tagIds?.includes(tagId)) {
       tasksWithTag.push(taskId);
     }
   }
@@ -120,14 +120,26 @@ export const computeOrderedTaskIdsForTag = (
     return [];
   }
 
+  // Filter out subtasks whose parent also has this tag
+  // (subtasks should only appear nested under their parent, not as separate top-level items)
+  const tasksWithTagSet = new Set(tasksWithTag);
+  const topLevelTasksWithTag = tasksWithTag.filter((taskId) => {
+    const task = taskEntities[taskId];
+    return !task?.parentId || !tasksWithTagSet.has(task.parentId);
+  });
+
+  if (topLevelTasksWithTag.length === 0) {
+    return [];
+  }
+
   // Order tasks according to stored order, with unordered tasks appended at end
   // PERF: Use Map for O(1) lookup instead of indexOf which is O(n) per task
   const orderedTasks: (string | undefined)[] = [];
   const unorderedTasks: string[] = [];
-  const tasksWithTagSet = new Set(tasksWithTag);
+  const topLevelTasksSet = new Set(topLevelTasksWithTag);
   const storedOrderMap = new Map(storedOrder.map((id, idx) => [id, idx]));
 
-  for (const taskId of tasksWithTag) {
+  for (const taskId of topLevelTasksWithTag) {
     const orderIndex = storedOrderMap.get(taskId);
     if (orderIndex !== undefined) {
       orderedTasks[orderIndex] = taskId;
@@ -140,7 +152,7 @@ export const computeOrderedTaskIdsForTag = (
   // Filter out undefined slots (stale IDs in stored order) and append unordered
   return [
     ...orderedTasks.filter(
-      (id): id is string => id !== undefined && tasksWithTagSet.has(id),
+      (id): id is string => id !== undefined && topLevelTasksSet.has(id),
     ),
     ...unorderedTasks,
   ];

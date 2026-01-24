@@ -22,10 +22,6 @@ describe('PluginI18nService', () => {
     service = TestBed.inject(PluginI18nService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('loadPluginTranslationsFromContent', () => {
     it('should load translations for multiple languages', () => {
       const translations = {

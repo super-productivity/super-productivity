@@ -52,10 +52,6 @@ describe('LayoutService', () => {
     mockTaskService = TestBed.inject(TaskService) as jasmine.SpyObj<TaskService>;
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('Focus restoration', () => {
     let mockTaskElement: HTMLElement;
 

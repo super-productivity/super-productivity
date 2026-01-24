@@ -96,6 +96,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
       }),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
       misc$: miscSubject,
+      tasks$: new BehaviorSubject({ defaultProjectId: null }),
     });
     const addTaskBarIssueSearchServiceSpy = jasmine.createSpyObj(
       'AddTaskBarIssueSearchService',

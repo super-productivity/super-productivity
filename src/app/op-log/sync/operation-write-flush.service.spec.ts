@@ -23,10 +23,6 @@ describe('OperationWriteFlushService', () => {
     service = TestBed.inject(OperationWriteFlushService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('flushPendingWrites', () => {
     it('should acquire the sp_op_log lock', async () => {
       await service.flushPendingWrites();

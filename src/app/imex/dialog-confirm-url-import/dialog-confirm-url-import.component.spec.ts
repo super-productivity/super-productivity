@@ -46,10 +46,6 @@ describe('ConfirmUrlImportDialogComponent', () => {
   });
 
   describe('component creation and initialization', () => {
-    it('should create', () => {
-      expect(component).toBeTruthy();
-    });
-
     it('should initialize with T constant', () => {
       expect(component.T).toBe(T);
     });

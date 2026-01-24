@@ -1,4 +1,4 @@
-import { fakeAsync, TestBed, tick } from '@angular/core/testing';
+import { fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
@@ -12,12 +12,18 @@ import { ActionType, OpType } from '../core/operation.types';
 import { CLOCK_DRIFT_THRESHOLD_MS } from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
 import { T } from '../../t.const';
+import { OperationEncryptionService } from './operation-encryption.service';
+import { SuperSyncStatusService } from './super-sync-status.service';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 
 describe('OperationLogDownloadService', () => {
   let service: OperationLogDownloadService;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
   let mockLockService: jasmine.SpyObj<LockService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
+  let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
+  let mockSuperSyncStatusService: jasmine.SpyObj<SuperSyncStatusService>;
+  let mockClientIdProvider: { loadClientId: jasmine.Spy };
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -26,17 +32,27 @@ describe('OperationLogDownloadService', () => {
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+    mockEncryptionService = jasmine.createSpyObj('OperationEncryptionService', [
+      'decryptOperations',
+    ]);
+    mockSuperSyncStatusService = jasmine.createSpyObj('SuperSyncStatusService', [
+      'markRemoteChecked',
+    ]);
+    mockClientIdProvider = {
+      loadClientId: jasmine
+        .createSpy('loadClientId')
+        .and.returnValue(Promise.resolve('test-client-id')),
+    };
 
     // Mock OpLog
     spyOn(OpLog, 'warn');
     spyOn(OpLog, 'normal');
 
     // Default mock implementations
-    mockLockService.request.and.callFake(
-      async (_name: string, fn: () => Promise<void>) => {
-        await fn();
-      },
-    );
+    // Note: Don't use async/await here as it breaks fakeAsync zone context
+    mockLockService.request.and.callFake((_name: string, fn: () => Promise<void>) => {
+      return fn();
+    });
     mockOpLogStore.getAppliedOpIds.and.returnValue(Promise.resolve(new Set<string>()));
     mockOpLogStore.hasSyncedOps.and.returnValue(Promise.resolve(false));
 
@@ -46,10 +62,15 @@ describe('OperationLogDownloadService', () => {
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
         { provide: LockService, useValue: mockLockService },
         { provide: SnackService, useValue: mockSnackService },
+        { provide: OperationEncryptionService, useValue: mockEncryptionService },
+        { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
       ],
     });
 
     service = TestBed.inject(OperationLogDownloadService);
+    // Reset the clock drift warning flag for each test
+    (service as any).hasWarnedClockDrift = false;
   });
 
   describe('downloadRemoteOps', () => {
@@ -92,7 +113,11 @@ describe('OperationLogDownloadService', () => {
 
       it('should detect and warn about clock drift after retry', fakeAsync(() => {
         const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000; // Threshold + 1 min
-        const serverCurrentTime = Date.now() - driftMs; // Server clock is behind
+        const initialTime = Date.now();
+        const serverCurrentTime = initialTime - driftMs; // Server clock is behind
+
+        // Spy on Date.now() to return consistent time during the test
+        spyOn(Date, 'now').and.returnValue(initialTime);
 
         mockApiProvider.downloadOps.and.returnValue(
           Promise.resolve({
@@ -108,7 +133,7 @@ describe('OperationLogDownloadService', () => {
                   entityType: 'TASK',
                   payload: {},
                   vectorClock: {},
-                  timestamp: Date.now(),
+                  timestamp: initialTime,
                   schemaVersion: 1,
                 },
               },
@@ -127,7 +152,7 @@ describe('OperationLogDownloadService', () => {
         expect(OpLog.warn).not.toHaveBeenCalled();
 
         // After 1 second retry, warning should appear
-        tick(1000);
+        flush(); // Flush all pending timers
 
         expect(OpLog.warn).toHaveBeenCalledWith(
           'OperationLogDownloadService: Clock drift detected',
@@ -232,7 +257,11 @@ describe('OperationLogDownloadService', () => {
 
       it('should only warn about clock drift once per session', fakeAsync(() => {
         const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000; // Threshold + 1 min
-        const serverCurrentTime = Date.now() - driftMs;
+        const initialTime = Date.now();
+        const serverCurrentTime = initialTime - driftMs;
+
+        // Spy on Date.now() to return consistent time during the test
+        spyOn(Date, 'now').and.returnValue(initialTime);
 
         mockApiProvider.downloadOps.and.returnValue(
           Promise.resolve({
@@ -248,7 +277,7 @@ describe('OperationLogDownloadService', () => {
                   entityType: 'TASK',
                   payload: {},
                   vectorClock: {},
-                  timestamp: Date.now(),
+                  timestamp: initialTime,
                   schemaVersion: 1,
                 },
               },
@@ -262,13 +291,13 @@ describe('OperationLogDownloadService', () => {
         // First call - should warn after retry
         service.downloadRemoteOps(mockApiProvider);
         tick(); // Resolve promises
-        tick(1000); // Wait for retry
+        flush(); // Flush all pending timers
         expect(OpLog.warn).toHaveBeenCalledTimes(1);
 
         // Second call - should NOT warn again
         service.downloadRemoteOps(mockApiProvider);
         tick(); // Resolve promises
-        tick(1000); // Wait for retry (if any)
+        flush(); // Flush all pending timers (if any)
         expect(OpLog.warn).toHaveBeenCalledTimes(1);
       }));
 
@@ -321,7 +350,11 @@ describe('OperationLogDownloadService', () => {
         // When server sends its current time and it differs significantly from
         // client time, we should warn about clock drift
         const driftMs = CLOCK_DRIFT_THRESHOLD_MS + 60000; // 6 minutes drift
-        const serverCurrentTime = Date.now() - driftMs; // Server clock is 6 min behind
+        const initialTime = Date.now();
+        const serverCurrentTime = initialTime - driftMs; // Server clock is 6 min behind
+
+        // Spy on Date.now() to return consistent time during the test
+        spyOn(Date, 'now').and.returnValue(initialTime);
 
         mockApiProvider.downloadOps.and.returnValue(
           Promise.resolve({
@@ -350,7 +383,7 @@ describe('OperationLogDownloadService', () => {
 
         service.downloadRemoteOps(mockApiProvider);
         tick(); // Resolve promises
-        tick(1000); // Wait for retry
+        flush(); // Flush all pending timers
 
         // Should warn because serverTime differs from client time
         expect(OpLog.warn).toHaveBeenCalledWith(
@@ -550,7 +583,11 @@ describe('OperationLogDownloadService', () => {
           await service.downloadRemoteOps(mockApiProvider, { forceFromSeq0: true });
 
           // Should start from 0, not from lastServerSeq (100)
-          expect(mockApiProvider.downloadOps).toHaveBeenCalledWith(0, undefined, 500);
+          expect(mockApiProvider.downloadOps).toHaveBeenCalledWith(
+            0,
+            'test-client-id',
+            500,
+          );
         });
 
         it('should collect all op clocks when forceFromSeq0 is true', async () => {

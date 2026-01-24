@@ -40,10 +40,6 @@ describe('TaskAttachmentListComponent', () => {
     snackService = TestBed.inject(SnackService) as jasmine.SpyObj<SnackService>;
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('copy', () => {
     let attachment: TaskAttachment;
     let originalClipboard: Clipboard;

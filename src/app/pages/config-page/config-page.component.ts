@@ -7,6 +7,7 @@ import {
   OnDestroy,
   OnInit,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
   GLOBAL_GENERAL_FORM_CONFIG,
@@ -14,6 +15,7 @@ import {
   GLOBAL_PLUGINS_FORM_CONFIG,
   GLOBAL_PRODUCTIVITY_FORM_CONFIG,
   GLOBAL_TIME_TRACKING_FORM_CONFIG,
+  GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
@@ -39,7 +41,6 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
-import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { createPluginShortcutFormItems } from '../../features/config/form-cfgs/plugin-keyboard-shortcuts';
 import { PluginShortcutCfg } from '../../plugins/plugin-api.model';
@@ -59,6 +60,7 @@ import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.c
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'config-page',
@@ -72,15 +74,16 @@ import { MatIcon } from '@angular/material/icon';
     TranslatePipe,
     AsyncPipe,
     PluginManagementComponent,
-    CollapsibleComponent,
     MatTabGroup,
     MatTab,
     MatTabLabel,
     MatIcon,
+    MatTooltip,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _cd = inject(ChangeDetectorRef);
+  private readonly _route = inject(ActivatedRoute);
   private readonly _providerManager = inject(SyncProviderManager);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _pluginBridgeService = inject(PluginBridgeService);
@@ -99,6 +102,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   // @todo - find better names for tabs configs forms
   // Tab-specific form configurations
   generalFormCfg: ConfigFormConfig;
+  globalTasksFormCfg: ConfigFormConfig;
   timeTrackingFormCfg: ConfigFormConfig;
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
@@ -136,6 +140,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
+    this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
     // NOTE: needs special handling cause of the async stuff
     if (IS_ANDROID_WEB_VIEW) {
@@ -163,6 +168,19 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       this.configService.cfg$.subscribe((cfg) => {
         this.globalCfg = cfg;
         // this._cd.detectChanges();
+      }),
+    );
+
+    // Check for tab query parameter and set selected tab
+    this._subs.add(
+      this._route.queryParams.subscribe((params) => {
+        if (params['tab'] !== undefined) {
+          const tabIndex = parseInt(params['tab'], 10);
+          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
+            this.selectedTabIndex = tabIndex;
+            this._cd.detectChanges();
+          }
+        }
       }),
     );
   }
@@ -352,6 +370,20 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
             required: false,
             onClick: () => {
               this._syncWrapperService.sync();
+            },
+          },
+        },
+        {
+          hideExpression: (m: any, _v: any, field: any) =>
+            !m.isEnabled || !field?.form?.valid,
+          type: 'btn',
+          className: 'mt2 block',
+          templateOptions: {
+            text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+            btnType: 'warn',
+            required: false,
+            onClick: () => {
+              this._syncWrapperService.forceUpload();
             },
           },
         },

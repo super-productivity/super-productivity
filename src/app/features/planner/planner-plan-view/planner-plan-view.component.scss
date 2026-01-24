@@ -26,3 +26,16 @@
     padding: 16px;
   }
 }
+
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 260px;
+  padding: 2rem;
+
+  @include mq(xs, max) {
+    min-width: 100%;
+    width: 100%;
+  }
+}

@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { Store } from '@ngrx/store';
+import { Action, Store } from '@ngrx/store';
 import { combineLatest, EMPTY, of } from 'rxjs';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import {
@@ -40,6 +40,7 @@ import { Banner, BannerId } from '../../../core/banner/banner.model';
 import { T } from '../../../t.const';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
+import { TakeABreakService } from '../../take-a-break/take-a-break.service';
 
 const SESSION_DONE_SOUND = 'positive.ogg';
 const TICK_SOUND = 'tick.mp3';
@@ -54,6 +55,7 @@ export class FocusModeEffects {
   private bannerService = inject(BannerService);
   private metricService = inject(MetricService);
   private storageService = inject(FocusModeStorageService);
+  private takeABreakService = inject(TakeABreakService);
 
   // Auto-show overlay when task is selected (if sync session with tracking is enabled)
   // Skip showing overlay if isStartInBackground is enabled
@@ -97,25 +99,45 @@ export class FocusModeEffects {
                 this.store.select(selectors.selectMode),
                 this.store.select(selectors.selectCurrentScreen),
                 this.store.select(selectors.selectPausedTaskId),
+                // Bug #5995 Fix: Get the LATEST value of isResumingBreak here
+                // to avoid using stale value from outer closure
+                this.store.select(selectors.selectIsResumingBreak),
               ),
-              switchMap(([_taskId, timer, mode, currentScreen, pausedTaskId]) => {
-                // If session is paused (purpose is 'work' but not running), resume it
-                if (timer.purpose === 'work' && !timer.isRunning) {
-                  return of(actions.unPauseFocusSession());
-                }
-                // If break is active (running or paused), skip it to sync with tracking
-                // This fixes bug #5875: pressing time tracking button during break
-                if (timer.purpose === 'break') {
-                  return of(actions.skipBreak({ pausedTaskId }));
-                }
-                // If no session active, start a new one (only from Main screen)
-                if (timer.purpose === null && currentScreen === FocusScreen.Main) {
-                  const strategy = this.strategyFactory.getStrategy(mode);
-                  const duration = strategy.initialSessionDuration;
-                  return of(actions.startFocusSession({ duration }));
-                }
-                return EMPTY;
-              }),
+              switchMap(
+                ([
+                  _taskId,
+                  timer,
+                  mode,
+                  currentScreen,
+                  pausedTaskId,
+                  isResumingBreak,
+                ]) => {
+                  // If session is paused (purpose is 'work' but not running), resume it
+                  if (timer.purpose === 'work' && !timer.isRunning) {
+                    return of(actions.unPauseFocusSession());
+                  }
+                  // If break is active, handle based on state and cause
+                  // Bug #5995 Fix: Don't skip breaks that were just resumed
+                  if (timer.purpose === 'break') {
+                    // Check store flag to distinguish between break resume and manual tracking start
+                    if (isResumingBreak) {
+                      // Clear flag after processing to prevent false positives
+                      // Don't skip the break - just clear the flag
+                      return of(actions.clearResumingBreakFlag());
+                    }
+                    // User manually started tracking during break
+                    // Skip the break to sync with tracking (bug #5875 fix)
+                    return of(actions.skipBreak({ pausedTaskId }));
+                  }
+                  // If no session active, start a new one (only from Main screen)
+                  if (timer.purpose === null && currentScreen === FocusScreen.Main) {
+                    const strategy = this.strategyFactory.getStrategy(mode);
+                    const duration = strategy.initialSessionDuration;
+                    return of(actions.startFocusSession({ duration }));
+                  }
+                  return EMPTY;
+                },
+              ),
             )
           : EMPTY,
       ),
@@ -240,19 +262,24 @@ export class FocusModeEffects {
   detectSessionCompletion$ = createEffect(() =>
     this.store.select(selectors.selectTimer).pipe(
       skipWhileApplyingRemoteOps(),
-      withLatestFrom(this.store.select(selectors.selectMode)),
+      withLatestFrom(
+        this.store.select(selectors.selectMode),
+        this.store.select(selectFocusModeConfig),
+      ),
       // Only consider emissions where timer just stopped running
       distinctUntilChanged(
         ([prevTimer], [currTimer]) => prevTimer.isRunning === currTimer.isRunning,
       ),
       filter(
-        ([timer, mode]) =>
+        ([timer, mode, config]) =>
           timer.purpose === 'work' &&
           !timer.isRunning &&
           timer.duration > 0 &&
           timer.elapsed >= timer.duration &&
-          mode !== FocusModeMode.Flowtime, // Flowtime sessions should never auto-complete
+          mode !== FocusModeMode.Flowtime &&
+          !config?.isManualBreakStart,
       ),
+
       map(() => actions.completeFocusSession({ isManual: false })),
     ),
   );
@@ -332,9 +359,11 @@ export class FocusModeEffects {
   );
 
   // Effect 3: Auto-start break after session completion
+  // Bug #6044 fix: Listen to incrementCycle instead of completeFocusSession to eliminate race condition
+  // This ensures the cycle value is already incremented when we calculate break type
   autoStartBreakOnSessionComplete$ = createEffect(() =>
     this.actions$.pipe(
-      ofType(actions.completeFocusSession),
+      ofType(actions.incrementCycle),
       withLatestFrom(
         this.store.select(selectors.selectMode),
         this.store.select(selectors.selectCurrentCycle),
@@ -342,17 +371,17 @@ export class FocusModeEffects {
         this.taskService.currentTaskId$,
       ),
       filter(([_, mode, __, config]) => {
+        // Only for Pomodoro mode (since only Pomodoro increments cycles)
+        if (mode !== FocusModeMode.Pomodoro) return false;
         const strategy = this.strategyFactory.getStrategy(mode);
         return strategy.shouldStartBreakAfterSession && !config?.isManualBreakStart;
       }),
       switchMap(([_, mode, cycle, config, currentTaskId]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
-        // Bug #5737 fix: Use cycle - 1 since incrementCycle fires before this effect
-        // This ensures long break occurs after session 4, not session 3
-        const actualCycle = Math.max(1, (cycle || 1) - 1);
-        const breakInfo = strategy.getBreakDuration(actualCycle);
+        // No adjustment needed - cycle is already correct after incrementCycle
+        const breakInfo = strategy.getBreakDuration(cycle || 1);
         const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
-        const actionsArr: any[] = [];
+        const actionsArr: Action[] = [];
 
         // Pause tracking during break if configured
         if (shouldPauseTracking) {
@@ -486,6 +515,22 @@ export class FocusModeEffects {
         return actionsToDispatch.length > 0 ? of(...actionsToDispatch) : EMPTY;
       }),
     ),
+  );
+
+  // Bug #6064 fix: Reset "without break" timer when focus mode break starts
+  // This ensures Pomodoro breaks are correctly recognized as rest periods regardless of
+  // whether task tracking is paused during breaks (isPauseTrackingDuringBreak setting)
+  resetBreakTimerOnBreakStart$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(actions.startBreak),
+        tap(() => {
+          // Signal TakeABreakService to reset its timer
+          // otherNoBreakTIme$ feeds into the break timer's tick stream
+          this.takeABreakService.otherNoBreakTIme$.next(0);
+        }),
+      ),
+    { dispatch: false },
   );
 
   // Handle session cancellation
@@ -628,14 +673,33 @@ export class FocusModeEffects {
   );
 
   // Electron-specific effects
+  // Action-based effect to update Windows taskbar progress (fixes #6061)
+  // Throttled to prevent excessive IPC calls (timer ticks every 1s)
+  // Follows action-based pattern (CLAUDE.md Section 8) instead of selector-based
   setTaskBarProgress$ =
     IS_ELECTRON &&
     createEffect(
       () =>
-        this.store.select(selectors.selectProgress).pipe(
-          skipWhileApplyingRemoteOps(),
-          withLatestFrom(this.store.select(selectors.selectIsRunning)),
-          tap(([progress, isRunning]) => {
+        this.actions$.pipe(
+          ofType(
+            actions.tick,
+            actions.startFocusSession,
+            actions.pauseFocusSession,
+            actions.unPauseFocusSession,
+            actions.startBreak,
+            actions.skipBreak,
+            actions.completeBreak,
+            actions.completeFocusSession,
+            actions.cancelFocusSession,
+          ),
+          // Throttle to prevent excessive IPC calls (timer ticks every 1s)
+          // Use leading + trailing to ensure immediate feedback and final state
+          throttleTime(500, undefined, { leading: true, trailing: true }),
+          withLatestFrom(
+            this.store.select(selectors.selectProgress),
+            this.store.select(selectors.selectIsRunning),
+          ),
+          tap(([_action, progress, isRunning]) => {
             window.ea.setProgressBar({
               progress: progress / 100,
               progressBarMode: isRunning ? 'normal' : 'pause',
@@ -852,10 +916,9 @@ export class FocusModeEffects {
           focusModeConfig?.isManualBreakStart &&
           strategy.shouldStartBreakAfterSession
         ) {
-          // Bug #5737 fix: Use cycle - 1 since incrementCycle fires before user clicks
-          // This ensures long break occurs after session 4, not session 5
-          const actualCycle = Math.max(1, (cycle || 1) - 1);
-          const breakInfo = strategy.getBreakDuration(actualCycle);
+          // Bug #6044 fix: No adjustment needed - cycle is already correct after incrementCycle
+          // This matches the auto-start break logic to ensure consistent break timing
+          const breakInfo = strategy.getBreakDuration(cycle || 1);
           if (breakInfo) {
             const currentTaskId = this.taskService.currentTaskId();
             const shouldPauseTracking =
@@ -974,20 +1037,29 @@ export class FocusModeEffects {
         };
 
     // End session button - complete for work, skip for break (while running)
-    // Hide when session is completed or break time is up (Start button takes priority)
-    const endAction = shouldShowStartButton
-      ? undefined
-      : isOnBreak
+    // When session is completed (not break), show "End Focus Session" button
+    const endAction =
+      isSessionCompleted && !isBreakTimeUp
         ? {
-            label: T.F.FOCUS_MODE.SKIP_BREAK,
-            ...(useIcons && { icon: 'skip_next' }),
-            fn: () => this._handleSkipBreak(),
-          }
-        : {
-            label: T.F.FOCUS_MODE.B.END_SESSION,
+            label: T.F.FOCUS_MODE.B.END_FOCUS_SESSION,
             ...(useIcons && { icon: 'done_all' }),
-            fn: () => this._handleEndSession(),
-          };
+            fn: () => {
+              this.store.dispatch(actions.cancelFocusSession());
+            },
+          }
+        : shouldShowStartButton
+          ? undefined
+          : isOnBreak
+            ? {
+                label: T.F.FOCUS_MODE.SKIP_BREAK,
+                ...(useIcons && { icon: 'skip_next' }),
+                fn: () => this._handleSkipBreak(),
+              }
+            : {
+                label: T.F.FOCUS_MODE.B.END_SESSION,
+                ...(useIcons && { icon: 'done_all' }),
+                fn: () => this._handleEndSession(),
+              };
 
     // Open overlay button
     const overlayAction = {

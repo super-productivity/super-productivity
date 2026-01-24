@@ -31,6 +31,8 @@ import { TaskService } from '../../tasks/task.service';
 import { BannerService } from '../../../core/banner/banner.service';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TakeABreakService } from '../../take-a-break/take-a-break.service';
 import * as actions from './focus-mode.actions';
 import * as selectors from './focus-mode.selectors';
 import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
@@ -88,6 +90,10 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       logFocusSession: jasmine.createSpy('logFocusSession'),
     };
 
+    const takeABreakServiceMock = {
+      otherNoBreakTIme$: new BehaviorSubject<number>(0),
+    };
+
     TestBed.configureTestingModule({
       providers: [
         FocusModeEffects,
@@ -126,6 +132,13 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
           provide: FocusModeStorageService,
           useValue: { setLastCountdownDuration: jasmine.createSpy() },
         },
+        { provide: TakeABreakService, useValue: takeABreakServiceMock },
+        {
+          provide: GlobalTrackingIntervalService,
+          useValue: {
+            todayStr$: new BehaviorSubject<string>('2024-01-19'),
+          },
+        },
       ],
     });
 
@@ -152,6 +165,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
       store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Break);
       store.overrideSelector(selectors.selectPausedTaskId, null);
+      store.overrideSelector(selectors.selectIsResumingBreak, false);
       store.refreshState();
 
       effects = TestBed.inject(FocusModeEffects);
@@ -187,6 +201,7 @@ describe('FocusMode Bug #5875: Pomodoro timer sync issues', () => {
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
       store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Break);
       store.overrideSelector(selectors.selectPausedTaskId, null);
+      store.overrideSelector(selectors.selectIsResumingBreak, false);
       store.refreshState();
 
       effects = TestBed.inject(FocusModeEffects);

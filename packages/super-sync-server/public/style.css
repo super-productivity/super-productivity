@@ -48,6 +48,40 @@ header p {
   margin-bottom: 2rem;
 }
 
+.eu-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 1rem;
+  background-color: #039;
+  border: 1px solid #002970;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fc0;
+  margin-top: 0.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.eu-stars {
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+}
+
+.beta-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  background-color: #ff9800;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -452,5 +486,16 @@ footer {
 
   .danger-zone h3 {
     color: #f77;
+  }
+
+  .eu-badge {
+    background-color: #039;
+    border-color: #002970;
+    color: #fc0;
+  }
+
+  .beta-badge {
+    background-color: #ffa726;
+    color: #1a1a1a;
   }
 }

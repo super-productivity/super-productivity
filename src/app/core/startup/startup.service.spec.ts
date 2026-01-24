@@ -126,12 +126,6 @@ describe('StartupService', () => {
     pluginService = TestBed.inject(PluginService) as jasmine.SpyObj<PluginService>;
   });
 
-  describe('service creation', () => {
-    it('should be created', () => {
-      expect(service).toBeTruthy();
-    });
-  });
-
   describe('init', () => {
     // Note: Full init() testing requires complex BroadcastChannel mocking
     // These tests cover the testable parts

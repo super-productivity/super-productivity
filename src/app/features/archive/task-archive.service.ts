@@ -133,6 +133,71 @@ export class TaskArchiveService {
     return !!archiveOld.task.entities[id];
   }
 
+  /**
+   * Checks if multiple tasks exist in archive (batch operation).
+   * Loads archives once, significantly improving performance vs calling hasTask() N times.
+   *
+   * @param ids Task IDs to check
+   * @returns Map of task ID to existence boolean
+   * @example
+   * const ids = ['task1', 'task2', 'task3'];
+   * const existenceMap = await service.hasTasksBatch(ids);
+   * console.log(existenceMap.get('task1')); // true or false
+   */
+  async hasTasksBatch(ids: string[]): Promise<Map<string, boolean>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const [archiveYoung, archiveOld] = await Promise.all([
+      this.archiveDbAdapter.loadArchiveYoung(),
+      this.archiveDbAdapter.loadArchiveOld(),
+    ]);
+
+    const young = archiveYoung || DEFAULT_ARCHIVE;
+    const old = archiveOld || DEFAULT_ARCHIVE;
+
+    const result = new Map<string, boolean>();
+    for (const id of ids) {
+      result.set(id, !!(young.task.entities[id] || old.task.entities[id]));
+    }
+    return result;
+  }
+
+  /**
+   * Gets multiple tasks by ID in single operation.
+   * Loads archives once instead of N times.
+   *
+   * @param ids Task IDs to retrieve
+   * @returns Map of task ID to Task (omits IDs not found)
+   * @example
+   * const ids = ['task1', 'task2'];
+   * const taskMap = await service.getByIdBatch(ids);
+   * const task1 = taskMap.get('task1'); // Task or undefined
+   */
+  async getByIdBatch(ids: string[]): Promise<Map<string, Task>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const [archiveYoung, archiveOld] = await Promise.all([
+      this.archiveDbAdapter.loadArchiveYoung(),
+      this.archiveDbAdapter.loadArchiveOld(),
+    ]);
+
+    const young = archiveYoung || DEFAULT_ARCHIVE;
+    const old = archiveOld || DEFAULT_ARCHIVE;
+
+    const result = new Map<string, Task>();
+    for (const id of ids) {
+      const task = young.task.entities[id] || old.task.entities[id];
+      if (task) {
+        result.set(id, task);
+      }
+    }
+    return result;
+  }
+
   async deleteTasks(
     taskIdsToDelete: string[],
     options?: { isIgnoreDBLock?: boolean },

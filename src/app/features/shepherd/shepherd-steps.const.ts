@@ -2,12 +2,12 @@ import Step from 'shepherd.js/src/types/step';
 import { nextOnObs, twoWayObs, waitForEl, waitForElObs$ } from './shepherd-helper';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 import { TaskService } from '../tasks/task.service';
-import { delay, filter, first, map, switchMap } from 'rxjs/operators';
+import { delay, filter, first, switchMap } from 'rxjs/operators';
 import { ofType } from '@ngrx/effects';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { GlobalConfigState } from '../config/global-config.model';
 import { IS_MOUSE_PRIMARY } from '../../util/is-mouse-primary';
-import { NavigationEnd, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { hideAddTaskBar } from '../../core-ui/layout/store/layout.actions';
 import { LS } from '../../core/persistence/storage-keys.const';
@@ -44,7 +44,6 @@ const CANCEL_BTN = (shepherdService: ShepherdService): Step.StepOptionsButton =>
 });
 
 const CLICK = IS_MOUSE_PRIMARY ? '<em>click</em>' : '<em>tap</em>';
-const CLICK_B = IS_MOUSE_PRIMARY ? '<em>Click</em>' : '<em>Tap</em>';
 
 export enum TourId {
   Welcome = 'Welcome',
@@ -500,87 +499,18 @@ export const SHEPHERD_STEPS = (
     },
     {
       title: 'Syncing & Data Privacy',
-      text: '<p>With Super Productivity <strong>you can save and sync your data with a cloud provider of your choice</strong> or even host it in your own cloud.</p><p>Let me show you where to configure this!!</p>',
-      buttons: [{ ...NEXT_BTN, text: "Let's go!" }],
-    },
-    // Only show "Open menu" step on mobile where menu is hidden
-    ...(layoutService.isShowMobileBottomNav()
-      ? [
-          {
-            title: 'Configure Sync',
-            attachTo: {
-              element: '.tour-burgerTrigger',
-              on: 'bottom' as any,
-            },
-            beforeShowPromise: () => router.navigate(['']),
-            text: 'Open the menu (<span class="material-icons">menu</span>)',
-            when: {
-              show: () => {
-                // TODO better implementation
-                setTimeout(() => shepherdService.next(), 8000);
-              },
-            },
-          },
-        ]
-      : []),
-    {
-      title: 'Configure Sync',
-      text: `${CLICK_B} on <span class="material-icons">settings</span> <strong>Settings</strong>!`,
+      text: IS_MOUSE_PRIMARY
+        ? '<p>To configure sync, <em>right-click</em> on the sync button (<span class="material-icons">sync</span> or <span class="material-icons">sync_disabled</span>) in the top right.</p><p>You can choose from <strong>SuperSync (Beta)</strong>, <strong>Dropbox</strong>, <strong>WebDAV</strong> (for Nextcloud and others), or <strong>LocalFile</strong> (desktop/Android only).</p>'
+        : '<p>To configure sync, <em>long-press</em> on the sync button (<span class="material-icons">sync</span> or <span class="material-icons">sync_disabled</span>) in the top right.</p><p>You can choose from <strong>SuperSync (Beta)</strong>, <strong>Dropbox</strong>, <strong>WebDAV</strong> (for Nextcloud and others), or <strong>LocalFile</strong> (desktop/Android only).</p>',
       attachTo: {
-        element: '.tour-settingsMenuBtn',
-        on: 'top',
+        element: '.sync-btn',
+        on: 'bottom',
       },
-      beforeShowPromise: () => {
-        // Navigate to home first on desktop since we skipped the menu step
-        if (!layoutService.isShowMobileBottomNav()) {
-          return router.navigate(['']);
-        }
-        return Promise.resolve();
-      },
-      when: nextOnObs(
-        router.events.pipe(
-          filter((event: any) => event instanceof NavigationEnd),
-          map((event) => !!event.url.includes('config')),
-          filter((v) => !!v),
-        ),
-        shepherdService,
-        // make sure we are not on config page already
-      ),
-    },
-    {
-      title: 'Configure Sync',
-      text: `Scroll down and ${CLICK} to expand the <strong>Sync</strong> Section`,
-      attachTo: {
-        element: '.tour-syncSection',
-        on: 'top',
-      },
-      scrollTo: true,
-      when: twoWayObs(
-        {
-          obs: waitForElObs$('.tour-isSyncEnabledToggle'),
-        },
-        {
-          obs: router.events.pipe(
-            filter((event: any) => event instanceof NavigationEnd),
-            map((event) => !event.url.includes('config')),
-            filter((v) => !!v),
-          ),
-        },
-        shepherdService,
-      ),
-    },
-    {
-      title: 'Configure Sync',
-      attachTo: {
-        element: '.tour-syncSection',
-        on: 'top',
-      },
-      text: '<p>Here you should be able to configure a sync provider of your choosing. For most people <a href="https://www.dropbox.com/" target="_blank"><strong>Dropbox</strong></a> is probably the easiest solution, that also will offer you automatic backups in the cloud.</p><p>If you have the desktop or Android version of Super Productivity <strong>LocalFile</strong> is another good option. It will let you configure a file path to sync to. You can then sync this file with any provider you like.</p><p>The option <strong>WebDAV</strong> can be used to sync with Nextcloud and others.</p>',
       buttons: [NEXT_BTN],
     },
     {
       title: 'Configure Sync',
-      text: 'This covers syncing. If you have any questions you can always ask them <a href="https://github.com/super-productivity/super-productivity/discussions">on the projects GitHub page</a>. ',
+      text: 'If you have any questions about syncing, you can always ask them <a href="https://github.com/super-productivity/super-productivity/discussions" target="_blank">on the project\'s GitHub page</a>.',
       buttons: [NEXT_BTN],
     },
 
@@ -589,7 +519,7 @@ export const SHEPHERD_STEPS = (
       id: TourId.ProductivityHelper,
       when: {
         show: () => {
-          router.navigate(['config']).then(() => {
+          router.navigate(['config'], { queryParams: { tab: 2 } }).then(() => {
             shepherdService.next();
           });
         },
@@ -597,8 +527,9 @@ export const SHEPHERD_STEPS = (
     },
     {
       title: 'Productivity Helper',
-      // eslint-disable-next-line max-len
-      text: `Another thing you might want to check out is the <strong>Productivity Helper</strong> section. Here you can configure a variety of little tools to your needs.`,
+      text:
+        `Another thing you might want to check out is the <strong>Productivity Helper</strong> section. ` +
+        `Here you can configure a variety of little tools to your needs.`,
       beforeShowPromise: () => promiseTimeout(500),
       attachTo: {
         element: '.tour-productivityHelper',

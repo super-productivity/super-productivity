@@ -5,6 +5,9 @@ import { stringToMs } from '../../ui/duration/string-to-ms.pipe';
 import { Tag } from '../tag/tag.model';
 import { Project } from '../project/project.model';
 import { ShortSyntaxConfig } from '../config/global-config.model';
+import { isImageUrlSimple } from '../../util/is-image-url';
+import { TaskAttachment } from './task-attachment/task-attachment.model';
+import { nanoid } from 'nanoid';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
@@ -87,6 +90,13 @@ const SHORT_SYNTAX_TAGS_REG_EX = new RegExp(`\\${CH_TAG}[^${ALL_SPECIAL}|\\s]+`,
 // not in the ALL_SPECIAL
 const SHORT_SYNTAX_DUE_REG_EX = new RegExp(`\\${CH_DUE}[^${ALL_SPECIAL}]+`, 'gi');
 
+// Match URLs with protocol (http, https, file) or www prefix
+// Matches URLs but excludes trailing punctuation
+const SHORT_SYNTAX_URL_REG_EX = new RegExp(
+  String.raw`(?:(?:https?|file)://\S+|www\.\S+?)(?=\s|$)`,
+  'gi',
+);
+
 export const shortSyntax = (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
@@ -100,6 +110,7 @@ export const shortSyntax = (
       newTagTitles: string[];
       remindAt: number | null;
       projectId: string | undefined;
+      attachments: TaskAttachment[];
     }
   | undefined => {
   if (!task.title) {
@@ -113,6 +124,7 @@ export const shortSyntax = (
   let taskChanges: Partial<TaskCopy> = {};
   let changesForProject: ProjectChanges = {};
   let changesForTag: TagChanges = {};
+  let attachments: TaskAttachment[] = [];
 
   if (config.isEnableDue) {
     taskChanges = parseTimeSpentChanges(task);
@@ -147,6 +159,18 @@ export const shortSyntax = (
     };
   }
 
+  const urlChanges = parseUrlAttachments({
+    ...task,
+    title: taskChanges.title || task.title,
+  });
+  if (urlChanges.attachments.length > 0) {
+    attachments = urlChanges.attachments;
+    taskChanges = {
+      ...taskChanges,
+      title: urlChanges.title,
+    };
+  }
+
   // const changesForDue = parseDueChanges({...task, title: taskChanges.title || task.title});
   // if (changesForDue.remindAt) {
   //   taskChanges = {
@@ -155,7 +179,7 @@ export const shortSyntax = (
   //   };
   // }
 
-  if (Object.keys(taskChanges).length === 0) {
+  if (Object.keys(taskChanges).length === 0 && attachments.length === 0) {
     return undefined;
   }
 
@@ -164,6 +188,7 @@ export const shortSyntax = (
     newTagTitles: changesForTag.newTagTitlesToCreate || [],
     remindAt: null,
     projectId: changesForProject.projectId,
+    attachments,
     // remindAt: changesForDue.remindAt
   };
 };
@@ -439,4 +464,97 @@ const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
     }),
     title: task.title.replace(matchSpan, '').trim(),
   };
+};
+
+const parseUrlAttachments = (
+  task: Partial<TaskCopy>,
+): {
+  attachments: TaskAttachment[];
+  title: string;
+} => {
+  if (!task.title || task.issueId) {
+    return { attachments: [], title: task.title || '' };
+  }
+
+  const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
+
+  if (!urlMatches || urlMatches.length === 0) {
+    return { attachments: [], title: task.title };
+  }
+
+  const attachments: TaskAttachment[] = urlMatches.map((url) => {
+    let path = url.trim();
+
+    // Remove trailing punctuation that's not part of the URL
+    path = path.replace(/[.,;!?]+$/, '');
+
+    const isFileProtocol = path.startsWith('file://');
+
+    // Add protocol if missing (for www. URLs)
+    if (!path.match(/^(?:https?|file):\/\//)) {
+      path = '//' + path;
+    }
+
+    // Detect if it's an image
+    const isImage = isImageUrlSimple(path);
+
+    // Determine type and icon
+    let type: 'FILE' | 'LINK' | 'IMG';
+    let icon: string;
+
+    if (isImage) {
+      type = 'IMG';
+      icon = 'image';
+    } else if (isFileProtocol) {
+      type = 'FILE';
+      icon = 'insert_drive_file';
+    } else {
+      type = 'LINK';
+      icon = 'bookmark';
+    }
+
+    // Extract basename for title
+    const title = _baseNameForUrl(path);
+
+    return {
+      id: nanoid(),
+      type,
+      path,
+      title,
+      icon,
+    };
+  });
+
+  // Clean URLs from title - use trimmed URLs without trailing punctuation
+  let cleanedTitle = task.title;
+  attachments.forEach((attachment) => {
+    const attachmentPath = attachment.path;
+    if (!attachmentPath) return;
+    // For www URLs, the path has '//' prepended, but the original doesn't
+    const originalUrl = attachmentPath.startsWith('//')
+      ? attachmentPath.substring(2)
+      : attachmentPath;
+    // Escape special regex characters for safe replacement
+    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
+  });
+  cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
+
+  return { attachments, title: cleanedTitle };
+};
+
+const _baseNameForUrl = (passedStr: string): string => {
+  const str = passedStr.trim();
+  let base;
+  if (str[str.length - 1] === '/') {
+    const strippedStr = str.substring(0, str.length - 1);
+    base = strippedStr.substring(strippedStr.lastIndexOf('/') + 1);
+  } else {
+    base = str.substring(str.lastIndexOf('/') + 1);
+  }
+
+  if (base.lastIndexOf('.') !== -1) {
+    base = base.substring(0, base.lastIndexOf('.'));
+  }
+  return base;
 };

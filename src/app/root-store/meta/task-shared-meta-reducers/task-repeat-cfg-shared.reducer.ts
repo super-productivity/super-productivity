@@ -13,20 +13,20 @@ import { ActionHandlerMap } from './task-shared-helpers';
 // ACTION HANDLERS
 // =============================================================================
 
-const handleDeleteTaskRepeatCfg = (
-  state: RootState,
-  taskIdsToUnlink: string[],
-): RootState => {
+const handleDeleteTaskRepeatCfg = (state: RootState, repeatCfgId: string): RootState => {
   const taskState = state[TASK_FEATURE_NAME];
 
-  // Filter to only existing tasks in current state
-  const existingTaskIds = taskIdsToUnlink.filter((id) => !!taskState.entities[id]);
+  // Scan local state for ALL tasks with this repeatCfgId
+  const taskIdsToUnlink = Object.values(taskState.entities)
+    .filter((task): task is Task => !!task && task.repeatCfgId === repeatCfgId)
+    .map((task) => task.id);
 
-  if (existingTaskIds.length === 0) {
+  if (taskIdsToUnlink.length === 0) {
     return state;
   }
 
-  const taskUpdates: Update<Task>[] = existingTaskIds.map((id) => ({
+  // Clear repeatCfgId from all found tasks
+  const taskUpdates: Update<Task>[] = taskIdsToUnlink.map((id) => ({
     id,
     changes: { repeatCfgId: undefined },
   }));
@@ -43,10 +43,10 @@ const handleDeleteTaskRepeatCfg = (
 
 const createActionHandlers = (state: RootState, action: Action): ActionHandlerMap => ({
   [TaskSharedActions.deleteTaskRepeatCfg.type]: () => {
-    const { taskIdsToUnlink } = action as ReturnType<
+    const { taskRepeatCfgId } = action as ReturnType<
       typeof TaskSharedActions.deleteTaskRepeatCfg
     >;
-    return handleDeleteTaskRepeatCfg(state, taskIdsToUnlink);
+    return handleDeleteTaskRepeatCfg(state, taskRepeatCfgId);
   },
 });
 

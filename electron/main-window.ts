@@ -5,7 +5,6 @@ import {
   BrowserWindowConstructorOptions,
   ipcMain,
   Menu,
-  MenuItem,
   MenuItemConstructorOptions,
   nativeTheme,
   shell,
@@ -34,9 +33,9 @@ let mainWin: BrowserWindow;
  * Semi-transparent to ensure window controls are always visible.
  */
 const getTitleBarColor = (isDark: boolean): string => {
-  // Dark: matches --bg (#131314) with 95% opacity
-  // Light: matches --bg (#f8f8f7) with 95% opacity
-  return isDark ? 'rgba(19, 19, 20, 0.95)' : 'rgba(248, 248, 247, 0.95)';
+  // Dark: matches --bg (#131314) with 0% opacity (fully transparent)
+  // Light: matches --bg (#f8f8f7) with 0% opacity (fully transparent)
+  return isDark ? 'rgba(19, 19, 20, 0)' : 'rgba(248, 248, 247, 0)';
 };
 
 const mainWinModule: {
@@ -305,44 +304,41 @@ function initWinEventListeners(app: Electron.App): void {
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function createMenu(
-  quitApp: (
-    menuItem: MenuItem,
-    browserWindow: BrowserWindow | undefined,
-    event: KeyboardEvent,
-  ) => void,
-): void {
+function createMenu(quitApp: () => void): void {
   // Create application menu to enable copy & pasting on MacOS
-  const menuTpl = [
+  const menuTpl: MenuItemConstructorOptions[] = [
     {
       label: 'Application',
       submenu: [
-        { label: 'About Super Productivity', selector: 'orderFrontStandardAboutPanel:' },
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
         { type: 'separator' },
         {
           label: 'Quit',
-          click: quitApp,
           accelerator: 'CmdOrCtrl+Q',
+          click: quitApp,
         },
       ],
     },
     {
       label: 'Edit',
       submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', selector: 'undo:' },
-        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', selector: 'redo:' },
+        { role: 'undo' },
+        { role: 'redo' },
         { type: 'separator' },
-        { label: 'Cut', accelerator: 'CmdOrCtrl+X', selector: 'cut:' },
-        { label: 'Copy', accelerator: 'CmdOrCtrl+C', selector: 'copy:' },
-        { label: 'Paste', accelerator: 'CmdOrCtrl+V', selector: 'paste:' },
-        { label: 'Select All', accelerator: 'CmdOrCtrl+A', selector: 'selectAll:' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
       ],
     },
   ];
-  const menuTplOUT = menuTpl as MenuItemConstructorOptions[];
 
   // we need to set a menu to get copy & paste working for mac os x
-  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTplOUT));
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTpl));
 }
 
 // TODO this is ugly as f+ck

@@ -127,11 +127,12 @@ export class SchemaMigrationService {
   /**
    * Migrates a single operation to the current schema version if needed.
    * Returns null if the operation should be dropped (e.g., for removed features).
+   * Returns an array if the operation should be split into multiple operations.
    *
    * @param op - The operation to migrate
-   * @returns The migrated operation, or null if it should be dropped
+   * @returns The migrated operation(s), or null if it should be dropped
    */
-  migrateOperation(op: Operation): Operation | null {
+  migrateOperation(op: Operation): Operation | Operation[] | null {
     const opVersion = op.schemaVersion ?? 1;
 
     if (opVersion >= CURRENT_SCHEMA_VERSION) {
@@ -159,6 +160,19 @@ export class SchemaMigrationService {
       return null;
     }
 
+    // Handle array result (operation was split into multiple)
+    if (Array.isArray(result.data)) {
+      return result.data.map((migratedOpLike) => ({
+        ...op,
+        opType: migratedOpLike.opType as Operation['opType'],
+        entityType: migratedOpLike.entityType as Operation['entityType'],
+        entityId: migratedOpLike.entityId,
+        entityIds: migratedOpLike.entityIds,
+        payload: migratedOpLike.payload,
+        schemaVersion: migratedOpLike.schemaVersion,
+      }));
+    }
+
     // Merge migrated fields back into the original operation
     return {
       ...op,
@@ -172,6 +186,7 @@ export class SchemaMigrationService {
 
   /**
    * Migrates an array of operations, filtering out any that should be dropped.
+   * Handles operations that are split into multiple operations.
    *
    * @param ops - The operations to migrate
    * @returns Array of migrated operations (dropped operations excluded)
@@ -180,13 +195,19 @@ export class SchemaMigrationService {
     const migrated: Operation[] = [];
 
     for (const op of ops) {
-      const migratedOp = this.migrateOperation(op);
-      if (migratedOp !== null) {
-        migrated.push(migratedOp);
-      } else {
+      const migratedResult = this.migrateOperation(op);
+      if (migratedResult === null) {
         OpLog.normal(
           `SchemaMigrationService: Dropped operation ${op.id} (${op.actionType}) during migration`,
         );
+      } else if (Array.isArray(migratedResult)) {
+        // Operation was split into multiple operations
+        migrated.push(...migratedResult);
+        OpLog.normal(
+          `SchemaMigrationService: Split operation ${op.id} into ${migratedResult.length} operations during migration`,
+        );
+      } else {
+        migrated.push(migratedResult);
       }
     }
 
@@ -224,9 +245,24 @@ export class SchemaMigrationService {
   }
 
   /**
-   * Returns all registered migrations (for debugging/testing).
+   * Returns registered migrations for a specific version range.
+   * If no range is provided, returns all migrations.
+   *
+   * @param fromVersion - The starting version (inclusive).
+   * @param toVersion - The ending version (inclusive).
+   * @returns Array of migrations within the specified range.
    */
-  getMigrations(): readonly SchemaMigration[] {
-    return MIGRATIONS;
+  getMigrations(fromVersion?: number, toVersion?: number): readonly SchemaMigration[] {
+    if (fromVersion === undefined && toVersion === undefined) {
+      return MIGRATIONS;
+    }
+
+    return MIGRATIONS.filter((migration) => {
+      const isAfterFromVersion =
+        fromVersion === undefined || migration.fromVersion >= fromVersion;
+      const isBeforeToVersion =
+        toVersion === undefined || migration.toVersion <= toVersion;
+      return isAfterFromVersion && isBeforeToVersion;
+    });
   }
 }

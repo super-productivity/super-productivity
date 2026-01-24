@@ -137,7 +137,7 @@
       "TITLE": "🙈 Please forgive us, but...",
       "TXT": "You would help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "在記錄任務時間時，每隔 X 時間重複配置的短語。",
         "L_INTERVAL": "重複短語的間隔時間",
@@ -145,7 +145,7 @@
         "L_TEXT_DESCRIPTION": "例如：\"處理 ${currentTaskTitle}！\"",
         "L_VOICE": "選擇一種聲音",
         "L_VOICE_DESCRIPTION": "選擇一種聲音",
-        "TITLE": "Domina 模式"
+        "TITLE": "語音提醒"
       }
     },
     "DROPBOX": {

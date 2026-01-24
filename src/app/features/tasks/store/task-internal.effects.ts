@@ -13,7 +13,7 @@ import { filter, map, mergeMap, withLatestFrom } from 'rxjs/operators';
 import { selectTaskFeatureState } from './task.selectors';
 import {
   selectConfigFeatureState,
-  selectMiscConfig,
+  selectTasksConfig,
 } from '../../config/store/global-config.reducer';
 import { Task, TaskState } from '../task.model';
 import { EMPTY, of } from 'rxjs';
@@ -33,13 +33,13 @@ export class TaskInternalEffects {
     this._actions$.pipe(
       ofType(TaskSharedActions.updateTask),
       withLatestFrom(
-        this._store$.pipe(select(selectMiscConfig)),
+        this._store$.pipe(select(selectTasksConfig)),
         this._store$.pipe(select(selectTaskFeatureState)),
       ),
       filter(
-        ([{ task }, miscCfg, state]) =>
-          !!miscCfg &&
-          miscCfg.isAutMarkParentAsDone &&
+        ([{ task }, tasksCfg, state]) =>
+          !!tasksCfg &&
+          tasksCfg.isAutoMarkParentAsDone &&
           !!task.changes.isDone &&
           // @ts-ignore
           !!state.entities[task.id].parentId,

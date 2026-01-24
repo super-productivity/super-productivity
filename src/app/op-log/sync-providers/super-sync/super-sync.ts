@@ -30,6 +30,13 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
 
 /**
+ * Timeout for individual HTTP requests to SuperSync server.
+ * Set to 75s to allow server's 60s database timeout to complete,
+ * plus buffer for network latency and response body reading.
+ */
+const SUPERSYNC_REQUEST_TIMEOUT_MS = 75000;
+
+/**
  * SuperSync provider - operation-based sync provider.
  *
  * This provider uses operation-based sync exclusively (no file-based sync).
@@ -387,6 +394,7 @@ export class SuperSyncProvider
     path: string,
     options: RequestInit,
   ): Promise<T> {
+    const startTime = Date.now();
     const baseUrl = cfg.baseUrl.replace(/\/$/, '');
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
@@ -395,21 +403,65 @@ export class SuperSyncProvider
     headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${sanitizedToken}`);
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
+    // Add timeout using AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SUPERSYNC_REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      // Check for auth failure FIRST before throwing generic error
-      this._checkHttpStatus(response.status, errorText);
-      throw new Error(
-        `SuperSync API error: ${response.status} ${response.statusText} - ${errorText}`,
-      );
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        clearTimeout(timeoutId);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        // Check for auth failure FIRST before throwing generic error
+        this._checkHttpStatus(response.status, errorText);
+        throw new Error(
+          `SuperSync API error: ${response.status} ${response.statusText} - ${errorText}`,
+        );
+      }
+
+      // CRITICAL: Read response body BEFORE clearing timeout
+      // The timeout must cover the entire response cycle including JSON parsing
+      const data = (await response.json()) as T;
+      clearTimeout(timeoutId);
+
+      // Log slow requests
+      const duration = Date.now() - startTime;
+      if (duration > 30000) {
+        SyncLog.warn(this.logLabel, `Slow SuperSync request detected`, {
+          path,
+          durationMs: duration,
+          durationSec: (duration / 1000).toFixed(1),
+        });
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        SyncLog.error(this.logLabel, `SuperSync request timeout`, {
+          path,
+          durationMs: duration,
+          timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        });
+        throw new Error(
+          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${path}`,
+        );
+      }
+
+      SyncLog.error(this.logLabel, `SuperSync request failed`, {
+        path,
+        durationMs: duration,
+        error: (error as Error).message,
+      });
+      throw error;
     }
-
-    return response.json() as Promise<T>;
   }
 
   /**
@@ -421,6 +473,7 @@ export class SuperSyncProvider
     path: string,
     compressedBody: Uint8Array,
   ): Promise<T> {
+    const startTime = Date.now();
     const baseUrl = cfg.baseUrl.replace(/\/$/, '');
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
@@ -430,22 +483,65 @@ export class SuperSyncProvider
     headers.set('Content-Encoding', 'gzip');
     headers.set('Authorization', `Bearer ${sanitizedToken}`);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: new Blob([compressedBody as BlobPart]),
-    });
+    // Add timeout using AbortController
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SUPERSYNC_REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      // Check for auth failure FIRST before throwing generic error
-      this._checkHttpStatus(response.status, errorText);
-      throw new Error(
-        `SuperSync API error: ${response.status} ${response.statusText} - ${errorText}`,
-      );
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: new Blob([compressedBody as BlobPart]),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        clearTimeout(timeoutId);
+        const errorText = await response.text().catch(() => 'Unknown error');
+        // Check for auth failure FIRST before throwing generic error
+        this._checkHttpStatus(response.status, errorText);
+        throw new Error(
+          `SuperSync API error: ${response.status} ${response.statusText} - ${errorText}`,
+        );
+      }
+
+      // CRITICAL: Read response body BEFORE clearing timeout
+      const data = (await response.json()) as T;
+      clearTimeout(timeoutId);
+
+      // Log slow requests
+      const duration = Date.now() - startTime;
+      if (duration > 30000) {
+        SyncLog.warn(this.logLabel, `Slow SuperSync request detected`, {
+          path,
+          durationMs: duration,
+          durationSec: (duration / 1000).toFixed(1),
+        });
+      }
+
+      return data;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        SyncLog.error(this.logLabel, `SuperSync request timeout`, {
+          path,
+          durationMs: duration,
+          timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        });
+        throw new Error(
+          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${path}`,
+        );
+      }
+
+      SyncLog.error(this.logLabel, `SuperSync request failed`, {
+        path,
+        durationMs: duration,
+        error: (error as Error).message,
+      });
+      throw error;
     }
-
-    return response.json() as Promise<T>;
   }
 
   /**
@@ -458,6 +554,7 @@ export class SuperSyncProvider
     path: string,
     jsonPayload: string,
   ): Promise<T> {
+    const startTime = Date.now();
     const base64Gzip = await compressWithGzipToString(jsonPayload);
     const baseUrl = cfg.baseUrl.replace(/\/$/, '');
     const url = `${baseUrl}${path}`;
@@ -477,21 +574,46 @@ export class SuperSyncProvider
     headers['Content-Encoding'] = 'gzip';
     headers['Content-Transfer-Encoding'] = 'base64';
 
-    const response = await CapacitorHttp.request({
-      url,
-      method: 'POST',
-      headers,
-      data: base64Gzip,
-    });
+    try {
+      const response = await CapacitorHttp.request({
+        url,
+        method: 'POST',
+        headers,
+        data: base64Gzip,
+        // Add timeout support for Android
+        connectTimeout: 10000, // 10s to establish connection
+        readTimeout: 75000, // 75s to match fetch timeout
+      });
 
-    if (response.status < 200 || response.status >= 300) {
-      const errorData =
-        typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      // Check for auth failure FIRST before throwing generic error
-      this._checkHttpStatus(response.status, errorData);
-      throw new Error(`SuperSync API error: ${response.status} - ${errorData}`);
+      if (response.status < 200 || response.status >= 300) {
+        const errorData =
+          typeof response.data === 'string'
+            ? response.data
+            : JSON.stringify(response.data);
+        // Check for auth failure FIRST before throwing generic error
+        this._checkHttpStatus(response.status, errorData);
+        throw new Error(`SuperSync API error: ${response.status} - ${errorData}`);
+      }
+
+      // Log slow requests
+      const duration = Date.now() - startTime;
+      if (duration > 30000) {
+        SyncLog.warn(this.logLabel, `Slow SuperSync request detected (Android)`, {
+          path,
+          durationMs: duration,
+          durationSec: (duration / 1000).toFixed(1),
+        });
+      }
+
+      return response.data as T;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      SyncLog.error(this.logLabel, `SuperSync request failed (Android)`, {
+        path,
+        durationMs: duration,
+        error: (error as Error).message,
+      });
+      throw error;
     }
-
-    return response.data as T;
   }
 }

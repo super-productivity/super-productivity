@@ -19,10 +19,6 @@ describe('MentionListComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('activeItem getter', () => {
     beforeEach(() => {
       logWarnSpy.calls.reset();

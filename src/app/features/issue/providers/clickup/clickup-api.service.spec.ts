@@ -49,10 +49,6 @@ describe('ClickUpApiService', () => {
     httpMock.verify();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('getById$', () => {
     it('should fetch a task by ID', () => {
       const mockTask: ClickUpTask = {

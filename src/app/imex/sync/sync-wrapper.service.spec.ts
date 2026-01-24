@@ -1044,4 +1044,54 @@ describe('SyncWrapperService', () => {
       });
     });
   });
+
+  describe('_isTimeoutError', () => {
+    it('should detect timeout keyword in error message', () => {
+      const timeoutError = new Error('Request timeout after 75s');
+      expect(service['_isTimeoutError'](timeoutError)).toBe(true);
+    });
+
+    it('should detect 504 status code', () => {
+      const error504 = new Error('504 Gateway Timeout');
+      expect(service['_isTimeoutError'](error504)).toBe(true);
+    });
+
+    it('should detect gateway timeout phrase', () => {
+      const gatewayError = new Error('Error: gateway timeout from proxy');
+      expect(service['_isTimeoutError'](gatewayError)).toBe(true);
+    });
+
+    it('should be case insensitive', () => {
+      const uppercaseError = new Error('REQUEST TIMEOUT');
+      expect(service['_isTimeoutError'](uppercaseError)).toBe(true);
+
+      const mixedCaseError = new Error('Gateway TIMEOUT occurred');
+      expect(service['_isTimeoutError'](mixedCaseError)).toBe(true);
+    });
+
+    it('should not false-positive on network errors', () => {
+      const networkError = new Error('Network error');
+      expect(service['_isTimeoutError'](networkError)).toBe(false);
+    });
+
+    it('should not false-positive on auth errors', () => {
+      const authError = new Error('401 Unauthorized');
+      expect(service['_isTimeoutError'](authError)).toBe(false);
+    });
+
+    it('should not false-positive on generic errors', () => {
+      const genericError = new Error('Something went wrong');
+      expect(service['_isTimeoutError'](genericError)).toBe(false);
+    });
+
+    it('should handle non-Error objects', () => {
+      expect(service['_isTimeoutError']('timeout string')).toBe(true);
+      expect(service['_isTimeoutError']('regular error')).toBe(false);
+    });
+
+    it('should handle objects with toString()', () => {
+      const errorObj = { toString: () => 'Error: timeout occurred' };
+      expect(service['_isTimeoutError'](errorObj)).toBe(true);
+    });
+  });
 });

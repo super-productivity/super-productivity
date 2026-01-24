@@ -92,10 +92,6 @@ describe('PollIssueUpdatesEffects', () => {
   });
 
   describe('pollIssueChangesForCurrentContext$', () => {
-    it('should be created', () => {
-      expect(effects).toBeTruthy();
-    });
-
     it('should trigger polling when setActiveWorkContext action is dispatched', fakeAsync(() => {
       const calendarProvider = createMockIssueProvider({
         id: 'cal-provider-1',

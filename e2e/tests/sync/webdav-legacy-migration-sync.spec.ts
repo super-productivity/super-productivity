@@ -1,8 +1,7 @@
-import { test, expect } from '../../fixtures/test.fixture';
+import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { waitForStatePersistence } from '../../utils/waits';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   createSyncFolder,
@@ -31,16 +30,8 @@ import legacyDataCollisionB from '../../fixtures/legacy-migration-collision-b.js
  *
  * Run with: npm run e2e:file e2e/tests/sync/webdav-legacy-migration-sync.spec.ts -- --retries=0
  */
-test.describe('@migration WebDAV Legacy Migration Sync', () => {
+test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   /**
    * Test: Both clients migrated from legacy - Keep local resolution

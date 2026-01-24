@@ -13,10 +13,18 @@
     "docker:deploy:build": "./scripts/deploy.sh --build",
     "docker:backup": "./scripts/backup.sh",
     "docker:logs": "docker logs supersync-server -f",
+    "docker:monitor": "./scripts/docker-monitor.sh",
+    "docker:monitor:usage": "./scripts/docker-monitor.sh usage",
+    "docker:monitor:all": "./scripts/docker-monitor.sh monitor-all --save",
+    "docker:shell": "./scripts/docker-monitor.sh shell",
     "delete-user": "ts-node scripts/delete-user.ts",
     "clear-data": "ts-node scripts/clear-data.ts",
     "monitor": "node dist/scripts/monitor.js",
-    "monitor:dev": "ts-node scripts/monitor.ts"
+    "monitor:dev": "tsx scripts/monitor.ts",
+    "analyze-storage": "tsx scripts/analyze-storage.ts",
+    "monitor:all": "tsx scripts/run-all-monitoring.ts",
+    "monitor:all:quick": "tsx scripts/run-all-monitoring.ts --quick",
+    "monitor:all:save": "tsx scripts/run-all-monitoring.ts --save"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
@@ -31,15 +39,15 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^7.0.11",
+    "nodemailer": "^7.0.12",
     "uuidv7": "^1.1.0",
-    "zod": "^4.1.13"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^18.0.0",
-    "@types/nodemailer": "^7.0.4",
+    "@types/nodemailer": "^7.0.5",
     "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.11",
     "prisma": "5.22.0",

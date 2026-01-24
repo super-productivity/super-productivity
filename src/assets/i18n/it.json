@@ -143,7 +143,7 @@
       "TITLE": "🙈 Perdonaci, ma...",
       "TXT": "Aiuteresti il progetto immensamente <strong>lasciando una buona recensione, se ti piace!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Ripeti la frase configurata ogni X tempo mentre stai tracciando il tempo di una attività.",
         "L_INTERVAL": "Intervallo di ripetizione frase",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "Es.: \"Lavora su ${currentTaskTitle}!\"",
         "L_VOICE": "Seleziona una voce",
         "L_VOICE_DESCRIPTION": "Scegli una voce",
-        "TITLE": "Modalità dominio"
+        "TITLE": "Promemoria vocale"
       }
     },
     "DROPBOX": {
@@ -1638,12 +1638,9 @@
       "DARK_MODE_DARK": "Scuro",
       "DARK_MODE_LIGHT": "Chiaro",
       "DARK_MODE_SYSTEM": "Sistema",
-      "DEFAULT_PROJECT": "Progetto predefinito da utilizzare per le attività se non ne viene specificato nessuno",
       "DEFAULT_START_PAGE": "Pagina iniziale predefinita",
       "FIRST_DAY_OF_WEEK": "Primo giorno della settimana",
       "HELP": "<p><strong>Non vedi le notifiche desktop?</strong>Per Windows controlla Sistema > Notifiche & azioni e controlla se le notifiche richieste sono abilitate.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Aggiungi automaticamente il tag oggi alle attività lavorate",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Segna l'attività padre come completata, quando tutti le sotto-attività sono completate",
       "IS_CONFIRM_BEFORE_EXIT": "Conferma prima di uscire dall'applicazione",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Conferma prima di uscire dall'app senza prima terminare il giorno",
       "IS_DARK_MODE": "Tema scuro",
@@ -1653,17 +1650,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Abilita finestra indicatore overlay (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Mostra consigli di produttività all'avvio dell'applicazione un po' più a lungo",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Mostra countdown corrente nella barra delle applicazioni / menu di stato (solo desktop Mac)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Mostra l'attività corrente nella barra delle applicazioni / menu di stato (solo desktop)",
-      "IS_TURN_OFF_MARKDOWN": "Disattiva markdown per le note",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Usa barra del titolo personalizzata (solo Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Richiede il riavvio per avere effetto",
       "START_OF_NEXT_DAY": "Ora di inizio del prossimo giorno",
       "START_OF_NEXT_DAY_HINT": "da quando (in ora) vuoi contare che il prossimo giorno è iniziato. Il predefinito è mezzanotte cioè 0.",
-      "TASK_NOTES_TPL": "Modello di descrizione dell'attività",
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (sperimentale)",
       "THEME_SELECT_LABEL": "Seleziona tema",
       "TITLE": "Impostazioni varie"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Progetto predefinito da utilizzare per le attività se non ne viene specificato nessuno",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Aggiungi automaticamente il tag oggi alle attività lavorate",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Segna l'attività padre come completata, quando tutte le sotto-attività sono completate",
+      "IS_CONFIRM_BEFORE_DELETE": "Conferma prima di eliminare le attività",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Abilita la formattazione Markdown nelle note delle attività",
+      "IS_TRAY_SHOW_CURRENT": "Mostra l'attività corrente nel menu a discesa / menu di stato (solo desktop mac/windows)",
+      "NOTES_TEMPLATE": "Modello di descrizione dell'attività",
+      "TITLE": "Attività"
     },
     "POMODORO": {
       "BREAK_DURATION": "Durata delle pause brevi",

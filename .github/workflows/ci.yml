@@ -1,0 +1,149 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - 'docs/wiki/**'
+  workflow_dispatch:
+    inputs: {}
+  release:
+    types: [published]
+permissions:
+  contents: read
+
+jobs:
+  # This job will scan dependency manifest files
+  # surfacing known-vulnerable versions of the packages declared or updated.
+  dependency-vulnerability-review:
+    name: Dependency Vulnerability Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: 20
+      - name: Check out Git repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      - name: Install npm Packages
+        run: npm i
+      - run: npm run lint
+
+  test-on-linux:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: [lint, dependency-vulnerability-review]
+    steps:
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: 20
+      - name: Check out Git repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Get npm cache directory
+        id: npm-cache-dir
+        run: |
+          echo "::set-output name=dir::$(npm config get cache)"
+      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ steps.npm-cache-dir.outputs.dir }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+      - name: Install npm Packages
+        run: npm i
+      - name: Install Playwright Browsers
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright install-deps chromium
+      - run: npm run env # Generate env.generated.ts from environment variables
+      - run: npm run int:test # Validate i18n JSON files
+      - run: npm run test
+      - name: Build Frontend for E2E
+        run: npm run buildFrontend:e2e
+      - name: Verify Build Output
+        run: |
+          test -f .tmp/angular-dist/browser/index.html || (echo "Build output missing" && exit 1)
+          test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
+      - name: Test E2E
+        run: npm run e2e:ci
+      - name: 'Upload E2E results on failure'
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: e2eResults
+          path: .tmp/e2e-test-results/**/*.*
+          retention-days: 14
+
+  # Lighthouse is designed to audit the performance, accessibility, SEO, and other metrics of a web application.
+  lighthouse:
+    name: Lighthouse
+    runs-on: ubuntu-latest
+    env:
+      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
+      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm i
+
+      - run: npm run env # Generate env.generated.ts
+
+      - name: Build production web app
+        run: npm run buildFrontend:prodWeb
+
+      - name: Add swap space for Lighthouse
+        run: |
+          # Ensure Lighthouse/Chrome have enough memory on GitHub-hosted runners
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Strip service worker artifacts for Lighthouse
+        run: rm -f dist/browser/ngsw.json dist/browser/ngsw-worker.js dist/browser/safety-worker.js dist/browser/worker-basic.min.js
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@fcd65974f7c4c2bf0ee9d09b84d2489183c29726 # v12
+        with:
+          # Configure Lighthouse CI
+          configPath: './tools/lighthouse/.lighthouserc.json'
+          # Upload results to temporary storage
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          # Run once to avoid long Chrome sessions on CI
+          runs: 1
+          # Configure budgets
+          budgetPath: './tools/lighthouse/budget.json'

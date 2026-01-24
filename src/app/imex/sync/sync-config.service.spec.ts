@@ -244,6 +244,301 @@ describe('SyncConfigService', () => {
       );
     });
 
+    it('should preserve SuperSync accessToken when form provides empty value (resetOnHide scenario)', async () => {
+      // This test verifies the fix for: SuperSync tokens being overwritten by empty string
+      // due to Formly's resetOnHide: true behavior on the accessToken field
+
+      const existingToken =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123';
+      const existingBaseUrl = 'https://supersync.example.com';
+
+      // Mock existing SuperSync provider with saved token
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: existingBaseUrl,
+              accessToken: existingToken, // Saved token
+              encryptKey: 'existing-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      // Simulate form state after resetOnHide: true triggered
+      // Form only provides baseUrl, accessToken is empty string (reset by Formly)
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.SuperSync,
+        syncInterval: 600000, // Changed interval (unrelated setting)
+        superSync: {
+          baseUrl: existingBaseUrl,
+          accessToken: '', // ← Empty due to resetOnHide
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // Verify the token is preserved (not overwritten with empty string)
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+        jasmine.objectContaining({
+          baseUrl: existingBaseUrl,
+          accessToken: existingToken, // ← Must be preserved!
+          // Empty string from form should NOT overwrite saved token
+        }),
+      );
+    });
+
+    it('should allow updating SuperSync accessToken with new non-empty value', async () => {
+      // Ensure we can still update tokens when user provides a new one
+      const oldToken = 'old-token-xyz';
+      const newToken = 'new-token-abc';
+
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'https://example.com',
+              accessToken: oldToken,
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.SuperSync,
+        syncInterval: 300000,
+        superSync: {
+          baseUrl: 'https://example.com',
+          accessToken: newToken, // User provides new token
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // Verify new token is saved
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+        jasmine.objectContaining({
+          accessToken: newToken, // New token should be saved
+        }),
+      );
+    });
+
+    it('should preserve WebDAV password when form provides empty value', async () => {
+      // Verify the defensive merge logic works for other providers too
+      const existingPassword = 'secret-password-123';
+
+      const mockProvider = {
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'https://webdav.example.com',
+              userName: 'testuser',
+              password: existingPassword,
+              syncFolderPath: '/sync',
+              encryptKey: 'test-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      // Form provides empty password (e.g., from resetOnHide or form state issue)
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.WebDAV,
+        syncInterval: 600000,
+        webDav: {
+          baseUrl: 'https://webdav.example.com',
+          userName: 'testuser',
+          password: '', // Empty - should not overwrite
+          syncFolderPath: '/sync',
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // Password should be preserved
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
+        jasmine.objectContaining({
+          password: existingPassword, // Must be preserved!
+        }),
+      );
+    });
+
+    it('should preserve boolean false values from form (not filter them out)', async () => {
+      // Ensure our filter doesn't treat false as "empty"
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'https://example.com',
+              isEncryptionEnabled: true, // Currently enabled
+              encryptKey: 'test-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      // User explicitly disables encryption (false should be respected)
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.SuperSync,
+        syncInterval: 300000,
+        superSync: {
+          baseUrl: 'https://example.com',
+          isEncryptionEnabled: false, // Explicitly false, not empty
+        } as any,
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // False should be saved (not filtered out)
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+        jasmine.objectContaining({
+          isEncryptionEnabled: false, // Must respect explicit false
+        }),
+      );
+    });
+
+    it('should handle multiple empty fields while preserving saved values', async () => {
+      // Test that all empty fields are filtered, preserving all saved credentials
+      const mockProvider = {
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'https://webdav.example.com',
+              userName: 'saveduser',
+              password: 'savedpass',
+              syncFolderPath: '/savedfolder',
+              encryptKey: 'saved-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      // Form provides only baseUrl, all other fields empty
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.WebDAV,
+        syncInterval: 300000,
+        webDav: {
+          baseUrl: 'https://webdav.example.com',
+          userName: '', // Empty
+          password: '', // Empty
+          syncFolderPath: '', // Empty
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // All saved values should be preserved
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
+        jasmine.objectContaining({
+          baseUrl: 'https://webdav.example.com', // From form
+          userName: 'saveduser', // Preserved
+          password: 'savedpass', // Preserved
+          syncFolderPath: '/savedfolder', // Preserved
+        }),
+      );
+    });
+
+    it('should handle mix of empty and non-empty fields correctly', async () => {
+      // Test partial updates: some fields updated, some empty (should preserve), some unchanged
+      const mockProvider = {
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'https://old.example.com',
+              userName: 'olduser',
+              password: 'oldpass',
+              syncFolderPath: '/old',
+              encryptKey: 'old-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.WebDAV,
+        syncInterval: 300000,
+        webDav: {
+          baseUrl: 'https://new.example.com', // Updated
+          userName: 'newuser', // Updated
+          password: '', // Empty - should preserve old
+          syncFolderPath: '/new', // Updated
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
+        jasmine.objectContaining({
+          baseUrl: 'https://new.example.com', // Updated
+          userName: 'newuser', // Updated
+          password: 'oldpass', // Preserved (form had empty)
+          syncFolderPath: '/new', // Updated
+        }),
+      );
+    });
+
+    it('should preserve LocalFile syncFolderPath when form provides empty value', async () => {
+      // Test LocalFile provider credentials preservation
+      const existingPath = 'C:\\Users\\test\\sync';
+
+      const mockProvider = {
+        id: SyncProviderId.LocalFile,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              syncFolderPath: existingPath,
+              encryptKey: 'test-key',
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+
+      // Form provides empty path
+      const settings: SyncConfig = {
+        isEnabled: true,
+        syncProvider: LegacySyncProvider.LocalFile,
+        syncInterval: 600000,
+        localFileSync: {
+          syncFolderPath: '', // Empty - should not overwrite
+        },
+      };
+
+      await service.updateSettingsFromForm(settings);
+
+      // Path should be preserved
+      expect(providerManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.LocalFile,
+        jasmine.objectContaining({
+          syncFolderPath: existingPath, // Must be preserved!
+        }),
+      );
+    });
+
     it('should prevent duplicate saves when settings are unchanged', async () => {
       // Mock provider for the test - getProviderById returns synchronously
       (providerManager.getProviderById as jasmine.Spy).and.returnValue({

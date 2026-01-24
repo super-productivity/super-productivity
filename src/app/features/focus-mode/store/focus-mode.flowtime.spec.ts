@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { of, ReplaySubject, Subject, Subscription } from 'rxjs';
+import { of, ReplaySubject, Subject, Subscription, BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
 import { Action } from '@ngrx/store';
 import { FocusModeMode } from '../focus-mode.model';
@@ -15,6 +15,9 @@ import { TaskService } from '../../tasks/task.service';
 import { FocusModeStrategyFactory } from '../focus-mode-strategies';
 import { MetricService } from '../../metric/metric.service';
 import { FocusModeStorageService } from '../focus-mode-storage.service';
+import { selectFocusModeConfig } from '../../config/store/global-config.reducer';
+import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { TakeABreakService } from '../../take-a-break/take-a-break.service';
 
 describe('FocusMode Flowtime behavior', () => {
   describe('Reducer: startFocusSession', () => {
@@ -92,6 +95,9 @@ describe('FocusMode Flowtime behavior', () => {
     let actions$: ReplaySubject<Action>;
     let storageService: jasmine.SpyObj<FocusModeStorageService>;
     let effects: FocusModeEffects;
+    const takeABreakServiceMock = {
+      otherNoBreakTIme$: new BehaviorSubject<number>(0),
+    };
 
     beforeEach(() => {
       actions$ = new ReplaySubject<Action>(1);
@@ -128,6 +134,13 @@ describe('FocusMode Flowtime behavior', () => {
               'setLastCountdownDuration',
             ]),
           },
+          { provide: TakeABreakService, useValue: takeABreakServiceMock },
+          {
+            provide: GlobalTrackingIntervalService,
+            useValue: {
+              todayStr$: new BehaviorSubject<string>('2024-01-19'),
+            },
+          },
         ],
       });
       store = TestBed.inject(MockStore);
@@ -159,6 +172,10 @@ describe('FocusMode Flowtime behavior', () => {
 
       store.overrideSelector(selectors.selectTimer, timer as any);
       store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isManualBreakStart: false,
+      });
       store.refreshState();
 
       const sub = effects.detectSessionCompletion$.pipe(take(1)).subscribe({
@@ -184,6 +201,10 @@ describe('FocusMode Flowtime behavior', () => {
 
       store.overrideSelector(selectors.selectTimer, timer as any);
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isManualBreakStart: false,
+      });
       store.refreshState();
 
       effects.detectSessionCompletion$.pipe(take(1)).subscribe((action: any) => {
@@ -306,6 +327,9 @@ describe('FocusMode Flowtime behavior', () => {
       duration: 45_000,
       purpose: 'work' as const,
     };
+    const takeABreakServiceMock = {
+      otherNoBreakTIme$: new BehaviorSubject<number>(0),
+    };
 
     beforeEach(() => {
       actions$ = new ReplaySubject<Action>(1);
@@ -341,6 +365,13 @@ describe('FocusMode Flowtime behavior', () => {
               'getLastCountdownDuration',
               'setLastCountdownDuration',
             ]),
+          },
+          { provide: TakeABreakService, useValue: takeABreakServiceMock },
+          {
+            provide: GlobalTrackingIntervalService,
+            useValue: {
+              todayStr$: new BehaviorSubject<string>('2024-01-19'),
+            },
           },
         ],
       });
@@ -401,6 +432,9 @@ describe('FocusMode Flowtime behavior', () => {
     let effects: FocusModeEffects;
     let actions$: Subject<Action>;
     let getStrategySpy: jasmine.Spy;
+    const takeABreakServiceMock = {
+      otherNoBreakTIme$: new BehaviorSubject<number>(0),
+    };
 
     beforeEach(() => {
       actions$ = new Subject<Action>();
@@ -439,6 +473,13 @@ describe('FocusMode Flowtime behavior', () => {
               'getLastCountdownDuration',
               'setLastCountdownDuration',
             ]),
+          },
+          { provide: TakeABreakService, useValue: takeABreakServiceMock },
+          {
+            provide: GlobalTrackingIntervalService,
+            useValue: {
+              todayStr$: new BehaviorSubject<string>('2024-01-19'),
+            },
           },
         ],
       });

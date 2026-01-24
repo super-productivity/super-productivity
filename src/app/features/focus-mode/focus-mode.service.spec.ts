@@ -152,13 +152,6 @@ describe('FocusModeService', () => {
     isRunningValue = false;
   });
 
-  it('should be created', fakeAsync(() => {
-    setupTestBed();
-    service = TestBed.inject(FocusModeService);
-    expect(service).toBeTruthy();
-    discardPeriodicTasks();
-  }));
-
   describe('signals', () => {
     beforeEach(fakeAsync(() => {
       setupTestBed();

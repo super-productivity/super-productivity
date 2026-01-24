@@ -82,9 +82,9 @@ export class SyncEffects {
                     msg: T.F.DROPBOX.S.SYNC_ERROR,
                     type: 'ERROR',
                   });
-                  if (confirm('Sync failed. Close App anyway?')) {
-                    this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
-                  }
+                  // Inform user but always allow close - sync already failed
+                  alert('Sync failed. The app will close.');
+                  this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
                 }),
             ),
           ),

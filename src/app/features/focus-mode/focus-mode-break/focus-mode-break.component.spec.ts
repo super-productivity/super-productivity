@@ -17,10 +17,12 @@ import {
 } from '@angular/core';
 import { T } from '../../../t.const';
 import { of } from 'rxjs';
+import { TaskService } from '../../tasks/task.service';
 
 describe('FocusModeBreakComponent', () => {
   let component: FocusModeBreakComponent;
   let mockStore: jasmine.SpyObj<Store>;
+  let mockTaskService: jasmine.SpyObj<any>;
   let mockFocusModeService: {
     timeRemaining: Signal<number>;
     progress: Signal<number>;
@@ -29,10 +31,14 @@ describe('FocusModeBreakComponent', () => {
   };
   let environmentInjector: EnvironmentInjector;
   const mockPausedTaskId = 'test-task-id';
+  const mockCurrentTaskId = 'current-task-id';
 
   beforeEach(() => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch', 'select']);
     mockStore.select.and.returnValue(of(mockPausedTaskId));
+
+    mockTaskService = jasmine.createSpyObj('TaskService', ['currentTaskId']);
+    mockTaskService.currentTaskId.and.returnValue(mockCurrentTaskId);
 
     mockFocusModeService = {
       timeRemaining: signal(300000),
@@ -45,6 +51,7 @@ describe('FocusModeBreakComponent', () => {
       providers: [
         { provide: Store, useValue: mockStore },
         { provide: FocusModeService, useValue: mockFocusModeService },
+        { provide: TaskService, useValue: mockTaskService },
       ],
     });
 
@@ -55,17 +62,9 @@ describe('FocusModeBreakComponent', () => {
     });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should expose T translations', () => {
       expect(component.T).toBe(T);
-    });
-
-    it('should inject FocusModeService', () => {
-      expect(component.focusModeService).toBeDefined();
     });
   });
 
@@ -109,9 +108,25 @@ describe('FocusModeBreakComponent', () => {
   });
 
   describe('pauseBreak', () => {
-    it('should dispatch pauseFocusSession action with pausedTaskId', () => {
+    it('should dispatch pauseFocusSession with currentTaskId when tracking is active (Bug #5995 fix)', () => {
+      // Scenario: Tracking continues during break (isPauseTrackingDuringBreak=FALSE)
+      mockTaskService.currentTaskId.and.returnValue(mockCurrentTaskId);
+
       component.pauseBreak();
 
+      expect(mockTaskService.currentTaskId).toHaveBeenCalled();
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        pauseFocusSession({ pausedTaskId: mockCurrentTaskId }),
+      );
+    });
+
+    it('should fall back to stored pausedTaskId when tracking is stopped', () => {
+      // Scenario: Tracking was auto-paused during break (isPauseTrackingDuringBreak=TRUE)
+      mockTaskService.currentTaskId.and.returnValue(null);
+
+      component.pauseBreak();
+
+      expect(mockTaskService.currentTaskId).toHaveBeenCalled();
       expect(mockStore.dispatch).toHaveBeenCalledWith(
         pauseFocusSession({ pausedTaskId: mockPausedTaskId }),
       );

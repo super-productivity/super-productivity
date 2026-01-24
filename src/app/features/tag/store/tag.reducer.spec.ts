@@ -419,15 +419,26 @@ describe('TagReducer', () => {
       expect(result).toEqual(['task1', 'task3', 'task4', 'task5']);
     });
 
-    it('should exclude subtasks (tasks with parentId)', () => {
+    it('should exclude subtasks when parent also has the same tag', () => {
       const tag = createTag(['task1', 'subtask1']);
       const taskEntities = createTaskEntities([
         { id: 'task1', tagIds: ['tag1'] },
-        { id: 'subtask1', tagIds: ['tag1'], parentId: 'task1' }, // Subtask
+        { id: 'subtask1', tagIds: ['tag1'], parentId: 'task1' }, // Subtask with same tag as parent
       ]);
 
       const result = computeOrderedTaskIdsForTag('tag1', tag, taskEntities);
-      expect(result).toEqual(['task1']);
+      expect(result).toEqual(['task1']); // subtask excluded - shown nested under parent
+    });
+
+    it('should include subtasks as top-level when parent does NOT have the tag', () => {
+      const tag = createTag(['subtask1']);
+      const taskEntities = createTaskEntities([
+        { id: 'task1', tagIds: [] }, // Parent without tag
+        { id: 'subtask1', tagIds: ['tag1'], parentId: 'task1' }, // Subtask with explicit tag
+      ]);
+
+      const result = computeOrderedTaskIdsForTag('tag1', tag, taskEntities);
+      expect(result).toEqual(['subtask1']); // subtask included as top-level item
     });
 
     it('should preserve sparse ordering (gaps in index)', () => {

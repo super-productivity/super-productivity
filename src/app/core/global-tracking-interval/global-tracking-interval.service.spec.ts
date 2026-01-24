@@ -1,20 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
-import { GlobalTrackingIntervalService } from './global-tracking-interval.service';
 import { map } from 'rxjs/operators';
 import { cold } from 'jasmine-marbles';
 
 describe('GlobalTrackingIntervalService', () => {
-  let service: GlobalTrackingIntervalService;
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [provideMockStore({ initialState: {} })],
     });
-    service = TestBed.inject(GlobalTrackingIntervalService);
-  });
-
-  it('should be created', () => {
-    expect(service).toBeTruthy();
   });
 
   it('should provide a steady interval', () => {

@@ -1,17 +1,16 @@
 name: 💡 Feature Request
-description: Suggest an idea for this project
+description: Suggest an idea for this project.
 title: '💡 '
-labels: ['enhancement']
-assignees: []
+type: Feature
 
 body:
   - type: markdown
     attributes:
       value: |
 
-        Thank you for taking the time to fill out this feature request fully! This will help a lot to communicate what this is about and focus the discussion.
+        🤝 Thank you for taking the time to fill out this feature request fully! This will help a lot to communicate what this is about and focus the discussion.
 
-        Please also make sure that there is no similar feature request opened up already by searching the issues in this repository!
+        ⚠️ Please make sure that there is no similar feature request opened up already by searching the issues in this repository!
 
   - type: textarea
     id: problem-statement

@@ -46,10 +46,6 @@ describe('SyncImportFilterService', () => {
     service = TestBed.inject(SyncImportFilterService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('filterOpsInvalidatedBySyncImport', () => {
     it('should return all ops as valid when no SYNC_IMPORT is present', async () => {
       const ops: Operation[] = [

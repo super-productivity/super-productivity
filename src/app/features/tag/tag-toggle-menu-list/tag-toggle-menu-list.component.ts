@@ -23,6 +23,9 @@ import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskService } from '../../tasks/task.service';
 import { isSingleEmoji } from '../../../util/extract-first-emoji';
+import { MenuTreeService } from '../../menu-tree/menu-tree.service';
+import { MenuTreeKind, MenuTreeViewNode } from '../../menu-tree/store/menu-tree.model';
+import { Tag } from '../tag.model';
 
 @Component({
   selector: 'tag-toggle-menu-list',
@@ -36,6 +39,7 @@ export class TagToggleMenuListComponent {
   private _tagService = inject(TagService);
   private _taskService = inject(TaskService);
   private _matDialog = inject(MatDialog);
+  private _menuTreeService = inject(MenuTreeService);
 
   task = input.required<TaskCopy>();
 
@@ -46,12 +50,37 @@ export class TagToggleMenuListComponent {
   private _tagList = toSignal(this._tagService.tagsNoMyDayAndNoList$, {
     initialValue: [],
   });
-  toggleTagList = computed(() =>
-    this._tagList().map((tag) => ({
+
+  // Build tree from tags to maintain menu tree ordering
+  private _tagTree = computed(() => {
+    const tags = this._tagList();
+    return this._menuTreeService.buildTagViewTree(tags);
+  });
+
+  // Extract tags in tree order (flattened)
+  toggleTagList = computed(() => {
+    const tree = this._tagTree();
+    const tags: Tag[] = [];
+
+    // Recursive function to extract tags maintaining order
+    const extractTags = (nodes: MenuTreeViewNode[]): void => {
+      for (const node of nodes) {
+        if (node.k === MenuTreeKind.TAG) {
+          tags.push(node.tag);
+        } else if (node.k === MenuTreeKind.FOLDER) {
+          extractTags(node.children);
+        }
+      }
+    };
+
+    extractTags(tree);
+
+    // Map to include isEmojiIcon
+    return tags.map((tag) => ({
       ...tag,
       isEmojiIcon: tag.icon ? isSingleEmoji(tag.icon) : false,
-    })),
-  );
+    }));
+  });
   menuEl = viewChild('menuEl', {
     // read: MatMenu,
   });

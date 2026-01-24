@@ -1,10 +1,7 @@
 <ng-content></ng-content>
 
 <div class="drag-handle">
-  <mat-icon
-    class="drag-handle-ico"
-    svgIcon="drag_handle"
-  ></mat-icon>
+  <mat-icon class="drag-handle-ico">drag_indicator</mat-icon>
   @if (isCurrent) {
     <mat-icon class="play-icon-indicator">play_arrow </mat-icon>
   }
@@ -63,10 +60,7 @@
     class="planner-time-remaining-shared"
   >
     @if (task.subTaskIds?.length) {
-      <mat-icon
-        svgIcon="estimate_remaining"
-        inline="true"
-      ></mat-icon>
+      <mat-icon inline="true">hourglass_empty</mat-icon>
     }
 
     <inline-input

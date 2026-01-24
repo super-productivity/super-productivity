@@ -100,6 +100,15 @@ export class BackupService {
 
       if (!validationResult.isValid) {
         // Try to repair
+        PFLog.normal('BackupService: Validation failed, attempting repair...', {
+          success: validationResult.typiaResult.success,
+          errors:
+            'errors' in validationResult.typiaResult
+              ? validationResult.typiaResult.errors.length
+              : 0,
+          hasArchiveYoung: !!backupData.archiveYoung,
+          hasArchiveOld: !!backupData.archiveOld,
+        });
         if (isDataRepairPossible(backupData)) {
           const errors =
             'errors' in validationResult.typiaResult

@@ -12,6 +12,7 @@ import { T } from '../../../t.const';
 import { ScheduleService } from '../schedule.service';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { parseDbDateStr } from 'src/app/util/parse-db-date-str';
 
 @Component({
   selector: 'schedule-month',
@@ -50,10 +51,22 @@ export class ScheduleMonthComponent {
     return headers;
   });
 
+  // Determine the reference month from the displayed days
+  // Find the first day that's actually in the target month (not padding days)
+  readonly referenceMonth = computed(() => {
+    const days = this.daysToShow();
+    if (days.length === 0) return new Date();
+
+    // Use the middle day as reference (around day 14-15 of the month)
+    // This ensures we get a day that's actually in the target month
+    const middleIndex = Math.floor(days.length / 2);
+    return parseDbDateStr(days[middleIndex]);
+  });
+
   T: typeof T = T;
 
   getDayClass(day: string): string {
-    return this._scheduleService.getDayClass(day);
+    return this._scheduleService.getDayClass(day, this.referenceMonth());
   }
 
   getWeekIndex(dayIndex: number): number {

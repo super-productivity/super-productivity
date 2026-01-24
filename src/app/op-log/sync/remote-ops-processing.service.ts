@@ -130,9 +130,7 @@ export class RemoteOpsProcessingService {
 
       try {
         const migrated = this.schemaMigrationService.migrateOperation(op);
-        if (migrated) {
-          migratedOps.push(migrated);
-        } else {
+        if (migrated === null) {
           // Track dropped entity IDs for dependency warning
           if (op.entityId) {
             droppedEntityIds.add(op.entityId);
@@ -143,6 +141,11 @@ export class RemoteOpsProcessingService {
           OpLog.verbose(
             `RemoteOpsProcessingService: Dropped op ${op.id} (migrated to null)`,
           );
+        } else if (Array.isArray(migrated)) {
+          // Operation was split into multiple operations
+          migratedOps.push(...migrated);
+        } else {
+          migratedOps.push(migrated);
         }
       } catch (e) {
         OpLog.err(`RemoteOpsProcessingService: Migration failed for op ${op.id}`, e);

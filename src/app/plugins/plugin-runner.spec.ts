@@ -69,10 +69,6 @@ describe('PluginRunner', () => {
     service = TestBed.inject(PluginRunner);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('Plugin variable injection', () => {
     it('should make "plugin" variable available to plugin code', async () => {
       // Plugin code that checks for 'plugin' variable existence

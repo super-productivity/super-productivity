@@ -13,9 +13,8 @@ const config: CapacitorConfig = {
       smallIcon: 'ic_stat_sp',
     },
     Keyboard: {
-      // Resize the web view when keyboard appears (iOS)
+      // Default: resize body (Android)
       resize: 'body',
-      // Style keyboard accessory bar
       resizeOnFullScreen: true,
     },
     StatusBar: {
@@ -33,6 +32,15 @@ const config: CapacitorConfig = {
     allowsLinkPreview: true,
     // Scroll behavior
     scrollEnabled: true,
+    // iOS-specific plugin overrides
+    plugins: {
+      Keyboard: {
+        // Resize the native WebView when keyboard appears
+        // This shrinks the viewport so 100vh/100% automatically fits above keyboard
+        resize: 'native',
+        resizeOnFullScreen: true,
+      },
+    },
   },
 };
 

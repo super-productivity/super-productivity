@@ -1,0 +1,22 @@
+/**
+ * SCSS constants for the Schedule component.
+ *
+ * These values control the responsive behavior and layout of the schedule view.
+ * They should be kept in sync with schedule.constants.ts where applicable.
+ */
+
+// Viewport breakpoints
+$schedule-horizontal-scroll-threshold: 1900px;
+$schedule-tablet-breakpoint: 768px;
+$schedule-mobile-breakpoint: 480px;
+
+// Column widths
+$schedule-time-column-width: 3em;
+$schedule-day-column-width-desktop: 180px;
+$schedule-day-column-width-tablet: 150px;
+$schedule-day-column-width-mobile: 120px;
+
+// Scrollbar dimensions
+$schedule-scrollbar-height: 8px;
+$schedule-scrollbar-width: 4px;
+$schedule-header-scrollbar-padding: 11px;

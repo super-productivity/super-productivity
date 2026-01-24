@@ -4,7 +4,7 @@
   class="markdown-wrapper"
   spResolveClipboardImages
 >
-  @if (isShowEdit() || isTurnOffMarkdownParsing()) {
+  @if (isShowEdit() || !isMarkdownFormattingEnabled()) {
     <textarea
       #textareaEl
       (blur)="untoggleShowEdit(); setBlur($event)"
@@ -39,7 +39,7 @@
   <div class="controls">
     <ng-content> </ng-content>
 
-    @if (isShowChecklistToggle() && !isTurnOffMarkdownParsing()) {
+    @if (isShowChecklistToggle() && isMarkdownFormattingEnabled()) {
       <!--  -->
       <button
         [matTooltip]="'Add checklist item'"

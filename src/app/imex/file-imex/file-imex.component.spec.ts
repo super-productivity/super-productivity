@@ -77,10 +77,6 @@ describe('FileImexComponent', () => {
     httpTestingController = TestBed.inject(HttpTestingController);
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('ngOnInit', () => {
     it('should handle importFromUrl query parameter', async () => {
       const mockUrl = 'https://example.com/backup.json';

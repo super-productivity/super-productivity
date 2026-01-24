@@ -31,6 +31,9 @@ export const pauseFocusSession = createAction(
   props<{ pausedTaskId?: string | null }>(),
 );
 export const unPauseFocusSession = createAction('[FocusMode] Resume Session');
+export const clearResumingBreakFlag = createAction(
+  '[FocusMode] Clear Resuming Break Flag',
+);
 
 export const completeFocusSession = createAction(
   '[FocusMode] Complete Session',

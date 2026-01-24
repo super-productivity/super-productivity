@@ -19,9 +19,10 @@ describe('TaskElectronEffects', () => {
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg$: of({}),
     });
-    const focusModeServiceSpy = jasmine.createSpyObj('FocusModeService', [], {
+    const focusModeServiceSpy = jasmine.createSpyObj('FocusModeService', ['mode'], {
       currentSessionTime$: of(0),
     });
+    focusModeServiceSpy.mode.and.returnValue('Countdown');
 
     // Mock window.ea
     (window as any).ea = {

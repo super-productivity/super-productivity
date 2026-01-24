@@ -57,11 +57,6 @@ describe('ScheduleWeekDragService', () => {
     TestBed.resetTestingModule();
   });
 
-  it('should be created', () => {
-    setupTestBed();
-    expect(service).toBeTruthy();
-  });
-
   describe('_scheduleTask reminder behavior (via scheduleTaskWithTime action)', () => {
     const baseTask = {
       id: 'task-1',

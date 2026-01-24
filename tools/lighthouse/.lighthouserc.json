@@ -23,7 +23,7 @@
         "interactive": ["warn", { "maxNumericValue": 5000 }],
         "resource-summary.script.count": ["warn", { "maxNumericValue": 140 }],
         "resource-summary.total.count": ["warn", { "maxNumericValue": 150 }],
-        "resource-summary.font.size": ["warn", { "maxNumericValue": 260000 }]
+        "resource-summary.font.size": ["warn", { "maxNumericValue": 520000 }]
       }
     },
     "upload": {

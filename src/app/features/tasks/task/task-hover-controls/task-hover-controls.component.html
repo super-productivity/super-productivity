@@ -10,10 +10,7 @@
     color=""
     mat-icon-button
   >
-    <mat-icon
-      class="play-icon"
-      svgIcon="play"
-    ></mat-icon>
+    <mat-icon class="play-icon">play_arrow</mat-icon>
   </button>
 }
 @if (!task().isDone && isCurrent() && !task().subTasks?.length) {
@@ -79,7 +76,7 @@
     mat-icon-button
   >
     @if (!task().issueWasUpdated) {
-      <mat-icon>vertical_split</mat-icon>
+      <mat-icon>right_panel_open</mat-icon>
     }
     <!--            <mat-icon *ngIf="!task().issueWasUpdated">toc</mat-icon>-->
     <!--            <mat-icon *ngIf="!task().issueWasUpdated">chevron_right</mat-icon>-->

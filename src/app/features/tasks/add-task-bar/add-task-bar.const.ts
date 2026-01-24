@@ -1,5 +1,6 @@
 import { INBOX_PROJECT } from '../../project/project.const';
 import { TimeSpentOnDay, TaskReminderOptionId } from '../task.model';
+import { TaskAttachment } from '../task-attachment/task-attachment.model';
 
 export interface AddTaskBarState {
   projectId: string;
@@ -12,6 +13,7 @@ export interface AddTaskBarState {
   newTagTitles: string[];
   cleanText: string | null;
   remindOption: TaskReminderOptionId | null;
+  attachments: TaskAttachment[];
 }
 export const ESTIMATE_OPTIONS = [
   { label: '5m', value: '5m' },
@@ -36,6 +38,7 @@ export const INITIAL_ADD_TASK_BAR_STATE: AddTaskBarState = {
   newTagTitles: [],
   cleanText: null,
   remindOption: null,
+  attachments: [],
 };
 
 export const CHRONO_SUGGESTIONS: string[] = [

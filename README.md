@@ -27,7 +27,24 @@
 <br>
 <br>
 
-[![Stand With Ukraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/banner2-direct.svg)](https://vshymanskyy.github.io/StandWithUkraine)
+<p align="center">
+</p>
+
+<p align="center">
+  <a href="https://bank.gov.ua/en/news/all/natsionalniy-bank-vidkriv-rahunok-dlya-gumanitarnoyi-dopomogi-ukrayintsyam-postrajdalim-vid-rosiyskoyi-agresiyi" target="_blank">
+    <img
+      src="https://upload.wikimedia.org/wikipedia/commons/4/49/Flag_of_Ukraine.svg"
+      alt="Ukraine Flag"
+      width="520"
+      height="120"
+    /><br/>
+    <strong>Humanitarian Aid for Ukraine</strong><br/>
+    Support humanitarian relief via the official National Bank of Ukraine account.
+  </a>
+</p>
+
+<br>
+<br>
 
 <p align="center" style="text-align: center;">
 <a href="https://lbesson.mit-license.org">
@@ -234,6 +251,18 @@ sudo snap install --channel=edge superproductivity
 sudo snap set core experimental.refresh-app-awareness=true
 ```
 
+**Important: Enable Local File Sync**
+To use local file sync, you need to manually connect the `home` interface:
+
+```bash
+sudo snap connect superproductivity:home
+```
+
+**⚠️ Snap Data Persistence Warning**
+When uninstalling the snap package, all user data (tasks, projects, settings) stored in `~/snap/superproductivity/common/` may be removed. Always export your data before uninstalling. Consider using Flatpak, AppImage, or .deb packages if you prefer data to persist in the standard `~/.config/` location.
+
+For more details, see [issue #6031](https://github.com/super-productivity/super-productivity/issues/6031).
+
 <a href="https://snapcraft.io/superproductivity">
   <img alt="Get it from the Snap Store" src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" />
 </a>
@@ -347,9 +376,12 @@ There are several ways to help.
 
 Recently support for Super Productivity has been growing! A big thank you to all our sponsors, especially the ones below!
 
-<p style="font-size:21px; color:black;">Browser testing via
-        <a href="https://www.lambdatest.com/?utm_source=superproductivity&utm_medium=sponsor" target="_blank">
-            <img src="https://www.lambdatest.com/blue-logo.png" style="vertical-align: middle;" width="250" height="45" />
+<p style="font-size:21px; color:black;">Agentic AI Quality Engineering via
+        <a href="https://www.testmu.ai/?utm_source=superproductivity&utm_medium=sponsor" target="_blank">
+            <picture>
+                <source srcset="https://super-productivity.com/_astro/test-mu-log-dark.Dy0yXuJ7.svg" media="(prefers-color-scheme: dark)" />
+                <img src="https://super-productivity.com/_astro/test-mu-log-light.CehEzLCt.svg" style="vertical-align: middle;" width="250" height="45" alt="TestMu AI" />
+            </picture>
         </a>
     </p>
 

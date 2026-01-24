@@ -230,10 +230,6 @@ describe('RemoteOpsProcessingService', () => {
     );
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('processRemoteOps', () => {
     it('should call migrateOperation for each remote op', async () => {
       const remoteOps: Operation[] = [

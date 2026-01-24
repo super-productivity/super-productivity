@@ -27,8 +27,8 @@ export class TaskRelatedModelEffects {
   // ---------------------
 
   ifAutoAddTodayEnabled$ = <T>(obs: Observable<T>): Observable<T> =>
-    this._globalConfigService.misc$.pipe(
-      switchMap((misc) => (misc.isAutoAddWorkedOnToToday ? obs : EMPTY)),
+    this._globalConfigService.tasks$.pipe(
+      switchMap((tasks) => (tasks.isAutoAddWorkedOnToToday ? obs : EMPTY)),
     );
 
   autoAddTodayTagOnTracking = createEffect(() =>

@@ -143,7 +143,7 @@
       "TITLE": "🙈 Por favor, perdónanos, pero...",
       "TXT": "¡Ayudarías inmensamente al proyecto al <strong>darle una buena calificación, si te gusta!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Repite la frase configurada cada X cuando se rastrea tiempo en una tarea.",
         "L_INTERVAL": "Intervalo para repetir la frase",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "P. ej.: \"¡Trabaja en ${currentTaskTitle}!\"",
         "L_VOICE": "Seleccionar una voz",
         "L_VOICE_DESCRIPTION": "Elige una voz",
-        "TITLE": "Modo Dómina"
+        "TITLE": "Recordatorio de voz"
       }
     },
     "DROPBOX": {
@@ -1636,12 +1636,9 @@
       "DARK_MODE_DARK": "Oscuro",
       "DARK_MODE_LIGHT": "Claro",
       "DARK_MODE_SYSTEM": "Sistema",
-      "DEFAULT_PROJECT": "Proyecto predeterminado a usar para tareas si no se especifica ninguno",
       "DEFAULT_START_PAGE": "Página de inicio predeterminada",
       "FIRST_DAY_OF_WEEK": "Primer día de la semana",
       "HELP": "<p><strong>¿No ves Notificaciones de Escritorio?</strong> Para windows podrías querer comprobar Sistema > Notificaciones y acciones y comprobar si las notificaciones requeridas han sido habilitadas.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Añadir automáticamente la etiqueta de hoy a las tareas trabajadas",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Marcar la tarea principal como realizada, cuando se completen todas las subtareas",
       "IS_CONFIRM_BEFORE_EXIT": "Confirmar antes de salir de la aplicación",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirmar antes de salir de la aplicación sin finalizar el día primero",
       "IS_DARK_MODE": "Modo Oscuro",
@@ -1651,17 +1648,25 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Habilitar ventana de indicador de superposición (escritorio linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Mostrar consejo de productividad al inicio de la aplicación un poco más de tiempo",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Mostrar cuenta regresiva actual en la bandeja / menú de estado (solo mac de escritorio)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Mostrar la tarea actual en el menú de bandeja / estado (solo escritorio mac/windows)",
       "IS_TURN_OFF_MARKDOWN": "Desactivar análisis de markdown para notas de tarea",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Usar barra de título personalizada (solo Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requiere reinicio para surtir efecto",
       "START_OF_NEXT_DAY": "Hora de inicio del siguiente día",
       "START_OF_NEXT_DAY_HINT": "desde cuándo (en hora) quieres contar que ha comenzado el siguiente día. predeterminado es medianoche que es 0.",
-      "TASK_NOTES_TPL": "Plantilla de descripción de tarea",
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (experimental)",
       "THEME_SELECT_LABEL": "Seleccionar Tema",
       "TITLE": "Ajustes Varios"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Proyecto predeterminado a usar para tareas si no se especifica ninguno",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Añadir automáticamente la etiqueta de hoy a las tareas trabajadas",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Marcar la tarea principal como realizada, cuando se completen todas las subtareas",
+      "IS_CONFIRM_BEFORE_DELETE": "Confirmar antes de eliminar tareas",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Habilitar formato Markdown en notas de tareas",
+      "IS_TRAY_SHOW_CURRENT": "Mostrar tarea actual en la bandeja / menú de estado (solo escritorio mac/windows)",
+      "NOTES_TEMPLATE": "Plantilla de descripción de tarea",
+      "TITLE": "Tareas"
     },
     "POMODORO": {
       "BREAK_DURATION": "Duración de descansos cortos",

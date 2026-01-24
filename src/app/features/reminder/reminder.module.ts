@@ -99,13 +99,41 @@ export class ReminderModule {
         ),
       )
       .subscribe((reminders: TaskWithReminderData[]) => {
+        const now = Date.now();
+        const overdueReminders = reminders.filter(
+          (r) => r.reminderData?.remindAt && r.reminderData.remindAt < now,
+        );
+        const futureReminders = reminders.filter(
+          (r) => r.reminderData?.remindAt && r.reminderData.remindAt >= now,
+        );
+
+        Log.log('=== REMINDER DIALOG TRIGGER ===', {
+          platform: IS_ANDROID_NATIVE ? 'Android' : IS_ELECTRON ? 'Electron' : 'Web',
+          reminderCount: reminders.length,
+          overdueCount: overdueReminders.length,
+          futureCount: futureReminders.length,
+          reminders: reminders.map((r) => ({
+            id: r.id.substring(0, 8),
+            title: r.title.substring(0, 30),
+            remindAt: r.reminderData?.remindAt
+              ? new Date(r.reminderData.remindAt).toISOString()
+              : 'unknown',
+            isOverdue: r.reminderData?.remindAt ? r.reminderData.remindAt < now : false,
+          })),
+          willShowNotification: !IS_NATIVE_PLATFORM,
+          willShowDialog: !IS_ANDROID_NATIVE || overdueReminders.length > 0,
+        });
+
         if (IS_ELECTRON && this._globalConfigService.cfg()?.reminder?.isFocusWindow) {
           this._uiHelperService.focusApp();
         }
 
         this._showNotification(reminders);
 
-        // Skip dialog on Android - native notifications handle reminders
+        // On Android:
+        // - Future reminders: Native AlarmManager handles them (skip dialog)
+        // - Overdue reminders: No native notification exists (show dialog)
+        // This is because android.effects.ts only schedules future reminders.
         // TODO: Native Android reminder notification actions (snooze/done buttons) currently
         // work entirely in the background without notifying TypeScript. This means:
         // 1. Snooze: Works correctly (native code reschedules the alarm)
@@ -113,8 +141,25 @@ export class ReminderModule {
         //    app state. The reminder will be cancelled when the task is marked done in the app.
         // To fully fix: Add onReminderDone$ subject to android-interface.ts and wire it up
         // in the Kotlin ReminderBroadcastReceiver to call dismissReminderOnly action.
-        if (IS_ANDROID_NATIVE) {
+        if (
+          IS_ANDROID_NATIVE &&
+          futureReminders.length > 0 &&
+          overdueReminders.length === 0
+        ) {
+          Log.log(
+            '⏭️  SKIPPING dialog on Android - all reminders are future, native notifications will handle them',
+          );
           return;
+        }
+
+        if (IS_ANDROID_NATIVE && overdueReminders.length > 0) {
+          Log.log(
+            '📱 SHOWING dialog on Android for overdue reminders (no native notification exists)',
+            {
+              overdueCount: overdueReminders.length,
+              futureCount: futureReminders.length,
+            },
+          );
         }
 
         const oldest = reminders[0];

@@ -49,30 +49,54 @@ export class SuperSyncRestoreService {
   async restoreToPoint(serverSeq: number): Promise<void> {
     const provider = this._getRestoreCapableProvider();
 
-    try {
-      // 1. Fetch state at the specified serverSeq
-      const snapshot = await provider.getStateAtSeq(serverSeq);
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
 
-      // 2. Import with isForceConflict=true to generate fresh vector clock
-      // This ensures the restored state syncs cleanly to all devices
-      await this._backupService.importCompleteBackup(
-        snapshot.state as AppDataComplete,
-        true, // isSkipLegacyWarnings
-        true, // isSkipReload - no page reload needed
-        true, // isForceConflict - generates fresh vector clock
-      );
+    while (retryCount <= MAX_RETRIES) {
+      try {
+        // 1. Fetch state at the specified serverSeq
+        const snapshot = await provider.getStateAtSeq(serverSeq);
 
-      this._snackService.open({
-        type: 'SUCCESS',
-        msg: T.F.SYNC.S.RESTORE_SUCCESS,
-      });
-    } catch (error) {
-      console.error('Failed to restore from point:', error);
-      this._snackService.open({
-        type: 'ERROR',
-        msg: T.F.SYNC.S.RESTORE_ERROR,
-      });
-      throw error;
+        // 2. Import with isForceConflict=true to generate fresh vector clock
+        // This ensures the restored state syncs cleanly to all devices
+        await this._backupService.importCompleteBackup(
+          snapshot.state as AppDataComplete,
+          true, // isSkipLegacyWarnings
+          true, // isSkipReload - no page reload needed
+          true, // isForceConflict - generates fresh vector clock
+        );
+
+        this._snackService.open({
+          type: 'SUCCESS',
+          msg: T.F.SYNC.S.RESTORE_SUCCESS,
+        });
+        return;
+      } catch (error) {
+        const errorMsg = (error as Error).message?.toLowerCase() || '';
+        const isNetworkError =
+          errorMsg.includes('timeout') ||
+          errorMsg.includes('504') ||
+          errorMsg.includes('failed to fetch') ||
+          errorMsg.includes('network');
+
+        if (isNetworkError && retryCount < MAX_RETRIES) {
+          retryCount++;
+          console.warn(
+            `Restore failed due to network error, retrying (${retryCount}/${MAX_RETRIES}):`,
+            error,
+          );
+          // Exponential backoff: 2s, 4s
+          await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount));
+          continue;
+        }
+
+        console.error('Failed to restore from point:', error);
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.RESTORE_ERROR,
+        });
+        throw error;
+      }
     }
   }
 

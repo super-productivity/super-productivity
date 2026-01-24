@@ -4,26 +4,26 @@
 #
 # FAST LOCAL ALTERNATIVE: Run `ng serve` locally + `npm run e2e:webdav` (only webdav in Docker)
 services:
-  # Angular development server for E2E tests
-  # Uses volume mount to avoid copying/rebuilding node_modules
-  # Requires: npm install to be run locally first
+  # Production Angular build for E2E tests
+  # Uses production Dockerfile with nginx
   app:
     build:
       context: .
-      dockerfile: Dockerfile.e2e.dev.fast
+      dockerfile: Dockerfile
+      args:
+        UNSPLASH_KEY: ${UNSPLASH_KEY:-DUMMY_UNSPLASH_KEY}
+        UNSPLASH_CLIENT_ID: ${UNSPLASH_CLIENT_ID:-DUMMY_UNSPLASH_CLIENT_ID}
     ports:
       - '${APP_PORT:-4242}:${APP_PORT:-4242}'
     environment:
       - APP_PORT=${APP_PORT:-4242}
-    volumes:
-      - .:/app
-      - /app/.angular # Exclude .angular cache (use container's)
+      - WEBDAV_BACKEND=${WEBDAV_BACKEND:-}
     healthcheck:
       test: ['CMD', 'curl', '-sf', 'http://localhost:${APP_PORT:-4242}']
       interval: 10s
       timeout: 5s
       retries: 30
-      start_period: 120s
+      start_period: 30s
 
   # WebDAV sync server (for sync tests)
   webdav:

@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogMigrationService } from './operation-log-migration.service';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
+import { LanguageService } from '../../core/language/language.service';
 import { OpLog } from '../../core/log';
 import { ActionType, OpType } from '../core/operation.types';
 
@@ -15,6 +17,8 @@ describe('OperationLogMigrationService', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockStore: jasmine.SpyObj<Store>;
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
+  let mockTranslateService: jasmine.SpyObj<TranslateService>;
+  let mockLanguageService: jasmine.SpyObj<LanguageService>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -41,6 +45,12 @@ describe('OperationLogMigrationService', () => {
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'generateNewClientId',
     ]);
+    mockTranslateService = jasmine.createSpyObj('TranslateService', [
+      'instant',
+      'getBrowserCultureLang',
+      'getBrowserLang',
+    ]);
+    mockLanguageService = jasmine.createSpyObj('LanguageService', ['setLng']);
 
     // Default returns for legacy db
     mockLegacyPfDb.hasUsableEntityData.and.resolveTo(false);
@@ -56,13 +66,11 @@ describe('OperationLogMigrationService', () => {
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: Store, useValue: mockStore },
         { provide: ClientIdService, useValue: mockClientIdService },
+        { provide: TranslateService, useValue: mockTranslateService },
+        { provide: LanguageService, useValue: mockLanguageService },
       ],
     });
     service = TestBed.inject(OperationLogMigrationService);
-  });
-
-  it('should be created', () => {
-    expect(service).toBeTruthy();
   });
 
   describe('checkAndMigrate', () => {

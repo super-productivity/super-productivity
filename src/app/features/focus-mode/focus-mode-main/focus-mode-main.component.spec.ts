@@ -67,8 +67,8 @@ describe('FocusModeMainComponent', () => {
 
   beforeEach(async () => {
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc: jasmine.createSpy().and.returnValue({
-        taskNotesTpl: 'Default task notes template',
+      tasks: jasmine.createSpy().and.returnValue({
+        notesTemplate: 'Default task notes template',
       }),
     });
 
@@ -146,10 +146,6 @@ describe('FocusModeMainComponent', () => {
 
     fixture.detectChanges();
     (mockStore.dispatch as jasmine.Spy).calls.reset();
-  });
-
-  it('should create', () => {
-    expect(component).toBeTruthy();
   });
 
   describe('initialization', () => {
@@ -584,8 +580,8 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
     isSessionRunningSignal = signal(true);
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc: jasmine.createSpy().and.returnValue({
-        taskNotesTpl: 'Default task notes template',
+      tasks: jasmine.createSpy().and.returnValue({
+        notesTemplate: 'Default task notes template',
       }),
     });
 
@@ -771,8 +767,8 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     storeSpy.select.and.returnValue(of([]));
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [], {
-      misc: jasmine.createSpy().and.returnValue({
-        taskNotesTpl: 'Default task notes template',
+      tasks: jasmine.createSpy().and.returnValue({
+        notesTemplate: 'Default task notes template',
       }),
     });
 

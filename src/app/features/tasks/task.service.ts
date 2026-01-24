@@ -1234,7 +1234,7 @@ export class TaskService {
         ? { projectId: workContextId }
         : {
             projectId:
-              this._globalConfigService.cfg()?.misc.defaultProjectId || INBOX_PROJECT.id,
+              this._globalConfigService.cfg()?.tasks.defaultProjectId || INBOX_PROJECT.id,
           }),
 
       tagIds:
@@ -1258,7 +1258,7 @@ export class TaskService {
       d1.projectId =
         workContextType === WorkContextType.PROJECT
           ? workContextId
-          : this._globalConfigService.cfg()?.misc.defaultProjectId || INBOX_PROJECT.id;
+          : this._globalConfigService.cfg()?.tasks.defaultProjectId || INBOX_PROJECT.id;
     }
 
     // Validate that we have a valid task before returning

@@ -28,6 +28,7 @@ describe('FocusModeSelectors', () => {
     currentCycle: 1,
     lastCompletedDuration: 0,
     pausedTaskId: null,
+    _isResumingBreak: false,
     ...overrides,
   });
 
@@ -151,11 +152,12 @@ describe('FocusModeSelectors', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false for break sessions', () => {
+    it('should return true for paused break sessions (Bug #5995 fix)', () => {
       const timer = createMockTimer({ isRunning: false, purpose: 'break' });
       const result = selectors.selectIsSessionPaused.projector(timer);
 
-      expect(result).toBe(false);
+      // Bug #5995 fix: Breaks can be paused too
+      expect(result).toBe(true);
     });
   });
 

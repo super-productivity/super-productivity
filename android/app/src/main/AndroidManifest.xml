@@ -71,6 +71,16 @@
         <category android:name="android.intent.category.DEFAULT" />
         <data android:mimeType="text/*" />
       </intent-filter>
+
+      <!-- OAuth callback handler for Dropbox authentication -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="oauth-callback" />
+      </intent-filter>
     </activity>
 
     <activity

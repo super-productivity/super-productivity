@@ -44,10 +44,6 @@ describe('DialogImportFromUrlComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('component initialization', () => {
     it('should initialize with empty URL', () => {
       expect(component.url).toBe('');

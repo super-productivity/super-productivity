@@ -49,7 +49,7 @@ describe('TaskRelatedModelEffects', () => {
         {
           provide: GlobalConfigService,
           useValue: {
-            misc$: of({ isAutoAddWorkedOnToToday: true }),
+            tasks$: of({ isAutoAddWorkedOnToToday: true }),
           },
         },
         { provide: HydrationStateService, useValue: hydrationStateServiceSpy },
