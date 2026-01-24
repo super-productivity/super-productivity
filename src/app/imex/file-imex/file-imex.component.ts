@@ -203,6 +203,7 @@ export class FileImexComponent implements OnInit {
           ImportEncryptionWarningData,
           ImportEncryptionWarningResult
         >(DialogImportEncryptionWarningComponent, {
+          disableClose: true,
           data: {
             currentEncryptionEnabled: encryptionCheck.currentEnabled,
             importedEncryptionEnabled: encryptionCheck.importedEnabled,

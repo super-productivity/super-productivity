@@ -4,7 +4,7 @@
 
 <mat-dialog-content>
   <div class="warning-box">
-    <mat-icon>warning</mat-icon>
+    <mat-icon aria-hidden="true">warning</mat-icon>
     <p>{{ T.F.SYNC.FORM.SUPER_SYNC.DISABLE_ENCRYPTION_WARNING | translate }}</p>
   </div>
 
@@ -18,7 +18,7 @@
   </div>
 
   <p class="note">
-    <mat-icon>info</mat-icon>
+    <mat-icon aria-hidden="true">info</mat-icon>
     <span>{{ T.F.SYNC.FORM.SUPER_SYNC.DISABLE_ENCRYPTION_NOTE | translate }}</span>
   </p>
 </mat-dialog-content>
@@ -40,10 +40,13 @@
     (click)="confirm()"
   >
     @if (isLoading()) {
-      <mat-spinner diameter="20"></mat-spinner>
+      <mat-spinner
+        diameter="20"
+        aria-label="Processing"
+      ></mat-spinner>
     } @else {
       <ng-container>
-        <mat-icon>lock_open</mat-icon>
+        <mat-icon aria-hidden="true">lock_open</mat-icon>
         {{ T.F.SYNC.FORM.SUPER_SYNC.BTN_DISABLE_ENCRYPTION | translate }}
       </ng-container>
     }
