@@ -147,6 +147,12 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.REPEAT_CFG_DELETE_INSTANCE]: 'RDI',
   [ActionType.REPEAT_CFG_UPSERT]: 'RX',
 
+  // Section
+  [ActionType.SECTION_ADD]: 'S1',
+  [ActionType.SECTION_DELETE]: 'S2',
+  [ActionType.SECTION_UPDATE]: 'S3',
+  [ActionType.SECTION_UPDATE_ORDER]: 'S4',
+
   // SimpleCounter actions (S)
   [ActionType.COUNTER_ADD]: 'SA',
   [ActionType.COUNTER_UPDATE]: 'SU',

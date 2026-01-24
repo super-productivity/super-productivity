@@ -330,3 +330,31 @@ finish-day-btn,
   padding-bottom: 8px;
   padding-top: 8px;
 }
+
+// Ensure section titles are left aligned and actions are right aligned
+.section-container {
+  ::ng-deep .collapsible-header {
+    justify-content: space-between;
+  }
+
+  ::ng-deep .collapsible-title {
+    text-align: left;
+    // ensure title takes available space to push actions to right
+    flex-grow: 1;
+  }
+
+  .drag-handle {
+    display: inline-flex;
+    align-items: center;
+    cursor: move;
+    margin-right: 8px;
+    color: var(--text-color-secondary); // standard Material color variable often used
+  }
+
+  button {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-color-secondary) !important;
+    border: none !important;
+  }
+}

@@ -5,11 +5,14 @@ import {
   parseMarkdownTasks,
   convertToMarkdownNotes,
   parseMarkdownTasksWithStructure,
+  parseMarkdownWithSections,
 } from '../../util/parse-markdown-tasks';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { T } from '../../t.const';
 import { TaskService } from './task.service';
 import { addSubTask } from './store/task.actions';
+import { SectionService } from '../section/section.service';
+import { WorkContextService } from '../work-context/work-context.service';
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +21,8 @@ export class MarkdownPasteService {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _store = inject(Store);
+  private _sectionService = inject(SectionService);
+  private _workContextService = inject(WorkContextService);
 
   async handleMarkdownPaste(
     pastedText: string,
@@ -60,6 +65,78 @@ export class MarkdownPasteService {
         this._taskService.update(selectedTaskId, { notes: newNotes });
       }
       return;
+    }
+
+    // Try to parse with sections first (for markdown with H1 headers)
+    if (!selectedTaskId) {
+      const sectionsData = parseMarkdownWithSections(pastedText);
+      if (sectionsData && sectionsData.hasHeaders) {
+        // Confirm with user
+        const totalTasks = sectionsData.sections.reduce((sum, section) => sum + section.tasks.length, 0);
+        const dialogRef = this._matDialog.open(DialogConfirmComponent, {
+          data: {
+            okTxt: T.G.CONFIRM,
+            title: T.F.MARKDOWN_PASTE.DIALOG_TITLE,
+            titleIcon: 'content_paste',
+            message: T.F.MARKDOWN_PASTE.CONFIRM_SECTIONS,
+            translateParams: {
+              sectionsCount: sectionsData.sections.length,
+              tasksCount: totalTasks,
+            },
+          },
+        });
+
+        const isConfirmed = await dialogRef.afterClosed().toPromise();
+        if (!isConfirmed) {
+          return;
+        }
+
+        const workContextId = this._workContextService.activeWorkContextId;
+
+        // Create sections and tasks
+        for (const section of sectionsData.sections) {
+          let sectionId: string | null = null;
+
+          // Create section if it has a title
+          if (section.sectionTitle) {
+            // Generate ID locally to avoid async wait issues
+            sectionId = this._sectionService.generateSectionId();
+            this._sectionService.addSectionWithId(sectionId, section.sectionTitle, workContextId);
+          }
+
+          // Create tasks for this section
+          for (const task of section.tasks) {
+            const taskId = this._taskService.add(
+              task.title,
+              false,
+              {
+                isDone: task.isCompleted,
+                notes: task.notes,
+                sectionId: sectionId,
+              },
+              true,
+            );
+
+            // Create sub-tasks if any
+            if (task.subTasks && task.subTasks.length > 0) {
+              for (const subTask of task.subTasks) {
+                const subTaskObj = this._taskService.createNewTaskWithDefaults({
+                  title: subTask.title,
+                  additional: {
+                    isDone: subTask.isCompleted,
+                    parentId: taskId,
+                    notes: subTask.notes,
+                  },
+                });
+                this._store.dispatch(
+                  addSubTask({ task: subTaskObj, parentId: taskId }),
+                );
+              }
+            }
+          }
+        }
+        return;
+      }
     }
 
     // Try to parse with structure first (for creating sub-tasks when no task selected)
@@ -177,6 +254,13 @@ export class MarkdownPasteService {
   }
 
   isMarkdownTaskList(text: string): boolean {
+    // Check for sections (H1 headers)
+    const sectionsData = parseMarkdownWithSections(text);
+    if (sectionsData && sectionsData.hasHeaders) {
+      return true;
+    }
+
+    // Check for regular task lists
     const parsedTasks = parseMarkdownTasks(text);
     return parsedTasks !== null && parsedTasks.length > 0;
   }

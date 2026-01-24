@@ -8,6 +8,7 @@ import {
   TimeTrackingState,
 } from '../../features/time-tracking/time-tracking.model';
 import { ProjectState } from '../../features/project/project.model';
+import { SectionState } from '../../features/section/section.model';
 import { MenuTreeState } from '../../features/menu-tree/store/menu-tree.model';
 import { TaskState } from '../../features/tasks/task.model';
 import { createValidate } from 'typia';
@@ -52,6 +53,7 @@ const _validateGlobalConfig = createValidate<GlobalConfigState>();
 const _validateTimeTracking = createValidate<TimeTrackingState>();
 const _validatePluginUserData = createValidate<PluginUserDataState>();
 const _validatePluginMetadata = createValidate<PluginMetaDataState>();
+const _validateSection = createValidate<SectionState>();
 
 export const validateAllData = <R>(
   d: AppDataComplete | R,
@@ -101,6 +103,7 @@ export const appDataValidators: {
     _wrapValidate(_validatePluginUserData(d)),
   pluginMetadata: <R>(d: R | PluginMetaDataState) =>
     _wrapValidate(_validatePluginMetadata(d)),
+  section: <R>(d: R | SectionState) => _wrapValidate(_validateSection(d), d, true),
 } as const;
 
 const validateArchiveModel = <R>(d: ArchiveModel | R): ValidationResult<ArchiveModel> => {

@@ -16,6 +16,17 @@ export interface MarkdownTaskStructure {
   totalSubTasks: number;
 }
 
+export interface SectionWithTasks {
+  sectionTitle: string | null; // null for "No Section"
+  tasks: ParsedMarkdownTask[];
+}
+
+export interface MarkdownWithSections {
+  sections: SectionWithTasks[];
+  hasHeaders: boolean;
+}
+
+
 interface ParsedLine {
   indentLevel: number;
   content: string;
@@ -308,4 +319,82 @@ export const parseMarkdownTasks = (text: string): ParsedMarkdownTask[] | null =>
 
   // Return tasks only if we found at least one
   return tasks.length > 0 ? tasks : null;
+};
+
+/**
+ * Parse markdown text to detect H1 headers (#) and group tasks under sections
+ * @param text - Markdown text with potential headers and task lists
+ * @returns Sections with tasks, or null if not valid markdown
+ */
+export const parseMarkdownWithSections = (text: string): MarkdownWithSections | null => {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+
+  const lines = text.split('\n');
+  const sections: SectionWithTasks[] = [];
+  let currentSection: SectionWithTasks | null = null;
+  let hasHeaders = false;
+  const pendingTaskLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Detect H1 header (only single #)
+    if (trimmed.match(/^#\s+(.+)$/)) {
+      hasHeaders = true;
+
+      // Process any pending tasks from previous section
+      if (pendingTaskLines.length > 0) {
+        const tasksText = pendingTaskLines.join('\n');
+        const parsedTasks = parseMarkdownTasksWithStructure(tasksText);
+
+        if (currentSection && parsedTasks) {
+          currentSection.tasks = parsedTasks.mainTasks;
+        }
+        pendingTaskLines.length = 0; // Clear
+      }
+
+      // Create new section
+      const headerText = trimmed.replace(/^#\s+/, '').trim();
+      currentSection = {
+        sectionTitle: headerText,
+        tasks: []
+      };
+      sections.push(currentSection);
+    }
+    // Detect task lines
+    else if (trimmed.match(/^[-*]\s+/) || trimmed.match(/^[-*]\s*\[([ x])\]/)) {
+      pendingTaskLines.push(line);
+    }
+    // Empty lines and other content are ignored for now
+  }
+
+  // Process remaining pending tasks
+  if (pendingTaskLines.length > 0) {
+    const tasksText = pendingTaskLines.join('\n');
+    const parsedTasks = parseMarkdownTasksWithStructure(tasksText);
+
+    if (currentSection && parsedTasks) {
+      // Add to current section
+      currentSection.tasks = parsedTasks.mainTasks;
+    } else if (parsedTasks) {
+      // Tasks before any header - create "No Section"
+      sections.unshift({
+        sectionTitle: null,
+        tasks: parsedTasks.mainTasks
+      });
+    }
+  }
+
+  // Only return if we found headers
+  if (!hasHeaders) {
+    return null;
+  }
+
+  return {
+    sections,
+    hasHeaders
+  };
 };

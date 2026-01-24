@@ -1,10 +1,11 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { filter, map, tap } from 'rxjs/operators';
+import { filter, map, tap, switchMap, withLatestFrom } from 'rxjs/operators';
 import {
   addProject,
   moveAllProjectBacklogTasksToRegularList,
+  moveProjectTaskToSection,
   updateProject,
 } from './project.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
@@ -13,12 +14,16 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { T } from '../../../t.const';
 import { Project } from '../project.model';
 import { Observable } from 'rxjs';
+import { Store } from '@ngrx/store';
+import { selectProjectFeatureState } from './project.selectors';
+import { moveItemAfterAnchor } from '../../work-context/store/work-context-meta.helper';
 
 @Injectable()
 export class ProjectEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
   private _snackService = inject(SnackService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _store$ = inject(Store);
 
   /**
    * Handles non-archive cleanup when a project is deleted.
@@ -54,6 +59,42 @@ export class ProjectEffects {
           });
         }),
       ),
+  );
+
+  moveProjectTaskToSection$: Observable<unknown> = createEffect(() =>
+    this._actions$.pipe(
+      ofType(moveProjectTaskToSection),
+      withLatestFrom(this._store$.select(selectProjectFeatureState)),
+      map(([{ taskId, sectionId, afterTaskId, workContextId }, projectState]) => {
+        const project = projectState.entities[workContextId];
+        if (!project) throw new Error('Project not found');
+        const currentTaskIds = project.taskIds || [];
+
+        let newTaskIds = [...currentTaskIds];
+        newTaskIds = moveItemAfterAnchor(taskId, afterTaskId, newTaskIds);
+
+        return {
+          taskId,
+          sectionId,
+          workContextId,
+          ids: newTaskIds,
+        };
+      }),
+      switchMap(({ taskId, sectionId, workContextId, ids }) => [
+        TaskSharedActions.updateTask({
+          task: {
+            id: taskId,
+            changes: { sectionId },
+          },
+        }),
+        updateProject({
+          project: {
+            id: workContextId,
+            changes: { taskIds: ids },
+          },
+        }),
+      ]),
+    ),
   );
 
   // CURRENTLY NOT IMPLEMENTED

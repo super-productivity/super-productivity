@@ -13,6 +13,7 @@ import { PlannerState } from '../../features/planner/store/planner.reducer';
 import { IssueProviderState } from '../../features/issue/issue.model';
 import { BoardsState } from '../../features/boards/store/boards.reducer';
 import { MenuTreeState } from '../../features/menu-tree/store/menu-tree.model';
+import { SectionState } from '../../features/section/section.model';
 
 export interface AppBaseWithoutLastSyncModelChange {
   project: ProjectState;
@@ -30,6 +31,7 @@ export interface AppBaseWithoutLastSyncModelChange {
   tag: TagState;
   simpleCounter: SimpleCounterState;
   taskRepeatCfg: TaskRepeatCfgState;
+  section: SectionState;
 }
 
 export interface AppMainFileNoRevsData extends AppBaseWithoutLastSyncModelChange {
@@ -47,7 +49,7 @@ export interface AppArchiveFileData {
 }
 
 export interface AppBaseData
-  extends AppBaseWithoutLastSyncModelChange, AppArchiveFileData {}
+  extends AppBaseWithoutLastSyncModelChange, AppArchiveFileData { }
 
 export interface LocalSyncMetaForProvider {
   lastSync: number;

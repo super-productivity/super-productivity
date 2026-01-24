@@ -11,6 +11,8 @@
 
   <div class="collapsible-title">{{ title() }}</div>
 
+  <ng-content select="[actions]"></ng-content>
+
   @if (!isIconBefore()) {
     <mat-icon class="collapsible-expand-icon">expand_more</mat-icon>
   }
