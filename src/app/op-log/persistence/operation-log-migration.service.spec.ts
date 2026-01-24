@@ -284,7 +284,9 @@ describe('OperationLogMigrationService', () => {
           afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
         };
         mockMatDialog.open.and.returnValue(mockDialogRef as any);
-        mockTranslateService.use = jasmine.createSpy('use').and.returnValue(of(undefined));
+        mockTranslateService.use = jasmine
+          .createSpy('use')
+          .and.returnValue(of(undefined));
         (service as any).languageService = {
           detect: jasmine.createSpy('detect').and.returnValue('en'),
         };
