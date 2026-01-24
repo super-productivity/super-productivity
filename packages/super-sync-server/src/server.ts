@@ -92,6 +92,9 @@ export const createServer = (
       fastifyServer = Fastify({
         logger: false, // We use our own logger
         bodyLimit: 20 * 1024 * 1024, // 20MB - needed for large imports
+        // Add explicit timeouts for long-running operations
+        connectionTimeout: 90000, // 90s - match client timeout
+        requestTimeout: 80000, // 80s - must exceed DB timeout (60s) but be less than Caddy (85s)
       });
 
       // Security Headers

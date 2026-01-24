@@ -1,5 +1,6 @@
 import { createSignal, createEffect, For, Show, onMount } from 'solid-js';
 import { Task, Project } from '@super-productivity/plugin-api';
+import { useTranslate } from '../utils/useTranslate';
 import './App.css';
 
 // Communication with plugin.js
@@ -20,6 +21,7 @@ const sendMessage = async (type: string, payload?: any) => {
 };
 
 function App() {
+  const t = useTranslate();
   const [tasks, setTasks] = createSignal<Task[]>([]);
   const [projects, setProjects] = createSignal<Project[]>([]);
   const [stats, setStats] = createSignal({
@@ -31,6 +33,32 @@ function App() {
   const [selectedProjectId, setSelectedProjectId] = createSignal<string>('');
   const [settings, setSettings] = createSignal({ theme: 'light', showCompleted: true });
   const [isLoading, setIsLoading] = createSignal(true);
+
+  // Translation signals for reactive i18n
+  const [appTitle, setAppTitle] = createSignal('');
+  const [refreshButton, setRefreshButton] = createSignal('');
+  const [totalTasksLabel, setTotalTasksLabel] = createSignal('');
+  const [completedTodayLabel, setCompletedTodayLabel] = createSignal('');
+  const [pendingLabel, setPendingLabel] = createSignal('');
+  const [createNewLabel, setCreateNewLabel] = createSignal('');
+  const [taskPlaceholder, setTaskPlaceholder] = createSignal('');
+  const [noProjectLabel, setNoProjectLabel] = createSignal('');
+  const [createButtonLabel, setCreateButtonLabel] = createSignal('');
+  const [loadingLabel, setLoadingLabel] = createSignal('');
+
+  // Load translations
+  createEffect(async () => {
+    setAppTitle(await t('APP.TITLE'));
+    setRefreshButton(await t('BUTTONS.REFRESH'));
+    setTotalTasksLabel(await t('STATS.TOTAL_TASKS'));
+    setCompletedTodayLabel(await t('STATS.COMPLETED_TODAY'));
+    setPendingLabel(await t('STATS.PENDING'));
+    setCreateNewLabel(await t('TASK.CREATE_NEW'));
+    setTaskPlaceholder(await t('TASK.ENTER_TITLE'));
+    setNoProjectLabel(await t('TASK.NO_PROJECT'));
+    setCreateButtonLabel(await t('TASK.CREATE_BUTTON'));
+    setLoadingLabel(await t('LOADING'));
+  });
 
   // Load initial data
   onMount(async () => {
@@ -107,12 +135,9 @@ function App() {
   return (
     <div class="app">
       <header class="app-header">
-        <h1>🚀 Solid.js Boilerplate Plugin</h1>
-        <button
-          onClick={refreshData}
-          class="refresh-btn"
-        >
-          Refresh Data
+        <h1>🚀 {appTitle()}</h1>
+        <button onClick={refreshData} class="refresh-btn">
+          {refreshButton()}
         </button>
       </header>
 
@@ -124,25 +149,25 @@ function App() {
             <section class="stats-section">
               <div class="stat-card">
                 <div class="stat-value">{stats().totalTasks}</div>
-                <div class="stat-label">Total Tasks</div>
+                <div class="stat-label">{totalTasksLabel()}</div>
               </div>
               <div class="stat-card">
                 <div class="stat-value">{stats().completedToday}</div>
-                <div class="stat-label">Completed Today</div>
+                <div class="stat-label">{completedTodayLabel()}</div>
               </div>
               <div class="stat-card">
                 <div class="stat-value">{stats().pendingTasks}</div>
-                <div class="stat-label">Pending</div>
+                <div class="stat-label">{pendingLabel()}</div>
               </div>
             </section>
 
             {/* Create Task Section */}
             <section class="create-task-section">
-              <h2>Create New Task</h2>
+              <h2>{createNewLabel()}</h2>
               <div class="create-task-form">
                 <input
                   type="text"
-                  placeholder="Enter task title..."
+                  placeholder={taskPlaceholder()}
                   value={newTaskTitle()}
                   onInput={(e) => setNewTaskTitle(e.currentTarget.value)}
                   onKeyPress={(e) => e.key === 'Enter' && createTask()}
@@ -153,16 +178,13 @@ function App() {
                   onChange={(e) => setSelectedProjectId(e.currentTarget.value)}
                   class="project-select"
                 >
-                  <option value="">No Project</option>
+                  <option value="">{noProjectLabel()}</option>
                   <For each={projects()}>
                     {(project) => <option value={project.id}>{project.title}</option>}
                   </For>
                 </select>
-                <button
-                  onClick={createTask}
-                  class="create-btn"
-                >
-                  Create Task
+                <button onClick={createTask} class="create-btn">
+                  {createButtonLabel()}
                 </button>
               </div>
             </section>
@@ -173,10 +195,7 @@ function App() {
               <div class="tasks-list">
                 <For each={tasks().slice(0, 10)}>
                   {(task) => (
-                    <div
-                      class="task-item"
-                      classList={{ completed: task.isDone }}
-                    >
+                    <div class="task-item" classList={{ completed: task.isDone }}>
                       <span class="task-title">{task.title}</span>
                       <Show when={task.projectId}>
                         <span class="task-project">
@@ -197,9 +216,7 @@ function App() {
                   <span>Theme:</span>
                   <select
                     value={settings().theme}
-                    onChange={(e) =>
-                      setSettings({ ...settings(), theme: e.currentTarget.value })
-                    }
+                    onChange={(e) => setSettings({ ...settings(), theme: e.currentTarget.value })}
                   >
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
@@ -223,7 +240,7 @@ function App() {
           </main>
         }
       >
-        <div class="loading">Loading...</div>
+        <div class="loading">{loadingLabel()}</div>
       </Show>
 
       <footer class="app-footer">

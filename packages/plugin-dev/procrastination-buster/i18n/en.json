@@ -1,0 +1,108 @@
+{
+  "HOME": {
+    "TITLE": "What's holding you back?",
+    "SUBTITLE": "Choose what best matches your current feeling:",
+    "LEARN_MORE_BUTTON": "Learn about procrastination →"
+  },
+  "NAVIGATION": {
+    "BACK": "← Back"
+  },
+  "STRATEGIES": {
+    "TITLE": "Recommended Strategies:",
+    "ACTION_BUTTON": "🎯 Start focus session",
+    "ACTION_BUTTON_TITLE": "Start a focus session"
+  },
+  "TYPES": {
+    "OVERWHELM": {
+      "TITLE": "Overwhelm",
+      "EMOTION": "Too much at once",
+      "STRATEGY_1": "Create micro-tasks (5 min steps)",
+      "STRATEGY_2": "Implementation Intentions (If X, then Y)",
+      "STRATEGY_3": "Pick just one thing",
+      "STRATEGY_4": "Start Focus Session"
+    },
+    "PERFECTIONISM": {
+      "TITLE": "Perfectionism",
+      "EMOTION": "It's not perfect enough",
+      "STRATEGY_1": "Time-box your first draft (30 min)",
+      "STRATEGY_2": "Journal: What is \"good enough\"?",
+      "STRATEGY_3": "Practice self-compassion",
+      "STRATEGY_4": "Progress over perfection"
+    },
+    "UNCLEAR": {
+      "TITLE": "Unclear",
+      "EMOTION": "I don't know what to do",
+      "STRATEGY_1": "Define next concrete step",
+      "STRATEGY_2": "Talk to someone about it",
+      "STRATEGY_3": "Create a mind map",
+      "STRATEGY_4": "Write down questions"
+    },
+    "BORING": {
+      "TITLE": "Boredom",
+      "EMOTION": "It's boring",
+      "STRATEGY_1": "Add gamification",
+      "STRATEGY_2": "Combine with music/podcast",
+      "STRATEGY_3": "Plan a reward",
+      "STRATEGY_4": "Break into smaller parts"
+    },
+    "FEAR": {
+      "TITLE": "Fear",
+      "EMOTION": "I might fail",
+      "STRATEGY_1": "Think through worst case",
+      "STRATEGY_2": "Run small experiments",
+      "STRATEGY_3": "Activate support system",
+      "STRATEGY_4": "Document successes"
+    },
+    "ENERGY": {
+      "TITLE": "Low Energy",
+      "EMOTION": "I'm too tired",
+      "STRATEGY_1": "5-minute movement break",
+      "STRATEGY_2": "Drink water",
+      "STRATEGY_3": "Easiest task first",
+      "STRATEGY_4": "Power nap (20 min)"
+    },
+    "DISTRACTION": {
+      "TITLE": "Distraction",
+      "EMOTION": "Other things are more interesting",
+      "STRATEGY_1": "Block distractions",
+      "STRATEGY_2": "Schedule deep work block",
+      "STRATEGY_3": "Clear work environment",
+      "STRATEGY_4": "Start focus ritual"
+    },
+    "RESISTANCE": {
+      "TITLE": "Resistance",
+      "EMOTION": "I don't want to do this",
+      "STRATEGY_1": "Why is it important?",
+      "STRATEGY_2": "Pair with something pleasant",
+      "STRATEGY_3": "Consider delegating",
+      "STRATEGY_4": "Reframe: What will I learn?"
+    }
+  },
+  "INFO": {
+    "TITLE": "Understanding Procrastination",
+    "INTRO": "Procrastination is an emotion regulation problem, not a time management problem.",
+    "CYCLE_TITLE": "The Procrastination Cycle",
+    "CYCLE_INTRO": "When we face tasks that trigger uncomfortable emotions, we enter a feedback loop:",
+    "CYCLE_STEP_1": "Fear of failure",
+    "CYCLE_STEP_2": "Avoid the task",
+    "CYCLE_STEP_3": "Temporary relief",
+    "CYCLE_STEP_4": "Increased anxiety",
+    "BREAKING_TITLE": "Breaking the Cycle",
+    "BREAKING_INTRO": "The key is to approach procrastination with curiosity and compassion, not judgment. Ask yourself:",
+    "BREAKING_Q1": "What emotions come up when I think about this task?",
+    "BREAKING_Q2": "What specific aspect feels most challenging?",
+    "BREAKING_Q3": "What am I afraid might happen if I start?",
+    "STRATEGIES_TITLE": "Practical Strategies",
+    "STRATEGY_START_SMALL": "Start small:",
+    "STRATEGY_START_SMALL_DESC": "What's the tiniest first step you could take?",
+    "STRATEGY_TIMEBOX": "Time-box:",
+    "STRATEGY_TIMEBOX_DESC": "Work for just 10-25 minutes, then take a break",
+    "STRATEGY_REFRAME": "Reframe:",
+    "STRATEGY_REFRAME_DESC": "Focus on progress over perfection",
+    "STRATEGY_COMPASSION": "Self-compassion:",
+    "STRATEGY_COMPASSION_DESC": "Speak to yourself as you would to a good friend",
+    "TRIGGERS_TITLE": "Common Triggers",
+    "TRIGGERS_TEXT": "Procrastination is often triggered by perfectionism, fear of failure, feeling overwhelmed, unclear expectations, or finding the task boring. Identifying your specific trigger is the first step to moving forward.",
+    "BACK_TO_WORK": "Back to work!"
+  }
+}

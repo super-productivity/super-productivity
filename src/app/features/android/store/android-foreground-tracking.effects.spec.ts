@@ -777,3 +777,289 @@ describe('AndroidForegroundTrackingEffects - syncElapsedTimeForTask logic', () =
     expect(resetTrackingStartSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AndroidForegroundTrackingEffects - flush await fix (issue #5842)', () => {
+  /**
+   * Tests for the critical bug fix: _flushPendingOperations must be awaited
+   * to prevent data loss when app is closed immediately after notification action.
+   */
+
+  let flushSpy: jasmine.Spy;
+  let syncSpy: jasmine.Spy;
+  let pauseSpy: jasmine.Spy;
+  let setDoneSpy: jasmine.Spy;
+
+  // Replicate the async pause handler logic
+  const handlePauseActionAsync = async (
+    currentTask: { id: string } | null,
+    syncElapsedTime: (taskId: string) => Promise<void>,
+    pauseCurrent: () => void,
+    flushPendingOps: () => Promise<void>,
+  ): Promise<void> => {
+    if (!currentTask) return;
+    await syncElapsedTime(currentTask.id);
+    pauseCurrent();
+    await flushPendingOps(); // CRITICAL: Must be awaited
+  };
+
+  // Replicate the async done handler logic
+  const handleDoneActionAsync = async (
+    currentTask: { id: string } | null,
+    syncElapsedTime: (taskId: string) => Promise<void>,
+    setDone: (taskId: string) => void,
+    pauseCurrent: () => void,
+    flushPendingOps: () => Promise<void>,
+  ): Promise<void> => {
+    if (!currentTask) return;
+    await syncElapsedTime(currentTask.id);
+    setDone(currentTask.id);
+    pauseCurrent();
+    await flushPendingOps(); // CRITICAL: Must be awaited
+  };
+
+  beforeEach(() => {
+    syncSpy = jasmine.createSpy('syncElapsedTime').and.resolveTo(undefined);
+    pauseSpy = jasmine.createSpy('pauseCurrent');
+    setDoneSpy = jasmine.createSpy('setDone');
+    flushSpy = jasmine.createSpy('flushPendingOps').and.resolveTo(undefined);
+  });
+
+  it('should await flush before completing pause action', async () => {
+    const callOrder: string[] = [];
+    syncSpy.and.callFake(async () => {
+      callOrder.push('sync');
+    });
+    pauseSpy.and.callFake(() => callOrder.push('pause'));
+    flushSpy.and.callFake(async () => {
+      // Simulate async flush taking time
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      callOrder.push('flush');
+    });
+
+    await handlePauseActionAsync({ id: 'task-1' }, syncSpy, pauseSpy, flushSpy);
+
+    // Verify flush completes before function returns
+    expect(callOrder).toEqual(['sync', 'pause', 'flush']);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should await flush before completing done action', async () => {
+    const callOrder: string[] = [];
+    syncSpy.and.callFake(async () => {
+      callOrder.push('sync');
+    });
+    setDoneSpy.and.callFake(() => callOrder.push('done'));
+    pauseSpy.and.callFake(() => callOrder.push('pause'));
+    flushSpy.and.callFake(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      callOrder.push('flush');
+    });
+
+    await handleDoneActionAsync(
+      { id: 'task-1' },
+      syncSpy,
+      setDoneSpy,
+      pauseSpy,
+      flushSpy,
+    );
+
+    expect(callOrder).toEqual(['sync', 'done', 'pause', 'flush']);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should propagate flush errors in pause action', async () => {
+    const flushError = new Error('IndexedDB write failed');
+    flushSpy.and.rejectWith(flushError);
+
+    await expectAsync(
+      handlePauseActionAsync({ id: 'task-1' }, syncSpy, pauseSpy, flushSpy),
+    ).toBeRejectedWith(flushError);
+
+    expect(syncSpy).toHaveBeenCalled();
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(flushSpy).toHaveBeenCalled();
+  });
+
+  it('should propagate flush errors in done action', async () => {
+    const flushError = new Error('IndexedDB write failed');
+    flushSpy.and.rejectWith(flushError);
+
+    await expectAsync(
+      handleDoneActionAsync({ id: 'task-1' }, syncSpy, setDoneSpy, pauseSpy, flushSpy),
+    ).toBeRejectedWith(flushError);
+
+    expect(syncSpy).toHaveBeenCalled();
+    expect(setDoneSpy).toHaveBeenCalled();
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(flushSpy).toHaveBeenCalled();
+  });
+});
+
+describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #5842)', () => {
+  /**
+   * Tests for enhanced error handling in _syncElapsedTimeForTask:
+   * - Negative duration handling (native time < app time)
+   * - Task not found with user notification
+   * - Error notification for sync failures
+   */
+
+  let addTimeSpentSpy: jasmine.Spy;
+  let resetTrackingStartSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
+
+  // Enhanced sync logic with error handling
+  const syncElapsedTimeForTaskEnhanced = async (
+    taskId: string,
+    elapsedJson: string | null,
+    getTask: (id: string) => Promise<{ id: string; timeSpent: number } | null>,
+    addTimeSpent: (task: unknown, duration: number, date: string) => void,
+    resetTrackingStart: () => void,
+    snackOpen: (params: { msg: string; type: string }) => void,
+    todayStr: string,
+  ): Promise<void> => {
+    if (!elapsedJson || elapsedJson === 'null') {
+      return;
+    }
+
+    try {
+      const nativeData = JSON.parse(elapsedJson) as {
+        taskId: string;
+        elapsedMs: number;
+      };
+
+      if (nativeData.taskId !== taskId) {
+        return;
+      }
+
+      const task = await getTask(taskId);
+      if (!task) {
+        snackOpen({
+          msg: 'Time tracking sync failed - task not found',
+          type: 'WARNING',
+        });
+        return;
+      }
+
+      const currentTimeSpent = task.timeSpent || 0;
+      const duration = nativeData.elapsedMs - currentTimeSpent;
+
+      // Handle negative duration (service crash/reset)
+      if (duration < 0) {
+        addTimeSpent(task, nativeData.elapsedMs, todayStr);
+        resetTrackingStart();
+        return;
+      }
+
+      if (duration > 0) {
+        addTimeSpent(task, duration, todayStr);
+        resetTrackingStart();
+      }
+    } catch (e) {
+      snackOpen({
+        msg: 'Time tracking sync failed - please check your tracked time',
+        type: 'WARNING',
+      });
+    }
+  };
+
+  beforeEach(() => {
+    addTimeSpentSpy = jasmine.createSpy('addTimeSpent');
+    resetTrackingStartSpy = jasmine.createSpy('resetTrackingStart');
+    snackOpenSpy = jasmine.createSpy('snackService.open');
+  });
+
+  it('should handle negative duration by trusting native service value', async () => {
+    const nativeElapsed = 30000; // 30 seconds (native service crashed and restarted)
+    const appTimeSpent = 600000; // 10 minutes (app has more time)
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: nativeElapsed });
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: appTimeSpent,
+    });
+
+    await syncElapsedTimeForTaskEnhanced(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    // Should add the native elapsed value directly (not the negative duration)
+    expect(addTimeSpentSpy).toHaveBeenCalledWith(
+      { id: 'task-1', timeSpent: appTimeSpent },
+      nativeElapsed,
+      '2024-01-01',
+    );
+    expect(resetTrackingStartSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should show snackbar notification when task not found', async () => {
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: 60000 });
+    const getTask = async (): Promise<null> => null;
+
+    await syncElapsedTimeForTaskEnhanced(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    expect(snackOpenSpy).toHaveBeenCalledWith({
+      msg: 'Time tracking sync failed - task not found',
+      type: 'WARNING',
+    });
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+  });
+
+  it('should show snackbar notification on JSON parse error', async () => {
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: 0,
+    });
+
+    await syncElapsedTimeForTaskEnhanced(
+      'task-1',
+      'invalid json {',
+      getTask,
+      addTimeSpentSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    expect(snackOpenSpy).toHaveBeenCalledWith({
+      msg: 'Time tracking sync failed - please check your tracked time',
+      type: 'WARNING',
+    });
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+  });
+
+  it('should NOT show notification for successful negative duration handling', async () => {
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: 30000 });
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: 60000, // App has more time
+    });
+
+    await syncElapsedTimeForTaskEnhanced(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    // Should handle gracefully without user notification (logged as warning)
+    expect(addTimeSpentSpy).toHaveBeenCalled();
+    expect(resetTrackingStartSpy).toHaveBeenCalled();
+    expect(snackOpenSpy).not.toHaveBeenCalled();
+  });
+});

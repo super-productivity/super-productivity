@@ -4,13 +4,14 @@ map "" $webdav_backend {
 }
 
 server {
-    listen       80;
+    listen       ${APP_PORT};
     server_name  localhost;
 
     # serve super-productivity as static files at the path /
     location / {
         root   /usr/share/nginx/html;
         index  index.html index.htm;
+        try_files $uri $uri/ /index.html;
     }
 
     # forward requests starting with "/webdav/" to $WEBDAV_BACKEND

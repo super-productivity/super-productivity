@@ -39,10 +39,6 @@ describe('DialogConfirmComponent', () => {
       });
     });
 
-    it('should create', () => {
-      expect(component).toBeTruthy();
-    });
-
     it('should display title when provided', () => {
       const titleElement = fixture.debugElement.query(By.css('h1'));
       expect(titleElement).toBeTruthy();

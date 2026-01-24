@@ -217,6 +217,115 @@ describe('taskSharedSchedulingMetaReducer', () => {
       );
     });
 
+    it('should add subtask when parent is NOT in Today', () => {
+      const testState = createStateWithExistingTasks([], [], [], []);
+      // Create parent and subtask entities
+      testState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
+        id: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].ids.push('parent-task', 'subtask1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['subtask1'],
+        parentTaskMap: { subtask1: 'parent-task' },
+      });
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['subtask1'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should NOT add subtask when parent is already in Today', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['parent-task']);
+      // Create parent and subtask entities
+      testState[TASK_FEATURE_NAME].entities['parent-task'] = createMockTask({
+        id: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].ids.push('parent-task', 'subtask1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['subtask1'],
+        parentTaskMap: { subtask1: 'parent-task' },
+      });
+
+      metaReducer(testState, action);
+      // Subtask should NOT be added, Today tag should remain unchanged (only parent-task)
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['parent-task'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should handle multiple subtasks with different parent states', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['parent1']);
+      // Create parent tasks and subtasks
+      testState[TASK_FEATURE_NAME].entities['parent1'] = createMockTask({
+        id: 'parent1',
+      });
+      testState[TASK_FEATURE_NAME].entities['parent2'] = createMockTask({
+        id: 'parent2',
+      });
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent1',
+      });
+      testState[TASK_FEATURE_NAME].entities['subtask2'] = createMockTask({
+        id: 'subtask2',
+        parentId: 'parent2',
+      });
+      testState[TASK_FEATURE_NAME].ids.push('parent1', 'parent2', 'subtask1', 'subtask2');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['subtask1', 'subtask2'],
+        parentTaskMap: { subtask1: 'parent1', subtask2: 'parent2' },
+      });
+
+      metaReducer(testState, action);
+      // subtask1 should NOT be added (parent1 is in Today)
+      // subtask2 SHOULD be added (parent2 is not in Today)
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['subtask2', 'parent1'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should set dueDay on subtask when added to Today', () => {
+      const testState = createStateWithExistingTasks([], [], [], []);
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+        dueDay: undefined,
+      });
+      testState[TASK_FEATURE_NAME].ids.push('subtask1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['subtask1'],
+        parentTaskMap: { subtask1: 'parent-task' },
+      });
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedSubtask = updatedState[TASK_FEATURE_NAME].entities.subtask1;
+
+      expect(updatedSubtask.dueDay).toBe(getDbDateStr());
+    });
+
     it('should remove tasks from planner days when adding to Today', () => {
       const testState = {
         ...createStateWithExistingTasks([], [], [], []),

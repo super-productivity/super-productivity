@@ -137,7 +137,7 @@
       "TITLE": "🙈 Förlåt oss, men...",
       "TXT": "Du skulle hjälpa projektet enormt genom att <strong>ge det ett bra betyg, om du gillar det!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Upprepar den konfigurerade frasen varje X när du loggar tid för en uppgift.",
         "L_INTERVAL": "Intervall för att upprepa frasen",
@@ -145,7 +145,7 @@
         "L_TEXT_DESCRIPTION": "T.ex.: \"Jobba med ${currentTaskTitle}!\"",
         "L_VOICE": "Välj en röst",
         "L_VOICE_DESCRIPTION": "Välj en röst",
-        "TITLE": "Domina Mode"
+        "TITLE": "Röstpåminnelse"
       }
     },
     "DROPBOX": {
@@ -1575,11 +1575,8 @@
       "TIME_LOCALE_KO_KR": "Korean - 12-hour AM/PM"
     },
     "MISC": {
-      "DEFAULT_PROJECT": "Standardprojekt som ska användas för uppgifter om inget annat anges",
       "FIRST_DAY_OF_WEEK": "Veckans första dag",
       "HELP": "<p><strong>Ser du inte skrivbordsmeddelanden?</strong> För Windows kan du gå till System > Meddelanden och åtgärder och kontrollera om de nödvändiga meddelandena har aktiverats.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Lägg automatiskt till taggen 'idag' till uppgifter som du har arbetat med",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Markera överordnad uppgift som klar när alla underordnade uppgifter är klara.",
       "IS_CONFIRM_BEFORE_EXIT": "Bekräfta innan du stänger appen",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bekräfta innan du stänger appen utan att först avsluta dagen.",
       "IS_DARK_MODE": "Mörkt läge",
@@ -1588,12 +1585,9 @@
       "IS_MINIMIZE_TO_TRAY": "Minimera till aktivitetsfältet (endast skrivbord)",
       "IS_SHOW_TIP_LONGER": "Visa produktivitetstips vid appstart lite längre",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Visa aktuell nedräkning i facket/statusmenyn (endast stationära Mac-datorer)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Visa aktuell uppgift i facket/statusmenyn (endast stationära Mac/Windows)",
       "IS_OVERLAY_INDICATOR_ENABLED": "Aktivera överläggningsindikatorfönster (skrivbord Linux/Gnome)",
-      "IS_TURN_OFF_MARKDOWN": "Stäng av markdown-tolkning för uppgiftsanteckningar",
       "START_OF_NEXT_DAY": "Starttid nästa dag",
       "START_OF_NEXT_DAY_HINT": "från vilken tidpunkt (i timmar) du vill räkna att nästa dag har börjat. Standardinställningen är midnatt, vilket är 0.",
-      "TASK_NOTES_TPL": "Mall för arbetsbeskrivning",
       "TITLE": "Diverse inställningar",
       "DARK_MODE": "Mörkt läge",
       "DARK_MODE_SYSTEM": "System",
@@ -1603,6 +1597,16 @@
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (experimentellt)",
       "THEME_SELECT_LABEL": "Välj tema"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Standardprojekt som ska användas för uppgifter om inget annat anges",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatiskt lägga till arbetade uppgifter till idag",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automatiskt markera överordnad uppgift som klar när alla underordnade uppgifter är klara",
+      "IS_CONFIRM_BEFORE_DELETE": "Bekräfta innan du tar bort uppgifter",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Aktivera Markdown-formatering i uppgiftsanteckningar",
+      "IS_TRAY_SHOW_CURRENT": "Visa aktuell uppgift i systemfältet / statusmenyn (endast skrivbord Mac/Windows)",
+      "NOTES_TEMPLATE": "Mall för uppgiftsanteckningar",
+      "TITLE": "Uppgifter"
     },
     "POMODORO": {
       "BREAK_DURATION": "Varaktighet för korta raster",
@@ -1824,7 +1828,6 @@
     "NO_PLUGINS_INSTALLED": "Inga plugins är för närvarande installerade",
     "PLUGINS": "Plugins",
     "PRIVACY_POLICY": "Sekretesspolicy",
-    "PRODUCTIVITY_HELPER": "Produktivitetshjälp",
     "PROJECT_SETTINGS": "Projektspecifika inställningar",
     "PROVIDE_FEEDBACK": "Ge feedback",
     "SYNC_EXPORT": "Synkronisera och exportera",

@@ -432,11 +432,11 @@ export class PluginManagementComponent {
     const languages = plugin.manifest.i18n?.languages;
 
     if (!languages || languages.length === 0) {
-      return 'English only';
+      return 'English';
     }
 
     if (languages.length === 1 && languages[0] === 'en') {
-      return 'English only';
+      return 'English';
     }
 
     // Map language codes to names and join with commas

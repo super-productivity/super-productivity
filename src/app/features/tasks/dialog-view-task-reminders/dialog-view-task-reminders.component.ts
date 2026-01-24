@@ -144,6 +144,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         parentTaskMap: {
           [task.id]: task.parentId,
         },
+        isClearScheduledTime: true,
       }),
     );
     this._removeTaskFromList(task.id);
@@ -261,6 +262,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           return { ...acc, [next.id as string]: next.parentId };
         }, {}),
         isShowSnack: true,
+        isClearScheduledTime: true,
       }),
     );
 

@@ -52,10 +52,6 @@ describe('InputDurationFormlyComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('onInputValueChange', () => {
     let setValueSpy: jasmine.Spy;
 

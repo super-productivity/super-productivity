@@ -1,0 +1,135 @@
+.warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 4px;
+
+  mat-icon {
+    color: #ff9800;
+    flex-shrink: 0;
+  }
+
+  p {
+    margin: 0;
+    line-height: 1.5;
+  }
+}
+
+.state-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 4px;
+
+  .arrow-icon {
+    color: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.state-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+
+  .state-label {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .state-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
+
+.info-section {
+  margin-bottom: 16px;
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 20px;
+
+    li {
+      line-height: 1.6;
+    }
+  }
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.note-warn {
+  padding: 12px;
+  background: rgba(255, 152, 0, 0.08);
+  border-radius: 4px;
+  color: rgba(0, 0, 0, 0.8);
+
+  mat-icon {
+    color: #ff9800;
+  }
+}
+
+:host-context(.isDarkTheme) {
+  .state-comparison {
+    background: rgba(255, 255, 255, 0.05);
+
+    .arrow-icon {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  }
+
+  .state-item .state-label {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .note {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .note-warn {
+    background: rgba(255, 152, 0, 0.15);
+    color: rgba(255, 255, 255, 0.9);
+  }
+}

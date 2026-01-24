@@ -119,10 +119,6 @@ describe('DialogScheduleTaskComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   it('should close dialog with form data when submit is clicked', async () => {
     const testDate = new Date(2023, 4, 15);
     component.selectedDate = testDate;

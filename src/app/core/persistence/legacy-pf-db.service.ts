@@ -159,18 +159,28 @@ export class LegacyPfDbService {
 
   /**
    * Checks if the legacy database has usable entity data worth migrating.
-   * Returns true if there are tasks, projects, or global config.
+   * Returns true if there are tasks, projects, tags, or global config.
+   *
+   * CRITICAL: This method now throws errors instead of silently returning false.
+   * This prevents data loss when the database exists but can't be accessed properly.
    */
   async hasUsableEntityData(): Promise<boolean> {
+    // First check if the database exists at all
+    const dbExists = await this.databaseExists();
+    if (!dbExists) {
+      Log.log('LegacyPfDbService.hasUsableEntityData: No legacy database exists');
+      return false;
+    }
+
+    let db: IDBPDatabase | undefined;
     try {
-      const db = await this._openDb();
+      db = await this._openDb();
 
       // Check for meaningful data in key models
       const task = await db.get(STORE_NAME, 'task');
       const project = await db.get(STORE_NAME, 'project');
+      const tag = await db.get(STORE_NAME, 'tag');
       const globalConfig = await db.get(STORE_NAME, 'globalConfig');
-
-      db.close();
 
       // Has usable data if any of these have content
       // Note: Use !! to coerce to boolean, since null && ... returns null, not false
@@ -180,12 +190,38 @@ export class LegacyPfDbService {
         Array.isArray(project.ids) &&
         project.ids.length > 0
       );
+      // Tags often contain the TODAY tag with task references
+      const hasTagData = !!(tag && Array.isArray(tag.ids) && tag.ids.length > 0);
       const hasConfigData = !!(globalConfig && typeof globalConfig === 'object');
 
-      return hasTaskData || hasProjectData || hasConfigData;
+      const hasData = hasTaskData || hasProjectData || hasTagData || hasConfigData;
+
+      Log.log('LegacyPfDbService.hasUsableEntityData:', {
+        hasTaskData,
+        hasProjectData,
+        hasTagData,
+        hasConfigData,
+        result: hasData,
+      });
+
+      return hasData;
     } catch (e) {
-      Log.warn('LegacyPfDbService.hasUsableEntityData failed:', e);
-      return false;
+      // CRITICAL: Don't silently swallow errors!
+      // If the database exists but we can't read it, that's a serious problem.
+      // Throwing here allows the migration service to show an error dialog
+      // instead of silently losing all user data.
+      Log.err(
+        'LegacyPfDbService.hasUsableEntityData: CRITICAL - Legacy database exists but failed to read:',
+        e,
+      );
+      throw new Error(
+        `Failed to read legacy database. Your data may still exist but cannot be accessed. ` +
+          `Error: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      if (db) {
+        db.close();
+      }
     }
   }
 

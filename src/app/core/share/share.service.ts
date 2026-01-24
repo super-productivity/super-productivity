@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
+import { IS_IOS } from '../../util/is-ios';
 import { SnackService } from '../snack/snack.service';
 import {
   ShareCanvasImageParams,
@@ -34,6 +35,13 @@ interface ShareParams {
 })
 export class ShareService {
   private _shareSupportPromise?: Promise<SharePlatformUtil.ShareSupport>;
+
+  // iOS: Timestamp-based debounce to prevent re-trigger when share sheet
+  // dismissal fires synthetic click events that reopen the menu.
+  // The component-level guard doesn't work because the menu component
+  // is destroyed when closed (inside ng-template matMenuContent).
+  private _lastNativeShareAttemptMs = 0;
+  private readonly _IOS_SHARE_DEBOUNCE_MS = 1000;
 
   private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
@@ -202,6 +210,16 @@ export class ShareService {
    * Public API for dialog component.
    */
   async tryNativeShare(payload: SharePayload): Promise<ShareResult> {
+    // iOS: Debounce to prevent re-trigger when share sheet dismissal
+    // fires synthetic click events that reopen the menu
+    if (IS_IOS) {
+      const now = Date.now();
+      if (now - this._lastNativeShareAttemptMs < this._IOS_SHARE_DEBOUNCE_MS) {
+        return { success: false, error: 'Share debounced' };
+      }
+      this._lastNativeShareAttemptMs = now;
+    }
+
     const normalized = ShareTextUtil.ensureShareText(payload);
 
     const capacitorShare = SharePlatformUtil.getCapacitorSharePlugin();
@@ -220,8 +238,14 @@ export class ShareService {
           usedNative: true,
           target: 'native',
         };
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+      } catch (error: unknown) {
+        // Check for AbortError (standard) or Capacitor iOS error format
+        const err = error as { name?: string; errorMessage?: string; message?: string };
+        const isCancelled =
+          err?.name === 'AbortError' ||
+          /cancel/i.test(err?.errorMessage ?? '') ||
+          /cancel/i.test(err?.message ?? '');
+        if (isCancelled) {
           return {
             success: false,
             error: 'Share cancelled',

@@ -11,10 +11,6 @@ describe('CapacitorPlatformService', () => {
     service = TestBed.inject(CapacitorPlatformService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   it('should detect platform type', () => {
     expect(service.platform).toBeDefined();
     expect(['ios', 'android', 'web', 'electron']).toContain(service.platform);

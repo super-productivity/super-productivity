@@ -14,7 +14,7 @@ describe('taskRepeatCfgSharedMetaReducer', () => {
   });
 
   describe('deleteTaskRepeatCfg action', () => {
-    it('should unlink repeatCfgId from tasks', () => {
+    it('should unlink repeatCfgId from all tasks with matching repeatCfgId', () => {
       const testState = createStateWithExistingTasks(['task1', 'task2'], [], []);
 
       // Add repeatCfgId to tasks
@@ -29,7 +29,6 @@ describe('taskRepeatCfgSharedMetaReducer', () => {
 
       const action = TaskSharedActions.deleteTaskRepeatCfg({
         taskRepeatCfgId: 'repeat-cfg-1',
-        taskIdsToUnlink: ['task1', 'task2'],
       });
 
       metaReducer(testState, action);
@@ -52,17 +51,17 @@ describe('taskRepeatCfgSharedMetaReducer', () => {
       );
     });
 
-    it('should handle empty task list', () => {
+    it('should handle case when no tasks have the repeatCfgId', () => {
       const testState = createStateWithExistingTasks(['task1'], [], []);
 
+      // task1 has no repeatCfgId
       const action = TaskSharedActions.deleteTaskRepeatCfg({
         taskRepeatCfgId: 'repeat-cfg-1',
-        taskIdsToUnlink: [],
       });
 
       metaReducer(testState, action);
 
-      // Should pass through unchanged
+      // Should pass through unchanged when no tasks match
       expect(mockReducer).toHaveBeenCalledWith(
         jasmine.objectContaining({
           [TASK_FEATURE_NAME]: testState[TASK_FEATURE_NAME],
@@ -71,22 +70,30 @@ describe('taskRepeatCfgSharedMetaReducer', () => {
       );
     });
 
-    it('should skip non-existent tasks', () => {
-      const testState = createStateWithExistingTasks(['task1'], [], []);
+    it('should only unlink tasks with matching repeatCfgId', () => {
+      const testState = createStateWithExistingTasks(['task1', 'task2', 'task3'], [], []);
 
+      // task1 and task2 have repeat-cfg-1, task3 has different repeatCfgId
       testState[TASK_FEATURE_NAME].entities.task1 = {
         ...testState[TASK_FEATURE_NAME].entities.task1!,
         repeatCfgId: 'repeat-cfg-1',
       };
+      testState[TASK_FEATURE_NAME].entities.task2 = {
+        ...testState[TASK_FEATURE_NAME].entities.task2!,
+        repeatCfgId: 'repeat-cfg-1',
+      };
+      testState[TASK_FEATURE_NAME].entities.task3 = {
+        ...testState[TASK_FEATURE_NAME].entities.task3!,
+        repeatCfgId: 'repeat-cfg-2',
+      };
 
       const action = TaskSharedActions.deleteTaskRepeatCfg({
         taskRepeatCfgId: 'repeat-cfg-1',
-        taskIdsToUnlink: ['task1', 'non-existent-task'],
       });
 
       metaReducer(testState, action);
 
-      // Should only update task1, ignore non-existent
+      // Should only update task1 and task2, leave task3 unchanged
       expectStateUpdate(
         {
           [TASK_FEATURE_NAME]: jasmine.objectContaining({
@@ -94,33 +101,11 @@ describe('taskRepeatCfgSharedMetaReducer', () => {
               task1: jasmine.objectContaining({
                 repeatCfgId: undefined,
               }),
-            }),
-          }),
-        },
-        action,
-        mockReducer,
-        testState,
-      );
-    });
-
-    it('should handle tasks without repeatCfgId', () => {
-      const testState = createStateWithExistingTasks(['task1'], [], []);
-
-      // task1 has no repeatCfgId
-      const action = TaskSharedActions.deleteTaskRepeatCfg({
-        taskRepeatCfgId: 'repeat-cfg-1',
-        taskIdsToUnlink: ['task1'],
-      });
-
-      metaReducer(testState, action);
-
-      // Should still set to undefined (idempotent)
-      expectStateUpdate(
-        {
-          [TASK_FEATURE_NAME]: jasmine.objectContaining({
-            entities: jasmine.objectContaining({
-              task1: jasmine.objectContaining({
+              task2: jasmine.objectContaining({
                 repeatCfgId: undefined,
+              }),
+              task3: jasmine.objectContaining({
+                repeatCfgId: 'repeat-cfg-2',
               }),
             }),
           }),

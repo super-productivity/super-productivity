@@ -76,10 +76,13 @@ snap:
     # https://github.com/super-productivity/super-productivity/issues/4920
     FC_CACHEDIR: $SNAP_USER_DATA/.cache/fontconfig
   plugs:
-    - default
+    - default # Includes: home, desktop, desktop-legacy, x11, wayland, etc.
     - password-manager-service
     - system-observe
     - login-session-observe
+    # Fix for issue #6031: Add filesystem access for local file sync
+    # https://github.com/super-productivity/super-productivity/issues/6031
+    - removable-media # Allows sync to external drives/USB storage
 
 flatpak:
   runtimeVersion: '23.08'

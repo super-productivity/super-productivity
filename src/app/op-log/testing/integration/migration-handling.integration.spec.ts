@@ -17,6 +17,7 @@ import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { OperationLogCompactionService } from '../../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 /**
  * Integration tests for Schema Migration Handling in Sync.
@@ -149,7 +150,7 @@ describe('Migration Handling Integration', () => {
 
     it('should reject operation with incompatible future version', async () => {
       // Logic: if opVersion > current + MAX_VERSION_SKIP, update required
-      const incompatibleVersion = 1 + MAX_VERSION_SKIP + 1;
+      const incompatibleVersion = CURRENT_SCHEMA_VERSION + MAX_VERSION_SKIP + 1;
       const op = createOp(incompatibleVersion);
 
       await service.processRemoteOps([op]);

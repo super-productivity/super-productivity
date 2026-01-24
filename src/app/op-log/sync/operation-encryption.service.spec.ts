@@ -3,8 +3,18 @@ import { OperationEncryptionService } from './operation-encryption.service';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError } from '../core/errors/sync-errors';
 import { ActionType } from '../core/operation.types';
-import { mockEncrypt, mockDecrypt } from '../testing/helpers/mock-encryption.helper';
-import { ENCRYPT_FN, DECRYPT_FN } from '../encryption/encryption.token';
+import {
+  mockEncrypt,
+  mockDecrypt,
+  mockEncryptBatch,
+  mockDecryptBatch,
+} from '../testing/helpers/mock-encryption.helper';
+import {
+  ENCRYPT_FN,
+  DECRYPT_FN,
+  ENCRYPT_BATCH_FN,
+  DECRYPT_BATCH_FN,
+} from '../encryption/encryption.token';
 
 describe('OperationEncryptionService', () => {
   let service: OperationEncryptionService;
@@ -31,6 +41,8 @@ describe('OperationEncryptionService', () => {
         // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
         { provide: ENCRYPT_FN, useValue: mockEncrypt },
         { provide: DECRYPT_FN, useValue: mockDecrypt },
+        { provide: ENCRYPT_BATCH_FN, useValue: mockEncryptBatch },
+        { provide: DECRYPT_BATCH_FN, useValue: mockDecryptBatch },
       ],
     });
     service = TestBed.inject(OperationEncryptionService);
@@ -177,6 +189,82 @@ describe('OperationEncryptionService', () => {
     it('should handle empty array', async () => {
       const decrypted = await service.decryptOperations([], TEST_PASSWORD);
       expect(decrypted).toEqual([]);
+    });
+
+    it('should return same array reference when none are encrypted', async () => {
+      const ops = [
+        createMockSyncOp({ title: 'Plain 1' }),
+        createMockSyncOp({ title: 'Plain 2' }),
+        createMockSyncOp({ title: 'Plain 3' }),
+      ];
+
+      const result = await service.decryptOperations(ops, TEST_PASSWORD);
+
+      // Should return the same array reference (optimization: no copying needed)
+      expect(result).toBe(ops);
+      expect(result.length).toBe(3);
+    });
+
+    it('should throw DecryptError for malformed encrypted operation (non-string payload)', async () => {
+      const malformedOp = createMockSyncOp({ title: 'Not a string' });
+      malformedOp.isPayloadEncrypted = true; // Mark as encrypted but payload is object
+
+      await expectAsync(
+        service.decryptOperations([malformedOp], TEST_PASSWORD),
+      ).toBeRejectedWithError(DecryptError);
+    });
+
+    it('should throw DecryptError with op ID for malformed encrypted operation', async () => {
+      const malformedOp = createMockSyncOp({ title: 'Not a string' });
+      malformedOp.id = 'malformed-op-123';
+      malformedOp.isPayloadEncrypted = true;
+
+      try {
+        await service.decryptOperations([malformedOp], TEST_PASSWORD);
+        fail('Should have thrown DecryptError');
+      } catch (e) {
+        expect(e).toBeInstanceOf(DecryptError);
+        expect((e as Error).message).toContain('malformed-op-123');
+      }
+    });
+  });
+
+  describe('encryptPayload / decryptPayload', () => {
+    it('should encrypt and decrypt an object payload', async () => {
+      const payload = { foo: 'bar', count: 42 };
+      const encrypted = await service.encryptPayload(payload, TEST_PASSWORD);
+
+      expect(typeof encrypted).toBe('string');
+      expect(encrypted).not.toContain('foo'); // Should be encrypted
+
+      const decrypted = await service.decryptPayload(encrypted, TEST_PASSWORD);
+      expect(decrypted).toEqual(payload);
+    });
+
+    it('should encrypt and decrypt an array payload', async () => {
+      const payload = [1, 2, 3, { nested: true }];
+      const encrypted = await service.encryptPayload(payload, TEST_PASSWORD);
+      const decrypted = await service.decryptPayload<typeof payload>(
+        encrypted,
+        TEST_PASSWORD,
+      );
+
+      expect(decrypted).toEqual(payload);
+    });
+
+    it('should throw DecryptError for wrong password', async () => {
+      const payload = { secret: 'data' };
+      const encrypted = await service.encryptPayload(payload, TEST_PASSWORD);
+
+      await expectAsync(
+        service.decryptPayload(encrypted, 'wrong-password'),
+      ).toBeRejectedWithError(DecryptError);
+    });
+
+    it('should throw DecryptError for corrupted ciphertext', async () => {
+      await expectAsync(
+        service.decryptPayload('invalid-ciphertext!!!', TEST_PASSWORD),
+      ).toBeRejectedWithError(DecryptError);
     });
   });
 

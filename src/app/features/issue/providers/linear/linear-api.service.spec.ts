@@ -33,10 +33,6 @@ describe('LinearApiService', () => {
     httpMock.verify();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   it('should fetch issue by id', (done) => {
     const issueId = 'test-issue-id';
     const mockResponse = {

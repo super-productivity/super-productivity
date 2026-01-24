@@ -143,7 +143,7 @@
       "TITLE": "🙈 Pyydämme anteeksi, mutta...",
       "TXT": "Auttaisit projektia valtavasti <strong>antamalla sille hyvän arvion, jos pidät siitä!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Toistaa määritetyn lauseen joka X, kun aikaa seurataan tehtävään.",
         "L_INTERVAL": "Aikaväli lauseen toistamiseen",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "Esim.: \"Työskentele tehtävän ${currentTaskTitle} parissa!\"",
         "L_VOICE": "Valitse ääni",
         "L_VOICE_DESCRIPTION": "Valitse ääni",
-        "TITLE": "Domina-tila"
+        "TITLE": "Äänimuistutus"
       }
     },
     "DROPBOX": {
@@ -1638,12 +1638,9 @@
       "DARK_MODE_DARK": "Tumma",
       "DARK_MODE_LIGHT": "Vaalea",
       "DARK_MODE_SYSTEM": "Järjestelmä",
-      "DEFAULT_PROJECT": "Oletusprojekti tehtäville, jos mitään ei ole määritetty",
       "DEFAULT_START_PAGE": "Oletus aloitussivu",
       "FIRST_DAY_OF_WEEK": "Viikon ensimmäinen päivä",
       "HELP": "<p><strong>Etkö näe työpöytäilmoituksia?</strong> Windowsissa saatat haluta tarkistaa Järjestelmä > Ilmoitukset ja toiminnot ja tarkistaa, onko tarvittavat ilmoitukset otettu käyttöön.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Lisää automaattisesti tänään-tunniste työskennellyille tehtäville",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Merkitse vanhempi tehtävä valmiiksi, kun kaikki alitehtävät ovat valmiita",
       "IS_CONFIRM_BEFORE_EXIT": "Vahvista ennen sovelluksen poistumista",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Vahvista ennen sovelluksen poistumista tallentamatta päivää ensin",
       "IS_DARK_MODE": "Tumma tila",
@@ -1653,17 +1650,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Ota päällekkäisyysindikaattori-ikkuna käyttöön (työpöytä linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Näytä tuottavuusvinkki sovelluksen käynnistyksessä hieman pidempään",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Näytä nykyinen laskuri tehtäväpalkissa / tilavalikossa (vain työpöytä mac)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Näytä nykyinen tehtävä tehtäväpalkissa / tilavalikossa (vain työpöytä mac/windows)",
-      "IS_TURN_OFF_MARKDOWN": "Poista markdown-jäsennys käytöstä tehtävien muistiinpanoissa",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Käytä mukautettua otsikkopalkkia (vain Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Vaatii uudelleenkäynnistyksen voimaan tullakseen",
       "START_OF_NEXT_DAY": "Seuraavan päivän alkamisaika",
       "START_OF_NEXT_DAY_HINT": "mistä tunnista alkaen haluat laskea seuraavan päivän alkaneen. oletus on keskiyö, joka on 0.",
-      "TASK_NOTES_TPL": "Tehtävän kuvauksen mallipohja",
       "THEME": "Teema",
       "THEME_EXPERIMENTAL": "Teema (kokeellinen)",
       "THEME_SELECT_LABEL": "Valitse teema",
       "TITLE": "Sekalaista"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Oletusprojekti tehtäville, jos mitään ei ole määritetty",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Lisää automaattisesti tänään-tunniste työskennellyille tehtäville",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Merkitse vanhempi tehtävä valmiiksi, kun kaikki alitehtävät ovat valmiita",
+      "IS_CONFIRM_BEFORE_DELETE": "Vahvista ennen tehtävien poistamista",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Ota käyttöön Markdown-muotoilu tehtävämuistiinpanoissa",
+      "IS_TRAY_SHOW_CURRENT": "Näytä nykyinen tehtävä tehtäväpalkissa / tilavalikossa (vain työpöytä mac/windows)",
+      "NOTES_TEMPLATE": "Tehtävän kuvauksen mallipohja",
+      "TITLE": "Tehtävät"
     },
     "POMODORO": {
       "BREAK_DURATION": "Lyhyiden taukojen kesto",
@@ -1977,7 +1981,6 @@
     "NO_PLUGINS_INSTALLED": "Laajennuksia ei ole asennettuna tällä hetkellä",
     "PLUGINS": "Laajennukset",
     "PRIVACY_POLICY": "Tietosuojakäytäntö",
-    "PRODUCTIVITY_HELPER": "Tuottavuusavustaja",
     "PROJECT_SETTINGS": "Projektikohtaiset asetukset",
     "PROVIDE_FEEDBACK": "Anna palautetta",
     "SYNC_EXPORT": "Synkronointi & Vienti",

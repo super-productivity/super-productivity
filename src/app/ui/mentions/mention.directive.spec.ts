@@ -36,10 +36,6 @@ describe('MentionDirective', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(directive).toBeTruthy();
-  });
-
   describe('DEFAULT_CONFIG mentionSelect', () => {
     let mentionSelect: (item: any, triggerChar?: string) => string;
     let logWarnSpy: jasmine.Spy;

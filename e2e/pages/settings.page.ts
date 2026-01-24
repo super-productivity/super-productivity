@@ -64,9 +64,18 @@ export class SettingsPage extends BasePage {
 
   /**
    * Expand plugin section
+   * Note: The plugin section is now in the "Plugins" tab (4th tab, index 3)
    */
   async expandPluginSection(): Promise<void> {
-    await this.expandSection(PLUGIN_SECTION);
+    // The plugin section is now in the "Plugins" tab (4th tab, index 3)
+    // Click on the "Plugins" tab to navigate to it
+    const pluginsTab = this.page.locator(
+      'mat-tab-header .mat-mdc-tab:has(mat-icon:has-text("extension"))',
+    );
+    await pluginsTab.waitFor({ state: 'visible', timeout: 10000 });
+    await pluginsTab.click();
+    await this.page.waitForTimeout(500);
+
     // Ensure plugin management component and at least file input are visible
     await this.pluginManagement.waitFor({ state: 'visible', timeout: 5000 });
     await this.page

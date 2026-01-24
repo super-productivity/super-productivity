@@ -4,11 +4,14 @@ import { SyncProviderManager } from '../sync-providers/provider-manager.service'
 import { OperationLogSyncService } from './operation-log-sync.service';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { BehaviorSubject } from 'rxjs';
 
 describe('ImmediateUploadService', () => {
   let service: ImmediateUploadService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncService: jasmine.SpyObj<OperationLogSyncService>;
+  let mockDataInitStateService: { isAllDataLoadedInitially$: BehaviorSubject<boolean> };
   let mockProvider: any;
 
   const createMockOp = (id: string): Operation => ({
@@ -50,11 +53,18 @@ describe('ImmediateUploadService', () => {
       'uploadPendingOps',
     ]);
 
+    // Mock DataInitStateService with BehaviorSubject that starts as false
+    // This prevents constructor from auto-initializing during tests
+    mockDataInitStateService = {
+      isAllDataLoadedInitially$: new BehaviorSubject<boolean>(false),
+    };
+
     TestBed.configureTestingModule({
       providers: [
         ImmediateUploadService,
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: OperationLogSyncService, useValue: mockSyncService },
+        { provide: DataInitStateService, useValue: mockDataInitStateService },
       ],
     });
 
@@ -290,6 +300,77 @@ describe('ImmediateUploadService', () => {
       tick(2100);
 
       // Should only upload once despite 5 triggers
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
+    }));
+  });
+
+  describe('constructor initialization', () => {
+    it('should auto-initialize when data is loaded', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          uploadedCount: 1,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+        }),
+      );
+
+      // Simulate data loading complete
+      mockDataInitStateService.isAllDataLoadedInitially$.next(true);
+      tick();
+
+      // Trigger upload - should work because service auto-initialized
+      service.trigger();
+      tick(2100);
+
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should not auto-initialize before data is loaded', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          uploadedCount: 1,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+        }),
+      );
+
+      // Data not loaded (still false)
+      // Trigger upload - should NOT work because service not initialized
+      service.trigger();
+      tick(2100);
+
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+    }));
+
+    it('should queue triggers before initialization and replay them when initialized', fakeAsync(() => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          uploadedCount: 1,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+        }),
+      );
+
+      // Trigger multiple times before initialization (data not loaded)
+      service.trigger();
+      service.trigger();
+      service.trigger();
+      tick(100);
+
+      // No upload should happen yet
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+
+      // Simulate data loading complete - should replay queued triggers
+      mockDataInitStateService.isAllDataLoadedInitially$.next(true);
+      tick();
+
+      // Wait for debounce - queued triggers should result in one upload
+      tick(2100);
+
+      // Should upload once (debounce coalesces multiple triggers)
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(1);
     }));
   });

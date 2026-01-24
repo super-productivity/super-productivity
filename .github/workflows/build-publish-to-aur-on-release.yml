@@ -12,13 +12,13 @@ jobs:
     if: '!github.event.release.prerelease'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - run: PACKAGE_VERSION=$(cat ./package.json | grep version | head -1 | awk -F '"' '{print $4}') && echo "package_version=$PACKAGE_VERSION" >> $GITHUB_ENV
       - run: sed "s/PACKAGE_VERSION/${package_version}/g" build/linux/PKGBUILD_template > build/linux/PKGBUILD
 
       - name: Publish AUR package
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        uses: KSXGitHub/github-actions-deploy-aur@2ac5a4c1d7035885d46b10e3193393be8460b6f1 # v4.1.1
         with:
           pkgname: superproductivity-bin
           pkgbuild: build/linux/PKGBUILD

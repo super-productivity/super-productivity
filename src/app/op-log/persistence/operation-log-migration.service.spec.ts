@@ -1,10 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { TranslateService } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { OperationLogMigrationService } from './operation-log-migration.service';
 import { OperationLogStoreService } from './operation-log-store.service';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
+import { LanguageService } from '../../core/language/language.service';
 import { OpLog } from '../../core/log';
 import { ActionType, OpType } from '../core/operation.types';
 
@@ -15,6 +18,8 @@ describe('OperationLogMigrationService', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockStore: jasmine.SpyObj<Store>;
   let mockClientIdService: jasmine.SpyObj<ClientIdService>;
+  let mockTranslateService: jasmine.SpyObj<TranslateService>;
+  let mockLanguageService: jasmine.SpyObj<LanguageService>;
 
   beforeEach(() => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
@@ -41,6 +46,12 @@ describe('OperationLogMigrationService', () => {
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'generateNewClientId',
     ]);
+    mockTranslateService = jasmine.createSpyObj('TranslateService', [
+      'instant',
+      'getBrowserCultureLang',
+      'getBrowserLang',
+    ]);
+    mockLanguageService = jasmine.createSpyObj('LanguageService', ['setLng']);
 
     // Default returns for legacy db
     mockLegacyPfDb.hasUsableEntityData.and.resolveTo(false);
@@ -56,13 +67,11 @@ describe('OperationLogMigrationService', () => {
         { provide: MatDialog, useValue: mockMatDialog },
         { provide: Store, useValue: mockStore },
         { provide: ClientIdService, useValue: mockClientIdService },
+        { provide: TranslateService, useValue: mockTranslateService },
+        { provide: LanguageService, useValue: mockLanguageService },
       ],
     });
     service = TestBed.inject(OperationLogMigrationService);
-  });
-
-  it('should be created', () => {
-    expect(service).toBeTruthy();
   });
 
   describe('checkAndMigrate', () => {
@@ -256,6 +265,41 @@ describe('OperationLogMigrationService', () => {
         expect(mockMatDialog.open).not.toHaveBeenCalled();
         expect(OpLog.warn).toHaveBeenCalledWith(
           jasmine.stringContaining('Migration lock held by another instance'),
+        );
+      });
+    });
+
+    describe('when hasUsableEntityData throws an error', () => {
+      beforeEach(() => {
+        mockOpLogStore.loadStateCache.and.resolveTo(null);
+        spyOn(OpLog, 'err');
+      });
+
+      it('should show error dialog and re-throw when database access fails', async () => {
+        const dbError = new Error('Failed to read legacy database. DB error');
+        mockLegacyPfDb.hasUsableEntityData.and.rejectWith(dbError);
+
+        const mockDialogRef = {
+          componentInstance: { error: { set: jasmine.createSpy('set') } },
+          afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
+        };
+        mockMatDialog.open.and.returnValue(mockDialogRef as any);
+        mockTranslateService.use = jasmine
+          .createSpy('use')
+          .and.returnValue(of(undefined));
+        (service as any).languageService = {
+          detect: jasmine.createSpy('detect').and.returnValue('en'),
+        };
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+
+        expect(OpLog.err).toHaveBeenCalledWith(
+          jasmine.stringContaining('Failed to check legacy data'),
+          dbError,
+        );
+        expect(mockMatDialog.open).toHaveBeenCalled();
+        expect(mockDialogRef.componentInstance.error.set).toHaveBeenCalledWith(
+          jasmine.stringContaining('Failed to read your existing data'),
         );
       });
     });

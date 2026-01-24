@@ -98,21 +98,117 @@ src/
 ├── app/             # Solid.js application
 │   ├── App.tsx      # Main app component
 │   └── App.css      # App styles
+├── utils/           # Helper utilities
+│   └── useTranslate.ts  # i18n hook for translations
 ├── index.html       # Plugin UI entry point
 ├── index.ts         # UI initialization
 ├── plugin.ts        # Plugin logic and API integration
 └── manifest.json    # Plugin metadata
+
+i18n/                # Translation files (optional)
+├── en.json          # English translations (required)
+└── de.json          # German translations (example)
 
 scripts/            # Build and utility scripts
 └── build-plugin.js  # Plugin packaging script
 
 dist/               # Build output (gitignored)
 ├── assets/
+├── i18n/           # Copied translation files
 ├── index.html
 ├── index.js
 ├── plugin.js
 └── manifest.json
 ```
+
+## Internationalization (i18n)
+
+This boilerplate includes built-in support for multi-language plugins.
+
+### Translation Files
+
+Translation files are located in the `i18n/` directory and use JSON format with nested keys:
+
+```json
+{
+  "APP": {
+    "TITLE": "My Plugin",
+    "SUBTITLE": "Description"
+  },
+  "BUTTONS": {
+    "SAVE": "Save",
+    "CANCEL": "Cancel"
+  },
+  "MESSAGES": {
+    "SUCCESS": "Task \"{{title}}\" created!"
+  }
+}
+```
+
+**Note**: English (`en.json`) is required and used as a fallback when translations are missing.
+
+### Using Translations in Components
+
+Use the `useTranslate()` hook in your Solid.js components:
+
+```typescript
+import { useTranslate } from '../utils/useTranslate';
+
+function MyComponent() {
+  const t = useTranslate();
+  const [title, setTitle] = createSignal('');
+
+  // Load translation
+  createEffect(async () => {
+    setTitle(await t('APP.TITLE'));
+  });
+
+  return <h1>{title()}</h1>;
+}
+```
+
+**With parameters** (for interpolation):
+
+```typescript
+createEffect(async () => {
+  const message = await t('MESSAGES.SUCCESS', { title: 'My Task' });
+  // Returns: 'Task "My Task" created!'
+  setMessage(message);
+});
+```
+
+### Adding New Languages
+
+1. Add the language code to `manifest.json`:
+
+```json
+{
+  "i18n": {
+    "languages": ["en", "de", "fr"]
+  }
+}
+```
+
+2. Create the translation file (e.g., `i18n/fr.json`):
+
+```json
+{
+  "APP": {
+    "TITLE": "Mon Plugin"
+  }
+}
+```
+
+3. Rebuild the plugin: `npm run build`
+
+### Translation Key Format
+
+- Use hierarchical keys: `APP.TITLE`, `SETTINGS.THEME`
+- Use parameter interpolation: `"message": "Hello {{name}}"`
+- Keep keys descriptive and consistent
+- English is the fallback language
+
+For complete i18n documentation, see [Plugin i18n Guide](../PLUGIN_I18N.md).
 
 ## Plugin API Usage
 

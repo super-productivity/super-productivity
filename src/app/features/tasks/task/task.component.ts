@@ -148,6 +148,27 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
   isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
+  isShowCloseButton = computed(() => {
+    // Only show close button when task is selected AND not on mobile (bottom panel)
+    return this.isSelected() && !this.layoutService.isXs();
+  });
+
+  // Determines if the toggle detail panel button should be visible
+  isShowToggleButton = computed(() => {
+    const t = this.task();
+    return (
+      t.notes || (t.issueId && t.issueType !== ICAL_TYPE) || this.isShowCloseButton()
+    );
+  });
+
+  // Determines which icon to show in the toggle button
+  toggleButtonIcon = computed((): 'chat' | 'close' | 'update' => {
+    const t = this.task();
+    if (t.issueWasUpdated) return 'update';
+    if (this.isShowCloseButton()) return 'close';
+    return 'chat';
+  });
+
   isTaskOnTodayList = computed(() =>
     this._taskService.todayListSet().has(this.task().id),
   );
@@ -371,7 +392,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     }
 
     const isConfirmBeforeTaskDelete =
-      this._configService.cfg()?.misc?.isConfirmBeforeTaskDelete ?? true;
+      this._configService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
     if (isConfirmBeforeTaskDelete) {
       this._matDialog
@@ -670,8 +691,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   addToMyDay(): void {
+    const task = this.task();
     this._store.dispatch(
-      TaskSharedActions.planTasksForToday({ taskIds: [this.task().id] }),
+      TaskSharedActions.planTasksForToday({
+        taskIds: [task.id],
+        parentTaskMap: { [task.id]: task.parentId },
+      }),
     );
   }
 

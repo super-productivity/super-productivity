@@ -148,6 +148,7 @@ export interface ElectronAPI {
     currentPomodoroSessionTime: number,
     isFocusModeEnabled?: boolean,
     currentFocusSessionTime?: number,
+    focusModeMode?: string,
   );
 
   exec(command: string): void;

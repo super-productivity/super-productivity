@@ -18,6 +18,7 @@ import {
   SoundConfig,
   SyncConfig,
   TakeABreakConfig,
+  TasksConfig,
 } from './global-config.model';
 import {
   selectConfigFeatureState,
@@ -30,6 +31,7 @@ import {
   selectSoundConfig,
   selectSyncConfig,
   selectTakeABreakConfig,
+  selectTasksConfig,
   selectTimelineConfig,
 } from './store/global-config.reducer';
 import { distinctUntilChanged, shareReplay } from 'rxjs/operators';
@@ -45,6 +47,11 @@ export class GlobalConfigService {
   cfg$: Observable<GlobalConfigState> = this._store.pipe(
     select(selectConfigFeatureState),
     distinctUntilChanged(distinctUntilChangedObject),
+    shareReplay(1),
+  );
+
+  tasks$: Observable<TasksConfig> = this._store.pipe(
+    select(selectTasksConfig),
     shareReplay(1),
   );
 
@@ -103,6 +110,9 @@ export class GlobalConfigService {
     this.localization$,
     { initialValue: undefined },
   );
+  readonly tasks: Signal<TasksConfig | undefined> = toSignal(this.tasks$, {
+    initialValue: undefined,
+  });
   readonly misc: Signal<MiscConfig | undefined> = toSignal(this.misc$, {
     initialValue: undefined,
   });

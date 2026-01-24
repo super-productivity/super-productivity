@@ -2,18 +2,20 @@
   <button
     mat-button
     class="nav-button"
-    (click)="toggleMobileNav()"
+    [routerLink]="todayRoute"
+    routerLinkActive="active"
+    [routerLinkActiveOptions]="{ exact: false }"
   >
-    <mat-icon>menu</mat-icon>
+    <mat-icon>wb_sunny</mat-icon>
   </button>
 
   <button
     mat-button
     class="nav-button"
-    [class.active]="currentRoute().includes('/tag/' + todayTagId + '/tasks')"
-    [routerLink]="todayRoute"
+    routerLink="/planner"
+    routerLinkActive="active"
   >
-    <mat-icon>wb_sunny</mat-icon>
+    <mat-icon>edit_calendar</mat-icon>
   </button>
 
   <button
@@ -29,18 +31,18 @@
   <button
     mat-button
     class="nav-button"
-    [class.active]="currentRoute() === '/planner'"
-    routerLink="/planner"
+    [matMenuTriggerFor]="panelsMenu"
+    [attr.aria-label]="T.MH.SIDE_PANEL_MENU | translate"
   >
-    <mat-icon>edit_calendar</mat-icon>
+    <mat-icon>bottom_panel_open</mat-icon>
   </button>
 
   <button
     mat-button
     class="nav-button"
-    [matMenuTriggerFor]="panelsMenu"
+    (click)="toggleMobileNav()"
   >
-    <mat-icon>view_sidebar</mat-icon>
+    <mat-icon>menu</mat-icon>
   </button>
 </nav>
 

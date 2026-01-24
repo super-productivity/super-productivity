@@ -143,7 +143,7 @@
       "TITLE": "🙈 Prosím, odpusťte nám, ale...",
       "TXT": "Projektu by ste nesmierne pomohli, keby ste mu <strong>dali dobré hodnotenie, ak sa vám páči!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Opakuje nakonfigurovanú frázu každých X pri sledovaní času úlohy.",
         "L_INTERVAL": "Interval na opakovanie frázy",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "Napr: \"Pracujte na ${currentTaskTitle}!\"",
         "L_VOICE": "Vyberte hlas",
         "L_VOICE_DESCRIPTION": "Vyberte hlas",
-        "TITLE": "Režim Domina"
+        "TITLE": "Hlasová pripomienka"
       }
     },
     "DROPBOX": {
@@ -1638,12 +1638,9 @@
       "DARK_MODE_DARK": "Tmavý",
       "DARK_MODE_LIGHT": "Svetlý",
       "DARK_MODE_SYSTEM": "Systém",
-      "DEFAULT_PROJECT": "Predvolený projekt, ktorý sa použije pre úlohy, ak nie je zadaný žiadny",
       "DEFAULT_START_PAGE": "Predvolená úvodná stránka",
       "FIRST_DAY_OF_WEEK": "Prvý deň v týždni",
       "HELP": "<p><strong>Not seeing Desktop Notifications?</strong> For windows you might want to check System > Notifications & actions and check if the required notifications have been enabled.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automatically add today tag to worked on tasks",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Mark parent task as done, when all sub tasks are done",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Confirm before exiting the app without finishing day first",
       "IS_DARK_MODE": "Tmavý režim",
@@ -1653,17 +1650,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Povoliť indikátor prekrytia okna (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Zobraziť tip na produktivitu pri spustení aplikácie o niečo dlhšie",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Zobraziť aktuálny odpočet v systémovej lište / stavovom menu (iba desktop mac)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Show current task in the tray / status menu (desktop mac/windows only)",
-      "IS_TURN_OFF_MARKDOWN": "Turn off markdown parsing for task notes",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Použiť vlastný titulkový panel (len Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Vyžaduje reštart na prejavenie zmien",
       "START_OF_NEXT_DAY": "Čas začiatku nasledujúceho dňa",
       "START_OF_NEXT_DAY_HINT": "od kedy (v hodinách) chcete počítať, že začal ďalší deň. predvolená hodnota je polnoc, čo je 0.",
-      "TASK_NOTES_TPL": "Task description template",
       "THEME": "Téma",
       "THEME_EXPERIMENTAL": "Téma (experimentálne)",
       "THEME_SELECT_LABEL": "Vybrať tému",
       "TITLE": "Rôzne nastavenia"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Predvolený projekt pre nové úlohy",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Automaticky pridať dnes tag k upravovaným úlohám",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Automaticky označiť rodičovskú úlohu ako dokončenú, keď sú všetky podúlohy dokončené",
+      "IS_CONFIRM_BEFORE_DELETE": "Potvrdiť pred odstránením úloh",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Povoliť formátovanie Markdown v poznámkach k úlohám",
+      "IS_TRAY_SHOW_CURRENT": "Zobraziť aktuálnu úlohu v systémovej lište / stavovom menu (iba desktop Mac/Windows)",
+      "NOTES_TEMPLATE": "Šablóna poznámok k úlohe",
+      "TITLE": "Úlohy"
     },
     "POMODORO": {
       "BREAK_DURATION": "Dĺžka krátkych prestávok",
@@ -1977,7 +1981,6 @@
     "NO_PLUGINS_INSTALLED": "Momentálne nie sú nainštalované žiadne pluginy",
     "PLUGINS": "Pluginy",
     "PRIVACY_POLICY": "Privacy Policy",
-    "PRODUCTIVITY_HELPER": "Productivity Helper",
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "Provide Feedback",
     "SYNC_EXPORT": "Sync & Export",

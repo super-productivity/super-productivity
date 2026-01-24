@@ -86,7 +86,11 @@ class TrackingForegroundService : Service() {
             }
 
             ACTION_STOP -> {
-                stopTracking()
+                if (isTracking) {
+                    stopTracking()
+                } else {
+                    Log.d(TAG, "Ignoring STOP action - service not tracking")
+                }
             }
 
             else -> {

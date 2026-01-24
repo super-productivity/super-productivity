@@ -1,0 +1,61 @@
+name: Code review
+
+# Using pull_request_target to grant write permissions for fork PRs.
+# This is safe because:
+# 1. We use a trusted action from Anthropic
+# 2. The action only reads PR content and posts comments
+# 3. No code from the PR is executed
+on:
+  pull_request_target:
+    types: [opened, synchronize, ready_for_review, reopened]
+    paths-ignore:
+      - 'docs/wiki/**'
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    name: Claude Code
+    continue-on-error: true
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    # Skip draft PRs to reduce API usage
+    if: github.event.pull_request.draft == false
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@a017b830c03e23789b11fb69ed571ea61c12e45c # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Allow all PR authors regardless of repository permissions
+          # This is safe because pull_request_target runs in the base repo context
+          allowed_non_write_users: '*'
+          # Allow common dependency management bots to trigger reviews
+          allowed_bots: 'dependabot[bot],renovate[bot]'
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://code.claude.com/docs/en/cli-reference for available options

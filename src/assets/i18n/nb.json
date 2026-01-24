@@ -143,7 +143,7 @@
       "TITLE": "🙈 Vennligst tilgi oss, men...",
       "TXT": "Du vil hjelpe prosjektet enormt ved å <strong>gi det en god vurdering, hvis du liker det!</strong>"
     },
-    "DOMINA_MODE": {
+    "VOICE_REMINDER": {
       "FORM": {
         "HELP": "Gjentar den konfigurerte frasen hver X når du sporer tid til en oppgave.",
         "L_INTERVAL": "Intervall for å gjenta frasen",
@@ -151,7 +151,7 @@
         "L_TEXT_DESCRIPTION": "F.eks: \"Jobb på ${currentTaskTitle}!\"",
         "L_VOICE": "Velg en stemme",
         "L_VOICE_DESCRIPTION": "Velg en stemme",
-        "TITLE": "Domina Mode"
+        "TITLE": "Stemmepåminnelse"
       }
     },
     "DROPBOX": {
@@ -1638,12 +1638,9 @@
       "DARK_MODE_DARK": "Mørk",
       "DARK_MODE_LIGHT": "Lys",
       "DARK_MODE_SYSTEM": "System",
-      "DEFAULT_PROJECT": "Standard prosjekt som skal brukes til oppgaver hvis ingen er spesifisert",
       "DEFAULT_START_PAGE": "Standard startside",
       "FIRST_DAY_OF_WEEK": "Første ukedag",
       "HELP": "<p><strong>Ser du ikke skrivebordsvarsler?</strong> For Windows vil du kanskje sjekke System&gt; Varsler og handlinger og sjekke om de nødvendige varslene er aktivert.</p>",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Legg til dagens tag automatisk for å jobbe med oppgaver",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Merk foreldreoppgaven som ferdig når alle underoppgaver er utført",
       "IS_CONFIRM_BEFORE_EXIT": "Bekreft før du avslutter appen",
       "IS_CONFIRM_BEFORE_EXIT_WITHOUT_FINISH_DAY": "Bekreft før du avslutter appen uten å avslutte dagen først",
       "IS_DARK_MODE": "Mørk modus",
@@ -1653,17 +1650,24 @@
       "IS_OVERLAY_INDICATOR_ENABLED": "Aktiver overleggindikatorvindu (desktop linux/gnome)",
       "IS_SHOW_TIP_LONGER": "Vis produktivitetstips på appstart litt lenger",
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Vis nåværende nedtelling i systemstatusmenyen (kun desktop mac)",
-      "IS_TRAY_SHOW_CURRENT_TASK": "Vis gjeldende oppgave i skuffen / statusmenyen (kun desktop mac/windows)",
-      "IS_TURN_OFF_MARKDOWN": "Slå av Markdown-parsering for notater",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Bruk egendefinert tittellinje (kun Windows/Linux)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Krever omstart for å tre i kraft",
       "START_OF_NEXT_DAY": "Starttidspunkt neste dag",
       "START_OF_NEXT_DAY_HINT": "fra når (i timer) du ønsker å telle neste dag har startet. standard er midnatt, som er 0.",
-      "TASK_NOTES_TPL": "Mal for oppgavebeskrivelse",
       "THEME": "Tema",
       "THEME_EXPERIMENTAL": "Tema (eksperimentell)",
       "THEME_SELECT_LABEL": "Velg tema",
       "TITLE": "Diverse innstillinger"
+    },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Standard prosjekt som skal brukes til oppgaver hvis ingen er spesifisert",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Legg til dagens tag automatisk for å jobbe med oppgaver",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Merk foreldreoppgaven som ferdig når alle underoppgaver er utført",
+      "IS_CONFIRM_BEFORE_DELETE": "Bekreft før du sletter oppgaver",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Aktiver Markdown-formatering i oppgavenotater",
+      "IS_TRAY_SHOW_CURRENT": "Vis gjeldende oppgave i skuffen / statusmenyen (kun desktop mac/windows)",
+      "NOTES_TEMPLATE": "Mal for oppgavebeskrivelse",
+      "TITLE": "Oppgaver"
     },
     "POMODORO": {
       "BREAK_DURATION": "Varighet av korte pauser",
@@ -1977,7 +1981,6 @@
     "NO_PLUGINS_INSTALLED": "Ingen plugins er installert for øyeblikket",
     "PLUGINS": "Plugins",
     "PRIVACY_POLICY": "Privat policy",
-    "PRODUCTIVITY_HELPER": "Produktivitetshjelper",
     "PROJECT_SETTINGS": "Prosjektspesifikke innstillinger",
     "PROVIDE_FEEDBACK": "Gi tilbakemelding",
     "SYNC_EXPORT": "Synkroniser og eksporter",

@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Install Snapcraft
-        uses: samuelmeuli/action-snapcraft@v3
+        uses: samuelmeuli/action-snapcraft@fceeb3c308e76f3487e72ef608618de625fb7fe8 # v3
       - run: yes | snapcraft promote superproductivity --from-channel latest/edge --to-channel latest/stable
         env: # Workaround for https://github.com/snapcore/snapcraft/issues/4439
           SNAPCRAFT_HAS_TTY: 'true'

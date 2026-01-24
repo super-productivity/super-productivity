@@ -18,10 +18,6 @@ describe('FocusModeCountdownComponent', () => {
     });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should initialize countdownValue to 5', () => {
       expect(component.countdownValue()).toBe(5);
@@ -29,14 +25,6 @@ describe('FocusModeCountdownComponent', () => {
 
     it('should initialize rocketState to pulse-5', () => {
       expect(component.rocketState()).toBe('pulse-5');
-    });
-
-    it('should expose T translations', () => {
-      expect(component.T).toBeDefined();
-    });
-
-    it('should have countdownComplete output', () => {
-      expect(component.countdownComplete).toBeDefined();
     });
   });
 

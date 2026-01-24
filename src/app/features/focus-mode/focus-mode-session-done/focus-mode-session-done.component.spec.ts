@@ -93,10 +93,6 @@ describe('FocusModeSessionDoneComponent', () => {
     });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should expose T translations', () => {
       expect(component.T).toBe(T);

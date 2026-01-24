@@ -47,10 +47,6 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('validation', () => {
     it('should be invalid when password is empty', () => {
       component.newPassword = '';

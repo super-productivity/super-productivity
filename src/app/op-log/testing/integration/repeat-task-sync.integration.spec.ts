@@ -441,4 +441,70 @@ describe('Repeat Task Sync Integration', () => {
       expect(frontier.get('TASK_REPEAT_CFG:cfg-2')).toEqual({ 'client-b-test': 1 });
     });
   });
+
+  describe('Cross-client repeat config deletion', () => {
+    it('should clean up ALL local tasks when deleting repeat config, not just synced task list', async () => {
+      const clientA = new TestClient('client-a-test');
+      const clientB = new TestClient('client-b-test');
+      const cfgId = 'repeat-cfg-1';
+
+      // Both clients create the repeat config
+      const createCfgOp = createTaskRepeatCfgOperation(
+        clientA,
+        cfgId,
+        OpType.Create,
+        createMinimalTaskRepeatCfgPayload(cfgId),
+      );
+      await storeService.append(createCfgOp, 'local');
+      clientB.mergeRemoteClock(createCfgOp.vectorClock);
+
+      // Client A creates tasks task1, task2
+      const task1 = createTaskOperation(clientA, 'task1', OpType.Create, {
+        id: 'task1',
+        title: 'Task 1',
+        repeatCfgId: cfgId,
+      });
+      await storeService.append(task1, 'local');
+
+      const task2 = createTaskOperation(clientA, 'task2', OpType.Create, {
+        id: 'task2',
+        title: 'Task 2',
+        repeatCfgId: cfgId,
+      });
+      await storeService.append(task2, 'local');
+
+      // Client B creates DIFFERENT tasks task3, task4 (doesn't know about task1, task2)
+      const task3 = createTaskOperation(clientB, 'task3', OpType.Create, {
+        id: 'task3',
+        title: 'Task 3',
+        repeatCfgId: cfgId,
+      });
+      await storeService.append(task3, 'remote');
+
+      const task4 = createTaskOperation(clientB, 'task4', OpType.Create, {
+        id: 'task4',
+        title: 'Task 4',
+        repeatCfgId: cfgId,
+      });
+      await storeService.append(task4, 'remote');
+
+      // Client A deletes the repeat config
+      const deleteOp = createTaskRepeatCfgOperation(clientA, cfgId, OpType.Delete, {});
+      await storeService.append(deleteOp, 'local');
+
+      // Verify operation is stored
+      const ops = await storeService.getOpsAfterSeq(0);
+      const deleteOpStored = ops.find(
+        (op) => op.op.opType === OpType.Delete && op.op.entityId === cfgId,
+      );
+      expect(deleteOpStored).toBeDefined();
+
+      // Key assertion: Delete operation should NOT contain task IDs
+      // This ensures deterministic cleanup on each client based on local state
+      expect((deleteOpStored!.op.payload as any).taskIdsToUnlink).toBeUndefined();
+
+      // The actual cleanup verification would happen in the reducer/effect layer
+      // This integration test verifies the operation structure is correct
+    });
+  });
 });

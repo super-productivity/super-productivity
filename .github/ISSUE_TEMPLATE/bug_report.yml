@@ -1,11 +1,9 @@
 name: 🚨 Bug Report
-description: Report a bug you encountered
+description: Report a bug you encountered.
 title: '🚨 '
-labels: [bug]
-assignees:
-  - '' # Ensure indentation uses regular spaces
+type: Bug
 
-body: # Ensure indentation uses regular spaces
+body:
   - type: input
     id: environment-version
     attributes:
@@ -15,7 +13,6 @@ body: # Ensure indentation uses regular spaces
     validations:
       required: true
 
-  # --- Remaining fields ---
   - type: textarea
     id: expected-behavior
     attributes:
@@ -24,6 +21,7 @@ body: # Ensure indentation uses regular spaces
       placeholder: "e.g. When I click the 'Save' button, the data should be saved without errors."
     validations:
       required: true
+
   - type: textarea
     id: current-behavior
     attributes:
@@ -32,6 +30,7 @@ body: # Ensure indentation uses regular spaces
       placeholder: "e.g. When I click the 'Save' button, the application crashes / nothing happens / an error message appears."
     validations:
       required: true
+
   - type: textarea
     id: steps-to-reproduce
     attributes:
@@ -44,6 +43,7 @@ body: # Ensure indentation uses regular spaces
         4. See error
     validations:
       required: true
+
   - type: dropdown
     id: reliability
     attributes:
@@ -55,6 +55,7 @@ body: # Ensure indentation uses regular spaces
         - 'No, it only happened once.'
     validations:
       required: true
+
   - type: textarea
     id: console-output
     attributes:
@@ -64,35 +65,3 @@ body: # Ensure indentation uses regular spaces
       render: shell # Use 'shell' or 'log' for better formatting of code/logs
     validations:
       required: false
-#  - type: textarea
-#    id: error-log-info # ID is optional for markdown but kept for consistency
-#    attributes:
-#      # Correctly combines label/description into the value using Markdown formatting
-#      label: Error Log File (Desktop only)
-#      description: |
-#        For the desktop versions, there might also be an error log file if there's no useful console output. Please check the following locations:
-#
-#        * **macOS:** `~/Library/Logs/superProductivity/main.log`
-#        * **Windows:** `%USERPROFILE%\AppData\Roaming\superProductivity\logs\main.log`
-#        * **Linux:** `~/.config/superProductivity/logs/main.log`
-#        * **Linux (Snap):** `~/snap/superproductivity/common/.config/superProductivity/logs`
-#        * **Linux (Flatpak):** `~/.var/app/com.super_productivity.SuperProductivity/config/superProductivity/logs`
-#
-#        **If you find logs and don't feel comfortable posting them publicly, you can email them to:** contact@super-productivity.com
-#
-#  - type: input
-#    id: environment-de
-#    attributes:
-#      label: Desktop Environment (Linux only)
-#      description: If you are using Linux, please specify your Desktop Environment.
-#      placeholder: "e.g., GNOME 42, KDE Plasma 5.27, XFCE 4.18"
-#    validations:
-#      required: false # Often not applicable or known
-#  - type: input
-#    id: environment-browser
-#    attributes:
-#      label: Browser Name and Version (Web version only)
-#      description: If you are using the web version, specify your browser.
-#      placeholder: "e.g., Chrome 123, Firefox 124"
-#    validations:
-#      required: false # Only required for web version usage

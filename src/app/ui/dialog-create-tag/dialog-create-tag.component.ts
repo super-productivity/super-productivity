@@ -21,7 +21,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { DEFAULT_TAG_COLOR } from '../../features/work-context/work-context.const';
 import { MatAutocomplete, MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { MatOption } from '@angular/material/core';
-import { MATERIAL_ICONS } from '../material-icons.const';
+import { MaterialIconsLoaderService } from '../material-icons-loader.service';
 
 export interface CreateTagData {
   title?: string;
@@ -51,6 +51,7 @@ export interface CreateTagData {
 })
 export class DialogCreateTagComponent {
   private _matDialogRef = inject<MatDialogRef<DialogCreateTagComponent>>(MatDialogRef);
+  private _iconLoader = inject(MaterialIconsLoaderService);
   data = inject(MAT_DIALOG_DATA);
 
   T: typeof T = T;
@@ -62,18 +63,30 @@ export class DialogCreateTagComponent {
   // Get reference to autocomplete trigger for explicit cleanup
   private _iconAutoTrigger = viewChild(MatAutocompleteTrigger);
 
-  onIconFocus(): void {
+  async onIconFocus(): Promise<void> {
     if (this.filteredIcons().length === 0) {
-      this.filteredIcons.set(MATERIAL_ICONS.slice(0, 50));
+      try {
+        const icons = await this._iconLoader.loadIcons();
+        this.filteredIcons.set(icons.slice(0, 50));
+      } catch (error) {
+        console.error('Failed to load material icons:', error);
+        this.filteredIcons.set([]);
+      }
     }
   }
 
-  onIconInput(val: string): void {
-    const filtered = MATERIAL_ICONS.filter((ico) =>
-      ico.toLowerCase().includes(val.toLowerCase()),
-    );
-    filtered.length = Math.min(50, filtered.length);
-    this.filteredIcons.set(filtered);
+  async onIconInput(val: string): Promise<void> {
+    try {
+      const icons = await this._iconLoader.loadIcons();
+      const filtered = icons.filter((ico) =>
+        ico.toLowerCase().includes(val.toLowerCase()),
+      );
+      filtered.length = Math.min(50, filtered.length);
+      this.filteredIcons.set(filtered);
+    } catch (error) {
+      console.error('Failed to filter icons:', error);
+      this.filteredIcons.set([]);
+    }
   }
 
   close(isSave: boolean): void {

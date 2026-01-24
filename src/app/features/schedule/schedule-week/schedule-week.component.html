@@ -6,7 +6,7 @@
     <div class="filler"><!--for time --></div>
     @for (day of daysToShow(); track $index) {
       <div class="day">
-        @if ($index === 0) {
+        @if (day === todayDateStr()) {
           <mat-icon>wb_sunny</mat-icon>
         }
         <div class="day-num">{{ day | localeDate: 'd' }}</div>
@@ -46,16 +46,23 @@
       class="col"
       [attr.data-day]="day"
       style="grid-column: {{ $index + 2 }}; grid-row: 1 / span {{
-        ($index === 0 ? currentTimeRow() : endOfDayColRowStart()) - 1
+        ($index === 0 && currentTimeRow() !== null
+          ? currentTimeRow()!
+          : endOfDayColRowStart()) - 1
       }}"
     ></div>
     <div
       class="col end-of-day"
       [attr.data-day]="day"
       style="grid-column: {{ $index + 2 }}; grid-row: {{
-        $index === 0 ? currentTimeRow() : endOfDayColRowStart()
+        $index === 0 && currentTimeRow() !== null
+          ? currentTimeRow()!
+          : endOfDayColRowStart()
       }} / span {{
-        totalRows - ($index === 0 ? currentTimeRow() : endOfDayColRowStart())
+        totalRows -
+          ($index === 0 && currentTimeRow() !== null
+            ? currentTimeRow()!
+            : endOfDayColRowStart())
       }}"
     ></div>
   }
@@ -77,13 +84,15 @@
     </div>
   }
 
-  <div
-    id="current-time"
-    class="current-time"
-    style="grid-column: 2;  grid-row: {{ currentTimeRow() }} / span 1"
-  >
-    <div class="circle"></div>
-  </div>
+  @if (currentTimeRow() !== null) {
+    <div
+      id="current-time"
+      class="current-time"
+      style="grid-column: 2;  grid-row: {{ currentTimeRow() }} / span 1"
+    >
+      <div class="circle"></div>
+    </div>
+  }
 
   <!-- Events -->
   @for (ev of safeEvents(); track ev.id) {

@@ -22,7 +22,14 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { BackupService } from '../../op-log/backup/backup.service';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
+import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 import { first } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
+import {
+  DialogImportEncryptionWarningComponent,
+  ImportEncryptionWarningData,
+  ImportEncryptionWarningResult,
+} from '../sync/dialog-import-encryption-warning/dialog-import-encryption-warning.component';
 import {
   ConfirmUrlImportDialogComponent,
   DialogConfirmUrlImportData,
@@ -45,6 +52,7 @@ export class FileImexComponent implements OnInit {
   private _activatedRoute = inject(ActivatedRoute);
   private _matDialog = inject(MatDialog);
   private _http = inject(HttpClient);
+  private _importEncryptionHandler = inject(ImportEncryptionHandlerService);
 
   readonly fileInputRef = viewChild<ElementRef>('fileInput');
   T: typeof T = T;
@@ -182,6 +190,34 @@ export class FileImexComponent implements OnInit {
     }
 
     try {
+      // Check if encryption state will change BEFORE importing
+      const encryptionCheck =
+        await this._importEncryptionHandler.checkEncryptionStateChange(
+          data as AppDataComplete,
+        );
+
+      // If encryption state will change, warn the user first
+      if (encryptionCheck.willChange) {
+        const dialogRef = this._matDialog.open<
+          DialogImportEncryptionWarningComponent,
+          ImportEncryptionWarningData,
+          ImportEncryptionWarningResult
+        >(DialogImportEncryptionWarningComponent, {
+          disableClose: true,
+          data: {
+            currentEncryptionEnabled: encryptionCheck.currentEnabled,
+            importedEncryptionEnabled: encryptionCheck.importedEnabled,
+          },
+        });
+
+        const result = await firstValueFrom(dialogRef.afterClosed());
+        if (!result?.confirmed) {
+          // User cancelled - don't import
+          Log.normal('Import cancelled by user due to encryption state change warning');
+          return;
+        }
+      }
+
       // Import first, then navigate (no page reload, state updates inline)
       // isForceConflict=true resets vector clock to prevent accumulation of old client IDs
       await this._backupService.importCompleteBackup(
@@ -189,6 +225,18 @@ export class FileImexComponent implements OnInit {
         false,
         true,
       );
+
+      // Handle encryption state change if needed (e.g., import has different encryption settings)
+      // This ensures server data is wiped and fresh snapshot is uploaded with correct encryption
+      const encryptionResult =
+        await this._importEncryptionHandler.handleImportEncryptionIfNeeded(
+          data as AppDataComplete,
+        );
+      if (encryptionResult?.error) {
+        Log.warn('Import encryption handling had an issue:', encryptionResult.error);
+        // Don't fail the import, just warn - the next sync will handle it
+      }
+
       await this._router.navigate([`tag/${TODAY_TAG.id}/tasks`]);
     } catch (e) {
       Log.err('Import process failed', e);

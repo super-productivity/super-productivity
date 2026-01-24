@@ -16,5 +16,8 @@
   "iFrame": true,
   "sidePanel": false,
   "isSkipMenuEntry": false,
-  "icon": "icon.svg"
+  "icon": "icon.svg",
+  "i18n": {
+    "languages": ["en", "de"]
+  }
 }

@@ -54,9 +54,14 @@ export class TaskPage extends BasePage {
   async markTaskAsDone(task: Locator): Promise<void> {
     await task.waitFor({ state: 'visible' });
     await task.hover();
+
+    // Give hover effects time to settle
+    await this.page.waitForTimeout(100);
+
     const doneBtn = task.locator(TASK_DONE_BTN);
     await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
     await doneBtn.click();
+
     await waitForAngularStability(this.page);
   }
 

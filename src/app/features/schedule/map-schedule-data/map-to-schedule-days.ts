@@ -27,6 +27,7 @@ export const mapToScheduleDays = (
     endTime: '23:59',
   },
   lunchBreakCfg?: ScheduleLunchBreakCfg,
+  realNow?: number,
 ): ScheduleDay[] => {
   // NOTE to use for failing test cases
   // const params = {
@@ -90,6 +91,7 @@ export const mapToScheduleDays = (
     blockerBlocksDayMap,
     workStartEndCfg,
     now,
+    realNow,
   );
 
   return v;

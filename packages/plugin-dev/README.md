@@ -375,9 +375,19 @@ PluginAPI.registerHook('taskUpdate', (data: unknown) => {
 1. **minimal-plugin** - The simplest possible plugin (10 lines)
 2. **simple-typescript-plugin** - TypeScript with minimal tooling
 3. **example-plugin** - Full featured example with webpack
-4. **procrastination-buster** - SolidJS plugin with modern UI
+4. **boilerplate-solid-js** - Modern Solid.js boilerplate with i18n support
+5. **procrastination-buster** - SolidJS plugin with modern UI
 
 ### Example Features
+
+**boilerplate-solid-js** demonstrates:
+
+- SolidJS for reactive UI
+- Vite for fast builds
+- Internationalization (i18n) support with example translations
+- Modern component architecture
+- Plugin-to-iframe communication
+- Best practices for plugin development
 
 **example-plugin** demonstrates:
 

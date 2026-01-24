@@ -43,7 +43,8 @@ export const selectIsSessionRunning = createSelector(
 
 export const selectIsSessionPaused = createSelector(
   selectTimer,
-  (timer) => !timer.isRunning && timer.purpose === 'work',
+  // Bug #5995 fix: Detect pause for both work sessions AND breaks
+  (timer) => !timer.isRunning && (timer.purpose === 'work' || timer.purpose === 'break'),
 );
 
 // Break selectors
@@ -89,4 +90,10 @@ export const selectIsSessionCompleted = createSelector(
 export const selectPausedTaskId = createSelector(
   selectFocusModeState,
   (state) => state.pausedTaskId,
+);
+
+// Internal flag for break resume tracking
+export const selectIsResumingBreak = createSelector(
+  selectFocusModeState,
+  (state) => state._isResumingBreak,
 );

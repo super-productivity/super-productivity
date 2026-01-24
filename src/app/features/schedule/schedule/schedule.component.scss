@@ -1,4 +1,5 @@
 @use '../../../../styles/_globals.scss' as *;
+@use '../schedule-constants.scss' as *;
 
 :host {
   --nr-of-days: 5;
@@ -15,6 +16,34 @@
   overflow-y: scroll;
   overflow-x: hidden;
   box-sizing: border-box;
+
+  // Enable horizontal scroll when viewport is too small for 7 days
+  &[data-horizontal-scroll] {
+    overflow-x: scroll; // Show horizontal scrollbar when needed
+
+    // Match app's standard scrollbar styling
+    scrollbar-width: $schedule-scrollbar-width;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+
+    &::-webkit-scrollbar {
+      width: $schedule-scrollbar-width;
+      height: $schedule-scrollbar-height; // Slightly taller for horizontal visibility
+    }
+
+    &::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+      border-radius: $schedule-scrollbar-width;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border-radius: 16px;
+
+      &:hover {
+        background: var(--scrollbar-thumb-hover);
+      }
+    }
+  }
 }
 
 header {
@@ -31,7 +60,36 @@ header {
   color: var(--text-color);
   background: var(--bg-lighter);
   // to account for scrollbar
-  padding-right: 11px;
+  padding-right: $schedule-header-scrollbar-padding;
+}
+
+.schedule-nav-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--extra-border-color);
+  background: var(--bg-lighter);
+  flex-wrap: nowrap;
+  //min-height: 48px;
+
+  button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  button[mat-button] {
+    min-width: fit-content;
+    padding: 0 12px;
+  }
+
+  button[mat-icon-button] {
+    flex-shrink: 0;
+  }
+
+  mat-icon {
+    flex-shrink: 0;
+  }
 }
 
 .main-controls {
@@ -48,7 +106,7 @@ header {
   grid-auto-columns: 1fr;
   grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
 
-  --schedule-time-width: 3em;
+  --schedule-time-width: #{$schedule-time-column-width};
 }
 
 .day {

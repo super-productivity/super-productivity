@@ -381,6 +381,7 @@ export class WorkContextService {
       const done = tasks.filter((task) => task.isDone);
       return done.length;
     }),
+    distinctUntilChanged(), // Only emit when count actually changes
   );
 
   undoneTasks$: Observable<TaskWithSubTasks[]> = combineLatest([

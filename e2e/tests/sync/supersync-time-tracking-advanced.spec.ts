@@ -61,8 +61,8 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await startTimeTracking(clientA, taskName);
       console.log('[Archive Time Test] Started time tracking');
 
-      // Wait for time to accumulate
-      await clientA.page.waitForTimeout(5000);
+      // Wait for time to accumulate (reduced from 5000ms to 2000ms)
+      await clientA.page.waitForTimeout(2000);
 
       // Stop tracking
       await stopTimeTracking(clientA, taskName);
@@ -251,10 +251,10 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       await startTimeTracking(clientB, taskName);
       console.log('[Concurrent Time Test] Client B started tracking');
 
-      await clientB.page.waitForTimeout(5000);
+      await clientB.page.waitForTimeout(2000); // Reduced from 5000ms
 
       await stopTimeTracking(clientB, taskName);
-      console.log('[Concurrent Time Test] Client B stopped after 5s');
+      console.log('[Concurrent Time Test] Client B stopped after 2s');
 
       // ============ PHASE 4: Sync Both ============
       await clientA.sync.syncAndWait();

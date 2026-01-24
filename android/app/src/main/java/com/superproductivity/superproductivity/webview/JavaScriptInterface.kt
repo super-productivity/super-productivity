@@ -1,7 +1,9 @@
 package com.superproductivity.superproductivity.webview
 
 import android.app.Activity
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -26,7 +28,11 @@ class JavaScriptInterface(
         try {
             block()
         } catch (e: Exception) {
-            Log.e(TAG, errorMsg, e)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is ForegroundServiceStartNotAllowedException) {
+                Log.e(TAG, "$errorMsg - ForegroundService restrictions violated (Android 12+). App may be in background.", e)
+            } else {
+                Log.e(TAG, errorMsg, e)
+            }
         }
     }
 
@@ -103,10 +109,8 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopTrackingService() {
         safeCall("Failed to stop tracking service") {
-            val intent = Intent(activity, TrackingForegroundService::class.java).apply {
-                action = TrackingForegroundService.ACTION_STOP
-            }
-            activity.startService(intent)
+            val intent = Intent(activity, TrackingForegroundService::class.java)
+            activity.stopService(intent)
         }
     }
 
@@ -163,10 +167,8 @@ class JavaScriptInterface(
     @JavascriptInterface
     fun stopFocusModeService() {
         safeCall("Failed to stop focus mode service") {
-            val intent = Intent(activity, FocusModeForegroundService::class.java).apply {
-                action = FocusModeForegroundService.ACTION_STOP
-            }
-            activity.startService(intent)
+            val intent = Intent(activity, FocusModeForegroundService::class.java)
+            activity.stopService(intent)
         }
     }
 

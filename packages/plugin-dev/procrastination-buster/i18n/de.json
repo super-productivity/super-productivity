@@ -1,0 +1,108 @@
+{
+  "HOME": {
+    "TITLE": "Was hält dich zurück?",
+    "SUBTITLE": "Wähle aus, was am besten zu deinem aktuellen Gefühl passt:",
+    "LEARN_MORE_BUTTON": "Mehr über Prokrastination erfahren →"
+  },
+  "NAVIGATION": {
+    "BACK": "← Zurück"
+  },
+  "STRATEGIES": {
+    "TITLE": "Empfohlene Strategien:",
+    "ACTION_BUTTON": "🎯 Fokus-Session starten",
+    "ACTION_BUTTON_TITLE": "Eine Fokus-Session starten"
+  },
+  "TYPES": {
+    "OVERWHELM": {
+      "TITLE": "Überforderung",
+      "EMOTION": "Zu viel auf einmal",
+      "STRATEGY_1": "Mikro-Aufgaben erstellen (5-Min-Schritte)",
+      "STRATEGY_2": "Implementierungsabsichten (Wenn X, dann Y)",
+      "STRATEGY_3": "Nur eine Sache aussuchen",
+      "STRATEGY_4": "Fokus-Session starten"
+    },
+    "PERFECTIONISM": {
+      "TITLE": "Perfektionismus",
+      "EMOTION": "Es ist nicht perfekt genug",
+      "STRATEGY_1": "Ersten Entwurf zeitlich begrenzen (30 Min)",
+      "STRATEGY_2": "Journal: Was ist \"gut genug\"?",
+      "STRATEGY_3": "Selbstmitgefühl üben",
+      "STRATEGY_4": "Fortschritt statt Perfektion"
+    },
+    "UNCLEAR": {
+      "TITLE": "Unklar",
+      "EMOTION": "Ich weiß nicht, was zu tun ist",
+      "STRATEGY_1": "Nächsten konkreten Schritt definieren",
+      "STRATEGY_2": "Mit jemandem darüber sprechen",
+      "STRATEGY_3": "Mindmap erstellen",
+      "STRATEGY_4": "Fragen aufschreiben"
+    },
+    "BORING": {
+      "TITLE": "Langeweile",
+      "EMOTION": "Es ist langweilig",
+      "STRATEGY_1": "Gamification hinzufügen",
+      "STRATEGY_2": "Mit Musik/Podcast kombinieren",
+      "STRATEGY_3": "Belohnung planen",
+      "STRATEGY_4": "In kleinere Teile aufteilen"
+    },
+    "FEAR": {
+      "TITLE": "Angst",
+      "EMOTION": "Ich könnte scheitern",
+      "STRATEGY_1": "Worst-Case-Szenario durchdenken",
+      "STRATEGY_2": "Kleine Experimente durchführen",
+      "STRATEGY_3": "Unterstützungssystem aktivieren",
+      "STRATEGY_4": "Erfolge dokumentieren"
+    },
+    "ENERGY": {
+      "TITLE": "Wenig Energie",
+      "EMOTION": "Ich bin zu müde",
+      "STRATEGY_1": "5-Minuten-Bewegungspause",
+      "STRATEGY_2": "Wasser trinken",
+      "STRATEGY_3": "Einfachste Aufgabe zuerst",
+      "STRATEGY_4": "Power-Nap (20 Min)"
+    },
+    "DISTRACTION": {
+      "TITLE": "Ablenkung",
+      "EMOTION": "Andere Dinge sind interessanter",
+      "STRATEGY_1": "Ablenkungen blockieren",
+      "STRATEGY_2": "Deep-Work-Block planen",
+      "STRATEGY_3": "Arbeitsumgebung aufräumen",
+      "STRATEGY_4": "Fokus-Ritual starten"
+    },
+    "RESISTANCE": {
+      "TITLE": "Widerstand",
+      "EMOTION": "Ich will das nicht tun",
+      "STRATEGY_1": "Warum ist es wichtig?",
+      "STRATEGY_2": "Mit etwas Angenehmem kombinieren",
+      "STRATEGY_3": "Delegieren in Erwägung ziehen",
+      "STRATEGY_4": "Umdenken: Was werde ich lernen?"
+    }
+  },
+  "INFO": {
+    "TITLE": "Prokrastination verstehen",
+    "INTRO": "Prokrastination ist ein Problem der Emotionsregulation, kein Zeitmanagement-Problem.",
+    "CYCLE_TITLE": "Der Prokrastinations-Kreislauf",
+    "CYCLE_INTRO": "Wenn wir mit Aufgaben konfrontiert werden, die unangenehme Emotionen auslösen, geraten wir in eine Rückkopplungsschleife:",
+    "CYCLE_STEP_1": "Angst vor Versagen",
+    "CYCLE_STEP_2": "Aufgabe vermeiden",
+    "CYCLE_STEP_3": "Vorübergehende Erleichterung",
+    "CYCLE_STEP_4": "Verstärkte Angst",
+    "BREAKING_TITLE": "Den Kreislauf durchbrechen",
+    "BREAKING_INTRO": "Der Schlüssel ist, Prokrastination mit Neugier und Mitgefühl zu begegnen, nicht mit Verurteilung. Frage dich:",
+    "BREAKING_Q1": "Welche Emotionen kommen hoch, wenn ich an diese Aufgabe denke?",
+    "BREAKING_Q2": "Welcher spezifische Aspekt fühlt sich am herausforderndsten an?",
+    "BREAKING_Q3": "Wovor habe ich Angst, wenn ich anfange?",
+    "STRATEGIES_TITLE": "Praktische Strategien",
+    "STRATEGY_START_SMALL": "Klein anfangen:",
+    "STRATEGY_START_SMALL_DESC": "Was ist der kleinste erste Schritt, den du machen könntest?",
+    "STRATEGY_TIMEBOX": "Zeitlich begrenzen:",
+    "STRATEGY_TIMEBOX_DESC": "Nur 10-25 Minuten arbeiten, dann eine Pause machen",
+    "STRATEGY_REFRAME": "Umdenken:",
+    "STRATEGY_REFRAME_DESC": "Fokus auf Fortschritt statt Perfektion",
+    "STRATEGY_COMPASSION": "Selbstmitgefühl:",
+    "STRATEGY_COMPASSION_DESC": "Mit dir selbst sprechen wie mit einem guten Freund",
+    "TRIGGERS_TITLE": "Häufige Auslöser",
+    "TRIGGERS_TEXT": "Prokrastination wird oft durch Perfektionismus, Angst vor Versagen, Überforderung, unklare Erwartungen oder langweilige Aufgaben ausgelöst. Das Identifizieren deines spezifischen Auslösers ist der erste Schritt nach vorne.",
+    "BACK_TO_WORK": "Zurück an die Arbeit!"
+  }
+}

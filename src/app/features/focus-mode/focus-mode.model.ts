@@ -47,6 +47,9 @@ export interface FocusModeState {
 
   // Task tracking during breaks
   pausedTaskId: string | null;
+
+  // Internal flag: tracks if break resume is in progress
+  _isResumingBreak: boolean;
 }
 
 // Mode strategy interface

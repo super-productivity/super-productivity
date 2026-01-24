@@ -46,6 +46,8 @@ WORKDIR /app
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/dist ./dist
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/public ./public
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/prisma ./prisma
+COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/scripts ./scripts
+COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/src ./src
 COPY --from=builder --chown=supersync:nodejs /repo/packages/super-sync-server/package.json ./package.json
 COPY --from=builder --chown=supersync:nodejs /repo/packages/shared-schema/sp-shared-schema-*.tgz ./shared-schema.tgz
 

@@ -1,0 +1,30 @@
+{
+  "APP": {
+    "TITLE": "Solid.js Boilerplate Plugin",
+    "SUBTITLE": "Built with Super Productivity Plugin API"
+  },
+  "STATS": {
+    "TOTAL_TASKS": "Total Tasks",
+    "COMPLETED_TODAY": "Completed Today",
+    "PENDING": "Pending"
+  },
+  "TASK": {
+    "CREATE_NEW": "Create New Task",
+    "ENTER_TITLE": "Enter task title...",
+    "NO_PROJECT": "No Project",
+    "CREATE_BUTTON": "Create Task",
+    "RECENT_TASKS": "Recent Tasks",
+    "CREATED_SUCCESS": "Task \"{{title}}\" created!"
+  },
+  "SETTINGS": {
+    "TITLE": "Settings",
+    "THEME": "Theme",
+    "THEME_LIGHT": "Light",
+    "THEME_DARK": "Dark",
+    "SHOW_COMPLETED": "Show completed tasks"
+  },
+  "BUTTONS": {
+    "REFRESH": "Refresh Data"
+  },
+  "LOADING": "Loading..."
+}

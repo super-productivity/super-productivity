@@ -105,11 +105,12 @@ describe('TaskService', () => {
 
     const globalConfigServiceSpy = jasmine.createSpyObj('GlobalConfigService', [''], {
       cfg: signal({
-        misc: { defaultProjectId: null },
+        tasks: { defaultProjectId: null },
         reminder: { defaultTaskRemindOption: 'AT_START' },
         appFeatures: { isTimeTrackingEnabled: true },
       }),
       misc: signal({ isShowProductivityTipLonger: false }),
+      tasks: signal({ defaultProjectId: null }),
     });
 
     const taskFocusServiceSpy = jasmine.createSpyObj('TaskFocusService', [''], {

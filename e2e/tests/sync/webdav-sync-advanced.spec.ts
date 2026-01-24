@@ -1,7 +1,6 @@
-import { test, expect } from '../../fixtures/test.fixture';
+import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   setupSyncClient,
@@ -10,17 +9,9 @@ import {
   generateSyncFolderName,
 } from '../../utils/sync-helpers';
 
-test.describe('WebDAV Sync Advanced Features', () => {
+test.describe('@webdav WebDAV Sync Advanced Features', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   test('should sync sub-tasks correctly', async ({ browser, baseURL, request }) => {
     const SYNC_FOLDER_NAME = generateSyncFolderName('e2e-advanced-sub');

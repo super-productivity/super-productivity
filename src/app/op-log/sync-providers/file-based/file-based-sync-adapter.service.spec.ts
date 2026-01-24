@@ -1133,5 +1133,111 @@ describe('FileBasedSyncAdapterService', () => {
 
       expect(result.snapshotState).toEqual({ tasks: [{ id: 't1' }] });
     });
+
+    it('should detect snapshot replacement when syncVersion remains at 1 (with excludeClient)', async () => {
+      // This test verifies the false negative fix using the clientId-based detection.
+      // Scenario:
+      // 1. Client A has synced before (lastServerSeq=1, syncVersion=1)
+      // 2. Client B uploads a snapshot: syncVersion=1, recentOps=[], clientId=client-b
+      // 3. Client A downloads with excludeClient='client-a'
+      // Expected: Should detect gap because snapshot.clientId !== excludeClient
+
+      // Step 1: Simulate initial download for client-a (has ops)
+      const initialData = createMockSyncData({
+        syncVersion: 1,
+        clientId: 'client-a',
+        recentOps: [
+          {
+            id: 'op1',
+            c: 'client-a',
+            a: 'HA',
+            o: 'CRT',
+            e: 'TASK',
+            d: 't1',
+            p: { title: 'Task 1' },
+            v: { client_a: 1 },
+            t: Date.now(),
+            s: 1,
+          },
+        ],
+      });
+
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(initialData), rev: 'rev-1' }),
+      );
+
+      // Download with excludeClient='client-a' to establish baseline
+      const initialResult = await adapter.downloadOps(0, 'client-a');
+      expect(initialResult.ops.length).toBe(0); // Own op filtered out
+      expect(initialResult.latestSeq).toBe(1);
+
+      // Update lastServerSeq to 1 (simulates that client-a has synced)
+      await adapter.setLastServerSeq(1);
+
+      // Step 2: Another client (client-b) uploads a snapshot
+      // syncVersion STAYS at 1 (doesn't increment), recentOps cleared, clientId changes
+      const snapshotData = createMockSyncData({
+        syncVersion: 1, // SAME VERSION as before
+        clientId: 'client-b', // DIFFERENT CLIENT
+        recentOps: [], // Snapshot cleared ops
+        state: { tasks: [{ id: 't2', title: 'Task 2' }] },
+      });
+
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(snapshotData), rev: 'rev-2' }),
+      );
+
+      // Step 3: Client A downloads again with sinceSeq=1 and excludeClient='client-a'
+      const result = await adapter.downloadOps(1, 'client-a');
+
+      // Should detect gap because:
+      // - syncData.clientId ('client-b') !== excludeClient ('client-a')
+      // - This means another client uploaded, so gap should be detected
+      expect(result.gapDetected).toBe(true);
+      expect(result.ops.length).toBe(0); // Gap detected, no ops returned
+    });
+
+    it('should NOT detect gap when own client uploads snapshot (with excludeClient)', async () => {
+      // This test verifies false positive prevention using clientId-based detection.
+      // Scenario:
+      // 1. Client A uploads a snapshot: syncVersion=1, recentOps=[], clientId=client-a
+      // 2. Client A immediately downloads with excludeClient='client-a'
+      // Expected: Should NOT detect gap because snapshot.clientId === excludeClient
+
+      // Step 1: Upload snapshot as client-a
+      const snapshotData = createMockSyncData({
+        syncVersion: 1,
+        clientId: 'client-a',
+        recentOps: [],
+        state: { tasks: [] },
+      });
+
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(snapshotData), rev: 'rev-1' }),
+      );
+      mockProvider.uploadFile.and.returnValue(Promise.resolve({ rev: 'rev-2' }));
+
+      await adapter.uploadSnapshot(
+        {},
+        'client-a',
+        'initial',
+        { client_a: 1 },
+        1,
+        undefined,
+        'test-op-id-snapshot',
+      );
+
+      const seqAfterUpload = await adapter.getLastServerSeq();
+      expect(seqAfterUpload).toBe(1);
+
+      // Step 2: Download with excludeClient='client-a' (same client that uploaded)
+      const result = await adapter.downloadOps(1, 'client-a');
+
+      // Should NOT detect gap because:
+      // - syncData.clientId ('client-a') === excludeClient ('client-a')
+      // - This means we just uploaded, so no gap
+      expect(result.gapDetected).toBe(false);
+      expect(result.snapshotState).toBeUndefined(); // No snapshot state when sinceSeq > 0
+    });
   });
 });

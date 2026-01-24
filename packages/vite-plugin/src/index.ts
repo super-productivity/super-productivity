@@ -69,6 +69,35 @@ export const superProductivityPlugin = (
           fs.copyFileSync(iconSrc, iconDest);
         }
 
+        // 2.5. Copy i18n folder if it exists
+        const i18nSrcDir = path.resolve(process.cwd(), 'i18n');
+        if (fs.existsSync(i18nSrcDir) && fs.statSync(i18nSrcDir).isDirectory()) {
+          try {
+            const i18nDestDir = path.join(distDir, 'i18n');
+            if (!fs.existsSync(i18nDestDir)) {
+              fs.mkdirSync(i18nDestDir, { recursive: true });
+            }
+
+            const i18nFiles = fs.readdirSync(i18nSrcDir);
+            let copiedCount = 0;
+            for (const file of i18nFiles) {
+              if (file.endsWith('.json')) {
+                fs.copyFileSync(
+                  path.join(i18nSrcDir, file),
+                  path.join(i18nDestDir, file),
+                );
+                copiedCount++;
+              }
+            }
+
+            if (copiedCount > 0) {
+              console.log(`📋 Copied ${copiedCount} i18n file(s)`);
+            }
+          } catch (error) {
+            console.warn('⚠️  Failed to copy i18n files:', error);
+          }
+        }
+
         // 3. Handle index.html and inlining
         const htmlPath = path.join(distDir, 'index.html');
 

@@ -8,13 +8,13 @@ import { setCurrentTask, toggleStart, unsetCurrentTask } from './task.actions';
 import { selectTaskFeatureState } from './task.selectors';
 import {
   selectConfigFeatureState,
-  selectMiscConfig,
+  selectTasksConfig,
 } from '../../config/store/global-config.reducer';
 import { DEFAULT_TASK, Task, TaskState } from '../task.model';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
-import { GlobalConfigState, MiscConfig } from '../../config/global-config.model';
+import { GlobalConfigState, TasksConfig } from '../../config/global-config.model';
 import { WorkContextType } from '../../work-context/work-context.model';
 
 describe('TaskInternalEffects', () => {
@@ -60,8 +60,8 @@ describe('TaskInternalEffects', () => {
     ...partial,
   });
 
-  const createMiscConfig = (partial: Partial<MiscConfig> = {}): MiscConfig => ({
-    ...DEFAULT_GLOBAL_CONFIG.misc,
+  const createTasksConfig = (partial: Partial<TasksConfig> = {}): TasksConfig => ({
+    ...DEFAULT_GLOBAL_CONFIG.tasks,
     ...partial,
   });
 
@@ -91,8 +91,8 @@ describe('TaskInternalEffects', () => {
         provideMockStore({
           selectors: [
             {
-              selector: selectMiscConfig,
-              value: createMiscConfig({ isAutMarkParentAsDone: true }),
+              selector: selectTasksConfig,
+              value: createTasksConfig({ isAutoMarkParentAsDone: true }),
             },
             { selector: selectTaskFeatureState, value: createTaskState([]) },
             { selector: selectConfigFeatureState, value: createConfigState() },
@@ -129,8 +129,8 @@ describe('TaskInternalEffects', () => {
       });
 
       store.overrideSelector(
-        selectMiscConfig,
-        createMiscConfig({ isAutMarkParentAsDone: true }),
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
       );
       store.overrideSelector(
         selectTaskFeatureState,
@@ -164,8 +164,8 @@ describe('TaskInternalEffects', () => {
       });
 
       store.overrideSelector(
-        selectMiscConfig,
-        createMiscConfig({ isAutMarkParentAsDone: false }),
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: false }),
       );
       store.overrideSelector(
         selectTaskFeatureState,
@@ -205,8 +205,8 @@ describe('TaskInternalEffects', () => {
       });
 
       store.overrideSelector(
-        selectMiscConfig,
-        createMiscConfig({ isAutMarkParentAsDone: true }),
+        selectTasksConfig,
+        createTasksConfig({ isAutoMarkParentAsDone: true }),
       );
       store.overrideSelector(
         selectTaskFeatureState,

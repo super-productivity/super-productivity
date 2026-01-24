@@ -185,9 +185,6 @@ describe('PluginService', () => {
   });
 
   describe('Service Creation', () => {
-    it('should be created', () => {
-      expect(service).toBeTruthy();
-    });
 
     it('should not be initialized initially', () => {
       expect(service.isInitialized()).toBeFalse();

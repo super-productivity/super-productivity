@@ -182,13 +182,14 @@ describe('shared-schema migration functions', () => {
   });
 
   describe('validateMigrationRegistry', () => {
-    it('returns empty array when no migrations and version is 1', () => {
-      // Only valid if CURRENT_SCHEMA_VERSION is 1
-      if (CURRENT_SCHEMA_VERSION === 1) {
-        const errors = validateMigrationRegistry();
-        expect(errors).toEqual([]);
-      }
-    });
+    // @todo: How can we change this test to check this behavior and increase CURRENT_SCHEMA_VERSION?
+    // it('returns empty array when no migrations and version is 1', () => {
+    //   // Only valid if CURRENT_SCHEMA_VERSION is 1
+    //   if (CURRENT_SCHEMA_VERSION === 1) {
+    //     const errors = validateMigrationRegistry();
+    //     expect(errors).toEqual([]);
+    //   }
+    // });
 
     it('returns errors when CURRENT_SCHEMA_VERSION > 1 but no migrations', () => {
       // This is a consistency check for when we add migrations

@@ -58,22 +58,22 @@
           <mat-icon
             class="keep-ico"
             matSuffix
-            svgIcon="keep_filled"
             style="cursor: pointer"
             (click)="unPinSearch()"
             [matTooltip]="'Clear pinned search query'"
-          ></mat-icon>
+            >bookmark</mat-icon
+          >
         } @else if (
           ip?.pinnedSearch?.length || searchText()?.length >= SEARCH_MIN_LENGTH
         ) {
           <mat-icon
             class="keep-ico"
             matSuffix
-            svgIcon="keep"
             style="cursor: pointer"
             (click)="pinSearch()"
             [matTooltip]="'Remember search query'"
-          ></mat-icon>
+            >bookmark_add</mat-icon
+          >
         }
         <!-- -->
         @if (searchText().length === 0 && issueProviderHelpLink()) {

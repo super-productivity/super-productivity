@@ -72,10 +72,6 @@ describe('FocusModeOverlayComponent', () => {
     }
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should dismiss focus mode banner on construction', () => {
       expect(mockBannerService.dismiss).toHaveBeenCalledWith(BannerId.FocusMode);
@@ -83,10 +79,6 @@ describe('FocusModeOverlayComponent', () => {
 
     it('should expose FocusScreen enum', () => {
       expect(component.FocusScreen).toBe(FocusScreen);
-    });
-
-    it('should expose T translations', () => {
-      expect(component.T).toBeDefined();
     });
 
     it('should have activePage signal from service', () => {

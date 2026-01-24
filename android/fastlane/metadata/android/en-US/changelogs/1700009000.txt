@@ -1,0 +1,55 @@
+
+### Bug Fixes
+
+* **ci:** add dependency for lighthouse job to ensure proper execution order
+* **ci:** enable preview deployments for fork PRs with manual approval
+* **ci:** pin pr-preview-deploy workflow actions to commit SHAs
+* **ci:** remove dependency on test-on-linux for lighthouse job
+* **ci:** use stable version tags for GitHub Actions
+* **e2e:** add frontend build step to build.yml workflow
+* **e2e:** eliminate plugin 404 errors in CI
+* **e2e:** eliminate race condition causing 404 errors for bundled plugin manifests
+* **e2e:** resolve timing issues in 4 failing tests
+* **i18n:** correct mistranslation in Korean
+* import TranslatePipe in dialog share component
+* import translation constants in dialog share component
+* **issue-templates:** correct type casing from 'Future' to 'Feature' in feature request template
+* **issue-templates:** standardize type casing for bug report templates
+* **lighthouse:** increase font budget for Material Symbols upgrade
+* **mobile:** account for safe area insets in dialog max-height
+* **mobile:** fix dialog height overflow and content scrolling on Android
+* **mobile:** increase dialog content max-height to 90vh on mobile
+* **plugins:** add missing automations plugin to build script
+* **supersync:** address high-priority security review findings (0573468), closes hi#priority hi#priority
+* **supersync:** simplify workflow to manual trigger only
+* **supersync:** use npx tsx instead of global install in docker monitor
+* **sync:** defer ImmediateUploadService initialization until data loads
+* **sync:** improve Dropbox PKCE error handling and messaging
+* **sync:** persist PKCE error notification until dismissed
+* **sync:** queue immediate upload triggers before initialization
+* **sync:** resolve DELETE vs UPDATE race in LWW conflict resolution
+* **sync:** show alert for storage quota errors in immediate upload
+* translate close button text in share and productivity breakdown dialogs
+* **ui:** restore 20px icon sizing in main header except sync button (dafa04b), closes #6119
+* **workflow:** restructure lint and test jobs for improved clarity and execution order
+### Features
+
+* add EU data hosting badge with SVG image to login page
+* **build:** add SignPath code signing integration for Windows
+* **ci:** add Cloudflare Pages PR preview deployments
+* **issue-templates:** add improved internal app error report template
+* **issue-templates:** type instead tag, better formatting.
+* **mobile-bottom-nav:** add active route styling for Today and Planner buttons
+* **mobile:** add swipe-to-close gesture for side navigation
+* **navigation:** reorder scheduler route addition in main routes
+* **planner:** limit initial days to 5 on mobile for better performance
+* **supersync:** add beta badge to login/register screens
+* **supersync:** add comprehensive storage monitoring and analysis toolkit
+* **supersync:** add EU data hosting badge to login page (5be9aea), closes #039 #fc0
+* **supersync:** add operational procedures documentation
+* **supersync:** add production Docker monitoring wrapper and tooling
+* **supersync:** implement Phase 1 encryption-at-rest tooling
+* **supersync:** implement Phase 2 testing & validation tooling
+* **supersync:** implement Phase 3 migration planning
+* update icons
+* update wording

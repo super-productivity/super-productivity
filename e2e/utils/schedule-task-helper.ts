@@ -11,7 +11,7 @@ const DETAIL_PANEL_SCHEDULE_ITEM =
   'task-detail-item:has(mat-icon:text("schedule"))';
 const RIGHT_PANEL = '.right-panel';
 const DIALOG_CONTAINER = 'mat-dialog-container';
-const DIALOG_SUBMIT = 'mat-dialog-actions button:last-child';
+const DIALOG_SUBMIT = 'mat-dialog-actions button[color="primary"]';
 
 /**
  * Closes the task detail panel if it's currently open.
@@ -74,7 +74,7 @@ export const scheduleTaskViaDetailPanel = async (
   // Fill time input
   await fillTimeInput(page, scheduleTime);
 
-  // Submit dialog
+  // Submit dialog - click the primary action button (Schedule button)
   const submitBtn = page.locator(DIALOG_SUBMIT);
   await submitBtn.waitFor({ state: 'visible', timeout: 5000 });
   await submitBtn.click();

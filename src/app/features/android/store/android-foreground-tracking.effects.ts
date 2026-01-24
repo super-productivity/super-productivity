@@ -204,7 +204,7 @@ export class AndroidForegroundTrackingEffects {
             await this._syncElapsedTimeForTask(currentTask!.id);
             this._taskService.pauseCurrent();
             // Flush pending operations to IndexedDB to prevent data loss
-            this._flushPendingOperations();
+            await this._flushPendingOperations();
           }),
         ),
       { dispatch: false },
@@ -228,7 +228,7 @@ export class AndroidForegroundTrackingEffects {
             this._taskService.setDone(currentTask!.id);
             this._taskService.pauseCurrent();
             // Flush pending operations to IndexedDB to prevent data loss
-            this._flushPendingOperations();
+            await this._flushPendingOperations();
           }),
         ),
       { dispatch: false },
@@ -249,12 +249,21 @@ export class AndroidForegroundTrackingEffects {
    * Force immediate flush of pending operations to IndexedDB.
    * This ensures all dispatched NgRx actions are persisted to the operation log
    * before the app can be closed (e.g., after notification button clicks).
+   * CRITICAL: Must be awaited to prevent data loss if app closes quickly.
    */
-  private _flushPendingOperations(): void {
-    this._operationWriteFlush.flushPendingWrites().catch((e) => {
+  private async _flushPendingOperations(): Promise<void> {
+    try {
+      DroidLog.log('Starting immediate flush of pending operations');
+      await this._operationWriteFlush.flushPendingWrites();
+      DroidLog.log('Successfully flushed pending operations');
+    } catch (e) {
       DroidLog.err('Failed to flush pending operations', e);
-    });
-    DroidLog.log('Triggered immediate flush of pending operations');
+      this._snackService.open({
+        msg: 'Failed to save time tracking data - please try again',
+        type: 'ERROR',
+      });
+      throw e;
+    }
   }
 
   /**
@@ -267,6 +276,7 @@ export class AndroidForegroundTrackingEffects {
     DroidLog.log('Syncing elapsed time for task', { taskId, elapsedJson });
 
     if (!elapsedJson || elapsedJson === 'null') {
+      DroidLog.warn('Native service has no tracking data', { taskId });
       return;
     }
 
@@ -278,7 +288,7 @@ export class AndroidForegroundTrackingEffects {
 
       // Only sync if native is tracking the same task
       if (nativeData.taskId !== taskId) {
-        DroidLog.log('Native tracking different task, skipping sync', {
+        DroidLog.warn('Native tracking different task, skipping sync', {
           nativeTaskId: nativeData.taskId,
           expectedTaskId: taskId,
         });
@@ -288,7 +298,11 @@ export class AndroidForegroundTrackingEffects {
       // Get the task to find its current timeSpent
       const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
       if (!task) {
-        DroidLog.log('Task not found for sync', { taskId });
+        DroidLog.err('Task not found for sync - data may be corrupted', { taskId });
+        this._snackService.open({
+          msg: 'Time tracking sync failed - task not found',
+          type: 'WARNING',
+        });
         return;
       }
 
@@ -302,6 +316,25 @@ export class AndroidForegroundTrackingEffects {
         duration,
       });
 
+      // Handle negative duration (clock skew or service crash)
+      if (duration < 0) {
+        DroidLog.warn('Native time less than app time - possible service crash', {
+          taskId,
+          nativeElapsed: nativeData.elapsedMs,
+          currentTimeSpent,
+          duration,
+        });
+        // Fallback: Trust the native service, reset to its value
+        // This prevents data loss if the native service crashed and restarted
+        this._taskService.addTimeSpent(
+          task,
+          nativeData.elapsedMs,
+          this._dateService.todayStr(),
+        );
+        this._globalTrackingIntervalService.resetTrackingStart();
+        return;
+      }
+
       if (duration > 0) {
         this._taskService.addTimeSpent(task, duration, this._dateService.todayStr());
         // Reset the tracking interval to prevent double-counting
@@ -311,6 +344,10 @@ export class AndroidForegroundTrackingEffects {
       }
     } catch (e) {
       DroidLog.err('Failed to sync elapsed time', e);
+      this._snackService.open({
+        msg: 'Time tracking sync failed - please check your tracked time',
+        type: 'WARNING',
+      });
     }
   }
 }

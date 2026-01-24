@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { combineLatest, from, Observable } from 'rxjs';
 import { SimpleMetrics } from './metric.model';
-import { delay, filter, map, switchMap, take } from 'rxjs/operators';
+import { filter, map, switchMap, take, withLatestFrom } from 'rxjs/operators';
 import { mapSimpleMetrics } from './metric.util';
 import { TaskService } from '../tasks/task.service';
 import { WorklogService } from '../worklog/worklog.service';
@@ -29,8 +29,9 @@ export class AllTasksMetricsService {
   private _simpleMetricsObs$: Observable<SimpleMetrics | undefined> =
     this._workContextService.activeWorkContext$.pipe(
       filter((ctx) => ctx?.type === WorkContextType.TAG && ctx.id === TODAY_TAG.id),
-      // wait for worklog to load after context switch
-      delay(100),
+      // Ensure worklog is loaded before computing metrics
+      withLatestFrom(this._worklogService.worklog$),
+      filter(([, worklog]) => !!worklog),
       switchMap(() =>
         combineLatest([
           this._getAllBreakNr$(),

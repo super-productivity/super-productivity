@@ -12,6 +12,23 @@ test.describe('Default task reminder option', () => {
 
   const changeDefaultTaskReminderOption = async (page: Page): Promise<void> => {
     await page.getByRole('menuitem', { name: 'Settings' }).click();
+
+    // Navigate to Time & Tracking tab first (2nd tab with timer icon)
+    await page.evaluate(() => {
+      const timeTrackingTab = Array.from(
+        document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
+      ).find((tab) => {
+        const icon = tab.querySelector('mat-icon');
+        return icon?.textContent?.trim() === 'timer';
+      });
+
+      if (timeTrackingTab) {
+        (timeTrackingTab as HTMLElement).click();
+      }
+    });
+
+    await page.waitForTimeout(500);
+
     const remindersSection = await page.locator('section', { hasText: 'Reminders' });
     await remindersSection.click();
 

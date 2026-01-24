@@ -347,6 +347,6 @@ export class GitlabApiService {
   }
 
   private _apiLink(cfg: GitlabCfg): string {
-    return this._projectApiLink(cfg, cfg.project);
+    return this._projectApiLink(cfg, assertTruthy(cfg.project));
   }
 }

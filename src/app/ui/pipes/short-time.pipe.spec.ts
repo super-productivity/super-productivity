@@ -19,10 +19,6 @@ describe('ShortTimePipe', () => {
     ) as jasmine.SpyObj<DateTimeFormatService>;
   });
 
-  it('should create an instance', () => {
-    expect(pipe).toBeTruthy();
-  });
-
   it('should format valid timestamp using DateTimeFormatService', () => {
     const timestamp = new Date(2024, 0, 15, 14, 30).getTime();
     dateTimeFormatService.formatTime.and.returnValue('2:30 PM');

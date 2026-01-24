@@ -30,10 +30,6 @@ describe('DialogCreateTagComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   it('should close with tag data when save is called with valid title', () => {
     component.title = 'Test Tag';
     component.color = '#ff0000';

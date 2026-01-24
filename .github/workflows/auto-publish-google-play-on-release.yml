@@ -12,8 +12,20 @@ jobs:
     if: '!github.event.release.prerelease'
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2
+        with:
+          egress-policy: audit
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            androidpublisher.googleapis.com:443
+            play.google.com:443
+            oauth2.googleapis.com:443
+            www.googleapis.com:443
+
       - name: Promote Internal Release to Production
-        uses: kevin-david/promote-play-release@v1.2.0
+        uses: kevin-david/promote-play-release@d1ed59ca4fd7456b9d8cae062a3684e93b412425 # v1.2.0
         with:
           service-account-json-raw: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           package-name: com.superproductivity.superproductivity

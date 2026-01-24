@@ -45,9 +45,24 @@ test.describe('Issue Provider Panel', () => {
           .catch(() => null);
 
         if (dialogOpened) {
-          await page.click(CANCEL_BTN);
-          // Wait for dialog to close
-          await page.waitForSelector(CANCEL_BTN, { state: 'detached' });
+          // Wait for dialog to be stable before clicking
+          await page.waitForTimeout(500);
+
+          // Try to click cancel, but handle case where dialog auto-closes
+          const cancelClicked = await page
+            .click(CANCEL_BTN, { timeout: 5000 })
+            .catch(() => false);
+
+          if (cancelClicked !== false) {
+            // Wait for dialog to close
+            await page.waitForSelector(CANCEL_BTN, { state: 'detached' });
+          }
+
+          // Ensure we're back on the issue provider panel
+          await page.waitForSelector('issue-provider-setup-overview', {
+            state: 'visible',
+            timeout: 3000,
+          });
         }
       }
     }

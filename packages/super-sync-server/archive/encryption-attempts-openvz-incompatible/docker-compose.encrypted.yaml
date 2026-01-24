@@ -1,0 +1,48 @@
+# Docker Compose overlay for encrypted PostgreSQL data at rest
+#
+# This file adds LUKS encryption at rest for the PostgreSQL database.
+# It MUST be used as an overlay with the base docker-compose.yml:
+#
+# Usage:
+#   1. Create encrypted LUKS volume: ./tools/setup-encrypted-volume.sh --size 50G
+#   2. Unlock volume: sudo ./tools/unlock-encrypted-volume.sh pg-data-encrypted
+#   3. Start with encryption: docker compose -f docker-compose.yml -f docker-compose.encrypted.yaml up -d
+#
+# CRITICAL:
+#   - The encrypted volume MUST be unlocked BEFORE starting containers
+#   - Run: ./tools/unlock-encrypted-volume.sh pg-data-encrypted
+#   - Without manual unlock, container startup will fail
+
+version: '3.8'
+
+services:
+  postgres:
+    # Override restart policy: requires manual unlock after reboot
+    restart: 'no'
+
+    volumes:
+      # Replace named volume with bind mount to encrypted filesystem
+      # IMPORTANT: /mnt/pg-data-encrypted MUST be unlocked and mounted first!
+      - /mnt/pg-data-encrypted:/var/lib/postgresql/data
+
+    healthcheck:
+      # Enhanced healthcheck: verify both PostgreSQL AND data directory exists
+      test:
+        - 'CMD-SHELL'
+        - |
+          pg_isready -U ${POSTGRES_USER:-supersync} -d ${POSTGRES_DB:-supersync} && \
+          test -d /var/lib/postgresql/data/base || \
+          (echo "ERROR: Data directory missing - encrypted volume not mounted!" && exit 1)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s # Allow extra time for mount verification
+
+# Remove the named volume - we're using bind mount instead
+volumes:
+  postgres-data:
+    external: false
+    name: postgres-data-unused
+
+# NOTE: No changes to supersync service - it connects to postgres normally
+# NOTE: No changes to caddy service - it proxies to supersync normally

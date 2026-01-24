@@ -106,10 +106,6 @@ describe('TaskRepeatCfgService', () => {
     dispatchSpy = spyOn(store, 'dispatch');
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('taskRepeatCfgs$', () => {
     it('should select all task repeat configs', (done) => {
       const mockConfigs = [mockTaskRepeatCfg];
@@ -194,7 +190,6 @@ describe('TaskRepeatCfgService', () => {
         jasmine.objectContaining({
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: id,
-          taskIdsToUnlink: [mockTask.id],
         }),
       );
     });
@@ -300,7 +295,6 @@ describe('TaskRepeatCfgService', () => {
         jasmine.objectContaining({
           type: TaskSharedActions.deleteTaskRepeatCfg.type,
           taskRepeatCfgId: 'cfg-123',
-          taskIdsToUnlink: [],
         }),
       );
     });

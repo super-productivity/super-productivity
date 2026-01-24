@@ -27,6 +27,49 @@ export abstract class BasePage {
     return `${this.testPrefix}-${value}`;
   }
 
+  /**
+   * Ensures all overlay backdrops are removed from the DOM before proceeding.
+   * This is critical before interacting with elements that might be blocked by overlays.
+   * Uses Escape key to dismiss overlays if they don't close naturally.
+   */
+  async ensureOverlaysClosed(): Promise<void> {
+    const backdrop = this.page.locator('.cdk-overlay-backdrop');
+
+    // Check if any overlays are present
+    const count = await backdrop.count();
+    if (count === 0) {
+      return; // No overlays - nothing to do
+    }
+
+    // Overlays present - try dismissing with Escape
+    console.log(
+      `[ensureOverlaysClosed] Found ${count} overlay(s), attempting to dismiss with Escape`,
+    );
+    await this.page.keyboard.press('Escape');
+
+    try {
+      // Wait for backdrop to be removed (uses Playwright's smart waiting)
+      await backdrop.first().waitFor({ state: 'detached', timeout: 3000 });
+    } catch (e) {
+      // Fallback: try Escape again for stacked overlays
+      const remaining = await backdrop.count();
+      if (remaining > 0) {
+        console.warn(
+          `[ensureOverlaysClosed] ${remaining} overlay(s) still present after first Escape, trying again`,
+        );
+        await this.page.keyboard.press('Escape');
+        await backdrop
+          .first()
+          .waitFor({ state: 'detached', timeout: 2000 })
+          .catch(() => {
+            console.error(
+              '[ensureOverlaysClosed] Failed to close overlays after multiple attempts',
+            );
+          });
+      }
+    }
+  }
+
   async addTask(taskName: string, skipClose = false): Promise<void> {
     // Add test prefix to task name for isolation
     const prefixedTaskName = this.applyPrefix(taskName);

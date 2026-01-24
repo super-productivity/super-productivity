@@ -22,6 +22,22 @@ function log(message, color = '') {
   console.log(`${color}${message}${colors.reset}`);
 }
 
+// Recursive copy function that handles both files and directories
+function copyRecursive(src, dest) {
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest, { recursive: true });
+    }
+    const entries = fs.readdirSync(src);
+    for (const entry of entries) {
+      copyRecursive(path.join(src, entry), path.join(dest, entry));
+    }
+  } else {
+    fs.copyFileSync(src, dest);
+  }
+}
+
 // Plugin configurations
 const plugins = [
   {
@@ -45,9 +61,7 @@ const plugins = [
         for (const file of files) {
           const src = path.join(distPath, file);
           const dest = path.join(targetDir, file);
-          if (fs.statSync(src).isFile()) {
-            fs.copyFileSync(src, dest);
-          }
+          copyRecursive(src, dest);
         }
       }
       return 'Built and copied to assets';
@@ -114,9 +128,7 @@ const plugins = [
         for (const file of files) {
           const src = path.join(distPath, file);
           const dest = path.join(targetDir, file);
-          if (fs.statSync(src).isFile()) {
-            fs.copyFileSync(src, dest);
-          }
+          copyRecursive(src, dest);
         }
       }
       return 'Built and copied to assets';
@@ -168,9 +180,34 @@ const plugins = [
         for (const file of files) {
           const src = path.join(distPath, file);
           const dest = path.join(targetDir, file);
-          if (fs.statSync(src).isFile()) {
-            fs.copyFileSync(src, dest);
-          }
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'automations',
+    path: 'automations',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      // Copy to assets directory
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/automations',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
         }
       }
       return 'Built and copied to assets';

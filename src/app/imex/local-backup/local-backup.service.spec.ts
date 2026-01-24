@@ -107,10 +107,6 @@ describe('LocalBackupService', () => {
     service = TestBed.inject(LocalBackupService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('backup data should include archives', () => {
     it('should use async method to get data with archives (not sync method)', async () => {
       // This test verifies that the service uses getAllSyncModelDataFromStoreAsync()

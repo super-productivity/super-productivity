@@ -198,6 +198,7 @@ export class AndroidFocusModeEffects {
       fn();
     } catch (e) {
       DroidLog.err(errorMsg, e);
+      DroidLog.err('Native call stack trace:', new Error().stack);
       if (showSnackbar) {
         this._snackService.open({ msg: errorMsg, type: 'ERROR' });
       }

@@ -75,7 +75,7 @@ export class FinishDayBeforeCloseEffects {
             const doneTasks = todayMainTasks.filter((t) => t.isDone);
             if (doneTasks.length) {
               if (
-                confirm(
+                !confirm(
                   this._translateService.instant(
                     T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY_BEFORE_EXIT,
                     {
@@ -84,13 +84,12 @@ export class FinishDayBeforeCloseEffects {
                   ),
                 )
               ) {
-                this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
-              } else {
+                // User wants to finish day first - navigate them there
                 this._router.navigate([`tag/${TODAY_TAG.id}/daily-summary`]);
               }
-            } else {
-              this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
             }
+            // Always complete the handler to prevent hanging
+            this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
           }),
         ),
       { dispatch: false },

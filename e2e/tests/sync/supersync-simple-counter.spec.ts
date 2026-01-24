@@ -31,11 +31,18 @@ const createSimpleCounter = async (
   await client.page.waitForURL(/config/);
   await client.page.waitForTimeout(500);
 
+  // Navigate to Productivity tab where Simple Counters section is located
+  const productivityTab = client.page.locator(
+    'mat-tab-header .mat-mdc-tab:has-text("Productivity"), mat-tab-header .mat-tab-label:has-text("Productivity")',
+  );
+  await productivityTab.waitFor({ state: 'visible', timeout: 10000 });
+  await productivityTab.click();
+  await client.page.waitForTimeout(500);
+
   // Click on Simple Counters section (it's inside a collapsible component)
   // The translated title is "Simple Counters & Habit Tracking"
-  // It's under "Productivity Helper" section, may need to scroll to see it
   const simpleCountersSection = client.page.locator(
-    '.collapsible-header:has-text("Simple Counter")',
+    '.collapsible-header:has-text("Simple Counters")',
   );
 
   // Scroll to section and wait for it

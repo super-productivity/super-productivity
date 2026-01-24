@@ -13,6 +13,7 @@ import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/supe
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
 import { uuidv7 } from '../../util/uuid-v7';
+import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
 
 /**
  * Service for changing the encryption password for SuperSync.
@@ -31,6 +32,7 @@ export class EncryptionPasswordChangeService {
   private _encryptionService = inject(OperationEncryptionService);
   private _vectorClockService = inject(VectorClockService);
   private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private _derivedKeyCache = inject(DerivedKeyCacheService);
 
   /**
    * Changes the encryption password by deleting all server data
@@ -105,6 +107,9 @@ export class EncryptionPasswordChangeService {
         encryptKey: newPassword,
         isEncryptionEnabled: true,
       } as SuperSyncPrivateCfg);
+
+      // Clear cached encryption keys to force re-derivation with new password
+      this._derivedKeyCache.clearCache();
 
       // Update lastServerSeq to the new snapshot's seq
       if (response.serverSeq !== undefined) {

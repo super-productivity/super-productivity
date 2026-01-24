@@ -55,19 +55,16 @@ plugin.registerHook(PluginHooks.TASK_UPDATE, (taskData: TaskUpdatePayload) => {
 });
 
 // Example: Hook into context changes
-plugin.registerHook(
-  PluginHooks.ANY_TASK_UPDATE,
-  async (payload: AnyTaskUpdatePayload) => {
-    const changes = payload.changes;
-    if (changes && 'projectId' in changes && changes.projectId) {
-      const projects = await plugin.getAllProjects();
-      const currentProject = projects.find((p) => p.id === changes.projectId);
-      if (currentProject) {
-        plugin.log.info('Switched to project:', currentProject.title);
-      }
+plugin.registerHook(PluginHooks.ANY_TASK_UPDATE, async (payload: AnyTaskUpdatePayload) => {
+  const changes = payload.changes;
+  if (changes && 'projectId' in changes && changes.projectId) {
+    const projects = await plugin.getAllProjects();
+    const currentProject = projects.find((p) => p.id === changes.projectId);
+    if (currentProject) {
+      plugin.log.info('Switched to project:', currentProject.title);
     }
-  },
-);
+  }
+});
 
 // Example: Custom command handler
 if (plugin.onMessage) {
@@ -76,8 +73,7 @@ if (plugin.onMessage) {
       case 'getStats':
         const tasks = await plugin.getTasks();
         const completedToday = tasks.filter(
-          (t) =>
-            t.isDone && new Date(t.doneOn!).toDateString() === new Date().toDateString(),
+          (t) => t.isDone && new Date(t.doneOn!).toDateString() === new Date().toDateString(),
         );
 
         return {
@@ -87,12 +83,12 @@ if (plugin.onMessage) {
         };
       case 'createTask': {
         const newTask = await plugin.addTask({
-          title: message.data.title,
-          projectId: message.data.projectId,
+          title: message.payload.title,
+          projectId: message.payload.projectId,
         });
 
         plugin.showSnack({
-          msg: `Task "${message.data.title}" created!`,
+          msg: `Task "${message.payload.title}" created!`,
           type: 'SUCCESS',
         });
 
@@ -104,15 +100,32 @@ if (plugin.onMessage) {
         return await plugin.getAllProjects();
       // Example: Persist plugin data
       case 'saveSettings':
-        await plugin.persistDataSynced(JSON.stringify(message.data));
+        await plugin.persistDataSynced(JSON.stringify(message.payload));
         return { success: true };
       // Example: Load plugin data
       case 'loadSettings': {
         const settings = await plugin.loadSyncedData();
         return settings ? JSON.parse(settings) : {};
       }
+      // i18n support
+      case 'translate':
+        return await plugin.translate(message.payload.key, message.payload.params);
+      case 'getCurrentLanguage':
+        return await plugin.getCurrentLanguage();
       default:
         return { error: 'Unknown message type' };
     }
   });
 }
+
+// Listen for language changes and notify iframe
+plugin.registerHook(PluginHooks.LANGUAGE_CHANGE, (language: string) => {
+  // Notify the iframe about language change
+  const iframe = document.querySelector('iframe[data-plugin-iframe]');
+  if (iframe && (iframe as HTMLIFrameElement).contentWindow) {
+    (iframe as HTMLIFrameElement).contentWindow!.postMessage(
+      { type: 'languageChanged', language },
+      '*',
+    );
+  }
+});

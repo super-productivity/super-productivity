@@ -88,43 +88,44 @@
         </mat-select>
       </mat-form-field>
     }
+
+    <mat-dialog-actions align="start">
+      <div class="schedule-actions">
+        @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {
+          <button
+            (click)="remove()"
+            color="warn"
+            mat-stroked-button
+          >
+            @if (selectedTime) {
+              <mat-icon>alarm_off</mat-icon>
+            } @else {
+              <mat-icon>event_busy</mat-icon>
+            }
+            {{ T.F.TASK.D_SCHEDULE_TASK.UNSCHEDULE | translate }}
+          </button>
+        }
+        <button
+          color="primary"
+          mat-stroked-button
+          (click)="submit()"
+        >
+          @if (selectedTime) {
+            <mat-icon>alarm</mat-icon>
+          } @else {
+            <mat-icon>today</mat-icon>
+          }
+          {{ T.F.TASK.D_SCHEDULE_TASK.SCHEDULE | translate }}
+        </button>
+      </div>
+      <button
+        class="dialog-cancel-btn"
+        mat-stroked-button
+        color="default"
+        (click)="close()"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+    </mat-dialog-actions>
   </div>
 </mat-dialog-content>
-
-<mat-dialog-actions align="end">
-  <button
-    color="primary"
-    mat-button
-    type="button"
-    (click)="close()"
-  >
-    {{ T.G.CANCEL | translate }}
-  </button>
-  @if (data.task && (data.task.dueWithTime || plannedDayForTask)) {
-    <button
-      (click)="remove()"
-      color="warn"
-      mat-stroked-button
-    >
-      @if (selectedTime) {
-        <mat-icon>alarm_off</mat-icon>
-      } @else {
-        <mat-icon>event_busy</mat-icon>
-      }
-      {{ T.F.TASK.D_SCHEDULE_TASK.UNSCHEDULE | translate }}
-    </button>
-  }
-
-  <button
-    color="primary"
-    mat-stroked-button
-    (click)="submit()"
-  >
-    @if (selectedTime) {
-      <mat-icon>alarm</mat-icon>
-    } @else {
-      <mat-icon>today</mat-icon>
-    }
-    {{ T.F.TASK.D_SCHEDULE_TASK.SCHEDULE | translate }}
-  </button>
-</mat-dialog-actions>

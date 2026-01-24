@@ -26,8 +26,13 @@ export const SYNC_MIN_INTERVAL = 5000;
 /**
  * Maximum time to wait for an ongoing sync to complete before considering it timed out.
  * Used by `afterCurrentSyncDoneOrSyncDisabled$` to prevent indefinite waiting.
+ * Set to 90s to exceed all server-side timeouts:
+ * - Caddy proxy: 85s
+ * - Fastify server: 80s
+ * - HTTP fetch: 75s
+ * - Database operations: 60s
  */
-export const SYNC_WAIT_TIMEOUT_MS = 40000;
+export const SYNC_WAIT_TIMEOUT_MS = 90000;
 
 /**
  * Small delay after data re-initialization to allow Angular change detection

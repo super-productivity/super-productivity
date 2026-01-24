@@ -289,10 +289,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
       return;
     }
 
-    const isConfirmBeforeTaskDelete =
-      this._globalConfigService.cfg()?.misc?.isConfirmBeforeTaskDelete ?? true;
+    const isConfirmBeforeDelete =
+      this._globalConfigService.cfg()?.tasks?.isConfirmBeforeDelete ?? true;
 
-    if (isConfirmBeforeTaskDelete) {
+    if (isConfirmBeforeDelete) {
       this._matDialog
         .open(DialogConfirmComponent, {
           data: {
@@ -420,7 +420,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
 
   addToMyDay(): void {
     this._store.dispatch(
-      TaskSharedActions.planTasksForToday({ taskIds: [this.task.id], isShowSnack: true }),
+      TaskSharedActions.planTasksForToday({
+        taskIds: [this.task.id],
+        parentTaskMap: { [this.task.id]: this.task.parentId },
+        isShowSnack: true,
+      }),
     );
   }
 

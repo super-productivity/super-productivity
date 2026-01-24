@@ -1,9 +1,10 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { effect, inject, Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PluginLog } from '../core/log';
 import { GlobalConfigService } from '../features/config/global-config.service';
 import { DEFAULT_LANGUAGE } from '../core/locale.constants';
+import { environment } from '../../environments/environment';
 
 interface PluginTranslations {
   [language: string]: Record<string, unknown>;
@@ -28,13 +29,14 @@ export class PluginI18nService {
   readonly currentLanguage = this._currentLanguage.asReadonly();
 
   constructor() {
-    // Initialize current language from global config
-    // Note: Language changes are handled via setCurrentLanguage() which should
-    // be called when the LANGUAGE_CHANGE hook fires or when global config updates
-    const lng = this._globalConfigService.localization()?.lng;
-    if (lng) {
-      this._currentLanguage.set(lng);
-    }
+    // Reactively sync with global config language
+    effect(() => {
+      const lng = this._globalConfigService.localization()?.lng;
+      if (lng && lng !== this._currentLanguage()) {
+        this._currentLanguage.set(lng);
+        PluginLog.log(`[PluginI18n] Language initialized/updated to: ${lng}`);
+      }
+    });
   }
 
   /**
@@ -118,6 +120,9 @@ export class PluginI18nService {
   ): string {
     const pluginTranslations = this._translations.get(pluginId);
     if (!pluginTranslations) {
+      if (!environment.production) {
+        PluginLog.warn(`[PluginI18n] No translations loaded for plugin: ${pluginId}`);
+      }
       return key;
     }
 
@@ -129,6 +134,14 @@ export class PluginI18nService {
     // Fall back to English if not found
     if (translation === key && currentLang !== 'en') {
       translation = this._getTranslation(pluginTranslations['en'], key);
+    }
+
+    // Warn if key not found in any language (dev only)
+    if (translation === key && !environment.production) {
+      PluginLog.warn(
+        `[PluginI18n] Missing translation key "${key}" for plugin ${pluginId} ` +
+          `(checked: ${currentLang}${currentLang !== 'en' ? ', en' : ''})`,
+      );
     }
 
     // Interpolate parameters if provided
@@ -165,24 +178,19 @@ export class PluginI18nService {
   }
 
   /**
-   * Interpolate parameters into a translation string
+   * Interpolate parameters into a translation string using regex
    */
   private _interpolate(
     translation: string,
     params: Record<string, string | number>,
   ): string {
-    let result = translation;
-
-    // Replace all parameter placeholders
-    for (const [param, value] of Object.entries(params)) {
-      const placeholder = `{{${param}}}`;
-      const replacement = String(value);
-
-      // Simple string replacement - safe from circular references
-      result = result.split(placeholder).join(replacement);
-    }
-
-    return result;
+    return translation.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      if (key in params) {
+        return String(params[key]);
+      }
+      // Preserve placeholder if parameter not provided
+      return match;
+    });
   }
 
   /**

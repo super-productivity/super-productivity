@@ -137,11 +137,12 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'npm run startFrontend:e2e',
+        command: process.env.CI
+          ? 'npm run serveFrontend:e2e:prod'
+          : 'npm run startFrontend:e2e',
         url: 'http://localhost:4242',
         reuseExistingServer: !process.env.CI, // Don't reuse in CI to ensure clean state
-        // unfortunately for CI we need to wait long for this to go up :(
-        timeout: 3 * 60 * 1000, // Allow up to 3 minutes for slower CI starts
+        timeout: process.env.CI ? 90000 : 3 * 60 * 1000,
         stdout: 'ignore', // Reduce log noise
         stderr: 'pipe',
       },

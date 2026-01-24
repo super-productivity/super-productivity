@@ -80,10 +80,16 @@ describe('LegacyPfDbService', () => {
   });
 
   describe('hasUsableEntityData', () => {
+    beforeEach(() => {
+      // Default: database exists
+      spyOn<any>(service, 'databaseExists').and.resolveTo(true);
+    });
+
     it('should return true if task data exists with non-empty ids', async () => {
       mockDb.get.and.callFake((_store: string, key: string) => {
         if (key === 'task') return Promise.resolve({ ids: ['t1', 't2'], entities: {} });
         if (key === 'project') return Promise.resolve({ ids: [], entities: {} });
+        if (key === 'tag') return Promise.resolve(null);
         if (key === 'globalConfig') return Promise.resolve(null);
         return Promise.resolve(null);
       });
@@ -97,6 +103,22 @@ describe('LegacyPfDbService', () => {
       mockDb.get.and.callFake((_store: string, key: string) => {
         if (key === 'task') return Promise.resolve({ ids: [], entities: {} });
         if (key === 'project') return Promise.resolve({ ids: ['p1'], entities: {} });
+        if (key === 'tag') return Promise.resolve(null);
+        if (key === 'globalConfig') return Promise.resolve(null);
+        return Promise.resolve(null);
+      });
+
+      const result = await service.hasUsableEntityData();
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true if tag data exists with non-empty ids', async () => {
+      mockDb.get.and.callFake((_store: string, key: string) => {
+        if (key === 'task') return Promise.resolve({ ids: [], entities: {} });
+        if (key === 'project') return Promise.resolve(null);
+        if (key === 'tag')
+          return Promise.resolve({ ids: ['TODAY', 'tag1'], entities: {} });
         if (key === 'globalConfig') return Promise.resolve(null);
         return Promise.resolve(null);
       });
@@ -110,6 +132,7 @@ describe('LegacyPfDbService', () => {
       mockDb.get.and.callFake((_store: string, key: string) => {
         if (key === 'task') return Promise.resolve(null);
         if (key === 'project') return Promise.resolve(null);
+        if (key === 'tag') return Promise.resolve(null);
         if (key === 'globalConfig')
           return Promise.resolve({ misc: { isDarkMode: true } });
         return Promise.resolve(null);
@@ -124,6 +147,7 @@ describe('LegacyPfDbService', () => {
       mockDb.get.and.callFake((_store: string, key: string) => {
         if (key === 'task') return Promise.resolve({ ids: [], entities: {} });
         if (key === 'project') return Promise.resolve(null);
+        if (key === 'tag') return Promise.resolve({ ids: [], entities: {} });
         if (key === 'globalConfig') return Promise.resolve(null);
         return Promise.resolve(null);
       });
@@ -133,12 +157,21 @@ describe('LegacyPfDbService', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false on error', async () => {
-      ((service as any)._openDb as jasmine.Spy).and.rejectWith(new Error('DB error'));
+    it('should return false if database does not exist', async () => {
+      (service as any).databaseExists.and.resolveTo(false);
 
       const result = await service.hasUsableEntityData();
 
       expect(result).toBe(false);
+      expect((service as any)._openDb).not.toHaveBeenCalled();
+    });
+
+    it('should throw on database access error when database exists', async () => {
+      ((service as any)._openDb as jasmine.Spy).and.rejectWith(new Error('DB error'));
+
+      await expectAsync(service.hasUsableEntityData()).toBeRejectedWithError(
+        /Failed to read legacy database/,
+      );
     });
   });
 

@@ -4,11 +4,10 @@
     #blockLeftEl
     class="block-left bg-400"
   >
-    @if (!t.isDone) {
-      <mat-icon>check</mat-icon>
-    }
     @if (t.isDone) {
       <mat-icon>undo</mat-icon>
+    } @else {
+      <mat-icon>check</mat-icon>
     }
   </div>
   <div
@@ -16,11 +15,10 @@
     class="block-right bg-400"
   >
     <!--NOTE: non observable should be enough as we only need the initial value-->
-    @if (!t.repeatCfgId) {
-      <mat-icon>today</mat-icon>
-    }
     @if (t.repeatCfgId) {
       <mat-icon svgIcon="repeat"></mat-icon>
+    } @else {
+      <mat-icon>today</mat-icon>
     }
   </div>
 }
@@ -79,10 +77,7 @@
         (click)="focusSelf()"
         class="drag-handle"
       >
-        <mat-icon
-          class="drag-handle-ico"
-          svgIcon="drag_handle"
-        ></mat-icon>
+        <mat-icon class="drag-handle-ico">drag_indicator</mat-icon>
         @if (isCurrent()) {
           <mat-icon class="play-icon-indicator">play_arrow</mat-icon>
         }
@@ -93,13 +88,11 @@
               @if (!isRepeatTaskCreatedToday()) {
                 <div class="repeat-date-badge">{{ t.created | shortDate2 }}</div>
               }
-              @if (t.repeatCfgId) {
-                <mat-icon
-                  [style.transform]="isCurrent() ? 'scale(1.4)' : ''"
-                  svgIcon="repeat"
-                >
-                </mat-icon>
-              }
+              <mat-icon
+                [style.transform]="isCurrent() ? 'scale(1.4)' : ''"
+                svgIcon="repeat"
+              >
+              </mat-icon>
             </div>
           }
           @if (t.issueId) {
@@ -171,10 +164,7 @@
               </div>
               <div class="separator">/</div>
               <div class="time-val">
-                <mat-icon
-                  svgIcon="estimate_remaining"
-                  inline="true"
-                ></mat-icon>
+                <mat-icon inline="true">hourglass_empty</mat-icon>
                 {{ t.timeEstimate | msToString }}
               </div>
             </div>
@@ -256,7 +246,7 @@
         }
 
         <div>
-          @if (t.notes || (t.issueId && t.issueType !== ICAL_TYPE) || isSelected()) {
+          @if (isShowToggleButton()) {
             <button
               (click)="toggleShowDetailPanel()"
               title="{{ T.F.TASK.CMP.TOGGLE_DETAIL_PANEL | translate }}  {{
@@ -268,19 +258,12 @@
               color=""
               mat-icon-button
             >
-              @if (!t.issueWasUpdated && !isSelected()) {
-                <mat-icon>chat</mat-icon>
-              }
-              @if (!t.issueWasUpdated && isSelected()) {
-                <mat-icon>close</mat-icon>
-              }
-              @if (t.issueWasUpdated) {
-                <mat-icon
-                  class="updated-icon"
-                  color="accent"
-                  >update
-                </mat-icon>
-              }
+              <mat-icon
+                [class.updated-icon]="toggleButtonIcon() === 'update'"
+                [color]="toggleButtonIcon() === 'update' ? 'accent' : ''"
+              >
+                {{ toggleButtonIcon() }}
+              </mat-icon>
             </button>
           }
         </div>
@@ -296,37 +279,32 @@
   }
   @if (t.subTasks?.length) {
     <div class="sub-tasks">
-      @if (t.subTasks?.length) {
-        <button
-          (click)="toggleSubTaskMode()"
-          [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
-          class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
-          color=""
-          mat-mini-fab
-        >
-          @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
-            <mat-icon>add</mat-icon>
-          }
-          @if (t._hideSubTasksMode !== ShowSubTasksMode.HideAll) {
-            <mat-icon
-              [class.isHideDoneTasks]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
-              >remove
-            </mat-icon>
-          }
-        </button>
-      }
-      @if (t.subTasks?.length) {
-        <task-list
-          [@expandInOnly]
-          [isHideAll]="!!t._hideSubTasksMode"
-          [isHideDone]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
-          [isSubTaskList]="true"
-          [listModelId]="t.id"
-          [parentId]="t.id"
-          [tasks]="t.subTasks"
-          listId="SUB"
-        ></task-list>
-      }
+      <button
+        (click)="toggleSubTaskMode()"
+        [title]="T.F.TASK.CMP.TOGGLE_SUB_TASK_VISIBILITY | translate"
+        class="toggle-sub-tasks-btn ico-btn mat-elevation-z2"
+        color=""
+        mat-mini-fab
+      >
+        @if (t._hideSubTasksMode === ShowSubTasksMode.HideAll) {
+          <mat-icon>add</mat-icon>
+        } @else {
+          <mat-icon
+            [class.isHideDoneTasks]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
+            >remove
+          </mat-icon>
+        }
+      </button>
+      <task-list
+        [@expandInOnly]
+        [isHideAll]="!!t._hideSubTasksMode"
+        [isHideDone]="t._hideSubTasksMode === ShowSubTasksMode.HideDone"
+        [isSubTaskList]="true"
+        [listModelId]="t.id"
+        [parentId]="t.id"
+        [tasks]="t.subTasks"
+        listId="SUB"
+      ></task-list>
     </div>
   }
   @if (isDragOver) {

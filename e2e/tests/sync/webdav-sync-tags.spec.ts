@@ -1,8 +1,7 @@
-import { test, expect } from '../../fixtures/test.fixture';
+import { test, expect } from '../../fixtures/webdav.fixture';
 import { SyncPage } from '../../pages/sync.page';
 import { WorkViewPage } from '../../pages/work-view.page';
 import { TagPage } from '../../pages/tag.page';
-import { isWebDavServerUp } from '../../utils/check-webdav';
 import {
   WEBDAV_CONFIG_TEMPLATE,
   createUniqueSyncFolder,
@@ -11,17 +10,9 @@ import {
   waitForSync,
 } from '../../utils/sync-helpers';
 
-test.describe('WebDAV Sync Tags', () => {
+test.describe('@webdav WebDAV Sync Tags', () => {
   // Run sync tests serially to avoid WebDAV server contention
   test.describe.configure({ mode: 'serial' });
-
-  test.beforeAll(async () => {
-    const isUp = await isWebDavServerUp(WEBDAV_CONFIG_TEMPLATE.baseUrl);
-    if (!isUp) {
-      console.warn('WebDAV server not reachable. Skipping WebDAV tests.');
-      test.skip(true, 'WebDAV server not reachable');
-    }
-  });
 
   test('should sync tag creation between clients', async ({
     browser,

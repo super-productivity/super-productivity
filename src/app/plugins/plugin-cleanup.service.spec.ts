@@ -12,10 +12,6 @@ describe('PluginCleanupService', () => {
     service = TestBed.inject(PluginCleanupService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('Timer management', () => {
     it('should register and cleanup timers', () => {
       const pluginId = 'test-plugin';

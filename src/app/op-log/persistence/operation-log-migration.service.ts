@@ -2,7 +2,9 @@ import { inject, Injectable } from '@angular/core';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
+import { TranslateService } from '@ngx-translate/core';
 import { OperationLogStoreService } from './operation-log-store.service';
+import { LanguageService } from '../../core/language/language.service';
 import { OpLog } from '../../core/log';
 import { LegacyPfDbService } from '../../core/persistence/legacy-pf-db.service';
 import { ClientIdService } from '../../core/util/client-id.service';
@@ -36,6 +38,8 @@ export class OperationLogMigrationService {
   private clientIdService = inject(ClientIdService);
   private matDialog = inject(MatDialog);
   private store = inject(Store);
+  private languageService = inject(LanguageService);
+  private translateService = inject(TranslateService);
 
   /**
    * Checks if the operation log is in a valid state and migrates legacy data if found.
@@ -55,8 +59,31 @@ export class OperationLogMigrationService {
     }
 
     // Check for legacy PFAPI data FIRST - we need to know this before deciding
-    // what to do with existing operations
-    const hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+    // what to do with existing operations.
+    // CRITICAL: hasUsableEntityData() now throws on database access errors
+    // to prevent silent data loss.
+    let hasLegacyData: boolean;
+    try {
+      hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+    } catch (e) {
+      // Database exists but can't be read - this is a critical error!
+      // Show error dialog and don't proceed with a "fresh start" which would lose data.
+      OpLog.err('OperationLogMigrationService: Failed to check legacy data:', e);
+
+      // Ensure translations are loaded before showing error dialog
+      await this._ensureTranslationsLoaded();
+
+      const dialogRef = this._showMigrationDialog();
+      dialogRef.componentInstance.error.set(
+        `Failed to read your existing data. Your data may still exist but cannot be accessed. ` +
+          `Please restart the app or try clearing your browser cache and reloading. ` +
+          `If the problem persists, please report this issue. ` +
+          `Error: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      // Wait for user acknowledgment
+      await firstValueFrom(dialogRef.afterClosed());
+      throw e;
+    }
 
     // No snapshot exists. Check if there are any operations in the log.
     const allOps = await this.opLogStore.getOpsAfterSeq(0);
@@ -105,6 +132,9 @@ export class OperationLogMigrationService {
       return;
     }
 
+    // Ensure translations are loaded before showing dialog
+    await this._ensureTranslationsLoaded();
+
     // Show migration dialog and perform migration
     const dialogRef = this._showMigrationDialog();
     try {
@@ -121,6 +151,26 @@ export class OperationLogMigrationService {
     } finally {
       await this.legacyPfDb.releaseMigrationLock();
       dialogRef.close();
+    }
+  }
+
+  /**
+   * Ensures translations are loaded before showing the migration dialog.
+   * Detects the browser language and preloads the corresponding translation file.
+   * This prevents the dialog from showing untranslated keys (e.g., "MIGRATE.DIALOG_TITLE").
+   */
+  private async _ensureTranslationsLoaded(): Promise<void> {
+    try {
+      // Detect appropriate language (browser language or default)
+      const lng = this.languageService.detect();
+
+      // Load translations synchronously before proceeding
+      await firstValueFrom(this.translateService.use(lng));
+
+      OpLog.normal(`OperationLogMigrationService: Translations loaded (${lng})`);
+    } catch (error) {
+      OpLog.warn('OperationLogMigrationService: Failed to load translations:', error);
+      // Continue anyway - dialog will show translation keys as fallback
     }
   }
 

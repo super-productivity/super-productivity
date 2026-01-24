@@ -1,5 +1,15 @@
 {$DOMAIN} {
-    reverse_proxy supersync:1900
+    reverse_proxy supersync:1900 {
+        # Allow up to 85 seconds for long-running operations
+        # (snapshot generation, large imports)
+        # MUST be greater than Fastify timeout (80s) but less than client timeout (90s)
+        timeout 85s
+
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 85s
+        }
+    }
 
     # Security headers
     header {

@@ -73,10 +73,6 @@ describe('ReminderService', () => {
     (window as any).Worker = originalWorker;
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('init', () => {
     it('should add event listeners to worker', () => {
       service.init();

@@ -4,6 +4,10 @@ import {
   DialogChangeEncryptionPasswordComponent,
   ChangeEncryptionPasswordResult,
 } from './dialog-change-encryption-password/dialog-change-encryption-password.component';
+import {
+  DialogDisableEncryptionComponent,
+  DisableEncryptionResult,
+} from './dialog-disable-encryption/dialog-disable-encryption.component';
 
 /**
  * Singleton service to open the encryption password change dialog.
@@ -18,6 +22,15 @@ export class EncryptionPasswordDialogOpenerService {
   openChangePasswordDialog(): Promise<ChangeEncryptionPasswordResult | undefined> {
     const dialogRef = this._matDialog.open(DialogChangeEncryptionPasswordComponent, {
       width: '400px',
+      disableClose: true,
+    });
+
+    return dialogRef.afterClosed().toPromise();
+  }
+
+  openDisableEncryptionDialog(): Promise<DisableEncryptionResult | undefined> {
+    const dialogRef = this._matDialog.open(DialogDisableEncryptionComponent, {
+      width: '450px',
       disableClose: true,
     });
 
@@ -52,4 +65,18 @@ export const openEncryptionPasswordChangeDialog = (): Promise<
     return Promise.resolve(undefined);
   }
   return dialogOpenerInstance.openChangePasswordDialog();
+};
+
+/**
+ * Opens the disable encryption confirmation dialog.
+ * Can be called from form config onChange handlers.
+ */
+export const openDisableEncryptionDialog = (): Promise<
+  DisableEncryptionResult | undefined
+> => {
+  if (!dialogOpenerInstance) {
+    console.error('EncryptionPasswordDialogOpenerService not initialized');
+    return Promise.resolve(undefined);
+  }
+  return dialogOpenerInstance.openDisableEncryptionDialog();
 };

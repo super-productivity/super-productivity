@@ -55,16 +55,6 @@ export class MobileBottomNavComponent {
   // Output events
   toggleMobileNavEvent = output<void>();
 
-  // Current route tracking
-  readonly currentRoute = toSignal(
-    this._router.events.pipe(
-      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-      map((event) => event.urlAfterRedirects),
-      startWith(this._router.url),
-    ),
-    { initialValue: this._router.url },
-  );
-
   // Plugin-related signals
   readonly sidePanelButtons = this._pluginBridge.sidePanelButtons;
   readonly activePluginId = toSignal(this._store.select(selectActivePluginId));

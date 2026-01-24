@@ -311,7 +311,7 @@ export class SyncWrapperService {
           // TODO translate
           msg: T.F.SYNC.S.ERROR_DATA_IS_CURRENTLY_WRITTEN,
           type: 'ERROR',
-          actionFn: async () => this._forceUpload(),
+          actionFn: async () => this.forceUpload(),
           actionStr: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
         });
         return 'HANDLED_ERROR';
@@ -335,6 +335,17 @@ export class SyncWrapperService {
         // File-based sync: Local data exists and remote snapshot would overwrite it
         // Show conflict dialog to let user choose between local and remote data
         return this._handleLocalDataConflict(error);
+      } else if (this._isTimeoutError(error)) {
+        this._snackService.open({
+          msg: T.F.SYNC.S.TIMEOUT_ERROR,
+          type: 'ERROR',
+          config: { duration: 12000 },
+          translateParams: {
+            suggestion:
+              'Large sync operations may take up to 90 seconds. Please try again.',
+          },
+        });
+        return 'HANDLED_ERROR';
       } else if (this._isPermissionError(error)) {
         this._snackService.open({
           msg: this._getPermissionErrorMessage(),
@@ -357,7 +368,7 @@ export class SyncWrapperService {
     }
   }
 
-  private async _forceUpload(): Promise<void> {
+  async forceUpload(): Promise<void> {
     if (!this._c(this._translateService.instant(T.F.SYNC.C.FORCE_UPLOAD))) {
       return;
     }
@@ -437,11 +448,12 @@ export class SyncWrapperService {
         }
       }
     } catch (error) {
-      SyncLog.err(error);
+      SyncLog.err(`Failed to configure auth for provider ${providerId}:`, error);
       this._snackService.open({
         // TODO don't limit snack to dropbox
         msg: T.F.DROPBOX.S.UNABLE_TO_GENERATE_PKCE_CHALLENGE,
         type: 'ERROR',
+        config: { duration: 0 }, // Stay visible until dismissed for critical setup errors
       });
       return { wasConfigured: false };
     }
@@ -462,7 +474,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this._forceUpload();
+          await this.forceUpload();
         } else if (res === 'FORCE_UPDATE_LOCAL') {
           // Op-log architecture handles this differently
           SyncLog.log(
@@ -490,7 +502,7 @@ export class SyncWrapperService {
     firstValueFrom(dialogRef.afterClosed())
       .then(async (res) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
-          await this._forceUpload();
+          await this.forceUpload();
         }
       })
       .catch((err) => {
@@ -519,6 +531,17 @@ export class SyncWrapperService {
   }
 
   private _handleDecryptionError(): void {
+    // Set ERROR status so sync button shows error icon
+    this._providerManager.setSyncStatus('ERROR');
+
+    // Show snackbar (consistent with other error handlers)
+    this._snackService.open({
+      msg: T.F.SYNC.S.DECRYPTION_FAILED,
+      type: 'ERROR',
+      config: { duration: 10000 }, // Longer duration for critical errors
+    });
+
+    // Open dialog for password correction
     this._matDialog
       .open(DialogHandleDecryptErrorComponent, {
         disableClose: true,
@@ -530,7 +553,11 @@ export class SyncWrapperService {
           this.sync();
         }
         if (isForceUpload) {
-          this._forceUpload();
+          this.forceUpload();
+        }
+        // Reset status if user cancelled without taking action
+        if (!isReSync && !isForceUpload) {
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
         }
       });
   }
@@ -666,6 +693,15 @@ export class SyncWrapperService {
   private _isPermissionError(error: unknown): boolean {
     const errStr = String(error);
     return /EROFS|EACCES|EPERM|read-only file system|permission denied/i.test(errStr);
+  }
+
+  private _isTimeoutError(error: unknown): boolean {
+    const errStr = String(error).toLowerCase();
+    return (
+      errStr.includes('timeout') ||
+      errStr.includes('504') ||
+      errStr.includes('gateway timeout')
+    );
   }
 
   private _getPermissionErrorMessage(): string {

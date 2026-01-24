@@ -22,10 +22,6 @@ describe('PluginI18nService', () => {
     service = TestBed.inject(PluginI18nService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('loadPluginTranslationsFromContent', () => {
     it('should load translations for multiple languages', () => {
       const translations = {
@@ -152,6 +148,88 @@ describe('PluginI18nService', () => {
     it('should handle non-existent plugin', () => {
       const result = service.translate('non-existent-plugin', 'SOME.KEY');
       expect(result).toBe('SOME.KEY');
+    });
+  });
+
+  describe('development warnings', () => {
+    let warnSpy: jasmine.Spy;
+
+    beforeEach(() => {
+      // Spy on PluginLog.warn to verify warnings are logged
+      warnSpy = spyOn(console, 'warn');
+    });
+
+    it('should warn when plugin has no translations', () => {
+      service.translate('non-existent-plugin', 'SOME.KEY');
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[plugin]',
+        jasmine.stringContaining('[PluginI18n] No translations loaded for plugin'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[plugin]',
+        jasmine.stringContaining('non-existent-plugin'),
+      );
+    });
+
+    it('should warn when key not found in any language', () => {
+      const translations = {
+        en: JSON.stringify({ EXISTING: 'Value' }),
+      };
+      service.loadPluginTranslationsFromContent('test-plugin', translations);
+
+      service.translate('test-plugin', 'MISSING.KEY');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[plugin]',
+        jasmine.stringContaining('[PluginI18n] Missing translation key'),
+      );
+      const call = warnSpy.calls.mostRecent();
+      expect(call.args[1]).toContain('MISSING.KEY');
+      expect(call.args[1]).toContain('test-plugin');
+      expect(call.args[1]).toContain('checked: en');
+    });
+
+    it('should warn when key not found and check multiple languages', () => {
+      const translations = {
+        en: JSON.stringify({ EXISTING: 'Value' }),
+        de: JSON.stringify({ EXISTING: 'Wert' }),
+      };
+      service.loadPluginTranslationsFromContent('test-plugin', translations);
+      service.setCurrentLanguage('de');
+
+      service.translate('test-plugin', 'MISSING.KEY');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[plugin]',
+        jasmine.stringContaining('[PluginI18n] Missing translation key'),
+      );
+      const call = warnSpy.calls.mostRecent();
+      expect(call.args[1]).toContain('MISSING.KEY');
+      expect(call.args[1]).toContain('checked: de, en');
+    });
+
+    it('should not warn when key exists', () => {
+      const translations = {
+        en: JSON.stringify({ EXISTING: 'Value' }),
+      };
+      service.loadPluginTranslationsFromContent('test-plugin', translations);
+
+      service.translate('test-plugin', 'EXISTING');
+
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not warn when key exists in fallback language', () => {
+      const translations = {
+        en: JSON.stringify({ ONLY_EN: 'English value' }),
+        de: JSON.stringify({ OTHER: 'Anderer Wert' }),
+      };
+      service.loadPluginTranslationsFromContent('test-plugin', translations);
+      service.setCurrentLanguage('de');
+
+      service.translate('test-plugin', 'ONLY_EN');
+
+      expect(warnSpy).not.toHaveBeenCalled();
     });
   });
 

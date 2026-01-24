@@ -65,10 +65,6 @@ describe('DialogRestorePointComponent', () => {
   });
 
   describe('initialization', () => {
-    it('should create', () => {
-      expect(component).toBeTruthy();
-    });
-
     it('should load restore points on init', fakeAsync(() => {
       fixture.detectChanges();
       tick();

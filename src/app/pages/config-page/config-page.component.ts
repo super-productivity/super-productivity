@@ -7,11 +7,15 @@ import {
   OnDestroy,
   OnInit,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
-  GLOBAL_CONFIG_FORM_CONFIG,
+  GLOBAL_GENERAL_FORM_CONFIG,
   GLOBAL_IMEX_FORM_CONFIG,
+  GLOBAL_PLUGINS_FORM_CONFIG,
   GLOBAL_PRODUCTIVITY_FORM_CONFIG,
+  GLOBAL_TIME_TRACKING_FORM_CONFIG,
+  GLOBAL_TASKS_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
@@ -37,7 +41,6 @@ import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
 import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
-import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
 import { createPluginShortcutFormItems } from '../../features/config/form-cfgs/plugin-keyboard-shortcuts';
 import { PluginShortcutCfg } from '../../plugins/plugin-api.model';
@@ -49,12 +52,14 @@ import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
-import { SuperSyncRestoreService } from '../../imex/sync/super-sync-restore.service';
 import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
 import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
 import { DialogChangeEncryptionPasswordComponent } from '../../imex/sync/dialog-change-encryption-password/dialog-change-encryption-password.component';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
+import { MatIcon } from '@angular/material/icon';
+import { MatTooltip } from '@angular/material/tooltip';
 
 @Component({
   selector: 'config-page',
@@ -68,23 +73,36 @@ import { LS } from '../../core/persistence/storage-keys.const';
     TranslatePipe,
     AsyncPipe,
     PluginManagementComponent,
-    CollapsibleComponent,
+    MatTabGroup,
+    MatTab,
+    MatTabLabel,
+    MatIcon,
+    MatTooltip,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _cd = inject(ChangeDetectorRef);
+  private readonly _route = inject(ActivatedRoute);
   private readonly _providerManager = inject(SyncProviderManager);
-  readonly configService = inject(GlobalConfigService);
-  readonly syncSettingsService = inject(SyncConfigService);
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _pluginBridgeService = inject(PluginBridgeService);
   private readonly _snackService = inject(SnackService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
-  private readonly _superSyncRestoreService = inject(SuperSyncRestoreService);
+
+  readonly configService = inject(GlobalConfigService);
+  readonly syncSettingsService = inject(SyncConfigService);
 
   T: typeof T = T;
-  globalConfigFormCfg: ConfigFormConfig;
+
+  selectedTabIndex = 0;
+
+  // @todo - find better names for tabs configs forms
+  // Tab-specific form configurations
+  generalFormCfg: ConfigFormConfig;
+  globalTasksFormCfg: ConfigFormConfig;
+  timeTrackingFormCfg: ConfigFormConfig;
+  pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
   globalSyncConfigFormCfg = this._buildSyncFormConfig();
@@ -114,10 +132,13 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private _subs: Subscription = new Subscription();
 
   constructor() {
-    // somehow they are only unproblematic if assigned here
-    this.globalConfigFormCfg = GLOBAL_CONFIG_FORM_CONFIG.slice();
+    // Initialize tab-specific form configurations
+    this.generalFormCfg = GLOBAL_GENERAL_FORM_CONFIG.slice();
+    this.timeTrackingFormCfg = GLOBAL_TIME_TRACKING_FORM_CONFIG.slice();
+    this.pluginsShortcutsFormCfg = GLOBAL_PLUGINS_FORM_CONFIG.slice();
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
+    this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
 
     // NOTE: needs special handling cause of the async stuff
     if (IS_ANDROID_WEB_VIEW) {
@@ -147,11 +168,25 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
         // this._cd.detectChanges();
       }),
     );
+
+    // Check for tab query parameter and set selected tab
+    this._subs.add(
+      this._route.queryParams.subscribe((params) => {
+        if (params['tab'] !== undefined) {
+          const tabIndex = parseInt(params['tab'], 10);
+          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
+            this.selectedTabIndex = tabIndex;
+            this._cd.detectChanges();
+          }
+        }
+      }),
+    );
   }
 
   private _updateKeyboardFormWithPluginShortcuts(shortcuts: PluginShortcutCfg[]): void {
-    // Find keyboard form section
-    const keyboardFormIndex = this.globalConfigFormCfg.findIndex(
+    // @todo - make separate core shortcuts and plugins shortcuts settings
+    // Find keyboard form section in general tab configuration
+    const keyboardFormIndex = this.generalFormCfg.findIndex(
       (section) => section.key === 'keyboard',
     );
 
@@ -160,7 +195,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const keyboardSection = this.globalConfigFormCfg[keyboardFormIndex];
+    const keyboardSection = this.generalFormCfg[keyboardFormIndex];
 
     // Remove existing plugin shortcuts and header from the form
     const filteredItems = (keyboardSection.items || []).filter((item) => {
@@ -196,10 +231,10 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     };
 
     // Create a new config array to ensure Angular detects the change
-    this.globalConfigFormCfg = [
-      ...this.globalConfigFormCfg.slice(0, keyboardFormIndex),
+    this.generalFormCfg = [
+      ...this.generalFormCfg.slice(0, keyboardFormIndex),
       newKeyboardSection,
-      ...this.globalConfigFormCfg.slice(keyboardFormIndex + 1),
+      ...this.generalFormCfg.slice(keyboardFormIndex + 1),
     ];
 
     // Trigger change detection
@@ -333,6 +368,20 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
             required: false,
             onClick: () => {
               this._syncWrapperService.sync();
+            },
+          },
+        },
+        {
+          hideExpression: (m: any, _v: any, field: any) =>
+            !m.isEnabled || !field?.form?.valid,
+          type: 'btn',
+          className: 'mt2 block',
+          templateOptions: {
+            text: T.F.SYNC.S.BTN_FORCE_OVERWRITE,
+            btnType: 'warn',
+            required: false,
+            onClick: () => {
+              this._syncWrapperService.forceUpload();
             },
           },
         },

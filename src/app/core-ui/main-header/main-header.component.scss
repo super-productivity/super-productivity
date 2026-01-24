@@ -135,6 +135,16 @@ button.isActive2 {
     margin-left: 0;
     margin-right: auto;
   }
+
+  // Set 20px icon sizing for buttons outside counters-action-group
+  // (add button, panel buttons, etc.) but exclude sync button
+  > button:not(.sync-btn) .mat-icon,
+  ::ng-deep > *:not(.counters-action-group):not(.sync-btn) .mat-icon {
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    line-height: 20px;
+  }
 }
 
 page-title {
@@ -322,12 +332,53 @@ page-title {
   border-radius: 12px;
 }
 
+.sync-btn {
+  position: relative;
+
+  > .mat-icon:not(.sync-state-ico) {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+  }
+}
+
 .sync-state-ico {
-  // important because it might be overwritten by material styles sometimes
+  // Positioning - center within sync button
   position: absolute !important;
-  font-size: 10px;
-  height: 10px;
-  line-height: 10px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  // Icon sizing (increased from 10px to 15px)
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  line-height: 15px;
+
+  // Colored outline using multiple text-shadows for better visibility
+  text-shadow:
+    -1px -1px 0 var(--c-bg),
+    1px -1px 0 var(--c-bg),
+    -1px 1px 0 var(--c-bg),
+    1px 1px 0 var(--c-bg),
+    -2px -2px 0 var(--c-bg),
+    2px -2px 0 var(--c-bg),
+    -2px 2px 0 var(--c-bg),
+    2px 2px 0 var(--c-bg),
+    0 -2px 0 var(--c-bg),
+    0 2px 0 var(--c-bg),
+    -2px 0 0 var(--c-bg),
+    2px 0 0 var(--c-bg);
+
+  // Ensure it sits above sync icon
+  z-index: 1;
+
+  // Fallback for Windows High Contrast Mode where text-shadow is suppressed
+  @media (forced-colors: active) {
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
 }
 
 .focus-btn-wrapper {

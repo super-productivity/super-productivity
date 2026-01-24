@@ -13,3 +13,12 @@ else
     echo "Please connect system-observe interface for better system integration:"
     echo "sudo snap connect superproductivity:system-observe"
 fi
+
+# Fix for issue #6031: Prompt for home interface connection for local file sync
+if snapctl is-connected home; then
+    echo "home interface already connected"
+else
+    echo "Please connect home interface to enable local file sync:"
+    echo "sudo snap connect superproductivity:home"
+    echo "Without this, you won't be able to sync to local files outside the snap container."
+fi

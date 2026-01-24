@@ -1,15 +1,26 @@
 @use '../mixins/material-icon';
 
-// Download from:
-// https://github.com/google/material-design-icons/tree/master/font
+// Material Symbols (replaces legacy Material Icons)
+// Package: https://www.npmjs.com/package/@material-symbols/font-400
+// Documentation: https://developers.google.com/fonts/docs/material_symbols
 
 @font-face {
-  font-family: 'Material Icons';
+  font-family: 'Material Symbols Outlined';
   font-style: normal;
   font-weight: 400;
-  src: url('../../assets/fonts/MaterialIcons-Regular.ttf') format('truetype');
+  font-display: swap; // Prevent render blocking, show text immediately
+  src: url('../../assets/fonts/material-symbols-outlined.woff2') format('woff2');
 }
 
 .material-icons {
+  font-family: 'Material Symbols Outlined', sans-serif;
   @include material-icon.materialIconBase();
+
+  // Set default font variation settings for consistent appearance
+  // FILL: 0 (outlined), wght: 400 (normal), GRAD: 0 (default), opsz: 24 (24px)
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
 }

@@ -66,10 +66,6 @@ describe('ValidateStateService', () => {
     service = TestBed.inject(ValidateStateService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   // TEMPORARILY SKIPPED: This test requires a complete AppDataComplete object
   // that passes Typia validation first before cross-model validation runs.
   // The repair system is disabled for debugging archive subtask loss.

@@ -2,64 +2,25 @@ import { test, expect } from '../../fixtures/test.fixture';
 
 test.describe.serial('Plugin Feature Check', () => {
   test('check if PluginService exists', async ({ page, workViewPage }) => {
-    // Wait for work view to be ready
+    // Wait for Angular app to be fully loaded
     await workViewPage.waitForTaskList();
 
-    const result = await page.evaluate(() => {
-      // Check if Angular is loaded
-      const hasAngular = !!(window as any).ng;
+    // Navigate to config/plugin management
+    await page.goto('/#/config');
 
-      // Try to get the app component
-      let hasPluginService = false;
-      let errorMessage = '';
+    // Click on the Plugins tab to show plugin management
+    const pluginsTab = page.getByRole('tab', { name: 'Plugins' });
+    await pluginsTab.click();
 
-      try {
-        if (hasAngular) {
-          const ng = (window as any).ng;
-          const appElement = document.querySelector('app-root');
-          if (appElement) {
-            // Try to find PluginService in injector
-            const injector = ng.getInjector(appElement);
-            // console.log('Injector found:', !!injector);
+    // Verify plugin management component exists (proves PluginService is loaded)
+    // The plugin-management component requires PluginService to be injected and functional
+    const pluginMgmt = page.locator('plugin-management');
+    await expect(pluginMgmt).toBeAttached({ timeout: 10000 });
 
-            // Log available service tokens
-            if (injector && injector.get) {
-              try {
-                // Try common service names
-                const possibleNames = ['PluginService', 'pluginService'];
-                for (const name of possibleNames) {
-                  try {
-                    const service = injector.get(name);
-                    if (service) {
-                      hasPluginService = true;
-                      // console.log(`Found service with name: ${name}`);
-                      break;
-                    }
-                  } catch (e: any) {
-                    // Service not found with this name
-                  }
-                }
-              } catch (e: any) {
-                errorMessage = e.toString();
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        errorMessage = e.toString();
-      }
-
-      return {
-        hasAngular,
-        hasPluginService,
-        errorMessage,
-      };
-    });
-
-    // console.log('Plugin service check:', result);
-    if (result && typeof result === 'object' && 'hasAngular' in result) {
-      expect(result.hasAngular).toBe(true);
-    }
+    // Additional verification: check that plugin management has rendered content
+    // This confirms the service is not only loaded but also working correctly
+    const pluginCards = pluginMgmt.locator('mat-card');
+    await expect(pluginCards.first()).toBeVisible({ timeout: 10000 });
   });
 
   test('check plugin UI elements in DOM', async ({ page, workViewPage }) => {
@@ -70,7 +31,20 @@ test.describe.serial('Plugin Feature Check', () => {
     await page.goto('/#/config');
 
     await page.evaluate(() => {
-      const uiResults: any = {};
+      const uiResults: {
+        hasPluginManagementTag: boolean;
+        hasPluginSection: boolean;
+        hasMagicSideNav: boolean;
+        hasPluginHeaderBtns: boolean;
+        hasPluginTextInBody: boolean;
+        hasPluginTextInConfig?: boolean;
+      } = {
+        hasPluginManagementTag: false,
+        hasPluginSection: false,
+        hasMagicSideNav: false,
+        hasPluginHeaderBtns: false,
+        hasPluginTextInBody: false,
+      };
 
       // Check various plugin-related elements
       uiResults.hasPluginManagementTag = !!document.querySelector('plugin-management');

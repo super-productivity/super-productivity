@@ -109,6 +109,7 @@ function initListeners(): void {
       currentPomodoroSessionTime,
       isFocusModeEnabled,
       currentFocusSessionTime,
+      focusModeMode,
     ) => {
       updateOverlayTask(
         currentTask,
@@ -128,6 +129,9 @@ function initListeners(): void {
               isPomodoroEnabled,
               currentPomodoroSessionTime,
               isTrayShowCurrentCountdown,
+              isFocusModeEnabled || false,
+              currentFocusSessionTime || 0,
+              focusModeMode,
             )
           : '';
 
@@ -168,6 +172,9 @@ function createIndicatorMessage(
   isPomodoroEnabled: boolean,
   currentPomodoroSessionTime: number,
   isTrayShowCurrentCountdown: boolean,
+  isFocusModeEnabled: boolean,
+  currentFocusSessionTime: number,
+  focusModeMode: string | undefined,
 ): string {
   if (task && task.title) {
     let title = task.title;
@@ -177,15 +184,36 @@ function createIndicatorMessage(
     }
 
     if (isTrayShowCurrentCountdown) {
+      // Priority 1: Focus mode with countdown/pomodoro (show countdown)
+      if (isFocusModeEnabled && focusModeMode && focusModeMode !== 'Flowtime') {
+        timeStr = getCountdownMessage(currentFocusSessionTime);
+        return `${title} ${timeStr}`;
+      }
+
+      // Priority 2: Flowtime mode (show nothing or task estimate)
+      if (isFocusModeEnabled && focusModeMode === 'Flowtime') {
+        // Don't show timer for flowtime mode
+        // Optionally show task estimate if available
+        if (task.timeEstimate) {
+          const restOfTime = Math.max(task.timeEstimate - task.timeSpent, 0);
+          timeStr = getCountdownMessage(restOfTime);
+          return `${title} ${timeStr}`;
+        }
+        return title; // No timer for flowtime
+      }
+
+      // Priority 3: Legacy pomodoro (if still used)
+      if (isPomodoroEnabled) {
+        timeStr = getCountdownMessage(currentPomodoroSessionTime);
+        return `${title} ${timeStr}`;
+      }
+
+      // Priority 4: Normal task time (no focus mode)
       if (task.timeEstimate) {
         const restOfTime = Math.max(task.timeEstimate - task.timeSpent, 0);
         timeStr = getCountdownMessage(restOfTime);
       } else if (task.timeSpent) {
         timeStr = getCountdownMessage(task.timeSpent);
-      }
-
-      if (isPomodoroEnabled) {
-        timeStr = getCountdownMessage(currentPomodoroSessionTime);
       }
       return `${title} ${timeStr}`;
     }

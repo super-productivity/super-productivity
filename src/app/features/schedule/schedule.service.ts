@@ -23,6 +23,7 @@ import { CalendarIntegrationService } from '../calendar-integration/calendar-int
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../tasks/task.service';
 import { startWith } from 'rxjs/operators';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
 
 @Injectable({
   providedIn: 'root',
@@ -71,6 +72,7 @@ export class ScheduleService {
   buildScheduleDays(params: BuildScheduleDaysParams): ScheduleDay[] {
     const {
       now = Date.now(),
+      realNow,
       daysToShow,
       timelineTasks,
       taskRepeatCfgs,
@@ -96,11 +98,50 @@ export class ScheduleService {
       plannerDayMap,
       timelineCfg?.isWorkStartEndEnabled ? createWorkStartEndCfg(timelineCfg) : undefined,
       timelineCfg?.isLunchBreakEnabled ? createLunchBreakCfg(timelineCfg) : undefined,
+      realNow,
     );
   }
 
-  getDaysToShow(nrOfDaysToShow: number): string[] {
-    const today = new Date().getTime();
+  /**
+   * Converts a Date object or timestamp to a date string format used by the schedule.
+   * This is a public wrapper around the internal DateService method.
+   */
+  getTodayStr(date?: Date | number): string {
+    return this._dateService.todayStr(date);
+  }
+
+  /**
+   * Builds schedule days with context-aware parameters.
+   * Encapsulates the internal data fetching and processing logic.
+   */
+  createScheduleDaysWithContext(params: {
+    daysToShow: string[];
+    contextNow: number;
+    realNow: number;
+    currentTaskId: string | null;
+  }): ScheduleDay[] {
+    this.scheduleRefreshTick();
+    const timelineTasks = this._timelineTasks();
+    const taskRepeatCfgs = this._taskRepeatCfgs();
+    const timelineCfg = this._timelineConfig();
+    const plannerDayMap = this._plannerDayMap();
+    const icalEvents = this._icalEvents();
+
+    return this.buildScheduleDays({
+      now: params.contextNow,
+      realNow: params.realNow,
+      daysToShow: params.daysToShow,
+      timelineTasks,
+      taskRepeatCfgs,
+      icalEvents,
+      plannerDayMap,
+      timelineCfg,
+      currentTaskId: params.currentTaskId,
+    });
+  }
+
+  getDaysToShow(nrOfDaysToShow: number, referenceDate: Date | null = null): string[] {
+    const today = referenceDate ? referenceDate.getTime() : new Date().getTime();
     const daysToShow: string[] = [];
     for (let i = 0; i < nrOfDaysToShow; i++) {
       // eslint-disable-next-line no-mixed-operators
@@ -109,8 +150,12 @@ export class ScheduleService {
     return daysToShow;
   }
 
-  getMonthDaysToShow(numberOfWeeks: number, firstDayOfWeek: number = 0): string[] {
-    const today = new Date();
+  getMonthDaysToShow(
+    numberOfWeeks: number,
+    firstDayOfWeek: number = 0,
+    referenceDate: Date | null = null,
+  ): string[] {
+    const today = referenceDate || new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
     // Calculate the first day to show based on firstDayOfWeek setting
@@ -227,12 +272,16 @@ export class ScheduleService {
     return null;
   }
 
-  getDayClass(day: string): string {
-    const dayDate = new Date(day);
+  getDayClass(day: string, referenceMonth?: Date): string {
+    const dayDate = parseDbDateStr(day);
     const today = new Date();
+
+    // If referenceMonth is provided, use it to determine "current month"
+    // Otherwise, use the actual current month
+    const monthToCompare = referenceMonth || today;
     const isCurrentMonth =
-      dayDate.getMonth() === today.getMonth() &&
-      dayDate.getFullYear() === today.getFullYear();
+      dayDate.getMonth() === monthToCompare.getMonth() &&
+      dayDate.getFullYear() === monthToCompare.getFullYear();
     const isToday = dayDate.toDateString() === today.toDateString();
 
     let classes = '';
@@ -285,6 +334,7 @@ type TaskRepeatCfgBuckets = {
 
 export interface BuildScheduleDaysParams {
   now?: number;
+  realNow?: number; // Actual current time for determining "current week"
   daysToShow: string[];
   timelineTasks: TimelineTasks | undefined | null;
   taskRepeatCfgs: TaskRepeatCfgBuckets | undefined | null;

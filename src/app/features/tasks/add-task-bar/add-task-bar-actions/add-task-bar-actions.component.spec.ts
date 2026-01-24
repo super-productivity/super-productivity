@@ -170,17 +170,9 @@ describe('AddTaskBarActionsComponent', () => {
   });
 
   describe('Component Creation', () => {
-    it('should create', () => {
-      expect(component).toBeTruthy();
-    });
-
     it('should initialize with correct signals', () => {
       expect(component.allProjects()).toEqual([mockProject]);
       expect(component.allTags()).toEqual([mockTag]);
-    });
-
-    it('should expose constants', () => {
-      expect(component.ESTIMATE_OPTIONS).toBeDefined();
     });
 
     it('should handle input properties', () => {

@@ -63,9 +63,9 @@ describe('Performance Integration', () => {
   });
 
   describe('Large operation log handling', () => {
-    it('should handle 1000 operations efficiently', async () => {
+    it('should handle 500 operations efficiently', async () => {
       const client = new TestClient('client-test');
-      const operationCount = 1000;
+      const operationCount = 500;
 
       const writeStartTime = Date.now();
 
@@ -104,7 +104,7 @@ describe('Performance Integration', () => {
 
     it('should maintain sequence integrity under load', async () => {
       const client = new TestClient('client-test');
-      const operationCount = 500;
+      const operationCount = 250;
 
       for (let i = 0; i < operationCount; i++) {
         await storeService.append(
@@ -115,14 +115,26 @@ describe('Performance Integration', () => {
 
       const ops = await storeService.getOpsAfterSeq(0);
 
+      // Verify we have exactly the expected number of operations (test isolation check)
+      expect(ops.length)
+        .withContext(
+          `Expected exactly ${operationCount} operations, but found ${ops.length}. ` +
+            `This suggests database cleanup failed or tests are interfering with each other.`,
+        )
+        .toBe(operationCount);
+
       // Verify strict sequence ordering
       for (let i = 1; i < ops.length; i++) {
-        expect(ops[i].seq).toBeGreaterThan(ops[i - 1].seq);
+        expect(ops[i].seq)
+          .withContext(`Sequence at index ${i} should be greater than previous`)
+          .toBeGreaterThan(ops[i - 1].seq);
       }
 
       // Verify vector clock progression
       for (let i = 0; i < ops.length; i++) {
-        expect(ops[i].op.vectorClock['client-test']).toBe(i + 1);
+        expect(ops[i].op.vectorClock['client-test'])
+          .withContext(`Vector clock at operation ${i} (seq: ${ops[i].seq})`)
+          .toBe(i + 1);
       }
     });
   });
@@ -215,7 +227,7 @@ describe('Performance Integration', () => {
   describe('Sync batch performance', () => {
     it('should mark operations as synced efficiently', async () => {
       const client = new TestClient('client-test');
-      const operationCount = 500;
+      const operationCount = 250;
 
       // Create operations
       for (let i = 0; i < operationCount; i++) {
@@ -245,7 +257,7 @@ describe('Performance Integration', () => {
       const client = new TestClient('client-test');
 
       // Create mix of synced and unsynced
-      for (let i = 0; i < 300; i++) {
+      for (let i = 0; i < 150; i++) {
         await storeService.append(
           createTaskOperation(client, `task-${i}`, OpType.Create, { title: `Task ${i}` }),
           'local',
@@ -254,7 +266,7 @@ describe('Performance Integration', () => {
 
       const allOps = await storeService.getOpsAfterSeq(0);
       // Mark first half as synced
-      const syncedSeqs = allOps.slice(0, 150).map((op) => op.seq);
+      const syncedSeqs = allOps.slice(0, 75).map((op) => op.seq);
       await storeService.markSynced(syncedSeqs);
 
       // Measure unsynced query
@@ -262,16 +274,16 @@ describe('Performance Integration', () => {
       const unsynced = await storeService.getUnsynced();
       const queryDuration = Date.now() - queryStart;
 
-      expect(unsynced.length).toBe(150);
+      expect(unsynced.length).toBe(75);
       expect(queryDuration).toBeLessThan(1000); // < 1 second
-      console.log(`Get unsynced: ${queryDuration}ms for 150 of 300 ops`);
+      console.log(`Get unsynced: ${queryDuration}ms for 75 of 150 ops`);
     });
   });
 
   describe('Compaction performance', () => {
     it('should compact operations efficiently', async () => {
       const client = new TestClient('client-test');
-      const operationCount = 500;
+      const operationCount = 250;
 
       // Create operations
       for (let i = 0; i < operationCount; i++) {

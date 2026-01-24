@@ -155,10 +155,6 @@ describe('ProjectService', () => {
     store.resetSelectors();
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('duplicateProject', () => {
     beforeEach(() => {
       spyOn(service, 'add').and.callFake(() => 'new-project-id');

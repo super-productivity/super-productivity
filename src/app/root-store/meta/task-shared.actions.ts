@@ -232,6 +232,7 @@ export const TaskSharedActions = createActionGroup({
       parentTaskMap?: { [taskId: string]: string | undefined };
       isShowSnack?: boolean;
       isSkipRemoveReminder?: boolean;
+      isClearScheduledTime?: boolean;
     }) => ({
       ...taskProps,
       meta: {
@@ -328,10 +329,7 @@ export const TaskSharedActions = createActionGroup({
     }),
 
     // Task Repeat Config Management
-    deleteTaskRepeatCfg: (props: {
-      taskRepeatCfgId: string;
-      taskIdsToUnlink: string[];
-    }) => ({
+    deleteTaskRepeatCfg: (props: { taskRepeatCfgId: string }) => ({
       ...props,
       meta: {
         isPersistent: true,

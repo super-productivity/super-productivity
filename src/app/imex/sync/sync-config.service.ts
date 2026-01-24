@@ -7,6 +7,7 @@ import { switchMap, tap } from 'rxjs/operators';
 import { PrivateCfgByProviderId, SyncProviderId } from '../../op-log/sync-exports';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SyncLog } from '../../core/log';
+import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -83,6 +84,7 @@ const PROVIDER_FIELD_DEFAULTS: Record<
 export class SyncConfigService {
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
+  private _derivedKeyCache = inject(DerivedKeyCacheService);
 
   private _lastSettings: SyncConfig | null = null;
 
@@ -181,6 +183,9 @@ export class SyncConfigService {
       ...oldConfig,
       encryptKey: pwd,
     } as PrivateCfgByProviderId<SyncProviderId>);
+
+    // Clear cached encryption keys to force re-derivation with new password
+    this._derivedKeyCache.clearCache();
   }
 
   async updateSettingsFromForm(newSettings: SyncConfig, isForce = false): Promise<void> {
@@ -243,18 +248,46 @@ export class SyncConfigService {
     // then overlay user settings, and always include encryption key for data security
     // NOTE: that we need the old config here in order not to overwrite other private stuff like tokens
     const providerCfgAsRecord = privateConfigProviderSpecific as Record<string, unknown>;
+
+    // Filter out empty/undefined values from form to preserve existing credentials
+    // This prevents resetOnHide and other form behaviors from clearing saved tokens
+    // Empty credentials should be cleared by disabling the provider, not by form state
+    const nonEmptyFormValues = Object.entries(providerCfgAsRecord).reduce(
+      (acc, [key, value]) => {
+        // Only include values that are truthy OR explicitly false/0
+        // Skip: undefined, null, empty string
+        if (value !== undefined && value !== null && value !== '') {
+          acc[key] = value;
+        }
+        return acc;
+      },
+      {} as Record<string, unknown>,
+    );
+
     const configWithDefaults = {
       ...PROVIDER_FIELD_DEFAULTS[providerId],
       ...oldConfig,
-      ...providerCfgAsRecord,
+      ...nonEmptyFormValues, // Only non-empty values overwrite saved config
       // Use provider specific key if available, otherwise fallback to root key
-      encryptKey:
-        (providerCfgAsRecord?.encryptKey as string) || settings.encryptKey || '',
+      encryptKey: (nonEmptyFormValues?.encryptKey as string) || settings.encryptKey || '',
     };
+
+    // Check if encryption settings changed to clear cached keys
+    const oldEncryptKey = (oldConfig as { encryptKey?: string })?.encryptKey;
+    const newEncryptKey = configWithDefaults.encryptKey as string;
+    const isEncryptionChanged = oldEncryptKey !== newEncryptKey;
 
     await this._providerManager.setProviderConfig(
       providerId,
       configWithDefaults as PrivateCfgByProviderId<SyncProviderId>,
     );
+
+    // Clear cache on ANY encryption change (not just disable)
+    if (isEncryptionChanged && (oldEncryptKey || newEncryptKey)) {
+      SyncLog.normal(
+        'SyncConfigService: Encryption settings changed, clearing cached keys',
+      );
+      this._derivedKeyCache.clearCache();
+    }
   }
 }

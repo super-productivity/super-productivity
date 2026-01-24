@@ -112,6 +112,12 @@ const validateUpdatePayload = (
     return { success: true };
   }
 
+  // METRIC focus session logging uses a special shape: { day, duration }
+  // This comes from logFocusSession action (see metric.actions.ts)
+  if (entityType === 'METRIC' && 'day' in p && 'duration' in p) {
+    return { success: true };
+  }
+
   // Update payloads can have various shapes:
   // 1. { task: { id, changes } } or { project: { id, changes } }
   // 2. { id, changes }

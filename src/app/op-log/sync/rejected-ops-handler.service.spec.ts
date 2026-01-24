@@ -62,10 +62,6 @@ describe('RejectedOpsHandlerService', () => {
     service = TestBed.inject(RejectedOpsHandlerService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('handleRejectedOps', () => {
     it('should return 0 when no rejected ops provided', async () => {
       const result = await service.handleRejectedOps([]);

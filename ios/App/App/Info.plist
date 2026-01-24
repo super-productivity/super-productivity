@@ -52,5 +52,16 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.super-productivity.app</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>OAuth Callback</string>
+		</dict>
+	</array>
 </dict>
 </plist>

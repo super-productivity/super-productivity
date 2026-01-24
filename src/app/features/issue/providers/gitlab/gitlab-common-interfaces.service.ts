@@ -40,7 +40,12 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
     return this._getCfgOnce$(issueProviderId)
       .pipe(
         map((cfg) => {
-          const project: string = cfg.project;
+          const project: string | null = cfg.project;
+
+          // Handle case where project is not configured
+          if (!project) {
+            return '';
+          }
 
           // Extract just the numeric issue ID from formats like 'project/repo#123' or '#123'
           // Note: issueId is intentionally stored as 'project/repo#123' to ensure uniqueness across different projects

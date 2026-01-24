@@ -7,7 +7,7 @@ on:
 
 jobs:
   ios-app-store-release:
-    runs-on: macos-latest
+    runs-on: macos-26
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -16,14 +16,23 @@ jobs:
     # if: '!github.event.release.prerelease'
 
     steps:
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
           node-version: 20
 
       - name: Check out Git repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
+
+      - name: Verify Xcode and SDK version
+        run: |
+          echo "=== Xcode Version ==="
+          xcodebuild -version
+          echo ""
+          echo "=== SDK Information ==="
+          xcrun --show-sdk-version
+          xcodebuild -showsdks | grep -E "(iOS|iphoneos)"
 
       # work around for npm installs from git+https://github.com/johannesjo/J2M.git
       - name: Reconfigure git to use HTTP authentication
@@ -99,9 +108,9 @@ jobs:
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
         id: npm-cache
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -125,8 +134,14 @@ jobs:
           echo "Setting iOS version to $VERSION (build $BUILD_NUMBER) [from $FULL_VERSION]"
 
           cd ios/App
-          xcrun agvtool new-marketing-version "$VERSION"
-          xcrun agvtool new-version -all "$BUILD_NUMBER"
+          if ! xcrun agvtool new-marketing-version "$VERSION"; then
+            echo "Error: Failed to set marketing version to $VERSION"
+            exit 1
+          fi
+          if ! xcrun agvtool new-version -all "$BUILD_NUMBER"; then
+            echo "Error: Failed to set build number to $BUILD_NUMBER"
+            exit 1
+          fi
 
       - name: Build Angular frontend
         run: npm run buildFrontend:prodWeb
@@ -188,7 +203,7 @@ jobs:
         run: ls -la "$RUNNER_TEMP/ipa-output"
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: sup-ios-release
           path: ${{ runner.temp }}/ipa-output/*.ipa

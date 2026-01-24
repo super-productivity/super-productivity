@@ -2,11 +2,13 @@
 # SuperSync Server - Build and Push to GitHub Container Registry
 #
 # Usage:
-#   ./scripts/build-and-push.sh [TAG]
+#   ./scripts/build-and-push.sh [TAG] [--no-cache]
 #
 # Examples:
-#   ./scripts/build-and-push.sh          # Pushes as :latest
-#   ./scripts/build-and-push.sh v1.0.0   # Pushes as :v1.0.0 and :latest
+#   ./scripts/build-and-push.sh                # Pushes as :latest
+#   ./scripts/build-and-push.sh v1.0.0         # Pushes as :v1.0.0 and :latest
+#   ./scripts/build-and-push.sh --no-cache     # Pushes as :latest without cache
+#   ./scripts/build-and-push.sh v1.0.0 --no-cache  # With version tag and no cache
 #
 # Prerequisites:
 #   Add to .env file:
@@ -31,8 +33,17 @@ GITHUB_USER="${GHCR_USER:-johannesjo}"
 GHCR_TOKEN="${GHCR_TOKEN:-}"
 IMAGE_NAME="ghcr.io/$GITHUB_USER/supersync"
 
-# Parse tag argument
-TAG="${1:-latest}"
+# Parse arguments
+TAG="latest"
+BUILD_NO_CACHE=false
+
+for arg in "$@"; do
+    if [ "$arg" = "--no-cache" ]; then
+        BUILD_NO_CACHE=true
+    elif [ "${arg:0:1}" != "-" ]; then
+        TAG="$arg"
+    fi
+done
 
 echo "==> SuperSync Build & Push"
 echo "    Image: $IMAGE_NAME:$TAG"
@@ -41,11 +52,20 @@ echo ""
 
 # Step 1: Build image
 echo "==> Building image..."
-docker build \
-    -t "$IMAGE_NAME:$TAG" \
-    -t "$IMAGE_NAME:latest" \
-    -f "$DOCKERFILE" \
-    "$REPO_ROOT"
+if [ "$BUILD_NO_CACHE" = true ]; then
+    echo "    Using --no-cache flag to prevent layer caching"
+    docker build --no-cache \
+        -t "$IMAGE_NAME:$TAG" \
+        -t "$IMAGE_NAME:latest" \
+        -f "$DOCKERFILE" \
+        "$REPO_ROOT"
+else
+    docker build \
+        -t "$IMAGE_NAME:$TAG" \
+        -t "$IMAGE_NAME:latest" \
+        -f "$DOCKERFILE" \
+        "$REPO_ROOT"
+fi
 
 echo ""
 echo "==> Build complete!"

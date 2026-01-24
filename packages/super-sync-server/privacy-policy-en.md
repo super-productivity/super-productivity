@@ -49,6 +49,22 @@ Technically necessary when accessing the server:
 - Operating system
 - Error and diagnostic information
 
+### 3a. Data Security and Encryption
+
+**Encryption in Transit:**
+All data transmissions between your app and our server use HTTPS/TLS encryption.
+
+**Encryption at Rest:**
+
+- **Optionally Available:** You can enable End-to-End Encryption (E2EE) in sync settings
+- **When E2EE is enabled:** Your data is encrypted on your device before being sent to our server. We have no access to your encryption keys and cannot decrypt your data.
+- **When E2EE is NOT enabled:** Your sync data is stored unencrypted in our database. We strongly recommend enabling E2EE for sensitive data.
+
+**Important Notice:** Without E2EE, your data is protected only by physical and technical access controls on our server, not by encryption at rest. In case of server compromise or physical access to storage media, your data could be accessed.
+
+**Password Security:**
+Your password is never stored in plaintext. We use bcrypt hashing (12 rounds) for secure password storage.
+
 ## 4. Legal Basis for Processing
 
 We process your data based on the following legal bases:
@@ -87,14 +103,32 @@ Processing takes place exclusively on servers in Germany.
 **(2) Data Processing Agreement**
 We have concluded a Data Processing Agreement (DPA) with Alfahosting GmbH in accordance with Art. 28 GDPR. Alfahosting processes your data only according to our instructions and not for its own purposes. No transfer to a third country takes place via the hoster.
 
-## 6. Data Processing during Synchronization
+## 6. Technical and Organizational Measures (Art. 32 GDPR)
 
-This is the core of our Service. We distinguish between two security levels:
+We implement the following security measures:
+
+**Access Security:**
+
+- HTTPS/TLS encryption for all data transmissions
+- JWT-based authentication with token versioning
+- bcrypt password hashing (12 rounds)
+- Rate limiting and account lockout after failed login attempts
+- Email verification before account activation
+
+**Encryption:**
+
+- **In Transit:** Full HTTPS/TLS encryption
+- **At Rest:** Optionally available End-to-End Encryption (E2EE)
+  - ⚠️ **IMPORTANT:** E2EE is not enabled by default
+  - ⚠️ Without E2EE, data is stored unencrypted in the database
+  - ✅ **Recommendation:** Enable E2EE for maximum protection
+
+**Data Processing during Synchronization:**
 
 **A) Standard Synchronization (without E2EE)**
 
 - Your content data is transmitted via TLS/SSL transport encryption.
-- It is stored in our database on the server. No end-to-end encryption is used here.
+- On the server, it is stored **unencrypted** in our PostgreSQL database.
 - Access by the Provider is technically possible in principle but occurs exclusively if mandatorily required for maintenance, diagnosis, or defense against technical disturbances.
 
 **B) End-to-End Encryption (E2EE – optional)**
@@ -104,6 +138,23 @@ If you enable E2EE in the app:
 - The server stores only encrypted data blocks ("Blobs").
 - We have **no access** to your keys and cannot restore, decrypt, or view the data.
 - Loss of the key results in permanent data loss.
+
+**Data Minimization:**
+
+- Minimal data collection (only required for sync functionality)
+- No analytics tools or tracking
+- Automatic deletion of old sync operations (45 days)
+
+**Availability and Resilience:**
+
+- Regular backups (you manage your own backups)
+- Monitoring and error logging
+
+**Limitations:**
+
+- No encryption of database files at disk level
+- Protection relies on hosting provider's physical security measures
+- In case of server compromise, unencrypted data (without E2EE) could be accessed
 
 ## 7. Email Sending
 

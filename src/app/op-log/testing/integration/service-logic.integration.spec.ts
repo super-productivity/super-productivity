@@ -40,8 +40,18 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { resetTestUuidCounter } from './helpers/test-client.helper';
 import { LockService } from '../../sync/lock.service';
 import { SchemaMigrationService } from '../../persistence/schema-migration.service';
-import { mockDecrypt, mockEncrypt } from '../helpers/mock-encryption.helper';
-import { ENCRYPT_FN, DECRYPT_FN } from '../../encryption/encryption.token';
+import {
+  mockDecrypt,
+  mockEncrypt,
+  mockEncryptBatch,
+  mockDecryptBatch,
+} from '../helpers/mock-encryption.helper';
+import {
+  ENCRYPT_FN,
+  DECRYPT_FN,
+  ENCRYPT_BATCH_FN,
+  DECRYPT_BATCH_FN,
+} from '../../encryption/encryption.token';
 import { TranslateService } from '@ngx-translate/core';
 import { SuperSyncStatusService } from '../../sync/super-sync-status.service';
 import { ServerMigrationService } from '../../sync/server-migration.service';
@@ -355,6 +365,8 @@ describe('Service Logic Integration', () => {
         // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
         { provide: ENCRYPT_FN, useValue: mockEncrypt },
         { provide: DECRYPT_FN, useValue: mockDecrypt },
+        { provide: ENCRYPT_BATCH_FN, useValue: mockEncryptBatch },
+        { provide: DECRYPT_BATCH_FN, useValue: mockDecryptBatch },
         { provide: ConflictResolutionService, useValue: conflictServiceSpy },
         { provide: OperationApplierService, useValue: applierSpy },
         { provide: SuperSyncStatusService, useValue: superSyncStatusSpy },

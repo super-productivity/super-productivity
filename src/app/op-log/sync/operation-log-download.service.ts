@@ -20,6 +20,7 @@ import { OperationEncryptionService } from './operation-encryption.service';
 import { DecryptError } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
+import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 
 // Re-export for consumers that import from this service
 export type { DownloadResult } from '../core/types/sync-results.types';
@@ -45,6 +46,7 @@ export class OperationLogDownloadService {
   private snackService = inject(SnackService);
   private encryptionService = inject(OperationEncryptionService);
   private superSyncStatusService = inject(SuperSyncStatusService);
+  private clientIdProvider = inject(CLIENT_ID_PROVIDER);
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
@@ -88,8 +90,10 @@ export class OperationLogDownloadService {
     await this.lockService.request(LOCK_NAMES.DOWNLOAD, async () => {
       const lastServerSeq = forceFromSeq0 ? 0 : await syncProvider.getLastServerSeq();
       const appliedOpIds = await this.opLogStore.getAppliedOpIds();
+      const clientId = await this.clientIdProvider.loadClientId();
       OpLog.verbose(
-        `OperationLogDownloadService: [DEBUG] Starting download. lastServerSeq=${lastServerSeq}, appliedOpIds.size=${appliedOpIds.size}`,
+        `OperationLogDownloadService: [DEBUG] Starting download. ` +
+          `lastServerSeq=${lastServerSeq}, appliedOpIds.size=${appliedOpIds.size}, clientId=${clientId}`,
       );
 
       if (forceFromSeq0) {
@@ -115,7 +119,11 @@ export class OperationLogDownloadService {
           break;
         }
 
-        const response = await syncProvider.downloadOps(sinceSeq, undefined, 500);
+        const response = await syncProvider.downloadOps(
+          sinceSeq,
+          clientId ?? undefined,
+          500,
+        );
         finalLatestSeq = response.latestSeq;
         OpLog.verbose(
           `OperationLogDownloadService: [DEBUG] Download response: ops=${response.ops.length}, ` +

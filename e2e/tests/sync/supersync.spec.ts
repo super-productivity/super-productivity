@@ -833,9 +833,9 @@ test.describe('@supersync SuperSync E2E', () => {
       console.log('[TimeTrack Test] Time tracking active');
 
       // ============ PHASE 3: Accumulate Time ============
-      // Wait for time to accumulate (5 seconds to get visible time display)
-      console.log('[TimeTrack Test] Waiting 5 seconds for time to accumulate...');
-      await clientA.page.waitForTimeout(5000);
+      // Wait for time to accumulate (reduced from 5s to 2s for faster tests)
+      console.log('[TimeTrack Test] Waiting 2 seconds for time to accumulate...');
+      await clientA.page.waitForTimeout(2000);
 
       // ============ PHASE 4: Stop Time Tracking ============
       await stopTimeTracking(clientA, taskName);
@@ -858,9 +858,9 @@ test.describe('@supersync SuperSync E2E', () => {
       // ============ PHASE 6: Client B Downloads ============
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig);
-      // Add delay to ensure any auto-sync from setup has time to start/finish
+      // Add delay to ensure any auto-sync from setup has time to start/finish (reduced from 2000ms)
       // or to avoid race conditions with "Sync already in progress"
-      await clientB.page.waitForTimeout(2000);
+      await clientB.page.waitForTimeout(500);
       await clientB.sync.syncAndWait();
       console.log('[TimeTrack Test] Client B synced');
 

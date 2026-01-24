@@ -712,6 +712,89 @@ describe('LWW Conflict Resolution Integration', () => {
   });
 
   describe('DELETE vs UPDATE conflict scenarios', () => {
+    it('should extract entity from DELETE payload when UPDATE wins LWW', async () => {
+      const clientA = new TestClient('client-a-test');
+      const clientB = new TestClient('client-b-test');
+
+      const now = Date.now();
+
+      // Create a complete task entity for the DELETE payload
+      const fullTaskEntity = {
+        id: 'task-restore',
+        title: 'Original Task Title',
+        created: now - 10000,
+        timeSpent: 3600000,
+        timeEstimate: 7200000,
+        isDone: false,
+        notes: 'Important notes',
+        tagIds: ['tag-1', 'tag-2'],
+        subTaskIds: [],
+        attachments: [],
+        projectId: 'project-1',
+      };
+
+      // Client A deletes task (older, remote) - with FULL entity in payload
+      const deleteOp = clientA.createOperation({
+        actionType: '[Task] Delete Task' as ActionType,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: 'task-restore',
+        payload: fullTaskEntity, // DELETE contains full entity for potential restoration
+      });
+      (deleteOp as any).timestamp = now - 1000;
+
+      // Client B updates same task (newer, local)
+      const updateOp = clientB.createOperation({
+        actionType: '[Task] Update Task' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: 'task-restore',
+        payload: { title: 'Updated Title After Delete' },
+      });
+      (updateOp as any).timestamp = now;
+
+      // LWW: UPDATE wins (newer timestamp)
+      expect(updateOp.timestamp).toBeGreaterThan(deleteOp.timestamp);
+
+      // Simulate: DELETE was applied first (entity removed from store)
+      // Then sync discovers UPDATE should win
+      // System must extract entity from DELETE payload to restore it
+
+      // Store both ops
+      await storeService.append(deleteOp, 'remote');
+      await storeService.append(updateOp, 'local');
+
+      // Verify DELETE has full entity in payload (available for extraction)
+      const storedDeleteEntry = await storeService.getOpById(deleteOp.id);
+      expect(storedDeleteEntry?.op.payload).toBeDefined();
+      expect((storedDeleteEntry?.op.payload as any).title).toBe('Original Task Title');
+      expect((storedDeleteEntry?.op.payload as any).id).toBe('task-restore');
+
+      // Both operations are concurrent (vector clocks don't dominate)
+      const comparison = compareVectorClocks(deleteOp.vectorClock, updateOp.vectorClock);
+      expect(comparison).toBe(VectorClockComparison.CONCURRENT);
+
+      // Mark DELETE as rejected since UPDATE wins
+      await storeService.markRejected([deleteOp.id]);
+
+      // Verify the entity from DELETE payload is available for extraction
+      // This simulates the ConflictResolutionService extracting the entity
+      // and applying the UPDATE on top of it
+      const extractedEntity = storedDeleteEntry?.op.payload as Record<string, unknown>;
+      expect(extractedEntity).toBeDefined();
+      expect(extractedEntity.title).toBe('Original Task Title');
+      expect(extractedEntity.timeSpent).toBe(3600000);
+
+      // The UPDATE should be applied on top of the extracted entity
+      const finalEntity = {
+        ...extractedEntity,
+        ...(updateOp.payload as Record<string, unknown>),
+      } as Record<string, unknown>;
+      expect(finalEntity.title).toBe('Updated Title After Delete');
+      expect(finalEntity.timeSpent).toBe(3600000); // Preserved from DELETE
+      expect(finalEntity.tagIds).toEqual(['tag-1', 'tag-2']); // Preserved from DELETE
+    });
+
     it('should resolve DELETE vs UPDATE when DELETE is newer (local wins)', async () => {
       const clientA = new TestClient('client-a-test');
       const clientB = new TestClient('client-b-test');

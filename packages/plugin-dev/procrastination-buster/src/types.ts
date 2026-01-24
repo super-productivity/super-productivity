@@ -44,8 +44,62 @@ export interface ProcrastinationType {
 // ============================================================================
 
 /**
+ * Type IDs for procrastination types - used to load translations
+ */
+export const PROCRASTINATION_TYPE_IDS = [
+  'overwhelm',
+  'perfectionism',
+  'unclear',
+  'boring',
+  'fear',
+  'energy',
+  'distraction',
+  'resistance',
+] as const;
+
+export type ProcrastinationTypeId = (typeof PROCRASTINATION_TYPE_IDS)[number];
+
+/**
+ * Creates procrastination types from translation function
+ * This allows the types to be translated dynamically
+ */
+export async function getProcrastinationTypes(
+  t: (key: string, params?: Record<string, string | number>) => Promise<string>,
+): Promise<ProcrastinationType[]> {
+  const types: ProcrastinationType[] = [];
+
+  for (const id of PROCRASTINATION_TYPE_IDS) {
+    const typeKey = id.toUpperCase();
+
+    // Load all 4 strategies for this type
+    const strategies: (string | Strategy)[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const strategyText = await t(`TYPES.${typeKey}.STRATEGY_${i}`);
+
+      // Special cases with actions
+      if ((id === 'overwhelm' && i === 4) || (id === 'distraction' && i === 2)) {
+        strategies.push({ text: strategyText, action: true });
+      } else {
+        strategies.push(strategyText);
+      }
+    }
+
+    types.push({
+      id,
+      title: await t(`TYPES.${typeKey}.TITLE`),
+      emotion: await t(`TYPES.${typeKey}.EMOTION`),
+      strategies,
+    });
+  }
+
+  return types;
+}
+
+/**
  * Available procrastination types with their strategies.
  * Each type represents a common reason for procrastination.
+ *
+ * @deprecated Use getProcrastinationTypes() instead for i18n support
  */
 export const procrastinationTypes: ProcrastinationType[] = [
   {

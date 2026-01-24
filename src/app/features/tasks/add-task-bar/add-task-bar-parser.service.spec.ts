@@ -19,6 +19,7 @@ describe('AddTaskBarParserService', () => {
       'updateSpent',
       'updateEstimate',
       'updateDate',
+      'updateAttachments',
       'isAutoDetected',
       'state',
     ]);
@@ -48,12 +49,6 @@ describe('AddTaskBarParserService', () => {
     mockStateService = TestBed.inject(
       AddTaskBarStateService,
     ) as jasmine.SpyObj<AddTaskBarStateService>;
-  });
-
-  describe('Service Creation', () => {
-    it('should be created', () => {
-      expect(service).toBeTruthy();
-    });
   });
 
   describe('parseAndUpdateText', () => {
@@ -95,6 +90,7 @@ describe('AddTaskBarParserService', () => {
       mockStateService.updateNewTagTitles.calls.reset();
       mockStateService.setAutoDetectedProjectId.calls.reset();
       mockStateService.updateProjectId.calls.reset();
+      mockStateService.updateAttachments.calls.reset();
     });
 
     it('should handle empty text', () => {
@@ -124,6 +120,7 @@ describe('AddTaskBarParserService', () => {
           estimate: null,
           cleanText: null,
           remindOption: null,
+          attachments: [],
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -160,6 +157,7 @@ describe('AddTaskBarParserService', () => {
           estimate: null,
           cleanText: null,
           remindOption: null,
+          attachments: [],
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -193,6 +191,7 @@ describe('AddTaskBarParserService', () => {
           estimate: null,
           cleanText: null,
           remindOption: null,
+          attachments: [],
         };
         mockStateService.state.and.returnValue(mockState);
 
@@ -595,6 +594,7 @@ describe('AddTaskBarParserService', () => {
         estimate: null,
         cleanText: null,
         remindOption: null,
+        attachments: [],
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -628,6 +628,7 @@ describe('AddTaskBarParserService', () => {
         estimate: null,
         cleanText: null,
         remindOption: null,
+        attachments: [],
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -663,6 +664,7 @@ describe('AddTaskBarParserService', () => {
         estimate: null,
         cleanText: null,
         remindOption: null,
+        attachments: [],
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -696,6 +698,7 @@ describe('AddTaskBarParserService', () => {
         estimate: null,
         cleanText: null,
         remindOption: null,
+        attachments: [],
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -728,6 +731,7 @@ describe('AddTaskBarParserService', () => {
         estimate: null,
         cleanText: null,
         remindOption: null,
+        attachments: [],
       };
       mockStateService.state.and.returnValue(mockState);
 
@@ -802,6 +806,350 @@ describe('AddTaskBarParserService', () => {
         const dateStr2 = '2024-01-16';
         expect(serviceAny._datesEqual(dateStr1, dateStr2)).toBe(false);
       });
+    });
+  });
+
+  describe('URL Attachment Integration', () => {
+    let mockConfig: ShortSyntaxConfig;
+    let mockProjects: Project[];
+    let mockTags: Tag[];
+    let mockDefaultProject: Project;
+
+    beforeEach(() => {
+      mockConfig = {
+        isEnableProject: true,
+        isEnableDue: true,
+        isEnableTag: true,
+      } as ShortSyntaxConfig;
+
+      mockDefaultProject = {
+        id: 'default-project',
+        title: 'Default Project',
+      } as Project;
+
+      mockProjects = [mockDefaultProject];
+      mockTags = [];
+
+      // Reset all spy calls
+      mockStateService.updateCleanText.calls.reset();
+      mockStateService.updateAttachments.calls.reset();
+    });
+
+    it('should extract single HTTPS URL and update state', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        'Task https://example.com',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(1);
+      expect(attachments[0].path).toBe('https://example.com');
+      expect(attachments[0].type).toBe('LINK');
+      expect(attachments[0].icon).toBe('bookmark');
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task');
+    });
+
+    it('should extract file:// URL with FILE type', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        'Document file:///home/user/doc.pdf',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(1);
+      expect(attachments[0].path).toBe('file:///home/user/doc.pdf');
+      expect(attachments[0].type).toBe('FILE');
+      expect(attachments[0].icon).toBe('insert_drive_file');
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Document');
+    });
+
+    it('should detect image URLs as IMG type', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        'Screenshot https://example.com/image.png',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(1);
+      expect(attachments[0].type).toBe('IMG');
+      expect(attachments[0].icon).toBe('image');
+    });
+
+    it('should extract multiple URLs', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        'Links https://example.com www.test.org',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(2);
+      expect(attachments[0].path).toBe('https://example.com');
+      expect(attachments[1].path).toBe('//www.test.org');
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Links');
+    });
+
+    it('should work with combined short syntax (URL + date + tag + estimate)', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      const mockTag = { id: 'urgent-id', title: 'urgent' } as Tag;
+      const tagsWithUrgent = [mockTag];
+
+      service.parseAndUpdateText(
+        'Task https://github.com/pr/123 @tomorrow #urgent 30m',
+        mockConfig,
+        mockProjects,
+        tagsWithUrgent,
+        mockDefaultProject,
+      );
+
+      // Should extract URL
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(1);
+      expect(attachments[0].path).toBe('https://github.com/pr/123');
+
+      // Should clean title
+      expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task');
+
+      // Should parse other syntax
+      expect(mockStateService.updateDate).toHaveBeenCalled();
+      expect(mockStateService.updateEstimate).toHaveBeenCalledWith(1800000); // 30m in ms
+      expect(mockStateService.updateTagIdsFromTxt).toHaveBeenCalledWith(['urgent-id']);
+    });
+
+    it('should not extract URLs from empty text', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        '',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).not.toHaveBeenCalled();
+    });
+
+    it('should update attachments when URL changes', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      // First parse
+      service.parseAndUpdateText(
+        'Task https://example.com',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const firstAttachments =
+        mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(firstAttachments.length).toBe(1);
+      expect(firstAttachments[0].path).toBe('https://example.com');
+
+      // Change URL
+      service.parseAndUpdateText(
+        'Task https://different.com',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(2);
+      const secondAttachments =
+        mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(secondAttachments.length).toBe(1);
+      expect(secondAttachments[0].path).toBe('https://different.com');
+    });
+
+    it('should clear attachments when URL removed from text', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      // First parse with URL
+      service.parseAndUpdateText(
+        'Task https://example.com',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+
+      // Remove URL from text
+      service.parseAndUpdateText(
+        'Task',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(2);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(0);
+    });
+
+    it('should handle www URLs correctly', () => {
+      const mockState = {
+        projectId: 'default-project',
+        tagIds: [],
+        tagIdsFromTxt: [],
+        newTagTitles: [],
+        date: null,
+        time: null,
+        spent: null,
+        estimate: null,
+        cleanText: null,
+        remindOption: null,
+        attachments: [],
+      };
+      mockStateService.state.and.returnValue(mockState);
+
+      service.parseAndUpdateText(
+        'Task www.example.com',
+        mockConfig,
+        mockProjects,
+        mockTags,
+        mockDefaultProject,
+      );
+
+      expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
+      const attachments = mockStateService.updateAttachments.calls.mostRecent().args[0];
+      expect(attachments.length).toBe(1);
+      expect(attachments[0].path).toBe('//www.example.com');
+      expect(attachments[0].type).toBe('LINK');
     });
   });
 });

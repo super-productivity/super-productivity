@@ -172,10 +172,6 @@ describe('AddTasksForTomorrowService', () => {
     store = TestBed.inject(Store) as MockStore;
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
-  });
-
   describe('nrOfPlannerItemsForTomorrow$', () => {
     it('should count repeatable tasks due tomorrow', (done) => {
       taskRepeatCfgServiceMock.getRepeatableTasksForExactDay$.and.returnValue(

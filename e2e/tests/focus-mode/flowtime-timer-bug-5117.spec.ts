@@ -120,6 +120,9 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
 
     // Wait for the 5-4-3-2-1 countdown animation to complete
     const countdownComponent = page.locator('focus-mode-countdown');
+    const completeSessionButton = page.locator(
+      'focus-mode-main button.complete-session-btn',
+    );
 
     // Wait for countdown to appear and then disappear
     try {
@@ -132,10 +135,10 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
       console.log('Countdown animation not visible (may be skipped in settings)');
     }
 
-    // Wait for the timer to start running
-    await page.waitForTimeout(2000);
+    // Wait for session to be in progress (complete session button becomes visible)
+    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
 
-    // Wait for clock-time to show a non-zero value (indicating session has started)
+    // Wait for clock-time to show a non-zero value (indicating timer has started ticking)
     await expect(async () => {
       const text = await clockTime.textContent();
       const trimmed = text?.trim() || '';
@@ -241,6 +244,10 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
 
     // Wait for countdown animation to complete
     const countdownComponent = page.locator('focus-mode-countdown');
+    const completeSessionButton = page.locator(
+      'focus-mode-main button.complete-session-btn',
+    );
+
     try {
       await expect(countdownComponent).toBeVisible({ timeout: 2000 });
       console.log('Countdown animation started...');
@@ -250,8 +257,8 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
       console.log('Countdown animation not visible (may be skipped)');
     }
 
-    // Wait for session to start
-    await page.waitForTimeout(2000);
+    // Wait for session to be in progress (complete session button becomes visible)
+    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
 
     // Wait for clock-time to show a non-zero value
     await expect(async () => {

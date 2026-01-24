@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { PluginManifest } from './plugin-api.model';
 import { PluginCacheService } from './plugin-cache.service';
@@ -94,28 +95,32 @@ export class PluginLoaderService {
         }
       }
 
-      // Load translation files if i18n is configured
+      // Load translation files if i18n is configured (in parallel)
       let translations: Record<string, string> | undefined;
       if (manifest.i18n?.languages && manifest.i18n.languages.length > 0) {
-        translations = {};
-        for (const lang of manifest.i18n.languages) {
+        const translationPromises = manifest.i18n.languages.map(async (lang) => {
           try {
             const translationUrl = `${pluginPath}/i18n/${lang}.json`;
-            const translationContent = await this._http
-              .get(translationUrl, { responseType: 'text' })
-              .pipe(first())
-              .toPromise();
-
-            if (translationContent) {
-              translations[lang] = translationContent;
-              PluginLog.log(
-                `[PluginLoader] Loaded ${lang} translations for ${manifest.id}`,
-              );
-            }
+            const translationContent = await firstValueFrom(
+              this._http.get(translationUrl, { responseType: 'text' }),
+            );
+            return [lang, translationContent] as const;
           } catch (e) {
             PluginLog.err(
               `[PluginLoader] Failed to load ${lang} translations for ${manifest.id}:`,
               e,
+            );
+            return [lang, null] as const;
+          }
+        });
+
+        const results = await Promise.all(translationPromises);
+        translations = {};
+        for (const [lang, content] of results) {
+          if (content) {
+            translations[lang] = content;
+            PluginLog.log(
+              `[PluginLoader] Loaded ${lang} translations for ${manifest.id}`,
             );
           }
         }

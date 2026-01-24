@@ -100,3 +100,33 @@ export const mockDecrypt = async (data: string, password: string): Promise<strin
 
   return base64ToUtf8(encoded);
 };
+
+/**
+ * Fast mock batch encrypt - encrypts multiple items using mockEncrypt.
+ * For tests that need batch encryption behavior.
+ */
+export const mockEncryptBatch = async (
+  dataItems: string[],
+  password: string,
+): Promise<string[]> => {
+  const results: string[] = [];
+  for (const data of dataItems) {
+    results.push(await mockEncrypt(data, password));
+  }
+  return results;
+};
+
+/**
+ * Fast mock batch decrypt - decrypts multiple items using mockDecrypt.
+ * For tests that need batch decryption behavior.
+ */
+export const mockDecryptBatch = async (
+  dataItems: string[],
+  password: string,
+): Promise<string[]> => {
+  const results: string[] = [];
+  for (const data of dataItems) {
+    results.push(await mockDecrypt(data, password));
+  }
+  return results;
+};

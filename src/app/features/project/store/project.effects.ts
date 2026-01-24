@@ -35,8 +35,8 @@ export class ProjectEffects {
         tap(({ projectId }) => {
           // Clear defaultProjectId if the deleted project was the default
           const cfg = this._globalConfigService.cfg();
-          if (cfg && projectId === cfg.misc.defaultProjectId) {
-            this._globalConfigService.updateSection('misc', { defaultProjectId: null });
+          if (cfg && projectId === cfg.tasks.defaultProjectId) {
+            this._globalConfigService.updateSection('tasks', { defaultProjectId: null });
           }
         }),
       ),

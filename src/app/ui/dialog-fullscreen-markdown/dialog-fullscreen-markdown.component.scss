@@ -69,11 +69,17 @@
   background-color: var(--bg-lightest);
   display: flex;
   flex-direction: column;
+  // Allow proper flex shrinking
+  min-height: 0;
+  overflow: hidden;
 
   .editor-section {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    // Allow proper flex shrinking
+    min-height: 0;
+    overflow: hidden;
 
     textarea {
       flex-grow: 1;
@@ -87,6 +93,8 @@
       display: block;
       resize: none;
       font-size: 14px;
+      // Allow proper flex shrinking
+      min-height: 0;
 
       @include scrollY;
 

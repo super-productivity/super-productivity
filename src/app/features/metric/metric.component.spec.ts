@@ -124,10 +124,6 @@ describe('MetricComponent', () => {
   });
 
   describe('Component creation', () => {
-    it('should create', () => {
-      expect(component).toBeTruthy();
-    });
-
     it('should inject all required services', () => {
       expect(component.metricService).toBe(metricService);
       expect(component.projectMetricsService).toBe(projectMetricsService);

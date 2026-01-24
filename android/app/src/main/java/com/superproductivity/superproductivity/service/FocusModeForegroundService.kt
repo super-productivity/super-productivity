@@ -116,7 +116,11 @@ class FocusModeForegroundService : Service() {
             }
 
             ACTION_STOP -> {
-                stopFocusMode()
+                if (isRunning) {
+                    stopFocusMode()
+                } else {
+                    Log.d(TAG, "Ignoring STOP action - service not running")
+                }
             }
 
             else -> {

@@ -509,6 +509,7 @@ describe('DropboxApi', () => {
       const result = await dropboxApi.getTokensFromAuthCode(
         'test-auth-code',
         'test-code-verifier',
+        null,
       );
 
       expect(result).toBeTruthy();
@@ -539,7 +540,7 @@ describe('DropboxApi', () => {
       );
 
       await expectAsync(
-        dropboxApi.getTokensFromAuthCode('test-auth-code', 'test-code-verifier'),
+        dropboxApi.getTokensFromAuthCode('test-auth-code', 'test-code-verifier', null),
       ).toBeRejectedWithError('Dropbox: Invalid access token response');
     });
   });

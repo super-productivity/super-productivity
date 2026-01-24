@@ -23,21 +23,9 @@ describe('FocusModeTaskSelectorComponent', () => {
     });
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
   describe('initialization', () => {
     it('should initialize currentTaskInputText as empty string', () => {
       expect(component.currentTaskInputText()).toBe('');
-    });
-
-    it('should have taskSelected output', () => {
-      expect(component.taskSelected).toBeDefined();
-    });
-
-    it('should have closed output', () => {
-      expect(component.closed).toBeDefined();
     });
   });
 
