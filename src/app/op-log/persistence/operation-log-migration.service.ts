@@ -59,8 +59,31 @@ export class OperationLogMigrationService {
     }
 
     // Check for legacy PFAPI data FIRST - we need to know this before deciding
-    // what to do with existing operations
-    const hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+    // what to do with existing operations.
+    // CRITICAL: hasUsableEntityData() now throws on database access errors
+    // to prevent silent data loss.
+    let hasLegacyData: boolean;
+    try {
+      hasLegacyData = await this.legacyPfDb.hasUsableEntityData();
+    } catch (e) {
+      // Database exists but can't be read - this is a critical error!
+      // Show error dialog and don't proceed with a "fresh start" which would lose data.
+      OpLog.err('OperationLogMigrationService: Failed to check legacy data:', e);
+
+      // Ensure translations are loaded before showing error dialog
+      await this._ensureTranslationsLoaded();
+
+      const dialogRef = this._showMigrationDialog();
+      dialogRef.componentInstance.error.set(
+        `Failed to read your existing data. Your data may still exist but cannot be accessed. ` +
+          `Please restart the app or try clearing your browser cache and reloading. ` +
+          `If the problem persists, please report this issue. ` +
+          `Error: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      // Wait for user acknowledgment
+      await firstValueFrom(dialogRef.afterClosed());
+      throw e;
+    }
 
     // No snapshot exists. Check if there are any operations in the log.
     const allOps = await this.opLogStore.getOpsAfterSeq(0);

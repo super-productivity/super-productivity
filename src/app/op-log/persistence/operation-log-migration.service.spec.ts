@@ -267,5 +267,42 @@ describe('OperationLogMigrationService', () => {
         );
       });
     });
+
+    describe('when hasUsableEntityData throws an error', () => {
+      beforeEach(() => {
+        mockOpLogStore.loadStateCache.and.resolveTo(null);
+        spyOn(OpLog, 'err');
+      });
+
+      it('should show error dialog and re-throw when database access fails', async () => {
+        const dbError = new Error('Failed to read legacy database. DB error');
+        mockLegacyPfDb.hasUsableEntityData.and.rejectWith(dbError);
+
+        const mockDialogRef = {
+          componentInstance: { error: { set: jasmine.createSpy('set') } },
+          afterClosed: jasmine
+            .createSpy('afterClosed')
+            .and.returnValue({ toPromise: () => Promise.resolve() }),
+        };
+        mockMatDialog.open.and.returnValue(mockDialogRef as any);
+        mockTranslateService.use = jasmine
+          .createSpy('use')
+          .and.returnValue({ toPromise: () => Promise.resolve() });
+        (service as any).languageService = {
+          detect: jasmine.createSpy('detect').and.returnValue('en'),
+        };
+
+        await expectAsync(service.checkAndMigrate()).toBeRejected();
+
+        expect(OpLog.err).toHaveBeenCalledWith(
+          jasmine.stringContaining('Failed to check legacy data'),
+          dbError,
+        );
+        expect(mockMatDialog.open).toHaveBeenCalled();
+        expect(mockDialogRef.componentInstance.error.set).toHaveBeenCalledWith(
+          jasmine.stringContaining('Failed to read your existing data'),
+        );
+      });
+    });
   });
 });
