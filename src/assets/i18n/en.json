@@ -1706,7 +1706,7 @@
       "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature, no guarantees. Make sure to have a backup!)"
     },
     "AUTO_BACKUPS": {
-      "HELP": "Auto-save all data to your app folder to have it ready if something goes wrong.",
+      "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LOCATION_INFO": "Backups are saved to:",
       "TITLE": "Automatic Backups"
@@ -1897,7 +1897,7 @@
       "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders."
     },
     "SCHEDULE": {
-      "HELP": "The schedule feature should provide you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
+      "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
       "LUNCH_BREAK_START_END_DESCRIPTION": "e.g. 13:00",
       "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
@@ -2071,9 +2071,9 @@
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",
     "DETECTED_LEGACY": "Detected legacy data. We will migrate it for you!",
-    "E_MIGRATION_FAILED": "Migration failed! with Error:",
+    "E_MIGRATION_FAILED": "Migration failed with error:",
     "E_RESTART_FAILED": "Automatic restart failed. Please restart the app manually!",
-    "SUCCESS": "Migration all done! Restarting app now..."
+    "SUCCESS": "Migration done! Restarting app now..."
   },
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "System Update",
@@ -2093,7 +2093,7 @@
       "MSG": "Exit the application?",
       "OK": "Exit"
     },
-    "END_OF_DAYS_RITUALS_PLACEHOLDER": "You can use this space to write down your own end of days rituals, you want to be reminded of.",
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "You can use this space to note your personal end-of-day rituals for which you would like to receive reminders.",
     "ESTIMATE_TOTAL": "Total estimate:",
     "EVALUATE_DAY": "Evaluate Day",
     "EXPORT_TASK_LIST": "Export Task List",
@@ -2291,19 +2291,19 @@
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",
     "ADD_SOME_TASKS": "Add some tasks to plan your day!",
-    "DONE_TASKS": "Comleted Tasks",
+    "DONE_TASKS": "Completed Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
     "FINISH_DAY_TOOLTIP": "Evaluate your day, move all completed tasks to the archive (optionally) and/or plan your next day.",
     "LATER_TODAY": "Later Today",
-    "MOVE_DONE_TO_ARCHIVE": "Move done to archive",
+    "MOVE_DONE_TO_ARCHIVE": "Move completed tasks to archive",
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASKS": "no tasks planned",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks done",
     "READY_TO_WORK": "Ready to work!",
     "RESET_BREAK_TIMER": "Reset without break timer",
-    "TIME_ESTIMATED": "Time Estimated:",
+    "TIME_ESTIMATED": "Time estimated:",
     "TODAY_REMAINING": "Today remaining:",
     "WITHOUT_BREAK": "Without break:",
     "WORKING_TODAY": "Working today:",
