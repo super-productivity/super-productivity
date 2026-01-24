@@ -17,6 +17,7 @@ import { TODAY_TAG } from '../../features/tag/tag.const';
 import { ConfirmUrlImportDialogComponent } from '../dialog-confirm-url-import/dialog-confirm-url-import.component';
 import { DialogImportFromUrlComponent } from '../dialog-import-from-url/dialog-import-from-url.component';
 import { createAppDataCompleteMock } from '../../util/app-data-mock';
+import { ImportEncryptionHandlerService } from '../sync/import-encryption-handler.service';
 
 describe('FileImexComponent', () => {
   let component: FileImexComponent;
@@ -44,6 +45,16 @@ describe('FileImexComponent', () => {
     ]);
     backupServiceSpy.loadCompleteBackup.and.returnValue(Promise.resolve(mockAppData));
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    const importEncryptionHandlerSpy = jasmine.createSpyObj(
+      'ImportEncryptionHandlerService',
+      ['checkEncryptionStateChange', 'handleImportEncryptionIfNeeded'],
+    );
+    importEncryptionHandlerSpy.checkEncryptionStateChange.and.returnValue(
+      Promise.resolve({ willChange: false }),
+    );
+    importEncryptionHandlerSpy.handleImportEncryptionIfNeeded.and.returnValue(
+      Promise.resolve(null),
+    );
 
     mockActivatedRoute = {
       queryParams: of({}),
@@ -65,6 +76,7 @@ describe('FileImexComponent', () => {
         { provide: BackupService, useValue: backupServiceSpy },
         { provide: ActivatedRoute, useValue: mockActivatedRoute },
         { provide: MatDialog, useValue: matDialogSpy },
+        { provide: ImportEncryptionHandlerService, useValue: importEncryptionHandlerSpy },
       ],
     }).compileComponents();
 

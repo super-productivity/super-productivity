@@ -13,6 +13,7 @@ import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migratio
 import { SyncLog } from '../../core/log';
 import { uuidv7 } from '../../util/uuid-v7';
 import { AppDataComplete } from '../../op-log/model/model-config';
+import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 
 export interface EncryptionStateChangeResult {
   encryptionStateChanged: boolean;
@@ -43,6 +44,7 @@ export class ImportEncryptionHandlerService {
   private _stateSnapshotService = inject(StateSnapshotService);
   private _vectorClockService = inject(VectorClockService);
   private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private _encryptionService = inject(OperationEncryptionService);
 
   /**
    * Checks if the imported data has different encryption settings than
@@ -169,11 +171,7 @@ export class ImportEncryptionHandlerService {
 
       // If encryption is enabled, encrypt the snapshot
       if (isEncryptionEnabled && newEncryptKey) {
-        // Import dynamically to avoid circular dependency
-        const { OperationEncryptionService } =
-          await import('../../op-log/sync/operation-encryption.service');
-        const encryptionService = new OperationEncryptionService();
-        snapshotPayload = await encryptionService.encryptPayload(
+        snapshotPayload = await this._encryptionService.encryptPayload(
           currentState,
           newEncryptKey,
         );
