@@ -10,7 +10,7 @@
       "CHANGE_BACKGROUND": "Change Background"
     },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
-    "UPDATE_WEB_APP": "New version available. Load New Version?"
+    "UPDATE_WEB_APP": "New version available. Load new version?"
   },
   "BL": {
     "NO_TASKS": "There are currently no tasks in your backlog"
@@ -20,11 +20,11 @@
     "SHOW_NOTES": "Project Notes"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This might result in partial data loss.",
+    "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This may result in partial data loss.",
     "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data. This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",
     "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
-    "RESTORE_STRAY_BACKUP": "During last sync there might have been some error. Do you want to restore the last backup?"
+    "RESTORE_STRAY_BACKUP": "During the last sync there may have been an error. Do you want to restore the last backup?"
   },
   "DATETIME_SCHEDULE": {
     "PRESS_ENTER_AGAIN": "Press enter again to save"
@@ -33,7 +33,7 @@
     "BY": "by",
     "NO_RESULTS": "No images found. Try a different search term.",
     "SEARCH_LABEL": "Search images",
-    "SEARCH_PLACEHOLDER": "e.g., nature, mountains, abstract",
+    "SEARCH_PLACEHOLDER": "e.g. nature, mountains, abstract",
     "TITLE": "Select Background Image from Unsplash"
   },
   "DONATE_PAGE": {
@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Edit Attachment",
         "LABELS": {
           "IMG": "Image",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Select a type",
         "TYPES": {
@@ -100,14 +100,14 @@
     "CALDAV": {
       "FORM": {
         "CALDAV_CATEGORY_FILTER": "Category to filter issues for (leave empty for none)",
-        "CALDAV_PASSWORD": "Your CalDav password",
-        "CALDAV_RESOURCE": "The name of the CalDav resource (the calendar)",
-        "CALDAV_URL": "CalDav URL (the base URL)",
-        "CALDAV_USER": "Your CalDav username",
-        "IS_TRANSITION_ISSUES_ENABLED": "Automatically complete CalDav todos on task completion"
+        "CALDAV_PASSWORD": "Your CalDAV password",
+        "CALDAV_RESOURCE": "The name of the CalDAV resource (the calendar)",
+        "CALDAV_URL": "CalDAV URL (the base URL)",
+        "CALDAV_USER": "Your CalDAV username",
+        "IS_TRANSITION_ISSUES_ENABLED": "Automatically complete CalDAV todos on task completion"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list uncompleted CalDav todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud in the webapp, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV todos for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the todo as well as more information about it.</p> <p>In addition you can automatically add and sync all uncompleted todos to your task backlog.</p><p>To make it work for nextcloud in the webapp, you might need to whitelist \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "ISSUE_CONTENT": {
         "DESCRIPTION": "Description",
@@ -117,9 +117,9 @@
         "SUMMARY": "Summary"
       },
       "S": {
-        "CALENDAR_NOT_FOUND": "CalDav: Calendar \"{{calendarName}}\" not found",
-        "CALENDAR_READ_ONLY": "CalDav: Calendar \"{{calendarName}}\" is readonly",
-        "ISSUE_NOT_FOUND": "CalDav: Todo \"{{issueId}}\" seems to be deleted on server."
+        "CALENDAR_NOT_FOUND": "CalDAV: Calendar \"{{calendarName}}\" not found",
+        "CALENDAR_READ_ONLY": "CalDAV: Calendar \"{{calendarName}}\" is readonly",
+        "ISSUE_NOT_FOUND": "CalDAV: Todo \"{{issueId}}\" seems to be deleted on server."
       }
     },
     "CALENDARS": {
@@ -146,10 +146,10 @@
     },
     "VOICE_REMINDER": {
       "FORM": {
-        "HELP": "Repeats the configured phrase every X when tracking time to a task.",
+        "HELP": "Repeats the configured phrase every X when tracking time for a task.",
         "L_INTERVAL": "Interval to repeat phrase",
         "L_TEXT": "Text",
-        "L_TEXT_DESCRIPTION": "E.g.: \"Work on ${currentTaskTitle}!\"",
+        "L_TEXT_DESCRIPTION": "e.g. \"Work on ${currentTaskTitle}!\"",
         "L_VOICE": "Select a Voice",
         "L_VOICE_DESCRIPTION": "Choose a voice",
         "TITLE": "Voice Reminder"
@@ -166,32 +166,32 @@
       "A_HOW": "How and where to rate",
       "BTN_DONT_BOTHER": "Don't bother me again",
       "TITLE": "🙈 Please forgive us, but...",
-      "TXT": "You would help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
+      "TXT": "You will help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} done tasks in your today list not yet moved to the archive. Do you really want to quit without finishing your day?"
+        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} completed tasks in your Today list not yet moved to the archive. Do you really want to quit without finishing your day?"
       }
     },
     "FOCUS_MODE": {
       "ADD_TIME_MINUTE": "Add 1 minute",
       "B": {
         "BREAK_RUNNING": "Break is running",
-        "END_FOCUS_SESSION": "End Focus Session",
+        "END_FOCUS_SESSION": "End focus session",
         "END_SESSION": "End session",
         "PAUSE": "Pause",
         "POMODORO_BREAK_RUNNING": "Break #{{cycleNr}} is running",
-        "POMODORO_SESSION_RUNNING": "Pomodoro Session #{{cycleNr}} is running",
+        "POMODORO_SESSION_RUNNING": "Pomodoro session #{{cycleNr}} is running",
         "RESUME": "Resume",
-        "SESSION_RUNNING": "Focus Session is running",
+        "SESSION_RUNNING": "Focus session is running",
         "START": "Start",
-        "TO_FOCUS_OVERLAY": "To Focus Overlay"
+        "TO_FOCUS_OVERLAY": "To focus overlay"
       },
       "BACK_TO_PLANNING": "Back to Planning",
       "BREAK_RELAX_MSG": "Take a moment to relax",
       "CLICK_TO_EDIT_DURATION": "Click to edit duration",
       "COMPLETE_FOCUS_SESSION": "Complete focus session",
-      "CONTINUE_TO_NEXT_SESSION": "Continue to next Session",
+      "CONTINUE_TO_NEXT_SESSION": "Continue to next session",
       "COUNTDOWN": "Countdown",
       "COUNTDOWN_HINT": "Focus until the clock hits zero",
       "FINISH_TASK_AND_SELECT_NEXT": "Finish task and select next",
@@ -204,18 +204,18 @@
       "LONG_BREAK": "Long Break",
       "LONG_BREAK_TITLE": "Long Break - Cycle {{cycle}}",
       "ON": "on",
-      "OPEN_ISSUE_IN_BROWSER": "Open issue in Browser",
+      "OPEN_ISSUE_IN_BROWSER": "Open issue in web browser",
       "PAUSE_BREAK": "Pause break",
       "PAUSE_SESSION": "Pause session",
       "PAUSE_TRACKING": "Pause tracking",
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Pause tracking for current task",
       "POMODORO": "Pomodoro",
       "POMODORO_HINT": "Structured sprints with planned breaks",
-      "POMODORO_SESSION_COMPLETED": "Pomodoro Session Completed!",
-      "POMODORO_SETTINGS": "Pomodoro Settings",
+      "POMODORO_SESSION_COMPLETED": "Pomodoro session completed!",
+      "POMODORO_SETTINGS": "Pomodoro settings",
       "PREP_GET_MENTALLY_READY": "Get mentally ready to be focused and productive",
       "PREP_SIT_UPRIGHT": "Sit (or stand) upright",
-      "PREP_STRETCH": "Do some mild stretching",
+      "PREP_STRETCH": "Enjoy some mild stretching",
       "REMOVE_TIME_MINUTE": "Remove 1 minute",
       "RESUME_BREAK": "Resume break",
       "RESUME_SESSION": "Resume session",
@@ -223,22 +223,22 @@
       "SELECT_TASK": "Select Task to focus on",
       "SELECT_TASK_FIRST": "Select a task first to start tracking",
       "SELECT_TASK_TO_FOCUS": "Select Task to Focus",
-      "SESSION_COMPLETED": "Focus Session Completed!",
-      "SHORT_BREAK": "Short Break",
-      "SHORT_BREAK_TITLE": "Short Break - Cycle {{cycle}}",
+      "SESSION_COMPLETED": "Focus session completed!",
+      "SHORT_BREAK": "Short break",
+      "SHORT_BREAK_TITLE": "Short break - cycle {{cycle}}",
       "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Show/hide task notes and attachments",
-      "SKIP_BREAK": "Skip Break",
-      "START_BREAK": "Start Break",
+      "SKIP_BREAK": "Skip break",
+      "START_BREAK": "Start break",
       "START_FOCUS_SESSION": "Start focus session",
-      "START_NEXT_FOCUS_SESSION": "Start next Focus Session",
+      "START_NEXT_FOCUS_SESSION": "Start next focus session",
       "SWITCH_TASK": "Switch task",
       "WORKED_FOR": "You worked for"
     },
     "GITEA": {
       "FORM": {
-        "HOST": "Host (e.g.: https://try.gitea.io)",
+        "HOST": "Host (e.g. https://try.gitea.io)",
         "REPO_FULL_NAME": "Username or Organization name/project",
-        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
+        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL, when viewing the project in a web browser.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -246,7 +246,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and import all open issues.</p><p>To get by usage limits and to access you can provide a an access token."
+        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and import all open issues.</p><p>To get by usage limits and to access you can provide a an access token."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -268,7 +268,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p><p>To get by usage limits and to access you can provide a an access token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>More info about its scopes can be found here</a>."
+        "HELP": "<p>Here you can configure Super Productivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p><p>To get by usage limits and to access you can provide a an access token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>More info about its scopes can be found here</a>."
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -277,7 +277,7 @@
         "LABELS": "Labels",
         "LAST_COMMENT": "Last comment",
         "LOAD_ALL_COMMENTS": "Load all {{nr}} comments",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Load description & all comments",
+        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Load description and all comments",
         "MARK_AS_CHECKED": "Mark updates as checked",
         "STATUS": "Status",
         "SUMMARY": "Summary",
@@ -285,7 +285,7 @@
       },
       "S": {
         "CONFIG_ERROR": "GitHub: Error while mapping data. Is your repository name correct?",
-        "ERR_UNKNOWN": "GitHub: Unknown error {{statusCode}} {{errorMsg}}. Api Rate limit exceeded?"
+        "ERR_UNKNOWN": "GitHub: Unknown error {{statusCode}} {{errorMsg}}. API rate limit exceeded?"
       }
     },
     "GITLAB": {
@@ -299,7 +299,7 @@
       },
       "FORM": {
         "FILTER": "Custom Filter",
-        "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined by &",
+        "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined with &",
         "FILTER_USER": "Filter username",
         "GITLAB_BASE_URL": "Custom GitLab base URL (optional)",
         "PROJECT": "user name/project",
@@ -312,12 +312,12 @@
         "SOURCE_GLOBAL": "All",
         "SOURCE_GROUP": "Group",
         "SOURCE_PROJECT": "Project",
-        "SUBMIT_TIMELOGS": "Submit timelogs to Gitlab",
+        "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
         "SUBMIT_TIMELOGS_DESCRIPTION": "Show Time Tracking Dialog after clicking on finish day",
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p>"
+        "HELP": "<p>Here you can configure Super Productivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -335,7 +335,7 @@
       }
     },
     "ISSUE": {
-      "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your browser. Please download the Desktop or Android version of Super Productivity!",
+      "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your web browser. Please download the Desktop or Android version of Super Productivity!",
       "DEFAULT": {
         "ISSUES_STR": "issues",
         "ISSUE_STR": "issue"
@@ -384,12 +384,12 @@
     },
     "ISSUE_PANEL": {
       "CALENDAR_AGENDA": {
-        "OFFLINE_BANNER_MSG": "Showing cached calendar results. Data might be outdated."
+        "OFFLINE_BANNER_MSG": "Showing cached calendar results. Data may be outdated."
       }
     },
     "JIRA": {
       "BANNER": {
-        "BLOCK_ACCESS_MSG": "Jira: To prevent shut out from api, access has been blocked by Super Productivity. You probably should check your jira settings!",
+        "BLOCK_ACCESS_MSG": "Jira: To prevent API lock out, access has been blocked by Super Productivity. You probably should check your Jira settings!",
         "BLOCK_ACCESS_UNBLOCK": "Unblock"
       },
       "CFG_CMP": {
@@ -401,7 +401,7 @@
         "IN_PROGRESS": "Status for starting task",
         "LOAD_SUGGESTIONS": "Load Suggestions",
         "MAP_CUSTOM_FIELDS": "Load Story Points",
-        "MAP_CUSTOM_FIELDS_INFO": "Unfortunately some of Jira's data is saved under custom fields which are different for every installation. If you want to include this data you need to select the proper custom field for it. Currently there is only the story points field that needs to be mapped.",
+        "MAP_CUSTOM_FIELDS_INFO": "Unfortunately some of Jira's data is saved under custom fields which are different for every installation. To include this data, you need to select the proper custom field for it. Currently there is only the story points field that needs to be mapped.",
         "OPEN": "Status for pausing task",
         "SELECT_ISSUE_FOR_TRANSITIONS": "Select issue to load available transitions",
         "STORY_POINTS": "Story Points Field Name",
@@ -451,7 +451,7 @@
       },
       "FORM_CRED": {
         "ALLOW_SELF_SIGNED": "Allow self signed certificate",
-        "HOST": "Host (e.g.: http://my-host.de:1234)",
+        "HOST": "Host (e.g. https://my-host.de:1234)",
         "PASSWORD": "Token / Password",
         "USER_NAME": "Email / Username",
         "USE_PAT": "Use Personal Access Token instead (LEGACY)",
@@ -465,8 +465,8 @@
           "H3": "Default transitions",
           "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please not that newer versions of Jira sometimes only work with the token. ",
           "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "You can also configure, if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
-          "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made if you're currently assigned to that ticket on Jira, if not an Dialog appears in which you can chose to assign the ticket to yourself.",
+          "P1_3": "You can also configure if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
+          "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made to ensure you're currently assigned to that ticket on Jira. If not, a dialog appears in which you can chose to assign the ticket to yourself.",
           "P2_1": "There are several options to determine when and how you want to submit a worklog. Enabling <em>'Open worklog dialog for adding a worklog to Jira when task is done'</em> opens a dialog to add an worklog every time you mark a Jira Task as done. So keep in mind that worklogs will be added on top of everything tracked so far. So if you mark a task as done for a second time, you might not want to submit the complete worked time for the task again.",
           "P2_2": "<em>'Open worklog dialog when sub task is done and not for tasks with sub tasks themselves'</em> opens a worklog dialog every time when you mark a sub task of a Jira issue as done. Because you already track your time via the sub tasks, no dialog is opened once you mark the Jira task itself as done.",
           "P2_3": "<em>'Send updates to worklog automatically without dialog'</em> does what it says. Because marking a task as done several times leads to the whole worked time being tracked twice, this is not recommended.",
@@ -497,7 +497,7 @@
         "EXTENSION_NOT_LOADED": "Super Productivity Extension not loaded. Reloading the page might help",
         "INSUFFICIENT_SETTINGS": "Insufficient Settings provided for Jira",
         "INVALID_RESPONSE": "Jira: Response contained invalid data",
-        "NO_AUTO_IMPORT_JQL": "Jira: No search query defined for auto import",
+        "NO_AUTO_IMPORT_JQL": "Jira: No search query defined for auto-import",
         "NO_VALID_TRANSITION": "Jira: No valid transition configured",
         "TIMED_OUT": "Jira: Request timed out",
         "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
@@ -514,11 +514,11 @@
       }
     },
     "MARKDOWN_PASTE": {
-      "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted markdown list to the notes of sub-task \"{{parentTaskTitle}}\"?",
+      "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted markdown list to the notes of subtask \"{{parentTaskTitle}}\"?",
       "CONFIRM_PARENT_TASKS": "Create <strong>{{tasksCount}} new tasks</strong> from the pasted markdown list?",
-      "CONFIRM_PARENT_TASKS_WITH_SUBS": "Create <strong>{{tasksCount}} new tasks and {{subTasksCount}} sub-tasks</strong> from the pasted markdown list?",
-      "CONFIRM_SUB_TASKS": "Create {{tasksCount}} new sub-tasks from the pasted markdown list?",
-      "CONFIRM_SUB_TASKS_WITH_PARENT": "Create <strong>{{tasksCount}} new sub-tasks under \"{{parentTaskTitle}}\"</strong> from the pasted markdown list?",
+      "CONFIRM_PARENT_TASKS_WITH_SUBS": "Create <strong>{{tasksCount}} new tasks and {{subTasksCount}} subtasks</strong> from the pasted markdown list?",
+      "CONFIRM_SUB_TASKS": "Create {{tasksCount}} new subtasks from the pasted markdown list?",
+      "CONFIRM_SUB_TASKS_WITH_PARENT": "Create <strong>{{tasksCount}} new subtasks under \"{{parentTaskTitle}}\"</strong> from the pasted markdown list?",
       "DIALOG_TITLE": "Pasted Markdown List detected!"
     },
     "METRIC": {
@@ -551,7 +551,7 @@
         "DAILY_STATE_TOOLTIP": "Quadrant system based on both scores (≥50 is high): Deep Flow (high/high), Overdrive (high/low), Recovery (low/high), Drift (low/low)",
         "ENERGY_LEVEL": "How's your energy?",
         "ENERGY_LEVEL_HINT": "😫 Exhausted – 😐 OK – 😊 Good",
-        "FOCUS_WORK_TIME": "Focussed work time",
+        "FOCUS_WORK_TIME": "Focused work time",
         "IMPACT_OF_WORK": "How do you rate the impact of your work today?",
         "IMPACT_OF_WORK_HINT": "1: No meaningful progress – 4: Significant impact",
         "NOTES": "",
@@ -645,7 +645,7 @@
         "ALWAYS_ASK": "Always open dialog",
         "DONE": "Status for completing task",
         "DO_NOT": "Don't transition",
-        "ENABLE": "Enable Openproject integration",
+        "ENABLE": "Enable OpenProject integration",
         "ENABLE_TRANSITIONS": "Enable Transition Handling",
         "IN_PROGRESS": "Status for starting task",
         "OPEN": "Status for pausing task",
@@ -673,12 +673,12 @@
       },
       "FORM": {
         "FILTER_USER": "Filter username",
-        "HOST": "Host (e.g.: https://www.openproject.org/)",
+        "HOST": "Host (e.g. https://www.openproject.org/)",
         "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to OpenProject",
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for OpenProject project",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when sub tasks are completed",
         "PROJECT_ID": "Project ID",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
+        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL, when viewing the project in the web browser.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -686,7 +686,7 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open OpenProject work packages. Please Note that for this to work in the browser you need to probably configure CORS for your OpenProject server, to allow access from app.super-productivity.com</p>"
+        "HELP": "<p>Here you can configure Super Productivity to list open OpenProject work packages. Please note that for this to work in the web browser you need to probably configure CORS for your OpenProject server to allow access from app.super-productivity.com</p>"
       },
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -734,7 +734,7 @@
     "PROJECT": {
       "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
         "CANCEL": "Cancel",
-        "MSG": "This project is quite large and might take a while to duplicate. Do you want to proceed?",
+        "MSG": "This project is quite large and may take a while to duplicate. Do you want to proceed?",
         "OK": "Duplicate Anyway",
         "TITLE": "Duplicate Project?"
       },
@@ -753,15 +753,15 @@
       },
       "FORM_THEME": {
         "HELP": "Theme settings for your project.",
-        "L_BACKGROUND_IMAGE_DARK": "Background Image Url (Dark Theme)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Background Image Url (Light Theme)",
+        "L_BACKGROUND_IMAGE_DARK": "Background Image URL (Dark Theme)",
+        "L_BACKGROUND_IMAGE_LIGHT": "Background Image URL (Light Theme)",
         "L_COLOR_ACCENT": "Accent Color",
         "L_COLOR_PRIMARY": "Primary Color",
         "L_COLOR_WARN": "Warn/Error Color",
         "L_HUE_ACCENT": "Threshold for dark text on accent color background",
         "L_HUE_PRIMARY": "Threshold for dark text on primary color background",
         "L_HUE_WARN": "Threshold for dark text on warn color background",
-        "L_IS_AUTO_CONTRAST": "Auto set text colors for best readability",
+        "L_IS_AUTO_CONTRAST": "Auto-set text colors for best readability",
         "L_IS_DISABLE_BACKGROUND_TINT": "Disable colored background tint",
         "L_THEME_COLOR": "Theme Color",
         "TITLE": "Theme"
@@ -801,16 +801,16 @@
     "REDMINE": {
       "FORM": {
         "API_KEY": "API access key",
-        "HOST": "Host (e.g.: https://redmine.org)",
+        "HOST": "Host (e.g. https://redmine.org)",
         "PROJECT_ID": "Project Identifier",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
+        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL, when viewing the project in a web browser.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
         "SCOPE_CREATED": "Created by me"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>",
+        "HELP": "<p>Here you can configure Super Productivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>",
         "TITLE": "Redmine"
       },
       "ISSUE_CONTENT": {
@@ -1046,7 +1046,7 @@
           "ITEM_1": "All sync history and backups on the server will be permanently deleted",
           "ITEM_2": "Your imported data will be uploaded with the new encryption settings",
           "ITEM_3": "All other devices must sync and update their encryption settings to match",
-          "NOTE_ENABLING": "Important: Encryption requires a password. If you forget this password, your data CANNOT be recovered.",
+          "NOTE_ENABLING": "Important: Encryption requires a password. If you forget this password, your data CANNOT be recovered!",
           "NOTE_DISABLING": "Important: Without encryption, anyone with access to your sync server can read your data.",
           "NOTE": "Your local data will be replaced with the imported data regardless of this choice.",
           "BTN_CONTINUE": "Import and Change Encryption"
@@ -1055,16 +1055,16 @@
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",
         "L_ENABLE_SYNCING": "Enable Syncing",
         "L_ENCRYPTION_NOTES": "IMPORTANT NOTES: You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please also note that <strong>you will NOT be able to access your data, if you forget this password. There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart of most attackers, but <strong>there is no guarantee.</strong>",
-        "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET)",
+        "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET!)",
         "L_SYNC_INTERVAL": "Sync Interval",
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
         "L_SYNC_PROVIDER": "Sync Provider",
         "TITLE": "Sync",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Making it work in the browser:</strong> To make this work in the browser you need to whitelist Super Productivity for CORS requests for your webdav server. This can have negative security implications! For nextcloud please <a href='https://github.com/nextcloud/server/issues/3131'>refer to this thread for more information</a>. One approach to make this work on mobile is whitelisting \"https://app.super-productivity.com\" via the nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
-          "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g., '/super-productivity' or '/'). This is NOT your server's internal directory path.",
+          "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
           "INFO": "WebDAV implementations differ wildly unfortunately. Super Productivity is known to work well with Nextcloud, <strong>but it might not work with your provider</strong>.",
-          "L_BASE_URL": "Base Url",
+          "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
           "L_TEST_CONNECTION": "Test Connection",
@@ -1213,7 +1213,7 @@
         "ADD_ATTACHMENT": "Add attachment",
         "ADD_SUB_TASK": "Add Sub Task",
         "ATTACHMENTS": "Attachments ({{nr}})",
-        "DUE": "Planned at",
+        "DUE": "Planned for",
         "FROM_PARENT": "(from Parent)",
         "LOCAL_ATTACHMENTS": "Local Attachments",
         "NOTES": "Description",
@@ -1251,7 +1251,7 @@
       },
       "B": {
         "ADD_HALF_HOUR": "Add 1/2 hour",
-        "ESTIMATE_EXCEEDED": "Time estimate exceeded for  \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "Time estimate exceeded for \"{{title}}\""
       },
       "CMP": {
         "ADD_SUB_TASK": "Add sub task",
@@ -1423,7 +1423,7 @@
         "ADD": "Add Repeat Task Config",
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Repeat Task Config",
-        "HELP1": "Repeating tasks are meant for daily chores, e.g.: \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
+        "HELP1": "Repeating tasks are meant for daily chores, e.g. \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
         "HELP2": "Once configured a repeating task will be recreated on every day selected below as soon as you open your project and will be automatically marked as completed at the end of the day. They will be handled as different instances. So you can freely add sub tasks etc.",
         "HELP3": "Tasks imported from Jira or Git Issues cannot be repeated.",
         "HELP4": "A note about the order field: Referring to the creation order repeatable tasks. Only in effect for repeatable tasks that are created at the same time. A lower value means a task will be higher up the list, a higher number that it will be further down. A value greater than 0 means items are created at the bottom of normal tasks.",
@@ -1525,7 +1525,7 @@
         "RESET_BREAK_REMINDER_TIMER": "Reset break reminder timer",
         "SIMPLE_CONFIRM_COUNTER_CANCEL": "Skip",
         "SIMPLE_CONFIRM_COUNTER_OK": "Track",
-        "SIMPLE_COUNTER_CONFIRM_TXT": "You selected skip, but activated {{nr}} simple counter button(s). Do you want to track the idle time to them?",
+        "SIMPLE_COUNTER_CONFIRM_TXT": "You selected skip, but activated {{nr}} simple counter button(s). Do you want to track the idle time for them?",
         "SIMPLE_COUNTER_TOOLTIP": "Click to track to {{title}}",
         "SIMPLE_COUNTER_TOOLTIP_DISABLE": "Click to NOT track to {{title}}",
         "SKIP": "Skip",
@@ -1626,7 +1626,7 @@
     "EXPORT_DATA": "Export Data",
     "IMPORT_FROM_FILE": "Import from file",
     "IMPORT_FROM_URL": "Import from URL",
-    "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file you want to import.",
+    "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file to import.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Import from URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Import from URL",
     "PRIVACY_EXPORT": "Export anonymized data (to send to contact@super-productivity.com for debugging)",
@@ -1665,9 +1665,9 @@
     "EDIT": "Edit",
     "ENABLED": "Enabled",
     "EXAMPLE_VAL": "e.g. 32m",
-    "EXTENSION_INFO": "Please <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> download the chrome extension</a> in order to allow communication with the Jira Api and Idle Time Handling. Note that this doesn't work for mobile. <strong>Without the extension the features will not work!!</strong>",
+    "EXTENSION_INFO": "Please <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> download the Chrome extension</a> to allow communication with the Jira API and Idle Time Handling. Note that this doesn't work for mobile. <strong>Without the extension, the features will not work!</strong>",
     "HIDE": "Hide",
-    "ICON_INP_DESCRIPTION": "All utf-8 emojis are also supported!",
+    "ICON_INP_DESCRIPTION": "All UTF-8 emojis are also supported!",
     "INBOX_PROJECT_TITLE": "Inbox",
     "MINUTES": "{{m}} minutes",
     "MOVE_BACKWARD": "Move Backward",
@@ -1683,7 +1683,7 @@
     "SUBMIT": "Submit",
     "TITLE": "Title",
     "TODAY_TAG_TITLE": "Today",
-    "TRACKING_INTERVAL_DESCRIPTION": "Track time using this interval in milliseconds. You might want to change this to reduce disk writes. See issue #2355.",
+    "TRACKING_INTERVAL_DESCRIPTION": "Track time using this interval in milliseconds. You might want to change this to reduce disk writes. See GitHub issue #2355.",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "Without Project",
     "YESTERDAY": "Yesterday"
@@ -1703,17 +1703,17 @@
       "TIME_TRACKING": "Stopwatch Time Tracking",
       "TITLE": "App Features",
       "USER_PROFILES": "User profiles (Experimental)",
-      "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data (Experimental feature, no guarantees. Make sure to have a backup)."
+      "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature, no guarantees. Make sure to have a backup!)"
     },
     "AUTO_BACKUPS": {
-      "HELP": "Auto save all data to your app folder in order to have it ready in case something goes wrong.",
+      "HELP": "Auto-save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LOCATION_INFO": "Backups are saved to:",
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {
-      "BROWSER_WARNING": "Due to cross origin restrictions <b>this will likely NOT work with the Browser version of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
-      "CAL_PATH": "Url of the iCal source",
+      "BROWSER_WARNING": "Due to cross-origin restrictions <b>this will likely NOT work with the web browser version of Super Productivity.<br /> Please <a href=\"https://super-productivity.com/download/\">download the desktop version</a> to use this feature!</b>",
+      "CAL_PATH": "URL of the iCal source",
       "CHECK_UPDATES": "Check for remote updates every X",
       "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
@@ -1723,7 +1723,7 @@
       "TITLE": "Evaluation & Metrics"
     },
     "FOCUS_MODE": {
-      "HELP": "Focus Mode opens up a distraction free screen to help you focus on your current task.",
+      "HELP": "Focus Mode opens up a distraction-free screen to help you focus on your current task.",
       "L_IS_PLAY_TICK": "Play ticking sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
@@ -1733,14 +1733,14 @@
       "TITLE": "Focus Mode"
     },
     "IDLE": {
-      "HELP": "<div><p>When idle time handling is enabled a dialog will open after a specified amount of time to check if and on which task you want to track your time, when you have been idle.</p></div>",
+      "HELP": "<div><p>When idle time handling is enabled, a dialog will open after a specified amount of time to check if - and on which - task you want to track your time when you have been idle.</p></div>",
       "IS_ENABLE_IDLE_TIME_TRACKING": "Enable idle time handling",
       "IS_ONLY_OPEN_IDLE_WHEN_CURRENT_TASK": "Only trigger idle time dialog when a current task is selected",
       "MIN_IDLE_TIME": "Trigger idle after X",
       "TITLE": "Idle Handling"
     },
     "IMEX": {
-      "HELP": "<p>Here you can export all your data as a <strong>JSON</strong> for backups, but also to use it in a different context (e.g. you might want to export your projects in the browser and import them into the desktop version). </p> <p>The import expects valid JSON to be copied into the text area. <strong>NOTE: Once you hit the import button all your current settings and data will be overwritten!</strong></p>",
+      "HELP": "<p>Here you can export all your data as <strong>JSON</strong> for backups, but also to use it in a different context (e.g. you might want to export your projects in the browser version and import them into the desktop version). </p> <p>The import expects valid JSON to be copied into the text area. <strong>NOTE: Once you hit the import button all your current settings and data will be overwritten!</strong></p>",
       "TITLE": "Import/Export"
     },
     "KEYBOARD": {
@@ -1825,7 +1825,7 @@
       "TIME_LOCALE": "Datetime format locale",
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "NOTE: now this options can not change time input format (12/24 hour) because it is controlled by your OS",
+      "TIME_LOCALE_DESCRIPTION": "NOTE: now this option cannot change time input format (12/24 hour) because it is controlled by your OS",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",
@@ -1934,7 +1934,7 @@
       "IS_LOCK_SCREEN": "Lock screen when a break is due (desktop only)",
       "MESSAGE": "Take a break message",
       "MIN_WORKING_TIME": "Trigger take a break notification after X working without taking a break",
-      "MOTIVATIONAL_IMGS": "Motivational images (use web urls)",
+      "MOTIVATIONAL_IMGS": "Motivational images (use web URLs)",
       "NOTIFICATION_TITLE": "Take a break!",
       "SNOOZE_TIME": "Snooze time when prompted to take a break",
       "TITLE": "Break Reminder"
@@ -2111,7 +2111,7 @@
     "ROUND_UP_30M": "Round UP all tasks to 30 minutes",
     "ROUND_UP_5M": "Round UP all tasks to 5 minutes",
     "SAVE_AND_GO_HOME": "Finish the day",
-    "SAVE_AND_GO_HOME_TOOLTIP": "Move all done tasks to the archive (worklog) and optionally sync all data and close the app.",
+    "SAVE_AND_GO_HOME_TOOLTIP": "Move all completed tasks to the archive (worklog) and optionally sync all data and close the app.",
     "START_END": "Start – End",
     "SUMMARY_FOR": "Daily Summary for {{dayStr}}",
     "TASKS_COMPLETED": "Tasks Completed",
@@ -2138,7 +2138,7 @@
     "ELECTRON_API_NOT_AVAILABLE": "Electron API is not available",
     "ERROR": "Error",
     "ERROR_LOADING_PLUGIN": "Error loading plugin",
-    "EXPERIMENTAL_WARNING": "The plugin system is in an experimental stage and should be used with extreme caution.",
+    "EXPERIMENTAL_WARNING": "The plugin system is in an experimental stage and should be used with extreme caution!",
     "EXPERIMENTAL_WARNING_TITLE": "Experimental Feature - Security Warning",
     "FAILED_TO_CLEAR_CACHE": "Failed to clear plugin cache",
     "FAILED_TO_EXECUTE_SCRIPT": "Failed to execute Node.js script",
@@ -2180,7 +2180,7 @@
     "PLUGIN_JS_NOT_FOUND": "Plugin JavaScript file (plugin.js) not found in ZIP file",
     "PROJECT_DOES_NOT_EXIST": "Project does not exist",
     "PROJECT_NOT_FOUND": "Project '{{contextId}}' not found",
-    "RECOMMENDATION": "Only install plugins from trusted sources and review their code if possible. Always backup your data before installing new plugins.",
+    "RECOMMENDATION": "Only install plugins from trusted sources and review their code if possible. Always backup your data before installing new plugins!",
     "REMEMBER_CHOICE": "Remember my choice for this plugin",
     "REMOVE": "Remove",
     "RISK_DATA_ACCESS": "Plugins can read, modify, and delete ALL your tasks, projects, and personal data",
@@ -2274,31 +2274,31 @@
     "EXPORT_PROFILE": "Export Profile",
     "MANAGE_PROFILES": "Manage Profiles...",
     "PROFILE_NAME": "Profile Name",
-    "PROFILE_NAME_PLACEHOLDER": "e.g., Work, Personal",
+    "PROFILE_NAME_PLACEHOLDER": "e.g. Work, Personal",
     "RENAME": "Rename",
     "SAVE": "Save"
   },
   "V": {
     "E_DATETIME": "The entered value is not a datetime!",
     "E_DURATION": "Please enter a valid duration (e.g. 1h)",
-    "E_MAX": "Should not be bigger than {{val}}",
-    "E_MAX_LENGTH": "Should be max {{val}} characters long",
-    "E_MIN": "Should not be smaller than {{val}}",
-    "E_MIN_LENGTH": "Should be at least {{val}} characters long",
+    "E_MAX": "Must not be bigger than {{val}}",
+    "E_MAX_LENGTH": "Must be max {{val}} characters long",
+    "E_MIN": "Must not be smaller than {{val}}",
+    "E_MIN_LENGTH": "Must be at least {{val}} characters long",
     "E_REQUIRED": "This field is required"
   },
   "WW": {
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",
     "ADD_SOME_TASKS": "Add some tasks to plan your day!",
-    "DONE_TASKS": "Done Tasks",
-    "DONE_TASKS_IN_ARCHIVE": "There are currently no done tasks here, but there are some already archived.",
+    "DONE_TASKS": "Comleted Tasks",
+    "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
-    "FINISH_DAY_TOOLTIP": "Evaluate your day, move all done tasks to the archive (optionally) and/or plan your next day.",
+    "FINISH_DAY_TOOLTIP": "Evaluate your day, move all completed tasks to the archive (optionally) and/or plan your next day.",
     "LATER_TODAY": "Later Today",
     "MOVE_DONE_TO_ARCHIVE": "Move done to archive",
-    "NO_DONE_TASKS": "There are currently no done tasks",
+    "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASKS": "no tasks planned",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks done",
     "READY_TO_WORK": "Ready to work!",
