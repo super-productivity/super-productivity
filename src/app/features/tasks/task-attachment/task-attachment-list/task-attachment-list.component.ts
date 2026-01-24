@@ -94,43 +94,47 @@ export class TaskAttachmentListComponent {
       if (!attachments) return;
 
       attachments.forEach(async (att) => {
-        const urlsToResolve: string[] = [];
+        try {
+          const urlsToResolve: string[] = [];
 
-        if (att.path?.startsWith('indexeddb://clipboard-images/')) {
-          urlsToResolve.push(att.path);
-        }
-
-        const imgPath = att.originalImgPath || att.path;
-        if (
-          imgPath?.startsWith('indexeddb://clipboard-images/') &&
-          imgPath !== att.path
-        ) {
-          urlsToResolve.push(imgPath);
-        }
-
-        for (const url of urlsToResolve) {
-          // Mark as loading
-          this._loadingUrls.update((set) => {
-            const newSet = new Set(set);
-            newSet.add(url);
-            return newSet;
-          });
-
-          const resolved = await this._clipboardImageService.resolveUrl(url);
-          if (resolved) {
-            this._resolvedUrlsMap.update((map) => {
-              const newMap = new Map(map);
-              newMap.set(url, resolved);
-              return newMap;
-            });
+          if (att.path?.startsWith('indexeddb://clipboard-images/')) {
+            urlsToResolve.push(att.path);
           }
 
-          // Remove from loading
-          this._loadingUrls.update((set) => {
-            const newSet = new Set(set);
-            newSet.delete(url);
-            return newSet;
-          });
+          const imgPath = att.originalImgPath || att.path;
+          if (
+            imgPath?.startsWith('indexeddb://clipboard-images/') &&
+            imgPath !== att.path
+          ) {
+            urlsToResolve.push(imgPath);
+          }
+
+          for (const url of urlsToResolve) {
+            // Mark as loading
+            this._loadingUrls.update((set) => {
+              const newSet = new Set(set);
+              newSet.add(url);
+              return newSet;
+            });
+
+            const resolved = await this._clipboardImageService.resolveUrl(url);
+            if (resolved) {
+              this._resolvedUrlsMap.update((map) => {
+                const newMap = new Map(map);
+                newMap.set(url, resolved);
+                return newMap;
+              });
+            }
+
+            // Remove from loading
+            this._loadingUrls.update((set) => {
+              const newSet = new Set(set);
+              newSet.delete(url);
+              return newSet;
+            });
+          }
+        } catch (error) {
+          console.error('Error resolving clipboard image:', error);
         }
       });
     });
