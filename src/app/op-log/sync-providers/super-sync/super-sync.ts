@@ -1,4 +1,4 @@
-import { CapacitorHttp } from '@capacitor/core';
+import { CapacitorHttp, Capacitor } from '@capacitor/core';
 import { SyncProviderId } from '../provider.const';
 import {
   SyncProviderServiceInterface,
@@ -70,9 +70,13 @@ export class SuperSyncProvider
     return 'SuperSyncProvider';
   }
 
-  // Make IS_ANDROID_WEB_VIEW testable by using a getter that can be overridden
+  // Make platform checks testable by using getters that can be overridden
   protected get isAndroidWebView(): boolean {
     return IS_ANDROID_WEB_VIEW;
+  }
+
+  protected get isNativePlatform(): boolean {
+    return Capacitor.isNativePlatform();
   }
 
   async isReady(): Promise<boolean> {
@@ -150,10 +154,11 @@ export class SuperSyncProvider
       isCleanSlate,
     });
 
-    // On Android, use CapacitorHttp with base64-encoded gzip
-    // (Android WebView's fetch() corrupts binary Uint8Array bodies)
-    if (this.isAndroidWebView) {
-      return this._fetchApiCompressedAndroid<OpUploadResponse>(
+    // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
+    // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
+    // may have similar issues with binary request bodies in Capacitor context)
+    if (this.isAndroidWebView || this.isNativePlatform) {
+      return this._fetchApiCompressedNative<OpUploadResponse>(
         cfg,
         '/api/sync/ops',
         jsonPayload,
@@ -245,10 +250,11 @@ export class SuperSyncProvider
       isCleanSlate,
     });
 
-    // On Android, use CapacitorHttp with base64-encoded gzip
-    // (Android WebView's fetch() corrupts binary Uint8Array bodies)
-    if (this.isAndroidWebView) {
-      return this._fetchApiCompressedAndroid<SnapshotUploadResponse>(
+    // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
+    // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
+    // may have similar issues with binary request bodies in Capacitor context)
+    if (this.isAndroidWebView || this.isNativePlatform) {
+      return this._fetchApiCompressedNative<SnapshotUploadResponse>(
         cfg,
         '/api/sync/snapshot',
         jsonPayload,
@@ -423,6 +429,16 @@ export class SuperSyncProvider
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
+    // On native platforms (Android/iOS), use CapacitorHttp for consistent behavior
+    if (this.isAndroidWebView || this.isNativePlatform) {
+      return this._fetchApiNative<T>(
+        url,
+        options.method || 'GET',
+        sanitizedToken,
+        startTime,
+      );
+    }
+
     const headers = new Headers(options.headers as HeadersInit);
     headers.set('Content-Type', 'application/json');
     headers.set('Authorization', `Bearer ${sanitizedToken}`);
@@ -457,7 +473,7 @@ export class SuperSyncProvider
       const duration = Date.now() - startTime;
       if (duration > 30000) {
         SyncLog.warn(this.logLabel, `Slow SuperSync request detected`, {
-          path,
+          path: url,
           durationMs: duration,
           durationSec: (duration / 1000).toFixed(1),
         });
@@ -470,17 +486,73 @@ export class SuperSyncProvider
 
       if (error instanceof Error && error.name === 'AbortError') {
         SyncLog.error(this.logLabel, `SuperSync request timeout`, {
-          path,
+          path: url,
           durationMs: duration,
           timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
         });
         throw new Error(
-          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${path}`,
+          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${url}`,
         );
       }
 
       SyncLog.error(this.logLabel, `SuperSync request failed`, {
-        path,
+        path: url,
+        durationMs: duration,
+        error: (error as Error).message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp.
+   * This ensures consistent behavior across native platforms for non-compressed requests.
+   */
+  private async _fetchApiNative<T>(
+    url: string,
+    method: string,
+    sanitizedToken: string,
+    startTime: number,
+  ): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${sanitizedToken}`,
+    };
+    headers['Content-Type'] = 'application/json';
+
+    try {
+      const response = await CapacitorHttp.request({
+        url,
+        method,
+        headers,
+        connectTimeout: 10000, // 10s to establish connection
+        readTimeout: 75000, // 75s to match fetch timeout
+      });
+
+      if (response.status < 200 || response.status >= 300) {
+        const errorData =
+          typeof response.data === 'string'
+            ? response.data
+            : JSON.stringify(response.data);
+        // Check for auth failure FIRST before throwing generic error
+        this._checkHttpStatus(response.status, errorData);
+        throw new Error(`SuperSync API error: ${response.status} - ${errorData}`);
+      }
+
+      // Log slow requests
+      const duration = Date.now() - startTime;
+      if (duration > 30000) {
+        SyncLog.warn(this.logLabel, `Slow SuperSync request detected (native)`, {
+          url,
+          durationMs: duration,
+          durationSec: (duration / 1000).toFixed(1),
+        });
+      }
+
+      return response.data as T;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      SyncLog.error(this.logLabel, `SuperSync request failed (native)`, {
+        url,
         durationMs: duration,
         error: (error as Error).message,
       });
@@ -569,11 +641,12 @@ export class SuperSyncProvider
   }
 
   /**
-   * Sends a gzip-compressed request body from Android.
-   * Android WebView's fetch() corrupts binary Uint8Array bodies, so we use
-   * CapacitorHttp with base64-encoded gzip data instead.
+   * Sends a gzip-compressed request body from native platforms (Android/iOS).
+   * Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
+   * may have similar issues in Capacitor context. We use CapacitorHttp with
+   * base64-encoded gzip data instead.
    */
-  private async _fetchApiCompressedAndroid<T>(
+  private async _fetchApiCompressedNative<T>(
     cfg: SuperSyncPrivateCfg,
     path: string,
     jsonPayload: string,
@@ -584,7 +657,7 @@ export class SuperSyncProvider
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
-    SyncLog.debug(this.logLabel, '_fetchApiCompressedAndroid', {
+    SyncLog.debug(this.logLabel, '_fetchApiCompressedNative', {
       path,
       originalSize: jsonPayload.length,
       compressedBase64Size: base64Gzip.length,
@@ -604,7 +677,7 @@ export class SuperSyncProvider
         method: 'POST',
         headers,
         data: base64Gzip,
-        // Add timeout support for Android
+        // Add timeout support for native platforms
         connectTimeout: 10000, // 10s to establish connection
         readTimeout: 75000, // 75s to match fetch timeout
       });
@@ -622,7 +695,7 @@ export class SuperSyncProvider
       // Log slow requests
       const duration = Date.now() - startTime;
       if (duration > 30000) {
-        SyncLog.warn(this.logLabel, `Slow SuperSync request detected (Android)`, {
+        SyncLog.warn(this.logLabel, `Slow SuperSync request detected (native)`, {
           path,
           durationMs: duration,
           durationSec: (duration / 1000).toFixed(1),
@@ -632,7 +705,7 @@ export class SuperSyncProvider
       return response.data as T;
     } catch (error) {
       const duration = Date.now() - startTime;
-      SyncLog.error(this.logLabel, `SuperSync request failed (Android)`, {
+      SyncLog.error(this.logLabel, `SuperSync request failed (native)`, {
         path,
         durationMs: duration,
         error: (error as Error).message,
