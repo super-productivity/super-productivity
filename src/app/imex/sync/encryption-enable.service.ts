@@ -55,7 +55,10 @@ export class EncryptionEnableService {
 
     // Encrypt the snapshot payload
     SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
-    const encryptedPayload = await this._encryptionService.encryptPayload(state, encryptKey);
+    const encryptedPayload = await this._encryptionService.encryptPayload(
+      state,
+      encryptKey,
+    );
 
     // Upload encrypted snapshot
     SyncLog.normal(`${LOG_PREFIX}: Uploading encrypted snapshot...`);

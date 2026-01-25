@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { SnapshotUploadService, SnapshotUploadData } from './snapshot-upload.service';
+import { SnapshotUploadService } from './snapshot-upload.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
 import { VectorClockService } from '../../op-log/sync/vector-clock.service';
@@ -32,10 +32,14 @@ describe('SnapshotUploadService', () => {
       save: jasmine.createSpy('save').and.resolveTo(undefined),
     };
     // Mark as operation-sync capable
-    (mockSyncProvider as any).uploadOperations = jasmine.createSpy('uploadOperations');
-    (mockSyncProvider as any).downloadOperations = jasmine.createSpy('downloadOperations');
+    (mockSyncProvider as any).uploadOperations =
+      jasmine.createSpy('uploadOperations');
+    (mockSyncProvider as any).downloadOperations =
+      jasmine.createSpy('downloadOperations');
 
-    mockProviderManager = jasmine.createSpyObj('SyncProviderManager', ['getActiveProvider']);
+    mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
+      'getActiveProvider',
+    ]);
     mockProviderManager.getActiveProvider.and.returnValue(mockSyncProvider);
 
     mockStateSnapshotService = jasmine.createSpyObj('StateSnapshotService', [

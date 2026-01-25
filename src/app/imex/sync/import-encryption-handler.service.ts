@@ -118,8 +118,9 @@ export class ImportEncryptionHandlerService {
     try {
       snapshotData = await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
     } catch (validationError) {
-      const errorMessage =
-        validationError instanceof Error ? validationError.message : 'Provider validation failed';
+      const errorMessage = validationError instanceof Error
+        ? validationError.message
+        : 'Provider validation failed';
       return {
         encryptionStateChanged: false,
         serverDataDeleted: false,
@@ -150,7 +151,10 @@ export class ImportEncryptionHandlerService {
       // If encryption is enabled, manually encrypt the snapshot
       // (unlike other services, import handler encrypts explicitly)
       if (isEncryptionEnabled && newEncryptKey) {
-        snapshotPayload = await this._encryptionService.encryptPayload(state, newEncryptKey);
+        snapshotPayload = await this._encryptionService.encryptPayload(
+          state,
+          newEncryptKey,
+        );
       }
 
       // 4. Upload snapshot
