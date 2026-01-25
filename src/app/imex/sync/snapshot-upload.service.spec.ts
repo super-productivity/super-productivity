@@ -5,8 +5,10 @@ import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service
 import { VectorClockService } from '../../op-log/sync/vector-clock.service';
 import { CLIENT_ID_PROVIDER } from '../../op-log/util/client-id.provider';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
-import { OperationSyncCapable } from '../../op-log/sync/operation-sync.util';
-import { SyncProviderServiceInterface } from '../../op-log/sync-providers/provider.interface';
+import {
+  OperationSyncCapable,
+  SyncProviderServiceInterface,
+} from '../../op-log/sync-providers/provider.interface';
 
 describe('SnapshotUploadService', () => {
   let service: SnapshotUploadService;

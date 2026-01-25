@@ -1,23 +1,25 @@
 import { inject, Injectable } from '@angular/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
+import {
+  AppStateSnapshot,
+  StateSnapshotService,
+} from '../../op-log/backup/state-snapshot.service';
 import { VectorClockService } from '../../op-log/sync/vector-clock.service';
 import {
   CLIENT_ID_PROVIDER,
   ClientIdProvider,
 } from '../../op-log/util/client-id.provider';
-import {
-  isOperationSyncCapable,
-  OperationSyncCapable,
-} from '../../op-log/sync/operation-sync.util';
+import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
 import { uuidv7 } from '../../util/uuid-v7';
-import { SyncProviderServiceInterface } from '../../op-log/sync-providers/provider.interface';
-import { VectorClock } from '../../op-log/core/types/sync-operation.types';
-import { AppStateSnapshot } from '../../op-log/model/model-config';
+import {
+  OperationSyncCapable,
+  SyncProviderServiceInterface,
+} from '../../op-log/sync-providers/provider.interface';
+import { VectorClock } from '../../core/util/vector-clock';
 
 /**
  * Data gathered for a snapshot upload operation.
