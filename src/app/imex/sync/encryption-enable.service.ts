@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
+import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 
 const LOG_PREFIX = 'EncryptionEnableService';
 
@@ -19,6 +20,7 @@ const LOG_PREFIX = 'EncryptionEnableService';
 })
 export class EncryptionEnableService {
   private _snapshotUploadService = inject(SnapshotUploadService);
+  private _encryptionService = inject(OperationEncryptionService);
 
   /**
    * Enables encryption by deleting all server data
@@ -51,12 +53,16 @@ export class EncryptionEnableService {
       isEncryptionEnabled: true,
     } as SuperSyncPrivateCfg);
 
+    // Encrypt the snapshot payload
+    SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
+    const encryptedPayload = await this._encryptionService.encryptPayload(state, encryptKey);
+
     // Upload encrypted snapshot
     SyncLog.normal(`${LOG_PREFIX}: Uploading encrypted snapshot...`);
     try {
       const result = await this._snapshotUploadService.uploadSnapshot(
         syncProvider,
-        state,
+        encryptedPayload,
         clientId,
         vectorClock,
         true, // isPayloadEncrypted = true
