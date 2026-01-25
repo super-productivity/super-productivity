@@ -473,7 +473,7 @@ export class SuperSyncProvider
       const duration = Date.now() - startTime;
       if (duration > 30000) {
         SyncLog.warn(this.logLabel, `Slow SuperSync request detected`, {
-          path: url,
+          path,
           durationMs: duration,
           durationSec: (duration / 1000).toFixed(1),
         });
@@ -486,17 +486,17 @@ export class SuperSyncProvider
 
       if (error instanceof Error && error.name === 'AbortError') {
         SyncLog.error(this.logLabel, `SuperSync request timeout`, {
-          path: url,
+          path,
           durationMs: duration,
           timeoutMs: SUPERSYNC_REQUEST_TIMEOUT_MS,
         });
         throw new Error(
-          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${url}`,
+          `SuperSync request timeout after ${SUPERSYNC_REQUEST_TIMEOUT_MS / 1000}s: ${path}`,
         );
       }
 
       SyncLog.error(this.logLabel, `SuperSync request failed`, {
-        path: url,
+        path,
         durationMs: duration,
         error: (error as Error).message,
       });
