@@ -337,10 +337,10 @@ test.describe('@supersync Backup Recovery with Existing SYNC_IMPORT', () => {
       console.log(`[Backup Recovery] Client B worklog entries: ${worklogCountB}`);
 
       // CRITICAL ASSERTION: Client B should have archived task from backup import
-      expect(worklogCountB).toBeGreaterThan(
-        0,
+      expect(
+        worklogCountB,
         'Client B should have archived task entries from BACKUP_IMPORT',
-      );
+      ).toBeGreaterThan(0);
 
       console.log('[Backup Recovery] ✓ Backup recovery test PASSED!');
       console.log(

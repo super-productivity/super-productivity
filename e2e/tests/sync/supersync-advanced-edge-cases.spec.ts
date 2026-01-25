@@ -153,7 +153,7 @@ test.describe('@supersync SuperSync Advanced Edge Cases', () => {
       // Initial task should be marked as done
       // Use toPass() to handle Angular change detection lag for CSS class update
       await expect(async () => {
-        const initialTaskB = clientB.page.locator(
+        const initialTaskB = clientB!.page.locator(
           `task.isDone:has-text("${initialTask}")`,
         );
         await expect(initialTaskB).toBeVisible({ timeout: 2000 });

@@ -157,14 +157,12 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
       // Use waitForInitialSync: false because the sync will fail with a decrypt error
       // The sync is triggered automatically after saving the config
-      await clientC.sync.setupSuperSync(
-        {
-          ...baseConfig,
-          isEncryptionEnabled: true,
-          password: oldPassword, // Using OLD password!
-        },
-        false, // Don't wait for initial sync - it will fail
-      );
+      await clientC.sync.setupSuperSync({
+        ...baseConfig,
+        isEncryptionEnabled: true,
+        password: oldPassword, // Using OLD password!
+        waitForInitialSync: false, // Don't wait for initial sync - it will fail
+      });
 
       // The sync is triggered automatically after setupSuperSync saves the config.
       // Wait for the decrypt error dialog to appear (it should show automatically)

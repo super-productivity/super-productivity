@@ -213,10 +213,10 @@ test.describe('@supersync Server Migration Archive Sync', () => {
       // CRITICAL ASSERTION: Client B should have archived task entries
       // Before the fix: This would be 0 because SYNC_IMPORT had empty archives
       // After the fix: This should be > 0 because SYNC_IMPORT includes real archives
-      expect(worklogCountB).toBeGreaterThan(
-        0,
+      expect(
+        worklogCountB,
         'Client B should have archived task entries from server migration SYNC_IMPORT',
-      );
+      ).toBeGreaterThan(0);
 
       console.log('[Migration Archive] ✓ Server migration archive test PASSED!');
       console.log(

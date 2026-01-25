@@ -398,7 +398,7 @@ export class ProjectPage extends BasePage {
     }
 
     // Verify the project is found and click it
-    if (!projectFound) {
+    if (!projectFound || !newProject) {
       throw new Error(`Project "${projectName}" not found in navigation after creation`);
     }
 

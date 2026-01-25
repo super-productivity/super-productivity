@@ -145,7 +145,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         }
       });
 
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait for initial sync
+      await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false }); // Don't auto-wait for initial sync
 
       // Check for Angular conflict dialog or let sync complete
       const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
@@ -188,7 +188,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         );
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000 });
       console.log('[Test] Client B sync completed');
 
       // Navigate to B's project and verify data
@@ -310,7 +310,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         }
       });
 
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait
+      await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false }); // Don't auto-wait
 
       // Check for Angular conflict dialog
       const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
@@ -352,7 +352,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] No Angular conflict dialog - sync auto-resolved');
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000 });
       console.log('[Test] Client B sync completed');
 
       // Check which data Client B has - may have A's data or B's data depending on resolution
@@ -501,7 +501,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         }
       });
 
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait
+      await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false }); // Don't auto-wait
 
       // Check for Angular conflict dialog
       const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
@@ -535,7 +535,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] No Angular conflict dialog - sync auto-resolved');
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000 });
       console.log('[Test] Client B sync completed');
 
       // Navigate back to project and verify
@@ -581,7 +581,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] Client A did not see conflict dialog');
       }
 
-      await syncPageA.waitForSyncComplete();
+      await syncPageA.waitForSyncToComplete();
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
@@ -711,7 +711,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await workViewB.waitForTaskList();
 
       // Setup sync - fresh client downloads data
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait, we'll sync manually
+      await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false }); // Don't auto-wait, we'll sync manually
 
       // Trigger sync and wait for it to complete
       await syncPageB.triggerSync();

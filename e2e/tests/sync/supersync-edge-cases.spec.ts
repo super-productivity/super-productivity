@@ -1,3 +1,4 @@
+import { type Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/supersync.fixture';
 import {
   createTestUser,
@@ -383,7 +384,7 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       // 3. All 3 clients make concurrent changes (no syncs between)
       // Helper to mark task as done with retry for stability
       const markTaskDone = async (
-        page: typeof clientA.page,
+        page: Page,
         name: string,
         clientLabel: string,
       ): Promise<void> => {

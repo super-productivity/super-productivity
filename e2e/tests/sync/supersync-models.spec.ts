@@ -172,18 +172,18 @@ test.describe('@supersync SuperSync Models', () => {
       const dismissAllOverlays = async (): Promise<void> => {
         // Dismiss backdrops by pressing Escape multiple times
         for (let j = 0; j < 3; j++) {
-          await clientA.page.keyboard.press('Escape');
-          await clientA.page.waitForTimeout(100);
+          await clientA!.page.keyboard.press('Escape');
+          await clientA!.page.waitForTimeout(100);
         }
         // Wait for any overlays to disappear
-        const overlayBackdrop = clientA.page.locator('.cdk-overlay-backdrop');
+        const overlayBackdrop = clientA!.page.locator('.cdk-overlay-backdrop');
         try {
           await overlayBackdrop.waitFor({ state: 'hidden', timeout: 2000 });
         } catch {
           // If still visible, force click to dismiss
           if (await overlayBackdrop.isVisible()) {
             await overlayBackdrop.click({ force: true });
-            await clientA.page.waitForTimeout(200);
+            await clientA!.page.waitForTimeout(200);
           }
         }
       };
@@ -347,7 +347,7 @@ test.describe('@supersync SuperSync Models', () => {
         await projectBtnA.click({ force: true });
         await clientA.page.waitForLoadState('networkidle');
         const urlMatch = clientA.page.url().match(/project\/([^/?#]+)/);
-        projectId = urlMatch?.[1] || undefined;
+        projectId = urlMatch?.[1] || null;
       }
       if (!projectId) {
         throw new Error('Project id not found after creation');
@@ -503,7 +503,7 @@ test.describe('@supersync SuperSync Models', () => {
 
       // Use toPass() to make tag deletion more robust
       await expect(async () => {
-        const tagsTreeA = clientA.page
+        const tagsTreeA = clientA!.page
           .locator('nav-list-tree')
           .filter({ hasText: 'Tags' })
           .first();
@@ -515,7 +515,7 @@ test.describe('@supersync SuperSync Models', () => {
         const isExpanded = await expandBtnA.getAttribute('aria-expanded');
         if (isExpanded !== 'true') {
           await groupNavItemA.click();
-          await clientA.page.waitForTimeout(300);
+          await clientA!.page.waitForTimeout(300);
         }
 
         // Find the specific tag and right-click
@@ -527,7 +527,7 @@ test.describe('@supersync SuperSync Models', () => {
         await tagNavItem.click({ button: 'right' });
 
         // Click delete option in context menu
-        const deleteBtn = clientA.page
+        const deleteBtn = clientA!.page
           .locator('.mat-mdc-menu-panel button, .mat-mdc-menu-content button')
           .filter({ hasText: /delete/i })
           .first();
@@ -535,7 +535,7 @@ test.describe('@supersync SuperSync Models', () => {
         await deleteBtn.click();
 
         // Handle confirmation dialog
-        const confirmBtn = clientA.page
+        const confirmBtn = clientA!.page
           .locator('dialog-confirm button, mat-dialog-container button')
           .filter({ hasText: /ok|delete|confirm|yes/i })
           .first();

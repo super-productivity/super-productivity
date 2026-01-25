@@ -119,7 +119,7 @@ test.describe('@supersync SuperSync Encryption', () => {
       try {
         await clientC.sync.triggerSync();
         // It might not throw immediately if waitForSyncComplete handles the error state gracefully or we catch it
-        await clientC.sync.waitForSyncComplete();
+        await clientC.sync.waitForSyncToComplete();
       } catch (e) {
         // Expected error or timeout due to failure
         console.log('Sync failed as expected:', e);
@@ -134,9 +134,9 @@ test.describe('@supersync SuperSync Encryption', () => {
       // Silent decryption failure is unacceptable - wrong password MUST produce visible error
       // Use retry logic since error indicators may take a moment to appear under load
       await expect(async () => {
-        const hasError = await clientC.sync.hasSyncError();
+        const hasError = await clientC!.sync.hasSyncError();
         // App uses snack-custom component, not simple-snack-bar
-        const snackbar = clientC.page.locator(
+        const snackbar = clientC!.page.locator(
           'snack-custom:has-text("decrypt"), ' +
             'snack-custom:has-text("password"), ' +
             '.mat-mdc-snack-bar-container:has-text("decrypt"), ' +
