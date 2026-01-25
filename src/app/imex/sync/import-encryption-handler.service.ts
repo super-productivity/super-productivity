@@ -1,19 +1,11 @@
 import { inject, Injectable } from '@angular/core';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
-import { VectorClockService } from '../../op-log/sync/vector-clock.service';
-import {
-  CLIENT_ID_PROVIDER,
-  ClientIdProvider,
-} from '../../op-log/util/client-id.provider';
-import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
-import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
-import { uuidv7 } from '../../util/uuid-v7';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
+import { SnapshotUploadService } from './snapshot-upload.service';
 
 export interface EncryptionStateChangeResult {
   encryptionStateChanged: boolean;
@@ -21,6 +13,8 @@ export interface EncryptionStateChangeResult {
   snapshotUploaded: boolean;
   error?: string;
 }
+
+const LOG_PREFIX = 'ImportEncryptionHandlerService';
 
 /**
  * Service for handling encryption state changes during data import.
@@ -41,10 +35,8 @@ export interface EncryptionStateChangeResult {
 })
 export class ImportEncryptionHandlerService {
   private _providerManager = inject(SyncProviderManager);
-  private _stateSnapshotService = inject(StateSnapshotService);
-  private _vectorClockService = inject(VectorClockService);
-  private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _encryptionService = inject(OperationEncryptionService);
+  private _snapshotUploadService = inject(SnapshotUploadService);
 
   /**
    * Checks if the imported data has different encryption settings than
@@ -116,91 +108,72 @@ export class ImportEncryptionHandlerService {
     newEncryptKey: string | undefined,
     isEncryptionEnabled: boolean,
   ): Promise<EncryptionStateChangeResult> {
-    SyncLog.normal(
-      'ImportEncryptionHandlerService: Handling encryption state change...',
-      { isEncryptionEnabled, hasKey: !!newEncryptKey },
-    );
+    SyncLog.normal(`${LOG_PREFIX}: Handling encryption state change...`, {
+      isEncryptionEnabled,
+      hasKey: !!newEncryptKey,
+    });
 
-    const syncProvider = this._providerManager.getActiveProvider();
-    if (!syncProvider || syncProvider.id !== SyncProviderId.SuperSync) {
+    // Validate provider - use try/catch since this service returns results instead of throwing
+    let snapshotData;
+    try {
+      snapshotData = await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
+    } catch (validationError) {
+      const errorMessage =
+        validationError instanceof Error ? validationError.message : 'Provider validation failed';
       return {
         encryptionStateChanged: false,
         serverDataDeleted: false,
         snapshotUploaded: false,
-        error: 'Not using SuperSync provider',
+        error: errorMessage,
       };
     }
 
-    if (!isOperationSyncCapable(syncProvider)) {
-      return {
-        encryptionStateChanged: false,
-        serverDataDeleted: false,
-        snapshotUploaded: false,
-        error: 'Sync provider does not support operation sync',
-      };
-    }
+    const { syncProvider, existingCfg, state, vectorClock, clientId } = snapshotData;
 
     try {
       // 1. Delete all server data (encrypted ops can't mix with unencrypted)
-      SyncLog.normal('ImportEncryptionHandlerService: Deleting server data...');
+      SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
       await syncProvider.deleteAllData();
 
       // 2. Update sync provider config with new encryption settings BEFORE upload
-      SyncLog.normal('ImportEncryptionHandlerService: Updating provider config...');
-      const currentCfg =
-        (await syncProvider.privateCfg.load()) as SuperSyncPrivateCfg | null;
+      SyncLog.normal(`${LOG_PREFIX}: Updating provider config...`);
       await syncProvider.setPrivateCfg({
-        ...currentCfg,
+        ...existingCfg,
         encryptKey: isEncryptionEnabled ? newEncryptKey : undefined,
         isEncryptionEnabled,
       } as SuperSyncPrivateCfg);
 
-      // 3. Get current state snapshot
-      // IMPORTANT: Must use async version to load real archives from IndexedDB
-      // The sync getStateSnapshot() returns DEFAULT_ARCHIVE (empty) which causes data loss
-      const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
-      const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-      const clientId = await this._clientIdProvider.loadClientId();
+      // 3. Prepare snapshot payload (encrypt if needed)
+      SyncLog.normal(`${LOG_PREFIX}: Uploading fresh snapshot...`);
+      let snapshotPayload: unknown = state;
 
-      if (!clientId) {
-        throw new Error('Client ID not available');
-      }
-
-      // 4. Upload snapshot (encrypted or not based on new settings)
-      SyncLog.normal('ImportEncryptionHandlerService: Uploading fresh snapshot...');
-
-      let snapshotPayload: unknown = currentState;
-
-      // If encryption is enabled, encrypt the snapshot
+      // If encryption is enabled, manually encrypt the snapshot
+      // (unlike other services, import handler encrypts explicitly)
       if (isEncryptionEnabled && newEncryptKey) {
-        snapshotPayload = await this._encryptionService.encryptPayload(
-          currentState,
-          newEncryptKey,
-        );
+        snapshotPayload = await this._encryptionService.encryptPayload(state, newEncryptKey);
       }
 
-      const response = await syncProvider.uploadSnapshot(
+      // 4. Upload snapshot
+      const result = await this._snapshotUploadService.uploadSnapshot(
+        syncProvider,
         snapshotPayload,
         clientId,
-        'recovery', // Use recovery reason like password change
         vectorClock,
-        CURRENT_SCHEMA_VERSION,
-        isEncryptionEnabled && !!newEncryptKey, // isPayloadEncrypted
-        uuidv7(),
+        isEncryptionEnabled && !!newEncryptKey,
       );
 
-      if (!response.accepted) {
-        throw new Error(`Snapshot upload failed: ${response.error}`);
+      if (!result.accepted) {
+        throw new Error(`Snapshot upload failed: ${result.error}`);
       }
 
       // 5. Update lastServerSeq
-      if (response.serverSeq !== undefined) {
-        await syncProvider.setLastServerSeq(response.serverSeq);
-      }
-
-      SyncLog.normal(
-        'ImportEncryptionHandlerService: Encryption state change handled successfully!',
+      await this._snapshotUploadService.updateLastServerSeq(
+        syncProvider,
+        result.serverSeq,
+        LOG_PREFIX,
       );
+
+      SyncLog.normal(`${LOG_PREFIX}: Encryption state change handled successfully!`);
 
       return {
         encryptionStateChanged: true,
@@ -210,7 +183,7 @@ export class ImportEncryptionHandlerService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error occurred';
-      SyncLog.err('ImportEncryptionHandlerService: Failed to handle encryption change', {
+      SyncLog.err(`${LOG_PREFIX}: Failed to handle encryption change`, {
         error: errorMessage,
       });
 

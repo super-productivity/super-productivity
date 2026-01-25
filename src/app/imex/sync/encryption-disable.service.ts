@@ -1,17 +1,9 @@
 import { inject, Injectable } from '@angular/core';
-import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
-import { VectorClockService } from '../../op-log/sync/vector-clock.service';
-import {
-  CLIENT_ID_PROVIDER,
-  ClientIdProvider,
-} from '../../op-log/util/client-id.provider';
-import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
-import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
-import { CURRENT_SCHEMA_VERSION } from '../../op-log/persistence/schema-migration.service';
 import { SyncLog } from '../../core/log';
-import { uuidv7 } from '../../util/uuid-v7';
+import { SnapshotUploadService } from './snapshot-upload.service';
+
+const LOG_PREFIX = 'EncryptionDisableService';
 
 /**
  * Service for disabling encryption for SuperSync.
@@ -25,10 +17,7 @@ import { uuidv7 } from '../../util/uuid-v7';
   providedIn: 'root',
 })
 export class EncryptionDisableService {
-  private _providerManager = inject(SyncProviderManager);
-  private _stateSnapshotService = inject(StateSnapshotService);
-  private _vectorClockService = inject(VectorClockService);
-  private _clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
+  private _snapshotUploadService = inject(SnapshotUploadService);
 
   /**
    * Disables encryption by deleting all server data
@@ -37,82 +26,51 @@ export class EncryptionDisableService {
    * @throws Error if sync provider is not SuperSync or not ready
    */
   async disableEncryption(): Promise<void> {
-    SyncLog.normal('EncryptionDisableService: Starting encryption disable...');
+    SyncLog.normal(`${LOG_PREFIX}: Starting encryption disable...`);
 
-    // Get the sync provider
-    const syncProvider = this._providerManager.getActiveProvider();
-    if (!syncProvider) {
-      throw new Error('No active sync provider. Please enable sync first.');
-    }
-    if (syncProvider.id !== SyncProviderId.SuperSync) {
-      throw new Error(
-        `Disable encryption is only supported for SuperSync (current: ${syncProvider.id})`,
-      );
-    }
-
-    if (!isOperationSyncCapable(syncProvider)) {
-      throw new Error('Sync provider does not support operation sync');
-    }
-
-    // Get current config
-    const existingCfg =
-      (await syncProvider.privateCfg.load()) as SuperSyncPrivateCfg | null;
-
-    // Get current state
-    // IMPORTANT: Must use async version to load real archives from IndexedDB
-    // The sync getStateSnapshot() returns DEFAULT_ARCHIVE (empty) which causes data loss
-    SyncLog.normal('EncryptionDisableService: Getting current state...');
-    const currentState = await this._stateSnapshotService.getStateSnapshotAsync();
-    const vectorClock = await this._vectorClockService.getCurrentVectorClock();
-    const clientId = await this._clientIdProvider.loadClientId();
-    if (!clientId) {
-      throw new Error('Client ID not available');
-    }
+    // Gather all data needed for upload (validates provider)
+    const { syncProvider, existingCfg, state, vectorClock, clientId } =
+      await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
 
     // Delete all server data (encrypted ops can't be mixed with unencrypted)
-    SyncLog.normal('EncryptionDisableService: Deleting server data...');
+    SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
     await syncProvider.deleteAllData();
 
     // Upload unencrypted snapshot
-    SyncLog.normal('EncryptionDisableService: Uploading unencrypted snapshot...');
+    SyncLog.normal(`${LOG_PREFIX}: Uploading unencrypted snapshot...`);
     try {
-      const response = await syncProvider.uploadSnapshot(
-        currentState,
+      const result = await this._snapshotUploadService.uploadSnapshot(
+        syncProvider,
+        state,
         clientId,
-        'recovery',
         vectorClock,
-        CURRENT_SCHEMA_VERSION,
         false, // isPayloadEncrypted = false
-        uuidv7(), // opId - server must use this ID
       );
 
-      if (!response.accepted) {
-        throw new Error(`Snapshot upload failed: ${response.error}`);
+      if (!result.accepted) {
+        throw new Error(`Snapshot upload failed: ${result.error}`);
       }
 
-      // Update local config - disable encryption and clear the key
-      SyncLog.normal('EncryptionDisableService: Updating local config...');
+      // Update local config AFTER successful upload - disable encryption and clear the key
+      SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
       await syncProvider.setPrivateCfg({
         ...existingCfg,
         encryptKey: undefined,
         isEncryptionEnabled: false,
       } as SuperSyncPrivateCfg);
 
-      // Update lastServerSeq to the new snapshot's seq
-      if (response.serverSeq !== undefined) {
-        await syncProvider.setLastServerSeq(response.serverSeq);
-      } else {
-        SyncLog.err(
-          'EncryptionDisableService: Snapshot accepted but serverSeq is missing. ' +
-            'Sync state may be inconsistent - consider using "Sync Now" to verify.',
-        );
-      }
+      // Update lastServerSeq
+      await this._snapshotUploadService.updateLastServerSeq(
+        syncProvider,
+        result.serverSeq,
+        LOG_PREFIX,
+      );
 
-      SyncLog.normal('EncryptionDisableService: Encryption disabled successfully!');
+      SyncLog.normal(`${LOG_PREFIX}: Encryption disabled successfully!`);
     } catch (uploadError) {
       // CRITICAL: Server data was deleted but new snapshot failed to upload.
       SyncLog.err(
-        'EncryptionDisableService: Snapshot upload failed after deleting server data!',
+        `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
         uploadError,
       );
 
