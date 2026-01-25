@@ -48,3 +48,7 @@ The above will display the English text for `SOME_KEY`.
 - Use `en.json` as reference for context
 - Keep translations concise (UI space is limited)
 - Test your translations locally if possible (`ng serve`)
+
+## Translation Management Script
+
+For managing missing translations and maintaining consistency, use the `tools/add-missing-i18n-variables.js` script. See [i18n-script-usage.md](i18n-script-usage.md) for detailed instructions.
