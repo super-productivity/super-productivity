@@ -28,15 +28,12 @@ describe('SnapshotUploadService', () => {
       'setPrivateCfg',
     ]);
     mockSyncProvider.id = SyncProviderId.SuperSync;
-    mockSyncProvider.isReady = true;
+    mockSyncProvider.isReady = jasmine.createSpy('isReady').and.resolveTo(true);
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(null),
-      save: jasmine.createSpy('save').and.resolveTo(undefined),
-    };
-    // Mark as operation-sync capable
-    (mockSyncProvider as any).uploadOperations = jasmine.createSpy('uploadOperations');
-    (mockSyncProvider as any).downloadOperations =
-      jasmine.createSpy('downloadOperations');
+    } as any;
+    // Mark as operation-sync capable (isOperationSyncCapable checks for this property)
+    (mockSyncProvider as any).supportsOperationSync = true;
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',
@@ -79,7 +76,7 @@ describe('SnapshotUploadService', () => {
     it('should throw when no active provider', () => {
       mockProviderManager.getActiveProvider.and.returnValue(null);
       expect(() => service.getValidatedSuperSyncProvider()).toThrowError(
-        'No active sync provider',
+        /No active sync provider/,
       );
     });
 
@@ -91,7 +88,7 @@ describe('SnapshotUploadService', () => {
     });
 
     it('should throw when provider is not operation-sync capable', () => {
-      delete (mockSyncProvider as any).uploadOperations;
+      (mockSyncProvider as any).supportsOperationSync = false;
       expect(() => service.getValidatedSuperSyncProvider()).toThrowError(
         /does not support operation sync/,
       );
