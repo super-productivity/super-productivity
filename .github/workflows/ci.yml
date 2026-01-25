@@ -16,9 +16,11 @@ permissions:
 jobs:
   # This job will scan dependency manifest files
   # surfacing known-vulnerable versions of the packages declared or updated.
+  # Only runs on pull_request events as the action requires base/head refs
   dependency-vulnerability-review:
     name: Dependency Vulnerability Review
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - name: 'Checkout Repository'
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -52,6 +54,7 @@ jobs:
     name: Tests
     runs-on: ubuntu-latest
     needs: [lint, dependency-vulnerability-review]
+    if: ${{ !cancelled() && !failure() }}
     steps:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
