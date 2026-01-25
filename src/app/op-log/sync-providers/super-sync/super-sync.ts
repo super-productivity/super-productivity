@@ -70,13 +70,10 @@ export class SuperSyncProvider
     return 'SuperSyncProvider';
   }
 
-  // Make platform checks testable by using getters that can be overridden
-  protected get isAndroidWebView(): boolean {
-    return IS_ANDROID_WEB_VIEW;
-  }
-
+  // Make platform check testable by using a getter that can be overridden
   protected get isNativePlatform(): boolean {
-    return Capacitor.isNativePlatform();
+    // Combines modern Capacitor native (iOS/Android) with legacy Android WebView
+    return Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW;
   }
 
   async isReady(): Promise<boolean> {
@@ -157,7 +154,7 @@ export class SuperSyncProvider
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
     // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
     // may have similar issues with binary request bodies in Capacitor context)
-    if (this.isAndroidWebView || this.isNativePlatform) {
+    if (this.isNativePlatform) {
       return this._fetchApiCompressedNative<OpUploadResponse>(
         cfg,
         '/api/sync/ops',
@@ -253,7 +250,7 @@ export class SuperSyncProvider
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip
     // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
     // may have similar issues with binary request bodies in Capacitor context)
-    if (this.isAndroidWebView || this.isNativePlatform) {
+    if (this.isNativePlatform) {
       return this._fetchApiCompressedNative<SnapshotUploadResponse>(
         cfg,
         '/api/sync/snapshot',
@@ -430,13 +427,8 @@ export class SuperSyncProvider
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
     // On native platforms (Android/iOS), use CapacitorHttp for consistent behavior
-    if (this.isAndroidWebView || this.isNativePlatform) {
-      return this._fetchApiNative<T>(
-        url,
-        options.method || 'GET',
-        sanitizedToken,
-        startTime,
-      );
+    if (this.isNativePlatform) {
+      return this._fetchApiNative<T>(cfg, path, options.method || 'GET', startTime);
     }
 
     const headers = new Headers(options.headers as HeadersInit);
@@ -509,11 +501,15 @@ export class SuperSyncProvider
    * This ensures consistent behavior across native platforms for non-compressed requests.
    */
   private async _fetchApiNative<T>(
-    url: string,
+    cfg: SuperSyncPrivateCfg,
+    path: string,
     method: string,
-    sanitizedToken: string,
     startTime: number,
   ): Promise<T> {
+    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}${path}`;
+    const sanitizedToken = this._sanitizeToken(cfg.accessToken);
+
     const headers: Record<string, string> = {
       Authorization: `Bearer ${sanitizedToken}`,
     };
@@ -542,7 +538,7 @@ export class SuperSyncProvider
       const duration = Date.now() - startTime;
       if (duration > 30000) {
         SyncLog.warn(this.logLabel, `Slow SuperSync request detected (native)`, {
-          url,
+          path,
           durationMs: duration,
           durationSec: (duration / 1000).toFixed(1),
         });
@@ -552,7 +548,7 @@ export class SuperSyncProvider
     } catch (error) {
       const duration = Date.now() - startTime;
       SyncLog.error(this.logLabel, `SuperSync request failed (native)`, {
-        url,
+        path,
         durationMs: duration,
         error: (error as Error).message,
       });

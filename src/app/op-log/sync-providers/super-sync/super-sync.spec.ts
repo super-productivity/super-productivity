@@ -1195,23 +1195,23 @@ describe('SuperSyncProvider', () => {
   // in Jasmine (they're registered at module load time). This is the same approach used by
   // WebDavHttpAdapter tests.
   //
-  // The Android gzip handling is tested via:
+  // The native platform gzip handling is tested via:
   // 1. Server-side tests that verify base64-encoded gzip decompression works
-  // 2. Manual testing on Android devices
+  // 2. Manual testing on Android/iOS devices
   // 3. Integration tests with the actual CapacitorHttp plugin
-  describe('Android WebView branching logic', () => {
-    // Create a testable subclass that overrides isAndroidWebView
+  describe('Native platform branching logic', () => {
+    // Create a testable subclass that overrides platform detection
     class TestableSuperSyncProvider extends SuperSyncProvider {
-      constructor(private _isAndroidWebView: boolean) {
+      constructor(private _isNativePlatform: boolean) {
         super();
       }
 
-      protected override get isAndroidWebView(): boolean {
-        return this._isAndroidWebView;
+      protected override get isNativePlatform(): boolean {
+        return this._isNativePlatform;
       }
 
       // Expose the private method for testing
-      public async testFetchApiCompressedAndroid(
+      public async testFetchApiCompressedNative(
         cfg: SuperSyncPrivateCfg,
         path: string,
         jsonPayload: string,
@@ -1239,13 +1239,13 @@ describe('SuperSyncProvider', () => {
       }
     }
 
-    it('should use Android path when isAndroidWebView is true', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+    it('should use native path when isNativePlatform is true', async () => {
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       // Test the payload that would be sent to CapacitorHttp
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/ops',
         JSON.stringify({ ops: [createMockOperation()], clientId: 'client-1' }),
@@ -1258,13 +1258,13 @@ describe('SuperSyncProvider', () => {
     });
 
     it('should produce valid base64-encoded gzip data', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
 
       const ops = [createMockOperation()];
       const payload = { ops, clientId: 'client-1', lastKnownServerSeq: 5 };
 
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/ops',
         JSON.stringify(payload),
@@ -1282,9 +1282,10 @@ describe('SuperSyncProvider', () => {
       expect(decompressedPayload.lastKnownServerSeq).toBe(5);
     });
 
-    it('should use regular fetch path when isAndroidWebView is false', async () => {
-      const nonAndroidProvider = new TestableSuperSyncProvider(false);
-      nonAndroidProvider.privateCfg = mockPrivateCfgStore;
+    it('should use regular fetch path when not on native platform', async () => {
+      // Simulate web browser
+      const webProvider = new TestableSuperSyncProvider(false);
+      webProvider.privateCfg = mockPrivateCfgStore;
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       fetchSpy.and.returnValue(
@@ -1294,20 +1295,20 @@ describe('SuperSyncProvider', () => {
         } as Response),
       );
 
-      await nonAndroidProvider.uploadOps([createMockOperation()], 'client-1');
+      await webProvider.uploadOps([createMockOperation()], 'client-1');
 
       // Should use regular fetch, not CapacitorHttp
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, options] = fetchSpy.calls.mostRecent().args;
       expect(url).toBe('https://sync.example.com/api/sync/ops');
       expect(options.headers.get('Content-Encoding')).toBe('gzip');
-      // Should NOT have Content-Transfer-Encoding header (that's only for Android)
+      // Should NOT have Content-Transfer-Encoding header (that's only for native)
       expect(options.headers.get('Content-Transfer-Encoding')).toBeNull();
     });
 
     it('should produce gzip data that decompresses to valid snapshot payload', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
 
       const state = { tasks: [{ id: 'task-1' }] };
       const vectorClock: Record<string, number> = {};
@@ -1321,7 +1322,7 @@ describe('SuperSyncProvider', () => {
         isPayloadEncrypted: true,
       };
 
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/snapshot',
         JSON.stringify(payload),
