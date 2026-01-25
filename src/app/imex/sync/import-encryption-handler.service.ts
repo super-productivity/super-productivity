@@ -118,9 +118,10 @@ export class ImportEncryptionHandlerService {
     try {
       snapshotData = await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
     } catch (validationError) {
-      const errorMessage = validationError instanceof Error
-        ? validationError.message
-        : 'Provider validation failed';
+      const errorMessage =
+        validationError instanceof Error
+          ? validationError.message
+          : 'Provider validation failed';
       return {
         encryptionStateChanged: false,
         serverDataDeleted: false,

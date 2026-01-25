@@ -32,10 +32,8 @@ describe('SnapshotUploadService', () => {
       save: jasmine.createSpy('save').and.resolveTo(undefined),
     };
     // Mark as operation-sync capable
-    (mockSyncProvider as any).uploadOperations =
-      jasmine.createSpy('uploadOperations');
-    (mockSyncProvider as any).downloadOperations =
-      jasmine.createSpy('downloadOperations');
+    (mockSyncProvider as any).uploadOperations = jasmine.createSpy('uploadOperations');
+    (mockSyncProvider as any).downloadOperations = jasmine.createSpy('downloadOperations');
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',
