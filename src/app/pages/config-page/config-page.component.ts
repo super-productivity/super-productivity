@@ -47,6 +47,7 @@ import { PluginShortcutCfg } from '../../plugins/plugin-api.model';
 import { ThemeSelectorComponent } from '../../core/theme/theme-selector/theme-selector.component';
 import { Log } from '../../core/log';
 import { downloadLogs } from '../../util/download';
+import { copyToClipboard } from '../../util/copy-to-clipboard';
 import { SnackService } from '../../core/snack/snack.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
@@ -471,6 +472,21 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       this._snackService.open('Logs downloaded to android documents folder');
     } catch (error) {
       this._snackService.open('Failed to download logs');
+    }
+  }
+
+  async copyToClipboard(text: string): Promise<void> {
+    try {
+      await copyToClipboard(text);
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: 'Copied to clipboard',
+      });
+    } catch (error) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: 'Failed to copy to clipboard',
+      });
     }
   }
 
