@@ -2,6 +2,7 @@
   #wrapperEl
   [class.isHideOverflow]="isHideOverflow()"
   class="markdown-wrapper"
+  spResolveClipboardImages
 >
   @if (isShowEdit() || !isMarkdownFormattingEnabled()) {
     <textarea
@@ -11,6 +12,7 @@
       (input)="resizeTextareaToFit()"
       (keydown)="keypressHandler($event)"
       (keypress)="keypressHandler($event)"
+      (paste)="pasteHandler($event)"
       [@fadeIn]
       [ngModel]="modelCopy()"
       [placeholder]="placeholderTxt()"
@@ -20,16 +22,16 @@
   }
 
   <!--  (focus)="clickOrFocusPreview($event, true)"-->
-  @if (isMarkdownFormattingEnabled()) {
-    <div
+  @if (!isTurnOffMarkdownParsing()) {
+    <markdown
       #previewEl
       (click)="clickPreview($event)"
-      [data]="model"
-      [hidden]="isShowEdit()"
+      [data]="resolvedMarkdownData"
+      [disableSanitizer]="true"
+      [class.preview-while-editing]="isShowEdit()"
       class="mat-body-2 markdown-parsed markdown"
-      markdown
       tabindex="0"
-    ></div>
+    ></markdown>
   }
 </div>
 

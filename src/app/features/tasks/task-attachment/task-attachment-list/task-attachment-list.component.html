@@ -3,7 +3,7 @@
   class="attachments"
 >
   @for (
-    attachment of attachments();
+    attachment of resolvedAttachments();
     track trackByFn($index, attachment);
     let i = $index
   ) {
@@ -14,7 +14,7 @@
       <!-- NOTE: view link exists twice, both for mobile and for clicks before animation is done -->
       <a
         [class.isImage]="attachment.type === 'IMG' && !isError[i]"
-        [href]="attachment.path"
+        [href]="attachment.resolvedPath"
         [type]="isError[i] ? 'LINK' : attachment.type"
         class="attachment-link mat-elevation-z3"
         draggable="false"
@@ -28,11 +28,18 @@
           <div class="title">{{ attachment.title || attachment.path }}</div>
         }
         @if (attachment.type === 'IMG' && !isError[i]) {
-          <img
-            (error)="isError[i] = true"
-            [enlargeImg]="attachment.originalImgPath"
-            [src]="attachment.originalImgPath || attachment.path"
-          />
+          @if (attachment.isLoading) {
+            <div class="image-loading">
+              <mat-icon>image</mat-icon>
+              <span>Loading image...</span>
+            </div>
+          } @else {
+            <img
+              (error)="isError[i] = true"
+              [enlargeImg]="attachment.resolvedOriginalPath"
+              [src]="attachment.resolvedOriginalPath"
+            />
+          }
         }
       </a>
       @if (!isDisableControls()) {
@@ -41,7 +48,7 @@
             class="view-btn"
             mat-flat-button
             [class.isImage]="attachment.type === 'IMG' && !isError[i]"
-            [href]="attachment.path"
+            [href]="attachment.resolvedPath"
             [type]="isError[i] ? 'LINK' : attachment.type"
             draggable="false"
             target="_blank"

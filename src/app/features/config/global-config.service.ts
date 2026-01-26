@@ -5,6 +5,7 @@ import { updateGlobalConfigSection } from './store/global-config.actions';
 import { Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
+  ClipboardImagesConfig,
   EvaluationConfig,
   GlobalConfigSectionKey,
   GlobalConfigState,
@@ -21,6 +22,7 @@ import {
   TasksConfig,
 } from './global-config.model';
 import {
+  selectClipboardImagesConfig,
   selectConfigFeatureState,
   selectEvaluationConfig,
   selectIdleConfig,
@@ -98,6 +100,11 @@ export class GlobalConfigService {
     shareReplay(1),
   );
 
+  clipboardImages$: Observable<ClipboardImagesConfig> = this._store.pipe(
+    select(selectClipboardImagesConfig),
+    shareReplay(1),
+  );
+
   timelineCfg$: Observable<ScheduleConfig> = this._store.pipe(
     select(selectTimelineConfig),
   );
@@ -140,6 +147,10 @@ export class GlobalConfigService {
     {
       initialValue: DEFAULT_GLOBAL_CONFIG.pomodoro,
     },
+  );
+  readonly clipboardImages: Signal<ClipboardImagesConfig | undefined> = toSignal(
+    this.clipboardImages$,
+    { initialValue: undefined },
   );
   readonly timelineCfg: Signal<ScheduleConfig | undefined> = toSignal(this.timelineCfg$, {
     initialValue: undefined,

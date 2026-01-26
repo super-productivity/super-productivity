@@ -16,6 +16,7 @@ import { VOICE_REMINDER_FORM } from './form-cfgs/voice-reminder-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
+import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
 import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
@@ -31,6 +32,7 @@ export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   APP_FEATURES_FORM_CFG,
   MISC_SETTINGS_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
+  CLIPBOARD_IMAGES_FORM,
 ].filter(filterGlobalConfigForm);
 
 // Tab: Time & Tracking - Time Tracking, Idle, Schedule, Reminder

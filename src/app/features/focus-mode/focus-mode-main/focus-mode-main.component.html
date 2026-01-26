@@ -314,6 +314,7 @@
           [isShowControls]="true"
           [isDefaultText]="!ct.notes"
           [model]="ct.notes || defaultTaskNotes()"
+          [taskId]="ct.id"
         ></inline-markdown>
       </div>
       @if (ct.attachments.length) {

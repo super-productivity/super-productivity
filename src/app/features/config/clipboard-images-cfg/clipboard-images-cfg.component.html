@@ -1,0 +1,47 @@
+<div class="clipboard-images-cfg">
+  @if (!IS_ELECTRON) {
+    <section class="manage-images-section">
+      <h3>{{ T.GCF.CLIPBOARD_IMAGES.MANAGE_TITLE | translate }}</h3>
+      <p>{{ T.GCF.CLIPBOARD_IMAGES.MANAGE_DESCRIPTION | translate }}</p>
+      <button
+        (click)="openImageManager()"
+        color="primary"
+        mat-raised-button
+      >
+        <mat-icon>image</mat-icon>
+        {{ T.GCF.CLIPBOARD_IMAGES.OPEN_MANAGER | translate }}
+      </button>
+    </section>
+  }
+
+  @if (IS_ELECTRON) {
+    <section class="image-path-section">
+      <h3>{{ T.GCF.CLIPBOARD_IMAGES.PATH_TITLE | translate }}</h3>
+      <p>{{ T.GCF.CLIPBOARD_IMAGES.PATH_DESCRIPTION | translate }}</p>
+
+      <mat-form-field appearance="outline">
+        <mat-label
+          >{{ T.GCF.CLIPBOARD_IMAGES.PATH_LABEL | translate }}
+          @if (!imagePath && defaultImagePath) {
+            ({{ defaultImagePath }})
+          }
+        </mat-label>
+        <input
+          [(ngModel)]="imagePath"
+          (ngModelChange)="onImagePathChange()"
+          matInput
+          [placeholder]="imagePath ? '' : defaultImagePath"
+        />
+      </mat-form-field>
+
+      <button
+        (click)="selectImagePath()"
+        color="primary"
+        mat-stroked-button
+      >
+        <mat-icon>folder_open</mat-icon>
+        {{ T.GCF.CLIPBOARD_IMAGES.SELECT_PATH | translate }}
+      </button>
+    </section>
+  }
+</div>
