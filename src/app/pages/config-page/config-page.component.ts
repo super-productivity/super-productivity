@@ -480,12 +480,12 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       await copyToClipboard(text);
       this._snackService.open({
         type: 'SUCCESS',
-        msg: 'Copied to clipboard',
+        msg: T.PS.COPIED_TO_CLIPBOARD,
       });
     } catch (error) {
       this._snackService.open({
         type: 'ERROR',
-        msg: 'Failed to copy to clipboard',
+        msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD,
       });
     }
   }
