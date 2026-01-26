@@ -47,8 +47,8 @@ import { PluginShortcutCfg } from '../../plugins/plugin-api.model';
 import { ThemeSelectorComponent } from '../../core/theme/theme-selector/theme-selector.component';
 import { Log } from '../../core/log';
 import { downloadLogs } from '../../util/download';
-import { copyToClipboard } from '../../util/copy-to-clipboard';
 import { SnackService } from '../../core/snack/snack.service';
+import { ShareService } from '../../core/share/share.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -87,6 +87,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _syncWrapperService = inject(SyncWrapperService);
   private readonly _pluginBridgeService = inject(PluginBridgeService);
   private readonly _snackService = inject(SnackService);
+  private readonly _shareService = inject(ShareService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
 
@@ -475,14 +476,9 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     }
   }
 
-  async copyToClipboard(text: string): Promise<void> {
-    try {
-      await copyToClipboard(text);
-      this._snackService.open({
-        type: 'SUCCESS',
-        msg: T.PS.COPIED_TO_CLIPBOARD,
-      });
-    } catch (error) {
+  async copyVersionToClipboard(text: string): Promise<void> {
+    const result = await this._shareService.copyToClipboard(text, 'Version');
+    if (!result.success) {
       this._snackService.open({
         type: 'ERROR',
         msg: T.PS.FAILED_TO_COPY_TO_CLIPBOARD,
