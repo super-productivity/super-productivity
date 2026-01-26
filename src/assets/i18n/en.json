@@ -1253,7 +1253,7 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
-        "DUE_BUTTON": "Due",
+        "DUE_BUTTON": "Schedule",
         "ESTIMATE_BUTTON": "Estimate",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
