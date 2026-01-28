@@ -271,42 +271,4 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: ${{ startsWith(github.ref, 'refs/tags/v') }}
-
-      # COMMENTED OUT: SignPath code signing integration (waiting for certificate issuance)
-      # Uncomment these steps once SignPath certificate is ready (CSR PENDING -> Active)
-      #
-      # # Sign all Windows executables (both NSIS installers and portable .exe files)
-      # - name: Sign Windows executables with SignPath
-      #   if: startsWith(github.ref, 'refs/tags/v')
-      #   uses: signpath/github-action-submit-signing-request@v1
-      #   with:
-      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-      #     organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-      #     project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
-      #     signing-policy-slug: 'release-signing'
-      #     artifact-configuration-slug: 'setup'
-      #     input-artifact-path: '.tmp/app-builds/*.exe'
-      #     output-artifact-path: '.tmp/app-builds-signed/'
-      #     wait-for-completion: true
-      #     wait-for-completion-timeout-in-seconds: 600
-      #
-      # # Replace unsigned files with signed ones
-      # - name: Move signed executables back to build directory
-      #   if: startsWith(github.ref, 'refs/tags/v')
-      #   shell: bash
-      #   run: |
-      #     mv .tmp/app-builds-signed/*.exe .tmp/app-builds/
-      #     echo "Signed executables:"
-      #     ls -lh .tmp/app-builds/*.exe
-      #
-      # # Upload signed binaries to GitHub Release
-      # - name: Upload signed binaries to GitHub Release
-      #   if: startsWith(github.ref, 'refs/tags/v')
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: |
-      #       .tmp/app-builds/*.exe
-      #       .tmp/app-builds/*.blockmap
-      #       .tmp/app-builds/latest*.yml
-      #     draft: false
-      #     prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+      # SignPath code signing now lives in .github/workflows/signpath-code-signing.yml
