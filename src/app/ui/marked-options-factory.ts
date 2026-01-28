@@ -46,9 +46,6 @@ export const preprocessMarkdown = (markdown: string): string => {
 export const markedOptionsFactory = (): MarkedOptions => {
   const renderer = new MarkedRenderer();
 
-  renderer.checkbox = ({ checked }: { checked: boolean }) =>
-    `<span class="checkbox material-icons">${checked ? 'check_box' : 'check_box_outline_blank'}</span>`;
-
   // In marked v17, we need to use this.parser.parseInline(tokens) to render inline content
   // Using a regular function to access 'this'
   renderer.listitem = function ({
