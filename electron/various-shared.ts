@@ -26,6 +26,7 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   if (win.isVisible()) {
     win.focus();
   } else {
+    win.restore();
     win.show();
   }
 
