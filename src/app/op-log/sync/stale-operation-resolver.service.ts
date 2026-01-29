@@ -11,7 +11,6 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
-import { LWWOperationFactory } from './lww-operation-factory.service';
 import { uuidv7 } from '../../util/uuid-v7';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 
@@ -42,7 +41,6 @@ export class StaleOperationResolverService {
   private lockService = inject(LockService);
   private snackService = inject(SnackService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
-  private lwwOperationFactory = inject(LWWOperationFactory);
 
   /**
    * Resolves stale local operations by creating new LWW Update operations.
@@ -123,7 +121,7 @@ export class StaleOperationResolverService {
 
         // Start with the global clock, merge in local pending ops' clocks, and increment
         const allClocks = [globalClock, ...entityOps.map(({ op }) => op.vectorClock)];
-        const newClock = this.lwwOperationFactory.mergeAndIncrementClocks(
+        const newClock = this.conflictResolutionService.mergeAndIncrementClocks(
           allClocks,
           clientId,
         );
@@ -183,7 +181,7 @@ export class StaleOperationResolverService {
         const preservedTimestamp = Math.max(...entityOps.map((e) => e.op.timestamp));
 
         // Create new UPDATE op with current state and merged clock
-        const newOp = this.lwwOperationFactory.createLWWUpdateOp(
+        const newOp = this.conflictResolutionService.createLWWUpdateOp(
           entityType,
           entityId,
           entityState,

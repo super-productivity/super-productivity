@@ -49,6 +49,8 @@ describe('StaleOperationResolverService', () => {
     ]);
     mockConflictResolutionService = jasmine.createSpyObj('ConflictResolutionService', [
       'getCurrentEntityState',
+      'mergeAndIncrementClocks',
+      'createLWWUpdateOp',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -65,6 +67,40 @@ describe('StaleOperationResolverService', () => {
     // Mock lock service to execute the callback immediately
     mockLockService.request.and.callFake(
       (_lockName: string, callback: () => Promise<any>) => callback(),
+    );
+    // Mock merged clock methods - merged from LWWOperationFactory
+    mockConflictResolutionService.mergeAndIncrementClocks.and.callFake(
+      (clocks: VectorClock[], clientId: string) => {
+        const merged: VectorClock = {};
+        for (const clock of clocks) {
+          for (const [k, v] of Object.entries(clock)) {
+            merged[k] = Math.max(merged[k] || 0, v);
+          }
+        }
+        merged[clientId] = (merged[clientId] || 0) + 1;
+        return merged;
+      },
+    );
+    mockConflictResolutionService.createLWWUpdateOp.and.callFake(
+      (
+        entityType: EntityType,
+        entityId: string,
+        entityState: unknown,
+        clientId: string,
+        vectorClock: VectorClock,
+        timestamp: number,
+      ) => ({
+        id: 'generated-id-' + Math.random().toString(36).substring(7),
+        actionType: `[${entityType}] LWW Update` as ActionType,
+        opType: OpType.Update,
+        entityType,
+        entityId,
+        payload: entityState,
+        clientId,
+        vectorClock,
+        timestamp,
+        schemaVersion: 1,
+      }),
     );
 
     TestBed.configureTestingModule({

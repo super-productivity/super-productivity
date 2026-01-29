@@ -8,25 +8,25 @@ TODAY_TAG is a **virtual tag** that behaves differently from regular tags. Under
 
 **TODAY_TAG (ID: `'TODAY'`) must NEVER be added to `task.tagIds`.**
 
-Membership in TODAY_TAG is determined by `task.dueDay`, not by `task.tagIds`. The `TODAY_TAG.taskIds` field stores only the **ordering** of today's tasks, not membership.
+Membership in TODAY_TAG is determined by **`task.dueWithTime` OR `task.dueDay`** (via [mutual exclusivity pattern](dueDay-dueWithTime-mutual-exclusivity.md)), not by `task.tagIds`. The `TODAY_TAG.taskIds` field stores only the **ordering** of today's tasks, not membership.
 
 ## Virtual Tag vs. Board-Style Pattern
 
-| Aspect                  | TODAY_TAG (Virtual)     | Regular Tags (Board-Style)    |
-| ----------------------- | ----------------------- | ----------------------------- |
-| **Membership source**   | `task.dueDay === today` | `task.tagIds.includes(tagId)` |
-| **Stored on task**      | `task.dueDay`           | `task.tagIds`                 |
-| **In task.tagIds?**     | NO (invariant)          | YES (required)                |
-| **tag.taskIds purpose** | Ordering only           | Ordering only                 |
-| **Use case**            | Time-based grouping     | Category/label grouping       |
+| Aspect                  | TODAY_TAG (Virtual)                                                                                      | Regular Tags (Board-Style)    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Membership source**   | `task.dueWithTime` OR `task.dueDay` (see [mutual exclusivity](dueDay-dueWithTime-mutual-exclusivity.md)) | `task.tagIds.includes(tagId)` |
+| **Stored on task**      | `task.dueWithTime` or `task.dueDay`                                                                      | `task.tagIds`                 |
+| **In task.tagIds?**     | NO (invariant)                                                                                           | YES (required)                |
+| **tag.taskIds purpose** | Ordering only                                                                                            | Ordering only                 |
+| **Use case**            | Time-based grouping                                                                                      | Category/label grouping       |
 
 ## Why This Pattern?
 
 1. **Uniform move operations**: Drag/drop and keyboard shortcuts (Ctrl+↑/↓) work identically for TODAY_TAG and regular tags because all tags store ordering in `tag.taskIds`.
 
-2. **Single source of truth**: `task.dueDay` is the canonical field for "is this task scheduled for today?" - no dual bookkeeping between `dueDay` and a hypothetical `tagIds` entry.
+2. **Single source of truth**: `task.dueWithTime` OR `task.dueDay` (via [mutual exclusivity pattern](dueDay-dueWithTime-mutual-exclusivity.md)) is the canonical field for "is this task scheduled for today?" - no dual bookkeeping between date fields and a hypothetical `tagIds` entry.
 
-3. **Planner integration**: The planner view uses `task.dueDay` to organize tasks by day. TODAY_TAG naturally aligns with this.
+3. **Planner integration**: The planner view uses `task.dueWithTime` and `task.dueDay` to organize tasks by day. TODAY_TAG naturally aligns with this.
 
 4. **Self-healing**: Stale ordering entries are gracefully filtered out by the selector. No manual cleanup needed when a task's `dueDay` changes.
 
@@ -51,7 +51,7 @@ export const TODAY_TAG: Tag = {
 
 The `computeOrderedTaskIdsForToday()` function:
 
-1. Finds all tasks where `dueDay === today` (membership)
+1. Finds all tasks where `dueWithTime` is today OR `dueDay === today` (membership via [mutual exclusivity pattern](dueDay-dueWithTime-mutual-exclusivity.md))
 2. Orders them according to `TODAY_TAG.taskIds` (ordering)
 3. Appends any unordered tasks at the end (self-healing)
 4. Filters out stale entries from `TODAY_TAG.taskIds` (self-healing)
@@ -60,10 +60,24 @@ The `computeOrderedTaskIdsForToday()` function:
 const computeOrderedTaskIdsForToday = (todayTag, taskEntities) => {
   const todayStr = getDbDateStr();
 
-  // Membership: tasks where dueDay === today
-  const tasksForToday = Object.values(taskEntities)
-    .filter((t) => t && !t.parentId && t.dueDay === todayStr)
-    .map((t) => t.id);
+  // Membership: tasks where dueWithTime is today OR dueDay === today
+  // See: dueDay-dueWithTime-mutual-exclusivity.md for priority pattern
+  const tasksForToday: string[] = [];
+  for (const taskId of Object.keys(taskEntities)) {
+    const task = taskEntities[taskId];
+    if (task) {
+      // Check dueWithTime first (takes priority - mutual exclusivity)
+      if (task.dueWithTime) {
+        if (isToday(task.dueWithTime)) {
+          tasksForToday.push(taskId);
+        }
+      }
+      // Fallback: check dueDay only if dueWithTime is not set
+      else if (task.dueDay === todayStr) {
+        tasksForToday.push(taskId);
+      }
+    }
+  }
 
   // Ordering: use TODAY_TAG.taskIds, filter stale, append missing
   const storedOrder = todayTag?.taskIds || [];
@@ -144,11 +158,16 @@ This handles state divergence from per-entity conflict resolution during sync.
 task.tagIds = [...task.tagIds, TODAY_TAG.id];
 ```
 
-### Correct: Set task.dueDay
+### Correct: Set task.dueDay or task.dueWithTime
 
 ```typescript
-// CORRECT - Set dueDay to add to today
+// CORRECT - Set dueDay to add to today (all-day, no specific time)
 task.dueDay = getDbDateStr(); // Today's date string
+task.dueWithTime = undefined; // See: dueDay-dueWithTime-mutual-exclusivity.md
+
+// ALSO CORRECT - Set dueWithTime for specific time today
+task.dueWithTime = Date.now(); // Specific time today
+task.dueDay = undefined; // See: dueDay-dueWithTime-mutual-exclusivity.md
 ```
 
 ### Wrong: Checking tagIds for TODAY membership
@@ -158,23 +177,33 @@ task.dueDay = getDbDateStr(); // Today's date string
 const isToday = task.tagIds.includes(TODAY_TAG.id);
 ```
 
-### Correct: Check dueDay
+### Correct: Check dueWithTime and dueDay (with priority)
 
 ```typescript
-// CORRECT - Check dueDay for TODAY membership
-const isToday = task.dueDay === getDbDateStr();
+// CORRECT - Check dueWithTime first, then dueDay (mutual exclusivity pattern)
+// See: dueDay-dueWithTime-mutual-exclusivity.md
+let isInToday = false;
+if (task.dueWithTime) {
+  isInToday = isToday(task.dueWithTime);
+} else if (task.dueDay === getDbDateStr()) {
+  isInToday = true;
+}
 ```
+
+## Related Documentation
+
+- **[dueDay/dueWithTime Mutual Exclusivity Pattern](dueDay-dueWithTime-mutual-exclusivity.md)** - Understanding how `dueDay` and `dueWithTime` interact (critical for TODAY_TAG membership)
 
 ## Key Files Reference
 
-| File                                                                          | Purpose                                       |
-| ----------------------------------------------------------------------------- | --------------------------------------------- |
-| `src/app/features/tag/tag.const.ts`                                           | TODAY_TAG definition                          |
-| `src/app/features/work-context/store/work-context.selectors.ts`               | Membership computation, repair selector       |
-| `src/app/features/tag/store/tag.reducer.ts`                                   | Move operations (uniform for all tags)        |
-| `src/app/root-store/meta/task-shared-meta-reducers/planner-shared.reducer.ts` | Multi-entity updates for planner actions      |
-| `src/app/root-store/meta/task-shared-meta-reducers/task-shared-helpers.ts`    | `filterOutTodayTag()`, `hasInvalidTodayTag()` |
-| `src/app/features/tag/store/tag.effects.ts`                                   | `repairTodayTagConsistency$` effect           |
+| File                                                                          | Purpose                                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `src/app/features/tag/tag.const.ts`                                           | TODAY_TAG definition                                                      |
+| `src/app/features/work-context/store/work-context.selectors.ts`               | Membership computation (uses mutual exclusivity pattern), repair selector |
+| `src/app/features/tag/store/tag.reducer.ts`                                   | Move operations (uniform for all tags)                                    |
+| `src/app/root-store/meta/task-shared-meta-reducers/planner-shared.reducer.ts` | Multi-entity updates for planner actions                                  |
+| `src/app/root-store/meta/task-shared-meta-reducers/task-shared-helpers.ts`    | `filterOutTodayTag()`, `hasInvalidTodayTag()`                             |
+| `src/app/features/tag/store/tag.effects.ts`                                   | `repairTodayTagConsistency$` effect                                       |
 
 ## Testing
 

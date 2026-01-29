@@ -57,10 +57,6 @@ export class SuperSyncProvider
 
   public privateCfg: SyncCredentialStore<SyncProviderId.SuperSync>;
 
-  // Caches to reduce repeated async loads during sync operations
-  private _cachedCfg?: SuperSyncPrivateCfg;
-  private _cachedServerSeqKey?: string;
-
   constructor(_basePath?: string) {
     // basePath is ignored - SuperSync uses operation-based sync only
     this.privateCfg = new SyncCredentialStore(SyncProviderId.SuperSync);
@@ -82,9 +78,6 @@ export class SuperSyncProvider
   }
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
-    // Invalidate caches when config changes
-    this._cachedCfg = undefined;
-    this._cachedServerSeqKey = undefined;
     await this.privateCfg.setComplete(cfg);
   }
 
@@ -359,14 +352,11 @@ export class SuperSyncProvider
   // === Private Helper Methods ===
 
   private async _cfgOrError(): Promise<SuperSyncPrivateCfg> {
-    if (this._cachedCfg) {
-      return this._cachedCfg;
-    }
+    // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
     if (!cfg) {
       throw new MissingCredentialsSPError();
     }
-    this._cachedCfg = cfg;
     return cfg;
   }
 
@@ -375,9 +365,7 @@ export class SuperSyncProvider
    * when switching between different accounts or servers.
    */
   private async _getServerSeqKey(): Promise<string> {
-    if (this._cachedServerSeqKey) {
-      return this._cachedServerSeqKey;
-    }
+    // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
     const baseUrl = cfg?.baseUrl ?? 'default';
     // Include accessToken in the hash so different users on the same server
@@ -389,20 +377,14 @@ export class SuperSyncProvider
       .split('')
       .reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0)
       .toString(16);
-    this._cachedServerSeqKey = `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
-    return this._cachedServerSeqKey;
+    return `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
   }
 
   /**
    * Check HTTP response status and throw AuthFailSPError for auth failures.
-   * Clears cached config so next operation will reload from store.
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      // Clear cached config so next operation will reload from store
-      // (allowing user to re-configure after auth failure)
-      this._cachedCfg = undefined;
-      this._cachedServerSeqKey = undefined;
       throw new AuthFailSPError(`Authentication failed (HTTP ${status})`, body);
     }
   }

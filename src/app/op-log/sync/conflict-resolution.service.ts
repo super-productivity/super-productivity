@@ -20,6 +20,7 @@ import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import { DUPLICATE_OPERATION_ERROR_PATTERN } from '../persistence/op-log-errors.const';
 import {
   compareVectorClocks,
+  incrementVectorClock,
   mergeVectorClocks,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
@@ -33,7 +34,8 @@ import {
   isArrayEntity,
 } from '../core/entity-registry';
 import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
-import { LWWOperationFactory } from './lww-operation-factory.service';
+import { uuidv7 } from '../../util/uuid-v7';
+import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
@@ -81,7 +83,72 @@ export class ConflictResolutionService {
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
-  private lwwOperationFactory = inject(LWWOperationFactory);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LWW OPERATION FACTORY METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Creates a new LWW Update operation for syncing local state.
+   *
+   * LWW Update operations are synthetic operations created during conflict resolution
+   * to carry the winning local state to remote clients. They are created when:
+   * 1. Local state wins LWW conflict resolution
+   * 2. Stale local operations need to be re-uploaded with merged clocks
+   *
+   * These operations use dynamically constructed action types (e.g., '[TASK] LWW Update')
+   * that are matched by regex in lwwUpdateMetaReducer.
+   *
+   * @param entityType - Type of the entity being updated
+   * @param entityId - ID of the entity being updated
+   * @param entityState - Current state of the entity to sync
+   * @param clientId - Client creating this operation
+   * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
+   * @param timestamp - Preserved timestamp for correct LWW semantics
+   * @returns New UPDATE operation ready for upload
+   */
+  createLWWUpdateOp(
+    entityType: EntityType,
+    entityId: string,
+    entityState: unknown,
+    clientId: string,
+    vectorClock: VectorClock,
+    timestamp: number,
+  ): Operation {
+    // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
+    // NOT in the ActionType enum. They are dynamically constructed here and matched
+    // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
+    // created during conflict resolution to carry the winning local state to remote clients.
+    return {
+      id: uuidv7(),
+      actionType: `[${entityType}] LWW Update` as ActionType,
+      opType: OpType.Update,
+      entityType,
+      entityId,
+      payload: entityState,
+      clientId,
+      vectorClock,
+      timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+  }
+
+  /**
+   * Merges multiple vector clocks and increments for the given client.
+   * Used when creating LWW Update operations that need to dominate
+   * all previously known clocks.
+   *
+   * @param clocks - Array of vector clocks to merge
+   * @param clientId - Client ID to increment in the final clock
+   * @returns Merged and incremented vector clock
+   */
+  mergeAndIncrementClocks(clocks: VectorClock[], clientId: string): VectorClock {
+    let mergedClock: VectorClock = {};
+    for (const clock of clocks) {
+      mergedClock = mergeVectorClocks(mergedClock, clock);
+    }
+    return incrementVectorClock(mergedClock, clientId);
+  }
 
   /**
    * Validates the current state after conflict resolution and repairs if necessary.
@@ -591,10 +658,7 @@ export class ConflictResolutionService {
       ...conflict.localOps.map((op) => op.vectorClock),
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
-    const newClock = this.lwwOperationFactory.mergeAndIncrementClocks(
-      allClocks,
-      clientId,
-    );
+    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
 
     // Preserve the maximum timestamp from local ops.
     // This is critical for LWW semantics: we're creating a new op to carry the
@@ -602,7 +666,7 @@ export class ConflictResolutionService {
     // it to win. Using Date.now() would give it an unfair advantage in future conflicts.
     const preservedTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
 
-    return this.lwwOperationFactory.createLWWUpdateOp(
+    return this.createLWWUpdateOp(
       conflict.entityType,
       conflict.entityId,
       entityState,
