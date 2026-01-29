@@ -378,7 +378,8 @@ export class FocusModeEffects {
       switchMap(([_, mode, cycle, config, currentTaskId]) => {
         const strategy = this.strategyFactory.getStrategy(mode);
         // No adjustment needed - cycle is already correct after incrementCycle
-        const breakInfo = strategy.getBreakDuration(cycle || 1);
+        // Adjustment needed, Cycle is 1 too high hafter incrementCycle
+        const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
         const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
         const actionsArr: Action[] = [];
 
@@ -916,8 +917,9 @@ export class FocusModeEffects {
           strategy.shouldStartBreakAfterSession
         ) {
           // Bug #6044 fix: No adjustment needed - cycle is already correct after incrementCycle
+          // Adjustment needed, Cycle is 1 too high hafter incrementCycle
           // This matches the auto-start break logic to ensure consistent break timing
-          const breakInfo = strategy.getBreakDuration(cycle || 1);
+          const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
           if (breakInfo) {
             const currentTaskId = this.taskService.currentTaskId();
             const shouldPauseTracking =
