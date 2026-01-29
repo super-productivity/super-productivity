@@ -95,7 +95,10 @@ export class HabitTrackerComponent {
 
     const currentValue = this.getVal(counter, date);
 
-    if (counter.type === SimpleCounterType.ClickCounter) {
+    if (
+      counter.type === SimpleCounterType.ClickCounter ||
+      counter.type === SimpleCounterType.RepeatedCountdownReminder
+    ) {
       // Increment for ClickCounters on left click
       const newVal = currentValue + 1;
       this._simpleCounterService.setCounterForDate(counter.id, date, newVal);
