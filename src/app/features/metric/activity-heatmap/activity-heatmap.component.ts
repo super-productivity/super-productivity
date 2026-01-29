@@ -11,14 +11,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { defer, from } from 'rxjs';
-import {
-  combineLatest,
-  combineLatestWith,
-  first,
-  map,
-  switchMap,
-  tap,
-} from 'rxjs/operators';
+import { combineLatestWith, first, map, switchMap, tap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TODAY_TAG } from '../../tag/tag.const';
