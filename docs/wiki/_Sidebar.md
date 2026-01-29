@@ -14,6 +14,7 @@
 - [[3.02-Settings-and-Preferences]]
 - [[3.03-Keyboard-Shortcuts]]
 - [[3.04-Short-Syntax]]
+- [[3.05-Web-App-vs-Desktop]]
 
 ## [[4.00-Concepts]]
 
