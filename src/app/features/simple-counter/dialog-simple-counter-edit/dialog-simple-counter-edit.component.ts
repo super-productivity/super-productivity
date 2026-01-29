@@ -159,7 +159,8 @@ export class DialogSimpleCounterEditComponent {
 
   readonly chartOptions: ChartConfiguration['options'] = {
     responsive: true,
-    maintainAspectRatio: false,
+    aspectRatio: 3,
+    maintainAspectRatio: true,
     scales: {
       y: {
         min: 0,

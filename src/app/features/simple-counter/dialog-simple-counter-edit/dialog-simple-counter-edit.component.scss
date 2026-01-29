@@ -21,13 +21,25 @@
   margin-bottom: 32px;
 
   .chart-wrapper {
-    height: 200px;
+    width: 100%;
+    max-width: 740px;
+    margin: 0 auto;
     position: relative;
-    overflow: hidden;
+
+    lazy-chart {
+      width: 100%;
+      display: block;
+
+      ::ng-deep canvas {
+        width: 100% !important;
+        height: auto !important;
+      }
+    }
 
     @include mq(xs) {
       min-width: 500px;
     }
+
     @include mq(sm) {
       min-width: 740px;
     }
