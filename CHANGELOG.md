@@ -1,3 +1,27 @@
+## [17.0.10](https://github.com/super-productivity/super-productivity/compare/v17.0.9...v17.0.10) (2026-01-29)
+
+### Bug Fixes
+
+- **android:** keep app time value when native reports less to prevent data loss ([51ad71d](https://github.com/super-productivity/super-productivity/commit/51ad71d52ac3c208c7327ad887c81d7104170127))
+- **android:** persist time synced from native service to operation log ([0b47ef1](https://github.com/super-productivity/super-productivity/commit/0b47ef15e4f996906cb8fec63eb15c83a91a8086)), closes [#6207](https://github.com/super-productivity/super-productivity/issues/6207)
+- **archive:** make lastTimeTrackingFlush optional for backwards compatibility ([f08083a](https://github.com/super-productivity/super-productivity/commit/f08083a3b1c2c420610a7fe1cfbccf179decf9ef)), closes [#6200](https://github.com/super-productivity/super-productivity/issues/6200)
+- **e2e:** improve SuperSync encryption test reliability ([27f12c6](https://github.com/super-productivity/super-productivity/commit/27f12c6ad78c375a7f0fff7cf6b080abba0fd4ef))
+- **electron:** restore input focus after native dialogs ([851d510](https://github.com/super-productivity/super-productivity/commit/851d510f760db3d637df6af0f2d9d6cce99c910c)), closes [electron/electron#19977](https://github.com/electron/electron/issues/19977) [electron/electron#20821](https://github.com/electron/electron/issues/20821) [#6221](https://github.com/super-productivity/super-productivity/issues/6221)
+- improve code clarity and add data repair warnings ([#6239](https://github.com/super-productivity/super-productivity/issues/6239)) ([1295057](https://github.com/super-productivity/super-productivity/commit/1295057604ec978d21aa09e75ff77075b667ecb0))
+- **ios:** hide Support us and Contribute links on iOS ([b5cde1d](https://github.com/super-productivity/super-productivity/commit/b5cde1dcb5f804d317f4c2b751e8c6878952082e))
+- **markdown:** handle gapped checklists without breaking layout ([#6244](https://github.com/super-productivity/super-productivity/issues/6244)) ([8428952](https://github.com/super-productivity/super-productivity/commit/842895200488cfb689d15ef04482043446f3fa95))
+- **op-log:** add retry logic for IndexedDB open failures ([#6255](https://github.com/super-productivity/super-productivity/issues/6255)) ([2a82754](https://github.com/super-productivity/super-productivity/commit/2a82754196f3ee4a2777812e34ed76fb26f5c033))
+- **sync:** add 1s buffer to WebDAV If-Unmodified-Since header ([f005e2b](https://github.com/super-productivity/super-productivity/commit/f005e2bff3a2d59709e02f0d190f32b8d8821506)), closes [#6218](https://github.com/super-productivity/super-productivity/issues/6218)
+- **sync:** add retry logic for duplicate operation detection ([#6213](https://github.com/super-productivity/super-productivity/issues/6213)) ([c6cd051](https://github.com/super-productivity/super-productivity/commit/c6cd0517f500ae13ad89cf182e3daebadb4a734d))
+- **task-repeat:** prevent date overflow when calculating monthly repeat ([8ca2117](https://github.com/super-productivity/super-productivity/commit/8ca21171f6b84129881182a5c4def2d5f9f32023))
+- **tasks:** prevent scheduled tasks from appearing in both today and tomorrow ([0d21c4d](https://github.com/super-productivity/super-productivity/commit/0d21c4da5a44c2ae8075ab68eb5bdb8e1f3dd9fe))
+- **ui:** remove duplicate checkbox rendering in markdown ([23f2c10](https://github.com/super-productivity/super-productivity/commit/23f2c10b1e062dcc1834c43d0fe1f3c72bc943aa)), closes [#6228](https://github.com/super-productivity/super-productivity/issues/6228)
+
+### Features
+
+- **short-syntax:** Automatically add a trailing space after inserting tag, project or time via Short Syntax. ([#6118](https://github.com/super-productivity/super-productivity/issues/6118)) ([#6248](https://github.com/super-productivity/super-productivity/issues/6248)) ([1048184](https://github.com/super-productivity/super-productivity/commit/1048184db47ac357ed0969f96e034ece84a6e441))
+- **sync:** add warning for Local File sync about file-syncing tools ([e4fcad0](https://github.com/super-productivity/super-productivity/commit/e4fcad019d863f83e45b068832a33d7428bf86e9)), closes [#6249](https://github.com/super-productivity/super-productivity/issues/6249)
+
 ## [17.0.9](https://github.com/super-productivity/super-productivity/compare/v17.0.8...v17.0.9) (2026-01-28)
 
 ## [17.0.8](https://github.com/super-productivity/super-productivity/compare/v17.0.7...v17.0.8) (2026-01-28)
