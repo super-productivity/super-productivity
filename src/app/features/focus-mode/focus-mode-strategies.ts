@@ -22,7 +22,8 @@ export class PomodoroStrategy implements FocusModeStrategy {
     const cyclesBeforeLong =
       config?.cyclesBeforeLongerBreak ?? FOCUS_MODE_DEFAULTS.CYCLES_BEFORE_LONG_BREAK;
     // Long break after every Nth session (e.g., after sessions 4, 8, 12...)
-    const isLong = cycle % cyclesBeforeLong === 0;
+    // Cycle gets updated before this function gets called. So we must subtract 1 from the count
+    const isLong = (cycle - 1) % cyclesBeforeLong === 0;
 
     const duration = isLong
       ? (config?.longerBreakDuration ?? FOCUS_MODE_DEFAULTS.LONG_BREAK_DURATION)
