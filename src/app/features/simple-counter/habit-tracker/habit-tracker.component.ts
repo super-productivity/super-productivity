@@ -74,8 +74,8 @@ export class HabitTrackerComponent {
   dateRangeLabel = computed(() => {
     const days = this.days();
     if (days.length === 0) return '';
-    const first = new Date(days[0]);
-    const last = new Date(days[days.length - 1]);
+    const first = this.parseDateLocal(days[0]);
+    const last = this.parseDateLocal(days[days.length - 1]);
 
     const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
     const firstStr = first.toLocaleDateString(undefined, formatOptions);
@@ -83,6 +83,11 @@ export class HabitTrackerComponent {
 
     return `${firstStr} - ${lastStr}`;
   });
+
+  parseDateLocal(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
 
   private _longPressTimer?: number;
   private _isLongPress = false;

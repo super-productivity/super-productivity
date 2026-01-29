@@ -1093,19 +1093,10 @@
         "L_TRACK_STREAKS": "跟踪连续",
         "L_TYPE": "类型",
         "L_WEEKDAYS": "检查连续的星期几",
-        "L_STREAK_MODE": "连续追踪模式",
-        "L_STREAK_MODE_SPECIFIC_DAYS": "具体日期",
-        "L_STREAK_MODE_WEEKLY_FREQUENCY": "每周频率 (例如：每周 3 次)",
-        "L_WEEKLY_FREQUENCY": "每周完成次数",
         "TITLE": "简单计数器和习惯跟踪",
         "TYPE_CLICK_COUNTER": "点击计数器",
         "TYPE_REPEATED_COUNTDOWN": "重复倒计时",
         "TYPE_STOPWATCH": "秒表"
-      },
-      "HABIT_TRACKER": {
-        "PREV_WEEK": "上一周",
-        "NEXT_WEEK": "下一周",
-        "TODAY": "今天"
       },
       "S": {
         "GOAL_REACHED_1": "您今天达到了目标！",
@@ -2194,7 +2185,6 @@
     "DONATE": "支持我们",
     "ENTER_FOCUS_MODE": "进入专注模式",
     "GO_TO_TASK_LIST": "转到任务列表",
-    "HABITS": "习惯",
     "HELP": "帮助",
     "HM": {
       "CALENDARS": "如何：连接日历",
@@ -2234,19 +2224,6 @@
     "TRIGGER_SYNC": "同步！",
     "UNPLAN_ALL_TASKS": "取消计划所有任务",
     "WORKLOG": "工作日志"
-  },
-  "MIGRATE": {
-    "DIALOG_TITLE": "迁移您的数据",
-    "DIALOG_MESSAGE": "我们正在更新您的数据存储方式，以提高同步可靠性。备份将自动下载。",
-    "STATUS_PREPARING": "正在准备迁移...",
-    "STATUS_BACKUP": "正在创建您的数据备份...",
-    "STATUS_MIGRATING": "正在迁移数据...",
-    "STATUS_COMPLETE": "迁移完成！",
-    "C_DOWNLOAD_BACKUP": "您想要下载旧数据的备份（可用于旧版本的超级生产力）吗？",
-    "DETECTED_LEGACY": "检测到旧数据。我们将为您迁移它！",
-    "E_MIGRATION_FAILED": "迁移失败！错误：",
-    "E_RESTART_FAILED": "自动重启失败。请手动重启应用！",
-    "SUCCESS": "迁移全部完成！现在重启应用..."
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "从今日添加任务",
