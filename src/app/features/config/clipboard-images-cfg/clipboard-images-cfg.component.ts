@@ -99,7 +99,6 @@ export class ClipboardImagesCfgComponent implements OnInit {
   async selectImagePath(): Promise<void> {
     if (!IS_ELECTRON) return;
 
-    console.log(this.getImagePath());
     const path = await window.ea.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
       title: this.T.GCF.CLIPBOARD_IMAGES.SELECT_PATH_TITLE,
