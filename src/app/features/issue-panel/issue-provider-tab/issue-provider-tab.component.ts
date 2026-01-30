@@ -188,8 +188,7 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
                 }),
               ),
           ),
-
-          tap(() => this.isLoading.set(false)),
+          finalize(() => this.isLoading.set(false)),
         );
       }),
     );
