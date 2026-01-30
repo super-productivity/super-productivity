@@ -156,7 +156,7 @@ const skipBreakAndStartNextSession = async (page: Page): Promise<void> => {
 
 test.describe('Bug #6044: Pomodoro break timing', () => {
   test.describe('Long break timing fix', () => {
-    test('should show long break after completing 4rd session (cycle becomes 5)', async ({
+    test('should show long break after completing 4th session (cycle becomes 5)', async ({
       page,
       testPrefix,
     }) => {
@@ -262,7 +262,7 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       });
     });
 
-    test('should show long breaks after sessions 4 and 7 (cycles 5 and 9)', async ({
+    test('should show long breaks after sessions 4 and 8 (cycles 5 and 9)', async ({
       page,
       testPrefix,
     }) => {
