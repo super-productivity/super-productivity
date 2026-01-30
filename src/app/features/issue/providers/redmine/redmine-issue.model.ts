@@ -58,6 +58,16 @@ export type RedmineIssue = Readonly<{
   url: string | null;
 }>;
 
+export type RedmineActivity = Readonly<{
+  id: number;
+  name: string;
+  is_default: boolean;
+}>;
+
+export type RedmineActivityResult = Readonly<{
+  time_entry_activities: RedmineActivity[];
+}>;
+
 export type RedmineSearchResultItem = Readonly<{
   id: number;
   title: string;
