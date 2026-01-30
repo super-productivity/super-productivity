@@ -2984,8 +2984,9 @@ describe('FocusModeEffects', () => {
       buttonActions.action.fn();
 
       setTimeout(() => {
-        // Verify getBreakDuration was called with cycle 4 directly (no adjustment)
-        expect(getBreakDurationSpy).toHaveBeenCalledWith(4);
+        // Verify getBreakDuration was called with cycle 3
+        // Because we decrement cycle by 1 to get last focus session's cycle
+        expect(getBreakDurationSpy).toHaveBeenCalledWith(3);
 
         const startBreakCall = dispatchSpy.calls
           .all()
