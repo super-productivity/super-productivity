@@ -149,7 +149,10 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
 
   async pasteHandler(ev: ClipboardEvent): Promise<void> {
     await this._clipboardPasteHandler.handlePaste(ev, {
-      currentPlaceholder: this._currentPastePlaceholder,
+      currentPlaceholder: {
+        get: () => this._currentPastePlaceholder,
+        set: (val) => (this._currentPastePlaceholder = val),
+      },
       getContent: () => this.data.content,
       setContent: (content) => {
         this.data.content = content;

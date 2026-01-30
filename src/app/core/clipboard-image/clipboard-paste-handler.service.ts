@@ -4,7 +4,10 @@ import { TaskAttachmentService } from '../../features/tasks/task-attachment/task
 
 // Paste context interface
 export interface PasteContext {
-  currentPlaceholder: string | null;
+  currentPlaceholder: {
+    get(): string | null;
+    set(val: string | null): void;
+  };
   getContent(): string;
   setContent(content: string): void;
   getTextarea(): HTMLTextAreaElement | null;
@@ -28,8 +31,8 @@ export class ClipboardPasteHandlerService {
     ev.preventDefault();
 
     // Clean up old placeholder if exists
-    if (context.currentPlaceholder) {
-      const cleaned = context.getContent().replace(context.currentPlaceholder, '');
+    if (context.currentPlaceholder.get()) {
+      const cleaned = context.getContent().replace(context.currentPlaceholder.get()!, '');
       context.setContent(cleaned);
     }
 
@@ -39,7 +42,7 @@ export class ClipboardPasteHandlerService {
     const { value, selectionStart, selectionEnd } = textarea;
 
     // Track and insert placeholder
-    context.currentPlaceholder = progress.placeholderText;
+    context.currentPlaceholder.set(progress.placeholderText);
     const newContent =
       value.substring(0, selectionStart) +
       progress.placeholderText +
@@ -50,7 +53,7 @@ export class ClipboardPasteHandlerService {
     const result = await progress.resultPromise;
 
     // Only update if still current operation
-    if (context.currentPlaceholder === progress.placeholderText) {
+    if (context.currentPlaceholder.get() === progress.placeholderText) {
       if (result.success && result.markdownText) {
         // Replace placeholder
         const finalContent = context
@@ -82,7 +85,7 @@ export class ClipboardPasteHandlerService {
         context.setContent(cleaned);
       }
 
-      context.currentPlaceholder = null;
+      context.currentPlaceholder.set(null);
     }
 
     return true;

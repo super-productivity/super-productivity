@@ -185,7 +185,10 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   async pasteHandler(ev: ClipboardEvent): Promise<void> {
     await this._clipboardPasteHandler.handlePaste(ev, {
-      currentPlaceholder: this._currentPastePlaceholder,
+      currentPlaceholder: {
+        get: () => this._currentPastePlaceholder,
+        set: (val) => (this._currentPastePlaceholder = val),
+      },
       getContent: () => this._model || '',
       setContent: (content) => {
         this.modelCopy.set(content);
