@@ -10,24 +10,19 @@
  * cross-model-2 through cross-model-4.5 into a single migration pass that runs
  * before Typia validation in BackupService.importCompleteBackup().
  */
+/* eslint-disable prefer-arrow/prefer-arrow-functions */
 import {
   HideSubTasksMode,
   TaskArchive,
   TaskCopy,
-  TaskState,
   TimeSpentOnDayCopy,
 } from '../../features/tasks/task.model';
-import { ProjectCopy } from '../../features/project/project.model';
-import { TagCopy } from '../../features/tag/tag.model';
 import { Dictionary } from '@ngrx/entity';
 import {
   initialBoardsState,
   BoardsState,
 } from '../../features/boards/store/boards.reducer';
-import {
-  DEFAULT_BOARD_CFG,
-  DEFAULT_PANEL_CFG,
-} from '../../features/boards/boards.const';
+import { DEFAULT_BOARD_CFG, DEFAULT_PANEL_CFG } from '../../features/boards/boards.const';
 import { plannerInitialState } from '../../features/planner/store/planner.reducer';
 import { issueProviderInitialState } from '../../features/issue/store/issue-provider.reducer';
 import { menuTreeInitialState } from '../../features/menu-tree/store/menu-tree.reducer';
@@ -89,28 +84,28 @@ export const migrateLegacyBackup = (
   let data = { ...legacyData } as Record<string, any>;
 
   // === Migration 2: Archive split + time tracking extraction ===
-  data = _migration2_archiveSplitAndTimeTracking(data);
+  data = _migration2ArchiveSplitAndTimeTracking(data);
 
   // === Migration 3: Planner, INBOX project, legacy tag cleanup ===
-  data = _migration3_plannerAndInbox(data);
+  data = _migration3PlannerAndInbox(data);
 
   // === Migration 4: plannedAt → dueWithTime, remove TODAY_TAG from tagIds ===
-  data = _migration4_taskDateTimeFields(data);
+  data = _migration4TaskDateTimeFields(data);
 
   // === Migration 4.1: Remove TODAY_TAG from task repeat configs ===
-  data = _migration4_1_repeatCfgTodayTag(data);
+  data = _migration41RepeatCfgTodayTag(data);
 
   // === Migration 4.2: Ensure both lastTaskCreation and lastTaskCreationDay ===
-  data = _migration4_2_repeatCfgDualDatetime(data);
+  data = _migration42RepeatCfgDualDatetime(data);
 
   // === Migration 4.3: Ensure menuTree exists ===
-  data = _migration4_3_menuTree(data);
+  data = _migration43MenuTree(data);
 
   // === Migration 4.4: Localization + appFeatures ===
-  data = _migration4_4_localizationAndAppFeatures(data);
+  data = _migration44LocalizationAndAppFeatures(data);
 
   // === Migration 4.5: Lowercase language codes ===
-  data = _migration4_5_lowercaseLanguageCodes(data);
+  data = _migration45LowercaseLanguageCodes(data);
 
   // === Final: Ensure all v17-required keys exist with defaults ===
   data = _ensureV17Defaults(data);
@@ -126,7 +121,7 @@ export const migrateLegacyBackup = (
 // Migration 2 — archive split + time tracking extraction
 // ---------------------------------------------------------------------------
 
-function _migration2_archiveSplitAndTimeTracking(
+function _migration2ArchiveSplitAndTimeTracking(
   data: Record<string, any>,
 ): Record<string, any> {
   // Skip if already migrated
@@ -145,7 +140,7 @@ function _migration2_archiveSplitAndTimeTracking(
   const projectTimeTracking: TTWorkContextSessionMap = {};
   if (data.project?.entities) {
     for (const projectId of Object.keys(data.project.entities)) {
-      const project = data.project.entities[projectId] as ProjectCopy;
+      const project = data.project.entities[projectId] as any;
       if (!project) continue;
       projectTimeTracking[projectId] = {};
 
@@ -185,7 +180,7 @@ function _migration2_archiveSplitAndTimeTracking(
   const tagTimeTracking: TTWorkContextSessionMap = {};
   if (data.tag?.entities) {
     for (const tagId of Object.keys(data.tag.entities)) {
-      const tag = data.tag.entities[tagId] as TagCopy;
+      const tag = data.tag.entities[tagId] as any;
       if (!tag) continue;
       tagTimeTracking[tagId] = {};
 
@@ -300,9 +295,7 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
 
     // Convert _showSubTasksMode → _hideSubTasksMode
     if (!taskDict[taskId]!._hideSubTasksMode) {
-      const oldValue = (taskDict[taskId] as any)?._showSubTasksMode as
-        | number
-        | undefined;
+      const oldValue = (taskDict[taskId] as any)?._showSubTasksMode as number | undefined;
       let newValue: HideSubTasksMode | undefined;
       if (oldValue === 1) {
         newValue = 1;
@@ -324,9 +317,7 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
     if (taskDict[taskId]!.timeSpentOnDay) {
       const cleanTimeSpent: TimeSpentOnDayCopy = {};
       let hasInvalidValues = false;
-      for (const [date, timeSpent] of Object.entries(
-        taskDict[taskId]!.timeSpentOnDay,
-      )) {
+      for (const [date, timeSpent] of Object.entries(taskDict[taskId]!.timeSpentOnDay)) {
         if (timeSpent !== null && timeSpent !== undefined) {
           cleanTimeSpent[date] = timeSpent;
         } else {
@@ -344,7 +335,7 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
 // Migration 3 — planner, INBOX project, legacy tag cleanup
 // ---------------------------------------------------------------------------
 
-function _migration3_plannerAndInbox(data: Record<string, any>): Record<string, any> {
+function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, any> {
   PFLog.log('migrateLegacyBackup: Running migration 3 (planner + inbox)');
 
   // Migrate planner days → task.dueDay
@@ -403,9 +394,7 @@ function _migration3_plannerAndInbox(data: Record<string, any>): Record<string, 
     };
     data.project.ids = [
       INBOX_PROJECT.id,
-      ...data.project.ids.filter(
-        (id: string) => id !== LEGACY_INBOX_PROJECT_ID,
-      ),
+      ...data.project.ids.filter((id: string) => id !== LEGACY_INBOX_PROJECT_ID),
     ];
     delete data.project.entities[LEGACY_INBOX_PROJECT_ID];
 
@@ -435,19 +424,12 @@ function _migration3_plannerAndInbox(data: Record<string, any>): Record<string, 
 
   // Remove legacy NO_LIST tag
   if (data.tag?.entities?.[LEGACY_NO_LIST_TAG_ID]) {
-    data.tag.ids = data.tag.ids.filter(
-      (id: string) => id !== LEGACY_NO_LIST_TAG_ID,
-    );
+    data.tag.ids = data.tag.ids.filter((id: string) => id !== LEGACY_NO_LIST_TAG_ID);
     delete data.tag.entities[LEGACY_NO_LIST_TAG_ID];
   }
 
   // Migrate tasks in all locations
-  _migrateTasksForMigration3(
-    data.task,
-    data.project,
-    false,
-    isMigrateLegacyInboxProject,
-  );
+  _migrateTasksForMigration3(data.task, data.project, false, isMigrateLegacyInboxProject);
   if (data.archiveYoung?.task) {
     _migrateTasksForMigration3(
       data.archiveYoung.task,
@@ -475,9 +457,7 @@ function _migration3_plannerAndInbox(data: Record<string, any>): Record<string, 
 
   // Cleanup task repeat config legacy references
   if (data.taskRepeatCfg?.entities) {
-    const availableTagIds = data.tag?.entities
-      ? Object.keys(data.tag.entities)
-      : [];
+    const availableTagIds = data.tag?.entities ? Object.keys(data.tag.entities) : [];
     for (const id of Object.keys(data.taskRepeatCfg.entities)) {
       const cfg = data.taskRepeatCfg.entities[id];
       if (cfg?.tagIds?.length > 0) {
@@ -511,9 +491,7 @@ function _migrateTasksForMigration3(
 
     // Remove legacy NO_LIST tag
     if (task.tagIds?.includes(LEGACY_NO_LIST_TAG_ID)) {
-      task.tagIds = task.tagIds.filter(
-        (v: string) => v !== LEGACY_NO_LIST_TAG_ID,
-      );
+      task.tagIds = task.tagIds.filter((v: string) => v !== LEGACY_NO_LIST_TAG_ID);
     }
 
     // Add INBOX project to tasks without projectId
@@ -536,9 +514,7 @@ function _migrateTasksForMigration3(
     task.issueId = task.issueId || undefined;
     task.issueProviderId = task.issueProviderId || undefined;
     task.issueType =
-      (task.issueType as any) === 'CALENDAR'
-        ? 'ICAL'
-        : task.issueType || undefined;
+      (task.issueType as any) === 'CALENDAR' ? 'ICAL' : task.issueType || undefined;
     task.issueWasUpdated = task.issueWasUpdated || undefined;
     task.issueLastUpdated = task.issueLastUpdated || undefined;
     task.issueAttachmentNr = task.issueAttachmentNr || undefined;
@@ -556,9 +532,7 @@ function _migrateTasksForMigration3(
 // Migration 4 — plannedAt → dueWithTime, remove TODAY_TAG from tagIds
 // ---------------------------------------------------------------------------
 
-function _migration4_taskDateTimeFields(
-  data: Record<string, any>,
-): Record<string, any> {
+function _migration4TaskDateTimeFields(data: Record<string, any>): Record<string, any> {
   PFLog.log('migrateLegacyBackup: Running migration 4 (task datetime fields)');
 
   if (data.improvement && !Array.isArray(data.improvement.hiddenImprovementBannerItems)) {
@@ -597,9 +571,7 @@ function _migrateTasksForMigration4(taskState: any): void {
 // Migration 4.1 — remove TODAY_TAG from task repeat configs
 // ---------------------------------------------------------------------------
 
-function _migration4_1_repeatCfgTodayTag(
-  data: Record<string, any>,
-): Record<string, any> {
+function _migration41RepeatCfgTodayTag(data: Record<string, any>): Record<string, any> {
   if (!data.taskRepeatCfg?.entities) return data;
 
   for (const id of Object.keys(data.taskRepeatCfg.entities)) {
@@ -615,7 +587,7 @@ function _migration4_1_repeatCfgTodayTag(
 // Migration 4.2 — ensure both lastTaskCreation and lastTaskCreationDay
 // ---------------------------------------------------------------------------
 
-function _migration4_2_repeatCfgDualDatetime(
+function _migration42RepeatCfgDualDatetime(
   data: Record<string, any>,
 ): Record<string, any> {
   if (!data.taskRepeatCfg?.entities) return data;
@@ -648,7 +620,7 @@ function _migration4_2_repeatCfgDualDatetime(
 // Migration 4.3 — ensure menuTree exists
 // ---------------------------------------------------------------------------
 
-function _migration4_3_menuTree(data: Record<string, any>): Record<string, any> {
+function _migration43MenuTree(data: Record<string, any>): Record<string, any> {
   if (!data.menuTree || typeof data.menuTree !== 'object') {
     data.menuTree = menuTreeInitialState;
   } else {
@@ -666,7 +638,7 @@ function _migration4_3_menuTree(data: Record<string, any>): Record<string, any> 
 // Migration 4.4 — localization + appFeatures
 // ---------------------------------------------------------------------------
 
-function _migration4_4_localizationAndAppFeatures(
+function _migration44LocalizationAndAppFeatures(
   data: Record<string, any>,
 ): Record<string, any> {
   if (!data.globalConfig) return data;
@@ -738,7 +710,7 @@ function _migration4_4_localizationAndAppFeatures(
 // Migration 4.5 — lowercase language codes
 // ---------------------------------------------------------------------------
 
-function _migration4_5_lowercaseLanguageCodes(
+function _migration45LowercaseLanguageCodes(
   data: Record<string, any>,
 ): Record<string, any> {
   const oldLang = data.globalConfig?.localization?.lng;

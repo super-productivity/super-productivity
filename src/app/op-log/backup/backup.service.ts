@@ -22,10 +22,7 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
-import {
-  isLegacyBackupData,
-  migrateLegacyBackup,
-} from './migrate-legacy-backup';
+import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 
 /**
  * Service for handling backup import and export operations.

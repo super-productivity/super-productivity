@@ -1,11 +1,15 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 import { INBOX_PROJECT } from '../../features/project/project.const';
+import fixture from './test-fixtures/legacy-v10-backup.json';
 
 /**
  * Creates a minimal v10-era legacy backup structure.
  * This matches the shape of backups exported by Super Productivity v10-v13.
  */
-const createLegacyBackup = (overrides: Record<string, any> = {}): Record<string, any> => ({
+const createLegacyBackup = (
+  overrides: Record<string, any> = {},
+): Record<string, any> => ({
   bookmark: {},
   globalConfig: {
     __modelVersion: 3.4,
@@ -201,7 +205,10 @@ describe('migrate-legacy-backup', () => {
 
     it('should NOT detect minimal v17 data without archives as legacy', () => {
       // dataRepair handles missing archives; no migration needed
-      const data = { task: { ids: [], entities: {} }, project: { ids: [], entities: {} } };
+      const data = {
+        task: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+      };
       expect(isLegacyBackupData(data)).toBe(false);
     });
   });
@@ -381,9 +388,6 @@ describe('migrate-legacy-backup', () => {
   });
 
   describe('migrateLegacyBackup with fixture file', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const fixture = require('./test-fixtures/legacy-v10-backup.json');
-
     it('should detect fixture as legacy', () => {
       expect(isLegacyBackupData(fixture)).toBe(true);
     });
