@@ -1,0 +1,185 @@
+{
+  "bookmark": {},
+  "globalConfig": {
+    "__modelVersion": 3.4,
+    "misc": { "defaultProjectId": null },
+    "lang": { "lng": "en" }
+  },
+  "reminders": [],
+  "planner": { "days": {} },
+  "project": {
+    "ids": ["proj-1"],
+    "entities": {
+      "proj-1": {
+        "id": "proj-1",
+        "title": "My Project",
+        "taskIds": ["task-1", "task-2"],
+        "backlogTaskIds": ["task-3"],
+        "noteIds": ["note-1"],
+        "isHiddenFromMenu": false,
+        "isArchived": false,
+        "workStart": { "2024-01-15": 1705312800000 },
+        "workEnd": { "2024-01-15": 1705341600000 },
+        "breakNr": { "2024-01-15": 2 },
+        "breakTime": { "2024-01-15": 1800000 }
+      }
+    },
+    "__modelVersion": 6.14
+  },
+  "tag": {
+    "ids": ["TODAY", "tag-1"],
+    "entities": {
+      "TODAY": { "id": "TODAY", "title": "Today", "taskIds": ["task-1"], "icon": "wb_sunny", "workStart": {}, "workEnd": {}, "breakNr": {}, "breakTime": {} },
+      "tag-1": { "id": "tag-1", "title": "Urgent", "taskIds": ["task-2"], "icon": null, "workStart": {}, "workEnd": {}, "breakNr": {}, "breakTime": {} }
+    },
+    "__modelVersion": 1
+  },
+  "simpleCounter": { "ids": [], "entities": {}, "__modelVersion": 2 },
+  "note": {
+    "ids": ["note-1"],
+    "entities": {
+      "note-1": { "id": "note-1", "projectId": "proj-1", "content": "A note", "created": 1705312800000 }
+    },
+    "todayOrder": [],
+    "__modelVersion": 1
+  },
+  "metric": { "ids": [], "entities": {}, "__modelVersion": 1 },
+  "improvement": { "ids": [], "entities": {}, "hiddenImprovementBannerItems": [] },
+  "obstruction": { "ids": [], "entities": {} },
+  "task": {
+    "ids": ["task-1", "task-2", "task-3"],
+    "entities": {
+      "task-1": {
+        "id": "task-1",
+        "projectId": "proj-1",
+        "title": "Active task",
+        "subTaskIds": [],
+        "timeSpentOnDay": { "2024-01-15": 3600000 },
+        "timeSpent": 3600000,
+        "timeEstimate": 7200000,
+        "isDone": false,
+        "notes": "",
+        "tagIds": ["tag-1"],
+        "parentId": null,
+        "created": 1705312800000,
+        "attachments": [],
+        "plannedAt": 1705399200000,
+        "issueId": null,
+        "issueProviderId": null,
+        "issueType": null,
+        "reminderId": null,
+        "repeatCfgId": null
+      },
+      "task-2": {
+        "id": "task-2",
+        "projectId": "proj-1",
+        "title": "Second task",
+        "subTaskIds": ["task-2-sub"],
+        "timeSpentOnDay": {},
+        "timeSpent": 0,
+        "timeEstimate": 0,
+        "isDone": false,
+        "notes": null,
+        "tagIds": [],
+        "parentId": null,
+        "created": 1705312800000,
+        "attachments": [],
+        "_showSubTasksMode": 0
+      },
+      "task-2-sub": {
+        "id": "task-2-sub",
+        "projectId": "proj-1",
+        "title": "Subtask",
+        "subTaskIds": [],
+        "timeSpentOnDay": {},
+        "timeSpent": 0,
+        "timeEstimate": null,
+        "isDone": false,
+        "notes": "",
+        "tagIds": [],
+        "parentId": "task-2",
+        "created": null,
+        "attachments": []
+      },
+      "task-3": {
+        "id": "task-3",
+        "projectId": "proj-1",
+        "title": "Backlog task",
+        "subTaskIds": [],
+        "timeSpentOnDay": {},
+        "timeSpent": 0,
+        "timeEstimate": 0,
+        "isDone": false,
+        "notes": "",
+        "tagIds": [],
+        "parentId": null,
+        "created": 1705312800000,
+        "attachments": [],
+        "issueId": 42
+      }
+    },
+    "currentTaskId": null,
+    "selectedTaskId": null,
+    "__modelVersion": 3.6
+  },
+  "taskArchive": {
+    "ids": ["arch-1", "arch-2"],
+    "entities": {
+      "arch-1": {
+        "id": "arch-1",
+        "projectId": "proj-1",
+        "title": "Archived task 1",
+        "subTaskIds": [],
+        "timeSpentOnDay": { "2024-01-10": 1800000 },
+        "timeSpent": 1800000,
+        "timeEstimate": 0,
+        "isDone": true,
+        "doneOn": 1704931200000,
+        "notes": "",
+        "tagIds": [],
+        "parentId": null,
+        "created": 1704844800000,
+        "attachments": []
+      },
+      "arch-2": {
+        "id": "arch-2",
+        "projectId": "proj-1",
+        "title": "Archived task 2",
+        "subTaskIds": [],
+        "timeSpentOnDay": {},
+        "timeSpent": 0,
+        "timeEstimate": 3600000,
+        "isDone": true,
+        "doneOn": 1704931200000,
+        "notes": "",
+        "tagIds": ["tag-1"],
+        "parentId": null,
+        "created": 1704844800000,
+        "attachments": []
+      }
+    },
+    "__modelVersion": 3.6
+  },
+  "taskRepeatCfg": {
+    "ids": ["repeat-1"],
+    "entities": {
+      "repeat-1": {
+        "id": "repeat-1",
+        "projectId": "proj-1",
+        "title": "Daily standup",
+        "tagIds": ["TODAY"],
+        "lastTaskCreation": 1705312800000,
+        "monday": true,
+        "tuesday": true,
+        "wednesday": true,
+        "thursday": true,
+        "friday": true,
+        "saturday": false,
+        "sunday": false
+      }
+    },
+    "__modelVersion": 1.43
+  },
+  "lastLocalSyncModelChange": 1705341600000,
+  "lastArchiveUpdate": 1705341600000
+}

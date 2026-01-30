@@ -379,4 +379,116 @@ describe('migrate-legacy-backup', () => {
       expect(result.archiveOld.task.ids.length).toBe(0);
     });
   });
+
+  describe('migrateLegacyBackup with fixture file', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fixture = require('./test-fixtures/legacy-v10-backup.json');
+
+    it('should detect fixture as legacy', () => {
+      expect(isLegacyBackupData(fixture)).toBe(true);
+    });
+
+    it('should produce all v17-required keys from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as unknown as Record<
+        string,
+        any
+      >;
+
+      for (const key of V17_REQUIRED_KEYS) {
+        expect(key in result)
+          .withContext(`expected key "${key}" to be present`)
+          .toBe(true);
+      }
+    });
+
+    it('should strip all legacy keys from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as unknown as Record<
+        string,
+        any
+      >;
+
+      for (const key of LEGACY_KEYS) {
+        expect(key in result)
+          .withContext(`expected key "${key}" to be absent`)
+          .toBe(false);
+      }
+    });
+
+    it('should preserve active tasks from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      // fixture has task-1, task-2, task-2-sub, task-3
+      expect(result.task.ids.length).toBe(fixture.task.ids.length);
+    });
+
+    it('should migrate archived tasks from fixture into archiveYoung', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      // fixture.taskArchive has arch-1, arch-2
+      expect(result.archiveYoung.task.ids).toContain('arch-1');
+      expect(result.archiveYoung.task.ids).toContain('arch-2');
+      expect(result.archiveYoung.task.ids.length).toBe(fixture.taskArchive.ids.length);
+    });
+
+    it('should extract time tracking from fixture projects', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      expect(result.timeTracking.project['proj-1']).toBeDefined();
+      expect(result.timeTracking.project['proj-1']['2024-01-15'].s).toBe(1705312800000);
+      expect(result.timeTracking.project['proj-1']['2024-01-15'].e).toBe(1705341600000);
+      expect(result.timeTracking.project['proj-1']['2024-01-15'].b).toBe(2);
+      expect(result.timeTracking.project['proj-1']['2024-01-15'].bt).toBe(1800000);
+    });
+
+    it('should convert plannedAt to dueWithTime from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      expect(result.task.entities['task-1'].dueWithTime).toBe(1705399200000);
+      expect(result.task.entities['task-1'].plannedAt).toBeUndefined();
+    });
+
+    it('should convert numeric issueId to string from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      expect(result.task.entities['task-3'].issueId).toBe('42');
+    });
+
+    it('should convert _showSubTasksMode to _hideSubTasksMode from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      // _showSubTasksMode: 0 → _hideSubTasksMode: 2
+      expect(result.task.entities['task-2']._hideSubTasksMode).toBe(2);
+      expect(result.task.entities['task-2']._showSubTasksMode).toBeUndefined();
+    });
+
+    it('should normalize null timeEstimate and created from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      // task-2-sub had timeEstimate: null and created: null
+      expect(result.task.entities['task-2-sub'].timeEstimate).toBe(0);
+      expect(result.task.entities['task-2-sub'].created).toBe(0);
+    });
+
+    it('should remove TODAY_TAG from repeat config tagIds in fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      expect(result.taskRepeatCfg.entities['repeat-1'].tagIds).not.toContain('TODAY');
+    });
+
+    it('should add lastTaskCreationDay for repeat configs in fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      const cfg = result.taskRepeatCfg.entities['repeat-1'];
+      expect(cfg.lastTaskCreation).toBeDefined();
+      expect(cfg.lastTaskCreationDay).toBeDefined();
+    });
+
+    it('should migrate lang to localization from fixture', () => {
+      const result = migrateLegacyBackup(structuredClone(fixture)) as any;
+
+      expect(result.globalConfig.localization).toBeDefined();
+      expect(result.globalConfig.localization.lng).toBe('en');
+      expect(result.globalConfig.lang).toBeUndefined();
+    });
+  });
 });
