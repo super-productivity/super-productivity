@@ -45,7 +45,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   readonly isShowControls = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
-  readonly placeholderTxt = input<string | undefined>(undefined);
+  readonly placeholderTxt = input<string>('');
 
   readonly changed = output<string>();
   readonly focused = output<Event>();
@@ -58,7 +58,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   isHideOverflow = signal(false);
   isChecklistMode = signal(false);
   isShowEdit = signal(false);
-  modelCopy = signal<string | undefined>(undefined);
+  modelCopy = signal<string>('');
 
   isMarkdownFormattingEnabled = computed(() => {
     const tasks = this._globalConfigService.tasks();
@@ -82,9 +82,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
-  @Input() set model(v: string | undefined) {
-    this._model = v;
-    this.modelCopy.set(v);
+  @Input() set model(v: string) {
+    this._model = v || '';
+    this.modelCopy.set(v || '');
 
     if (!this.isShowEdit()) {
       window.setTimeout(() => {
