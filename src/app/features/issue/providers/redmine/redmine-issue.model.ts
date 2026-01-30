@@ -49,6 +49,7 @@ export type RedmineIssue = Readonly<{
   author: RedmineAuthor;
   category: RedmineCategory;
   subject: string;
+  title: string;
   description: string;
   done_ratio: number;
   custom_fields: RedmineCustomField[];
