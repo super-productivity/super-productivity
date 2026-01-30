@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { info } from 'electron-log/main';
-import { getWin } from './main-window';
+import { getWin, wasMaximizedBeforeHide } from './main-window';
 import { hideOverlayWindow } from './overlay-indicator/overlay-indicator';
 import { setIsQuiting } from './shared-state';
 
@@ -26,8 +26,10 @@ export function showOrFocus(passedWin: BrowserWindow): void {
   if (win.isVisible()) {
     win.focus();
   } else {
-    win.restore();
+    // restore explicitly
+    if (win.isMinimized()) win.restore();
     win.show();
+    if (wasMaximizedBeforeHide) win.maximize();
   }
 
   // Hide overlay when main window is shown
