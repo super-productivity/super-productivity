@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  input,
+  computed,
+  effect,
+  signal,
+} from '@angular/core';
 import { TaskAttachment } from '../task-attachment.model';
 import { TaskAttachmentService } from '../task-attachment.service';
 import { MatDialog } from '@angular/material/dialog';
@@ -10,6 +18,13 @@ import { TaskAttachmentLinkDirective } from '../task-attachment-link/task-attach
 import { MatIcon } from '@angular/material/icon';
 import { EnlargeImgDirective } from '../../../../ui/enlarge-img/enlarge-img.directive';
 import { MatAnchor, MatButton } from '@angular/material/button';
+import { ClipboardImageService } from '../../../../core/clipboard-image/clipboard-image.service';
+
+interface ResolvedAttachment extends TaskAttachment {
+  resolvedPath?: string;
+  resolvedOriginalPath?: string;
+  isLoading?: boolean;
+}
 
 @Component({
   selector: 'task-attachment-list',
@@ -29,13 +44,101 @@ export class TaskAttachmentListComponent {
   readonly attachmentService = inject(TaskAttachmentService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _snackService = inject(SnackService);
+  private readonly _clipboardImageService = inject(ClipboardImageService);
 
   readonly taskId = input<string>();
   readonly attachments = input<TaskAttachment[]>();
   readonly isDisableControls = input<boolean>(false);
 
+  private readonly _resolvedUrlsMap = signal<Map<string, string>>(new Map());
+  private readonly _loadingUrls = signal<Set<string>>(new Set());
+
+  readonly resolvedAttachments = computed(() => {
+    const attachments = this.attachments();
+    const urlMap = this._resolvedUrlsMap();
+    const loadingUrls = this._loadingUrls();
+
+    if (!attachments) return [];
+
+    return attachments.map((att) => {
+      const resolvedPath = att.path?.startsWith('indexeddb://clipboard-images/')
+        ? urlMap.get(att.path) || att.path
+        : att.path;
+
+      const imgPath = att.originalImgPath || att.path;
+      const resolvedOriginalPath = imgPath?.startsWith('indexeddb://clipboard-images/')
+        ? urlMap.get(imgPath) || imgPath
+        : imgPath;
+
+      const isLoading =
+        att.path?.startsWith('indexeddb://clipboard-images/') &&
+        !urlMap.has(att.path) &&
+        loadingUrls.has(att.path);
+
+      return {
+        ...att,
+        resolvedPath,
+        resolvedOriginalPath,
+        isLoading,
+      } as ResolvedAttachment;
+    });
+  });
+
   T: typeof T = T;
   isError: boolean[] = [];
+
+  constructor() {
+    // Effect to resolve URLs asynchronously when attachments change
+    effect(() => {
+      const attachments = this.attachments();
+      if (!attachments) return;
+
+      attachments.forEach(async (att) => {
+        try {
+          const urlsToResolve: string[] = [];
+
+          if (att.path?.startsWith('indexeddb://clipboard-images/')) {
+            urlsToResolve.push(att.path);
+          }
+
+          const imgPath = att.originalImgPath || att.path;
+          if (
+            imgPath?.startsWith('indexeddb://clipboard-images/') &&
+            imgPath !== att.path
+          ) {
+            urlsToResolve.push(imgPath);
+          }
+
+          for (const url of urlsToResolve) {
+            // Mark as loading
+            this._loadingUrls.update((set) => {
+              const newSet = new Set(set);
+              newSet.add(url);
+              return newSet;
+            });
+
+            const resolved = await this._clipboardImageService.resolveIndexedDbUrl(url);
+            if (resolved) {
+              this._resolvedUrlsMap.update((map) => {
+                const newMap = new Map(map);
+                newMap.set(url, resolved);
+                return newMap;
+              });
+            }
+
+            // Remove from loading
+            this._loadingUrls.update((set) => {
+              const newSet = new Set(set);
+              newSet.delete(url);
+              return newSet;
+            });
+          }
+        } catch (error) {
+          console.error('Error resolving clipboard image:', error);
+        }
+      });
+    });
+  }
 
   openEditDialog(attachment?: TaskAttachment): void {
     if (!this.taskId()) {

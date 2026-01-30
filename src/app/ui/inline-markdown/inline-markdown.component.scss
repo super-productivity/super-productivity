@@ -47,6 +47,15 @@
   cursor: text;
 }
 
+.markdown-parsed.preview-while-editing {
+  position: relative;
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--color-border);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 // NOTE:
 // see global marked.scss for more styles
 

@@ -1,0 +1,32 @@
+.clipboard-images-cfg {
+  padding: 16px 0;
+
+  section {
+    margin-bottom: 24px;
+  }
+
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  p {
+    margin: 0 0 16px 0;
+    color: var(--text-color-muted);
+  }
+
+  mat-form-field {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  button {
+    margin-right: 8px;
+  }
+
+  .manage-images-section {
+    padding-top: 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+  }
+}
