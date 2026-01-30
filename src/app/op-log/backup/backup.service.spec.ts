@@ -10,6 +10,7 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType, Operation } from '../core/operation.types';
+import { DataValidationFailedError } from '../core/errors/sync-errors';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -284,6 +285,26 @@ describe('BackupService', () => {
      *
      * @see packages/super-sync-server/src/sync/sync.routes.ts:703-733
      */
+    it('should throw DataValidationFailedError when validation fails and repair is not possible', async () => {
+      // Data with completely wrong structure — not repairable
+      const invalidData = { garbage: true } as any;
+
+      await expectAsync(
+        service.importCompleteBackup(invalidData, true, true),
+      ).toBeRejectedWithError(/Validation failed/);
+    });
+
+    it('should throw DataValidationFailedError (not plain Error) for unrepairable data', async () => {
+      const invalidData = { garbage: true } as any;
+
+      try {
+        await service.importCompleteBackup(invalidData, true, true);
+        fail('Expected importCompleteBackup to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(DataValidationFailedError);
+      }
+    });
+
     it('should use OpType.BackupImport for recovery (not SyncImport)', async () => {
       const backupData = createMinimalValidBackup();
 

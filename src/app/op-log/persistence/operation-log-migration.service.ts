@@ -208,24 +208,54 @@ export class OperationLogMigrationService {
     let dataToMigrate: AppDataComplete = legacyData as any;
 
     if (!validationResult.isValid) {
-      OpLog.warn(
-        'OperationLogMigrationService: Legacy data validation failed, attempting repair',
-      );
-
-      if (!isDataRepairPossible(legacyData as any)) {
-        throw new Error('Legacy data is corrupted and cannot be repaired');
-      }
-
-      const errors =
+      const typiaErrors =
         'errors' in validationResult.typiaResult
           ? validationResult.typiaResult.errors
           : [];
-      dataToMigrate = dataRepair(legacyData as any, errors);
+      const errorPaths = typiaErrors.map((e) => e.path).join(', ');
+
+      OpLog.warn('OperationLogMigrationService: Legacy data validation failed.', {
+        typiaErrorCount: typiaErrors.length,
+        typiaErrorPaths: errorPaths,
+        crossModelError: validationResult.crossModelError || null,
+      });
+
+      OpLog.verbose(
+        'OperationLogMigrationService: Typia validation errors:',
+        JSON.stringify(typiaErrors.slice(0, 10)),
+      );
+
+      if (!isDataRepairPossible(legacyData as any)) {
+        OpLog.err(
+          'OperationLogMigrationService: Legacy data is corrupted and cannot be repaired.',
+          {
+            typiaErrorPaths: errorPaths,
+            crossModelError: validationResult.crossModelError,
+          },
+        );
+        throw new Error(
+          `Legacy data is corrupted and cannot be repaired. Validation errors at: ${errorPaths || 'unknown'}`,
+        );
+      }
+
+      OpLog.normal('OperationLogMigrationService: Attempting data repair...');
+      dataToMigrate = dataRepair(legacyData as any, typiaErrors);
 
       // Re-validate after repair to ensure success
       const postRepairValidation = validateFull(dataToMigrate);
       if (!postRepairValidation.isValid) {
-        throw new Error('Data repair failed - data still invalid after repair attempt');
+        const postErrors =
+          'errors' in postRepairValidation.typiaResult
+            ? postRepairValidation.typiaResult.errors
+            : [];
+        const postErrorPaths = postErrors.map((e) => e.path).join(', ');
+        OpLog.err('OperationLogMigrationService: Data still invalid after repair.', {
+          postErrorPaths,
+          crossModelError: postRepairValidation.crossModelError,
+        });
+        throw new Error(
+          `Data repair failed - data still invalid after repair attempt. Remaining errors at: ${postErrorPaths || 'unknown'}`,
+        );
       }
 
       OpLog.normal('OperationLogMigrationService: Data repair successful');

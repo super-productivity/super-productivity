@@ -49,21 +49,41 @@ export class ArchiveMigrationService {
     }
 
     // Load archives from legacy database
-    const [legacyYoung, legacyOld] = await Promise.all([
-      this._legacyPfDb.loadArchiveYoung(),
-      this._legacyPfDb.loadArchiveOld(),
-    ]);
+    let legacyYoung: ArchiveModel;
+    let legacyOld: ArchiveModel;
+    try {
+      [legacyYoung, legacyOld] = await Promise.all([
+        this._legacyPfDb.loadArchiveYoung(),
+        this._legacyPfDb.loadArchiveOld(),
+      ]);
+    } catch (e) {
+      Log.err(
+        'ArchiveMigrationService: Failed to load archives from legacy database:',
+        e,
+      );
+      throw e;
+    }
 
     // Migrate archiveYoung if it has data and doesn't exist in SUP_OPS
     if (!hasYoung && this._hasArchiveData(legacyYoung)) {
-      Log.log('ArchiveMigrationService: Migrating archiveYoung to SUP_OPS');
-      await this._archiveStore.saveArchiveYoung(legacyYoung);
+      try {
+        Log.log('ArchiveMigrationService: Migrating archiveYoung to SUP_OPS');
+        await this._archiveStore.saveArchiveYoung(legacyYoung);
+      } catch (e) {
+        Log.err('ArchiveMigrationService: Failed to save archiveYoung to SUP_OPS:', e);
+        throw e;
+      }
     }
 
     // Migrate archiveOld if it has data and doesn't exist in SUP_OPS
     if (!hasOld && this._hasArchiveData(legacyOld)) {
-      Log.log('ArchiveMigrationService: Migrating archiveOld to SUP_OPS');
-      await this._archiveStore.saveArchiveOld(legacyOld);
+      try {
+        Log.log('ArchiveMigrationService: Migrating archiveOld to SUP_OPS');
+        await this._archiveStore.saveArchiveOld(legacyOld);
+      } catch (e) {
+        Log.err('ArchiveMigrationService: Failed to save archiveOld to SUP_OPS:', e);
+        throw e;
+      }
     }
 
     Log.log('ArchiveMigrationService: Archive migration complete');

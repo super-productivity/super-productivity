@@ -22,6 +22,7 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
+import { DataValidationFailedError } from '../core/errors/sync-errors';
 
 /**
  * Service for handling backup import and export operations.
@@ -89,35 +90,58 @@ export class BackupService {
 
       if ('crossModelVersion' in data && 'timestamp' in data && 'data' in data) {
         backupData = data.data;
-        // crossModelVersion was used for cross-model migrations, which are now removed
+        PFLog.verbose(
+          'BackupService: Detected CompleteBackup wrapper format',
+          `crossModelVersion=${(data as CompleteBackup<AllModelConfig>).crossModelVersion}`,
+        );
       } else {
         backupData = data as AppDataComplete;
+        PFLog.verbose('BackupService: Detected raw AppDataComplete format');
       }
+
+      PFLog.verbose(
+        'BackupService: Backup data keys:',
+        Object.keys(backupData).sort().join(', '),
+      );
 
       // 2. Validate data
       const validationResult = validateFull(backupData);
       let validatedData = backupData;
 
       if (!validationResult.isValid) {
-        // Try to repair
-        PFLog.normal('BackupService: Validation failed, attempting repair...', {
-          success: validationResult.typiaResult.success,
-          errors:
-            'errors' in validationResult.typiaResult
-              ? validationResult.typiaResult.errors.length
-              : 0,
+        const typiaErrors =
+          'errors' in validationResult.typiaResult
+            ? validationResult.typiaResult.errors
+            : [];
+        const errorPaths = typiaErrors.map((e) => e.path).join(', ');
+
+        PFLog.warn('BackupService: Validation failed.', {
+          typiaSuccess: validationResult.typiaResult.success,
+          typiaErrorCount: typiaErrors.length,
+          typiaErrorPaths: errorPaths,
+          crossModelError: validationResult.crossModelError || null,
           hasArchiveYoung: !!backupData.archiveYoung,
           hasArchiveOld: !!backupData.archiveOld,
         });
+
+        PFLog.verbose(
+          'BackupService: Typia validation errors:',
+          JSON.stringify(typiaErrors.slice(0, 10)),
+        );
+
         if (isDataRepairPossible(backupData)) {
-          const errors =
-            'errors' in validationResult.typiaResult
-              ? validationResult.typiaResult.errors
-              : [];
-          validatedData = dataRepair(backupData, errors);
+          PFLog.normal('BackupService: Attempting data repair...');
+          validatedData = dataRepair(backupData, typiaErrors);
+          PFLog.normal('BackupService: Data repair completed.');
         } else {
-          throw new Error('Data validation failed and repair not possible');
+          PFLog.err('BackupService: Data repair not possible. Import aborted.', {
+            typiaErrorPaths: errorPaths,
+            crossModelError: validationResult.crossModelError || null,
+          });
+          throw new DataValidationFailedError(validationResult.typiaResult);
         }
+      } else {
+        PFLog.verbose('BackupService: Validation passed.');
       }
 
       // 3. Persist to operation log

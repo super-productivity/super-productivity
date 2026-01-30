@@ -41,7 +41,13 @@ export const dataRepair = (
     throw new Error('Data repair attempted but not possible');
   }
 
-  // console.time('dataRepair');
+  PFLog.verbose('[data-repair] Starting data repair.', {
+    tasks: data.task?.ids?.length ?? 0,
+    projects: data.project?.ids?.length ?? 0,
+    tags: data.tag?.ids?.length ?? 0,
+    typiaErrors: errors.length,
+  });
+
   // NOTE deep copy is important to prevent readonly errors from frozen NgRx state
   // We detect if the state is frozen and only deep clone in that case for performance
   const isFrozen =
@@ -80,34 +86,120 @@ export const dataRepair = (
   // NOTE: We no longer merge archiveOld into archiveYoung during repair.
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
-  dataOut = _fixEntityStates(dataOut);
-  dataOut = _removeMissingTasksFromListsOrRestoreFromArchive(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut);
-  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut);
-  dataOut = _addOrphanedTasksToProjectLists(dataOut);
-  dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut);
-  dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut);
-  dataOut = _cleanupOrphanedSubTasks(dataOut);
-  dataOut = _cleanupNonExistingTasksFromLists(dataOut);
-  dataOut = _cleanupNonExistingNotesFromLists(dataOut);
-  dataOut = _fixInconsistentProjectId(dataOut);
-  dataOut = _fixInconsistentTagId(dataOut);
-  dataOut = _setTaskProjectIdAccordingToParent(dataOut);
-  dataOut = _removeDuplicatesFromArchive(dataOut);
-  dataOut = _clearLegacyReminderIds(dataOut);
-  dataOut = _fixTaskRepeatMissingWeekday(dataOut);
-  dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut);
-  dataOut = _createInboxProjectIfNecessary(dataOut);
-  dataOut = _fixOrphanedNotes(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromTasks(dataOut);
-  dataOut = _removeNonExistentTagsFromTasks(dataOut);
-  dataOut = _addInboxProjectIdIfNecessary(dataOut);
-  dataOut = _repairMenuTree(dataOut);
+  dataOut = _runRepairStep('fixEntityStates', dataOut, _fixEntityStates);
+  dataOut = _runRepairStep(
+    'removeMissingTasksFromLists',
+    dataOut,
+    _removeMissingTasksFromListsOrRestoreFromArchive,
+  );
+  dataOut = _runRepairStep(
+    'removeNonExistentProjectIdsFromIssueProviders',
+    dataOut,
+    _removeNonExistentProjectIdsFromIssueProviders,
+  );
+  dataOut = _runRepairStep(
+    'removeNonExistentProjectIdsFromTaskRepeatCfg',
+    dataOut,
+    _removeNonExistentProjectIdsFromTaskRepeatCfg,
+  );
+  dataOut = _runRepairStep(
+    'removeNonExistentRepeatCfgIdsFromTasks',
+    dataOut,
+    _removeNonExistentRepeatCfgIdsFromTasks,
+  );
+  dataOut = _runRepairStep(
+    'addOrphanedTasksToProjectLists',
+    dataOut,
+    _addOrphanedTasksToProjectLists,
+  );
+  dataOut = _runRepairStep(
+    'moveArchivedSubTasksToUnarchivedParents',
+    dataOut,
+    _moveArchivedSubTasksToUnarchivedParents,
+  );
+  dataOut = _runRepairStep(
+    'moveUnArchivedSubTasksToArchivedParents',
+    dataOut,
+    _moveUnArchivedSubTasksToArchivedParents,
+  );
+  dataOut = _runRepairStep('cleanupOrphanedSubTasks', dataOut, _cleanupOrphanedSubTasks);
+  dataOut = _runRepairStep(
+    'cleanupNonExistingTasksFromLists',
+    dataOut,
+    _cleanupNonExistingTasksFromLists,
+  );
+  dataOut = _runRepairStep(
+    'cleanupNonExistingNotesFromLists',
+    dataOut,
+    _cleanupNonExistingNotesFromLists,
+  );
+  dataOut = _runRepairStep(
+    'fixInconsistentProjectId',
+    dataOut,
+    _fixInconsistentProjectId,
+  );
+  dataOut = _runRepairStep('fixInconsistentTagId', dataOut, _fixInconsistentTagId);
+  dataOut = _runRepairStep(
+    'setTaskProjectIdAccordingToParent',
+    dataOut,
+    _setTaskProjectIdAccordingToParent,
+  );
+  dataOut = _runRepairStep(
+    'removeDuplicatesFromArchive',
+    dataOut,
+    _removeDuplicatesFromArchive,
+  );
+  dataOut = _runRepairStep('clearLegacyReminderIds', dataOut, _clearLegacyReminderIds);
+  dataOut = _runRepairStep(
+    'fixTaskRepeatMissingWeekday',
+    dataOut,
+    _fixTaskRepeatMissingWeekday,
+  );
+  dataOut = _runRepairStep(
+    'fixTaskRepeatCfgInvalidQuickSetting',
+    dataOut,
+    _fixTaskRepeatCfgInvalidQuickSetting,
+  );
+  dataOut = _runRepairStep(
+    'createInboxProjectIfNecessary',
+    dataOut,
+    _createInboxProjectIfNecessary,
+  );
+  dataOut = _runRepairStep('fixOrphanedNotes', dataOut, _fixOrphanedNotes);
+  dataOut = _runRepairStep(
+    'removeNonExistentProjectIdsFromTasks',
+    dataOut,
+    _removeNonExistentProjectIdsFromTasks,
+  );
+  dataOut = _runRepairStep(
+    'removeNonExistentTagsFromTasks',
+    dataOut,
+    _removeNonExistentTagsFromTasks,
+  );
+  dataOut = _runRepairStep(
+    'addInboxProjectIdIfNecessary',
+    dataOut,
+    _addInboxProjectIdIfNecessary,
+  );
+  dataOut = _runRepairStep('repairMenuTree', dataOut, _repairMenuTree);
   dataOut = autoFixTypiaErrors(dataOut, errors);
 
-  // console.timeEnd('dataRepair');
+  PFLog.verbose('[data-repair] Data repair complete.');
   return dataOut;
+};
+
+const _runRepairStep = (
+  stepName: string,
+  data: AppDataComplete,
+  stepFn: (d: AppDataComplete) => AppDataComplete,
+): AppDataComplete => {
+  try {
+    return stepFn(data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    PFLog.err(`[data-repair] Step "${stepName}" failed: ${msg}`);
+    throw new Error(`Data repair failed at step "${stepName}": ${msg}`);
+  }
 };
 
 const _fixTaskRepeatMissingWeekday = (data: AppDataComplete): AppDataComplete => {

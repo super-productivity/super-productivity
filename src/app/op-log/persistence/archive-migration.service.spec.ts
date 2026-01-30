@@ -181,6 +181,46 @@ describe('ArchiveMigrationService', () => {
     });
   });
 
+  describe('error handling', () => {
+    it('should throw and log error when loading legacy archives fails', async () => {
+      mockArchiveStore.hasArchiveYoung.and.resolveTo(false);
+      mockArchiveStore.hasArchiveOld.and.resolveTo(false);
+      mockLegacyPfDb.databaseExists.and.resolveTo(true);
+      mockLegacyPfDb.loadArchiveYoung.and.rejectWith(new Error('IndexedDB read failed'));
+      mockLegacyPfDb.loadArchiveOld.and.resolveTo(createEmptyArchive());
+
+      await expectAsync(service.migrateArchivesIfNeeded()).toBeRejectedWithError(
+        'IndexedDB read failed',
+      );
+    });
+
+    it('should throw and log error when saving archiveYoung fails', async () => {
+      mockArchiveStore.hasArchiveYoung.and.resolveTo(false);
+      mockArchiveStore.hasArchiveOld.and.resolveTo(false);
+      mockLegacyPfDb.databaseExists.and.resolveTo(true);
+      mockLegacyPfDb.loadArchiveYoung.and.resolveTo(createArchiveWithTasks());
+      mockLegacyPfDb.loadArchiveOld.and.resolveTo(createEmptyArchive());
+      mockArchiveStore.saveArchiveYoung.and.rejectWith(new Error('Write quota exceeded'));
+
+      await expectAsync(service.migrateArchivesIfNeeded()).toBeRejectedWithError(
+        'Write quota exceeded',
+      );
+    });
+
+    it('should throw and log error when saving archiveOld fails', async () => {
+      mockArchiveStore.hasArchiveYoung.and.resolveTo(true);
+      mockArchiveStore.hasArchiveOld.and.resolveTo(false);
+      mockLegacyPfDb.databaseExists.and.resolveTo(true);
+      mockLegacyPfDb.loadArchiveYoung.and.resolveTo(createEmptyArchive());
+      mockLegacyPfDb.loadArchiveOld.and.resolveTo(createArchiveWithTasks());
+      mockArchiveStore.saveArchiveOld.and.rejectWith(new Error('Write failed'));
+
+      await expectAsync(service.migrateArchivesIfNeeded()).toBeRejectedWithError(
+        'Write failed',
+      );
+    });
+  });
+
   describe('_hasArchiveData (via migrateArchivesIfNeeded)', () => {
     beforeEach(() => {
       mockArchiveStore.hasArchiveYoung.and.resolveTo(false);
