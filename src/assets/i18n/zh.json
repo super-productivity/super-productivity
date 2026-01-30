@@ -1769,6 +1769,13 @@
     "S_IMPORT_FROM_URL_ERR_DECODE": "错误：无法解码用于导入的 URL 参数。请确保其格式正确。",
     "URL_PLACEHOLDER": "输入要从中导入的 URL"
   },
+  "PRE_MIGRATION": {
+    "C_DOWNLOAD_BACKUP": "您想下载旧数据的备份吗（可用于旧版本的超级生产力）？",
+    "DETECTED_LEGACY": "检测到旧数据。我们将为您迁移！",
+    "E_MIGRATION_FAILED": "迁移失败，错误：",
+    "E_RESTART_FAILED": "自动重启失败。请手动重启应用！",
+    "SUCCESS": "迁移完成！正在重启应用..."
+  },
   "G": {
     "ADD": "添加",
     "ADVANCED_CFG": "高级配置",
