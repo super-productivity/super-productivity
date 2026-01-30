@@ -95,6 +95,7 @@ export class HabitTrackerComponent {
 
   private _longPressTimer?: number;
   private _isLongPress = false;
+  private _pendingLongPressAction?: { counter: SimpleCounter; date: string };
 
   onCellClick(counter: SimpleCounter, date: string): void {
     if (this._isLongPress) {
@@ -124,9 +125,10 @@ export class HabitTrackerComponent {
 
   onPressStart(counter: SimpleCounter, date: string): void {
     this._isLongPress = false;
+    this._pendingLongPressAction = undefined;
     this._longPressTimer = window.setTimeout(() => {
       this._isLongPress = true;
-      this.openEditDialog(counter, date);
+      this._pendingLongPressAction = { counter, date };
     }, 700); // 700ms for long press
   }
 
@@ -134,6 +136,13 @@ export class HabitTrackerComponent {
     if (this._longPressTimer) {
       window.clearTimeout(this._longPressTimer);
       this._longPressTimer = undefined;
+    }
+
+    // If long press was triggered, open dialog on release
+    if (this._pendingLongPressAction) {
+      const { counter, date } = this._pendingLongPressAction;
+      this._pendingLongPressAction = undefined;
+      this.openEditDialog(counter, date);
     }
   }
 
