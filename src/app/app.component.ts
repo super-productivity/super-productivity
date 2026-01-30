@@ -178,7 +178,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   isShowFocusOverlay = computed(
     () =>
       this._isOverlayShownFromStore() &&
-      this._globalConfigService.cfg()?.appFeatures.isFocusModeEnabled,
+      this._globalConfigService.appFeatures().isFocusModeEnabled,
   );
 
   private readonly _activeWorkContextId = toSignal(

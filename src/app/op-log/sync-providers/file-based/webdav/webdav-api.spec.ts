@@ -548,6 +548,110 @@ describe('WebdavApi', () => {
       );
     });
 
+    it('should add 1-second buffer to If-Unmodified-Since header to handle sub-second precision', async () => {
+      const mockResponse = {
+        status: 200,
+        headers: {
+          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
+        },
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // Use a known date: Wed, 15 Jan 2025 10:00:00 GMT
+      const expectedRev = 'Wed, 15 Jan 2025 10:00:00 GMT';
+      // The buffered date should be: Wed, 15 Jan 2025 10:00:01 GMT
+
+      await api.upload({
+        path: '/test.txt',
+        data: 'new content',
+        expectedRev,
+      });
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // The header should have 1 second added (10:00:01 instead of 10:00:00)
+      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
+        'Wed, 15 Jan 2025 10:00:01 GMT',
+      );
+    });
+
+    it('should NOT add buffer to If-Match header when expectedRev is an ETag', async () => {
+      const mockResponse = {
+        status: 200,
+        headers: {
+          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
+        },
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // ETag that is not a valid date - no buffer should be applied
+      const etag = 'abc123-etag-value';
+
+      await api.upload({
+        path: '/test.txt',
+        data: 'new content',
+        expectedRev: etag,
+      });
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // ETag should be used as-is (with quotes), no time buffer
+      expect(requestArgs.headers['If-Match']).toBe('"abc123-etag-value"');
+      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
+    });
+
+    it('should add 1-second buffer to ISO date format', async () => {
+      const mockResponse = {
+        status: 200,
+        headers: {
+          'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT',
+        },
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // ISO date: 2025-01-15T10:00:00.000Z
+      const isoDate = '2025-01-15T10:00:00.000Z';
+
+      await api.upload({
+        path: '/test.txt',
+        data: 'new content',
+        expectedRev: isoDate,
+      });
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // The header should have 1 second added (10:00:01 instead of 10:00:00)
+      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
+        'Wed, 15 Jan 2025 10:00:01 GMT',
+      );
+    });
+
+    it('should handle date boundary rollover with 1-second buffer', async () => {
+      const mockResponse = {
+        status: 200,
+        headers: {
+          'last-modified': 'Thu, 16 Jan 2025 00:00:00 GMT',
+        },
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // Date at 23:59:59 - adding 1 second should roll over to next day
+      const expectedRev = 'Wed, 15 Jan 2025 23:59:59 GMT';
+
+      await api.upload({
+        path: '/test.txt',
+        data: 'new content',
+        expectedRev,
+      });
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // Should roll over to 00:00:00 on the next day
+      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
+        'Thu, 16 Jan 2025 00:00:00 GMT',
+      );
+    });
+
     it('should use If-Match header when expectedRev is an ETag (not a valid date)', async () => {
       const mockResponse = {
         status: 200,
@@ -864,6 +968,43 @@ describe('WebdavApi', () => {
           }),
         }),
       );
+    });
+
+    it('should add 1-second buffer to If-Unmodified-Since header for delete', async () => {
+      const mockResponse = {
+        status: 204,
+        headers: {},
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // Use a known date: Wed, 15 Jan 2025 10:00:00 GMT
+      const expectedRev = 'Wed, 15 Jan 2025 10:00:00 GMT';
+      // The buffered date should be: Wed, 15 Jan 2025 10:00:01 GMT
+
+      await api.remove('/test.txt', expectedRev);
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // The header should have 1 second added (10:00:01 instead of 10:00:00)
+      expect(requestArgs.headers['If-Unmodified-Since']).toBe(
+        'Wed, 15 Jan 2025 10:00:01 GMT',
+      );
+    });
+
+    it('should NOT set If-Unmodified-Since when delete expectedRev is not a valid date', async () => {
+      const mockResponse = {
+        status: 204,
+        headers: {},
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      // ETag that is not a valid date
+      await api.remove('/test.txt', 'abc123-etag-value');
+
+      const requestArgs = mockHttpAdapter.request.calls.mostRecent()?.args[0] as any;
+      // No If-Unmodified-Since header should be set for non-date revisions
+      expect(requestArgs.headers['If-Unmodified-Since']).toBeUndefined();
     });
   });
 

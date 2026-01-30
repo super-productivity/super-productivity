@@ -152,7 +152,9 @@ export const waitForStatePersistence = async (page: Page): Promise<void> => {
   // Additional delay for IndexedDB writes to complete (they happen outside Angular zone)
   // The operation log effects use concatMap which serializes writes, but the actual
   // IndexedDB transaction may still be pending when Angular reports stability.
+  // Reduced from 500ms to 200ms as a minimal safety buffer - Angular stability check
+  // already ensures most async work is complete.
   if (!page.isClosed()) {
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
   }
 };

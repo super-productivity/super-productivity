@@ -29,6 +29,9 @@ import {
 import { TranslateService } from '@ngx-translate/core';
 import { LocalDataConflictError } from '../core/errors/sync-errors';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { TODAY_TAG, SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
 
 describe('OperationLogSyncService', () => {
   let service: OperationLogSyncService;
@@ -39,6 +42,7 @@ describe('OperationLogSyncService', () => {
   let rejectedOpsHandlerServiceSpy: jasmine.SpyObj<RejectedOpsHandlerService>;
   let writeFlushServiceSpy: jasmine.SpyObj<OperationWriteFlushService>;
   let superSyncStatusServiceSpy: jasmine.SpyObj<SuperSyncStatusService>;
+  let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
 
   beforeEach(() => {
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
@@ -60,6 +64,17 @@ describe('OperationLogSyncService', () => {
     serverMigrationServiceSpy.checkAndHandleMigration.and.resolveTo();
     serverMigrationServiceSpy.handleServerMigration.and.resolveTo();
 
+    // Default: no meaningful local data (only system defaults)
+    stateSnapshotServiceSpy = jasmine.createSpyObj('StateSnapshotService', [
+      'getStateSnapshot',
+    ]);
+    stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+      task: { ids: [] },
+      project: { ids: [INBOX_PROJECT.id] }, // Only default INBOX project
+      tag: { ids: [TODAY_TAG.id] }, // Only default TODAY tag
+      note: { ids: [] },
+    } as any);
+
     remoteOpsProcessingServiceSpy = jasmine.createSpyObj('RemoteOpsProcessingService', [
       'processRemoteOps',
     ]);
@@ -73,7 +88,10 @@ describe('OperationLogSyncService', () => {
     rejectedOpsHandlerServiceSpy = jasmine.createSpyObj('RejectedOpsHandlerService', [
       'handleRejectedOps',
     ]);
-    rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo(0);
+    rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+      mergedOpsCreated: 0,
+      permanentRejectionCount: 0,
+    });
 
     writeFlushServiceSpy = jasmine.createSpyObj('OperationWriteFlushService', [
       'flushPendingWrites',
@@ -177,6 +195,7 @@ describe('OperationLogSyncService', () => {
             'hydrateFromRemoteSync',
           ]),
         },
+        { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
       ],
     });
 
@@ -336,7 +355,7 @@ describe('OperationLogSyncService', () => {
           rejectedOpsHandlerServiceSpy.handleRejectedOps.and.callFake(
             async (_ops, callback) => {
               capturedCallback = callback;
-              return 0;
+              return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
             },
           );
 
@@ -400,7 +419,10 @@ describe('OperationLogSyncService', () => {
           });
 
           // handleRejectedOps returns 3 merged ops created
-          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo(3);
+          rejectedOpsHandlerServiceSpy.handleRejectedOps.and.resolveTo({
+            mergedOpsCreated: 3,
+            permanentRejectionCount: 0,
+          });
 
           const result = await service.uploadPendingOps(mockProvider);
 
@@ -1074,6 +1096,23 @@ describe('OperationLogSyncService', () => {
         error,
       );
     });
+
+    it('should upload with isCleanSlate=true to delete server data before accepting new data', async () => {
+      // This is critical for recovery scenarios like decrypt errors where the server
+      // may have data encrypted with a different password. Clean slate ensures the
+      // server deletes ALL existing data before accepting the new SYNC_IMPORT.
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      await service.forceUploadLocalState(mockProvider);
+
+      expect(uploadServiceSpy.uploadPendingOps).toHaveBeenCalledWith(mockProvider, {
+        skipPiggybackProcessing: true,
+        isCleanSlate: true,
+      });
+    });
   });
 
   describe('forceDownloadRemoteState', () => {
@@ -1300,6 +1339,291 @@ describe('OperationLogSyncService', () => {
       await expectAsync(service.forceDownloadRemoteState(mockProvider)).toBeRejectedWith(
         error,
       );
+    });
+  });
+
+  describe('_hasMeaningfulLocalData detection for first-time sync', () => {
+    let downloadServiceSpy: jasmine.SpyObj<OperationLogDownloadService>;
+
+    beforeEach(() => {
+      downloadServiceSpy = TestBed.inject(
+        OperationLogDownloadService,
+      ) as jasmine.SpyObj<OperationLogDownloadService>;
+
+      // Make this a fresh client (no snapshot, no ops)
+      opLogStoreSpy.loadStateCache.and.resolveTo(null);
+      opLogStoreSpy.getLastSeq.and.resolveTo(0);
+      opLogStoreSpy.getUnsynced.and.resolveTo([]); // No unsynced ops
+    });
+
+    it('should throw LocalDataConflictError when fresh client has tasks in NgRx store', async () => {
+      // Store has tasks (meaningful data)
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1', 'task-2'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: ['remote-task'] } },
+        snapshotVectorClock: { clientB: 5 },
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+        jasmine.any(LocalDataConflictError),
+      );
+    });
+
+    it('should throw LocalDataConflictError when fresh client has custom projects', async () => {
+      // Store has custom project (not INBOX)
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: [] },
+        project: { ids: [INBOX_PROJECT.id, 'custom-project-1'] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: [] } },
+        snapshotVectorClock: { clientB: 5 },
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+        jasmine.any(LocalDataConflictError),
+      );
+    });
+
+    it('should throw LocalDataConflictError when fresh client has custom tags', async () => {
+      // Store has custom tag (not TODAY or other system tags)
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: [] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id, 'custom-tag-1'] },
+        note: { ids: [] },
+      } as any);
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: [] } },
+        snapshotVectorClock: { clientB: 5 },
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+        jasmine.any(LocalDataConflictError),
+      );
+    });
+
+    it('should throw LocalDataConflictError when fresh client has notes', async () => {
+      // Store has notes
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: [] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: ['note-1'] },
+      } as any);
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: [] } },
+        snapshotVectorClock: { clientB: 5 },
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      await expectAsync(service.downloadRemoteOps(mockProvider)).toBeRejectedWith(
+        jasmine.any(LocalDataConflictError),
+      );
+    });
+
+    it('should NOT throw LocalDataConflictError when fresh client has only default data', async () => {
+      // Store has only default data (INBOX project, TODAY tag, no tasks/notes)
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: [] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      const syncHydrationServiceSpy = TestBed.inject(
+        SyncHydrationService,
+      ) as jasmine.SpyObj<SyncHydrationService>;
+      syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: ['remote-task'] } },
+        snapshotVectorClock: { clientB: 5 },
+        latestServerSeq: 1,
+      });
+
+      // Mock window.confirm since it's called for fresh clients - stub method directly
+      const originalConfirm = window.confirm;
+      window.confirm = jasmine.createSpy('confirm').and.returnValue(true);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      try {
+        // Should NOT throw - should show confirmation dialog and proceed
+        await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
+        expect(syncHydrationServiceSpy.hydrateFromRemoteSync).toHaveBeenCalled();
+      } finally {
+        window.confirm = originalConfirm;
+      }
+    });
+
+    it('should NOT throw LocalDataConflictError when client already has op-log history', async () => {
+      // Client has op-log history (not a fresh client)
+      opLogStoreSpy.loadStateCache.and.resolveTo({
+        state: {},
+        lastAppliedOpSeq: 5,
+        vectorClock: { clientA: 5 },
+        compactedAt: Date.now(),
+      });
+      opLogStoreSpy.getLastSeq.and.resolveTo(5);
+
+      // Store has tasks (meaningful data), but client is not fresh
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      const syncHydrationServiceSpy = TestBed.inject(
+        SyncHydrationService,
+      ) as jasmine.SpyObj<SyncHydrationService>;
+      syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: ['remote-task'] } },
+        snapshotVectorClock: { clientB: 5 },
+        latestServerSeq: 1,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      // Should NOT throw - client has history, so it's not "fresh"
+      await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
+    });
+
+    it('should include correct context in LocalDataConflictError when fresh client has store data', async () => {
+      // Store has tasks (meaningful data)
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: ['task-1'] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: [TODAY_TAG.id] },
+        note: { ids: [] },
+      } as any);
+
+      const remoteSnapshot = { task: { ids: ['remote-task'] } };
+      const remoteVectorClock = { clientB: 5, clientC: 3 };
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: remoteSnapshot,
+        snapshotVectorClock: remoteVectorClock,
+      });
+
+      const mockProvider = {
+        supportsOperationSync: true,
+      } as any;
+
+      try {
+        await service.downloadRemoteOps(mockProvider);
+        fail('Expected LocalDataConflictError to be thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(LocalDataConflictError);
+        const conflictError = error as LocalDataConflictError;
+        expect(conflictError.unsyncedCount).toBe(0); // No unsynced ops
+        expect(conflictError.remoteSnapshotState).toEqual(remoteSnapshot);
+        expect(conflictError.remoteVectorClock).toEqual(remoteVectorClock);
+      }
+    });
+
+    it('should NOT throw when store has only system tags (TODAY, URGENT, IMPORTANT, IN_PROGRESS)', async () => {
+      // Store has all system tags but no user data
+      stateSnapshotServiceSpy.getStateSnapshot.and.returnValue({
+        task: { ids: [] },
+        project: { ids: [INBOX_PROJECT.id] },
+        tag: { ids: Array.from(SYSTEM_TAG_IDS) }, // All system tags
+        note: { ids: [] },
+      } as any);
+
+      const syncHydrationServiceSpy = TestBed.inject(
+        SyncHydrationService,
+      ) as jasmine.SpyObj<SyncHydrationService>;
+      syncHydrationServiceSpy.hydrateFromRemoteSync.and.resolveTo();
+
+      downloadServiceSpy.downloadRemoteOps.and.resolveTo({
+        newOps: [],
+        needsFullStateUpload: false,
+        success: true,
+        failedFileCount: 0,
+        snapshotState: { task: { ids: [] } },
+        snapshotVectorClock: { clientB: 5 },
+        latestServerSeq: 1,
+      });
+
+      // Mock window.confirm - stub method directly
+      const originalConfirm = window.confirm;
+      window.confirm = jasmine.createSpy('confirm').and.returnValue(true);
+
+      const mockProvider = {
+        supportsOperationSync: true,
+        setLastServerSeq: jasmine.createSpy('setLastServerSeq').and.resolveTo(),
+      } as any;
+
+      try {
+        // Should NOT throw - system tags don't count as meaningful user data
+        await expectAsync(service.downloadRemoteOps(mockProvider)).toBeResolved();
+      } finally {
+        window.confirm = originalConfirm;
+      }
     });
   });
 });

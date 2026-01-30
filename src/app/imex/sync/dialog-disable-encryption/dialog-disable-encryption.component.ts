@@ -12,6 +12,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { EncryptionDisableService } from '../encryption-disable.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 
 export interface DisableEncryptionResult {
   success: boolean;
@@ -35,6 +37,7 @@ export interface DisableEncryptionResult {
 export class DialogDisableEncryptionComponent {
   private _encryptionDisableService = inject(EncryptionDisableService);
   private _snackService = inject(SnackService);
+  private _providerManager = inject(SyncProviderManager);
   private _matDialogRef =
     inject<MatDialogRef<DialogDisableEncryptionComponent, DisableEncryptionResult>>(
       MatDialogRef,
@@ -42,9 +45,31 @@ export class DialogDisableEncryptionComponent {
 
   T: typeof T = T;
   isLoading = signal(false);
+  canProceed = signal(true);
+  errorReason = signal<string | null>(null);
+
+  constructor() {
+    this._checkPreconditions();
+  }
+
+  private _checkPreconditions(): void {
+    const provider = this._providerManager.getActiveProvider();
+
+    if (!provider) {
+      this.canProceed.set(false);
+      this.errorReason.set(T.F.SYNC.FORM.SUPER_SYNC.DISABLE_ENCRYPTION_NOT_READY);
+      return;
+    }
+
+    if (provider.id !== SyncProviderId.SuperSync) {
+      this.canProceed.set(false);
+      this.errorReason.set(T.F.SYNC.FORM.SUPER_SYNC.DISABLE_ENCRYPTION_SUPERSYNC_ONLY);
+      return;
+    }
+  }
 
   async confirm(): Promise<void> {
-    if (this.isLoading()) {
+    if (this.isLoading() || !this.canProceed()) {
       return;
     }
 

@@ -111,6 +111,7 @@ describe('TaskService', () => {
       }),
       misc: signal({ isShowProductivityTipLonger: false }),
       tasks: signal({ defaultProjectId: null }),
+      appFeatures: signal({ isTimeTrackingEnabled: true }),
     });
 
     const taskFocusServiceSpy = jasmine.createSpyObj('TaskFocusService', [''], {
@@ -615,6 +616,34 @@ describe('TaskService', () => {
       });
 
       // Should fallback to INBOX_PROJECT since no default is configured
+      expect(task.projectId).toBe(INBOX_PROJECT.id);
+    });
+
+    it('should use INBOX_PROJECT when cfg() returns undefined', () => {
+      // Simulate config not being loaded yet (e.g., during early sync)
+      const globalConfigService = TestBed.inject(GlobalConfigService) as any;
+      globalConfigService.cfg.set(undefined);
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        workContextType: WorkContextType.TAG,
+        workContextId: 'some-tag',
+      });
+
+      expect(task.projectId).toBe(INBOX_PROJECT.id);
+    });
+
+    it('should use INBOX_PROJECT when cfg().tasks is undefined', () => {
+      // Simulate partial/corrupted config during sync
+      const globalConfigService = TestBed.inject(GlobalConfigService) as any;
+      globalConfigService.cfg.set({ reminder: {}, appFeatures: {} });
+
+      const task = service.createNewTaskWithDefaults({
+        title: 'Test',
+        workContextType: WorkContextType.TAG,
+        workContextId: 'some-tag',
+      });
+
       expect(task.projectId).toBe(INBOX_PROJECT.id);
     });
   });

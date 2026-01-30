@@ -3,6 +3,7 @@ import {
   type BrowserContext,
   type Locator,
   type Page,
+  expect,
 } from '@playwright/test';
 import { SuperSyncPage, type SuperSyncConfig } from '../pages/supersync.page';
 import { WorkViewPage } from '../pages/work-view.page';
@@ -312,10 +313,17 @@ export const waitForTask = async (
         state: 'visible',
       });
       return; // Success
-    } catch {
+    } catch (error) {
       // Check if page is closed before waiting
       if (page.isClosed()) {
         throw new Error(`Page was closed while waiting for task "${taskName}"`);
+      }
+      // Only retry on timeout errors; re-throw other errors (page crashes, etc.)
+      const isTimeoutError =
+        error instanceof Error &&
+        (error.message.includes('Timeout') || error.name === 'TimeoutError');
+      if (!isTimeoutError) {
+        throw error;
       }
       // Wait a bit and retry
       await page.waitForTimeout(TASK_POLL_INTERVAL);
@@ -537,7 +545,8 @@ export const deleteTask = async (
   // Confirm deletion if dialog appears
   const confirmBtn = client.page.locator('mat-dialog-actions button:has-text("Delete")');
   const dialogAppeared = await confirmBtn
-    .isVisible({ timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .then(() => true)
     .catch(() => false);
 
   if (dialogAppeared) {
@@ -758,4 +767,189 @@ export const createProjectReliably = async (
 
   // Wait for project to appear
   await page.waitForTimeout(UI_SETTLE_EXTENDED);
+};
+
+// ============================================================================
+// ARCHIVE & WORKLOG HELPERS - For archive-related E2E tests
+// ============================================================================
+
+/**
+ * Mark a task as done by pressing 'd' key.
+ * The task must be visible and focusable on the current page.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name to mark as done
+ */
+export const markTaskDoneByKey = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<void> => {
+  const escapedName = escapeForSelector(taskName);
+  const task = client.page
+    .locator(`task:not(.ng-animating):has-text("${escapedName}")`)
+    .first();
+  await task.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
+  await task.focus();
+  await client.page.waitForTimeout(UI_SETTLE_SMALL);
+  await task.press('d');
+  // Wait for task to show done state
+  await expect(task).toHaveClass(/isDone/, { timeout: UI_VISIBLE_TIMEOUT });
+};
+
+/**
+ * Archive done tasks via the Daily Summary flow.
+ * Navigates to Daily Summary, clicks "Save & Go Home" to archive all done tasks.
+ *
+ * @param client - The simulated E2E client
+ */
+export const archiveDoneTasks = async (client: SimulatedE2EClient): Promise<void> => {
+  // Click the "Finish Day" button to go to Daily Summary
+  const finishDayBtn = client.page.locator('.e2e-finish-day');
+  await finishDayBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
+  await finishDayBtn.click();
+
+  // Wait for navigation to Daily Summary
+  await client.page.waitForURL(/daily-summary/);
+
+  // Click "Save & Go Home" button (has sun icon wb_sunny)
+  const saveAndGoHomeBtn = client.page.locator(
+    'daily-summary button[mat-flat-button]:has(mat-icon:has-text("wb_sunny"))',
+  );
+  await saveAndGoHomeBtn.waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT });
+  await saveAndGoHomeBtn.click();
+
+  // Wait for navigation back to work view
+  await client.page.waitForURL(/(active\/tasks|tag\/TODAY\/tasks)/);
+  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
+};
+
+/**
+ * Archive a specific task by marking it done and going through Daily Summary.
+ * Combines markTaskDoneByKey and archiveDoneTasks for convenience.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name to archive
+ */
+export const archiveTask = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<void> => {
+  await markTaskDoneByKey(client, taskName);
+  await archiveDoneTasks(client);
+};
+
+/**
+ * Navigate to worklog and check for a specific task in archived entries.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name to search for in worklog
+ * @returns true if the task is found in worklog
+ */
+export const hasTaskInWorklog = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<boolean> => {
+  // Navigate to worklog
+  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.waitForLoadState('networkidle');
+  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
+
+  // Try to expand week rows to see task entries
+  const weekRows = client.page.locator('.week-row');
+  const weekCount = await weekRows.count();
+  for (let i = 0; i < Math.min(weekCount, 3); i++) {
+    const row = weekRows.nth(i);
+    if (await row.isVisible()) {
+      await row.click().catch(() => {});
+      await client.page.waitForTimeout(UI_SETTLE_SMALL);
+    }
+  }
+
+  // Search for the task in worklog entries
+  const escapedName = escapeForSelector(taskName);
+  const taskEntry = client.page.locator(
+    `.task-summary-table .task-title:has-text("${escapedName}"), ` +
+      `.worklog-task:has-text("${escapedName}"), ` +
+      `worklog-task:has-text("${escapedName}")`,
+  );
+
+  const count = await taskEntry.count().catch(() => 0);
+  return count > 0;
+};
+
+/**
+ * Assert that a task appears in the worklog.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name to verify in worklog
+ */
+export const expectTaskInWorklog = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<void> => {
+  const found = await hasTaskInWorklog(client, taskName);
+  if (!found) {
+    throw new Error(`Expected task "${taskName}" to be in worklog, but it was not found`);
+  }
+};
+
+/**
+ * Assert that a task does NOT appear in the worklog.
+ *
+ * @param client - The simulated E2E client
+ * @param taskName - The task name that should NOT be in worklog
+ */
+export const expectTaskNotInWorklog = async (
+  client: SimulatedE2EClient,
+  taskName: string,
+): Promise<void> => {
+  const found = await hasTaskInWorklog(client, taskName);
+  if (found) {
+    throw new Error(`Expected task "${taskName}" NOT to be in worklog, but it was found`);
+  }
+};
+
+/**
+ * Get the count of worklog entries (archived tasks).
+ *
+ * @param client - The simulated E2E client
+ * @returns The number of task entries in worklog
+ */
+export const getWorklogTaskCount = async (
+  client: SimulatedE2EClient,
+): Promise<number> => {
+  // Navigate to worklog
+  await client.page.goto('/#/tag/TODAY/worklog');
+  await client.page.waitForLoadState('networkidle');
+  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
+
+  // Expand week rows
+  const weekRows = client.page.locator('.week-row');
+  const weekCount = await weekRows.count();
+  for (let i = 0; i < Math.min(weekCount, 3); i++) {
+    const row = weekRows.nth(i);
+    if (await row.isVisible()) {
+      await row.click().catch(() => {});
+      await client.page.waitForTimeout(UI_SETTLE_SMALL);
+    }
+  }
+
+  // Count task entries
+  const taskEntries = await client.page
+    .locator('.task-summary-table .task-title, .worklog-task, worklog-task')
+    .count()
+    .catch(() => 0);
+
+  return taskEntries;
+};
+
+/**
+ * Navigate back to work view from worklog or other pages.
+ *
+ * @param client - The simulated E2E client
+ */
+export const navigateToWorkView = async (client: SimulatedE2EClient): Promise<void> => {
+  await client.page.goto('/#/tag/TODAY/tasks');
+  await client.page.waitForLoadState('networkidle');
+  await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 };

@@ -1,0 +1,70 @@
+
+### Bug Fixes
+
+* address code review issues from yesterday's changes
+* **android:** await flush after notification actions to prevent data loss (#5842)
+* **build:** check for real packages in node_modules, not just folder existence
+* **ci:** correct cloudflare/wrangler-action SHA to match v3.12.0 tag
+* **ci:** exclude @webdav and @supersync tests from CI workflow
+* **dev:** update default SuperSync port to 1901 for local development
+* **e2e:** wait for button enabled state instead of visibility + timeout
+* **encryption:** fix cache key bug and add missing tests
+* **gitlab:** allow null project field for backward compatibility (21743df), closes #6139 #6131
+* **i18n:** add missing encryption translation keys to t.const.ts
+* **passkey:** skip email verification in TEST_MODE for passkey registration
+* **schedule:** use SCSS interpolation for CSS custom property value
+* **supersync:** parse wildcard patterns when universal wildcard present
+* **supersync:** prevent credential loss on Android dialog close
+* **supersync:** prevent domain confusion in parseCorsOrigin wildcard conversion
+* **supersync:** prevent domain confusion in preview CORS pattern
+* **supersync:** show informative message when disable encryption preconditions not met
+* **supersync:** sync form values explicitly before save on Android
+* **sync:** add mutex lock between sync and password change
+* **sync:** add PASSWORD_SET_INFO translation constant for encryption password UI
+* **sync:** add type assertions for provider config assignments
+* **sync:** allow clean slate when isCleanSlate flag is set
+* **sync:** auto-sync encryption state when disabled on another device
+* **sync:** await auth configuration to prevent dialog race condition
+* **sync:** await password update before retrying decryption
+* **sync:** clear adapter cache when encryption settings change
+* **sync:** clear encryptKey when disabling SuperSync encryption
+* **sync:** detect pre-op-log data on first-time sync to prevent silent overwrite
+* **sync:** ensure iOS WebDAV returns string data to prevent format errors (b2e81e7), closes #6144
+* **sync:** exclude full-state ops from unsynced check before password change
+* **sync:** fix readonly property assignments in sync dialog
+* **sync:** fix SuperSync encryption password change bug
+* **sync:** improve encryption error handling and add missing tests
+* **sync:** improve error message for failed password change
+* **sync:** prevent archive data loss in encryption enable/disable/import
+* **sync:** prevent multiple password dialogs from opening simultaneously
+* **sync:** re-fetch encryption key after gap detection
+* **sync:** replace archive safety guard error with confirmation dialog
+* **sync:** surface DecryptError password dialog instead of silent error
+* **sync:** use async state snapshot to prevent archive data loss
+* **sync:** use manual code entry for Dropbox auth on all platforms
+* **sync:** warn about unsynced changes before password change
+* **sync:** wrap @else block content in ng-container for proper icon projection
+* **tasks:** add URL attachments when editing task titles (060a3c0), closes #6146
+* **test:** complete encryption enable/disable E2E tests with proper dialog handling
+* **ui:** add space between checkbox and text in markdown notes (1b69b36), closes #6147
+* **upload:** handle missing encryption key for piggybacked encrypted operations
+### Features
+
+* **cors:** normalize domain to lowercase and validate non-empty origins
+* **supersync:** add parseCorsOrigin helper with wildcard support
+* **supersync:** add preview deployments to default CORS origins
+* **supersync:** improve encryption UX with confirmation dialogs
+* **supersync:** parse wildcard patterns in CORS_ORIGINS env var
+* **sync:** add confirmation dialog when disabling SuperSync encryption (#6129)
+* **sync:** add remove encryption option to password change dialog
+* **sync:** implement clean slate mechanism for encryption password changes
+### Performance Improvements
+
+* **encryption:** add session-level key caching for faster syncs
+* **encryption:** parallelize batch operations and fix cache invalidation
+* **encryption:** remove cache timeout and add password change invalidation
+* **sync:** expand cached key usage to all encryption call sites (d4152c2), closes #6130 #6130
+* **sync:** optimize encryption for mobile by caching derived keys
+### Reverts
+
+* remove error message field from internal_error_report.yml

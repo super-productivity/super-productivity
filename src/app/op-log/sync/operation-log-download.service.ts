@@ -1,4 +1,4 @@
-import { inject, Injectable } from '@angular/core';
+import { inject, Injectable, OnDestroy } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { LockService } from './lock.service';
 import { Operation } from '../core/operation.types';
@@ -15,9 +15,10 @@ import {
   MAX_DOWNLOAD_OPS_IN_MEMORY,
   MAX_DOWNLOAD_ITERATIONS,
   CLOCK_DRIFT_THRESHOLD_MS,
+  DOWNLOAD_PAGE_SIZE,
 } from '../core/operation-log.const';
 import { OperationEncryptionService } from './operation-encryption.service';
-import { DecryptError } from '../core/errors/sync-errors';
+import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 import { SuperSyncStatusService } from './super-sync-status.service';
 import { DownloadResult } from '../core/types/sync-results.types';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
@@ -40,7 +41,7 @@ export type { DownloadResult } from '../core/types/sync-results.types';
 @Injectable({
   providedIn: 'root',
 })
-export class OperationLogDownloadService {
+export class OperationLogDownloadService implements OnDestroy {
   private opLogStore = inject(OperationLogStoreService);
   private lockService = inject(LockService);
   private snackService = inject(SnackService);
@@ -50,6 +51,16 @@ export class OperationLogDownloadService {
 
   /** Track if we've already warned about clock drift this session */
   private hasWarnedClockDrift = false;
+
+  /** Timeout handle for clock drift retry check (cleaned up on destroy) */
+  private clockDriftTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  ngOnDestroy(): void {
+    if (this.clockDriftTimeoutId) {
+      clearTimeout(this.clockDriftTimeoutId);
+      this.clockDriftTimeoutId = null;
+    }
+  }
 
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
@@ -81,9 +92,16 @@ export class OperationLogDownloadService {
     let finalLatestSeq = 0;
     let snapshotVectorClock: import('../core/operation.types').VectorClock | undefined;
     let snapshotState: unknown | undefined;
+    // Track encryption state of downloaded operations for detecting encryption config mismatch.
+    // When another client disables encryption, all downloaded ops will be unencrypted.
+    // We track this BEFORE decryption to detect the server's actual encryption state.
+    let sawAnyOps = false;
+    let sawEncryptedOp = false;
 
     // Get encryption key upfront (optional - file-based adapters handle encryption internally)
-    const encryptKey = syncProvider.getEncryptKey
+    // Note: Use 'let' instead of 'const' because we may need to re-fetch the key
+    // if gap detection occurs (e.g., after password change clean slate)
+    let encryptKey = syncProvider.getEncryptKey
       ? await syncProvider.getEncryptKey()
       : undefined;
 
@@ -122,7 +140,7 @@ export class OperationLogDownloadService {
         const response = await syncProvider.downloadOps(
           sinceSeq,
           clientId ?? undefined,
-          500,
+          DOWNLOAD_PAGE_SIZE,
         );
         finalLatestSeq = response.latestSeq;
         OpLog.verbose(
@@ -161,6 +179,17 @@ export class OperationLogDownloadService {
           allOpClocks.length = 0; // Clear clocks too
           snapshotVectorClock = undefined; // Clear snapshot clock to capture fresh one after reset
           snapshotState = undefined; // Clear snapshot state to capture fresh one after reset
+          sawAnyOps = false; // Reset encryption tracking
+          sawEncryptedOp = false;
+
+          // CRITICAL: Re-fetch encryption key after gap detection.
+          // Gap usually means server was wiped (e.g., password change clean slate),
+          // so the encryption key may have changed. We must fetch the current key
+          // before attempting to decrypt the re-downloaded operations.
+          encryptKey = syncProvider.getEncryptKey
+            ? await syncProvider.getEncryptKey()
+            : undefined;
+
           // NOTE: Don't persist lastServerSeq=0 here - caller will persist the final value
           // after ops are stored in IndexedDB. This ensures localStorage and IndexedDB stay in sync.
           continue;
@@ -188,6 +217,16 @@ export class OperationLogDownloadService {
           }
         }
 
+        // Track encryption state from ALL server ops BEFORE filtering.
+        // This detects server encryption state even when ops were already applied.
+        // Critical for detecting when another client disables encryption.
+        if (response.ops.length > 0) {
+          sawAnyOps = true;
+          if (response.ops.some((serverOp) => serverOp.op.isPayloadEncrypted)) {
+            sawEncryptedOp = true;
+          }
+        }
+
         // Filter already applied ops
         let syncOps: SyncOperation[] = response.ops
           .filter((serverOp) => !appliedOpIds.has(serverOp.op.id))
@@ -197,35 +236,17 @@ export class OperationLogDownloadService {
         const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);
         if (hasEncryptedOps) {
           if (!encryptKey) {
-            // No encryption key available - fail with a helpful message
+            // No encryption key available - throw error to let sync wrapper show password dialog
             OpLog.error(
               'OperationLogDownloadService: Received encrypted operations but no encryption key is configured.',
             );
-            this.snackService.open({
-              type: 'ERROR',
-              msg: T.F.SYNC.S.ENCRYPTION_PASSWORD_REQUIRED,
-            });
-            downloadFailed = true;
-            return;
+            throw new DecryptNoPasswordError(
+              'Encrypted data received but no encryption password is configured',
+            );
           }
 
-          try {
-            syncOps = await this.encryptionService.decryptOperations(syncOps, encryptKey);
-          } catch (e) {
-            if (e instanceof DecryptError) {
-              OpLog.error(
-                'OperationLogDownloadService: Failed to decrypt operations. Wrong encryption password?',
-                e,
-              );
-              this.snackService.open({
-                type: 'ERROR',
-                msg: T.F.SYNC.S.DECRYPTION_FAILED,
-              });
-              downloadFailed = true;
-              return;
-            }
-            throw e;
-          }
+          // Decrypt encrypted operations - let DecryptError propagate to sync-wrapper handler
+          syncOps = await this.encryptionService.decryptOperations(syncOps, encryptKey);
         }
 
         // Convert to Operation format
@@ -353,6 +374,11 @@ export class OperationLogDownloadService {
         `hasSnapshotState=${!!snapshotState}`,
     );
 
+    // Determine if server has only unencrypted data.
+    // This is true when we downloaded ops AND none of them were encrypted.
+    // This indicates another client disabled encryption.
+    const serverHasOnlyUnencryptedData = sawAnyOps && !sawEncryptedOp;
+
     // Return latestServerSeq so caller can persist it AFTER storing ops in IndexedDB.
     // This ensures localStorage (lastServerSeq) and IndexedDB (ops) stay in sync.
     return {
@@ -367,6 +393,8 @@ export class OperationLogDownloadService {
       ...(snapshotVectorClock ? { snapshotVectorClock } : {}),
       // Include snapshot state for file-based sync fresh downloads
       ...(snapshotState ? { snapshotState } : {}),
+      // Include encryption state detection for mismatch handling
+      ...(serverHasOnlyUnencryptedData ? { serverHasOnlyUnencryptedData } : {}),
     };
   }
 
@@ -387,7 +415,8 @@ export class OperationLogDownloadService {
 
     if (driftMinutes > thresholdMinutes) {
       // Retry after 1 second - clock may sync after device wake-up
-      setTimeout(() => {
+      this.clockDriftTimeoutId = setTimeout(() => {
+        this.clockDriftTimeoutId = null;
         if (this.hasWarnedClockDrift) {
           return;
         }

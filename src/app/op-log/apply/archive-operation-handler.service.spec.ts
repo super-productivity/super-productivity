@@ -1002,29 +1002,31 @@ describe('ArchiveOperationHandler', () => {
         });
 
         describe('SYNC_IMPORT', () => {
-          it('should throw error when empty archiveYoung would overwrite non-empty archive', async () => {
+          it('should preserve local archiveYoung when SYNC_IMPORT has empty archive (likely bug)', async () => {
             const action = {
               type: loadAllData.type,
               appDataComplete: { archiveYoung: emptyArchive },
               meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
             } as unknown as PersistentAction;
 
-            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
-              /SAFETY GUARD.*archiveYoung.*bug in SYNC_IMPORT/,
-            );
+            // Should not throw - instead preserves local archives
+            await service.handleOperation(action);
+
+            // Should NOT write empty archive over existing data
             expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
           });
 
-          it('should throw error when empty archiveOld would overwrite non-empty archive', async () => {
+          it('should preserve local archiveOld when SYNC_IMPORT has empty archive (likely bug)', async () => {
             const action = {
               type: loadAllData.type,
               appDataComplete: { archiveOld: emptyArchive },
               meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
             } as unknown as PersistentAction;
 
-            await expectAsync(service.handleOperation(action)).toBeRejectedWithError(
-              /SAFETY GUARD.*archiveOld.*bug in SYNC_IMPORT/,
-            );
+            // Should not throw - instead preserves local archives
+            await service.handleOperation(action);
+
+            // Should NOT write empty archive over existing data
             expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
           });
 

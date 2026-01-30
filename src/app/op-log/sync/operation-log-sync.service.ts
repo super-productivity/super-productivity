@@ -4,7 +4,11 @@ import { TranslateService } from '@ngx-translate/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpType, VectorClock, FULL_STATE_OP_TYPES } from '../core/operation.types';
 import { OpLog } from '../../core/log';
-import { OperationSyncCapable } from '../sync-providers/provider.interface';
+import {
+  OperationSyncCapable,
+  SyncProviderServiceInterface,
+} from '../sync-providers/provider.interface';
+import { SyncProviderId } from '../sync-providers/provider.const';
 import { OperationLogUploadService, UploadResult } from './operation-log-upload.service';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -17,11 +21,25 @@ import { RemoteOpsProcessingService } from './remote-ops-processing.service';
 import {
   DownloadResultForRejection,
   RejectedOpsHandlerService,
+  RejectionHandlingResult,
 } from './rejected-ops-handler.service';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
 import { getDefaultMainModelData } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
+import { StateSnapshotService } from '../backup/state-snapshot.service';
+import { INBOX_PROJECT } from '../../features/project/project.const';
+import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
+import { confirmDialog } from '../../util/native-dialogs';
+
+/**
+ * Type guard for NgRx entity state (has an `ids` array).
+ */
+const isEntityState = (obj: unknown): obj is { ids: string[] } =>
+  typeof obj === 'object' &&
+  obj !== null &&
+  'ids' in obj &&
+  Array.isArray((obj as { ids: unknown }).ids);
 
 /**
  * Orchestrates synchronization of the Operation Log with remote storage.
@@ -99,6 +117,7 @@ export class OperationLogSyncService {
   private superSyncStatusService = inject(SuperSyncStatusService);
   private serverMigrationService = inject(ServerMigrationService);
   private writeFlushService = inject(OperationWriteFlushService);
+  private stateSnapshotService = inject(StateSnapshotService);
 
   // Extracted services
   private remoteOpsProcessingService = inject(RemoteOpsProcessingService);
@@ -119,6 +138,51 @@ export class OperationLogSyncService {
 
     // Fresh client: no snapshot AND no operations in the log
     return !snapshot && lastSeq === 0;
+  }
+
+  /**
+   * Checks if the NgRx store has meaningful user data (tasks, projects, tags, notes).
+   * This detects data that existed before the operation-log feature was added.
+   *
+   * @returns true if user has created any tasks, projects (besides INBOX), tags (besides system tags), or notes
+   */
+  private _hasMeaningfulLocalData(): boolean {
+    const snapshot = this.stateSnapshotService.getStateSnapshot();
+
+    if (!snapshot) {
+      OpLog.warn(
+        'OperationLogSyncService._hasMeaningfulLocalData: Unable to get state snapshot',
+      );
+      return false; // Assume no data rather than blocking sync
+    }
+
+    // Check for tasks (any tasks = meaningful data)
+    if (isEntityState(snapshot.task) && snapshot.task.ids.length > 0) {
+      return true;
+    }
+
+    // Check for projects (beyond the default INBOX project)
+    if (
+      isEntityState(snapshot.project) &&
+      snapshot.project.ids.some((id) => id !== INBOX_PROJECT.id)
+    ) {
+      return true;
+    }
+
+    // Check for tags (beyond system tags like TODAY, URGENT, IMPORTANT, IN_PROGRESS)
+    if (
+      isEntityState(snapshot.tag) &&
+      snapshot.tag.ids.some((id) => !SYSTEM_TAG_IDS.has(id))
+    ) {
+      return true;
+    }
+
+    // Check for notes
+    if (isEntityState(snapshot.note) && snapshot.note.ids.length > 0) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -143,6 +207,7 @@ export class OperationLogSyncService {
    */
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
+    options?: { skipPiggybackProcessing?: boolean; skipServerMigrationCheck?: boolean },
   ): Promise<UploadResult | null> {
     // CRITICAL: Ensure all pending write operations have completed before uploading.
     // The effect that writes operations uses concatMap for sequential processing,
@@ -165,9 +230,13 @@ export class OperationLogSyncService {
     // SERVER MIGRATION CHECK: Passed as callback to execute INSIDE the upload lock.
     // This prevents race conditions where multiple tabs could both detect migration
     // and create duplicate SYNC_IMPORT operations.
+    // Skip migration check for force uploads (e.g., after password change) to avoid
+    // DecryptError when downloading ops encrypted with a different key.
     const result = await this.uploadService.uploadPendingOps(syncProvider, {
-      preUploadCallback: () =>
-        this.serverMigrationService.checkAndHandleMigration(syncProvider),
+      preUploadCallback: options?.skipServerMigrationCheck
+        ? undefined
+        : () => this.serverMigrationService.checkAndHandleMigration(syncProvider),
+      skipPiggybackProcessing: options?.skipPiggybackProcessing,
     });
 
     // STEP 1: Process piggybacked ops FIRST
@@ -185,7 +254,10 @@ export class OperationLogSyncService {
     // even if processing throws. Otherwise rejected ops remain in pending
     // state and get re-uploaded infinitely.
     let localWinOpsCreated = 0;
-    let mergedOpsFromRejection = 0;
+    let rejectionResult: RejectionHandlingResult = {
+      mergedOpsCreated: 0,
+      permanentRejectionCount: 0,
+    };
     try {
       if (result.piggybackedOps.length > 0) {
         const processResult = await this.remoteOpsProcessingService.processRemoteOps(
@@ -197,22 +269,32 @@ export class OperationLogSyncService {
       // handleRejectedOps may create merged ops for concurrent modifications
       // These need to be uploaded, so we add them to localWinOpsCreated
       // Pass a download callback so the handler can trigger downloads for concurrent mods
-      const downloadCallback = (options?: {
+      const downloadCallback = (downloadOptions?: {
         forceFromSeq0?: boolean;
       }): Promise<DownloadResultForRejection> =>
-        this.downloadRemoteOps(syncProvider, options);
-      mergedOpsFromRejection = await this.rejectedOpsHandlerService.handleRejectedOps(
+        this.downloadRemoteOps(syncProvider, downloadOptions);
+      rejectionResult = await this.rejectedOpsHandlerService.handleRejectedOps(
         result.rejectedOps,
         downloadCallback,
       );
-      localWinOpsCreated += mergedOpsFromRejection;
+      localWinOpsCreated += rejectionResult.mergedOpsCreated;
     }
 
     // Update pending ops status for UI indicator
     const pendingOps = await this.opLogStore.getUnsynced();
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
-    return { ...result, localWinOpsCreated };
+    // Check for encryption state mismatch in piggybacked ops (another client disabled encryption)
+    await this.handleEncryptionStateMismatch(
+      syncProvider,
+      result.piggybackHasOnlyUnencryptedData,
+    );
+
+    return {
+      ...result,
+      localWinOpsCreated,
+      permanentRejectionCount: rejectionResult.permanentRejectionCount,
+    };
   }
 
   /**
@@ -311,8 +393,24 @@ export class OperationLogSyncService {
 
       // Only show confirmation for wholly fresh clients without any local changes
       if (!hasLocalChanges) {
-        // Show fresh client confirmation if this is a wholly fresh client
         const isFreshClient = await this.isWhollyFreshClient();
+
+        // CRITICAL FIX: Even if op-log is empty, check if NgRx store has meaningful data.
+        // This catches data that existed before the operation-log feature was added.
+        if (isFreshClient && this._hasMeaningfulLocalData()) {
+          OpLog.warn(
+            'OperationLogSyncService: Fresh client detected with meaningful local data in store. ' +
+              'Throwing LocalDataConflictError for conflict resolution dialog.',
+          );
+
+          throw new LocalDataConflictError(
+            0, // No unsynced ops, but we have meaningful store data
+            result.snapshotState as Record<string, unknown>,
+            result.snapshotVectorClock,
+          );
+        }
+
+        // Original flow for truly fresh clients (no store data)
         if (isFreshClient) {
           OpLog.warn(
             'OperationLogSyncService: Fresh client detected. Requesting confirmation before accepting snapshot.',
@@ -502,6 +600,12 @@ export class OperationLogSyncService {
     const pendingOps = await this.opLogStore.getUnsynced();
     this.superSyncStatusService.updatePendingOpsStatus(pendingOps.length > 0);
 
+    // Check for encryption state mismatch (another client disabled encryption)
+    await this.handleEncryptionStateMismatch(
+      syncProvider,
+      result.serverHasOnlyUnencryptedData,
+    );
+
     return {
       serverMigrationHandled: false,
       localWinOpsCreated: processResult.localWinOpsCreated,
@@ -524,7 +628,7 @@ export class OperationLogSyncService {
         count: opCount,
       },
     );
-    return window.confirm(`${title}\n\n${message}`);
+    return confirmDialog(`${title}\n\n${message}`);
   }
 
   /**
@@ -548,7 +652,19 @@ export class OperationLogSyncService {
     });
 
     // Upload the SYNC_IMPORT (and any pending ops)
-    await this.uploadPendingOps(syncProvider);
+    // Skip piggybacked ops processing and server migration check because:
+    // 1. SYNC_IMPORT supersedes all previous ops anyway
+    // 2. Piggybacked ops may be encrypted with a different key (e.g., after password change)
+    //    which would cause DecryptError
+    // 3. Server migration check downloads ops which would fail with DecryptError if password changed
+    //
+    // Use isCleanSlate=true to ensure server deletes ALL existing data before accepting
+    // the new SYNC_IMPORT. This is critical for recovery scenarios like decrypt errors
+    // where the server may have data encrypted with a different password.
+    await this.uploadService.uploadPendingOps(syncProvider, {
+      skipPiggybackProcessing: true,
+      isCleanSlate: true,
+    });
 
     OpLog.normal('OperationLogSyncService: Force upload complete.');
   }
@@ -666,6 +782,93 @@ export class OperationLogSyncService {
 
     OpLog.normal(
       `OperationLogSyncService: Force download complete. Processed ${result.newOps.length} ops.`,
+    );
+  }
+
+  /**
+   * Checks if there's an encryption state mismatch between local config and server data.
+   * If the server has only unencrypted data but local config has encryption enabled,
+   * this means another client disabled encryption. Updates local config to match.
+   *
+   * @param syncProvider - The sync provider to check and update
+   * @param serverHasOnlyUnencryptedData - Whether all downloaded/piggybacked ops were unencrypted
+   */
+  async handleEncryptionStateMismatch(
+    syncProvider: OperationSyncCapable,
+    serverHasOnlyUnencryptedData: boolean | undefined,
+  ): Promise<void> {
+    // No detection possible if we didn't download any ops
+    if (!serverHasOnlyUnencryptedData) {
+      return;
+    }
+
+    // Check if local config has encryption enabled
+    const localEncryptKey = syncProvider.getEncryptKey
+      ? await syncProvider.getEncryptKey()
+      : undefined;
+
+    // No mismatch if local config also has no encryption
+    if (!localEncryptKey) {
+      return;
+    }
+
+    // Mismatch detected: server has only unencrypted data but local has encryption enabled
+    OpLog.warn(
+      'OperationLogSyncService: Encryption state mismatch detected. ' +
+        'Server has only unencrypted data but local config has encryption enabled. ' +
+        'Another client must have disabled encryption. Updating local config to match.',
+    );
+
+    // Check if provider supports config updates using type guard
+    if (!this._isSyncProviderWithConfig(syncProvider)) {
+      OpLog.warn(
+        'OperationLogSyncService: Cannot update encryption config - ' +
+          'provider does not support privateCfg or setPrivateCfg.',
+      );
+      return;
+    }
+
+    // Load existing config
+    const existingCfg = await syncProvider.privateCfg.load();
+    if (!existingCfg) {
+      OpLog.warn(
+        'OperationLogSyncService: Cannot update encryption config - ' +
+          'failed to load existing config.',
+      );
+      return;
+    }
+
+    // Update config to disable encryption
+    await syncProvider.setPrivateCfg({
+      ...existingCfg,
+      encryptKey: undefined,
+      isEncryptionEnabled: false,
+    });
+
+    OpLog.normal(
+      'OperationLogSyncService: Local encryption config updated to match server state.',
+    );
+
+    // Notify user - use WARNING since this is a security-relevant change
+    this.snackService.open({
+      type: 'WARNING',
+      msg: T.F.SYNC.S.ENCRYPTION_DISABLED_ON_OTHER_DEVICE,
+    });
+  }
+
+  /**
+   * Type guard to check if a sync provider supports config updates.
+   * Returns true if the provider has both privateCfg.load() and setPrivateCfg().
+   */
+  private _isSyncProviderWithConfig(
+    provider: OperationSyncCapable,
+  ): provider is OperationSyncCapable & SyncProviderServiceInterface<SyncProviderId> {
+    const providerWithCfg = provider as Partial<
+      SyncProviderServiceInterface<SyncProviderId>
+    >;
+    return (
+      typeof providerWithCfg.privateCfg?.load === 'function' &&
+      typeof providerWithCfg.setPrivateCfg === 'function'
     );
   }
 }

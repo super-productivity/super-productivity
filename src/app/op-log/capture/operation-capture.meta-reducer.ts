@@ -120,13 +120,28 @@ export const getIsApplyingRemoteOps = (): boolean => {
 const MAX_DEFERRED_ACTIONS_WARNING = 10;
 
 /**
+ * Hard limit for deferred actions buffer.
+ * If reached, oldest actions are dropped to prevent unbounded memory growth.
+ */
+const MAX_DEFERRED_ACTIONS_HARD_LIMIT = 100;
+
+/**
  * Buffers an action for processing after sync completes.
  * Called by the meta-reducer when a persistent action arrives during sync.
  */
 export const bufferDeferredAction = (action: PersistentAction): void => {
+  // Hard limit: drop oldest action if buffer is full (sync stuck scenario)
+  if (deferredActions.length >= MAX_DEFERRED_ACTIONS_HARD_LIMIT) {
+    devError(
+      `[operationCaptureMetaReducer] Deferred actions buffer exceeded ${MAX_DEFERRED_ACTIONS_HARD_LIMIT} items. ` +
+        `Dropping oldest action. Sync may be stuck - consider reloading the app.`,
+    );
+    deferredActions.shift();
+  }
+
   deferredActions.push(action);
 
-  // Warn if buffer is growing unusually large - may indicate sync is stuck
+  // Soft warning at 10 items
   if (deferredActions.length > MAX_DEFERRED_ACTIONS_WARNING) {
     devError(
       `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items - sync may be stuck or taking too long`,

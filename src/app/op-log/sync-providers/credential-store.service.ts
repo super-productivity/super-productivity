@@ -261,10 +261,16 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
    * Internal method to save configuration.
    */
   private async _save(privateCfg: PrivateCfgByProviderId<PID>): Promise<void> {
+    // Log the encryptKey being saved (redacted for security - just show length)
+    const cfgWithRedacted = privateCfg as { encryptKey?: string };
+    const encryptKeyInfo = cfgWithRedacted?.encryptKey
+      ? `[length=${cfgWithRedacted.encryptKey.length}]`
+      : '[not set]';
     PFLog.normal(
       `${SyncCredentialStore.L}._save()`,
       this._providerId,
-      typeof this._privateCfgInMemory,
+      `encryptKey=${encryptKeyInfo}`,
+      `dbKey=${this._dbKey}`,
     );
 
     this._privateCfgInMemory = privateCfg;
@@ -280,6 +286,11 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
     try {
       const db = await this._ensureDb();
       await db.put(DB_STORE_NAME, privateCfg, this._dbKey);
+      PFLog.normal(
+        `${SyncCredentialStore.L}._save() SUCCESS`,
+        this._providerId,
+        `wrote to ${DB_STORE_NAME}/${this._dbKey}`,
+      );
     } catch (error) {
       PFLog.critical(`Failed to save credentials: ${error}`);
       throw new Error(`Failed to save credentials: ${error}`);

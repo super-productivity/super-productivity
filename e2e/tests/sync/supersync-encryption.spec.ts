@@ -105,24 +105,43 @@ test.describe('@supersync SuperSync Encryption', () => {
       // --- Client C: Attempt Download (Wrong Password) ---
       clientC = await createSimulatedClient(browser, baseURL!, 'C', testRunId);
 
-      // Setup with WRONG password
+      // Setup with WRONG password - don't wait for sync since it will fail
       await clientC.sync.setupSuperSync({
         ...baseConfig,
         isEncryptionEnabled: true,
         password: wrongPassword,
+        waitForInitialSync: false, // Sync will fail with wrong password
       });
 
-      // Try to sync - expectation is that it completes (download happens) but processing fails
-      // The SyncPage helper might throw if it detects an error icon, or we check for error manually
+      // The sync already happened during setupSuperSync with wrong password
+      // A decrypt error dialog should appear - wait for it and close it
+      const decryptErrorDialog = clientC.page.locator('dialog-handle-decrypt-error');
 
-      // We expect the sync to technically "fail" or show an error state because decryption failed
-      try {
-        await clientC.sync.triggerSync();
-        // It might not throw immediately if waitForSyncComplete handles the error state gracefully or we catch it
-        await clientC.sync.waitForSyncComplete();
-      } catch (e) {
-        // Expected error or timeout due to failure
-        console.log('Sync failed as expected:', e);
+      // Wait for the decrypt error dialog to appear (it may take a moment after sync fails)
+      const decryptErrorAppeared = await decryptErrorDialog
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (decryptErrorAppeared) {
+        console.log('Decrypt error dialog appeared - closing it');
+        // Close the dialog by clicking cancel or pressing Escape
+        const cancelBtn = decryptErrorDialog
+          .locator('button')
+          .filter({ hasText: /cancel/i });
+        const cancelVisible = await cancelBtn.isVisible().catch(() => false);
+        if (cancelVisible) {
+          await cancelBtn.click();
+        } else {
+          await clientC.page.keyboard.press('Escape');
+        }
+        await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      } else {
+        console.log(
+          'No decrypt error dialog appeared - checking for other error indicators',
+        );
+        // The error might be shown via snackbar instead of dialog
+        // Just proceed to verify error state
       }
 
       // Verify Client C DOES NOT have the task

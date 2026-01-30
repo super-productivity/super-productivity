@@ -60,6 +60,9 @@
 mat-dialog-content {
   position: relative;
   padding: 0 !important;
+  max-height: calc(
+    100vh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  ) !important;
 }
 
 .press-enter-msg {

@@ -57,8 +57,8 @@ export class RepeatSectionTypeComponent extends FieldArrayType {
       toIndex <= this.model.length
     ) {
       const m = this.model[fromIndex];
-      this.remove(fromIndex);
-      this.add(toIndex, m);
+      this.remove(fromIndex, { markAsDirty: true });
+      this.add(toIndex, m, { markAsDirty: true });
     }
   }
 }

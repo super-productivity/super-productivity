@@ -5,6 +5,7 @@ import { updateGlobalConfigSection } from './store/global-config.actions';
 import { Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
+  AppFeaturesConfig,
   ClipboardImagesConfig,
   EvaluationConfig,
   GlobalConfigSectionKey,
@@ -22,6 +23,7 @@ import {
   TasksConfig,
 } from './global-config.model';
 import {
+  selectAppFeaturesConfig,
   selectClipboardImagesConfig,
   selectConfigFeatureState,
   selectEvaluationConfig,
@@ -109,6 +111,11 @@ export class GlobalConfigService {
     select(selectTimelineConfig),
   );
 
+  appFeatures$: Observable<AppFeaturesConfig> = this._store.pipe(
+    select(selectAppFeaturesConfig),
+    shareReplay(1),
+  );
+
   // Signal versions of the properties
   readonly cfg: Signal<GlobalConfigState | undefined> = toSignal(this.cfg$, {
     initialValue: undefined,
@@ -154,6 +161,9 @@ export class GlobalConfigService {
   );
   readonly timelineCfg: Signal<ScheduleConfig | undefined> = toSignal(this.timelineCfg$, {
     initialValue: undefined,
+  });
+  readonly appFeatures: Signal<AppFeaturesConfig> = toSignal(this.appFeatures$, {
+    initialValue: DEFAULT_GLOBAL_CONFIG.appFeatures,
   });
 
   updateSection(

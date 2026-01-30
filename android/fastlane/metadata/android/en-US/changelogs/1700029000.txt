@@ -1,0 +1,10 @@
+
+### Bug Fixes
+
+* **ci:** only run dependency vulnerability review on pull requests (#6153)
+* **sync:** address code review findings and add encryption tests
+* **sync:** clear adapter cache on encryption changes and add safety limits
+* **sync:** use CapacitorHttp for SuperSync on iOS native platform (#6154) (feb8604), closes #6151
+
+
+

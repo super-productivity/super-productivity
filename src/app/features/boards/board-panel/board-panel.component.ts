@@ -40,6 +40,10 @@ import { first, take } from 'rxjs/operators';
 import { ShortPlannedAtPipe } from '../../../ui/pipes/short-planned-at.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { selectUnarchivedProjects } from '../../project/store/project.selectors';
+import {
+  moveProjectTaskToBacklogListAuto,
+  moveProjectTaskToRegularListAuto,
+} from '../../project/store/project.actions';
 
 @Component({
   selector: 'board-panel',
@@ -288,6 +292,7 @@ export class BoardPanelComponent {
     );
 
     this._checkToScheduledTask(panelCfg, task.id);
+    this._checkBacklogState(panelCfg, task.id);
   }
 
   async afterTaskAdd({
@@ -308,6 +313,7 @@ export class BoardPanelComponent {
     );
 
     this._checkToScheduledTask(panelCfg, taskId);
+    this._checkBacklogState(panelCfg, taskId);
   }
 
   scheduleTask(task: TaskCopy, ev?: MouseEvent): void {
@@ -337,6 +343,51 @@ export class BoardPanelComponent {
         TaskSharedActions.unscheduleTask({
           id: taskId,
           isSkipToast: false,
+        }),
+      );
+    }
+  }
+
+  private async _checkBacklogState(
+    panelCfg: BoardPanelCfg,
+    taskId: string,
+  ): Promise<void> {
+    if (
+      !panelCfg.backlogState ||
+      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.All
+    ) {
+      return;
+    }
+
+    const task = await this.store
+      .select(selectTaskById, { id: taskId })
+      .pipe(first())
+      .toPromise();
+
+    if (!task || !task.projectId) {
+      return;
+    }
+
+    const project = this.allProjects().find((p) => p.id === task.projectId);
+    const isInBacklog = this._isTaskInBacklog(task);
+
+    if (panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.NoBacklog && isInBacklog) {
+      this.store.dispatch(
+        moveProjectTaskToRegularListAuto({
+          taskId: task.id,
+          projectId: task.projectId,
+          isMoveToTop: false,
+        }),
+      );
+    } else if (
+      panelCfg.backlogState === BoardPanelCfgTaskTypeFilter.OnlyBacklog &&
+      !isInBacklog &&
+      project?.isEnableBacklog
+    ) {
+      this.store.dispatch(
+        moveProjectTaskToBacklogListAuto({
+          taskId: task.id,
+          projectId: task.projectId,
         }),
       );
     }

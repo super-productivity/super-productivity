@@ -14,6 +14,7 @@ import {
   generateSyncFolderName,
   dismissTourIfVisible,
   waitForArchivePersistence,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { Page } from 'playwright';
 
@@ -178,8 +179,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     console.log('[Delete Tag] ✓ Delete tag with archived tasks synced correctly');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -312,8 +312,7 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     console.log('[Delete Project] ✓ Delete project with archived tasks synced correctly');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -459,7 +458,6 @@ test.describe('@webdav WebDAV Delete Cascade Sync', () => {
     );
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 });

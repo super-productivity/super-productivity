@@ -1,0 +1,5 @@
+
+### Bug Fixes
+
+* **focus-mode:** dispatch completeFocusSession when isManualBreakStart=true #6206
+* schedule dialog height #6187

@@ -64,20 +64,71 @@ export class ImportPage extends BasePage {
       'mat-tab-header .mat-mdc-tab:has(mat-icon:has-text("cloud_sync"))',
     );
     await syncBackupTab.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Ensure tab is scrolled into view and stable before clicking
+    await syncBackupTab.scrollIntoViewIfNeeded();
+    await this.page.waitForTimeout(200);
+
     await syncBackupTab.click();
+
+    // Verify the tab became active by checking for aria-selected attribute
+    // Retry click if tab didn't become active
+    const maxTabRetries = 3;
+    for (let i = 0; i < maxTabRetries; i++) {
+      const isActive = await syncBackupTab
+        .getAttribute('aria-selected')
+        .then((val) => val === 'true')
+        .catch(() => false);
+
+      if (isActive) {
+        break;
+      }
+
+      if (i < maxTabRetries - 1) {
+        console.log(
+          `[ImportPage] Tab click didn't register, retrying (attempt ${i + 2})`,
+        );
+        await this.page.waitForTimeout(300);
+        await syncBackupTab.click();
+      }
+    }
+
+    // Wait for tab panel content to load
     await this.page.waitForTimeout(500);
 
     // Step 2: Within the tab, expand the "Import/Export" collapsible section
     const importExportSection = this.page.locator(
       'collapsible:has-text("Import/Export")',
     );
+    await importExportSection.waitFor({ state: 'visible', timeout: 10000 });
     await importExportSection.scrollIntoViewIfNeeded();
     await this.page.waitForTimeout(300);
 
-    // Click on the collapsible header to expand it
+    // Click on the collapsible header to expand it with retry logic
     const collapsibleHeader = importExportSection.locator('.collapsible-header, .header');
     await collapsibleHeader.click();
-    await this.page.waitForTimeout(500);
+
+    // Verify expansion by checking if import button becomes visible
+    // Retry if expansion failed
+    const maxExpandRetries = 3;
+    for (let i = 0; i < maxExpandRetries; i++) {
+      const isExpanded = await this.importFromFileBtn
+        .waitFor({ state: 'visible', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (isExpanded) {
+        break;
+      }
+
+      if (i < maxExpandRetries - 1) {
+        console.log(
+          `[ImportPage] Collapsible expansion failed, retrying (attempt ${i + 2})`,
+        );
+        await this.page.waitForTimeout(300);
+        await collapsibleHeader.click();
+      }
+    }
 
     // Now the file-imex component should be visible in the active tab
     await this.importFromFileBtn.waitFor({ state: 'visible', timeout: 10000 });

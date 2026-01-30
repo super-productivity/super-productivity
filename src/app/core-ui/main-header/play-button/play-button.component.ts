@@ -151,6 +151,11 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
           .mat-icon {
             position: relative;
             z-index: 2;
+            font-variation-settings:
+              'FILL' 1,
+              'wght' 400,
+              'GRAD' 0,
+              'opsz' 24;
           }
         }
       }

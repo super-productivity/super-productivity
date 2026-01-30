@@ -120,7 +120,11 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
 
       // Reload page after import to ensure UI reflects the imported state
       // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-      await clientA.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
 
       // Re-enable sync after import (import overwrites globalConfig)
@@ -144,7 +148,11 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
 
       // This is the CRITICAL step - reload triggers fresh hydration
       // With the bug, operations created during loadAllData would get stale clocks
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
       console.log('[Stale Clock] Client B reloaded, hydration complete');
 
@@ -251,7 +259,11 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       await importPage.importBackupFile(backupPath);
 
       // Reload page after import to ensure UI reflects the imported state
-      await clientA.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
 
       await clientA.sync.setupSuperSync(syncConfig);
@@ -267,9 +279,11 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       for (let cycle = 1; cycle <= 3; cycle++) {
         console.log(`[Multi-Reload] Reload cycle ${cycle}/3`);
 
-        // Reload Client B
-        await clientB.page.reload();
-        await clientB.page.waitForLoadState('networkidle');
+        // Reload Client B - use goto instead of reload for reliability with service workers
+        await clientB.page.goto(clientB.page.url(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
 
         // Navigate and verify state
         await clientB.page.goto('/#/work-view');

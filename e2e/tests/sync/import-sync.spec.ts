@@ -9,6 +9,7 @@ import {
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * Import + Sync E2E Tests
@@ -91,7 +92,11 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
 
         // Reload page after import to ensure UI reflects the imported state
         // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-        await clientA.page.reload();
+        // Use goto instead of reload - more reliable with service workers
+        await clientA.page.goto(clientA.page.url(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
         await clientA.page.waitForLoadState('networkidle');
 
         // Wait for import to complete and verify tasks are visible
@@ -117,9 +122,12 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         console.log('[Import Test] Client B sync complete');
 
         // Reload Client B after sync to ensure UI reflects synced state
-        // (bulk state updates from SYNC_IMPORT may not trigger component re-renders)
-        await clientB.page.reload();
-        await clientB.page.waitForLoadState('networkidle');
+        // Use goto (current URL) instead of reload - more reliable with service workers
+        await clientB.page.goto(clientB.page.url(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+        await waitForAppReady(clientB.page);
 
         // ============ PHASE 4: Verify Active Tasks on Client B ============
         console.log('[Import Test] Phase 4: Verifying active tasks on Client B');
@@ -285,7 +293,11 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
 
         // Reload page after import to ensure UI reflects the imported state
         // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-        await clientA.page.reload();
+        // Use goto instead of reload - more reliable with service workers
+        await clientA.page.goto(clientA.page.url(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
         await clientA.page.waitForLoadState('networkidle');
 
         // Re-enable sync after import (import overwrites globalConfig including sync settings)
@@ -299,8 +311,12 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await clientB.sync.syncAndWait();
 
         // Reload Client B after sync to ensure UI reflects synced state
-        await clientB.page.reload();
-        await clientB.page.waitForLoadState('networkidle');
+        // Use goto (current URL) instead of reload - more reliable with service workers
+        await clientB.page.goto(clientB.page.url(), {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+        await waitForAppReady(clientB.page);
 
         // ============ PHASE 4: Verify Merged Data ============
         console.log('[Merge Test] Phase 4: Verifying merged data');

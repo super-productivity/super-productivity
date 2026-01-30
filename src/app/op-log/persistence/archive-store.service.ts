@@ -3,6 +3,7 @@ import { IDBPDatabase, openDB } from 'idb';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { DB_NAME, DB_VERSION, STORE_NAMES, SINGLETON_KEY } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
+import { ARCHIVE_STORE_NOT_INITIALIZED } from './op-log-errors.const';
 
 /**
  * Entry stored in archive_young or archive_old object stores.
@@ -72,9 +73,7 @@ export class ArchiveStoreService {
 
   private get db(): IDBPDatabase<ArchiveDBSchema> {
     if (!this._db) {
-      throw new Error(
-        'ArchiveStoreService not initialized. Ensure _ensureInit() is called.',
-      );
+      throw new Error(ARCHIVE_STORE_NOT_INITIALIZED);
     }
     return this._db;
   }

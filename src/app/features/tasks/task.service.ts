@@ -178,7 +178,7 @@ export class TaskService {
   allStartableTasks$: Observable<Task[]> = this._store.pipe(select(selectStartableTasks));
 
   isTimeTrackingEnabled = computed(
-    () => this._globalConfigService.cfg()?.appFeatures.isTimeTrackingEnabled,
+    () => this._globalConfigService.appFeatures().isTimeTrackingEnabled,
   );
 
   // META FIELDS
@@ -304,6 +304,14 @@ export class TaskService {
           this._unsyncedContexts.clear();
         });
     }
+  }
+
+  /**
+   * Flush accumulated time tracking data to sync.
+   * Called before app goes to background or closes.
+   */
+  flushAccumulatedTimeSpent(): void {
+    this._flushAccumulatedTimeSpent();
   }
 
   getAllParentWithoutTag$(tagId: string): Observable<Task[]> {
@@ -1234,7 +1242,8 @@ export class TaskService {
         ? { projectId: workContextId }
         : {
             projectId:
-              this._globalConfigService.cfg()?.tasks.defaultProjectId || INBOX_PROJECT.id,
+              this._globalConfigService.cfg()?.tasks?.defaultProjectId ||
+              INBOX_PROJECT.id,
           }),
 
       tagIds:
@@ -1258,7 +1267,7 @@ export class TaskService {
       d1.projectId =
         workContextType === WorkContextType.PROJECT
           ? workContextId
-          : this._globalConfigService.cfg()?.tasks.defaultProjectId || INBOX_PROJECT.id;
+          : this._globalConfigService.cfg()?.tasks?.defaultProjectId || INBOX_PROJECT.id;
     }
 
     // Validate that we have a valid task before returning

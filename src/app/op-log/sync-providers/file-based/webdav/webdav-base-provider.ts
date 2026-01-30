@@ -7,6 +7,8 @@ import {
   InvalidDataSPError,
   MissingCredentialsSPError,
   NoRevAPIError,
+  RemoteFileChangedUnexpectedly,
+  UploadRevToMatchMismatchAPIError,
 } from '../../../core/errors/sync-errors';
 import { WebdavPrivateCfg } from './webdav.model';
 import { SyncLog } from '../../../../core/log';
@@ -76,12 +78,22 @@ export abstract class WebdavBaseProvider<
     });
     const { filePath } = await this._getConfigAndPath(targetPath);
 
-    const result = await this._api.upload({
-      path: filePath,
-      data: dataStr,
-      isForceOverwrite: isForceOverwrite,
-      expectedRev: isForceOverwrite ? null : localRev,
-    });
+    let result;
+    try {
+      result = await this._api.upload({
+        path: filePath,
+        data: dataStr,
+        isForceOverwrite: isForceOverwrite,
+        expectedRev: isForceOverwrite ? null : localRev,
+      });
+    } catch (e) {
+      // Translate RemoteFileChangedUnexpectedly to UploadRevToMatchMismatchAPIError
+      // so the retry mechanism in FileBasedSyncAdapterService._uploadWithRetry() can handle it
+      if (e instanceof RemoteFileChangedUnexpectedly) {
+        throw new UploadRevToMatchMismatchAPIError(e.message);
+      }
+      throw e;
+    }
 
     if (!result.rev) {
       throw new NoRevAPIError();

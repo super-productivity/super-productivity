@@ -143,9 +143,19 @@ async function buildPlugin(plugin) {
       try {
         await fs.access(packageJsonPath);
         const nodeModulesPath = path.join(pluginPath, 'node_modules');
+        // Check if dependencies are actually installed by looking for a real package
+        // (not just .vite cache folders)
+        let needsInstall = false;
         try {
           await fs.access(nodeModulesPath);
+          // Check if at least one actual package exists (not a dot-folder)
+          const entries = await fs.readdir(nodeModulesPath);
+          const hasRealPackages = entries.some((e) => !e.startsWith('.'));
+          needsInstall = !hasRealPackages;
         } catch {
+          needsInstall = true;
+        }
+        if (needsInstall) {
           log(`  Installing dependencies...`, colors.yellow);
           await execAsync(`cd ${pluginPath} && npm install`);
         }

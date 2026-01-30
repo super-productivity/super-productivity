@@ -122,10 +122,10 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
   todayList = toSignal(this._store.select(selectTodayTaskIds), { initialValue: [] });
   isOnTodayList = computed(() => this.task && this.todayList().includes(this.task.id));
   readonly isTimeTrackingEnabled = computed(
-    () => this._globalConfigService.cfg()?.appFeatures.isTimeTrackingEnabled,
+    () => this._globalConfigService.appFeatures().isTimeTrackingEnabled,
   );
   readonly isFocusModeEnabled = computed(
-    () => this._globalConfigService.cfg()?.appFeatures.isFocusModeEnabled,
+    () => this._globalConfigService.appFeatures().isFocusModeEnabled,
   );
 
   // eslint-disable-next-line @angular-eslint/no-output-native

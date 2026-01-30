@@ -49,6 +49,8 @@ describe('StaleOperationResolverService', () => {
     ]);
     mockConflictResolutionService = jasmine.createSpyObj('ConflictResolutionService', [
       'getCurrentEntityState',
+      'mergeAndIncrementClocks',
+      'createLWWUpdateOp',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
@@ -65,6 +67,40 @@ describe('StaleOperationResolverService', () => {
     // Mock lock service to execute the callback immediately
     mockLockService.request.and.callFake(
       (_lockName: string, callback: () => Promise<any>) => callback(),
+    );
+    // Mock merged clock methods - merged from LWWOperationFactory
+    mockConflictResolutionService.mergeAndIncrementClocks.and.callFake(
+      (clocks: VectorClock[], clientId: string) => {
+        const merged: VectorClock = {};
+        for (const clock of clocks) {
+          for (const [k, v] of Object.entries(clock)) {
+            merged[k] = Math.max(merged[k] || 0, v);
+          }
+        }
+        merged[clientId] = (merged[clientId] || 0) + 1;
+        return merged;
+      },
+    );
+    mockConflictResolutionService.createLWWUpdateOp.and.callFake(
+      (
+        entityType: EntityType,
+        entityId: string,
+        entityState: unknown,
+        clientId: string,
+        vectorClock: VectorClock,
+        timestamp: number,
+      ) => ({
+        id: 'generated-id-' + Math.random().toString(36).substring(7),
+        actionType: `[${entityType}] LWW Update` as ActionType,
+        opType: OpType.Update,
+        entityType,
+        entityId,
+        payload: entityState,
+        clientId,
+        vectorClock,
+        timestamp,
+        schemaVersion: 1,
+      }),
     );
 
     TestBed.configureTestingModule({
@@ -513,6 +549,211 @@ describe('StaleOperationResolverService', () => {
       expect(op1.id).not.toBe(op2.id);
       expect(op1.id).not.toBe('op-1'); // New ID, not reusing original
       expect(op2.id).not.toBe('op-2');
+    });
+
+    describe('DELETE operation handling', () => {
+      const createMockDeleteOperation = (
+        id: string,
+        entityType: EntityType,
+        entityId: string,
+        vectorClock: VectorClock,
+        timestamp: number = Date.now(),
+      ): Operation => ({
+        id,
+        actionType: `[${entityType}] Delete Task` as ActionType,
+        opType: OpType.Delete,
+        entityType,
+        entityId,
+        payload: { id: entityId, title: 'Deleted Task' }, // Entity data for potential undo
+        clientId: 'original-client',
+        vectorClock,
+        timestamp,
+        schemaVersion: 1,
+      });
+
+      it('should create replacement DELETE op for stale DELETE operation', async () => {
+        const staleDeleteOp = createMockDeleteOperation(
+          'op-1',
+          'TASK',
+          'task-1',
+          {
+            clientA: 5,
+          },
+          1000,
+        );
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(
+          Promise.resolve({ clientA: 3, clientB: 2 }),
+        );
+        // Entity doesn't exist - it was deleted
+        mockConflictResolutionService.getCurrentEntityState.and.returnValue(
+          Promise.resolve(undefined),
+        );
+
+        const result = await service.resolveStaleLocalOps([
+          { opId: 'op-1', op: staleDeleteOp },
+        ]);
+
+        expect(result).toBe(1);
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1']);
+        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        expect(appendedOp.opType).toBe(OpType.Delete);
+        expect(appendedOp.actionType).toBe('[TASK] Delete Task');
+        expect(appendedOp.entityType).toBe('TASK');
+        expect(appendedOp.entityId).toBe('task-1');
+        expect(appendedOp.payload).toEqual({ id: 'task-1', title: 'Deleted Task' });
+        expect(appendedOp.clientId).toBe(TEST_CLIENT_ID);
+        expect(appendedOp.timestamp).toBe(1000);
+        // Should NOT call getCurrentEntityState for DELETE ops
+        expect(
+          mockConflictResolutionService.getCurrentEntityState,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('should create single replacement DELETE for multiple stale DELETE ops on same entity', async () => {
+        const staleDeleteOp1 = createMockDeleteOperation(
+          'op-1',
+          'TASK',
+          'task-1',
+          { clientA: 3 },
+          1000,
+        );
+        const staleDeleteOp2 = createMockDeleteOperation(
+          'op-2',
+          'TASK',
+          'task-1',
+          { clientA: 4 },
+          2000,
+        );
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(
+          Promise.resolve({ clientB: 10 }),
+        );
+
+        const result = await service.resolveStaleLocalOps([
+          { opId: 'op-1', op: staleDeleteOp1 },
+          { opId: 'op-2', op: staleDeleteOp2 },
+        ]);
+
+        expect(result).toBe(1); // Only ONE new op for both stale DELETE ops
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2']);
+        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(1);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        expect(appendedOp.opType).toBe(OpType.Delete);
+        // Timestamp should be max of all stale ops (2000)
+        expect(appendedOp.timestamp).toBe(2000);
+      });
+
+      it('should preserve actionType and payload from original DELETE op', async () => {
+        const customPayload = {
+          id: 'task-1',
+          title: 'Important Task',
+          notes: 'some notes',
+        };
+        const staleDeleteOp: Operation = {
+          id: 'op-1',
+          actionType: '[TASK] Delete Task' as ActionType,
+          opType: OpType.Delete,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          payload: customPayload,
+          clientId: 'original-client',
+          vectorClock: { clientA: 1 },
+          timestamp: 1000,
+          schemaVersion: 1,
+        };
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
+
+        await service.resolveStaleLocalOps([{ opId: 'op-1', op: staleDeleteOp }]);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        expect(appendedOp.actionType).toBe('[TASK] Delete Task');
+        expect(appendedOp.payload).toEqual(customPayload);
+      });
+
+      it('should merge vector clocks properly for DELETE ops', async () => {
+        const staleDeleteOp = createMockDeleteOperation('op-1', 'TASK', 'task-1', {
+          clientA: 10,
+          clientB: 5,
+        });
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(
+          Promise.resolve({ clientA: 8, clientC: 15 }),
+        );
+
+        await service.resolveStaleLocalOps([{ opId: 'op-1', op: staleDeleteOp }]);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        // New clock should dominate all known clocks
+        expect(appendedOp.vectorClock['clientA']).toBeGreaterThanOrEqual(10);
+        expect(appendedOp.vectorClock['clientB']).toBeGreaterThanOrEqual(5);
+        expect(appendedOp.vectorClock['clientC']).toBeGreaterThanOrEqual(15);
+        expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeGreaterThanOrEqual(1);
+      });
+
+      it('should handle DELETE ops alongside UPDATE ops for different entities', async () => {
+        const staleDeleteOp = createMockDeleteOperation(
+          'op-1',
+          'TASK',
+          'deleted-task',
+          { clientA: 1 },
+          1000,
+        );
+        const staleUpdateOp = createMockOperation(
+          'op-2',
+          'TASK',
+          'existing-task',
+          { clientA: 2 },
+          2000,
+        );
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
+        mockConflictResolutionService.getCurrentEntityState.and.returnValue(
+          Promise.resolve({ id: 'existing-task', title: 'Existing' }),
+        );
+
+        const result = await service.resolveStaleLocalOps([
+          { opId: 'op-1', op: staleDeleteOp },
+          { opId: 'op-2', op: staleUpdateOp },
+        ]);
+
+        expect(result).toBe(2); // One DELETE op + one UPDATE op
+        expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['op-1', 'op-2']);
+        expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
+
+        const calls = mockOpLogStore.appendWithVectorClockUpdate.calls.all();
+        const ops = calls.map((c) => c.args[0] as Operation);
+
+        const deleteOp = ops.find((op) => op.entityId === 'deleted-task');
+        const updateOp = ops.find((op) => op.entityId === 'existing-task');
+
+        expect(deleteOp?.opType).toBe(OpType.Delete);
+        expect(updateOp?.opType).toBe(OpType.Update);
+      });
+
+      it('should show conflict resolution snack for DELETE ops', async () => {
+        const staleDeleteOp = createMockDeleteOperation('op-1', 'TASK', 'task-1', {
+          clientA: 1,
+        });
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
+
+        await service.resolveStaleLocalOps([{ opId: 'op-1', op: staleDeleteOp }]);
+
+        expect(mockSnackService.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            translateParams: { localWins: 1, remoteWins: 0 },
+          }),
+        );
+      });
     });
   });
 });

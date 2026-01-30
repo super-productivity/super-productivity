@@ -8,7 +8,6 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { SnackService } from '../../core/snack/snack.service';
 import { StaleOperationResolverService } from './stale-operation-resolver.service';
 import { Operation, OpType, ActionType } from '../core/operation.types';
-import { MAX_REJECTED_OPS_BEFORE_WARNING } from '../core/operation-log.const';
 import { T } from '../../t.const';
 
 describe('RejectedOpsHandlerService', () => {
@@ -63,9 +62,9 @@ describe('RejectedOpsHandlerService', () => {
   });
 
   describe('handleRejectedOps', () => {
-    it('should return 0 when no rejected ops provided', async () => {
+    it('should return zero counts when no rejected ops provided', async () => {
       const result = await service.handleRejectedOps([]);
-      expect(result).toBe(0);
+      expect(result).toEqual({ mergedOpsCreated: 0, permanentRejectionCount: 0 });
     });
 
     it('should skip already synced ops', async () => {
@@ -110,9 +109,28 @@ describe('RejectedOpsHandlerService', () => {
       expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith(['op-1']);
     });
 
-    it('should show snack warning when many ops are rejected', async () => {
+    it('should show snack warning when even 1 op is rejected', async () => {
+      const op = createOp({ id: 'op-1' });
+      opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+      opLogStoreSpy.markRejected.and.resolveTo();
+
+      await service.handleRejectedOps([
+        { opId: 'op-1', error: 'validation error', errorCode: 'VALIDATION_ERROR' },
+      ]);
+
+      expect(snackServiceSpy.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.UPLOAD_OPS_REJECTED,
+          translateParams: { count: 1 },
+        }),
+      );
+    });
+
+    it('should show snack warning with correct count when multiple ops are rejected', async () => {
+      const opCount = 10;
       const rejectedOps: Array<{ opId: string; error: string }> = [];
-      for (let i = 0; i < MAX_REJECTED_OPS_BEFORE_WARNING; i++) {
+      for (let i = 0; i < opCount; i++) {
         const op = createOp({ id: `op-${i}` });
         opLogStoreSpy.getOpById
           .withArgs(`op-${i}`)
@@ -371,7 +389,86 @@ describe('RejectedOpsHandlerService', () => {
           [remoteClock],
           { snapshot: 1 },
         );
-        expect(result).toBe(1);
+        expect(result).toEqual({ mergedOpsCreated: 1, permanentRejectionCount: 0 });
+      });
+
+      it('should pass existingClock from rejection to stale resolver (FIX: encryption conflict loop)', async () => {
+        // REGRESSION TEST: Bug where encrypted SuperSync gets stuck in infinite conflict loop.
+        // Root cause: Client cannot create LWW update that dominates server state because
+        // it doesn't receive the server's existing entity clock in rejection responses.
+        //
+        // Fix: Server returns existingClock in rejection, client passes it to stale resolver.
+        const op = createOp({ id: 'op-1' });
+        const existingClock = { otherClient: 5 };
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            return {
+              newOpsCount: 0,
+              allOpClocks: [],
+              snapshotVectorClock: { snapshot: 1 },
+            } as DownloadResultForRejection;
+          }
+          return { newOpsCount: 0 } as DownloadResultForRejection;
+        });
+        staleOperationResolverSpy.resolveStaleLocalOps.and.resolveTo(1);
+
+        await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock,
+            },
+          ],
+          downloadCallback,
+        );
+
+        // Should include existingClock in the extraClocks passed to resolver
+        expect(staleOperationResolverSpy.resolveStaleLocalOps).toHaveBeenCalledWith(
+          jasmine.arrayContaining([jasmine.objectContaining({ opId: 'op-1' })]),
+          [existingClock], // existingClock should be in extraClocks
+          { snapshot: 1 },
+        );
+      });
+
+      it('should merge existingClock with allOpClocks from force download', async () => {
+        // Test that existingClock is merged with other clocks from force download
+        const op = createOp({ id: 'op-1' });
+        const existingClock = { conflictClient: 3 };
+        const remoteClocks = [{ otherClient: 2 }];
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            return {
+              newOpsCount: 0,
+              allOpClocks: remoteClocks,
+              snapshotVectorClock: { snapshot: 1 },
+            } as DownloadResultForRejection;
+          }
+          return { newOpsCount: 0 } as DownloadResultForRejection;
+        });
+        staleOperationResolverSpy.resolveStaleLocalOps.and.resolveTo(1);
+
+        await service.handleRejectedOps(
+          [
+            {
+              opId: 'op-1',
+              error: 'concurrent',
+              errorCode: 'CONFLICT_CONCURRENT',
+              existingClock,
+            },
+          ],
+          downloadCallback,
+        );
+
+        // Should merge existingClock with allOpClocks
+        expect(staleOperationResolverSpy.resolveStaleLocalOps).toHaveBeenCalledWith(
+          jasmine.arrayContaining([jasmine.objectContaining({ opId: 'op-1' })]),
+          [...remoteClocks, existingClock], // Both clocks should be passed
+          { snapshot: 1 },
+        );
       });
 
       it('should mark ops as rejected when force download returns no clocks', async () => {

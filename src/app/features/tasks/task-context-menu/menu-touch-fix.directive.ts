@@ -88,20 +88,50 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
   private _onCapturingClick(event: MouseEvent): void {
     const timeSinceMenuOpen = Date.now() - lastMenuOpenTime;
     const timeSinceTouchStart = Date.now() - this._touchStartTime;
+    const element = this._elementRef.nativeElement;
+    const isSubmenuTrigger = element.hasAttribute('matMenuTriggerFor');
 
     // Block clicks that happen too quickly after any menu/submenu opened
     // This prevents accidental selection when submenu appears under finger
-    if (event.isTrusted && lastMenuOpenTime > 0 && timeSinceMenuOpen < 350) {
+    // Only apply aggressive blocking to submenu triggers
+    if (
+      event.isTrusted &&
+      isSubmenuTrigger &&
+      lastMenuOpenTime > 0 &&
+      timeSinceMenuOpen < 350
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      // Schedule a delayed click if this was a legitimate tap (not too quick)
+      if (timeSinceTouchStart >= 100) {
+        this._scheduleDelayedClick(event, 350 - timeSinceMenuOpen);
+      }
+      return;
+    }
+
+    // Also block if touch just started (immediate taps) - only for submenu triggers
+    if (event.isTrusted && isSubmenuTrigger && timeSinceTouchStart < 100) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
     }
+  }
 
-    // Also block if touch just started (immediate taps)
-    if (event.isTrusted && timeSinceTouchStart < 100) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
+  /**
+   * Schedule a delayed click on the correct menu item element.
+   */
+  private _scheduleDelayedClick(event: MouseEvent, delay: number): void {
+    // Find the actual menu item button (not a child element like icon)
+    const menuItem = (event.target as HTMLElement).closest(
+      '[mat-menu-item]',
+    ) as HTMLElement | null;
+    if (menuItem) {
+      setTimeout(() => {
+        // Check element is still in DOM before clicking
+        if (document.body.contains(menuItem)) {
+          menuItem.click();
+        }
+      }, delay);
     }
   }
 
@@ -152,25 +182,20 @@ export class MenuTouchFixDirective implements OnInit, OnDestroy {
       return;
     }
 
-    // Prevent immediate clicks on submenu items
+    // Only apply the 300ms delay to submenu triggers, not regular menu items
+    const element = this._elementRef.nativeElement;
+    const isSubmenuTrigger = element.hasAttribute('matMenuTriggerFor');
+
+    // Prevent immediate clicks on submenu triggers only
     const timeSinceTouchStart = Date.now() - this._touchStartTime;
-    if (this._preventNextClick || timeSinceTouchStart < 300) {
+    if (isSubmenuTrigger && (this._preventNextClick || timeSinceTouchStart < 300)) {
       event.preventDefault();
       // Don't call stopPropagation() - we need the event to bubble for menu closing
       this._preventNextClick = false;
 
       // If this was a legitimate tap (not too quick), simulate the click after delay
       if (timeSinceTouchStart >= 100 && timeSinceTouchStart < 300) {
-        setTimeout(() => {
-          const target = event.target as HTMLElement;
-          // Create a new click event that can properly bubble
-          const newEvent = new MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window,
-          });
-          target.dispatchEvent(newEvent);
-        }, 350 - timeSinceTouchStart);
+        this._scheduleDelayedClick(event, 350 - timeSinceTouchStart);
       }
     }
   }

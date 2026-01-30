@@ -282,6 +282,60 @@ describe('Conflict Detection', () => {
       expect(result2[0].error).toContain('Concurrent modification');
     });
 
+    it('should return existingClock in rejection response for concurrent conflicts', async () => {
+      const service = getSyncService();
+      const entityId = 'task-1';
+
+      // First op from client A with clock {a: 1}
+      const op1 = createOp({
+        entityId,
+        clientId: clientA,
+        vectorClock: { [clientA]: 1 },
+        opType: 'CRT',
+      });
+      await service.uploadOps(userId, clientA, [op1]);
+
+      // Second op from client B with clock {b: 1} - CONCURRENT with {a: 1}
+      const op2 = createOp({
+        entityId,
+        clientId: clientB,
+        vectorClock: { [clientB]: 1 },
+      });
+      const result = await service.uploadOps(userId, clientB, [op2]);
+
+      // Should return the existing clock so client can create LWW update
+      expect(result[0].accepted).toBe(false);
+      expect(result[0].existingClock).toBeDefined();
+      expect(result[0].existingClock).toEqual({ [clientA]: 1 });
+    });
+
+    it('should return existingClock in rejection response for stale conflicts', async () => {
+      const service = getSyncService();
+      const entityId = 'task-1';
+
+      // First op with clock {a: 2}
+      const op1 = createOp({
+        entityId,
+        clientId: clientA,
+        vectorClock: { [clientA]: 2 },
+        opType: 'CRT',
+      });
+      await service.uploadOps(userId, clientA, [op1]);
+
+      // Second op with clock {a: 1} - LESS_THAN {a: 2} (stale)
+      const op2 = createOp({
+        entityId,
+        clientId: clientB,
+        vectorClock: { [clientA]: 1 },
+      });
+      const result = await service.uploadOps(userId, clientB, [op2]);
+
+      // Should return the existing clock so client can create LWW update
+      expect(result[0].accepted).toBe(false);
+      expect(result[0].existingClock).toBeDefined();
+      expect(result[0].existingClock).toEqual({ [clientA]: 2 });
+    });
+
     it('should accept operation when clocks are EQUAL from same client (retry)', async () => {
       const service = getSyncService();
       const entityId = 'task-1';

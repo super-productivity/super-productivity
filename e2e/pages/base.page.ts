@@ -28,44 +28,82 @@ export abstract class BasePage {
   }
 
   /**
-   * Ensures all overlay backdrops are removed from the DOM before proceeding.
+   * Ensures all overlay backdrops and dialogs are removed from the DOM before proceeding.
    * This is critical before interacting with elements that might be blocked by overlays.
    * Uses Escape key to dismiss overlays if they don't close naturally.
    */
   async ensureOverlaysClosed(): Promise<void> {
     const backdrop = this.page.locator('.cdk-overlay-backdrop');
+    const dialogContainer = this.page.locator('mat-dialog-container');
 
-    // Check if any overlays are present
-    const count = await backdrop.count();
-    if (count === 0) {
-      return; // No overlays - nothing to do
+    // Check if any overlays or dialogs are present
+    const backdropCount = await backdrop.count();
+    const dialogCount = await dialogContainer.count();
+
+    if (backdropCount === 0 && dialogCount === 0) {
+      return; // No overlays or dialogs - nothing to do
     }
 
-    // Overlays present - try dismissing with Escape
+    // Overlays/dialogs present - try dismissing with Escape
     console.log(
-      `[ensureOverlaysClosed] Found ${count} overlay(s), attempting to dismiss with Escape`,
+      `[ensureOverlaysClosed] Found ${backdropCount} backdrop(s) and ${dialogCount} dialog(s), attempting to dismiss with Escape`,
     );
+
+    // Wait for any running animations to complete before dismissing
+    await this.page
+      .waitForFunction(
+        () =>
+          document.getAnimations().filter((a) => a.playState === 'running').length === 0,
+        { timeout: 2000 },
+      )
+      .catch(() => {
+        // Ignore timeout - proceed anyway if animations can't be detected
+      });
+
     await this.page.keyboard.press('Escape');
 
     try {
-      // Wait for backdrop to be removed (uses Playwright's smart waiting)
-      await backdrop.first().waitFor({ state: 'detached', timeout: 3000 });
+      // Wait for both backdrop and dialog to be removed
+      const waitPromises: Promise<void>[] = [];
+
+      if (backdropCount > 0) {
+        waitPromises.push(backdrop.first().waitFor({ state: 'detached', timeout: 3000 }));
+      }
+      if (dialogCount > 0) {
+        waitPromises.push(
+          dialogContainer.first().waitFor({ state: 'detached', timeout: 3000 }),
+        );
+      }
+
+      await Promise.all(waitPromises);
     } catch (e) {
       // Fallback: try Escape again for stacked overlays
-      const remaining = await backdrop.count();
-      if (remaining > 0) {
+      const remainingBackdrops = await backdrop.count();
+      const remainingDialogs = await dialogContainer.count();
+
+      if (remainingBackdrops > 0 || remainingDialogs > 0) {
         console.warn(
-          `[ensureOverlaysClosed] ${remaining} overlay(s) still present after first Escape, trying again`,
+          `[ensureOverlaysClosed] ${remainingBackdrops} backdrop(s) and ${remainingDialogs} dialog(s) still present after first Escape, trying again`,
         );
         await this.page.keyboard.press('Escape');
-        await backdrop
-          .first()
-          .waitFor({ state: 'detached', timeout: 2000 })
-          .catch(() => {
-            console.error(
-              '[ensureOverlaysClosed] Failed to close overlays after multiple attempts',
-            );
-          });
+
+        // Give Angular animations time to complete
+        await this.page.waitForTimeout(300);
+
+        await Promise.all([
+          backdrop
+            .first()
+            .waitFor({ state: 'detached', timeout: 2000 })
+            .catch(() => {}),
+          dialogContainer
+            .first()
+            .waitFor({ state: 'detached', timeout: 2000 })
+            .catch(() => {}),
+        ]).catch(() => {
+          console.error(
+            '[ensureOverlaysClosed] Failed to close overlays after multiple attempts',
+          );
+        });
       }
     }
   }

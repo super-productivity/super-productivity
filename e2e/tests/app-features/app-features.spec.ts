@@ -66,7 +66,7 @@ test.describe('App Features', () => {
       await page.goto('/#/tag/TODAY');
 
       // Feature's element should not be present when disabled
-      expect(featureElement).not.toBeAttached();
+      await expect(featureElement).not.toBeAttached();
 
       // Re-enable the feature
       await page.goto('/#/config');

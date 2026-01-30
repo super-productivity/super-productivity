@@ -35,6 +35,7 @@ import { getSyncErrorStr } from './get-sync-error-str';
 import { InitialPwaUpdateCheckService } from '../../core/initial-pwa-update-check.service';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
+import { alertDialog } from '../../util/native-dialogs';
 
 @Injectable()
 export class SyncEffects {
@@ -83,7 +84,7 @@ export class SyncEffects {
                     type: 'ERROR',
                   });
                   // Inform user but always allow close - sync already failed
-                  alert('Sync failed. The app will close.');
+                  alertDialog('Sync failed. The app will close.');
                   this._execBeforeCloseService.setDone(SYNC_BEFORE_CLOSE_ID);
                 }),
             ),

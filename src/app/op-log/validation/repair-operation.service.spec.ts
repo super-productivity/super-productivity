@@ -210,12 +210,13 @@ describe('RepairOperationService', () => {
       expect(alertSpy).toHaveBeenCalled();
     });
 
-    it('should not notify user when no fixes were made', async () => {
+    it('should always notify user even when no fixes were made', async () => {
+      // Always show alert since user already confirmed the repair
       const summary = createRepairSummary(); // All zeros
 
       await service.createRepairOperation(mockRepairedState, summary, 'test-client');
 
-      expect(alertSpy).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalled();
     });
 
     it('should generate unique operation ID', async () => {

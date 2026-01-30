@@ -32,6 +32,7 @@ import { selectAllTasksDueToday } from '../../planner/store/planner.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
+import { alertDialog, confirmDialog } from '../../../util/native-dialogs';
 
 @Injectable()
 export class TagEffects {
@@ -130,14 +131,14 @@ export class TagEffects {
         tap((arg) => Log.log('Error INFO Today:', arg)),
         tap(({ activeId, allTasks }) => {
           const allIds = allTasks.map((t) => t && t.id);
-          const r = confirm(
+          const r = confirmDialog(
             'Nooo! We found some tasks with no data. It is strongly recommended to delete them to avoid further data corruption. Delete them now?',
           );
           if (r) {
             this._tagService.updateTag(activeId, {
               taskIds: allIds.filter((id) => !!id),
             });
-            alert('Done!');
+            alertDialog('Done!');
           }
         }),
       ),

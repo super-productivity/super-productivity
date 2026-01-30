@@ -28,6 +28,14 @@ export class GlobalErrorHandler implements ErrorHandler {
       return;
     }
 
+    // Suppress MatFormField onContainerClick timing errors that occur when form fields
+    // are destroyed during rapid state changes (e.g., during sync). These are purely
+    // UI-related race conditions that don't affect functionality or state.
+    if (errStr.includes('onContainerClick')) {
+      Log.warn('Suppressing MatFormField timing error (likely during sync):', err);
+      return;
+    }
+
     let simpleStack = '';
     if (
       err &&

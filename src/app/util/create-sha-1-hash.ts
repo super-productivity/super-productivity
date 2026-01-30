@@ -1,11 +1,12 @@
 import { WebCryptoNotAvailableError } from '../sync/sync-exports';
+import { alertDialog } from './native-dialogs';
 
 export const createSha1Hash = (str: string): Promise<string> => {
   console.time('createSha1Hash');
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(str);
   if (!crypto.subtle) {
-    alert('WebCrypto API (subtle.digest) is only supported in secure contexts.');
+    alertDialog('WebCrypto API (subtle.digest) is only supported in secure contexts.');
     throw new WebCryptoNotAvailableError();
   }
 

@@ -113,7 +113,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
 
       // Reload page after import to ensure UI reflects the imported state
       // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-      await clientA.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
 
       // Re-enable sync after import (import overwrites globalConfig)
@@ -270,7 +274,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Late Joiner] Client A imported backup');
 
       // Reload page after import to ensure UI reflects the imported state
-      await clientA.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
 
       // Re-enable sync after import
@@ -404,11 +412,31 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Pending Invalidation] Client A imported backup');
 
       // Reload page after import to ensure UI reflects the imported state
-      await clientA.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
 
       // Re-enable sync after import (import overwrites globalConfig)
-      await clientA.sync.setupSuperSync(syncConfig);
+      // Use waitForInitialSync: false because a conflict dialog may appear
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+      });
+
+      // Handle sync conflict dialog if it appears (server has changes from initial sync)
+      const conflictDialog = clientA.page.locator(
+        'dialog-handle-import-conflict, mat-dialog-container:has-text("Sync Conflict")',
+      );
+      if (await conflictDialog.isVisible({ timeout: 3000 }).catch(() => false)) {
+        console.log('[Pending Invalidation] Handling sync conflict dialog');
+        // Choose "Use My Data" to keep imported data (clean slate)
+        const useMyDataBtn = conflictDialog.locator('button:has-text("Use My Data")');
+        await useMyDataBtn.click();
+        await conflictDialog.waitFor({ state: 'hidden', timeout: 10000 });
+      }
 
       // Wait for imported task to be visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');

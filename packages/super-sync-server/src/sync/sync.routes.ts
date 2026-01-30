@@ -75,6 +75,7 @@ const UploadOpsSchema = z.object({
   clientId: ClientIdSchema,
   lastKnownServerSeq: z.number().optional(),
   requestId: z.string().min(1).max(64).optional(), // For request deduplication
+  isCleanSlate: z.boolean().optional(), // If true, server deletes all user data before accepting ops
 });
 
 const DownloadOpsQuerySchema = z.object({
@@ -92,6 +93,7 @@ const UploadSnapshotSchema = z.object({
   isPayloadEncrypted: z.boolean().optional(),
   // Client's operation ID - server MUST use this to prevent ID mismatch bugs
   opId: z.string().uuid().optional(),
+  isCleanSlate: z.boolean().optional(),
 });
 
 // Error helper
@@ -230,7 +232,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
             .send(createValidationErrorResponse(parseResult.error.issues));
         }
 
-        const { ops, clientId, lastKnownServerSeq, requestId } = parseResult.data;
+        const { ops, clientId, lastKnownServerSeq, requestId, isCleanSlate } =
+          parseResult.data;
         const syncService = getSyncService();
 
         Logger.info(
@@ -366,6 +369,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           userId,
           clientId,
           ops as unknown as import('./sync.types').Operation[],
+          isCleanSlate,
         );
 
         // Cache results for deduplication if requestId was provided
@@ -646,6 +650,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           schemaVersion,
           isPayloadEncrypted,
           opId,
+          isCleanSlate,
         } = parseResult.data;
         const syncService = getSyncService();
 
@@ -709,8 +714,9 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
         // Exceptions that bypass this check:
         // - 'recovery': Explicit backup restore or repair (user action)
         // - 'migration': Legacy data migration (should be allowed to override)
+        // - 'isCleanSlate': Password change or explicit clean slate request
         // Only 'initial' (first-time server migration) should be rejected if one exists.
-        if (reason === 'initial') {
+        if (reason === 'initial' && !isCleanSlate) {
           const existingImport = await prisma.operation.findFirst({
             where: {
               userId,
@@ -752,7 +758,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           isPayloadEncrypted: isPayloadEncrypted ?? false,
         };
 
-        const results = await syncService.uploadOps(userId, clientId, [op]);
+        const results = await syncService.uploadOps(userId, clientId, [op], isCleanSlate);
         const result = results[0];
 
         if (result.accepted && result.serverSeq !== undefined) {

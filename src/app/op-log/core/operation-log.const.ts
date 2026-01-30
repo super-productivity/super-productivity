@@ -230,3 +230,21 @@ export const MIN_CLIENT_ID_LENGTH = 5;
  * Default: 2 seconds
  */
 export const POST_SYNC_COOLDOWN_MS = 2000;
+
+// ============================================================================
+// IndexedDB Open Retry Configuration (Issue #6255)
+// ============================================================================
+
+/**
+ * Number of retry attempts when opening IndexedDB fails.
+ * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
+ * Transient failures (file locks, temporary I/O issues) may resolve on retry.
+ * @see https://github.com/johannesjo/super-productivity/issues/6255
+ */
+export const IDB_OPEN_RETRIES = 3;
+
+/**
+ * Base delay for IndexedDB open retry exponential backoff (milliseconds).
+ * With IDB_OPEN_RETRIES=3: delays are 500ms, 1000ms, 2000ms for retries 1, 2, 3.
+ */
+export const IDB_OPEN_RETRY_BASE_DELAY_MS = 500;

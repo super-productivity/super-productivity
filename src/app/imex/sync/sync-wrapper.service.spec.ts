@@ -824,6 +824,151 @@ describe('SyncWrapperService', () => {
     });
   });
 
+  describe('isEncryptionOperationInProgress', () => {
+    it('should return false initially', () => {
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+
+    it('should return true during runWithSyncBlocked execution', async () => {
+      let capturedValue = false;
+
+      await service.runWithSyncBlocked(async () => {
+        capturedValue = service.isEncryptionOperationInProgress;
+      });
+
+      expect(capturedValue).toBe(true);
+    });
+
+    it('should return false after runWithSyncBlocked completes', async () => {
+      await service.runWithSyncBlocked(async () => {
+        // do nothing
+      });
+
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+
+    it('should return false after runWithSyncBlocked throws', async () => {
+      try {
+        await service.runWithSyncBlocked(async () => {
+          throw new Error('Test error');
+        });
+      } catch {
+        // expected
+      }
+
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+  });
+
+  describe('runWithSyncBlocked()', () => {
+    it('should execute the operation and return its result', async () => {
+      const result = await service.runWithSyncBlocked(async () => {
+        return 'test-result';
+      });
+
+      expect(result).toBe('test-result');
+    });
+
+    it('should propagate errors from the operation', async () => {
+      const testError = new Error('Test operation error');
+
+      await expectAsync(
+        service.runWithSyncBlocked(async () => {
+          throw testError;
+        }),
+      ).toBeRejectedWith(testError);
+    });
+
+    it('should block sync during operation', async () => {
+      let syncResultDuringOperation: SyncStatus | 'HANDLED_ERROR' | undefined;
+
+      await service.runWithSyncBlocked(async () => {
+        // Try to sync during encryption operation
+        syncResultDuringOperation = await service.sync();
+      });
+
+      // Sync should have been blocked and returned HANDLED_ERROR
+      expect(syncResultDuringOperation).toBe('HANDLED_ERROR');
+    });
+
+    it('should allow sync after operation completes', async () => {
+      await service.runWithSyncBlocked(async () => {
+        // do nothing
+      });
+
+      // Sync should work after encryption operation completes
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should wait for ongoing sync to complete before starting operation', async () => {
+      const callOrder: string[] = [];
+
+      // Start a sync that takes a bit
+      let syncResolve: () => void;
+      const syncPromise = new Promise<void>((resolve) => {
+        syncResolve = resolve;
+      });
+
+      mockSyncService.downloadRemoteOps.and.callFake(async () => {
+        callOrder.push('sync-download-start');
+        await syncPromise;
+        callOrder.push('sync-download-end');
+        return { newOpsCount: 0, serverMigrationHandled: false, localWinOpsCreated: 0 };
+      });
+
+      // Start sync
+      const syncCall = service.sync();
+
+      // Give sync time to start
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Start encryption operation - should wait for sync
+      const encryptionOpPromise = service.runWithSyncBlocked(async () => {
+        callOrder.push('encryption-op');
+      });
+
+      // Let sync complete
+      syncResolve!();
+      await syncCall;
+      await encryptionOpPromise;
+
+      // Encryption operation should have waited for sync to complete
+      expect(callOrder).toEqual([
+        'sync-download-start',
+        'sync-download-end',
+        'encryption-op',
+      ]);
+    });
+  });
+
+  describe('sync() with encryption operation blocking', () => {
+    it('should return HANDLED_ERROR when encryption operation is in progress', async () => {
+      // Manually set the flag (simulating runWithSyncBlocked is active)
+      service['_isEncryptionOperationInProgress$'].next(true);
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+
+      // Clean up
+      service['_isEncryptionOperationInProgress$'].next(false);
+    });
+
+    it('should not call download or upload when encryption operation is in progress', async () => {
+      service['_isEncryptionOperationInProgress$'].next(true);
+
+      await service.sync();
+
+      expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+
+      // Clean up
+      service['_isEncryptionOperationInProgress$'].next(false);
+    });
+  });
+
   describe('syncProviderId$', () => {
     it('should convert LegacySyncProvider to SyncProviderId', (done) => {
       configSubject.next(createMockSyncConfig(LegacySyncProvider.SuperSync));

@@ -3,6 +3,9 @@ import { cssSelectors } from '../../constants/selectors';
 import {
   waitForPluginAssets,
   waitForPluginManagementInit,
+  enablePluginWithVerification,
+  waitForPluginInMenu,
+  disablePluginWithVerification,
   getCITimeoutMultiplier,
 } from '../../helpers/plugin-test.helpers';
 
@@ -10,11 +13,12 @@ const { SIDENAV, SETTINGS_BTN } = cssSelectors;
 
 // Plugin-related selectors
 const API_TEST_PLUGIN_NAV_ITEM = `${SIDENAV} nav-item button:has-text("API Test Plugin")`;
+const TIMEOUT_MULTIPLIER = getCITimeoutMultiplier();
+const TEST_TIMEOUT_MS = 30000 * TIMEOUT_MULTIPLIER;
 
 test.describe('Plugin Lifecycle', () => {
   test.beforeEach(async ({ page, workViewPage }) => {
-    const timeoutMultiplier = getCITimeoutMultiplier();
-    test.setTimeout(30000 * timeoutMultiplier); // Reduced from 60s to 30s base
+    test.setTimeout(TEST_TIMEOUT_MS); // Reduced from 60s to 30s base
 
     // First, ensure plugin assets are available
     const assetsAvailable = await waitForPluginAssets(page);
@@ -35,108 +39,23 @@ test.describe('Plugin Lifecycle', () => {
       );
     }
 
-    // Enable API Test Plugin
-    const settingsBtn = page.locator(SETTINGS_BTN);
-    await settingsBtn.waitFor({ state: 'visible' });
-    await settingsBtn.click();
-    // Wait for settings page to be fully visible - use first() to avoid multiple matches
-    await page
-      .locator('.page-settings')
-      .first()
-      .waitFor({ state: 'visible', timeout: 10000 });
+    const enabled = await enablePluginWithVerification(
+      page,
+      'API Test Plugin',
+      10000 * TIMEOUT_MULTIPLIER,
+    );
+    expect(enabled).toBe(true);
 
-    // Navigate to Plugins tab first
-    await page.evaluate(() => {
-      const pluginsTab = Array.from(
-        document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
-      ).find((tab) => {
-        const icon = tab.querySelector('mat-icon');
-        return icon?.textContent?.trim() === 'extension';
-      });
-
-      if (pluginsTab) {
-        (pluginsTab as HTMLElement).click();
-      }
-    });
-
-    await page.waitForTimeout(500);
-
-    await page.evaluate(() => {
-      const configPage = document.querySelector('.page-settings');
-      if (!configPage) {
-        return;
-      }
-
-      const pluginSection = document.querySelector('.plugin-section');
-      if (pluginSection) {
-        pluginSection.scrollIntoView({ behavior: 'instant', block: 'center' });
-      }
-
-      const collapsible = document.querySelector('.plugin-section collapsible');
-      if (collapsible) {
-        const isExpanded = collapsible.classList.contains('isExpanded');
-        if (!isExpanded) {
-          const header = collapsible.querySelector('.collapsible-header');
-          if (header) {
-            (header as HTMLElement).click();
-          }
-        }
-      }
-    });
-
-    // Scroll plugin-management into view
-    await page.evaluate(() => {
-      const pluginMgmt = document.querySelector('plugin-management');
-      if (pluginMgmt) {
-        pluginMgmt.scrollIntoView({ behavior: 'instant', block: 'center' });
-      }
-    });
-
-    // Wait for plugin management section to be attached
-    await page.locator('plugin-management').waitFor({ state: 'attached', timeout: 5000 });
-
-    // Enable the plugin
-    const enableResult = await page.evaluate((pluginName: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => {
-        const title = card.querySelector('mat-card-title')?.textContent || '';
-        return title.includes(pluginName);
-      });
-
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        if (toggleButton) {
-          const wasChecked = toggleButton.getAttribute('aria-checked') === 'true';
-          if (!wasChecked) {
-            toggleButton.click();
-          }
-          return {
-            found: true,
-            wasEnabled: wasChecked,
-            clicked: !wasChecked,
-          };
-        }
-        return { found: true, hasToggle: false };
-      }
-
-      return { found: false };
-    }, 'API Test Plugin');
-
-    expect(enableResult.found).toBe(true);
-
-    // Go back to work view
-    await page.goto('/#/tag/TODAY');
-    // Wait for navigation and work view to be ready
-    await page.locator('.route-wrapper').waitFor({ state: 'visible', timeout: 10000 });
-
-    // Wait for task list to be visible
-    await page.waitForSelector('task-list', { state: 'visible', timeout: 10000 });
+    const pluginVisible = await waitForPluginInMenu(
+      page,
+      'API Test Plugin',
+      15000 * TIMEOUT_MULTIPLIER,
+    );
+    expect(pluginVisible).toBe(true);
   });
 
   test('verify plugin is initially loaded', async ({ page }) => {
-    test.setTimeout(20000); // Increase timeout
+    test.setTimeout(TEST_TIMEOUT_MS); // Increase timeout
     // Wait for magic-side-nav to be ready
     await page.locator(SIDENAV).waitFor({ state: 'visible' });
 
@@ -146,11 +65,15 @@ test.describe('Plugin Lifecycle', () => {
   });
 
   test('test plugin navigation', async ({ page }) => {
-    test.setTimeout(20000); // Increase timeout
+    test.setTimeout(TEST_TIMEOUT_MS); // Increase timeout
 
     // Click on the plugin nav item to navigate to plugin
-    await expect(page.locator(API_TEST_PLUGIN_NAV_ITEM)).toBeVisible();
-    await page.click(API_TEST_PLUGIN_NAV_ITEM);
+    const pluginNavItem = page.locator(API_TEST_PLUGIN_NAV_ITEM);
+    await expect(pluginNavItem).toBeVisible({ timeout: 10000 });
+    await Promise.all([
+      page.waitForURL(/\/plugins\/api-test-plugin\/index/, { timeout: 15000 }),
+      pluginNavItem.click(),
+    ]);
 
     // Verify we navigated to the plugin page
     await expect(page).toHaveURL(/\/plugins\/api-test-plugin\/index/, { timeout: 10000 });
@@ -272,43 +195,12 @@ test.describe('Plugin Lifecycle', () => {
       );
     }
 
-    // Now disable the plugin
-    await page.evaluate((pluginName: string) => {
-      const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-      const targetCard = cards.find((card) => {
-        const title = card.querySelector('mat-card-title')?.textContent || '';
-        return title.includes(pluginName);
-      });
-
-      if (targetCard) {
-        const toggleButton = targetCard.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        if (toggleButton && toggleButton.getAttribute('aria-checked') === 'true') {
-          toggleButton.click();
-          return { found: true, clicked: true };
-        }
-        return { found: true, clicked: false, alreadyDisabled: true };
-      }
-      return { found: false };
-    }, 'API Test Plugin');
-
-    // Wait for toggle state to update to disabled
-    await page.waitForFunction(
-      (name) => {
-        const cards = Array.from(document.querySelectorAll('plugin-management mat-card'));
-        const targetCard = cards.find((card) => {
-          const title = card.querySelector('mat-card-title')?.textContent || '';
-          return title.includes(name);
-        });
-        const toggle = targetCard?.querySelector(
-          'mat-slide-toggle button[role="switch"]',
-        ) as HTMLButtonElement;
-        return toggle?.getAttribute('aria-checked') === 'false';
-      },
+    const disabled = await disablePluginWithVerification(
+      page,
       'API Test Plugin',
-      { timeout: 5000 },
+      10000 * TIMEOUT_MULTIPLIER,
     );
+    expect(disabled).toBe(true);
 
     // Go back to work view
     await page.goto('/#/tag/TODAY');

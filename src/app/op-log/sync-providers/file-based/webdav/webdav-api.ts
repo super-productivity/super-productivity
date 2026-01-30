@@ -258,8 +258,17 @@ export class WebdavApi {
           Log.verbose(WebdavApi.L, 'Using If-Match with ETag', quotedEtag);
         } else {
           // Valid date - use If-Unmodified-Since header
-          headers[WebDavHttpHeader.IF_UNMODIFIED_SINCE] = parsedDate.toUTCString();
-          Log.verbose(WebdavApi.L, 'Using If-Unmodified-Since', parsedDate.toUTCString());
+          // Add 1 second buffer to handle sub-second filesystem precision differences.
+          // Some WebDAV servers store mtimes with millisecond precision but HTTP headers
+          // only support second-level precision, causing false 412 Precondition Failed errors.
+          // See: https://github.com/super-productivity/super-productivity/issues/6218
+          const bufferedDate = new Date(parsedDate.getTime() + 1000);
+          headers[WebDavHttpHeader.IF_UNMODIFIED_SINCE] = bufferedDate.toUTCString();
+          Log.verbose(
+            WebdavApi.L,
+            'Using If-Unmodified-Since (with 1s buffer)',
+            bufferedDate.toUTCString(),
+          );
         }
       }
 
@@ -398,7 +407,10 @@ export class WebdavApi {
         // Try to parse as date for If-Unmodified-Since
         const parsedDate = new Date(expectedRev);
         if (!isNaN(parsedDate.getTime())) {
-          headers[WebDavHttpHeader.IF_UNMODIFIED_SINCE] = parsedDate.toUTCString();
+          // Add 1 second buffer to handle sub-second filesystem precision differences.
+          // See: https://github.com/super-productivity/super-productivity/issues/6218
+          const bufferedDate = new Date(parsedDate.getTime() + 1000);
+          headers[WebDavHttpHeader.IF_UNMODIFIED_SINCE] = bufferedDate.toUTCString();
         }
       }
 

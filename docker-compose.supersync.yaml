@@ -5,3 +5,14 @@ services:
   supersync:
     ports: !override
       - '1901:1900'
+    environment:
+      - NODE_ENV=development
+      - PORT=1900
+      - TEST_MODE=true
+      - TEST_MODE_CONFIRM=yes-i-understand-the-risks
+      - JWT_SECRET=e2e-test-secret-minimum-32-chars-long-for-security
+      - CORS_ORIGINS=*
+      - DATA_DIR=/data
+      - DATABASE_URL=postgresql://supersync:superpassword@db:5432/supersync_db
+      - WEBAUTHN_ORIGIN=http://localhost:1901
+      - PUBLIC_URL=http://localhost:1901

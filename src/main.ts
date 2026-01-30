@@ -19,7 +19,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
 import { bootstrapApplication, BrowserModule } from '@angular/platform-browser';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
-import { MarkdownModule, MARKED_OPTIONS, provideMarkdown, SANITIZE } from 'ngx-markdown';
+import { MarkdownModule, MARKED_OPTIONS, SANITIZE } from 'ngx-markdown';
 import { MAT_FORM_FIELD_DEFAULT_OPTIONS } from '@angular/material/form-field';
 import { FeatureStoresModule } from './app/root-store/feature-stores.module';
 import { MATERIAL_ANIMATIONS, MatNativeDateModule } from '@angular/material/core';
@@ -152,7 +152,6 @@ bootstrapApplication(AppComponent, {
     LocaleDatePipe,
     ShortTimeHtmlPipe,
     ShortTimePipe,
-    provideMarkdown(),
     {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
       useValue: { appearance: 'fill', subscriptSizing: 'dynamic' },

@@ -29,8 +29,8 @@ describe('generatePKCECodes', () => {
     );
   });
 
-  it('should throw error when crypto.subtle is unavailable', async () => {
-    // Mock crypto with getRandomValues but without subtle
+  it('should successfully generate PKCE codes when crypto.subtle is unavailable (fallback)', async () => {
+    // Mock crypto with getRandomValues but without subtle (simulates Android Capacitor insecure context)
     Object.defineProperty(window, 'crypto', {
       value: {
         getRandomValues: (array: Uint32Array) => {
@@ -46,9 +46,17 @@ describe('generatePKCECodes', () => {
       configurable: true,
     });
 
-    await expectAsync(generatePKCECodes(128)).toBeRejectedWithError(
-      /WebCrypto API.*subtle/i,
-    );
+    const result = await generatePKCECodes(128);
+
+    expect(result).toBeDefined();
+    expect(result.codeVerifier).toBeDefined();
+    expect(result.codeChallenge).toBeDefined();
+    expect(typeof result.codeVerifier).toBe('string');
+    expect(typeof result.codeChallenge).toBe('string');
+    expect(result.codeVerifier.length).toBeGreaterThan(0);
+    expect(result.codeChallenge.length).toBeGreaterThan(0);
+    // Code challenge should be different from verifier (it's hashed)
+    expect(result.codeChallenge).not.toBe(result.codeVerifier);
   });
 
   it('should successfully generate PKCE codes when WebCrypto is available', async () => {

@@ -20,11 +20,8 @@
   // Enable horizontal scroll when viewport is too small for 7 days
   &[data-horizontal-scroll] {
     .week-header {
-      // Remove left/right constraints to allow horizontal scrolling
-      left: auto;
-      right: auto;
-      // Force width to match grid width
-      width: fit-content;
+      // Force width to match grid width for horizontal scrolling
+      width: 100%;
       min-width: 100%;
     }
 
@@ -35,10 +32,8 @@
           minmax(var(--schedule-day-width), 1fr)
         );
       // Force grid to size based on content, not container
-      width: fit-content;
+      width: 100%;
       min-width: 100%;
-      // Disable centering to allow proper overflow
-      place-content: start;
     }
 
     .days {
@@ -48,9 +43,7 @@
           minmax(var(--schedule-day-width), 1fr)
         );
       // Ensure days container matches grid width
-      width: fit-content;
-      // Disable centering
-      place-content: start;
+      width: 100%;
     }
   }
 
@@ -102,11 +95,15 @@
 
   grid-auto-flow: column;
   display: grid;
-  place-content: center;
+  // Use start alignment to ensure grid aligns with header
+  place-content: start;
   text-align: center;
   grid-auto-columns: 1fr;
   grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
   grid-template-rows: repeat(var(--schedule-total-rows), var(--schedule-row-height));
+  // Ensure same sizing as .days header grid
+  width: 100%;
+  box-sizing: border-box;
 
   @include mq(xs, max) {
     grid-template-rows: repeat(
@@ -126,12 +123,9 @@
 }
 
 .week-header {
-  display: flex;
-  flex-direction: column;
+  display: block;
   position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
   border-top: 1px solid var(--extra-border-color);
   border-bottom: 1px solid var(--extra-border-color);
   box-shadow: var(--whiteframe-shadow-1dp);
@@ -160,10 +154,14 @@
 .days {
   grid-auto-flow: column;
   display: grid;
-  place-content: center;
+  // Use start alignment to match grid-container
+  place-content: start;
   text-align: center;
   grid-auto-columns: 1fr;
   grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
+  // Ensure full width to match grid-container
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .day {

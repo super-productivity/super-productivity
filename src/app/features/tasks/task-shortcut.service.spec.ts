@@ -17,6 +17,7 @@ describe('TaskShortcutService', () => {
   };
   let mockConfigService: {
     cfg: ReturnType<typeof signal<any>>;
+    appFeatures: ReturnType<typeof signal<any>>;
   };
 
   const defaultKeyboardConfig = {
@@ -73,6 +74,9 @@ describe('TaskShortcutService', () => {
         appFeatures: {
           isTimeTrackingEnabled: true,
         },
+      }),
+      appFeatures: signal({
+        isTimeTrackingEnabled: true,
       }),
     };
 
@@ -199,6 +203,9 @@ describe('TaskShortcutService', () => {
           appFeatures: {
             isTimeTrackingEnabled: false,
           },
+        });
+        mockConfigService.appFeatures.set({
+          isTimeTrackingEnabled: false,
         });
         mockTaskFocusService.focusedTaskId.set(null);
         mockTaskService.selectedTaskId.set('selected-task-1');

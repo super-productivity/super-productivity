@@ -5,6 +5,7 @@ import { OperationLogSyncService } from './operation-log-sync.service';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { BehaviorSubject } from 'rxjs';
 
 describe('ImmediateUploadService', () => {
@@ -12,6 +13,7 @@ describe('ImmediateUploadService', () => {
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncService: jasmine.SpyObj<OperationLogSyncService>;
   let mockDataInitStateService: { isAllDataLoadedInitially$: BehaviorSubject<boolean> };
+  let mockSyncWrapperService: { isEncryptionOperationInProgress: boolean };
   let mockProvider: any;
 
   const createMockOp = (id: string): Operation => ({
@@ -59,12 +61,18 @@ describe('ImmediateUploadService', () => {
       isAllDataLoadedInitially$: new BehaviorSubject<boolean>(false),
     };
 
+    // Mock SyncWrapperService - default to no encryption operation in progress
+    mockSyncWrapperService = {
+      isEncryptionOperationInProgress: false,
+    };
+
     TestBed.configureTestingModule({
       providers: [
         ImmediateUploadService,
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: OperationLogSyncService, useValue: mockSyncService },
         { provide: DataInitStateService, useValue: mockDataInitStateService },
+        { provide: SyncWrapperService, useValue: mockSyncWrapperService },
       ],
     });
 
@@ -173,6 +181,25 @@ describe('ImmediateUploadService', () => {
     it('should skip upload when sync is in progress', fakeAsync(() => {
       // Need to re-create the mock with isSyncInProgress = true
       Object.defineProperty(mockProviderManager, 'isSyncInProgress', { value: true });
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          uploadedCount: 1,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+        }),
+      );
+
+      service.initialize();
+      service.trigger();
+      tick(2100);
+
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+    }));
+
+    it('should skip upload when encryption operation is in progress', fakeAsync(() => {
+      // Set encryption operation in progress (e.g., password change)
+      mockSyncWrapperService.isEncryptionOperationInProgress = true;
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
           uploadedCount: 1,

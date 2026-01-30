@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
 import { stringify } from 'query-string';
+import { CapacitorHttp, Capacitor, HttpResponse } from '@capacitor/core';
 import { DropboxFileMetadata } from '../../../../imex/sync/dropbox/dropbox.model';
 import {
   AuthFailSPError,
@@ -17,6 +18,7 @@ import { PFLog } from '../../../../core/log';
 import { SyncProviderServiceInterface } from '../../provider.interface';
 import { SyncProviderId } from '../../provider.const';
 import { tryCatchInlineAsync } from '../../../../util/try-catch-inline';
+import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
 
 interface DropboxApiOptions {
   method: HttpMethod;
@@ -80,6 +82,15 @@ export class DropboxApi {
     private _appKey: string,
     private _parent: SyncProviderServiceInterface<SyncProviderId.Dropbox>,
   ) {}
+
+  /**
+   * Check if running on a native platform (iOS/Android).
+   * On native platforms, we use CapacitorHttp instead of fetch() to avoid
+   * issues with iOS WebKit and Android WebView handling of HTTP requests.
+   */
+  protected get isNativePlatform(): boolean {
+    return Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW;
+  }
 
   // ==============================
   // File Operations
@@ -284,27 +295,73 @@ export class DropboxApi {
 
     if (!refreshToken) {
       PFLog.critical('Dropbox: No refresh token available');
+      await this._clearTokensIfPresent(privateCfg);
       throw new MissingRefreshTokenAPIError();
     }
 
-    try {
-      const response = await fetch('https://api.dropbox.com/oauth2/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: stringify({
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token',
-          client_id: this._appKey,
-        }),
-      });
+    const bodyParams = stringify({
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+      client_id: this._appKey,
+    });
 
-      if (!response.ok) {
-        throw new HttpNotOkAPIError(response);
+    try {
+      let data: TokenResponse;
+
+      if (this.isNativePlatform) {
+        // Use CapacitorHttp on native platforms
+        const response = await CapacitorHttp.request({
+          url: 'https://api.dropbox.com/oauth2/token',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          data: bodyParams,
+          responseType: 'json',
+          connectTimeout: 30000,
+          readTimeout: 60000,
+        });
+
+        if (response.status < 200 || response.status >= 300) {
+          if (
+            response.status === 400 ||
+            response.status === 401 ||
+            response.status === 403
+          ) {
+            await this._clearTokensIfPresent(privateCfg);
+            throw new MissingRefreshTokenAPIError();
+          }
+          throw new HttpNotOkAPIError(
+            new Response(JSON.stringify(response.data), { status: response.status }),
+          );
+        }
+
+        data = response.data as TokenResponse;
+      } else {
+        // Use fetch on web/Electron
+        const response = await fetch('https://api.dropbox.com/oauth2/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: bodyParams,
+        });
+
+        if (!response.ok) {
+          if (
+            response.status === 400 ||
+            response.status === 401 ||
+            response.status === 403
+          ) {
+            await this._clearTokensIfPresent(privateCfg);
+            throw new MissingRefreshTokenAPIError();
+          }
+          throw new HttpNotOkAPIError(response);
+        }
+
+        data = (await response.json()) as TokenResponse;
       }
 
-      const data = (await response.json()) as TokenResponse;
       PFLog.normal('Dropbox: Refresh access token Response', data);
 
       await this._parent.privateCfg.updatePartial({
@@ -315,6 +372,19 @@ export class DropboxApi {
       PFLog.critical('Failed to refresh Dropbox access token', e);
       throw e;
     }
+  }
+
+  private async _clearTokensIfPresent(
+    privateCfg: { accessToken?: string; refreshToken?: string } | null,
+  ): Promise<void> {
+    if (!privateCfg) {
+      return;
+    }
+    await this._parent.privateCfg.setComplete({
+      ...privateCfg,
+      accessToken: '',
+      refreshToken: '',
+    });
   }
 
   /**
@@ -342,19 +412,45 @@ export class DropboxApi {
         bodyParams.redirect_uri = redirectUri;
       }
 
-      const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body: stringify(bodyParams),
-      });
+      let data: TokenResponse;
 
-      if (!response.ok) {
-        throw new HttpNotOkAPIError(response);
+      if (this.isNativePlatform) {
+        // Use CapacitorHttp on native platforms
+        const response = await CapacitorHttp.request({
+          url: 'https://api.dropboxapi.com/oauth2/token',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          data: stringify(bodyParams),
+          responseType: 'json',
+          connectTimeout: 30000,
+          readTimeout: 60000,
+        });
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new HttpNotOkAPIError(
+            new Response(JSON.stringify(response.data), { status: response.status }),
+          );
+        }
+
+        data = response.data as TokenResponse;
+      } else {
+        // Use fetch on web/Electron
+        const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body: stringify(bodyParams),
+        });
+
+        if (!response.ok) {
+          throw new HttpNotOkAPIError(response);
+        }
+
+        data = (await response.json()) as TokenResponse;
       }
-
-      const data = (await response.json()) as TokenResponse;
 
       // Validate response data
       if (typeof data.access_token !== 'string') {
@@ -384,9 +480,142 @@ export class DropboxApi {
   // ==============================
 
   /**
+   * Make an authenticated request to the Dropbox API using CapacitorHttp.
+   * Used on native platforms (iOS/Android) to avoid issues with fetch().
+   */
+  private async _requestNative(options: DropboxApiOptions): Promise<Response> {
+    const {
+      url,
+      method = 'GET',
+      data,
+      headers = {},
+      params,
+      accessToken,
+      isSkipTokenRefresh = false,
+    } = options;
+
+    let token = accessToken;
+    if (!token) {
+      const privateCfg = await this._parent.privateCfg.load();
+      if (!privateCfg?.accessToken) {
+        throw new MissingCredentialsSPError('Dropbox no token');
+      }
+      token = privateCfg.accessToken;
+    }
+
+    // Add query params if needed
+    const requestUrl =
+      params && Object.keys(params).length ? `${url}?${stringify(params)}` : url;
+
+    // Prepare request headers
+    const requestHeaders: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      ...headers,
+    };
+
+    // Set default content-type for JSON requests if not explicitly disabled or set
+    if (
+      requestHeaders['Content-Type'] === undefined &&
+      data &&
+      typeof data !== 'string' &&
+      !requestHeaders['Dropbox-API-Arg']
+    ) {
+      requestHeaders['Content-Type'] = 'application/json';
+    }
+
+    // Prepare request body
+    let requestData: string | undefined;
+    if (data !== undefined) {
+      requestData = typeof data === 'string' ? data : JSON.stringify(data);
+    }
+
+    try {
+      PFLog.log(`${DropboxApi.L}._requestNative() ${method} ${requestUrl}`);
+
+      const capacitorResponse = await CapacitorHttp.request({
+        url: requestUrl,
+        method,
+        headers: requestHeaders,
+        data: requestData,
+        responseType: 'text', // Ensure consistent text response
+        connectTimeout: 30000,
+        readTimeout: 60000,
+      });
+
+      // Handle token refresh
+      if (capacitorResponse.status === 401 && !isSkipTokenRefresh) {
+        await this.updateAccessTokenFromRefreshTokenIfAvailable();
+        return this._requestNative({
+          ...options,
+          isSkipTokenRefresh: true,
+        });
+      }
+
+      // Convert CapacitorHttp response to fetch-like Response
+      const response = this._convertCapacitorResponse(capacitorResponse);
+
+      // Handle errors
+      if (!response.ok) {
+        const path = headers['Dropbox-API-Arg']
+          ? JSON.parse(headers['Dropbox-API-Arg']).path
+          : 'unknown';
+
+        await this._handleErrorResponse(response, requestHeaders, path, () =>
+          this._requestNative({
+            ...options,
+            isSkipTokenRefresh: true,
+          }),
+        );
+      }
+
+      return response;
+    } catch (e) {
+      PFLog.critical(`${DropboxApi.L}._requestNative() error for ${url}`, e);
+      this._checkCommonErrors(e, url);
+      throw e;
+    }
+  }
+
+  /**
+   * Convert CapacitorHttp response to a fetch-like Response object.
+   * This ensures compatibility with existing code that expects fetch Response.
+   */
+  private _convertCapacitorResponse(capacitorResponse: HttpResponse): Response {
+    let responseData = capacitorResponse.data;
+
+    // Ensure data is a string
+    if (responseData === null || responseData === undefined) {
+      responseData = '';
+    } else if (typeof responseData !== 'string') {
+      if (typeof responseData === 'object') {
+        responseData = JSON.stringify(responseData);
+      } else {
+        responseData = String(responseData);
+      }
+    }
+
+    // Create a Headers object from CapacitorHttp headers
+    const headers = new Headers();
+    if (capacitorResponse.headers) {
+      Object.entries(capacitorResponse.headers).forEach(([key, value]) => {
+        headers.set(key.toLowerCase(), value);
+      });
+    }
+
+    return new Response(responseData, {
+      status: capacitorResponse.status,
+      headers,
+    });
+  }
+
+  /**
    * Make an authenticated request to the Dropbox API
    */
   async _request(options: DropboxApiOptions): Promise<Response> {
+    // On native platforms, use CapacitorHttp for consistent behavior
+    if (this.isNativePlatform) {
+      return this._requestNative(options);
+    }
     const {
       url,
       method = 'GET',

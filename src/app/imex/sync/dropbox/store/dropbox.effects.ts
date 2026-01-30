@@ -2,12 +2,14 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 import { Observable } from 'rxjs';
-import { filter, tap, withLatestFrom } from 'rxjs/operators';
+import { filter, tap } from 'rxjs/operators';
 import { SyncConfig } from '../../../../features/config/global-config.model';
 import { updateGlobalConfigSection } from '../../../../features/config/store/global-config.actions';
 import { environment } from '../../../../../environments/environment';
 import { SyncProviderManager } from '../../../../op-log/sync-providers/provider-manager.service';
 import { DropboxPrivateCfg, SyncProviderId } from '../../../../op-log/sync-exports';
+import { LegacySyncProvider } from '../../legacy-sync-provider.model';
+import { confirmDialog } from '../../../../util/native-dialogs';
 
 @Injectable()
 export class DropboxEffects {
@@ -22,23 +24,28 @@ export class DropboxEffects {
           ({ sectionKey, sectionCfg }): boolean =>
             sectionKey === 'sync' && (sectionCfg as SyncConfig).isEnabled === false,
         ),
-        withLatestFrom(this._providerManager.currentProviderPrivateCfg$),
-        tap(async ([, provider]) => {
-          if (
-            provider?.providerId === SyncProviderId.Dropbox &&
-            (provider.privateCfg as DropboxPrivateCfg)?.accessToken
-          ) {
-            if (!environment.production && !confirm('DEV: Delete Dropbox Tokens?')) {
-              return;
-            }
-            alert('Delete tokens');
-            const existingConfig = provider.privateCfg as DropboxPrivateCfg;
-            await this._providerManager.setProviderConfig(SyncProviderId.Dropbox, {
-              ...existingConfig,
-              accessToken: '',
-              refreshToken: '',
-            });
+        tap(async ({ sectionCfg }) => {
+          const syncCfg = sectionCfg as SyncConfig;
+          if (syncCfg.syncProvider !== LegacySyncProvider.Dropbox) {
+            return;
           }
+          const provider = this._providerManager.getProviderById(SyncProviderId.Dropbox);
+          if (!provider) {
+            return;
+          }
+          const existingConfig =
+            (await provider.privateCfg.load()) as DropboxPrivateCfg | null;
+          if (!existingConfig?.accessToken && !existingConfig?.refreshToken) {
+            return;
+          }
+          if (!environment.production && !confirmDialog('DEV: Delete Dropbox Tokens?')) {
+            return;
+          }
+          await this._providerManager.setProviderConfig(SyncProviderId.Dropbox, {
+            ...existingConfig,
+            accessToken: '',
+            refreshToken: '',
+          });
         }),
       ),
     { dispatch: false },

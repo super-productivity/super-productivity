@@ -81,9 +81,20 @@ export class WrappedProviderService {
 
     OpLog.normal(`WrappedProviderService: Creating adapter for ${provider.id}`);
 
-    const cfg = this._providerManager.getEncryptAndCompressCfg();
+    const baseCfg = this._providerManager.getEncryptAndCompressCfg();
     const privateCfg = await provider.privateCfg.load();
     const encryptKey = privateCfg?.encryptKey;
+
+    // For file-based providers (Dropbox, WebDAV, LocalFile), the encryptKey
+    // in privateCfg is the source of truth for whether to encrypt.
+    // - If encryptKey exists, encryption is enabled
+    // - If encryptKey is undefined/empty, encryption is disabled
+    // This ensures that when encryption is disabled (encryptKey cleared),
+    // sync works even if the global config update hasn't propagated yet.
+    const cfg = {
+      ...baseCfg,
+      isEncrypt: !!encryptKey,
+    };
 
     const adapter = this._fileBasedAdapter.createAdapter(provider, cfg, encryptKey);
     this._cache.set(provider.id, adapter);

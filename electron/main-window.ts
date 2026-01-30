@@ -235,6 +235,14 @@ export const createWindow = async ({
     mainWinModule.isAppReady = true;
   });
 
+  // Register F11 key handler for fullscreen toggle
+  mainWin.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') {
+      event.preventDefault();
+      mainWin.setFullScreen(!mainWin.isFullScreen());
+    }
+  });
+
   // Listen for theme changes to update title bar overlay color and symbol
   if (isUseCustomWindowTitleBar && !IS_MAC) {
     ipcMain.on(IPC.UPDATE_TITLE_BAR_DARK_MODE, (ev, isDarkMode: boolean) => {

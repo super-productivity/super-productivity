@@ -24,6 +24,7 @@ import {
   UploadOptions,
 } from '../core/types/sync-results.types';
 import { handleStorageQuotaError } from './sync-error-utils';
+import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 
 // Re-export for consumers that import from this service
 export type {
@@ -72,6 +73,11 @@ export class OperationLogUploadService {
     let uploadedCount = 0;
     let rejectedCount = 0;
     let hasMorePiggyback = false;
+    // Track encryption state of piggybacked operations for detecting encryption config mismatch.
+    // When another client disables encryption, all piggybacked ops will be unencrypted.
+    // We track this BEFORE decryption to detect the server's actual encryption state.
+    let sawAnyPiggybackOps = false;
+    let sawEncryptedPiggybackOp = false;
 
     await this.lockService.request(LOCK_NAMES.UPLOAD, async () => {
       // Execute pre-upload callback INSIDE the lock, BEFORE checking for pending ops.
@@ -116,6 +122,7 @@ export class OperationLogUploadService {
           syncProvider,
           entry,
           encryptKey,
+          options?.isCleanSlate,
         );
         if (result.accepted) {
           await this.opLogStore.markSynced([entry.seq]);
@@ -207,7 +214,12 @@ export class OperationLogUploadService {
 
         let response;
         try {
-          response = await syncProvider.uploadOps(chunk, clientId, lastKnownServerSeq);
+          response = await syncProvider.uploadOps(
+            chunk,
+            clientId,
+            lastKnownServerSeq,
+            options?.isCleanSlate,
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           OpLog.error(`OperationLogUploadService: Upload failed: ${message}`);
@@ -230,16 +242,41 @@ export class OperationLogUploadService {
         }
 
         // Collect piggybacked new ops from other clients
-        if (response.newOps && response.newOps.length > 0) {
+        // SKIP if skipPiggybackProcessing is set - used for force upload scenarios
+        // where piggybacked ops may be encrypted with a different key (e.g., after password change)
+        if (options?.skipPiggybackProcessing) {
+          if (response.newOps && response.newOps.length > 0) {
+            OpLog.normal(
+              `OperationLogUploadService: Skipping ${response.newOps.length} piggybacked ops (skipPiggybackProcessing=true)`,
+            );
+          }
+        } else if (response.newOps && response.newOps.length > 0) {
           OpLog.normal(
             `OperationLogUploadService: Received ${response.newOps.length} piggybacked ops` +
               (response.hasMorePiggyback ? ' (more available on server)' : ''),
           );
           let piggybackSyncOps = response.newOps.map((serverOp) => serverOp.op);
 
-          // Decrypt piggybacked ops if any are encrypted and we have a key
+          // Track encryption state BEFORE decryption to detect server's actual state.
+          // This is critical for detecting when another client disables encryption.
+          sawAnyPiggybackOps = true;
           const hasEncryptedOps = piggybackSyncOps.some((op) => op.isPayloadEncrypted);
-          if (hasEncryptedOps && encryptKey) {
+          if (hasEncryptedOps) {
+            sawEncryptedPiggybackOp = true;
+          }
+
+          // Decrypt piggybacked ops if any are encrypted
+          if (hasEncryptedOps) {
+            if (!encryptKey) {
+              // Match download service behavior: throw error to trigger password dialog
+              OpLog.error(
+                'OperationLogUploadService: Received encrypted piggybacked operations but no encryption key is configured.',
+              );
+              throw new DecryptNoPasswordError(
+                'Encrypted data received but no encryption password is configured',
+              );
+            }
+
             piggybackSyncOps = await this.encryptionService.decryptOperations(
               piggybackSyncOps,
               encryptKey,
@@ -289,7 +326,12 @@ export class OperationLogUploadService {
         const rejected = response.results.filter((r) => !r.accepted);
         if (rejected.length > 0) {
           for (const r of rejected) {
-            rejectedOps.push({ opId: r.opId, error: r.error, errorCode: r.errorCode });
+            rejectedOps.push({
+              opId: r.opId,
+              error: r.error,
+              errorCode: r.errorCode,
+              existingClock: r.existingClock,
+            });
           }
           rejectedCount += rejected.length;
 
@@ -309,12 +351,19 @@ export class OperationLogUploadService {
     // Note: We no longer show the rejection warning here since rejections
     // may be resolved via conflict dialog. The sync service handles this.
 
+    // Determine if piggybacked ops have only unencrypted data.
+    // This is true when we received piggybacked ops AND none of them were encrypted.
+    // This indicates another client disabled encryption.
+    const piggybackHasOnlyUnencryptedData =
+      sawAnyPiggybackOps && !sawEncryptedPiggybackOp;
+
     return {
       uploadedCount,
       piggybackedOps,
       rejectedCount,
       rejectedOps,
       ...(hasMorePiggyback ? { hasMorePiggyback: true } : {}),
+      ...(piggybackHasOnlyUnencryptedData ? { piggybackHasOnlyUnencryptedData } : {}),
     };
   }
 
@@ -338,11 +387,17 @@ export class OperationLogUploadService {
    * Uploads a full-state operation (backup import, repair, sync import) via
    * the snapshot endpoint instead of the ops endpoint. This is more efficient
    * for large payloads as the snapshot endpoint is designed for full state uploads.
+   *
+   * @param syncProvider - The sync provider to upload to
+   * @param entry - The operation log entry containing the full state
+   * @param encryptKey - Optional encryption key for E2E encryption
+   * @param isCleanSlate - If true, server deletes all data before accepting the snapshot
    */
   private async _uploadFullStateOpAsSnapshot(
     syncProvider: OperationSyncCapable,
     entry: OperationLogEntry,
     encryptKey: string | undefined,
+    isCleanSlate?: boolean,
   ): Promise<{
     accepted: boolean;
     serverSeq?: number;
@@ -385,6 +440,7 @@ export class OperationLogUploadService {
         op.schemaVersion,
         isPayloadEncrypted,
         op.id, // CRITICAL: Pass op.id to prevent ID mismatch bugs
+        isCleanSlate,
       );
       return response;
     } catch (err) {

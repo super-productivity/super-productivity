@@ -18,6 +18,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { TranslatePipe } from '@ngx-translate/core';
 import { IS_ELECTRON } from '../../../app.constants';
 import { T } from '../../../t.const';
+import { confirmDialog } from '../../../util/native-dialogs';
 
 @Component({
   selector: 'dialog-user-profile-management',
@@ -90,7 +91,9 @@ export class DialogUserProfileManagementComponent {
   }
 
   async deleteProfile(profile: UserProfile): Promise<void> {
-    if (!confirm(`Are you sure you want to delete the profile "${profile.name}"?`)) {
+    if (
+      !confirmDialog(`Are you sure you want to delete the profile "${profile.name}"?`)
+    ) {
       return;
     }
 

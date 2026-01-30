@@ -310,11 +310,15 @@ export interface VectorClockMetrics {
  * Limits the size of a vector clock by keeping only the most active clients
  * @param clock The vector clock to limit
  * @param currentClientId The current client's ID (always preserved)
+ * @param protectedClientIds Additional client IDs to always preserve (e.g., from latest SYNC_IMPORT).
+ *        These are kept even if they have low counter values, to ensure correct
+ *        comparison with full-state operations.
  * @returns A vector clock with at most MAX_VECTOR_CLOCK_SIZE entries
  */
 export const limitVectorClockSize = (
   clock: VectorClock,
   currentClientId: string,
+  protectedClientIds: string[] = [],
 ): VectorClock => {
   const entries = Object.entries(clock);
 
@@ -322,26 +326,32 @@ export const limitVectorClockSize = (
     return clock;
   }
 
+  // Build set of clients to always preserve
+  const alwaysPreserve = new Set([currentClientId, ...protectedClientIds]);
+
   PFLog.warn('Vector clock pruning triggered', {
     originalSize: entries.length,
     maxSize: MAX_VECTOR_CLOCK_SIZE,
     currentClientId,
+    protectedClientIds,
     pruned: entries.length - MAX_VECTOR_CLOCK_SIZE,
   });
 
   // Sort by value (descending) to keep most active clients
   entries.sort(([, a], [, b]) => b - a);
 
-  // Always keep current client
+  // Always keep preserved clients first
   const limited: VectorClock = {};
-  if (clock[currentClientId] !== undefined) {
-    limited[currentClientId] = clock[currentClientId];
+  for (const id of alwaysPreserve) {
+    if (clock[id] !== undefined) {
+      limited[id] = clock[id];
+    }
   }
 
-  // Add top clients up to limit
+  // Add top active non-preserved clients up to limit
   let count = Object.keys(limited).length;
   for (const [clientId, value] of entries) {
-    if (clientId !== currentClientId && count < MAX_VECTOR_CLOCK_SIZE) {
+    if (!alwaysPreserve.has(clientId) && count < MAX_VECTOR_CLOCK_SIZE) {
       limited[clientId] = value;
       count++;
     }

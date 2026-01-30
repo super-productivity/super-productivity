@@ -37,7 +37,7 @@ export class TaskHoverControlsComponent {
   isInSubTaskList = input<boolean>(false);
 
   readonly isTimeTrackingEnabled = computed(() => {
-    return this._configService.cfg()?.appFeatures.isTimeTrackingEnabled;
+    return this._configService.appFeatures().isTimeTrackingEnabled;
   });
 
   T: typeof T = T;

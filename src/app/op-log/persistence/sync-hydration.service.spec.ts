@@ -39,6 +39,7 @@ describe('SyncHydrationService', () => {
       'getLastSeq',
       'saveStateCache',
       'setVectorClock',
+      'setProtectedClientIds',
       'loadStateCache',
       'getUnsynced',
       'markRejected',
@@ -83,6 +84,7 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
+    mockOpLogStore.setProtectedClientIds.and.resolveTo(undefined);
     mockValidateStateService.validateAndRepair.and.returnValue({
       isValid: true,
       wasRepaired: false,
@@ -373,6 +375,62 @@ describe('SyncHydrationService', () => {
       await expectAsync(service.hydrateFromRemoteSync({})).toBeRejectedWithError(
         'Save failed',
       );
+    });
+
+    describe('protected client IDs for vector clock pruning', () => {
+      // These tests verify that SYNC_IMPORT client IDs are protected during
+      // hydrateFromRemoteSync to prevent vector clock pruning from removing them.
+
+      it('should set protected client ID when creating SYNC_IMPORT', async () => {
+        await service.hydrateFromRemoteSync({ task: {} });
+
+        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith([
+          'localClient',
+        ]);
+      });
+
+      it('should call setProtectedClientIds AFTER setVectorClock', async () => {
+        let callSequence = 0;
+        let setVectorClockSequence = -1;
+        let setProtectedSequence = -1;
+
+        mockOpLogStore.setVectorClock.and.callFake(async () => {
+          setVectorClockSequence = callSequence++;
+        });
+        mockOpLogStore.setProtectedClientIds.and.callFake(async () => {
+          setProtectedSequence = callSequence++;
+        });
+
+        await service.hydrateFromRemoteSync({ task: {} });
+
+        expect(setVectorClockSequence).toBeGreaterThanOrEqual(
+          0,
+          'setVectorClock should have been called',
+        );
+        expect(setProtectedSequence).toBeGreaterThanOrEqual(
+          0,
+          'setProtectedClientIds should have been called',
+        );
+        expect(setVectorClockSequence).toBeLessThan(
+          setProtectedSequence,
+          `setVectorClock (seq ${setVectorClockSequence}) should be called BEFORE ` +
+            `setProtectedClientIds (seq ${setProtectedSequence})`,
+        );
+      });
+
+      it('should NOT call setProtectedClientIds when createSyncImportOp is false', async () => {
+        await service.hydrateFromRemoteSync({ task: {} }, undefined, false);
+
+        expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
+      });
+
+      it('should call setProtectedClientIds when createSyncImportOp is explicitly true', async () => {
+        await service.hydrateFromRemoteSync({ task: {} }, undefined, true);
+
+        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith([
+          'localClient',
+        ]);
+      });
     });
 
     describe('createSyncImportOp parameter', () => {

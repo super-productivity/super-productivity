@@ -51,11 +51,16 @@ export const selectAllTasksDueToday = createSelector(
       const task = taskState.entities[id];
       if (!task) continue;
 
-      // Check if task is due today (either by dueDay or dueWithTime)
-      const isDueByDay = task.dueDay === todayStr;
-      const isDueByTime = task.dueWithTime && isToday(task.dueWithTime);
+      // Check if task is due today
+      // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity pattern)
+      let isDueToday = false;
+      if (task.dueWithTime) {
+        isDueToday = isToday(task.dueWithTime);
+      } else if (task.dueDay === todayStr) {
+        isDueToday = true;
+      }
 
-      if (isDueByDay || isDueByTime) {
+      if (isDueToday) {
         allDue.push(task as TaskWithDueTime | TaskWithDueDay);
         allDueIds.add(id);
       }

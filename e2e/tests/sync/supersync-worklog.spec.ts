@@ -7,6 +7,7 @@ import {
   markTaskDone,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { waitForAppReady } from '../../utils/waits';
 
 /**
  * SuperSync Worklog/Archive E2E Tests
@@ -275,6 +276,20 @@ test.describe('@supersync Worklog Sync', () => {
       await clientB.sync.syncAndWait();
       await clientA.sync.syncAndWait();
       console.log('[Multi Archive Test] Both synced');
+
+      // Reload both clients to ensure archive data from sync is loaded
+      // Archive data is stored in a separate IndexedDB store and may need reload to appear in UI
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await waitForAppReady(clientA.page);
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await waitForAppReady(clientB.page);
+      console.log('[Multi Archive Test] Both clients reloaded after sync');
 
       // ============ PHASE 4: Verify All Archives in Worklog ============
       // Check Client A worklog

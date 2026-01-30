@@ -142,6 +142,7 @@ test.describe('@supersync SuperSync Account Deletion', () => {
       await client.sync.accessTokenInput.fill(configB.accessToken);
 
       // Save configuration
+      await expect(client.sync.saveBtn).toBeEnabled({ timeout: 5000 });
       await client.sync.saveBtn.click();
       await client.page
         .locator('mat-dialog-container')

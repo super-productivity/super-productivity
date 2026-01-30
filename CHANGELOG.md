@@ -1,3 +1,251 @@
+## [17.0.11](https://github.com/super-productivity/super-productivity/compare/v17.0.9...v17.0.11) (2026-01-29)
+
+### Bug Fixes
+
+- **android:** keep app time value when native reports less to prevent data loss ([51ad71d](https://github.com/super-productivity/super-productivity/commit/51ad71d52ac3c208c7327ad887c81d7104170127))
+- **android:** persist time synced from native service to operation log ([0b47ef1](https://github.com/super-productivity/super-productivity/commit/0b47ef15e4f996906cb8fec63eb15c83a91a8086)), closes [#6207](https://github.com/super-productivity/super-productivity/issues/6207)
+- **archive:** make lastTimeTrackingFlush optional for backwards compatibility ([f08083a](https://github.com/super-productivity/super-productivity/commit/f08083a3b1c2c420610a7fe1cfbccf179decf9ef)), closes [#6200](https://github.com/super-productivity/super-productivity/issues/6200)
+- **e2e:** improve SuperSync encryption test reliability ([27f12c6](https://github.com/super-productivity/super-productivity/commit/27f12c6ad78c375a7f0fff7cf6b080abba0fd4ef))
+- **electron:** restore input focus after native dialogs ([851d510](https://github.com/super-productivity/super-productivity/commit/851d510f760db3d637df6af0f2d9d6cce99c910c)), closes [electron/electron#19977](https://github.com/electron/electron/issues/19977) [electron/electron#20821](https://github.com/electron/electron/issues/20821) [#6221](https://github.com/super-productivity/super-productivity/issues/6221)
+- improve code clarity and add data repair warnings ([#6239](https://github.com/super-productivity/super-productivity/issues/6239)) ([1295057](https://github.com/super-productivity/super-productivity/commit/1295057604ec978d21aa09e75ff77075b667ecb0))
+- **ios:** hide Support us and Contribute links on iOS ([b5cde1d](https://github.com/super-productivity/super-productivity/commit/b5cde1dcb5f804d317f4c2b751e8c6878952082e))
+- **mac:** regenerate icon without alpha channel to fix MAS white circle ([6fbda9d](https://github.com/super-productivity/super-productivity/commit/6fbda9d25febe20f8bd338db00a5fbe7572074e8))
+- **markdown:** handle gapped checklists without breaking layout ([#6244](https://github.com/super-productivity/super-productivity/issues/6244)) ([8428952](https://github.com/super-productivity/super-productivity/commit/842895200488cfb689d15ef04482043446f3fa95))
+- **op-log:** add retry logic for IndexedDB open failures ([#6255](https://github.com/super-productivity/super-productivity/issues/6255)) ([2a82754](https://github.com/super-productivity/super-productivity/commit/2a82754196f3ee4a2777812e34ed76fb26f5c033))
+- **sync:** add 1s buffer to WebDAV If-Unmodified-Since header ([f005e2b](https://github.com/super-productivity/super-productivity/commit/f005e2bff3a2d59709e02f0d190f32b8d8821506)), closes [#6218](https://github.com/super-productivity/super-productivity/issues/6218)
+- **sync:** add retry logic for duplicate operation detection ([#6213](https://github.com/super-productivity/super-productivity/issues/6213)) ([c6cd051](https://github.com/super-productivity/super-productivity/commit/c6cd0517f500ae13ad89cf182e3daebadb4a734d))
+- **task-repeat:** prevent date overflow when calculating monthly repeat ([8ca2117](https://github.com/super-productivity/super-productivity/commit/8ca21171f6b84129881182a5c4def2d5f9f32023))
+- **tasks:** prevent scheduled tasks from appearing in both today and tomorrow ([0d21c4d](https://github.com/super-productivity/super-productivity/commit/0d21c4da5a44c2ae8075ab68eb5bdb8e1f3dd9fe))
+- **ui:** remove duplicate checkbox rendering in markdown ([23f2c10](https://github.com/super-productivity/super-productivity/commit/23f2c10b1e062dcc1834c43d0fe1f3c72bc943aa)), closes [#6228](https://github.com/super-productivity/super-productivity/issues/6228)
+
+### Features
+
+- **short-syntax:** Automatically add a trailing space after inserting tag, project or time via Short Syntax. ([#6118](https://github.com/super-productivity/super-productivity/issues/6118)) ([#6248](https://github.com/super-productivity/super-productivity/issues/6248)) ([1048184](https://github.com/super-productivity/super-productivity/commit/1048184db47ac357ed0969f96e034ece84a6e441))
+- **sync:** add warning for Local File sync about file-syncing tools ([e4fcad0](https://github.com/super-productivity/super-productivity/commit/e4fcad019d863f83e45b068832a33d7428bf86e9)), closes [#6249](https://github.com/super-productivity/super-productivity/issues/6249)
+
+## [17.0.10](https://github.com/super-productivity/super-productivity/compare/v17.0.9...v17.0.10) (2026-01-29)
+
+### Bug Fixes
+
+- **android:** keep app time value when native reports less to prevent data loss ([51ad71d](https://github.com/super-productivity/super-productivity/commit/51ad71d52ac3c208c7327ad887c81d7104170127))
+- **android:** persist time synced from native service to operation log ([0b47ef1](https://github.com/super-productivity/super-productivity/commit/0b47ef15e4f996906cb8fec63eb15c83a91a8086)), closes [#6207](https://github.com/super-productivity/super-productivity/issues/6207)
+- **archive:** make lastTimeTrackingFlush optional for backwards compatibility ([f08083a](https://github.com/super-productivity/super-productivity/commit/f08083a3b1c2c420610a7fe1cfbccf179decf9ef)), closes [#6200](https://github.com/super-productivity/super-productivity/issues/6200)
+- **e2e:** improve SuperSync encryption test reliability ([27f12c6](https://github.com/super-productivity/super-productivity/commit/27f12c6ad78c375a7f0fff7cf6b080abba0fd4ef))
+- **electron:** restore input focus after native dialogs ([851d510](https://github.com/super-productivity/super-productivity/commit/851d510f760db3d637df6af0f2d9d6cce99c910c)), closes [electron/electron#19977](https://github.com/electron/electron/issues/19977) [electron/electron#20821](https://github.com/electron/electron/issues/20821) [#6221](https://github.com/super-productivity/super-productivity/issues/6221)
+- improve code clarity and add data repair warnings ([#6239](https://github.com/super-productivity/super-productivity/issues/6239)) ([1295057](https://github.com/super-productivity/super-productivity/commit/1295057604ec978d21aa09e75ff77075b667ecb0))
+- **ios:** hide Support us and Contribute links on iOS ([b5cde1d](https://github.com/super-productivity/super-productivity/commit/b5cde1dcb5f804d317f4c2b751e8c6878952082e))
+- **markdown:** handle gapped checklists without breaking layout ([#6244](https://github.com/super-productivity/super-productivity/issues/6244)) ([8428952](https://github.com/super-productivity/super-productivity/commit/842895200488cfb689d15ef04482043446f3fa95))
+- **op-log:** add retry logic for IndexedDB open failures ([#6255](https://github.com/super-productivity/super-productivity/issues/6255)) ([2a82754](https://github.com/super-productivity/super-productivity/commit/2a82754196f3ee4a2777812e34ed76fb26f5c033))
+- **sync:** add 1s buffer to WebDAV If-Unmodified-Since header ([f005e2b](https://github.com/super-productivity/super-productivity/commit/f005e2bff3a2d59709e02f0d190f32b8d8821506)), closes [#6218](https://github.com/super-productivity/super-productivity/issues/6218)
+- **sync:** add retry logic for duplicate operation detection ([#6213](https://github.com/super-productivity/super-productivity/issues/6213)) ([c6cd051](https://github.com/super-productivity/super-productivity/commit/c6cd0517f500ae13ad89cf182e3daebadb4a734d))
+- **task-repeat:** prevent date overflow when calculating monthly repeat ([8ca2117](https://github.com/super-productivity/super-productivity/commit/8ca21171f6b84129881182a5c4def2d5f9f32023))
+- **tasks:** prevent scheduled tasks from appearing in both today and tomorrow ([0d21c4d](https://github.com/super-productivity/super-productivity/commit/0d21c4da5a44c2ae8075ab68eb5bdb8e1f3dd9fe))
+- **ui:** remove duplicate checkbox rendering in markdown ([23f2c10](https://github.com/super-productivity/super-productivity/commit/23f2c10b1e062dcc1834c43d0fe1f3c72bc943aa)), closes [#6228](https://github.com/super-productivity/super-productivity/issues/6228)
+
+### Features
+
+- **short-syntax:** Automatically add a trailing space after inserting tag, project or time via Short Syntax. ([#6118](https://github.com/super-productivity/super-productivity/issues/6118)) ([#6248](https://github.com/super-productivity/super-productivity/issues/6248)) ([1048184](https://github.com/super-productivity/super-productivity/commit/1048184db47ac357ed0969f96e034ece84a6e441))
+- **sync:** add warning for Local File sync about file-syncing tools ([e4fcad0](https://github.com/super-productivity/super-productivity/commit/e4fcad019d863f83e45b068832a33d7428bf86e9)), closes [#6249](https://github.com/super-productivity/super-productivity/issues/6249)
+
+## [17.0.9](https://github.com/super-productivity/super-productivity/compare/v17.0.8...v17.0.9) (2026-01-28)
+
+## [17.0.8](https://github.com/super-productivity/super-productivity/compare/v17.0.7...v17.0.8) (2026-01-28)
+
+### Bug Fixes
+
+- **ci:** remove redundant grep-invert args from e2e command ([08cfa55](https://github.com/super-productivity/super-productivity/commit/08cfa556bddd37084287d2a04f270dc669cb7ed3))
+
+## [17.0.7](https://github.com/super-productivity/super-productivity/compare/v17.0.6...v17.0.7) (2026-01-28)
+
+### Bug Fixes
+
+- **e2e:** resolve flaky WebDAV tests and fix encryption test failures ([a37d0ea](https://github.com/super-productivity/super-productivity/commit/a37d0eac4f4e37e130991ff70d453353e72f7b36))
+- emit legacy PBKDF2 deprecation warning only after successful decryption ([2ed0e59](https://github.com/super-productivity/super-productivity/commit/2ed0e59d730e2d4017a3149c0908038babdc8e52))
+- **markdown:** prevent duplicate checkbox rendering in markdown ([#6229](https://github.com/super-productivity/super-productivity/issues/6229)) ([b3c548e](https://github.com/super-productivity/super-productivity/commit/b3c548e67821078270963665efff933606c2f47a)), closes [#6228](https://github.com/super-productivity/super-productivity/issues/6228) [#6228](https://github.com/super-productivity/super-productivity/issues/6228)
+- remove debug logging and fix isLoading reset in encryption dialog ([e3b517d](https://github.com/super-productivity/super-productivity/commit/e3b517d177e88d0a50f0e62ad780888903abf868))
+- **simple-counter:** preserve order when reordering counters in settings ([98f4009](https://github.com/super-productivity/super-productivity/commit/98f40093d6ac37466b08d4e726ce834c3e7014aa)), closes [#6232](https://github.com/super-productivity/super-productivity/issues/6232)
+- **sync:** allow force overwrite on encryption password ([e260cea](https://github.com/super-productivity/super-productivity/commit/e260ceab805101d609720c844dc6f3b085f80090))
+- **sync:** clear dropbox tokens when sync disabled ([d7ff5a5](https://github.com/super-productivity/super-productivity/commit/d7ff5a5faccaf94561f614e355a12d4e369f8645))
+- **sync:** clear old full-state ops when new SYNC_IMPORT is applied ([04f30d9](https://github.com/super-productivity/super-productivity/commit/04f30d9af5cecb413f4c81677810bcef59d01bf8))
+- **sync:** ensure server deletes existing data before accepting new SYNC_IMPORT ([07b1e97](https://github.com/super-productivity/super-productivity/commit/07b1e97b97a34d6722076c08a1a0f9dd0672cf27))
+- **sync:** handle dropbox refresh auth failure ([cc6f04f](https://github.com/super-productivity/super-productivity/commit/cc6f04fd9319450a4047f1516d5b3922fcfb1ff4))
+- **sync:** handle encryption password entry ([64a3e64](https://github.com/super-productivity/super-productivity/commit/64a3e64dd6eeff8129a758f4b28ba4a06503ce9c))
+- **sync:** invalidate appliedOpIds cache on ConstraintError ([a712e43](https://github.com/super-productivity/super-productivity/commit/a712e434b2f0dc270419437f07ff7fcf48b04bd0)), closes [#6213](https://github.com/super-productivity/super-productivity/issues/6213)
+- **sync:** preserve SuperSync encryption password from race condition ([47050c0](https://github.com/super-productivity/super-productivity/commit/47050c0658556ab849dfff1684c9bfd613803ee1))
+- **sync:** prevent archive corruption during "Keep local" conflict resolution ([4402575](https://github.com/super-productivity/super-productivity/commit/440257518730e744e09cde99b7fcfd1028e26a77))
+- **sync:** reflect file-based encryption state in UI ([7d84a36](https://github.com/super-productivity/super-productivity/commit/7d84a36b4b82f07fb9a9af8be459ce1c3fa98dfa))
+- **sync:** translate WebDAV 412 error for retry mechanism ([edcb2cb](https://github.com/super-productivity/super-productivity/commit/edcb2cbc1854a17dcf6bca6e5b7dab758b50fcb3)), closes [#6218](https://github.com/super-productivity/super-productivity/issues/6218)
+- **sync:** update currentProviderPrivateCfg$ observable when enabling encryption ([be11a4a](https://github.com/super-productivity/super-productivity/commit/be11a4aef195ba277990ce0081bd9c13175ba35d))
+- **ui:** add missing checkbox renderer for marked options ([699c034](https://github.com/super-productivity/super-productivity/commit/699c0348bcd1842dd61f229e8108f9d294ff973f))
+- use providerManager.setProviderConfig to prevent file-based encryption password loss ([db6de98](https://github.com/super-productivity/super-productivity/commit/db6de985820fc22647f63a6b929b05dada0c013e))
+
+### Features
+
+- **sync:** close parent settings dialog after disabling encryption ([730addc](https://github.com/super-productivity/super-productivity/commit/730addc181390f306b4126ac08e6257be0aac8b9))
+- **sync:** unify encryption status UI into a styled box ([bd99d4a](https://github.com/super-productivity/super-productivity/commit/bd99d4a907ab5e57387d1d3c754cf9823b08df5b))
+
+## [17.0.6](https://github.com/super-productivity/super-productivity/compare/v17.0.5...v17.0.6) (2026-01-27)
+
+### Bug Fixes
+
+- **dropbox:** use hash-wasm fallback for PKCE on Android ([e2c585e](https://github.com/super-productivity/super-productivity/commit/e2c585ee45b77118256e794e2a03e683cda2dd6a))
+- **encryption:** use @noble/ciphers fallback for AES-GCM on mobile ([6dc00e4](https://github.com/super-productivity/super-productivity/commit/6dc00e442a7125f09666ba4496b75ce38bf09f44))
+- **issue-providers:** make newer fields optional for backwards compatibility ([5657308](https://github.com/super-productivity/super-productivity/commit/56573083ad685c197f74815d7fbd978f550a0826)), closes [#6215](https://github.com/super-productivity/super-productivity/issues/6215)
+- lint ([fb759a0](https://github.com/super-productivity/super-productivity/commit/fb759a0848612f7a74cd66aaa99eaef185290542))
+- **op-log:** remove noisy warning for empty entityChanges ([6f79209](https://github.com/super-productivity/super-productivity/commit/6f79209466d6cc9cf8f70f8037b79f322e1a8167))
+- **sync:** ensure all client IDs in vectorClock are protected during SYNC_IMPORT operations ([abffd4f](https://github.com/super-productivity/super-productivity/commit/abffd4f133a1888a265bbc64730f1a541c45fd97))
+- **sync:** ensure protected client IDs are set after SYNC_IMPORT to prevent pruning issues ([7f6c20a](https://github.com/super-productivity/super-productivity/commit/7f6c20a1c9ed06a8af3bc6db6002cd8d3607e529))
+- **sync:** handle duplicate operation IDs gracefully in appendBatch ([ab6df00](https://github.com/super-productivity/super-productivity/commit/ab6df00a72dc6ca43df1ff9e0f11f34c2808b609)), closes [#6213](https://github.com/super-productivity/super-productivity/issues/6213)
+- **sync:** handle MissingRefreshTokenAPIError for Dropbox re-auth ([48f9967](https://github.com/super-productivity/super-productivity/commit/48f9967cf59838758ac0be3a2fc58d990d940f3c)), closes [#6212](https://github.com/super-productivity/super-productivity/issues/6212)
+- **sync:** improve error visibility in SuperSync operations ([b911546](https://github.com/super-productivity/super-productivity/commit/b911546e53b4352152a2ea1277f6a507c1a2d63e))
+- **sync:** prevent ImmediateUploadService from triggering during encryption ops ([4acc7d6](https://github.com/super-productivity/super-productivity/commit/4acc7d6ca878bba3c12ba3a0dd6ac2f2c5ac2da8))
+- **sync:** prevent race condition in encryption password change ([ac700b6](https://github.com/super-productivity/super-productivity/commit/ac700b6eed6920c04f32b5092545e3caf6ac9452))
+- **sync:** show clear error when encryption unavailable on Android ([5f44e18](https://github.com/super-productivity/super-productivity/commit/5f44e18aa250d42c5490974e7f552dedc21fbff4))
+- **test:** update mock client ID references in clean-slate tests ([8983091](https://github.com/super-productivity/super-productivity/commit/89830910c5bdde59a4bc6c654527428fa19fe4ca))
+- **touch:** limit click blocking to submenu triggers only ([ebe72c1](https://github.com/super-productivity/super-productivity/commit/ebe72c14df513efcedce51e7eac9b432b8143080))
+
+### Features
+
+- **boards:** move tasks to and from backlog when dragging to a panel with backlogState set ([#6209](https://github.com/super-productivity/super-productivity/issues/6209)) ([3fc0be6](https://github.com/super-productivity/super-productivity/commit/3fc0be6924e15c70e04ba5e18de4102680f59136))
+- Copy Version Number [#5108](https://github.com/super-productivity/super-productivity/issues/5108) ([#6184](https://github.com/super-productivity/super-productivity/issues/6184)) ([2e20746](https://github.com/super-productivity/super-productivity/commit/2e20746fb8f7c6c0de3b759dde94cfefcb92e632))
+- **sync:** add encryption disable flow for file-based providers ([d67d340](https://github.com/super-productivity/super-productivity/commit/d67d340f0ebe4f8ea9ed351a9539236dff731603))
+- **sync:** make encryption actions explicit ([a1c9b7c](https://github.com/super-productivity/super-productivity/commit/a1c9b7cb93868558568a22db60cd9e807b8490d1))
+
+## [17.0.5](https://github.com/super-productivity/super-productivity/compare/v17.0.4...v17.0.5) (2026-01-26)
+
+### Bug Fixes
+
+- **android:** flush time tracking data when app goes to background [#6207](https://github.com/super-productivity/super-productivity/issues/6207) ([7c49cc2](https://github.com/super-productivity/super-productivity/commit/7c49cc2e6b13b657d0abfa89590595e8843fd8cd))
+- **open-project:** make legacy config fields optional for backward compatibility ([3534706](https://github.com/super-productivity/super-productivity/commit/3534706f165f6828430d3b5669454a4e48dea2c3))
+- **schedule:** apply dialog max-height to schedule task dialog only ([8f93529](https://github.com/super-productivity/super-productivity/commit/8f935294a5fd56a33bfa4dcf04fa2e76f99fd88b))
+
+## [17.0.4](https://github.com/super-productivity/super-productivity/compare/v17.0.3...v17.0.4) (2026-01-26)
+
+### Bug Fixes
+
+- **focus-mode:** dispatch completeFocusSession when isManualBreakStart=true [#6206](https://github.com/super-productivity/super-productivity/issues/6206) ([070469f](https://github.com/super-productivity/super-productivity/commit/070469f23950251816799221e956d65de871626a))
+- schedule dialog height [#6187](https://github.com/super-productivity/super-productivity/issues/6187) ([550eede](https://github.com/super-productivity/super-productivity/commit/550eedefa80116c577f1f9caf9cd943d04688dea))
+
+## [17.0.3](https://github.com/super-productivity/super-productivity/compare/v17.0.2...v17.0.3) (2026-01-26)
+
+### Bug Fixes
+
+- **ci:** disable no-inline-html rule in wiki markdown linter ([0383476](https://github.com/super-productivity/super-productivity/commit/0383476927974e8c7a692765783dd417835d9f6f))
+- **config:** merge defaults for tasks config on data load ([f948186](https://github.com/super-productivity/super-productivity/commit/f94818641c5a034262c7c20081e9c85b07e7d5c4))
+- **config:** prevent crash when appFeatures is undefined ([e8e4ed6](https://github.com/super-productivity/super-productivity/commit/e8e4ed69138e0dba5c7a5f7fdc48f574ca5e468a)), closes [#6182](https://github.com/super-productivity/super-productivity/issues/6182)
+- **e2e:** add retry logic for flaky provider dropdown clicks ([7c1c2cd](https://github.com/super-productivity/super-productivity/commit/7c1c2cd3c1a637641ed024cb776811599a011da6))
+- **gitlab:** use null as default for project field ([3c6d036](https://github.com/super-productivity/super-productivity/commit/3c6d0369c6c383456162fd6ae733c75c781e3d12)), closes [#6138](https://github.com/super-productivity/super-productivity/issues/6138)
+- **markdown:** restore inline formatting and links for marked v17 ([02959b5](https://github.com/super-productivity/super-productivity/commit/02959b56ca6568dc575caf5dd30be00f81ea78bf)), closes [#6181](https://github.com/super-productivity/super-productivity/issues/6181)
+- **mobile-nav:** fix hamburger menu not working with background image ([61590fd](https://github.com/super-productivity/super-productivity/commit/61590fdc1b90eb41ca193aef53f658dbf4fb0b2b)), closes [#6177](https://github.com/super-productivity/super-productivity/issues/6177) [#6133](https://github.com/super-productivity/super-productivity/issues/6133)
+- **mobile:** prevent menu flash on Android by disabling swipe during animation ([ed8b9a5](https://github.com/super-productivity/super-productivity/commit/ed8b9a5f88ebe8e3b21625163cc6133429bc2008))
+- **sync:** distinguish permanent rejections from resolved conflicts ([e4d2a3a](https://github.com/super-productivity/super-productivity/commit/e4d2a3ac452a7a854333ad3807dccdc7bd4b7bfc))
+- **sync:** handle DELETE operations in StaleOperationResolverService ([6ece08c](https://github.com/super-productivity/super-productivity/commit/6ece08c51be7eb58db29f6cc279da0305ebd543a))
+- **sync:** improve hideExpression null safety and E2E test reliability ([8963b52](https://github.com/super-productivity/super-productivity/commit/8963b525a07b3b67124445f6d490c68248213321))
+- **sync:** preserve SYNC_IMPORT client ID through vector clock pruning ([91cab8e](https://github.com/super-productivity/super-productivity/commit/91cab8e97449afc80ab19d12d955d16707d9aba1))
+- **sync:** remove state mutation from cross-model validation ([bb7a3ec](https://github.com/super-productivity/super-productivity/commit/bb7a3ec2b1b6e46d24fdc71eb96c821a1d2fb095))
+- **sync:** return existingClock in conflict rejections to fix infinite loop ([100b8af](https://github.com/super-productivity/super-productivity/commit/100b8af5f2cb4569f277d7711442ab2023bb61fe))
+- **tasks:** allow subtask drag-drop reordering in Today/Tag views ([6ffc414](https://github.com/super-productivity/super-productivity/commit/6ffc414693268d6ed417af253a81e64e55cb721a))
+- **tasks:** handle undefined config in createNewTaskWithDefaults ([df3f68c](https://github.com/super-productivity/super-productivity/commit/df3f68c3a901773d50c6af98ca39fcefa170326c)), closes [#6199](https://github.com/super-productivity/super-productivity/issues/6199)
+- **ui:** restore filled icons for impact stars and play button ([95b969d](https://github.com/super-productivity/super-productivity/commit/95b969d1b381ad807fcbd0ff04dc34f9967c922c))
+
+### Features
+
+- **dropbox:** add Capacitor HTTP support for native platforms ([e0e0344](https://github.com/super-productivity/super-productivity/commit/e0e03446b4075c36d98cff7ac784dd4d096422d8))
+- **i18n:** update turkish ([#6170](https://github.com/super-productivity/super-productivity/issues/6170)) ([b058875](https://github.com/super-productivity/super-productivity/commit/b05887593e64176aa1dd226efbe8cc1bdbfd7e07))
+- **sync:** enhance vector clock management and improve error handling in sync process ([1138c2c](https://github.com/super-productivity/super-productivity/commit/1138c2c1c0b8d4ea5d5de1aa5b0a119136647917))
+- **sync:** re-enable repair system with user confirmation ([2108e69](https://github.com/super-productivity/super-productivity/commit/2108e69e0bbadbb5cbd8296b1079fd1e0371c699))
+- **tools:** enhance translation management script ([#6171](https://github.com/super-productivity/super-productivity/issues/6171)) ([bc3df77](https://github.com/super-productivity/super-productivity/commit/bc3df77e3f3f8e80e9822368497ef736d6230329))
+- **ui:** Desktop Full Screen Mode (F11) [#5851](https://github.com/super-productivity/super-productivity/issues/5851) ([#6183](https://github.com/super-productivity/super-productivity/issues/6183)) ([5a2b675](https://github.com/super-productivity/super-productivity/commit/5a2b6753832a23cebd502663459112e509dd9a4a))
+
+### Performance Improvements
+
+- **ci:** optimize E2E workflow with shared build and Playwright caching ([c0387f1](https://github.com/super-productivity/super-productivity/commit/c0387f12d2e05d7b7ae61cfd1e7e1364f665241f))
+- **e2e:** split scheduled CI into parallel jobs and reduce wait times ([e9b1b9c](https://github.com/super-productivity/super-productivity/commit/e9b1b9c34c1c89019ad2001715bd21edbf402971))
+
+## [17.0.2](https://github.com/super-productivity/super-productivity/compare/v17.0.1...v17.0.2) (2026-01-25)
+
+### Bug Fixes
+
+- **ci:** only run dependency vulnerability review on pull requests ([#6153](https://github.com/super-productivity/super-productivity/issues/6153)) ([1b32a81](https://github.com/super-productivity/super-productivity/commit/1b32a81f7615ca7b3dc58501308c24039105214a))
+- **sync:** address code review findings and add encryption tests ([e48749d](https://github.com/super-productivity/super-productivity/commit/e48749d0f79039b335850040f0e2c8d4d293335f))
+- **sync:** clear adapter cache on encryption changes and add safety limits ([fe9db14](https://github.com/super-productivity/super-productivity/commit/fe9db14d7ac1e1df2dd11053dd23a40d79237107))
+- **sync:** use CapacitorHttp for SuperSync on iOS native platform ([#6154](https://github.com/super-productivity/super-productivity/issues/6154)) ([feb8604](https://github.com/super-productivity/super-productivity/commit/feb860498b6019d4772b4dcc7842afff41e5b6a5)), closes [#6151](https://github.com/super-productivity/super-productivity/issues/6151)
+
+## [17.0.1](https://github.com/super-productivity/super-productivity/compare/v17.0.0...v17.0.1) (2026-01-24)
+
+### Bug Fixes
+
+- address code review issues from yesterday's changes ([9cefb19](https://github.com/super-productivity/super-productivity/commit/9cefb19629d30aeabc3599421ccb47a5c657f9e0))
+- **android:** await flush after notification actions to prevent data loss ([#5842](https://github.com/super-productivity/super-productivity/issues/5842)) ([300c4ec](https://github.com/super-productivity/super-productivity/commit/300c4ecfac5c0deed69530ead549d6a5caa3b360))
+- **build:** check for real packages in node_modules, not just folder existence ([ee3ceb6](https://github.com/super-productivity/super-productivity/commit/ee3ceb62a827d05f70248bf4ffc5efa734e4c13e))
+- **ci:** correct cloudflare/wrangler-action SHA to match v3.12.0 tag ([b9cefeb](https://github.com/super-productivity/super-productivity/commit/b9cefeb14be944ad7edcb530656af1594950004d))
+- **ci:** exclude [@webdav](https://github.com/webdav) and [@supersync](https://github.com/supersync) tests from CI workflow ([5635c6a](https://github.com/super-productivity/super-productivity/commit/5635c6a047d77f56914d81226cf14d3c39c9ab86))
+- **dev:** update default SuperSync port to 1901 for local development ([d982b70](https://github.com/super-productivity/super-productivity/commit/d982b708ccf10b43ef5c0f2eb5be5fa4f4369cae))
+- **e2e:** wait for button enabled state instead of visibility + timeout ([20a6af5](https://github.com/super-productivity/super-productivity/commit/20a6af534ada9a1a905386a4720e43f13c11e93f))
+- **encryption:** fix cache key bug and add missing tests ([39f9501](https://github.com/super-productivity/super-productivity/commit/39f95015ee6bf29dc29bdec2d2b65c023ce4ade2))
+- **gitlab:** allow null project field for backward compatibility ([21743df](https://github.com/super-productivity/super-productivity/commit/21743df401398d954026a4924d4d7a23348bf2a4)), closes [#6139](https://github.com/super-productivity/super-productivity/issues/6139) [#6131](https://github.com/super-productivity/super-productivity/issues/6131)
+- **i18n:** add missing encryption translation keys to t.const.ts ([1f4d6cb](https://github.com/super-productivity/super-productivity/commit/1f4d6cb6aa9f0e909e34d14d8974bd8f1f347f0b))
+- **passkey:** skip email verification in TEST_MODE for passkey registration ([e924b06](https://github.com/super-productivity/super-productivity/commit/e924b068aca3674accfe9452082c72d3d520b7af))
+- **schedule:** use SCSS interpolation for CSS custom property value ([d0abcf1](https://github.com/super-productivity/super-productivity/commit/d0abcf1d68800c8d83e91a1217833119c087407b))
+- **supersync:** parse wildcard patterns when universal wildcard present ([ded17e9](https://github.com/super-productivity/super-productivity/commit/ded17e96fc42dad042a5d26e6bf39d77f3126968))
+- **supersync:** prevent credential loss on Android dialog close ([a7db5e1](https://github.com/super-productivity/super-productivity/commit/a7db5e14e8b43e10a99aae64044e256fde53b708))
+- **supersync:** prevent domain confusion in parseCorsOrigin wildcard conversion ([6a74318](https://github.com/super-productivity/super-productivity/commit/6a743181e5e1bf333cdd2c586cbe0d08840a52d4))
+- **supersync:** prevent domain confusion in preview CORS pattern ([d990173](https://github.com/super-productivity/super-productivity/commit/d990173b349f5fb9c87b5232738c7bfc33d195eb))
+- **supersync:** show informative message when disable encryption preconditions not met ([ec2db19](https://github.com/super-productivity/super-productivity/commit/ec2db1911584e85444073a01746c07f0955ce0cb))
+- **supersync:** sync form values explicitly before save on Android ([4c1aac9](https://github.com/super-productivity/super-productivity/commit/4c1aac9eb52617e6b363ee18c7e9b29320307091))
+- **sync:** add mutex lock between sync and password change ([4ea30b1](https://github.com/super-productivity/super-productivity/commit/4ea30b183bae1adedc6b5791dc9accfc91575c0a))
+- **sync:** add PASSWORD_SET_INFO translation constant for encryption password UI ([be96903](https://github.com/super-productivity/super-productivity/commit/be969033b3a70bcad27768c125864206039b5864))
+- **sync:** add type assertions for provider config assignments ([cf611de](https://github.com/super-productivity/super-productivity/commit/cf611de2a3f373c887f94c0cad661f4813a900e0))
+- **sync:** allow clean slate when isCleanSlate flag is set ([cc31767](https://github.com/super-productivity/super-productivity/commit/cc3176780d13284ea457d37ff2a82692d31e137c))
+- **sync:** auto-sync encryption state when disabled on another device ([045b722](https://github.com/super-productivity/super-productivity/commit/045b7224b224f7ede704a28bfc14bddc3a5980ee))
+- **sync:** await auth configuration to prevent dialog race condition ([d3b85db](https://github.com/super-productivity/super-productivity/commit/d3b85dbd7e400f4c83bbe836fd0f980e097137ba))
+- **sync:** await password update before retrying decryption ([1466c9a](https://github.com/super-productivity/super-productivity/commit/1466c9aefbc4d273e9b7b9db3c659f683998681a))
+- **sync:** clear adapter cache when encryption settings change ([9f74f46](https://github.com/super-productivity/super-productivity/commit/9f74f467449d9922641428fa6356227c7fe95462))
+- **sync:** clear encryptKey when disabling SuperSync encryption ([762e92c](https://github.com/super-productivity/super-productivity/commit/762e92c287826899ae36046840f3e62a417f6a13))
+- **sync:** detect pre-op-log data on first-time sync to prevent silent overwrite ([f27f1d6](https://github.com/super-productivity/super-productivity/commit/f27f1d68dd7d2dc0af399df76f11c552df7ac0d8))
+- **sync:** ensure iOS WebDAV returns string data to prevent format errors ([b2e81e7](https://github.com/super-productivity/super-productivity/commit/b2e81e719084fc6d8b44dd5ac0424f87921fc3bd)), closes [#6144](https://github.com/super-productivity/super-productivity/issues/6144)
+- **sync:** exclude full-state ops from unsynced check before password change ([d3a7f3a](https://github.com/super-productivity/super-productivity/commit/d3a7f3a3d0dd130fa618ece488e8f3663ecc443d))
+- **sync:** fix readonly property assignments in sync dialog ([c75eb2d](https://github.com/super-productivity/super-productivity/commit/c75eb2d4c7590451bead6e3b7057395aa970e713))
+- **sync:** fix SuperSync encryption password change bug ([77bb4e9](https://github.com/super-productivity/super-productivity/commit/77bb4e9f99e88104a6da13ac8e10e4c9e085591d))
+- **sync:** improve encryption error handling and add missing tests ([6c7d166](https://github.com/super-productivity/super-productivity/commit/6c7d1668f92e879bb8384977e6aed1164a9b998f))
+- **sync:** improve error message for failed password change ([2ab8f35](https://github.com/super-productivity/super-productivity/commit/2ab8f35639efe240fe8cb7f7e16e87d26a82d572))
+- **sync:** prevent archive data loss in encryption enable/disable/import ([c062f0b](https://github.com/super-productivity/super-productivity/commit/c062f0b2242b360195c892225e71aa627872818d))
+- **sync:** prevent multiple password dialogs from opening simultaneously ([f293521](https://github.com/super-productivity/super-productivity/commit/f293521a23afaed7a34a9c07c35962dccd755639))
+- **sync:** re-fetch encryption key after gap detection ([035fe0a](https://github.com/super-productivity/super-productivity/commit/035fe0a95fd8324e167cae2553b0e6be3e6def6b))
+- **sync:** replace archive safety guard error with confirmation dialog ([2380808](https://github.com/super-productivity/super-productivity/commit/2380808e842e0fc3c3cc9dcd0867e757ff65de13))
+- **sync:** surface DecryptError password dialog instead of silent error ([788f2de](https://github.com/super-productivity/super-productivity/commit/788f2dedf847c6930dcce278fcc62c835e569721))
+- **sync:** use async state snapshot to prevent archive data loss ([8c4d217](https://github.com/super-productivity/super-productivity/commit/8c4d21721b99fb0190bf2e55933f0d36d08c347f))
+- **sync:** use manual code entry for Dropbox auth on all platforms ([ec847ce](https://github.com/super-productivity/super-productivity/commit/ec847ce8972f191586221206ba005d0e23dbf176))
+- **sync:** warn about unsynced changes before password change ([842baf8](https://github.com/super-productivity/super-productivity/commit/842baf81bf71ef1d84b2cb92d23e117e48942206))
+- **sync:** wrap [@else](https://github.com/else) block content in ng-container for proper icon projection ([e9a9fb6](https://github.com/super-productivity/super-productivity/commit/e9a9fb681ab49bc01bbe5df0d89684ae772f90dd))
+- **tasks:** add URL attachments when editing task titles ([060a3c0](https://github.com/super-productivity/super-productivity/commit/060a3c0020433e6eeaabbef695c9a03fba2638ee)), closes [#6146](https://github.com/super-productivity/super-productivity/issues/6146)
+- **test:** complete encryption enable/disable E2E tests with proper dialog handling ([479ba90](https://github.com/super-productivity/super-productivity/commit/479ba906df129fa9016aecee01ca5c43f9ea6bbe))
+- **ui:** add space between checkbox and text in markdown notes ([1b69b36](https://github.com/super-productivity/super-productivity/commit/1b69b365eeab33cff15567f09ecacb9f653dce6e)), closes [#6147](https://github.com/super-productivity/super-productivity/issues/6147)
+- **upload:** handle missing encryption key for piggybacked encrypted operations ([1628760](https://github.com/super-productivity/super-productivity/commit/1628760d48b0e1680f835d487bb2b7757ae20eff))
+
+### Features
+
+- **cors:** normalize domain to lowercase and validate non-empty origins ([737d11d](https://github.com/super-productivity/super-productivity/commit/737d11d8f3e88ada8a0b63faab18b3fbbe594b60))
+- **supersync:** add parseCorsOrigin helper with wildcard support ([be26d6d](https://github.com/super-productivity/super-productivity/commit/be26d6de05146728ec96a91d40d327500456e12d))
+- **supersync:** add preview deployments to default CORS origins ([aa55c04](https://github.com/super-productivity/super-productivity/commit/aa55c0475bdebaff20aa97a6ecaa00db7031891c))
+- **supersync:** improve encryption UX with confirmation dialogs ([e2db30c](https://github.com/super-productivity/super-productivity/commit/e2db30cfc259d9888b937bc27026855209072bbe))
+- **supersync:** parse wildcard patterns in CORS_ORIGINS env var ([1da3d90](https://github.com/super-productivity/super-productivity/commit/1da3d90c6bdf08885c13da61435c7a38c437ea82))
+- **sync:** add confirmation dialog when disabling SuperSync encryption ([#6129](https://github.com/super-productivity/super-productivity/issues/6129)) ([76defad](https://github.com/super-productivity/super-productivity/commit/76defad73250af8fe814086a5d6a0c3cadca95a6))
+- **sync:** add remove encryption option to password change dialog ([f3dfe2d](https://github.com/super-productivity/super-productivity/commit/f3dfe2d927220b36448cd90c16ac94e66e349a0f))
+- **sync:** implement clean slate mechanism for encryption password changes ([c576372](https://github.com/super-productivity/super-productivity/commit/c576372d00d378216acc72d12f8c35821ff11529))
+
+### Performance Improvements
+
+- **encryption:** add session-level key caching for faster syncs ([420fb40](https://github.com/super-productivity/super-productivity/commit/420fb401a3656ec72f7f8186c81974ac78ee56f7))
+- **encryption:** parallelize batch operations and fix cache invalidation ([caf22e3](https://github.com/super-productivity/super-productivity/commit/caf22e38648b4e4b281a1d4a066ccf636c07a000))
+- **encryption:** remove cache timeout and add password change invalidation ([bf79266](https://github.com/super-productivity/super-productivity/commit/bf7926664006e17892540e873babe7362a5cb7de))
+- **sync:** expand cached key usage to all encryption call sites ([d4152c2](https://github.com/super-productivity/super-productivity/commit/d4152c2195ef1d09c2513cfb04a8de49f12b2a35)), closes [#6130](https://github.com/super-productivity/super-productivity/issues/6130) [#6130](https://github.com/super-productivity/super-productivity/issues/6130)
+- **sync:** optimize encryption for mobile by caching derived keys ([33883d6](https://github.com/super-productivity/super-productivity/commit/33883d68453f3fe7b00f323badde6f0470f8fee6))
+
+### Reverts
+
+- remove error message field from internal_error_report.yml ([588e912](https://github.com/super-productivity/super-productivity/commit/588e912decec46404059ab8856dd377091d2f2de))
+
 # [17.0.0](https://github.com/super-productivity/super-productivity/compare/v17.0.0-RC.13...v17.0.0) (2026-01-23)
 
 ### Bug Fixes

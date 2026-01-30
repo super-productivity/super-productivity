@@ -184,7 +184,7 @@ export class OpenProjectEffects {
     task: Task,
   ): Observable<any> {
     const chosenTransition: OpenProjectTransitionOption | undefined =
-      openProjectCfg.transitionConfig[localState];
+      openProjectCfg.transitionConfig?.[localState];
 
     if (!task.issueId) {
       throw new Error('No issueId for task');
@@ -230,7 +230,7 @@ export class OpenProjectEffects {
               ) {
                 return this._openProjectApiService
                   .transitionIssue$(
-                    { ...issue, percentageDone: openProjectCfg.progressOnDone },
+                    { ...issue, percentageDone: openProjectCfg.progressOnDone ?? 0 },
                     chosenTransition,
                     openProjectCfg,
                   )

@@ -51,6 +51,21 @@ export const extractErrorMessage = (err: unknown): string | null => {
   return null;
 };
 
+/**
+ * Sanitizes data for logging by redacting sensitive information.
+ * Removes tokens, passwords, secrets, and authorization headers.
+ */
+const sanitizeForLogging = (data: unknown): unknown => {
+  if (typeof data !== 'string') return data;
+  return data
+    .replace(
+      /("(access_?token|refresh_?token|password|secret|authorization)":\s*")[^"]+"/gi,
+      '$1[REDACTED]"',
+    )
+    .replace(/(Bearer\s+)[^\s"]+/gi, '$1[REDACTED]')
+    .substring(0, 1000);
+};
+
 class AdditionalLogErrorBase<T = unknown[]> extends Error {
   additionalLog: T;
 
@@ -63,7 +78,9 @@ class AdditionalLogErrorBase<T = unknown[]> extends Error {
     if (additional.length > 0) {
       PFLog.log(this.name, ...additional);
       try {
-        PFLog.log('additional error log: ' + JSON.stringify(additional));
+        // Sanitize before logging to avoid exposing tokens in logs
+        const sanitized = additional.map(sanitizeForLogging);
+        PFLog.log('additional error log: ' + JSON.stringify(sanitized));
       } catch (e) {
         PFLog.log('additional error log not stringified: ', additional, e);
       }
@@ -513,4 +530,16 @@ export class BackupImportFailedError extends AdditionalLogErrorBase {
 
 export class WebCryptoNotAvailableError extends Error {
   override name = 'WebCryptoNotAvailableError';
+}
+
+/**
+ * Thrown when IndexedDB storage quota is exceeded during operation log write.
+ * Callers should handle by running compaction or prompting user to clear data.
+ */
+export class StorageQuotaExceededError extends Error {
+  override name = 'StorageQuotaExceededError';
+
+  constructor() {
+    super('Operation log storage quota exceeded');
+  }
 }

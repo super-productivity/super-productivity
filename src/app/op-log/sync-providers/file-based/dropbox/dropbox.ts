@@ -14,7 +14,6 @@ import { DropboxApi } from './dropbox-api';
 import { generatePKCECodes } from './generate-pkce-codes';
 import { SyncCredentialStore } from '../../credential-store.service';
 import { SyncProviderPrivateCfgBase } from '../../../core/types/sync.types';
-import { IS_NATIVE_PLATFORM } from '../../../../util/is-native-platform';
 
 const DROPBOX_AUTH_URL = 'https://www.dropbox.com/oauth2/authorize' as const;
 const PATH_NOT_FOUND_ERROR = 'path/not_found' as const;
@@ -306,25 +305,16 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
   }
 
   /**
-   * Gets the appropriate OAuth redirect URI based on the current platform.
+   * Gets the OAuth redirect URI.
    *
-   * Mobile platforms (iOS/Android/Android WebView):
-   *   Returns custom URI scheme to enable automatic redirect back to app.
-   *   Dropbox will redirect to: com.super-productivity.app://oauth-callback?code=xxx
+   * Always returns null to use Dropbox's manual code entry flow.
+   * User must copy the code from Dropbox's page and paste it manually.
+   * This works reliably across all platforms (web, Electron, Android, iOS).
    *
-   * Web/Electron platforms:
-   *   Returns null to use Dropbox's manual code entry flow.
-   *   User must copy the code from Dropbox's page and paste it manually.
-   *
-   * @returns The redirect URI for mobile platforms, null for web/Electron
+   * @returns null for manual code entry flow
    */
   private _getRedirectUri(): string | null {
-    if (IS_NATIVE_PLATFORM) {
-      return 'com.super-productivity.app://oauth-callback';
-    } else {
-      // Web/Electron: Use manual code entry (no redirect_uri)
-      return null;
-    }
+    return null;
   }
 
   /**

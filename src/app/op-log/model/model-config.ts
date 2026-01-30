@@ -48,6 +48,7 @@ import { appDataValidators, validateFull } from '../validation/validation-fn';
 import { fixEntityStateConsistency } from '../../util/check-fix-entity-state-consistency';
 import { IValidation } from 'typia';
 import { PFLog } from '../../core/log';
+import { alertDialog } from '../../util/native-dialogs';
 import {
   initialPluginMetaDataState,
   initialPluginUserDataState,
@@ -237,7 +238,7 @@ export const SYNC_CONFIG: BaseSyncConfig<AllModelConfig> = {
 
     if (!environment.production && !result.isValid) {
       PFLog.log(result);
-      alert('VALIDATION ERROR');
+      alertDialog('VALIDATION ERROR');
     }
 
     if (result.isValid) {
@@ -262,7 +263,7 @@ export const SYNC_CONFIG: BaseSyncConfig<AllModelConfig> = {
   },
   onDbError: (err) => {
     PFLog.err(err);
-    alert('DB ERROR: ' + err);
+    alertDialog('DB ERROR: ' + err);
   },
   repair: (data: unknown, errors: IValidation.IError[]) => {
     if (!isDataRepairPossible(data as AppDataComplete)) {

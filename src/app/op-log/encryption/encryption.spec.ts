@@ -128,7 +128,11 @@ describe('Encryption', () => {
     describe('deriveKeyFromPassword', () => {
       it('should derive a key that can be reused for encryption', async () => {
         const keyInfo = await deriveKeyFromPassword(PASSWORD);
-        expect(keyInfo.key).toBeDefined();
+        // In browser with WebCrypto, should return webcrypto type
+        expect(keyInfo.type).toBe('webcrypto');
+        if (keyInfo.type === 'webcrypto') {
+          expect(keyInfo.key).toBeDefined();
+        }
         expect(keyInfo.salt).toBeDefined();
         expect(keyInfo.salt.length).toBe(16);
       });
@@ -531,6 +535,247 @@ describe('Encryption', () => {
       const decrypted = await decryptBatch(encrypted, PASSWORD);
 
       expect(decrypted).toEqual(items);
+    });
+  });
+
+  describe('Fallback Encryption (@noble/ciphers)', () => {
+    // These tests verify the fallback path works when WebCrypto is unavailable.
+    // We mock crypto.subtle to simulate mobile environments (Android/iOS Capacitor).
+
+    let originalCryptoSubtle: SubtleCrypto | undefined;
+    let cryptoDescriptor: PropertyDescriptor | undefined;
+
+    beforeEach(() => {
+      clearSessionKeyCache();
+      // Save original crypto.subtle and its descriptor
+      originalCryptoSubtle = window.crypto.subtle;
+      cryptoDescriptor = Object.getOwnPropertyDescriptor(window.crypto, 'subtle');
+
+      // Remove crypto.subtle to simulate insecure context
+      Object.defineProperty(window.crypto, 'subtle', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      // Restore crypto.subtle with original descriptor or value
+      if (cryptoDescriptor) {
+        Object.defineProperty(window.crypto, 'subtle', cryptoDescriptor);
+      } else if (originalCryptoSubtle) {
+        Object.defineProperty(window.crypto, 'subtle', {
+          value: originalCryptoSubtle,
+          writable: true,
+          configurable: true,
+        });
+      }
+      clearSessionKeyCache();
+    });
+
+    it('should encrypt and decrypt when WebCrypto is unavailable', async () => {
+      const encrypted = await encrypt(DATA, PASSWORD);
+      expect(encrypted).not.toBe(DATA);
+
+      const decrypted = await decrypt(encrypted, PASSWORD);
+      expect(decrypted).toBe(DATA);
+    });
+
+    it('should derive fallback key type when WebCrypto is unavailable', async () => {
+      const keyInfo = await deriveKeyFromPassword(PASSWORD);
+      expect(keyInfo.type).toBe('fallback');
+      if (keyInfo.type === 'fallback') {
+        expect(keyInfo.keyBytes).toBeDefined();
+        expect(keyInfo.keyBytes.length).toBe(32); // 256-bit key
+      }
+    });
+
+    it('should encrypt/decrypt batch when WebCrypto is unavailable', async () => {
+      const items = ['item1', 'item2', 'item3'];
+      const encrypted = await encryptBatch(items, PASSWORD);
+      expect(encrypted.length).toBe(3);
+
+      const decrypted = await decryptBatch(encrypted, PASSWORD);
+      expect(decrypted).toEqual(items);
+    });
+
+    it('should use session key cache in fallback mode', async () => {
+      // First batch - derives key
+      await encryptBatch(['a'], PASSWORD);
+
+      // Verify cache is populated
+      const stats = getSessionKeyCacheStats();
+      expect(stats.hasEncryptKey).toBe(true);
+
+      // Second batch - should reuse cached key
+      const encrypted = await encryptBatch(['b'], PASSWORD);
+      const decrypted = await decryptBatch(encrypted, PASSWORD);
+      expect(decrypted[0]).toBe('b');
+    });
+
+    it('should throw error when decryption fails in fallback mode', async () => {
+      // Create invalid encrypted data
+      const invalidData = window.btoa(
+        String.fromCharCode(
+          ...new Array(50).fill(0).map(() => Math.floor(Math.random() * 256)),
+        ),
+      );
+
+      try {
+        await decrypt(invalidData, PASSWORD);
+        fail('Should have thrown an error');
+      } catch (e: unknown) {
+        // Should throw some error (decryption failure or authentication error)
+        expect(e).toBeDefined();
+      }
+    });
+  });
+
+  describe('Cross-Compatibility (WebCrypto ↔ Fallback)', () => {
+    // These tests verify that data encrypted with one implementation
+    // can be decrypted by the other. This is critical for mobile/desktop sync.
+
+    let originalCryptoSubtle: SubtleCrypto | undefined;
+    let cryptoDescriptor: PropertyDescriptor | undefined;
+
+    const disableWebCrypto = (): void => {
+      if (!originalCryptoSubtle) {
+        originalCryptoSubtle = window.crypto.subtle;
+        cryptoDescriptor = Object.getOwnPropertyDescriptor(window.crypto, 'subtle');
+      }
+      Object.defineProperty(window.crypto, 'subtle', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+    };
+
+    const enableWebCrypto = (): void => {
+      if (cryptoDescriptor) {
+        Object.defineProperty(window.crypto, 'subtle', cryptoDescriptor);
+      } else if (originalCryptoSubtle) {
+        Object.defineProperty(window.crypto, 'subtle', {
+          value: originalCryptoSubtle,
+          writable: true,
+          configurable: true,
+        });
+      }
+    };
+
+    beforeEach(() => {
+      clearSessionKeyCache();
+      // Save original state at the start of each test
+      originalCryptoSubtle = window.crypto.subtle;
+      cryptoDescriptor = Object.getOwnPropertyDescriptor(window.crypto, 'subtle');
+    });
+
+    afterEach(() => {
+      enableWebCrypto();
+      clearSessionKeyCache();
+    });
+
+    it('should decrypt WebCrypto-encrypted data with fallback', async () => {
+      // Encrypt with WebCrypto (desktop)
+      enableWebCrypto();
+      const encrypted = await encrypt(DATA, PASSWORD);
+
+      // Clear cache to force fresh key derivation
+      clearSessionKeyCache();
+
+      // Decrypt with fallback (mobile)
+      disableWebCrypto();
+      const decrypted = await decrypt(encrypted, PASSWORD);
+
+      expect(decrypted).toBe(DATA);
+    });
+
+    it('should decrypt fallback-encrypted data with WebCrypto', async () => {
+      // Encrypt with fallback (mobile)
+      disableWebCrypto();
+      const encrypted = await encrypt(DATA, PASSWORD);
+
+      // Clear cache to force fresh key derivation
+      clearSessionKeyCache();
+
+      // Decrypt with WebCrypto (desktop)
+      enableWebCrypto();
+      const decrypted = await decrypt(encrypted, PASSWORD);
+
+      expect(decrypted).toBe(DATA);
+    });
+
+    it('should handle batch cross-compatibility: WebCrypto → Fallback', async () => {
+      // Encrypt batch with WebCrypto
+      enableWebCrypto();
+      const items = ['desktop item 1', 'desktop item 2', 'desktop item 3'];
+      const encrypted = await encryptBatch(items, PASSWORD);
+
+      clearSessionKeyCache();
+
+      // Decrypt batch with fallback
+      disableWebCrypto();
+      const decrypted = await decryptBatch(encrypted, PASSWORD);
+
+      expect(decrypted).toEqual(items);
+    });
+
+    it('should handle batch cross-compatibility: Fallback → WebCrypto', async () => {
+      // Encrypt batch with fallback
+      disableWebCrypto();
+      const items = ['mobile item 1', 'mobile item 2', 'mobile item 3'];
+      const encrypted = await encryptBatch(items, PASSWORD);
+
+      clearSessionKeyCache();
+
+      // Decrypt batch with WebCrypto
+      enableWebCrypto();
+      const decrypted = await decryptBatch(encrypted, PASSWORD);
+
+      expect(decrypted).toEqual(items);
+    });
+
+    it('should handle mixed batch with items from both environments', async () => {
+      // Encrypt some items with WebCrypto
+      enableWebCrypto();
+      const desktopEncrypted = await encryptBatch(['from desktop'], PASSWORD);
+
+      clearSessionKeyCache();
+
+      // Encrypt more items with fallback
+      disableWebCrypto();
+      const mobileEncrypted = await encryptBatch(['from mobile'], PASSWORD);
+
+      clearSessionKeyCache();
+
+      // Decrypt mixed batch with WebCrypto
+      enableWebCrypto();
+      const mixed = [...desktopEncrypted, ...mobileEncrypted];
+      const decrypted = await decryptBatch(mixed, PASSWORD);
+
+      expect(decrypted).toEqual(['from desktop', 'from mobile']);
+    });
+
+    it('should produce consistent ciphertext format across implementations', async () => {
+      // Both implementations should produce: [SALT (16)][IV (12)][CIPHERTEXT + TAG]
+      enableWebCrypto();
+      const webCryptoEncrypted = await encrypt(DATA, PASSWORD);
+
+      clearSessionKeyCache();
+
+      disableWebCrypto();
+      const fallbackEncrypted = await encrypt(DATA, PASSWORD);
+
+      // Both should be valid base64 with similar structure
+      const webCryptoBuffer = window.atob(webCryptoEncrypted);
+      const fallbackBuffer = window.atob(fallbackEncrypted);
+
+      // Both should have at least 44 bytes (16 salt + 12 IV + 16 tag minimum)
+      expect(webCryptoBuffer.length).toBeGreaterThanOrEqual(44);
+      expect(fallbackBuffer.length).toBeGreaterThanOrEqual(44);
+
+      // Ciphertext lengths should be similar (same plaintext)
+      // Allow small variance due to potential padding differences
+      expect(Math.abs(webCryptoBuffer.length - fallbackBuffer.length)).toBeLessThan(32);
     });
   });
 });

@@ -39,7 +39,7 @@ export class TaskShortcutService {
   private readonly _taskService = inject(TaskService);
   private readonly _configService = inject(GlobalConfigService);
   readonly isTimeTrackingEnabled = computed(
-    () => this._configService.cfg()?.appFeatures.isTimeTrackingEnabled,
+    () => this._configService.appFeatures().isTimeTrackingEnabled,
   );
 
   /**

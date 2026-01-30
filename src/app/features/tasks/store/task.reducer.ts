@@ -58,6 +58,29 @@ export { taskAdapter };
 
 export const TASK_FEATURE_NAME = 'tasks';
 
+/**
+ * Checks if moving a task under a new parent would create a circular reference.
+ * A circular reference occurs when taskId would become a subtask of one of its descendants.
+ */
+const wouldCreateCircularReference = (
+  state: TaskState,
+  taskId: string,
+  newParentId: string,
+): boolean => {
+  // Check if newParentId is taskId itself or a descendant of taskId
+  let current = newParentId;
+  const visited = new Set<string>();
+
+  while (current) {
+    if (current === taskId) return true; // Would create cycle
+    if (visited.has(current)) return false; // Already visited, no cycle
+    visited.add(current);
+    const task = state.entities[current];
+    current = task?.parentId || '';
+  }
+  return false;
+};
+
 // REDUCER
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
@@ -261,6 +284,14 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(moveSubTask, (state, { taskId, srcTaskId, targetTaskId, afterTaskId }) => {
+    // Prevent circular references (task becoming subtask of its own descendant)
+    if (wouldCreateCircularReference(state, taskId, targetTaskId)) {
+      TaskLog.err(
+        `Cannot move task ${taskId} under ${targetTaskId}: would create circular reference`,
+      );
+      return state;
+    }
+
     let newState = state;
     const oldPar = getTaskById(srcTaskId, state);
     const newPar = getTaskById(targetTaskId, state);

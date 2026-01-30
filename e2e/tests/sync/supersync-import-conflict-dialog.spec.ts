@@ -89,19 +89,21 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       console.log('[Conflict Dialog] Client B imported backup');
 
       // Reload page after import to ensure UI reflects the imported state
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
 
       // NOW setup sync - B has local SYNC_IMPORT but no knowledge of server ops
       // Use waitForInitialSync=false so we can manually observe the dialog
-      await clientB.sync.setupSuperSync(syncConfig, false);
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // ============ PHASE 3: Client B Syncs (Should See Dialog) ============
       console.log('[Conflict Dialog] Phase 3: Client B syncs (should see dialog)');
 
-      // Trigger sync - this should cause the sync import conflict dialog to appear
-      await clientB.sync.triggerSync();
-
+      // The auto-sync after enabling will trigger the conflict dialog
       // Wait for the sync import conflict dialog to appear
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 15000 });
@@ -185,10 +187,14 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[USE_LOCAL] Client B imported backup');
 
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
       // Setup sync AFTER import, but don't wait for initial sync so we can handle the dialog
-      await clientB.sync.setupSuperSync(syncConfig, false);
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // ============ PHASE 3: Client B Syncs and Chooses USE_LOCAL ============
       console.log('[USE_LOCAL] Phase 3: Client B syncs and chooses USE_LOCAL');
@@ -291,10 +297,14 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[USE_REMOTE] Client B imported backup');
 
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
       // Setup sync AFTER import, but don't wait for initial sync so we can handle the dialog
-      await clientB.sync.setupSuperSync(syncConfig, false);
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // ============ PHASE 3: Client B Syncs and Chooses USE_REMOTE ============
       console.log('[USE_REMOTE] Phase 3: Client B syncs and chooses USE_REMOTE');
@@ -313,7 +323,7 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
 
       // Wait for sync to fully complete after USE_REMOTE (downloads server state)
       // This is more reliable than a fixed timeout as it waits for actual sync completion
-      await clientB.sync.waitForSyncComplete(30000);
+      await clientB.sync.waitForSyncToComplete(30000);
       console.log('[USE_REMOTE] Client B chose USE_REMOTE');
 
       // ============ PHASE 4: Verify Client B State ============
@@ -389,18 +399,19 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[CANCEL] Client B imported backup');
 
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
       // Setup sync AFTER import, but don't wait for initial sync so we can handle the dialog
-      await clientB.sync.setupSuperSync(syncConfig, false);
+      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // ============ PHASE 3: Client B Syncs and Chooses CANCEL ============
       console.log('[CANCEL] Phase 3: Client B syncs and chooses CANCEL');
 
-      // Trigger sync - this will cause the sync import conflict dialog to appear
-      // (matches the pattern from other tests in this file)
-      await clientB.sync.triggerSync();
-
+      // The auto-sync after enabling will trigger the conflict dialog
       // Wait for the sync import conflict dialog to appear
       const dialog = clientB.page.locator('dialog-sync-import-conflict');
       await expect(dialog).toBeVisible({ timeout: 15000 });

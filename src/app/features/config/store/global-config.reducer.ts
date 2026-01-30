@@ -1,6 +1,7 @@
 import { updateGlobalConfigSection } from './global-config.actions';
 import { createFeatureSelector, createReducer, createSelector, on } from '@ngrx/store';
 import {
+  AppFeaturesConfig,
   ClipboardImagesConfig,
   DominaModeConfig,
   EvaluationConfig,
@@ -87,10 +88,14 @@ export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
 );
+export const selectAppFeaturesConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): AppFeaturesConfig => cfg?.appFeatures ?? DEFAULT_GLOBAL_CONFIG.appFeatures,
+);
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,
   (cfg): boolean =>
-    cfg?.appFeatures.isFocusModeEnabled ??
+    cfg?.appFeatures?.isFocusModeEnabled ??
     DEFAULT_GLOBAL_CONFIG.appFeatures.isFocusModeEnabled,
 );
 
@@ -127,6 +132,13 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
 
     return {
       ...appDataComplete.globalConfig,
+      // Merge defaults for tasks config to fill missing fields.
+      // This handles data from older app versions or synced snapshots that
+      // predate newly added fields (e.g., isAutoMarkParentAsDone, notesTemplate).
+      tasks: {
+        ...DEFAULT_GLOBAL_CONFIG.tasks,
+        ...appDataComplete.globalConfig.tasks,
+      },
       sync: {
         ...incomingSyncConfig,
         syncProvider,

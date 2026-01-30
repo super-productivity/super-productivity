@@ -11,6 +11,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   waitForArchivePersistence,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { dismissTourIfVisible } from '../../utils/tour-helpers';
 
@@ -227,8 +228,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     console.log('[Archive Diff] ✓ Two clients archived different tasks successfully');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -354,8 +354,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     console.log('[Archive Same] ✓ Both clients archived same task without conflict');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -490,8 +489,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     );
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -634,8 +632,7 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     console.log('[Archive Subtasks] ✓ Archive with subtasks synced correctly');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -746,7 +743,6 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     );
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 });

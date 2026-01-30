@@ -1,7 +1,11 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { Operation, OpType } from '../core/operation.types';
-import { compareVectorClocks, VectorClockComparison } from '../../core/util/vector-clock';
+import {
+  compareVectorClocks,
+  VectorClockComparison,
+  vectorClockToString,
+} from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 
 /**
@@ -136,6 +140,9 @@ export class SyncImportFilterService {
     OpLog.normal(
       `SyncImportFilterService: Filtering ops against SYNC_IMPORT from client ${latestImport.clientId} (op: ${latestImport.id})`,
     );
+    OpLog.debug(
+      `SyncImportFilterService: SYNC_IMPORT vectorClock: ${vectorClockToString(latestImport.vectorClock)}`,
+    );
 
     const validOps: Operation[] = [];
     const invalidatedOps: Operation[] = [];
@@ -166,6 +173,15 @@ export class SyncImportFilterService {
       // work is intentionally discarded to ensure a clean slate.
       const comparison = compareVectorClocks(op.vectorClock, latestImport.vectorClock);
 
+      // DIAGNOSTIC LOGGING: Log vector clock comparison details
+      // This helps debug issues where ops are incorrectly filtered as CONCURRENT
+      OpLog.debug(
+        `SyncImportFilterService: Comparing op ${op.id} (${op.actionType}) from client ${op.clientId}\n` +
+          `  Op vectorClock:     ${vectorClockToString(op.vectorClock)}\n` +
+          `  Import vectorClock: ${vectorClockToString(latestImport.vectorClock)}\n` +
+          `  Comparison result:  ${comparison}`,
+      );
+
       if (
         comparison === VectorClockComparison.GREATER_THAN ||
         comparison === VectorClockComparison.EQUAL
@@ -175,6 +191,13 @@ export class SyncImportFilterService {
       } else {
         // CONCURRENT or LESS_THAN: Op was created without knowledge of import
         // Filter it to ensure clean slate semantics
+        OpLog.warn(
+          `SyncImportFilterService: FILTERING op ${op.id} (${op.actionType}) as ${comparison}\n` +
+            `  Op vectorClock:     ${vectorClockToString(op.vectorClock)}\n` +
+            `  Import vectorClock: ${vectorClockToString(latestImport.vectorClock)}\n` +
+            `  Import client:      ${latestImport.clientId}\n` +
+            `  Op client:          ${op.clientId}`,
+        );
         invalidatedOps.push(op);
       }
     }

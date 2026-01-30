@@ -2077,6 +2077,34 @@ describe('FocusModeEffects', () => {
         done();
       }, 50);
     });
+
+    // Bug #6206: completeFocusSession must be dispatched even when isManualBreakStart=true
+    // The screen transition to SessionDone depends on this action being dispatched
+    it('should dispatch completeFocusSession when timer completes even with isManualBreakStart=true', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'work',
+          duration: 25 * 60 * 1000,
+          elapsed: 25 * 60 * 1000,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+        isManualBreakStart: true,
+        isSkipPreparation: false,
+      });
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.detectSessionCompletion$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.completeFocusSession({ isManual: false }));
+        done();
+      });
+    });
   });
 
   describe('detectBreakTimeUp$', () => {

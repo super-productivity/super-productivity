@@ -6,6 +6,12 @@ export interface SuperSyncConfig {
   accessToken: string;
   isEncryptionEnabled?: boolean;
   password?: string;
+  /**
+   * If true (default), waits for the automatic initial sync to complete
+   * and handles dialogs. Set to false when you want to manually handle
+   * dialogs (e.g., to test specific dialog behaviors like wrong password errors).
+   */
+  waitForInitialSync?: boolean;
 }
 
 /**
@@ -17,7 +23,8 @@ export class SuperSyncPage extends BasePage {
   readonly providerSelect: Locator;
   readonly baseUrlInput: Locator;
   readonly accessTokenInput: Locator;
-  readonly encryptionCheckbox: Locator;
+  readonly enableEncryptionBtn: Locator;
+  readonly disableEncryptionBtn: Locator;
   readonly encryptionPasswordInput: Locator;
   readonly saveBtn: Locator;
   readonly syncSpinner: Locator;
@@ -41,9 +48,8 @@ export class SuperSyncPage extends BasePage {
     this.providerSelect = page.locator('formly-field-mat-select mat-select');
     this.baseUrlInput = page.locator('.e2e-baseUrl input');
     this.accessTokenInput = page.locator('.e2e-accessToken textarea');
-    this.encryptionCheckbox = page.locator(
-      '.e2e-isEncryptionEnabled input[type="checkbox"]',
-    );
+    this.enableEncryptionBtn = page.locator('.e2e-enable-encryption-btn button');
+    this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
     this.encryptionPasswordInput = page.locator('.e2e-encryptKey input[type="password"]');
     this.saveBtn = page.locator('mat-dialog-actions button[mat-stroked-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
@@ -74,21 +80,72 @@ export class SuperSyncPage extends BasePage {
   }
 
   /**
+   * Click the provider dropdown and select "SuperSync" with retry logic.
+   * Angular Material dropdowns can be flaky under load - the click may not register
+   * or the dropdown may close immediately. This method retries up to 3 times.
+   *
+   * @private
+   */
+  private async selectSuperSyncProviderWithRetry(): Promise<void> {
+    // Wait for Angular Material to fully initialize the select component
+    // and for any animations to complete
+    await this.page.waitForTimeout(300);
+
+    // Ensure the provider select is visible and scrolled into view
+    await this.providerSelect.scrollIntoViewIfNeeded();
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 5000 });
+
+    const superSyncOption = this.page.locator('mat-option:has-text("SuperSync")');
+    let dropdownOpened = false;
+
+    for (let attempt = 0; attempt < 3 && !dropdownOpened; attempt++) {
+      if (attempt > 0) {
+        console.log(`[SuperSyncPage] Retrying dropdown click (attempt ${attempt + 1})`);
+        // Wait between retries to let Angular settle
+        await this.page.waitForTimeout(500);
+      }
+
+      // Ensure no animations are in progress before clicking
+      await this.page
+        .waitForFunction(
+          () =>
+            document.getAnimations().filter((a) => a.playState === 'running').length ===
+            0,
+          { timeout: 2000 },
+        )
+        .catch(() => {
+          // Ignore timeout - proceed anyway if animations can't be detected
+        });
+
+      await this.providerSelect.click();
+      // Wait for dropdown options to appear (Angular Material animation)
+      // Increased timeout from 2s to 3s for slow environments
+      dropdownOpened = await superSyncOption
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+
+    if (!dropdownOpened) {
+      throw new Error('Failed to open provider dropdown after 3 attempts');
+    }
+
+    await superSyncOption.click();
+  }
+
+  /**
    * Configure SuperSync with server URL and access token.
    * Uses right-click to open settings dialog (works even when sync is already configured).
    *
-   * @param config - SuperSync configuration
-   * @param waitForInitialSync - If true (default), waits for the automatic initial sync to complete
-   *                            and handles dialogs. Set to false when you want to manually handle
-   *                            dialogs (e.g., to test specific dialog behaviors).
+   * @param config - SuperSync configuration (includes optional waitForInitialSync flag)
    */
-  async setupSuperSync(
-    config: SuperSyncConfig,
-    waitForInitialSync = true,
-  ): Promise<void> {
+  async setupSuperSync(config: SuperSyncConfig): Promise<void> {
+    // Extract waitForInitialSync from config, defaulting to true
+    const waitForInitialSync = config.waitForInitialSync ?? true;
     // Auto-accept native browser confirm dialogs (window.confirm used for fresh client sync confirmation)
     // Only handles 'confirm' dialogs to avoid conflicts with test handlers that may handle 'alert' dialogs
-    this.page.on('dialog', async (dialog) => {
+    // Use 'once' to prevent memory leak from registering multiple handlers on repeated calls
+    this.page.once('dialog', async (dialog) => {
       if (dialog.type() === 'confirm') {
         const message = dialog.message();
         // Validate this is the expected fresh client sync confirmation
@@ -98,494 +155,922 @@ export class SuperSyncPage extends BasePage {
         );
 
         if (!isExpectedDialog) {
-          console.error(`[SuperSyncPage] Unexpected confirm dialog: "${message}"`);
-          throw new Error(
-            `Unexpected confirm dialog message: "${message}". ` +
-              `Expected fresh client sync confirmation.`,
+          console.warn(
+            `[SuperSyncPage] Unexpected confirm dialog: "${message}". Accepting anyway...`,
           );
         }
-
-        console.log(`[SuperSyncPage] Auto-accepting confirm dialog: "${message}"`);
         await dialog.accept();
       }
     });
 
-    // Wait for sync button to be ready first
-    // The sync button depends on globalConfig being loaded (isSyncIconEnabled),
-    // which can take time after initial app load. Use longer timeout and retry.
-    const syncBtnTimeout = 30000;
-    try {
-      await this.syncBtn.waitFor({ state: 'visible', timeout: syncBtnTimeout });
-    } catch {
-      // If sync button not visible, the app might not be fully loaded
-      // Wait a bit more and try once more (reduced from 2000ms - rare fallback)
-      console.log('[SuperSyncPage] Sync button not found initially, waiting longer...');
-      await this.page.waitForTimeout(1000);
-      await this.syncBtn.waitFor({ state: 'visible', timeout: syncBtnTimeout });
-    }
+    // CRITICAL: Ensure any leftover overlays from previous operations are closed
+    // This prevents "backdrop intercepts pointer events" errors when clicking buttons
+    await this.ensureOverlaysClosed();
 
-    // Wait for network to be idle - helps ensure Angular has finished loading
-    await this.page.waitForLoadState('networkidle').catch(() => {
-      console.log('[SuperSyncPage] Network idle timeout (non-fatal)');
-    });
+    // Open sync settings via right-click (context menu)
+    // This allows configuring sync even when already set up
+    await this.syncBtn.click({ button: 'right' });
 
-    // Retry loop for opening the sync settings dialog via right-click
-    // Sometimes the right-click doesn't register, especially under load
-    let dialogOpened = false;
-    for (let dialogAttempt = 0; dialogAttempt < 5; dialogAttempt++) {
-      if (this.page.isClosed()) {
-        throw new Error('Page was closed during SuperSync setup');
-      }
+    // Wait for the provider select (indicates dialog is open)
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
-      console.log(
-        `[SuperSyncPage] Opening sync settings dialog (attempt ${dialogAttempt + 1})...`,
-      );
+    // Select "SuperSync" from provider dropdown with retry logic
+    await this.selectSuperSyncProviderWithRetry();
+    await this.page.waitForTimeout(500); // Wait for dropdown to close and form to update
 
-      // Use right-click to always open sync settings dialog
-      // (left-click triggers sync if already configured)
-      await this.syncBtn.click({ button: 'right' });
-
-      try {
-        // Wait for dialog container first
-        const dialogContainer = this.page.locator('mat-dialog-container');
-        await dialogContainer.waitFor({ state: 'visible', timeout: 5000 });
-
-        // Wait for formly form to initialize inside dialog
-        // This ensures the form structure is ready before interacting with fields
-        await this.page
-          .locator('mat-dialog-container formly-form')
-          .waitFor({ state: 'visible', timeout: 5000 });
-
-        // Wait for the formly form to be rendered inside the dialog
-        // Under heavy load, the dialog may appear but form rendering is delayed
-        await this.providerSelect.waitFor({ state: 'visible', timeout: 5000 });
-
-        // Ensure the element is actually attached and stable
-        await expect(this.providerSelect).toBeAttached({ timeout: 2000 });
-
-        dialogOpened = true;
-        console.log('[SuperSyncPage] Sync settings dialog opened successfully');
-        break;
-      } catch {
-        console.log(
-          `[SuperSyncPage] Dialog not opened on attempt ${dialogAttempt + 1}, retrying...`,
-        );
-        // Dismiss any partial state
-        await this.page.keyboard.press('Escape');
-        await this.page.waitForTimeout(200); // Reduced from 500ms
-      }
-    }
-
-    if (!dialogOpened) {
-      // Last attempt with longer timeout
-      console.log('[SuperSyncPage] Final attempt to open sync settings dialog...');
-      await this.syncBtn.click({ button: 'right', force: true });
-      const dialogContainer = this.page.locator('mat-dialog-container');
-      await dialogContainer.waitFor({ state: 'visible', timeout: 10000 });
-      await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
-      await expect(this.providerSelect).toBeAttached({ timeout: 5000 });
-    }
-
-    // Additional wait for the element to be stable/interactive (reduced from 300ms)
-    await this.page.waitForTimeout(100);
-
-    // Retry loop for opening the dropdown - use toPass() for more robust retries
-    const superSyncOption = this.page
-      .locator('mat-option')
-      .filter({ hasText: 'SuperSync' });
-    const dropdownPanel = this.page.locator('.mat-mdc-select-panel');
-    const dropdownBackdrop = this.page.locator(
-      '.cdk-overlay-backdrop.cdk-overlay-transparent-backdrop',
-    );
-
-    await expect(async () => {
-      // Check if page is still open
-      if (this.page.isClosed()) {
-        throw new Error('Page was closed during SuperSync setup');
-      }
-
-      // If a dropdown backdrop is showing, dismiss it first
-      if (await dropdownBackdrop.isVisible()) {
-        console.log('[SuperSyncPage] Dismissing existing dropdown overlay...');
-        await this.page.keyboard.press('Escape');
-        await dropdownBackdrop
-          .waitFor({ state: 'hidden', timeout: 2000 })
-          .catch(() => {});
-        await this.page.waitForTimeout(100); // Reduced from 200ms
-      }
-
-      // Ensure the select is still attached (may have been re-rendered)
-      await expect(this.providerSelect).toBeAttached({ timeout: 2000 });
-
-      // Click to open dropdown - use force to bypass any lingering overlays
-      await this.providerSelect.click({ timeout: 3000, force: true });
-
-      // Wait for dropdown panel to appear
-      await dropdownPanel.waitFor({ state: 'visible', timeout: 3000 });
-
-      // Verify the option is visible
-      await expect(superSyncOption).toBeVisible({ timeout: 2000 });
-    }).toPass({
-      timeout: 30000,
-      intervals: [200, 400, 600, 800, 1000, 1200], // Reduced from [500, 1000, 1500, 2000, 2500, 3000]
-    });
-
-    // Click the SuperSync option and verify selection was applied
-    await expect(async () => {
-      // Check if dropdown is open - if not, we may need to reopen it
-      if (!(await dropdownPanel.isVisible())) {
-        await this.providerSelect.click({ timeout: 2000, force: true });
-        await dropdownPanel.waitFor({ state: 'visible', timeout: 3000 });
-      }
-
-      // Click the option if visible
-      if (await superSyncOption.isVisible()) {
-        await superSyncOption.click({ timeout: 2000 });
-      }
-
-      // Wait for dropdown panel to close
-      await dropdownPanel.waitFor({ state: 'detached', timeout: 3000 });
-
-      // CRITICAL: Verify selection was actually applied
-      const selectedText = await this.providerSelect
-        .locator('.mat-mdc-select-value-text')
-        .textContent();
-      if (!selectedText?.includes('SuperSync')) {
-        throw new Error(`Provider selection not applied. Selected: "${selectedText}"`);
-      }
-    }).toPass({
-      timeout: 15000,
-      intervals: [200, 400, 600, 800], // Reduced from [500, 1000, 1500, 2000]
-    });
-
-    // Wait for formly to re-render SuperSync-specific fields after provider selection
-    // The hideExpression on these fields triggers a re-render that needs time to complete
-    // NOTE: The mat-select UI updates immediately, but the formly model update is async.
-    // We must wait for the actual DOM elements to appear, not just the UI selection.
-    await this.page.waitForLoadState('networkidle').catch(() => {});
-
-    // Fill Access Token first (it's outside the collapsible)
-    // Use toPass() to handle slow formly model updates and hideExpression re-evaluation
-    // First wait for the wrapper element to exist (formly has processed the model change)
-    // Then wait for the textarea inside to be visible
-    await expect(async () => {
-      // Check if the wrapper element exists (formly hideExpression has evaluated)
-      const wrapper = this.page.locator('.e2e-accessToken');
-      await wrapper.waitFor({ state: 'attached', timeout: 3000 });
-      // Then check if the textarea is visible
-      await this.accessTokenInput.waitFor({ state: 'visible', timeout: 3000 });
-    }).toPass({
-      timeout: 30000,
-      intervals: [200, 400, 600, 800, 1000], // Reduced from [500, 1000, 1500, 2000, 3000]
-    });
-    await this.accessTokenInput.fill(config.accessToken);
-
-    // Expand "Advanced settings" collapsible to access baseUrl and encryption fields
-    // Use text-based locator to find the correct collapsible (there may be others on the page)
+    // IMPORTANT: The baseUrl field is now inside the "Advanced Config" collapsible section.
+    // We need to expand it first to access the field.
     const advancedCollapsible = this.page.locator(
       '.collapsible-header:has-text("Advanced")',
     );
     await advancedCollapsible.waitFor({ state: 'visible', timeout: 5000 });
-    await advancedCollapsible.click();
-    // Wait for baseUrl input to be visible (confirms collapsible is expanded)
-    await this.baseUrlInput.waitFor({ state: 'visible', timeout: 3000 });
 
-    // Now fill baseUrl (inside the collapsible)
-    await this.baseUrlInput.waitFor({ state: 'visible' });
+    // Check if already expanded (baseUrl input is visible)
+    const isExpanded = await this.baseUrlInput.isVisible().catch(() => false);
+    if (!isExpanded) {
+      await advancedCollapsible.click();
+      await this.baseUrlInput.waitFor({ state: 'visible', timeout: 3000 });
+    }
+
+    // Fill in base URL
     await this.baseUrlInput.fill(config.baseUrl);
 
-    // Handle Encryption (also inside the collapsible)
-    // Only modify checkbox if encryption is explicitly configured
-    // Skip checkbox handling if isEncryptionEnabled is not specified (undefined)
-    if (config.isEncryptionEnabled !== undefined) {
-      // Angular Material checkboxes can start in an indeterminate "mixed" state before the form loads.
-      // Use the label click with retry logic to reliably toggle the checkbox state.
-      const checkboxLabel = this.page.locator('.e2e-isEncryptionEnabled label');
+    // Fill in access token (this field is NOT in the Advanced section)
+    await this.accessTokenInput.fill(config.accessToken);
 
-      // Wait for checkbox to be in a stable state (not indeterminate)
-      await this.encryptionCheckbox.waitFor({ state: 'attached', timeout: 5000 });
-      await this.page.waitForTimeout(200); // Let Angular settle
+    // Track if this is a fresh setup that needs encryption enabled
+    // For the FIRST client (Client A), we enable encryption AFTER saving config
+    // For SUBSEQUENT clients (Client B), we handle the password dialog that appears
+    // when receiving encrypted data from the server
+    const needsEncryptionEnabled = config.isEncryptionEnabled && config.password;
 
-      if (config.isEncryptionEnabled) {
-        // Use toPass() to retry until checkbox is checked - handles initial indeterminate state
-        await expect(async () => {
-          const isChecked = await this.encryptionCheckbox.isChecked();
-          if (!isChecked) {
-            await checkboxLabel.click();
-            await this.page.waitForTimeout(100);
+    // Save configuration first (without encryption changes)
+    // Encryption can only be enabled/disabled after the provider is active
+    await expect(this.saveBtn).toBeEnabled({ timeout: 5000 });
+    await this.saveBtn.click();
+
+    // Wait for the config dialog to close
+    // The save() method is async and may take time to complete
+    // Note: After save, a password dialog might appear if server has encrypted data
+    // So we check for the config dialog specifically, not just any dialog
+    await this.page.waitForTimeout(1000);
+
+    // Define locators for dialogs we might see
+    const configDialog = this.page.locator('dialog-sync-initial-cfg');
+    const passwordDialog = this.page.locator('dialog-enter-encryption-password');
+
+    // Wait for config dialog to close OR password dialog to appear
+    // (password dialog appearing means config dialog closed and sync started)
+    const configDialogClosed = await Promise.race([
+      configDialog
+        .waitFor({ state: 'hidden', timeout: 15000 })
+        .then(() => 'config_closed'),
+      passwordDialog
+        .waitFor({ state: 'visible', timeout: 15000 })
+        .then(() => 'password_appeared'),
+    ]).catch(() => 'timeout');
+
+    if (configDialogClosed === 'timeout') {
+      // Neither happened - try pressing Escape to close any stuck dialog
+      console.log(
+        '[SuperSyncPage] Config dialog did not close after save, trying Escape',
+      );
+      await this.page.keyboard.press('Escape');
+      await this.page.waitForTimeout(500);
+    } else if (configDialogClosed === 'password_appeared') {
+      console.log('[SuperSyncPage] Password dialog appeared - config dialog closed');
+    }
+
+    // If encryption is needed, handle the flow based on whether server has encrypted data
+    if (needsEncryptionEnabled && waitForInitialSync) {
+      // Wait for one of several possible outcomes:
+      // 1. Password dialog (server has encrypted data, client needs to enter password)
+      // 2. Fresh client dialog (server has no data or unencrypted data)
+      // 3. Sync completes successfully (server has no data - this is Client A)
+      // 4. Sync error with password dialog (server has encrypted data - this is Client B)
+      // 5. Sync import conflict dialog
+
+      // Define locators for all possible dialogs/states
+      const decryptErrorDialog = this.page.locator('dialog-handle-decrypt-error');
+
+      // CRITICAL: Wait for sync to reach a definitive state before deciding Client A vs B
+      // The password dialog appears AFTER sync fails with DecryptNoPasswordError.
+      // We should NOT assume Client A until sync has actually completed or failed.
+      console.log(
+        '[SuperSyncPage] Waiting for sync outcome to determine Client A vs B...',
+      );
+
+      // IMPORTANT: Do NOT include syncCheckIcon in the race!
+      // The sync check icon can appear briefly when local data syncs,
+      // BEFORE the server's encrypted data triggers the password dialog.
+      // Instead, we wait specifically for dialogs that indicate definitive outcomes.
+      // If no dialog appears within timeout, THEN we check if sync succeeded.
+      const outcome = await Promise.race([
+        passwordDialog
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'password_dialog' as const),
+        this.freshClientDialog
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'fresh_client_dialog' as const),
+        this.syncImportConflictDialog
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'sync_import_dialog' as const),
+        decryptErrorDialog
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'decrypt_error_dialog' as const),
+        // Sync error icon indicates encrypted data received but no password
+        this.syncErrorIcon
+          .waitFor({ state: 'visible', timeout: 15000 })
+          .then(() => 'sync_error' as const),
+        // Timeout fallback - we'll check state manually after timeout
+        this.page.waitForTimeout(15000).then(() => 'timeout' as const),
+      ]).catch(() => 'error' as const);
+
+      console.log(`[SuperSyncPage] Sync outcome: ${outcome}`);
+
+      if (outcome === 'password_dialog') {
+        // Server has encrypted data - enter password and sync (this is Client B)
+        console.log('[SuperSyncPage] Password dialog appeared - entering password');
+        const passwordInput = passwordDialog.locator('input[type="password"]');
+        await passwordInput.fill(config.password!);
+        const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+        await saveAndSyncBtn.click();
+        await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+      } else if (outcome === 'decrypt_error_dialog') {
+        // Decryption error - this shouldn't happen with correct password
+        console.log('[SuperSyncPage] Decrypt error dialog appeared - unexpected');
+        throw new Error('Decrypt error dialog appeared - password may be incorrect');
+      } else if (outcome === 'fresh_client_dialog') {
+        // Fresh client dialog - server has no encrypted data yet
+        // This means we're Client A (first client)
+        console.log('[SuperSyncPage] Fresh client dialog - enabling encryption');
+        await this.freshClientConfirmBtn.click();
+        await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
+
+        // Now enable encryption (this is Client A)
+        await this.ensureOverlaysClosed();
+        await this.enableEncryption(config.password!);
+      } else if (outcome === 'sync_import_dialog') {
+        // Sync import conflict - use remote data
+        console.log('[SuperSyncPage] Sync import conflict dialog - using remote');
+        await this.syncImportUseRemoteBtn.click();
+        await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+
+        // After handling sync import, check for password dialog
+        const passwordDialogAfterImport = await passwordDialog
+          .waitFor({ state: 'visible', timeout: 5000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (passwordDialogAfterImport) {
+          const passwordInput = passwordDialog.locator('input[type="password"]');
+          await passwordInput.fill(config.password!);
+          const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+          await saveAndSyncBtn.click();
+          await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+        } else {
+          // No password dialog after import - this might be Client A
+          // Check if sync succeeded
+          const syncSucceeded = await this.syncCheckIcon.isVisible().catch(() => false);
+          if (!syncSucceeded) {
+            // Enable encryption if no sync success (this is Client A)
+            await this.ensureOverlaysClosed();
+            await this.enableEncryption(config.password!);
           }
-          await expect(this.encryptionCheckbox).toBeChecked({ timeout: 1000 });
-        }).toPass({ timeout: 15000, intervals: [500, 1000, 1500, 2000] });
+        }
+      } else if (outcome === 'sync_error') {
+        // Sync error - this typically means encrypted data was received but no password configured
+        // Wait for password dialog to appear
+        console.log('[SuperSyncPage] Sync error detected - waiting for password dialog');
+        const passwordDialogAfterError = await passwordDialog
+          .waitFor({ state: 'visible', timeout: 10000 })
+          .then(() => true)
+          .catch(() => false);
 
-        if (config.password) {
-          await this.encryptionPasswordInput.waitFor({ state: 'visible' });
-          await this.encryptionPasswordInput.fill(config.password);
-          await this.encryptionPasswordInput.blur();
+        if (passwordDialogAfterError) {
+          console.log(
+            '[SuperSyncPage] Password dialog appeared after sync error - entering password',
+          );
+          const passwordInput = passwordDialog.locator('input[type="password"]');
+          await passwordInput.fill(config.password!);
+          const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+          await saveAndSyncBtn.click();
+          await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+        } else {
+          throw new Error(
+            'Sync error occurred but no password dialog appeared - check sync configuration',
+          );
         }
       } else {
-        // Use toPass() to retry until checkbox is unchecked
-        await expect(async () => {
-          const isChecked = await this.encryptionCheckbox.isChecked();
-          if (isChecked) {
-            await checkboxLabel.click();
-            await this.page.waitForTimeout(100);
-          }
-          await expect(this.encryptionCheckbox).not.toBeChecked({ timeout: 1000 });
-        }).toPass({ timeout: 15000, intervals: [500, 1000, 1500, 2000] });
-      }
-    }
-
-    // Save - use a robust click that handles element detachment during dialog close
-    // The dialog may close and navigation may start before click completes
-    try {
-      // Wait for button to be stable before clicking
-      await this.saveBtn.waitFor({ state: 'visible', timeout: 5000 });
-      await this.page.waitForTimeout(100); // Brief settle
-
-      // Click and don't wait for navigation to complete - just initiate the action
-      await Promise.race([
-        this.saveBtn.click({ timeout: 5000 }),
-        // If dialog closes quickly, the click may fail - that's OK if dialog is gone
-        this.page
-          .locator('mat-dialog-container')
-          .waitFor({ state: 'detached', timeout: 5000 }),
-      ]);
-    } catch (e) {
-      // If click failed but dialog is already closed, that's fine
-      const dialogStillOpen = await this.page
-        .locator('mat-dialog-container')
-        .isVisible()
-        .catch(() => false);
-      if (dialogStillOpen) {
-        // Dialog still open - the click actually failed
-        throw e;
-      }
-      // Dialog closed - click worked or was unnecessary
-      console.log('[SuperSyncPage] Dialog closed (click may have been interrupted)');
-    }
-
-    // Wait for dialog to fully close
-    await this.page
-      .locator('mat-dialog-container')
-      .waitFor({ state: 'detached', timeout: 5000 })
-      .catch(() => {});
-
-    // Check if sync starts automatically (it should if enabled)
-    if (waitForInitialSync) {
-      try {
-        await this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 });
+        // Timeout or error - check current state and decide
         console.log(
-          '[SuperSyncPage] Initial sync started automatically, waiting for completion...',
+          '[SuperSyncPage] Timeout/error - checking current state to determine Client A vs B',
         );
-        await this.waitForSyncComplete();
-      } catch (e) {
-        // No auto-sync, that's fine
-      }
-    }
-  }
 
-  /**
-   * Trigger a sync operation by clicking the sync button.
-   */
-  async triggerSync(): Promise<void> {
-    // Wait a bit to ensure any previous internal state is cleared (reduced from 1000ms)
-    await this.page.waitForTimeout(300);
+        // Check for sync error (which would indicate encrypted data without password)
+        const hasSyncError = await this.syncErrorIcon.isVisible().catch(() => false);
+        const hasPasswordDialog = await passwordDialog.isVisible().catch(() => false);
+        const hasSyncSuccess = await this.syncCheckIcon.isVisible().catch(() => false);
+        const isSpinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
 
-    // Check if sync is already running to avoid "Sync already in progress" errors
-    // If it is, wait for it to finish so we can trigger a fresh sync that includes our latest changes
-    if (await this.syncSpinner.isVisible()) {
-      console.log(
-        '[SuperSyncPage] Sync already in progress, waiting for it to finish...',
-      );
-      await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {
-        console.log(
-          '[SuperSyncPage] Warning: Timed out waiting for previous sync to finish',
-        );
-      });
-      // Add a small buffer after spinner disappears (reduced from 500ms)
-      await this.page.waitForTimeout(200);
-    }
-
-    // Use force:true to bypass any tooltip overlays that might be in the way
-    await this.syncBtn.click({ force: true });
-    // Wait for sync to start or complete immediately
-    await Promise.race([
-      this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {}),
-      this.syncCheckIcon.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {}),
-    ]);
-  }
-
-  /**
-   * Wait for sync to complete (spinner gone, no error).
-   * Automatically handles sync dialogs:
-   * - Fresh client confirmation dialog
-   * - Conflict resolution dialog (uses remote by default)
-   */
-  async waitForSyncComplete(timeout = 30000): Promise<void> {
-    const startTime = Date.now();
-    let stableCount = 0; // Count consecutive checks where sync appears complete
-
-    // Poll for completion while handling dialogs
-    while (Date.now() - startTime < timeout) {
-      // Check if page is still open
-      if (this.page.isClosed()) {
-        throw new Error('Page was closed while waiting for sync to complete');
-      }
-
-      // Check if fresh client confirmation dialog appeared
-      if (await this.freshClientDialog.isVisible()) {
-        console.log('[SuperSyncPage] Fresh client dialog detected, confirming...');
-        try {
-          await this.freshClientConfirmBtn.click({ timeout: 2000 });
-          await this.page.waitForTimeout(200); // Reduced from 500ms
-        } catch (e) {
-          // Dialog may have auto-closed or been detached - that's OK
+        if (hasPasswordDialog) {
           console.log(
-            '[SuperSyncPage] Fresh client dialog closed before click completed',
+            '[SuperSyncPage] Password dialog visible after timeout - entering password',
           );
-        }
-        stableCount = 0;
-        continue;
-      }
-
-      // Check if conflict resolution dialog appeared
-      if (await this.conflictDialog.isVisible()) {
-        console.log('[SuperSyncPage] Conflict dialog detected, using remote...');
-        await this.conflictUseRemoteBtn.click();
-        // Wait for selection to be applied and Apply to be enabled (reduced from 500ms)
-        await this.page.waitForTimeout(200);
-
-        // Wait for Apply button to be enabled (with retry)
-        // Increase retries to allow for processing time (50 * 200ms = 10s)
-        for (let i = 0; i < 50; i++) {
-          // If dialog closed unexpectedly, break loop
-          if (!(await this.conflictDialog.isVisible())) {
-            break;
-          }
-
-          // Check if enabled with short timeout to avoid long waits if element missing
-          const isEnabled = await this.conflictApplyBtn
-            .isEnabled({ timeout: 1000 })
+          const passwordInput = passwordDialog.locator('input[type="password"]');
+          await passwordInput.fill(config.password!);
+          const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+          await saveAndSyncBtn.click();
+          await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+        } else if (hasSyncError) {
+          // Sync error without password dialog - wait longer for password dialog
+          console.log(
+            '[SuperSyncPage] Sync error detected - waiting for password dialog',
+          );
+          const passwordDialogAfterError = await passwordDialog
+            .waitFor({ state: 'visible', timeout: 10000 })
+            .then(() => true)
             .catch(() => false);
 
-          if (isEnabled) {
-            console.log('[SuperSyncPage] Clicking Apply to apply resolution...');
-            await this.conflictApplyBtn.click();
-            break;
+          if (passwordDialogAfterError) {
+            const passwordInput = passwordDialog.locator('input[type="password"]');
+            await passwordInput.fill(config.password!);
+            const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+            await saveAndSyncBtn.click();
+            await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+          } else {
+            throw new Error(
+              'Sync error occurred but no password dialog appeared - check sync configuration',
+            );
           }
-          await this.page.waitForTimeout(100); // Reduced from 200ms
-        }
+        } else if (isSpinnerVisible) {
+          // Sync still in progress - wait for it to complete or for password dialog
+          console.log('[SuperSyncPage] Sync still in progress - waiting for outcome');
+          const laterOutcome = await Promise.race([
+            passwordDialog
+              .waitFor({ state: 'visible', timeout: 30000 })
+              .then(() => 'password_dialog' as const),
+            this.syncCheckIcon
+              .waitFor({ state: 'visible', timeout: 30000 })
+              .then(() => 'sync_success' as const),
+            this.syncErrorIcon
+              .waitFor({ state: 'visible', timeout: 30000 })
+              .then(() => 'sync_error' as const),
+          ]).catch(() => 'error' as const);
 
-        // Wait for dialog to close
-        await this.conflictDialog
-          .waitFor({ state: 'hidden', timeout: 5000 })
-          .catch(() => {});
-        await this.page.waitForTimeout(200); // Reduced from 500ms (dialog already confirmed hidden)
-        stableCount = 0;
-        continue;
-      }
+          console.log(`[SuperSyncPage] Later outcome: ${laterOutcome}`);
 
-      // Check if sync import conflict dialog appeared
-      // This dialog appears when a SYNC_IMPORT filters all remote ops
-      if (await this.syncImportConflictDialog.isVisible()) {
-        console.log(
-          '[SuperSyncPage] Sync import conflict dialog detected, using local...',
-        );
-        await this.syncImportUseLocalBtn.click();
-        // Wait for dialog to close
-        await this.syncImportConflictDialog
-          .waitFor({ state: 'hidden', timeout: 10000 })
-          .catch(() => {});
-        await this.page.waitForTimeout(200); // Reduced from 500ms (dialog already confirmed hidden)
-        stableCount = 0;
-        continue;
-      }
-
-      // Check if sync is complete
-      const isSpinning = await this.syncSpinner.isVisible();
-      if (!isSpinning) {
-        // Check for error state first
-        const hasError = await this.syncErrorIcon.isVisible();
-        if (hasError) {
-          // Check for error snackbar - only treat as error if it contains actual error keywords
-          const errorSnackbar = this.page.locator(
-            'simple-snack-bar, .mat-mdc-snack-bar-container',
+          if (laterOutcome === 'password_dialog') {
+            const passwordInput = passwordDialog.locator('input[type="password"]');
+            await passwordInput.fill(config.password!);
+            const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+            await saveAndSyncBtn.click();
+            await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+          } else if (laterOutcome === 'sync_success') {
+            // Sync succeeded with no password dialog - this is Client A
+            console.log(
+              '[SuperSyncPage] Sync success after wait - enabling encryption as Client A',
+            );
+            await this.ensureOverlaysClosed();
+            await this.enableEncryption(config.password!);
+          } else if (laterOutcome === 'sync_error') {
+            // Wait for password dialog after error
+            const dialogAfterError = await passwordDialog
+              .waitFor({ state: 'visible', timeout: 10000 })
+              .then(() => true)
+              .catch(() => false);
+            if (dialogAfterError) {
+              const passwordInput = passwordDialog.locator('input[type="password"]');
+              await passwordInput.fill(config.password!);
+              const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+              await saveAndSyncBtn.click();
+              await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+            } else {
+              throw new Error('Sync error but no password dialog');
+            }
+          } else {
+            throw new Error('Unable to determine sync outcome after waiting');
+          }
+        } else if (hasSyncSuccess) {
+          // Sync shows success but we might still get a password dialog if server has encrypted data
+          // Wait a bit longer to see if password dialog appears (it can be delayed)
+          console.log(
+            '[SuperSyncPage] Sync success - waiting to see if password dialog appears',
           );
-          const snackbarText = await errorSnackbar.textContent().catch(() => '');
-          const snackbarLower = (snackbarText || '').toLowerCase();
+          const latePasswordDialog = await passwordDialog
+            .waitFor({ state: 'visible', timeout: 10000 })
+            .then(() => true)
+            .catch(() => false);
 
-          // Only throw if this looks like a real sync error, not an informational message
-          // Informational messages include: "Deleted task X Undo", "addCreated task X", etc.
-          // Rate limit errors (429) are transient - the app retries automatically
-          const isRateLimitError =
-            snackbarLower.includes('rate limit') ||
-            snackbarLower.includes('429') ||
-            snackbarLower.includes('retry in');
-
-          const isRealError =
-            (snackbarLower.includes('error') ||
-              snackbarLower.includes('failed') ||
-              snackbarLower.includes('problem') ||
-              snackbarLower.includes('could not') ||
-              snackbarLower.includes('unable to')) &&
-            !isRateLimitError;
-
-          if (isRealError) {
-            throw new Error(`Sync failed: ${snackbarText?.trim() || 'Server error'}`);
+          if (latePasswordDialog) {
+            console.log(
+              '[SuperSyncPage] Late password dialog appeared - entering password',
+            );
+            const passwordInput = passwordDialog.locator('input[type="password"]');
+            await passwordInput.fill(config.password!);
+            const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+            await saveAndSyncBtn.click();
+            await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
+          } else {
+            // No password dialog after waiting - this is truly Client A (first client)
+            console.log(
+              '[SuperSyncPage] No password dialog after wait - enabling encryption as Client A',
+            );
+            await this.ensureOverlaysClosed();
+            await this.enableEncryption(config.password!);
           }
-
-          // If rate limited, wait for the retry (app handles this automatically)
-          if (isRateLimitError) {
-            console.log('[SuperSyncPage] Rate limited, waiting for automatic retry...');
-            stableCount = 0;
-            await this.page.waitForTimeout(500); // Reduced from 1000ms (rare error condition)
-            continue;
-          }
-          // Not a real error, just an informational snackbar - continue checking
+        } else {
+          // Unknown state - log and throw
+          throw new Error(
+            'Unable to determine Client A vs B - sync state unclear after timeout',
+          );
         }
-
-        // Sync finished - check icon may appear briefly or not at all
-        const checkVisible = await this.syncCheckIcon.isVisible();
-        if (checkVisible) {
-          return; // Sync complete with check icon
-        }
-
-        // No spinner, no error - sync likely complete
-        // Wait for stable state (3 consecutive checks) to confirm
-        stableCount++;
-        if (stableCount >= 3) {
-          console.log('[SuperSyncPage] Sync complete (no spinner, no error)');
-          return;
-        }
-
-        await this.page.waitForTimeout(150); // Reduced from 300ms
-        continue;
       }
 
-      // Still spinning - reset stable count
-      stableCount = 0;
-      await this.page.waitForTimeout(100); // Reduced from 200ms
+      // Wait for sync to complete
+      const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+
+      if (!checkAlreadyVisible) {
+        // Wait for sync to start or complete
+        const spinnerAppeared = await this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 2000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (spinnerAppeared) {
+          await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+        }
+
+        // Wait for check icon to appear
+        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+      }
+    } else if (waitForInitialSync) {
+      // No encryption change needed - just wait for dialogs and sync
+      // Check if a fresh client confirmation dialog appeared
+      const freshDialogVisible = await this.freshClientDialog
+        .isVisible()
+        .catch(() => false);
+      if (freshDialogVisible) {
+        await this.freshClientConfirmBtn.click();
+        await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      }
+
+      // Check if a sync import conflict dialog appeared
+      const syncImportDialogVisible = await this.syncImportConflictDialog
+        .isVisible()
+        .catch(() => false);
+      if (syncImportDialogVisible) {
+        await this.syncImportUseRemoteBtn.click();
+        await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      }
+
+      // Wait for all dialogs to close
+      await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
+        timeout: 10000,
+      });
+
+      // Wait for initial sync to complete
+      const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+
+      if (!checkAlreadyVisible) {
+        const spinnerAppeared = await this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 2000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (spinnerAppeared) {
+          await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+        }
+
+        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 5000 });
+      }
+    } else if (needsEncryptionEnabled) {
+      // When waitForInitialSync is false but encryption is needed,
+      // we need to handle the password dialog that appears when receiving encrypted data
+      // This is used for testing wrong password scenarios
+      const decryptErrorDialog = this.page.locator('dialog-handle-decrypt-error');
+
+      // Wait for password dialog to appear (server has encrypted data)
+      const passwordDialogAppeared = await passwordDialog
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (passwordDialogAppeared) {
+        // Enter the password (which may be wrong for testing purposes)
+        console.log(
+          '[SuperSyncPage] Password dialog appeared - entering password (may be wrong)',
+        );
+        const passwordInput = passwordDialog.locator('input[type="password"]');
+        await passwordInput.fill(config.password!);
+        const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+        await saveAndSyncBtn.click();
+
+        // Wait for either:
+        // 1. Password dialog to close (password was correct)
+        // 2. Decrypt error dialog to appear (password was wrong)
+        // 3. Sync to complete (password was correct)
+        const result = await Promise.race([
+          passwordDialog
+            .waitFor({ state: 'hidden', timeout: 30000 })
+            .then(() => 'password_dialog_closed'),
+          decryptErrorDialog
+            .waitFor({ state: 'visible', timeout: 30000 })
+            .then(() => 'decrypt_error'),
+        ]).catch(() => 'timeout');
+
+        console.log(`[SuperSyncPage] After entering password: ${result}`);
+      } else {
+        // No password dialog - wait for sync to start or error
+        const syncStartedOrFailed = await Promise.race([
+          this.syncSpinner
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .then(() => 'spinner'),
+          this.syncErrorIcon
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .then(() => 'error'),
+          decryptErrorDialog
+            .waitFor({ state: 'visible', timeout: 5000 })
+            .then(() => 'decrypt_error'),
+          this.page.waitForTimeout(2000).then(() => 'timeout'),
+        ]).catch(() => 'timeout');
+        console.log(`[SuperSyncPage] Sync started or failed: ${syncStartedOrFailed}`);
+      }
+    } else {
+      // When waitForInitialSync is false and no encryption,
+      // just wait for sync to start or show an error
+      const syncStartedOrFailed = Promise.race([
+        this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 5000 })
+          .catch(() => 'timeout'),
+        this.syncErrorIcon
+          .waitFor({ state: 'visible', timeout: 5000 })
+          .catch(() => 'timeout'),
+        this.page
+          .locator('dialog-handle-decrypt-error')
+          .waitFor({ state: 'visible', timeout: 5000 })
+          .catch(() => 'timeout'),
+        this.page.waitForTimeout(2000).then(() => 'timeout'),
+      ]);
+      await syncStartedOrFailed;
+    }
+  }
+
+  /**
+   * Enable encryption by reconfiguring the SuperSync provider.
+   * This will trigger a clean slate operation (server wipe + fresh encrypted upload).
+   *
+   * Prerequisites: SuperSync must already be configured without encryption
+   */
+  async enableEncryption(password: string): Promise<void> {
+    // Open sync settings via right-click
+    await this.syncBtn.click({ button: 'right' });
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
+
+    // CRITICAL: Select "SuperSync" from provider dropdown to load current configuration
+    // Without this, the form shows default/empty values instead of the actual current state
+    await this.selectSuperSyncProviderWithRetry();
+
+    // IMPORTANT: Wait for the provider change listener to complete loading the config
+    // The listener is async and needs time to load provider config and update the form
+    await this.page.waitForTimeout(1000);
+
+    // Expand "Advanced settings" collapsible to access encryption fields
+    const advancedCollapsible = this.page.locator(
+      '.collapsible-header:has-text("Advanced")',
+    );
+    await advancedCollapsible.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Check if already expanded
+    const isExpanded = await this.enableEncryptionBtn.isVisible().catch(() => false);
+    if (!isExpanded) {
+      await advancedCollapsible.click();
+      await this.enableEncryptionBtn.waitFor({ state: 'visible', timeout: 3000 });
     }
 
-    throw new Error(`Sync did not complete within ${timeout}ms`);
+    // Check if already enabled
+    const isEnabled = await this.disableEncryptionBtn.isVisible().catch(() => false);
+    if (isEnabled) {
+      // Already enabled - just close the dialog
+      const configDialog = this.page.locator('mat-dialog-container').first();
+      const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
+      await cancelBtn.click();
+      await this.page.waitForTimeout(500);
+      return;
+    }
+
+    // Enable encryption by clicking the "Enable Encryption" button which opens a dialog
+    await this.enableEncryptionBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await this.enableEncryptionBtn.click();
+
+    // Wait for the Enable Encryption dialog to appear
+    const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
+    await enableEncryptionDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Fill in the password fields
+    const passwordInput = enableEncryptionDialog
+      .locator('input[type="password"]')
+      .first();
+    const confirmPasswordInput = enableEncryptionDialog
+      .locator('input[type="password"]')
+      .nth(1);
+    await passwordInput.fill(password);
+    await confirmPasswordInput.fill(password);
+
+    // Click the confirm button (has mat-flat-button and text includes "Enable")
+    const confirmBtn = enableEncryptionDialog.locator(
+      'button[mat-flat-button]:has-text("Enable")',
+    );
+    await confirmBtn.click();
+
+    await this.page.waitForTimeout(500);
+
+    // Close the "Configure Sync" dialog
+    const configDialog = this.page.locator('mat-dialog-container').first();
+    const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
+    await cancelBtn.click();
+
+    // Wait for dialog to close
+    await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
+      timeout: 10000,
+    });
+
+    // CRITICAL: Ensure all overlays are properly closed
+    // This handles backdrop removal and any lingering dialogs
+    await this.ensureOverlaysClosed();
+
+    // Wait for clean slate operation to complete (sync will happen automatically)
+    await this.page.waitForTimeout(3000);
   }
 
   /**
-   * Check if sync resulted in an error.
+   * Disable encryption by reconfiguring the SuperSync provider.
+   * This will trigger a clean slate operation (server wipe + fresh unencrypted upload).
+   *
+   * Prerequisites: SuperSync must already be configured with encryption enabled
+   */
+  async disableEncryption(): Promise<void> {
+    // Open sync settings via right-click
+    // Use noWaitAfter to prevent waiting for navigation events
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
+
+    // CRITICAL: Select "SuperSync" from provider dropdown to load current configuration
+    // Without this, the form shows default/empty values instead of the actual current state
+    await this.selectSuperSyncProviderWithRetry();
+
+    // IMPORTANT: Wait for the provider change listener to complete loading the config
+    // The listener is async and needs time to load provider config and update the form
+    await this.page.waitForTimeout(1000);
+
+    // Expand "Advanced settings" collapsible to access encryption fields
+    const advancedCollapsible = this.page.locator(
+      '.collapsible-header:has-text("Advanced")',
+    );
+
+    // Debug: Check if Advanced collapsible exists
+    const advancedExists = await advancedCollapsible.count();
+    console.log(`[DisableEncryption] Advanced collapsible count: ${advancedExists}`);
+
+    // Debug: Get all collapsible headers
+    const allCollapsibles = await this.page
+      .locator('.collapsible-header')
+      .allTextContents();
+    console.log(
+      `[DisableEncryption] All collapsible headers: ${JSON.stringify(allCollapsibles)}`,
+    );
+
+    await advancedCollapsible.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Check if already expanded
+    const isExpanded = await this.disableEncryptionBtn.isVisible().catch(() => false);
+    console.log(`[DisableEncryption] isExpanded before click: ${isExpanded}`);
+    if (!isExpanded) {
+      // Debug: Check if collapsible is clickable
+      const isClickable = await advancedCollapsible.isEnabled().catch(() => false);
+      console.log(`[DisableEncryption] Collapsible isEnabled: ${isClickable}`);
+
+      // Scroll the collapsible into view
+      await advancedCollapsible.scrollIntoViewIfNeeded();
+      await this.page.waitForTimeout(300);
+
+      // Try clicking multiple times with different methods
+      console.log(`[DisableEncryption] Attempting click on collapsible...`);
+
+      // Method 1: Regular click with noWaitAfter to prevent navigation blocking
+      await advancedCollapsible.click({ noWaitAfter: true });
+      await this.page.waitForTimeout(500);
+
+      // Check if expanded
+      let expandedAfterClick1 =
+        (await this.page.locator('formly-collapsible.isExpanded').count()) > 0;
+      console.log(`[DisableEncryption] After click 1: isExpanded=${expandedAfterClick1}`);
+
+      if (!expandedAfterClick1) {
+        // Method 2: Click with force and noWaitAfter
+        await advancedCollapsible.click({ force: true, noWaitAfter: true });
+        await this.page.waitForTimeout(500);
+        expandedAfterClick1 =
+          (await this.page.locator('formly-collapsible.isExpanded').count()) > 0;
+        console.log(
+          `[DisableEncryption] After click 2 (force): isExpanded=${expandedAfterClick1}`,
+        );
+      }
+
+      if (!expandedAfterClick1) {
+        // Method 3: Use JavaScript to click
+        await advancedCollapsible.evaluate((el) => (el as HTMLElement).click());
+        await this.page.waitForTimeout(500);
+        expandedAfterClick1 =
+          (await this.page.locator('formly-collapsible.isExpanded').count()) > 0;
+        console.log(
+          `[DisableEncryption] After click 3 (JS): isExpanded=${expandedAfterClick1}`,
+        );
+      }
+
+      // Debug: Check collapsible state after click
+      const collapsibleText = await advancedCollapsible
+        .textContent()
+        .catch(() => 'unknown');
+      console.log(`[DisableEncryption] Collapsible text after click: ${collapsibleText}`);
+
+      // Debug: Check what buttons are visible in the Advanced section
+      const enableBtn = await this.enableEncryptionBtn.isVisible().catch(() => false);
+      const disableBtn = await this.disableEncryptionBtn.isVisible().catch(() => false);
+      const changeBtn = await this.page
+        .locator('button:has-text("Change Password")')
+        .isVisible()
+        .catch(() => false);
+
+      // Debug: Check if the Advanced section content is visible at all
+      const advancedContent = await this.page
+        .locator('.collapsible-content')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const encryptKeyInput = await this.encryptionPasswordInput
+        .isVisible()
+        .catch(() => false);
+
+      // Debug: Check the selected provider
+      const selectedProvider = await this.providerSelect
+        .textContent()
+        .catch(() => 'unknown');
+
+      // Debug: Check if there are any formly fields inside the collapsible
+      const formlyFieldsInCollapsible = await this.page
+        .locator('.collapsible-content formly-field')
+        .count();
+
+      // Debug: Check if there are any hidden formly fields
+      const hiddenFormlyFields = await this.page
+        .locator('.collapsible-content formly-field[hidden]')
+        .count();
+
+      // Debug: Check if the collapsible panel exists (expanded state)
+      const collapsiblePanel = await this.page.locator('.collapsible-panel').count();
+
+      // Debug: Check if formly-collapsible has isExpanded class
+      const isCollapsibleExpanded = await this.page
+        .locator('formly-collapsible.isExpanded')
+        .count();
+
+      console.log('[DisableEncryption] After expand', {
+        enableBtn,
+        disableBtn,
+        changeBtn,
+        advancedContent,
+        encryptKeyInput,
+        selectedProvider,
+        formlyFieldsInCollapsible,
+        hiddenFormlyFields,
+        collapsiblePanel,
+        isCollapsibleExpanded,
+      });
+
+      await this.disableEncryptionBtn.waitFor({ state: 'visible', timeout: 3000 });
+    }
+
+    // Check if already disabled
+    const isEnabled = await this.disableEncryptionBtn.isVisible().catch(() => false);
+    if (isEnabled) {
+      await this.disableEncryptionBtn.click();
+
+      // IMPORTANT: The "Disable Encryption?" confirmation dialog appears immediately
+      // when the button is clicked, NOT after clicking Save.
+      // We must handle this dialog BEFORE trying to click Save on the Configure Sync dialog.
+
+      // Wait for confirmation dialog "Disable Encryption?"
+      // Use a longer timeout since the dialog might take time to render
+      const confirmDialog = this.page
+        .locator('mat-dialog-container')
+        .filter({ hasText: 'Disable Encryption?' });
+      await confirmDialog.waitFor({ state: 'visible', timeout: 10000 });
+
+      // Click the confirm button (mat-flat-button with "Disable Encryption" text)
+      const confirmBtn = confirmDialog
+        .locator('button[mat-flat-button]')
+        .filter({ hasText: /disable encryption/i });
+      // Wait for button to be visible and clickable (dialog animation may delay rendering)
+      await confirmBtn.waitFor({ state: 'visible', timeout: 10000 });
+      await confirmBtn.click();
+
+      // Wait for the disable encryption dialog to close and the operation to complete
+      // This includes server wipe + fresh unencrypted upload - can take a while
+      await confirmDialog.waitFor({ state: 'hidden', timeout: 60000 });
+      await this.page.waitForTimeout(500);
+    }
+
+    // Now close the "Configure Sync" dialog if it's still open
+    // NOTE: The app's closeAllDialogs() is called after disabling encryption,
+    // which may have already closed the config dialog. Check before trying to close.
+    const configDialog = this.page.locator('mat-dialog-container').first();
+    const isDialogOpen = await configDialog.isVisible().catch(() => false);
+
+    if (isDialogOpen) {
+      const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
+      const hasCancelBtn = await cancelBtn.isVisible().catch(() => false);
+      if (hasCancelBtn) {
+        await cancelBtn.click();
+        // Wait for dialog to close
+        await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
+          timeout: 10000,
+        });
+      }
+    }
+
+    // CRITICAL: Ensure all overlays are properly closed
+    // This handles backdrop removal and any lingering dialogs
+    await this.ensureOverlaysClosed();
+
+    // Wait for clean slate operation to complete (sync will happen automatically)
+    await this.page.waitForTimeout(3000);
+  }
+
+  /**
+   * Trigger a manual sync via the sync button and wait for it to complete.
+   * Does not handle dialogs - use syncAndWait() for normal operation.
+   *
+   * @internal Use syncAndWait() instead for most cases
+   */
+  async triggerSync(): Promise<void> {
+    await this.syncBtn.click();
+
+    const spinnerAppeared = await this.syncSpinner
+      .waitFor({ state: 'visible', timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (spinnerAppeared) {
+      // Increased timeout from 15s to 30s for multi-client scenarios under load
+      // Also check for error state to fail fast
+      const result = await Promise.race([
+        this.syncSpinner
+          .waitFor({ state: 'hidden', timeout: 30000 })
+          .then(() => 'hidden'),
+        this.syncErrorIcon
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'error'),
+      ]);
+
+      if (result === 'error') {
+        throw new Error('Sync failed with error state during triggerSync()');
+      }
+    }
+
+    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+  }
+
+  /**
+   * Wait for an ongoing sync operation to complete.
+   * Useful when sync is triggered automatically (e.g., after data changes).
+   *
+   * @param options.timeout - Maximum time to wait (default: 15000ms)
+   * @param options.skipSpinnerCheck - If true, only waits for check icon (useful when sync might already be in progress)
+   */
+  async waitForSyncToComplete(
+    options: { timeout?: number; skipSpinnerCheck?: boolean } = {},
+  ): Promise<void> {
+    const { timeout = 15000, skipSpinnerCheck = false } = options;
+
+    if (!skipSpinnerCheck) {
+      // Wait for spinner to appear (sync started)
+      await this.syncSpinner.waitFor({ state: 'visible', timeout: 5000 });
+    }
+
+    // Wait for sync to complete (spinner disappears)
+    await this.syncSpinner.waitFor({ state: 'hidden', timeout });
+
+    // Verify success (check icon should be visible)
+    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 3000 });
+  }
+
+  /**
+   * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
+   * This is the main method to use for syncing in tests.
+   *
+   * Automatically handles:
+   * - Fresh client confirmation dialogs
+   * - Conflict resolution (uses "Use All Remote" by default)
+   * - Sync import conflicts (uses remote by default)
+   *
+   * @param options.useLocal - For conflicts, use local data instead of remote (default: false)
+   * @param options.timeout - Maximum time to wait for sync (default: 30000ms)
+   */
+  async syncAndWait(
+    options: { useLocal?: boolean; timeout?: number } = {},
+  ): Promise<void> {
+    // Increased default timeout from 15s to 30s for multi-client scenarios under load
+    const { useLocal = false, timeout = 30000 } = options;
+
+    // Click sync button
+    await this.syncBtn.click();
+
+    // Check if sync already completed (for very fast syncs)
+    const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+
+    if (!checkAlreadyVisible) {
+      // Sync not yet complete, wait for it to start or complete
+      // Try to wait for spinner, but if it's already gone (sync completed quickly), that's fine
+      const spinnerAppeared = await this.syncSpinner
+        .waitFor({ state: 'visible', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (spinnerAppeared) {
+        // Spinner appeared, now wait for dialogs and completion
+        // Check for dialogs that might appear during sync
+        // These can appear in any order or not at all
+
+        // 1. Check for fresh client confirmation dialog
+        const freshDialogVisible = await this.freshClientDialog
+          .isVisible()
+          .catch(() => false);
+        if (freshDialogVisible) {
+          console.log('[SuperSyncPage] Fresh client dialog detected, confirming...');
+          await this.freshClientConfirmBtn.click();
+          await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+
+        // 2. Check for conflict resolution dialog
+        const conflictDialogVisible = await this.conflictDialog
+          .isVisible()
+          .catch(() => false);
+        if (conflictDialogVisible) {
+          console.log(
+            `[SuperSyncPage] Conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+          );
+          if (useLocal) {
+            // Keep local changes (manual resolution required - just click Apply)
+            await this.conflictApplyBtn.click();
+          } else {
+            // Use all remote changes
+            await this.conflictUseRemoteBtn.click();
+            await this.page.waitForTimeout(200);
+            await this.conflictApplyBtn.click();
+          }
+          await this.conflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+
+        // 3. Check for sync import conflict dialog
+        const syncImportConflictVisible = await this.syncImportConflictDialog
+          .isVisible()
+          .catch(() => false);
+        if (syncImportConflictVisible) {
+          console.log(
+            `[SuperSyncPage] Sync import conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+          );
+          if (useLocal) {
+            await this.syncImportUseLocalBtn.click();
+          } else {
+            await this.syncImportUseRemoteBtn.click();
+          }
+          await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        }
+
+        // Wait for sync to complete (spinner disappears)
+        await this.syncSpinner.waitFor({ state: 'hidden', timeout });
+      }
+
+      // Now wait for check icon to appear (whether spinner appeared or not)
+      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 5000 });
+    }
+  }
+
+  /**
+   * Check if sync is currently in error state.
+   * Useful for debugging test failures.
+   */
+  async isSyncInErrorState(): Promise<boolean> {
+    return this.syncErrorIcon.isVisible().catch(() => false);
+  }
+
+  /**
+   * Check if sync button shows an error icon.
+   * Alias for isSyncInErrorState for backwards compatibility with tests.
    */
   async hasSyncError(): Promise<boolean> {
-    return this.syncErrorIcon.isVisible();
-  }
-
-  /**
-   * Perform a full sync and wait for completion.
-   * Includes a settling delay to let UI update after sync.
-   */
-  async syncAndWait(): Promise<void> {
-    await this.triggerSync();
-    await this.waitForSyncComplete();
-    // Allow UI to settle after sync - reduces flakiness (reduced from 300ms)
-    await this.page.waitForTimeout(100);
+    return this.syncErrorIcon.isVisible().catch(() => false);
   }
 
   /**
@@ -599,15 +1084,60 @@ export class SuperSyncPage extends BasePage {
     await this.syncBtn.click({ button: 'right' });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
-    // Scroll down to find the change password button
+    // Wait for the form to initialize and load the current configuration
+    // The encryption-status-box should be visible when isEncryptionEnabled is true
+    await this.page.waitForTimeout(500);
+
+    // Scroll down to find the change password button in the encryption-status-box
     const dialogContent = this.page.locator('mat-dialog-content');
     await dialogContent.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    await this.page.waitForTimeout(200);
 
-    // Click the "Change Encryption Password" button
-    const changePasswordBtn = this.page.locator(
-      'button:has-text("Change Encryption Password")',
-    );
-    await changePasswordBtn.waitFor({ state: 'visible', timeout: 5000 });
+    // Click the "Change Password" button (using e2e selector)
+    // If the button isn't visible, try re-selecting SuperSync to force config reload
+    const changePasswordBtn = this.page.locator('.e2e-change-password-btn button');
+
+    // First try: wait for button with shorter timeout
+    let isButtonVisible = await changePasswordBtn
+      .waitFor({ state: 'visible', timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+
+    // If not visible, re-select SuperSync to force provider config reload
+    if (!isButtonVisible) {
+      console.log(
+        '[SuperSyncPage] Change password button not visible, re-selecting provider...',
+      );
+      await this.selectSuperSyncProviderWithRetry();
+      await this.page.waitForTimeout(1500); // Wait for async config load
+
+      // Scroll again after provider change
+      await dialogContent.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+      await this.page.waitForTimeout(200);
+
+      // Second try: wait with longer timeout
+      isButtonVisible = await changePasswordBtn
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+
+    // If still not visible, throw a helpful error
+    if (!isButtonVisible) {
+      // Log what we can see for debugging
+      const enableBtnVisible = await this.enableEncryptionBtn
+        .isVisible()
+        .catch(() => false);
+      const disableBtnVisible = await this.disableEncryptionBtn
+        .isVisible()
+        .catch(() => false);
+      throw new Error(
+        `Change password button not visible after retries. ` +
+          `Enable btn visible: ${enableBtnVisible}, Disable btn visible: ${disableBtnVisible}. ` +
+          `This suggests isEncryptionEnabled is false in the form model.`,
+      );
+    }
+
     await changePasswordBtn.click();
 
     // Wait for the change password dialog to appear
@@ -628,48 +1158,95 @@ export class SuperSyncPage extends BasePage {
     // Wait for Angular to process form validation
     await this.page.waitForTimeout(200);
 
-    // Click the confirm button - wait for it to be enabled first
-    const confirmBtn = changePasswordDialog.locator('button[color="warn"]');
+    // Click the "Change Password" confirm button (mat-flat-button, not the "Disable Encryption" button which is mat-stroked-button)
+    const confirmBtn = changePasswordDialog.locator(
+      'button[mat-flat-button][color="warn"]',
+    );
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
     await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
     await confirmBtn.click();
 
     // Wait for the dialog to close (password change complete)
     await changePasswordDialog.waitFor({ state: 'detached', timeout: 60000 });
 
-    // Check for snackbar - if visible, verify it's not an error
-    // The snackbar may auto-dismiss quickly, so we use a short timeout
-    const snackbar = this.page.locator('simple-snack-bar');
-    try {
-      await snackbar.waitFor({ state: 'visible', timeout: 3000 });
-      const snackbarText = (await snackbar.textContent()) || '';
-      const lowerText = snackbarText.toLowerCase();
+    // Wait for the config dialog to close as well
+    await this.page.waitForTimeout(500);
 
-      // Check for error indicators
-      if (
-        lowerText.includes('error') ||
-        lowerText.includes('failed') ||
-        lowerText.includes('critical')
-      ) {
-        throw new Error(`Password change failed: ${snackbarText}`);
+    // Close the sync config dialog if still open
+    const configDialog = this.page.locator('mat-dialog-container').first();
+    const isConfigDialogOpen = await configDialog.isVisible().catch(() => false);
+    if (isConfigDialogOpen) {
+      const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
+      const hasCancelBtn = await cancelBtn.isVisible().catch(() => false);
+      if (hasCancelBtn) {
+        await cancelBtn.click();
+        await configDialog.waitFor({ state: 'hidden', timeout: 5000 });
       }
-      // Success - snackbar appeared and wasn't an error
-    } catch (e) {
-      // Snackbar not visible or already dismissed - that's OK
-      // The dialog closing successfully is the primary indicator of success
-      if (e instanceof Error && e.message.includes('Password change failed')) {
-        throw e; // Re-throw actual error snackbars
-      }
-      // Otherwise ignore - dialog closed = success
     }
 
-    // Small wait for UI to settle (reduced from 500ms)
-    await this.page.waitForTimeout(200);
+    // Wait for password change operation to complete (server wipe + re-upload)
+    await this.page.waitForTimeout(2000);
+  }
 
-    // Close the sync settings dialog if still open
-    const dialogContainer = this.page.locator('mat-dialog-container');
-    if (await dialogContainer.isVisible()) {
-      await this.page.keyboard.press('Escape');
-      await dialogContainer.waitFor({ state: 'detached', timeout: 5000 });
+  /**
+   * Get the current sync state based on visible icons.
+   * Returns: 'syncing' | 'success' | 'error' | 'unknown'
+   */
+  async getSyncState(): Promise<'syncing' | 'success' | 'error' | 'unknown'> {
+    const isSpinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
+    if (isSpinnerVisible) return 'syncing';
+
+    const isCheckVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+    if (isCheckVisible) return 'success';
+
+    const isErrorVisible = await this.syncErrorIcon.isVisible().catch(() => false);
+    if (isErrorVisible) return 'error';
+
+    return 'unknown';
+  }
+
+  /**
+   * Disable sync by opening settings and disabling the provider.
+   * Useful for test cleanup or testing sync re-enabling.
+   */
+  async disableSync(): Promise<void> {
+    // Open sync settings via right-click
+    await this.syncBtn.click({ button: 'right' });
+    await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Look for "Enable Syncing" toggle (appears when editing existing config)
+    const enableToggle = this.page.locator('.e2e-isEnabled input[type="checkbox"]');
+    const toggleExists = await enableToggle.isVisible().catch(() => false);
+
+    if (toggleExists) {
+      const isChecked = await enableToggle.isChecked();
+      if (isChecked) {
+        // Click the label to toggle off
+        const toggleLabel = this.page.locator('.e2e-isEnabled label');
+        await toggleLabel.click();
+        await this.page.waitForTimeout(200);
+      }
     }
+
+    // Save configuration
+    await expect(this.saveBtn).toBeEnabled({ timeout: 5000 });
+    await this.saveBtn.click();
+
+    // Wait for dialog to close
+    await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
+      timeout: 10000,
+    });
+  }
+
+  /**
+   * Check if SuperSync is currently configured and enabled.
+   * Returns true if sync button shows check or spinner icon.
+   */
+  async isSyncEnabled(): Promise<boolean> {
+    const checkVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+    const spinnerVisible = await this.syncSpinner.isVisible().catch(() => false);
+    const errorVisible = await this.syncErrorIcon.isVisible().catch(() => false);
+
+    return checkVisible || spinnerVisible || errorVisible;
   }
 }

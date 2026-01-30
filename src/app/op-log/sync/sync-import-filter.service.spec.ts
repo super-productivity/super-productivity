@@ -774,6 +774,131 @@ describe('SyncImportFilterService', () => {
       });
     });
 
+    describe('BUG FIX: Vector clock pruning preserves import client', () => {
+      /**
+       * This test documents the bug that occurs when vector clock pruning removes
+       * the SYNC_IMPORT client's entry, causing new ops to appear CONCURRENT with
+       * the import instead of GREATER_THAN.
+       *
+       * THE BUG SCENARIO:
+       * 1. Client A creates SYNC_IMPORT with clock {clientA: 1}
+       * 2. Client B receives it, merges clocks → {clientA: 1, clientB: 9746, ...}
+       * 3. B has 91 clients in clock, pruning triggers (limit is 8)
+       * 4. clientA has counter=1 (lowest) → PRUNED by limitVectorClockSize()
+       * 5. New task on B has clock {clientB: 9747} - MISSING clientA!
+       * 6. Comparison: {clientA: 0 (missing)} vs {clientA: 1} → CONCURRENT
+       * 7. Op is incorrectly filtered as "invalidated by import"
+       *
+       * THE FIX:
+       * - After applying SYNC_IMPORT, store the import client ID as "protected"
+       * - limitVectorClockSize() preserves protected client IDs even with low counters
+       * - New ops include the import client entry → comparison yields GREATER_THAN
+       */
+
+      it('should correctly filter ops when SYNC_IMPORT client was NOT pruned (fix applied)', async () => {
+        // This test shows CORRECT behavior when the fix is applied:
+        // The import client's entry is preserved in the op's vector clock
+
+        const existingSyncImport: Operation = {
+          id: '019afd68-0050-7000-0000-000000000000',
+          actionType: '[SP_ALL] Load(import) all data' as ActionType,
+          opType: OpType.SyncImport,
+          entityType: 'ALL',
+          entityId: 'import-1',
+          payload: { appDataComplete: {} },
+          clientId: 'clientA',
+          vectorClock: { clientA: 1 }, // Import's clock
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+
+        opLogStoreSpy.getLatestFullStateOpEntry.and.returnValue(
+          Promise.resolve({
+            seq: 1,
+            op: existingSyncImport,
+            source: 'remote',
+            syncedAt: Date.now(),
+            appliedAt: Date.now(),
+          }),
+        );
+
+        // With the fix: op's clock includes clientA (protected during pruning)
+        const opWithPreservedClock: Operation[] = [
+          {
+            id: '019afd70-0001-7000-0000-000000000000',
+            actionType: '[Task Shared] addTask' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'new-task-1',
+            payload: { title: 'My new task' },
+            clientId: 'clientB',
+            // Clock includes clientA because it was protected during pruning
+            vectorClock: { clientA: 1, clientB: 9747 },
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ];
+
+        const result =
+          await service.filterOpsInvalidatedBySyncImport(opWithPreservedClock);
+
+        // With preserved clock: op is GREATER_THAN import → kept
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
+      });
+
+      it('should incorrectly filter ops when SYNC_IMPORT client was pruned (bug scenario)', async () => {
+        // This test documents the BUGGY behavior before the fix:
+        // When the import client's entry is pruned, new ops appear CONCURRENT
+
+        const existingSyncImport: Operation = {
+          id: '019afd68-0050-7000-0000-000000000000',
+          actionType: '[SP_ALL] Load(import) all data' as ActionType,
+          opType: OpType.SyncImport,
+          entityType: 'ALL',
+          entityId: 'import-1',
+          payload: { appDataComplete: {} },
+          clientId: 'clientA',
+          vectorClock: { clientA: 1 },
+          timestamp: Date.now(),
+          schemaVersion: 1,
+        };
+
+        opLogStoreSpy.getLatestFullStateOpEntry.and.returnValue(
+          Promise.resolve({
+            seq: 1,
+            op: existingSyncImport,
+            source: 'remote',
+            syncedAt: Date.now(),
+            appliedAt: Date.now(),
+          }),
+        );
+
+        // WITHOUT the fix: clientA was pruned from clock (low counter)
+        const opWithPrunedClock: Operation[] = [
+          {
+            id: '019afd70-0001-7000-0000-000000000000',
+            actionType: '[Task Shared] addTask' as ActionType,
+            opType: OpType.Create,
+            entityType: 'TASK',
+            entityId: 'new-task-1',
+            payload: { title: 'My new task' },
+            clientId: 'clientB',
+            vectorClock: { clientB: 9747 }, // clientA was pruned!
+            timestamp: Date.now(),
+            schemaVersion: 1,
+          },
+        ];
+
+        const result = await service.filterOpsInvalidatedBySyncImport(opWithPrunedClock);
+
+        // BUG: Op is CONCURRENT with import (clientA: 0 vs 1) → filtered
+        // This documents the buggy behavior that the fix prevents
+        expect(result.invalidatedOps.length).toBe(1);
+        expect(result.validOps.length).toBe(0);
+      });
+    });
+
     describe('filteringImport return field', () => {
       it('should return filteringImport when ops are filtered by SYNC_IMPORT in batch', async () => {
         const syncImportOp = createOp({
@@ -1148,6 +1273,162 @@ describe('SyncImportFilterService', () => {
         // Batch import is used (newer), so isLocalUnsyncedImport is false
         expect(result.isLocalUnsyncedImport).toBe(false);
         expect(result.filteringImport!.id).toBe('019afd68-0050-7000-0000-000000000000');
+      });
+    });
+
+    describe('Bug Scenario: Pruned vector clock causes false CONCURRENT classification', () => {
+      /**
+       * This test verifies the scenario that caused the bug where changes on client B
+       * were not syncing to client A.
+       *
+       * Root Cause: When a SYNC_IMPORT is created locally via handleServerMigration() or
+       * createCleanSlateFromImport(), the protectedClientIds were not being set.
+       * Without this protection, limitVectorClockSize() would prune low-counter entries
+       * from subsequent operations' vector clocks.
+       *
+       * Example from logs:
+       * - Op vectorClock had 9 entries
+       * - Import vectorClock had 16 entries
+       * - Op was missing 7 low-counter entries present in Import
+       * - This caused CONCURRENT comparison instead of GREATER_THAN
+       *
+       * The fix adds setProtectedClientIds() call after creating local SYNC_IMPORT ops.
+       * This test validates the correct behavior when vector clocks are properly maintained.
+       */
+
+      it('should classify op as GREATER_THAN when it has full knowledge of SYNC_IMPORT (no pruning)', async () => {
+        // Simulate a SYNC_IMPORT with many client entries (like from server migration)
+        const syncImportClock = {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_3Xx3: 5,
+          A_AMT3: 81,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_EemJ: 1,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_Jxm0: 35,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_wU5p: 13,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_ypDK: 19,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          B_bC8O: 25,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          B_HSxu: 10806,
+        };
+
+        const syncImport = createOp({
+          id: '019afd68-0050-7000-0000-000000000000',
+          opType: OpType.SyncImport,
+          clientId: 'A_Jxm0',
+          entityType: 'ALL',
+          vectorClock: syncImportClock,
+        });
+
+        // Op created AFTER the import - includes ALL entries from import plus increment
+        // (This is what happens when protectedClientIds are set correctly)
+        const postImportOp = createOp({
+          id: '019afd68-0100-7000-0000-000000000000',
+          opType: OpType.Update,
+          clientId: 'A_Jxm0',
+          entityId: 'task-1',
+          vectorClock: {
+            // All entries from import are preserved
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_3Xx3: 5,
+            A_AMT3: 81,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_EemJ: 1,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_Jxm0: 36, // Incremented
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_wU5p: 13,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_ypDK: 19,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            B_bC8O: 25,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            B_HSxu: 10806,
+          },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([
+          syncImport,
+          postImportOp,
+        ]);
+
+        // Both should be valid - op has GREATER_THAN relationship to import
+        expect(result.validOps.length).toBe(2);
+        expect(result.invalidatedOps.length).toBe(0);
+      });
+
+      it('should demonstrate the bug: op with PRUNED clock is incorrectly classified as CONCURRENT', async () => {
+        // SYNC_IMPORT with many client entries
+        const syncImportClock = {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_3Xx3: 5,
+          A_AMT3: 81,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_EemJ: 1,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_Jxm0: 35,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_wU5p: 13,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          A_ypDK: 19,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          B_bC8O: 25,
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          B_HSxu: 10806,
+        };
+
+        const syncImport = createOp({
+          id: '019afd68-0050-7000-0000-000000000000',
+          opType: OpType.SyncImport,
+          clientId: 'A_Jxm0',
+          entityType: 'ALL',
+          vectorClock: syncImportClock,
+        });
+
+        // Op created AFTER the import, but with PRUNED clock (missing low-counter entries)
+        // This simulates what happens WITHOUT the fix (protectedClientIds not set)
+        // limitVectorClockSize() would have removed the low-counter entries
+        const postImportOpWithPrunedClock = createOp({
+          id: '019afd68-0100-7000-0000-000000000000',
+          opType: OpType.Update,
+          clientId: 'A_Jxm0',
+          entityId: 'task-1',
+          vectorClock: {
+            // Only kept the highest counter entries (pruned to ~8 entries)
+            // Missing: A_3Xx3, A_EemJ, A_wU5p, A_ypDK, B_bC8O (all with low counters)
+            A_AMT3: 81,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            A_Jxm0: 36, // Incremented from 35
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            B_HSxu: 10806,
+          },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([
+          syncImport,
+          postImportOpWithPrunedClock,
+        ]);
+
+        // BUG BEHAVIOR: Op is incorrectly classified as CONCURRENT and filtered out
+        // because it's missing entries that the import has (A_3Xx3, A_EemJ, etc.)
+        //
+        // When comparing vector clocks:
+        // - Import has A_3Xx3:5, op has it as undefined (0) → Import wins on this key
+        // - Op has A_Jxm0:36, import has 35 → Op wins on this key
+        // - This results in CONCURRENT (both have some higher values)
+        //
+        // After our fix (setProtectedClientIds), this scenario won't occur because
+        // the op will preserve all entries from the import's vector clock.
+        expect(result.invalidatedOps.length).toBe(1);
+        expect(result.invalidatedOps[0].id).toBe('019afd68-0100-7000-0000-000000000000');
+
+        // The SYNC_IMPORT itself is valid
+        expect(result.validOps.length).toBe(1);
+        expect(result.validOps[0].opType).toBe(OpType.SyncImport);
       });
     });
   });

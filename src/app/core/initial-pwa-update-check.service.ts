@@ -7,6 +7,7 @@ import { SwUpdate } from '@angular/service-worker';
 import { isOnline } from '../util/is-online';
 import { TranslateService } from '@ngx-translate/core';
 import { Log } from './log';
+import { confirmDialog } from '../util/native-dialogs';
 
 @Injectable({
   providedIn: 'root',
@@ -26,7 +27,7 @@ export class InitialPwaUpdateCheckService {
             );
             if (
               isUpdateAvailable &&
-              confirm(this._translateService.instant(T.APP.UPDATE_WEB_APP))
+              confirmDialog(this._translateService.instant(T.APP.UPDATE_WEB_APP))
             ) {
               window.location.reload();
               return EMPTY;

@@ -970,21 +970,30 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     describe('downloadOps', () => {
-      it('should write archive to IndexedDB on first download (sinceSeq=0)', async () => {
+      // NOTE: Archives are NOT written to IndexedDB during downloadOps anymore.
+      // They are included in snapshotState and written during hydrateFromRemoteSync.
+      // This prevents corrupting local archives if user chooses "Keep local" in conflict dialog.
+
+      it('should NOT write archive to IndexedDB on first download - archives go in snapshotState', async () => {
         const syncData = createMockSyncData({
           archiveYoung: mockArchiveYoung,
           archiveOld: mockArchiveOld,
+          state: { tasks: [] },
         });
         mockProvider.downloadFile.and.returnValue(
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          mockArchiveYoung,
-        );
-        expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(mockArchiveOld);
+        // Archives should NOT be written during downloadOps
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // Archives should be included in snapshotState instead
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toEqual(mockArchiveYoung);
+        expect((result.snapshotState as any).archiveOld).toEqual(mockArchiveOld);
       });
 
       it('should NOT write archive on subsequent downloads (sinceSeq > 0)', async () => {
@@ -1004,7 +1013,7 @@ describe('FileBasedSyncAdapterService', () => {
 
       it('should handle missing archive gracefully (backward compatibility)', async () => {
         // Old sync file without archive fields
-        const syncData = createMockSyncData();
+        const syncData = createMockSyncData({ state: { tasks: [] } });
         delete (syncData as any).archiveYoung;
         delete (syncData as any).archiveOld;
 
@@ -1012,27 +1021,37 @@ describe('FileBasedSyncAdapterService', () => {
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
         // Should not attempt to save undefined archive
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // snapshotState should still be returned but without archives
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toBeUndefined();
+        expect((result.snapshotState as any).archiveOld).toBeUndefined();
       });
 
-      it('should handle partial archive (only archiveYoung)', async () => {
+      it('should include partial archive (only archiveYoung) in snapshotState', async () => {
         const syncData = createMockSyncData({
           archiveYoung: mockArchiveYoung,
+          state: { tasks: [] },
         });
         mockProvider.downloadFile.and.returnValue(
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          mockArchiveYoung,
-        );
+        // Archives should NOT be written during downloadOps
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // Only archiveYoung should be in snapshotState
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toEqual(mockArchiveYoung);
+        expect((result.snapshotState as any).archiveOld).toBeUndefined();
       });
     });
   });

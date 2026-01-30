@@ -189,8 +189,11 @@ describe('SuperSyncProvider', () => {
     });
   });
 
-  describe('config caching', () => {
-    it('should cache config and only call privateCfg.load once for multiple operations', async () => {
+  describe('config loading', () => {
+    it('should call privateCfg.load for each operation (relies on SyncCredentialStore caching)', async () => {
+      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching. Each call to _cfgOrError now calls load(),
+      // but SyncCredentialStore returns cached value after first load.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       fetchSpy.and.returnValue(
         Promise.resolve({
@@ -204,11 +207,13 @@ describe('SuperSyncProvider', () => {
       await provider.downloadOps(1);
       await provider.downloadOps(2);
 
-      // privateCfg.load should only be called once due to caching
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
+      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
-    it('should cache server seq key and only call privateCfg.load once for multiple seq operations', async () => {
+    it('should call privateCfg.load for each server seq operation (relies on SyncCredentialStore caching)', async () => {
+      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       localStorageSpy.getItem.and.returnValue('10');
 
@@ -217,8 +222,8 @@ describe('SuperSyncProvider', () => {
       await provider.getLastServerSeq();
       await provider.getLastServerSeq();
 
-      // privateCfg.load should only be called once due to caching
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
+      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -605,8 +610,9 @@ describe('SuperSyncProvider', () => {
       );
     });
 
-    it('should clear cached config on auth failure', async () => {
-      // First call succeeds - config gets cached
+    it('should throw AuthFailSPError and allow next operation to proceed', async () => {
+      // Note: We removed the local caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching. Each operation calls load() directly.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       fetchSpy.and.returnValue(
         Promise.resolve({
@@ -634,7 +640,7 @@ describe('SuperSyncProvider', () => {
         expect(e).toBeInstanceOf(AuthFailSPError);
       }
 
-      // Third call should reload config from store (cache was cleared)
+      // Third call should succeed - config reloaded from SyncCredentialStore
       fetchSpy.and.returnValue(
         Promise.resolve({
           ok: true,
@@ -642,7 +648,8 @@ describe('SuperSyncProvider', () => {
         } as Response),
       );
       await provider.downloadOps(0);
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(2);
+      // Each operation calls load() directly (SyncCredentialStore handles caching)
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
     it('should throw AuthFailSPError for uploadOps on 401', async () => {
@@ -1195,23 +1202,23 @@ describe('SuperSyncProvider', () => {
   // in Jasmine (they're registered at module load time). This is the same approach used by
   // WebDavHttpAdapter tests.
   //
-  // The Android gzip handling is tested via:
+  // The native platform gzip handling is tested via:
   // 1. Server-side tests that verify base64-encoded gzip decompression works
-  // 2. Manual testing on Android devices
+  // 2. Manual testing on Android/iOS devices
   // 3. Integration tests with the actual CapacitorHttp plugin
-  describe('Android WebView branching logic', () => {
-    // Create a testable subclass that overrides isAndroidWebView
+  describe('Native platform branching logic', () => {
+    // Create a testable subclass that overrides platform detection
     class TestableSuperSyncProvider extends SuperSyncProvider {
-      constructor(private _isAndroidWebView: boolean) {
+      constructor(private _isNativePlatform: boolean) {
         super();
       }
 
-      protected override get isAndroidWebView(): boolean {
-        return this._isAndroidWebView;
+      protected override get isNativePlatform(): boolean {
+        return this._isNativePlatform;
       }
 
       // Expose the private method for testing
-      public async testFetchApiCompressedAndroid(
+      public async testFetchApiCompressedNative(
         cfg: SuperSyncPrivateCfg,
         path: string,
         jsonPayload: string,
@@ -1239,13 +1246,13 @@ describe('SuperSyncProvider', () => {
       }
     }
 
-    it('should use Android path when isAndroidWebView is true', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+    it('should use native path when isNativePlatform is true', async () => {
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       // Test the payload that would be sent to CapacitorHttp
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/ops',
         JSON.stringify({ ops: [createMockOperation()], clientId: 'client-1' }),
@@ -1258,13 +1265,13 @@ describe('SuperSyncProvider', () => {
     });
 
     it('should produce valid base64-encoded gzip data', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
 
       const ops = [createMockOperation()];
       const payload = { ops, clientId: 'client-1', lastKnownServerSeq: 5 };
 
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/ops',
         JSON.stringify(payload),
@@ -1282,9 +1289,10 @@ describe('SuperSyncProvider', () => {
       expect(decompressedPayload.lastKnownServerSeq).toBe(5);
     });
 
-    it('should use regular fetch path when isAndroidWebView is false', async () => {
-      const nonAndroidProvider = new TestableSuperSyncProvider(false);
-      nonAndroidProvider.privateCfg = mockPrivateCfgStore;
+    it('should use regular fetch path when not on native platform', async () => {
+      // Simulate web browser
+      const webProvider = new TestableSuperSyncProvider(false);
+      webProvider.privateCfg = mockPrivateCfgStore;
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       fetchSpy.and.returnValue(
@@ -1294,20 +1302,20 @@ describe('SuperSyncProvider', () => {
         } as Response),
       );
 
-      await nonAndroidProvider.uploadOps([createMockOperation()], 'client-1');
+      await webProvider.uploadOps([createMockOperation()], 'client-1');
 
       // Should use regular fetch, not CapacitorHttp
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, options] = fetchSpy.calls.mostRecent().args;
       expect(url).toBe('https://sync.example.com/api/sync/ops');
       expect(options.headers.get('Content-Encoding')).toBe('gzip');
-      // Should NOT have Content-Transfer-Encoding header (that's only for Android)
+      // Should NOT have Content-Transfer-Encoding header (that's only for native)
       expect(options.headers.get('Content-Transfer-Encoding')).toBeNull();
     });
 
     it('should produce gzip data that decompresses to valid snapshot payload', async () => {
-      const androidProvider = new TestableSuperSyncProvider(true);
-      androidProvider.privateCfg = mockPrivateCfgStore;
+      const nativeProvider = new TestableSuperSyncProvider(true);
+      nativeProvider.privateCfg = mockPrivateCfgStore;
 
       const state = { tasks: [{ id: 'task-1' }] };
       const vectorClock: Record<string, number> = {};
@@ -1321,7 +1329,7 @@ describe('SuperSyncProvider', () => {
         isPayloadEncrypted: true,
       };
 
-      const result = await androidProvider.testFetchApiCompressedAndroid(
+      const result = await nativeProvider.testFetchApiCompressedNative(
         testConfig,
         '/api/sync/snapshot',
         JSON.stringify(payload),
@@ -1462,6 +1470,83 @@ describe('SuperSyncProvider', () => {
           timeoutMs: 75000,
         }),
       );
+    });
+  });
+
+  describe('getEncryptKey', () => {
+    it('should return encryption key when encryption is enabled', async () => {
+      const configWithEncryption: SuperSyncPrivateCfg = {
+        ...testConfig,
+        encryptKey: 'test-password-123',
+        isEncryptionEnabled: true,
+      };
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(configWithEncryption));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBe('test-password-123');
+    });
+
+    it('should return undefined when encryption is disabled even if encryptKey is set', async () => {
+      // This test prevents regression of the password change bug where data was
+      // uploaded unencrypted because getEncryptKey() returned the key even when
+      // isEncryptionEnabled was false
+      const configWithKeyButDisabled: SuperSyncPrivateCfg = {
+        ...testConfig,
+        encryptKey: 'test-password-123',
+        isEncryptionEnabled: false,
+      };
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(configWithKeyButDisabled));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when no encryption key is set', async () => {
+      const configWithoutKey: SuperSyncPrivateCfg = {
+        ...testConfig,
+        isEncryptionEnabled: true,
+      };
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(configWithoutKey));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when config is null', async () => {
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(null));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when encryption is explicitly disabled', async () => {
+      const configDisabled: SuperSyncPrivateCfg = {
+        ...testConfig,
+        encryptKey: 'old-password',
+        isEncryptionEnabled: false,
+      };
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(configDisabled));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should handle empty string encryption key', async () => {
+      const configWithEmptyKey: SuperSyncPrivateCfg = {
+        ...testConfig,
+        encryptKey: '',
+        isEncryptionEnabled: true,
+      };
+      mockPrivateCfgStore.load.and.returnValue(Promise.resolve(configWithEmptyKey));
+
+      const result = await provider.getEncryptKey();
+
+      expect(result).toBeUndefined();
     });
   });
 });

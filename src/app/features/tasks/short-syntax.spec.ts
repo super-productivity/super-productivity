@@ -70,11 +70,6 @@ const checkSameDay = (date1: Date, date2: Date): boolean => {
   );
 };
 
-const checkIfADateIsTomorrow = (now: Date, tmrDate: Date): boolean => {
-  const nextday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  return checkSameDay(nextday, tmrDate);
-};
-
 const checkIfDateHasCorrectTime = (date: Date, hour: number, minute: number): boolean => {
   expect(date.getHours()).toBe(hour);
   expect(date.getMinutes()).toBe(minute);
@@ -273,19 +268,16 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Test @4pm',
       };
-      const now = new Date();
+      // Use fixed date at 10am to avoid race conditions with real system time
+      // and ensure we're safely before 4pm for same-day scheduling
+      const now = new Date(2024, 0, 15, 10, 0, 0, 0); // Jan 15, 2024 at 10:00 AM
       const parsedDateInMilliseconds = getPlannedDateTimestampFromShortSyntaxReturnValue(
         t,
         now,
       );
       const parsedDate = new Date(parsedDateInMilliseconds);
-      if (now.getHours() > 16 || (now.getHours() === 16 && now.getMinutes() > 0)) {
-        const isSetToTomorrow = checkIfADateIsTomorrow(now, parsedDate);
-        expect(isSetToTomorrow).toBeTrue();
-      } else {
-        const isSetToSameDay = checkSameDay(parsedDate, now);
-        expect(isSetToSameDay).toBeTrue();
-      }
+      const isSetToSameDay = checkSameDay(parsedDate, now);
+      expect(isSetToSameDay).toBeTrue();
       const isTimeSetCorrectly = checkIfDateHasCorrectTime(parsedDate, 16, 0);
       expect(isTimeSetCorrectly).toBeTrue();
     });

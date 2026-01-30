@@ -66,7 +66,10 @@ describe('Security Fixes', () => {
       delete process.env.CORS_ORIGINS;
 
       const config = loadConfigFromEnv();
-      expect(config.cors.allowedOrigins).toEqual(['https://app.super-productivity.com']);
+      expect(config.cors.allowedOrigins).toEqual([
+        'https://app.super-productivity.com',
+        /^https:\/\/[a-zA-Z0-9-]+\.super-productivity-preview\.pages\.dev$/,
+      ]);
     });
   });
 

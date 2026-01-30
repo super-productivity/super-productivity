@@ -69,6 +69,9 @@ test.describe('@supersync SuperSync Error Handling', () => {
       const taskLocatorA = clientA.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
+      // Wait for task to be stable before double-clicking
+      await taskLocatorA.waitFor({ state: 'visible', timeout: 5000 });
+      await clientA.page.waitForTimeout(500);
       await taskLocatorA.dblclick();
       const editInputA = clientA.page.locator(
         'input.mat-mdc-input-element:focus, textarea:focus',
@@ -76,12 +79,16 @@ test.describe('@supersync SuperSync Error Handling', () => {
       await editInputA.waitFor({ state: 'visible', timeout: 5000 });
       await editInputA.fill(`${taskName}-ModifiedByA`);
       await editInputA.press('Enter');
-      await clientA.page.waitForTimeout(300);
+      // Wait for edit to be saved
+      await clientA.page.waitForTimeout(500);
 
       // Client B modifies the same task with a different value using inline editing
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
+      // Wait for task to be stable before double-clicking
+      await taskLocatorB.waitFor({ state: 'visible', timeout: 5000 });
+      await clientB.page.waitForTimeout(500);
       await taskLocatorB.dblclick();
       const editInputB = clientB.page.locator(
         'input.mat-mdc-input-element:focus, textarea:focus',
@@ -89,7 +96,8 @@ test.describe('@supersync SuperSync Error Handling', () => {
       await editInputB.waitFor({ state: 'visible', timeout: 5000 });
       await editInputB.fill(`${taskName}-ModifiedByB`);
       await editInputB.press('Enter');
-      await clientB.page.waitForTimeout(300);
+      // Wait for edit to be saved
+      await clientB.page.waitForTimeout(500);
 
       // 6. Client A syncs first (succeeds)
       await clientA.sync.syncAndWait();
@@ -98,21 +106,26 @@ test.describe('@supersync SuperSync Error Handling', () => {
       // The newer timestamp wins, so B's change might win or A's depending on timing
       await clientB.sync.syncAndWait();
 
-      // Give time for any conflict resolution UI
-      await clientB.page.waitForTimeout(1000);
+      // Give time for any conflict resolution UI and state to settle
+      await clientB.page.waitForTimeout(2000);
 
       // 8. Final sync to ensure convergence
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
 
+      // Additional wait for UI to update after sync
+      await clientA.page.waitForTimeout(500);
+      await clientB.page.waitForTimeout(500);
+
       // Verify both clients have converged - they should show the same task title
       // The exact title depends on LWW resolution (whichever timestamp was later)
+      // Use the task title specifically to avoid capturing other text
       const finalTaskA = await clientA.page
-        .locator('task:not(.ng-animating)')
+        .locator('task:not(.ng-animating) .task-title')
         .first()
         .textContent();
       const finalTaskB = await clientB.page
-        .locator('task:not(.ng-animating)')
+        .locator('task:not(.ng-animating) .task-title')
         .first()
         .textContent();
 

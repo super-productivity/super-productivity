@@ -8,6 +8,8 @@ import {
 } from './dialog-change-encryption-password.component';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
+import { EncryptionDisableService } from '../encryption-disable.service';
+import { FileBasedEncryptionService } from '../file-based-encryption.service';
 
 describe('DialogChangeEncryptionPasswordComponent', () => {
   let component: DialogChangeEncryptionPasswordComponent;
@@ -16,7 +18,9 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     MatDialogRef<DialogChangeEncryptionPasswordComponent, ChangeEncryptionPasswordResult>
   >;
   let mockEncryptionPasswordChangeService: jasmine.SpyObj<EncryptionPasswordChangeService>;
+  let mockFileBasedEncryptionService: jasmine.SpyObj<FileBasedEncryptionService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
+  let mockEncryptionDisableService: jasmine.SpyObj<EncryptionDisableService>;
 
   beforeEach(async () => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -24,7 +28,14 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       'EncryptionPasswordChangeService',
       ['changePassword'],
     );
+    mockFileBasedEncryptionService = jasmine.createSpyObj('FileBasedEncryptionService', [
+      'changePassword',
+    ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
+    mockEncryptionDisableService = jasmine.createSpyObj('EncryptionDisableService', [
+      'disableEncryption',
+      'disableEncryptionForFileBased',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [
@@ -38,7 +49,12 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
           provide: EncryptionPasswordChangeService,
           useValue: mockEncryptionPasswordChangeService,
         },
+        {
+          provide: FileBasedEncryptionService,
+          useValue: mockFileBasedEncryptionService,
+        },
         { provide: SnackService, useValue: mockSnackService },
+        { provide: EncryptionDisableService, useValue: mockEncryptionDisableService },
       ],
     }).compileComponents();
 
@@ -123,7 +139,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       // After success, dialog closes, loading state may or may not be reset
     });
 
-    it('should call changePassword and close dialog on success', async () => {
+    it('should call changePassword with allowUnsyncedOps and close dialog on success', async () => {
       component.newPassword = 'password123';
       component.confirmPassword = 'password123';
       mockEncryptionPasswordChangeService.changePassword.and.returnValue(
@@ -134,6 +150,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
 
       expect(mockEncryptionPasswordChangeService.changePassword).toHaveBeenCalledWith(
         'password123',
+        { allowUnsyncedOps: true },
       );
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({ type: 'SUCCESS' }),

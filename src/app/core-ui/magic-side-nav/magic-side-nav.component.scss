@@ -51,14 +51,6 @@
   }
 }
 
-// Dark theme milkglass adjustments
-:host-context(.isDarkTheme.hasBgImage) :host {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  -webkit-backdrop-filter: blur(20px) saturate(180%); // Safari support
-}
-
 // Mobile overlay
 .nav-backdrop-mobile {
   position: fixed;
@@ -106,13 +98,18 @@
     transition: none !important;
   }
 
-  // Milkglass effect when background image is present
-  // This will be applied when a CSS class is added to indicate background image presence
-  :host-context(.hasBgImage) {
+  // Milkglass effect when background image is present (light theme)
+  :host-context(.hasBgImage) & {
     background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(20px) saturate(180%);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-    -webkit-backdrop-filter: blur(20px) saturate(180%); // Safari support
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  // Milkglass effect for dark theme with background image
+  :host-context(.isDarkTheme.hasBgImage) & {
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
   }
 
   // CompactMode state (desktop)

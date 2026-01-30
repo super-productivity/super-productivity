@@ -11,5 +11,9 @@ export interface ArchiveModel {
    */
   timeTracking: TimeTrackingState;
   task: TaskArchive;
-  lastTimeTrackingFlush: number;
+  /**
+   * Optional for backwards compatibility with older backups that don't have this field.
+   * @see https://github.com/johannesjo/super-productivity/issues/6200
+   */
+  lastTimeTrackingFlush?: number;
 }

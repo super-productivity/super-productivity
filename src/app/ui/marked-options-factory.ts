@@ -46,33 +46,59 @@ const preprocessMarkdown = (markdown: string): string => {
 export const markedOptionsFactory = (): MarkedOptions => {
   const renderer = new MarkedRenderer();
 
-  renderer.checkbox = ({ checked }: { checked: boolean }) =>
-    `<span class="checkbox material-icons">${checked ? 'check_box' : 'check_box_outline_blank'}</span>`;
+  // Note: We intentionally do NOT override renderer.checkbox here.
+  // The listitem renderer below handles checkbox rendering for task items.
+  // Overriding both causes duplicate checkboxes (see GitHub issue #6228).
 
-  renderer.listitem = ({
+  // In marked v17, list items can contain block-level tokens (e.g., paragraph) when the list
+  // is "loose" (has blank lines between items). Use parse() instead of parseInline() to handle
+  // both block and inline tokens correctly. See GitHub issue #6244.
+  // Using a regular function to access 'this'
+  renderer.listitem = function ({
     text,
     task,
     checked,
+    tokens,
   }: {
     text: string;
     task: boolean;
     checked?: boolean;
-  }) => {
+    tokens: any[];
+  }) {
     // In marked v17, task list items need to manually prepend the checkbox
+    // Use parse() to handle both block tokens (paragraph in loose lists) and inline tokens
+    let renderedText = tokens ? this.parser.parse(tokens) : text;
+
     if (task) {
+      // For task items, strip outer <p></p> wrapper to keep checkbox and text on same line.
+      // Loose lists wrap content in <p> tags which pushes text to new line after checkbox.
+      // Only strip if it's a simple wrapper (no nested block content).
+      const strippedText = renderedText.replace(/^<p>([\s\S]*)<\/p>\n?$/, '$1');
+      if (strippedText !== renderedText && !strippedText.includes('<p>')) {
+        renderedText = strippedText;
+      }
+
       const isChecked = checked === true;
       const checkboxHtml = `<span class="checkbox material-icons">${isChecked ? 'check_box' : 'check_box_outline_blank'}</span>`;
-      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml}${text}</li>`;
+      return `<li class="checkbox-wrapper ${isChecked ? 'done' : 'undone'}">${checkboxHtml} ${renderedText}</li>`;
     }
-    return `<li>${text}</li>`;
+    return `<li>${renderedText}</li>`;
   };
 
-  renderer.link = ({ href, title, text }) =>
-    `<a target="_blank" href="${href}" title="${title || ''}">${text}</a>`;
+  // In marked v17, link renderer receives tokens that need to be parsed for inline content
+  renderer.link = function ({
+    href,
+    title,
+    tokens,
+  }: {
+    href: string;
+    title?: string | null;
+    tokens: any[];
+  }) {
+    const text = tokens ? this.parser.parseInline(tokens) : '';
+    return `<a target="_blank" href="${href}" title="${title || ''}">${text}</a>`;
+  };
 
-  // Custom image renderer with support for sizing syntax
-  // Note: indexeddb:// URLs are pre-resolved to blob: URLs before markdown rendering
-  // The sizing dimensions are passed via the title attribute in "width|height" format
   renderer.image = ({ href, title, text }) => {
     const { width, height } = parseImageDimensionsFromTitle(title);
 
@@ -88,20 +114,29 @@ export const markedOptionsFactory = (): MarkedOptions => {
     return `<img alt="${text}"${srcAttr}${titleAttr}${widthAttr}${heightAttr} loading="lazy">`;
   };
 
-  // parse all RFC3986 URIs
-  const urlPattern =
-    /\b((([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]*))([^?#]*)(\?([^#]*))?(#(.*))?)\b/gi;
+  // In marked v17, paragraph renderer receives tokens that need to be parsed
+  renderer.paragraph = function ({ tokens }: { tokens: any[] }) {
+    const text = tokens ? this.parser.parseInline(tokens) : '';
+    const split = text.split('\n');
+    return split.reduce((acc, p, i) => {
+      const result = /h(\d)\./.exec(p);
+      if (result !== null) {
+        const h = `h${result[1]}`;
+        return acc + `<${h}>${p.replace(result[0], '')}</${h}>`;
+      }
 
-  const rendererTxtOld = renderer.text.bind(renderer);
-  renderer.text = (token) => {
-    const modifiedToken = {
-      ...token,
-      text: token.text.replace(urlPattern, (url) => {
-        return `<a href="${url}" target="_blank">${url}</a>`;
-      }),
-    };
-    return rendererTxtOld(modifiedToken);
+      if (split.length === 1) {
+        return `<p>` + p + `</p>`;
+      }
+
+      return acc ? (split.length - 1 === i ? acc + p + `</p>` : acc + p) : `<p>` + p;
+    }, '');
   };
+
+  // NOTE: We intentionally do NOT override renderer.text for URL auto-linking.
+  // In marked v17 with gfm: true, URLs are automatically detected and converted to links
+  // by the lexer before they reach the text renderer. Custom URL linkification here
+  // would cause double-processing and broken HTML (links inside links).
 
   const options: MarkedOptions = {
     renderer,

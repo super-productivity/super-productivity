@@ -16,6 +16,8 @@ import { AppDataComplete } from '../model/model-config';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
+import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
+import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 
 /**
  * Handles hydration after remote sync downloads.
@@ -38,6 +40,7 @@ export class SyncHydrationService {
   private vectorClockService = inject(VectorClockService);
   private validateStateService = inject(ValidateStateService);
   private snackService = inject(SnackService);
+  private archiveDbAdapter = inject(ArchiveDbAdapter);
 
   /**
    * Handles hydration after a remote sync download.
@@ -76,9 +79,30 @@ export class SyncHydrationService {
         syncProvider: currentSyncConfig.syncProvider,
       };
 
-      // 1. Read archive data from IndexedDB and merge with passed entity data
+      // 1. Write archives to IndexedDB if they were included in the downloaded data.
+      // This is critical for file-based sync where archives are bundled with the snapshot.
+      // Archives must be written BEFORE we read them back via getAllSyncModelDataFromStoreAsync().
+      // NOTE: This only happens when actually applying remote state (not during conflict
+      // detection - the downloadOps method no longer writes archives prematurely).
+      if (downloadedMainModelData) {
+        const typedData = downloadedMainModelData as Record<string, unknown>;
+        if (typedData['archiveYoung']) {
+          await this.archiveDbAdapter.saveArchiveYoung(
+            typedData['archiveYoung'] as ArchiveModel,
+          );
+          OpLog.normal('SyncHydrationService: Wrote archiveYoung to IndexedDB from sync');
+        }
+        if (typedData['archiveOld']) {
+          await this.archiveDbAdapter.saveArchiveOld(
+            typedData['archiveOld'] as ArchiveModel,
+          );
+          OpLog.normal('SyncHydrationService: Wrote archiveOld to IndexedDB from sync');
+        }
+      }
+
+      // 2. Read archive data from IndexedDB and merge with passed entity data
       // Entity models (task, tag, project, etc.) come from downloadedMainModelData
-      // Archive models (archiveYoung, archiveOld) come from IndexedDB
+      // Archive models (archiveYoung, archiveOld) come from IndexedDB (now with synced data)
       const dbData = await this.stateSnapshotService.getAllSyncModelDataFromStoreAsync();
 
       const mergedData = downloadedMainModelData
@@ -93,13 +117,13 @@ export class SyncHydrationService {
           : '(from state snapshot)',
       );
 
-      // 2. Get client ID for vector clock
+      // 3. Get client ID for vector clock
       const clientId = await this.clientIdService.loadClientId();
       if (!clientId) {
         throw new Error('Failed to load clientId - cannot create SYNC_IMPORT operation');
       }
 
-      // 3. Create SYNC_IMPORT operation with merged clock
+      // 4. Create SYNC_IMPORT operation with merged clock
       // CRITICAL: The SYNC_IMPORT's clock must include ALL known clients, not just local ones.
       // If we only use the local clock, ops from other clients will be CONCURRENT with
       // this import and get filtered out by SyncImportFilterService.
@@ -124,7 +148,7 @@ export class SyncHydrationService {
       let lastSeq: number;
 
       if (createSyncImportOp) {
-        // 3b. Create and append SYNC_IMPORT operation
+        // 4b. Create and append SYNC_IMPORT operation
         // This is used for explicit "use local/remote" conflict resolution where we want
         // "clean slate" semantics that discard concurrent ops from other clients.
         OpLog.normal('SyncHydrationService: Creating SYNC_IMPORT with merged clock', {
@@ -146,14 +170,14 @@ export class SyncHydrationService {
           schemaVersion: CURRENT_SCHEMA_VERSION,
         };
 
-        // 4. Append operation to SUP_OPS
+        // 5. Append operation to SUP_OPS
         await this.opLogStore.append(op, 'remote');
         OpLog.normal('SyncHydrationService: Persisted SYNC_IMPORT operation');
 
-        // 5. Get the sequence number of the operation we just wrote
+        // 6. Get the sequence number of the operation we just wrote
         lastSeq = await this.opLogStore.getLastSeq();
       } else {
-        // 3b-alt. Skip SYNC_IMPORT creation for file-based sync bootstrap.
+        // 4b-alt. Skip SYNC_IMPORT creation for file-based sync bootstrap.
         // This avoids "clean slate" semantics so concurrent ops from other clients
         // won't be filtered by SyncImportFilterService.
         OpLog.normal(
@@ -184,7 +208,7 @@ export class SyncHydrationService {
         lastSeq = await this.opLogStore.getLastSeq();
       }
 
-      // 6. Validate and repair synced data before dispatching
+      // 7. Validate and repair synced data before dispatching
       // This fixes stale task references (e.g., tags/projects referencing deleted tasks)
       let dataToLoad = syncedData as AppDataComplete;
       const validationResult = this.validateStateService.validateAndRepair(dataToLoad);
@@ -194,7 +218,7 @@ export class SyncHydrationService {
         OpLog.normal('SyncHydrationService: Repaired synced data before loading');
       }
 
-      // 6b. Restore local-only sync settings into dataToLoad
+      // 7b. Restore local-only sync settings into dataToLoad
       // This ensures the snapshot and NgRx state have the correct local settings,
       // not the ones from remote data. Without this, isEnabled could be set to false
       // if another client had sync disabled, causing sync to appear disabled on reload.
@@ -211,7 +235,7 @@ export class SyncHydrationService {
         };
       }
 
-      // 7. Save new state cache (snapshot) for crash safety
+      // 8. Save new state cache (snapshot) for crash safety
       await this.opLogStore.saveStateCache({
         state: dataToLoad,
         lastAppliedOpSeq: lastSeq,
@@ -220,7 +244,7 @@ export class SyncHydrationService {
       });
       OpLog.normal('SyncHydrationService: Saved state cache after sync');
 
-      // 8. Update vector clock store to match the new clock
+      // 9. Update vector clock store to match the new clock
       // This is critical because:
       // - The SYNC_IMPORT was appended with source='remote', so store wasn't updated
       // - If user creates new ops in this session, incrementAndStoreVectorClock reads from store
@@ -228,7 +252,19 @@ export class SyncHydrationService {
       await this.opLogStore.setVectorClock(newClock);
       OpLog.normal('SyncHydrationService: Updated vector clock store after sync');
 
-      // 9. Dispatch loadAllData to update NgRx
+      // 9b. Protect ALL client IDs in the SYNC_IMPORT's vector clock from pruning
+      // This ensures all client IDs from the import aren't pruned from future vector clocks.
+      // If any are pruned, new ops would appear CONCURRENT with the import instead of GREATER_THAN.
+      // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
+      if (createSyncImportOp) {
+        const protectedIds = Object.keys(newClock);
+        await this.opLogStore.setProtectedClientIds(protectedIds);
+        OpLog.normal(
+          `SyncHydrationService: Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,
+        );
+      }
+
+      // 10. Dispatch loadAllData to update NgRx
       this.store.dispatch(loadAllData({ appDataComplete: dataToLoad }));
       OpLog.normal('SyncHydrationService: Dispatched loadAllData with synced data');
     } catch (e) {

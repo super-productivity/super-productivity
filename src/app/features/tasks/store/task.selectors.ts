@@ -295,10 +295,12 @@ export const selectLaterTodayTasksWithSubTasks = createSelector(
     const todayEndTime = todayEnd.getTime();
 
     // Helper to check if task is "in TODAY" via virtual tag pattern
+    // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity)
     const isInToday = (task: Task): boolean => {
-      if (task.dueDay === todayStr) return true;
-      if (task.dueWithTime && isToday(task.dueWithTime)) return true;
-      return false;
+      if (task.dueWithTime) {
+        return isToday(task.dueWithTime);
+      }
+      return task.dueDay === todayStr;
     };
 
     // Helper to check if task is scheduled for later today

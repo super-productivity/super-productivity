@@ -37,6 +37,7 @@ import { PluginLog } from '../../../core/log';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { LanguageCode } from '../../../core/locale.constants';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
+import { confirmDialog } from '../../../util/native-dialogs';
 
 interface CommunityPlugin {
   name: string;
@@ -303,7 +304,7 @@ export class PluginManagementComponent {
 
   async removeUploadedPlugin(plugin: PluginInstance): Promise<void> {
     if (
-      !confirm(
+      !confirmDialog(
         this._translateService.instant(T.PLUGINS.CONFIRM_REMOVE, {
           name: plugin.manifest.name,
         }),

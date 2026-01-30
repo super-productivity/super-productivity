@@ -45,10 +45,10 @@ test.describe('App Features - Focus Mode', () => {
     // Navigate to main view
     await page.goto('/#/tag/TODAY');
     // Focus Mode button in main button bar should not be present when feature is disabled
-    expect(mainFocusButton).not.toBeAttached();
+    await expect(mainFocusButton).not.toBeAttached();
     // Focus Mode in the task context menu should not be visible
     await firstTask.click({ button: 'right' });
-    expect(taskContextStartFocus).not.toBeAttached();
+    await expect(taskContextStartFocus).not.toBeAttached();
 
     // send shortcut for focus mode, ensure that focus overlay is not showing
     await page.keyboard.press('F');

@@ -142,8 +142,11 @@ test.describe('Default task reminder option', () => {
     await changeDefaultTaskReminderOption(page);
 
     await page.getByRole('menuitem', { name: 'Schedule' }).click();
-    // Dismiss the scheduling information dialog
-    await page.locator('button', { hasText: /Cancel/ }).click();
+    // Wait for and dismiss the scheduling information dialog
+    const scheduleDialog = page.locator('mat-dialog-container');
+    await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
+    await scheduleDialog.locator('button', { hasText: /Cancel/ }).click();
+    await scheduleDialog.waitFor({ state: 'detached', timeout: 10000 });
     // Click somewhere during the final day column to create a placeholder task
     await page.locator('schedule-week [data-day]').last().click();
     const taskInput = page.getByPlaceholder('Schedule task...');
@@ -151,7 +154,17 @@ test.describe('Default task reminder option', () => {
     await taskInput.press('Enter');
     // Click the scheduled task to reveal the details panel
     await page.locator('schedule-event').click();
-    await page.locator('task-detail-item', { hasText: 'Planned at' }).click();
+
+    // Click on the schedule item in the detail panel (using icon-based selector for robustness)
+    const scheduleItem = page
+      .locator(
+        'task-detail-item:has(mat-icon:text("alarm")), ' +
+          'task-detail-item:has(mat-icon:text("today")), ' +
+          'task-detail-item:has(mat-icon:text("schedule"))',
+      )
+      .first();
+    await scheduleItem.waitFor({ state: 'visible', timeout: 10000 });
+    await scheduleItem.click();
 
     await expect(page.getByText(changedOptionText)).toBeVisible();
   });

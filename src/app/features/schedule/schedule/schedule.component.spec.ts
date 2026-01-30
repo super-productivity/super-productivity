@@ -180,8 +180,7 @@ describe('ScheduleComponent', () => {
 
     it('should return false when _selectedDate is in the future', () => {
       // Arrange
-      const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDate = new Date('2026-01-27'); // 7 days after mocked today (2026-01-20)
       component['_selectedDate'].set(futureDate);
 
       // Act & Assert
@@ -190,8 +189,7 @@ describe('ScheduleComponent', () => {
 
     it('should return false when _selectedDate is in the past', () => {
       // Arrange
-      const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - 7);
+      const pastDate = new Date('2026-01-13'); // 7 days before mocked today (2026-01-20)
       component['_selectedDate'].set(pastDate);
 
       // Act & Assert

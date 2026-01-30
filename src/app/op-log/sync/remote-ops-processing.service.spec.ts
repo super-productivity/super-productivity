@@ -28,6 +28,7 @@ import {
 } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
 import { T } from '../../t.const';
+import { DUPLICATE_OPERATION_ERROR_MSG } from '../persistence/op-log-errors.const';
 
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
@@ -63,6 +64,9 @@ describe('RemoteOpsProcessingService', () => {
       'getLatestFullStateOp',
       'getOpById',
       'markRejected',
+      'setProtectedClientIds',
+      'clearFullStateOps',
+      'clearFullStateOpsExcept',
     ]);
     // By default, treat all ops as new (return them as-is)
     opLogStoreSpy.filterNewOps.and.callFake((ops: any[]) => Promise.resolve(ops));
@@ -74,6 +78,12 @@ describe('RemoteOpsProcessingService', () => {
     opLogStoreSpy.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
     // By default, mergeRemoteOpClocks succeeds
     opLogStoreSpy.mergeRemoteOpClocks.and.resolveTo();
+    // By default, setProtectedClientIds succeeds
+    opLogStoreSpy.setProtectedClientIds.and.resolveTo();
+    // By default, clearFullStateOps returns 0 (no ops cleared)
+    opLogStoreSpy.clearFullStateOps.and.resolveTo(0);
+    // By default, clearFullStateOpsExcept returns 0 (no ops cleared)
+    opLogStoreSpy.clearFullStateOpsExcept.and.resolveTo(0);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
       'getEntityFrontier',
       'getSnapshotVectorClock',
@@ -604,6 +614,169 @@ describe('RemoteOpsProcessingService', () => {
       expect(service.detectConflicts).not.toHaveBeenCalled();
     });
 
+    it('should call setProtectedClientIds with ALL vectorClock keys when SYNC_IMPORT is applied', async () => {
+      // The import's vectorClock contains ALL clients known at import time
+      // ALL of these must be protected from pruning, not just the clientId
+      const syncImportOp: Operation = {
+        id: 'sync-import-1',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'importClientId',
+        vectorClock: { importClientId: 1, otherClient: 5, thirdClient: 3 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [syncImportOp] }),
+      );
+
+      await service.processRemoteOps([syncImportOp]);
+
+      // All keys from vectorClock must be protected, not just the clientId
+      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalledWith(
+        jasmine.arrayContaining(['importClientId', 'otherClient', 'thirdClient']),
+      );
+      // Verify we got exactly 3 keys
+      const calledWith = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(calledWith.length).toBe(3);
+    });
+
+    it('should call setProtectedClientIds with ALL vectorClock keys when BACKUP_IMPORT is applied', async () => {
+      // Same as SYNC_IMPORT: backup's vectorClock contains all known clients
+      // and all must be protected from pruning
+      const backupImportOp: Operation = {
+        id: 'backup-import-1',
+        opType: OpType.BackupImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'backupClientId',
+        vectorClock: { backupClientId: 1, deviceA: 10, deviceB: 7 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [backupImportOp] }),
+      );
+
+      await service.processRemoteOps([backupImportOp]);
+
+      // All keys from vectorClock must be protected
+      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalledWith(
+        jasmine.arrayContaining(['backupClientId', 'deviceA', 'deviceB']),
+      );
+      // Verify we got exactly 3 keys
+      const calledWith = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(calledWith.length).toBe(3);
+    });
+
+    it('should NOT call setProtectedClientIds when no full-state op is applied', async () => {
+      const regularOp: Operation = {
+        id: 'regular-op-1',
+        opType: OpType.Update,
+        actionType: '[Task] Update Task' as ActionType,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'Test' },
+        clientId: 'client1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [regularOp] }),
+      );
+
+      await service.processRemoteOps([regularOp]);
+
+      expect(opLogStoreSpy.setProtectedClientIds).not.toHaveBeenCalled();
+    });
+
+    it('should call clearFullStateOpsExcept when SYNC_IMPORT is applied to prevent stale import filtering', async () => {
+      // This test verifies the fix for the scenario where:
+      // 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
+      // 2. Client B uploads new SYNC_IMPORT
+      // 3. Client A downloads B's SYNC_IMPORT but still has X's old one stored
+      // 4. If X's import has a higher UUIDv7, getLatestFullStateOpEntry returns it
+      // 5. New operations appear CONCURRENT with X's import and get filtered
+      //
+      // The fix clears old full-state ops AFTER storing the new one (for crash safety),
+      // excluding the newly stored ID so we don't delete what we just added.
+      const syncImportOp: Operation = {
+        id: 'sync-import-1',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'client-1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      opLogStoreSpy.clearFullStateOpsExcept.and.returnValue(Promise.resolve(2)); // Had 2 old ops
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [syncImportOp] }),
+      );
+
+      await service.processRemoteOps([syncImportOp]);
+
+      // Verify clearFullStateOpsExcept was called AFTER the new SYNC_IMPORT is stored,
+      // with the new import ID excluded to preserve it
+      expect(opLogStoreSpy.clearFullStateOpsExcept).toHaveBeenCalledWith([
+        'sync-import-1',
+      ]);
+    });
+
+    it('should NOT call clearFullStateOpsExcept when regular ops are applied', async () => {
+      const regularOp: Operation = {
+        id: 'regular-op-1',
+        opType: OpType.Update,
+        actionType: '[Task] Update Task' as ActionType,
+        entityType: 'TASK',
+        entityId: 'task-1',
+        payload: { title: 'Test' },
+        clientId: 'client1',
+        vectorClock: { client1: 1 },
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
+      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
+      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [regularOp] }),
+      );
+
+      await service.processRemoteOps([regularOp]);
+
+      // clearFullStateOpsExcept should NOT be called for regular ops
+      expect(opLogStoreSpy.clearFullStateOpsExcept).not.toHaveBeenCalled();
+    });
+
     describe('SYNC_IMPORT filter metadata return fields', () => {
       const createFullOp = (partial: Partial<Operation>): Operation => ({
         id: 'op-1',
@@ -983,6 +1156,93 @@ describe('RemoteOpsProcessingService', () => {
         'partial-apply-failure',
         { callerHoldsLock: false },
       );
+    });
+
+    // =========================================================================
+    // Issue #6213: Duplicate operation error handling
+    // =========================================================================
+    // These tests verify the race condition where filterNewOps returns ops as "new"
+    // but appendBatch fails because another sync wrote them in between.
+
+    describe('duplicate operation error handling (issue #6213)', () => {
+      it('should retry once and still fail if both attempts throw duplicate error', async () => {
+        const remoteOps: Operation[] = [
+          createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
+          createFullOp({ id: 'op-2', vectorClock: { client1: 2 } }),
+        ];
+
+        // Setup: filterNewOps always returns all ops (simulating persistent cache issue)
+        opLogStoreSpy.filterNewOps.and.returnValue(Promise.resolve(remoteOps));
+
+        // Setup: appendBatch always throws duplicate error (both attempts fail)
+        opLogStoreSpy.appendBatch.and.rejectWith(
+          new Error(DUPLICATE_OPERATION_ERROR_MSG),
+        );
+
+        // After retry, error propagates up, sync fails
+        await expectAsync(
+          service.applyNonConflictingOps(remoteOps),
+        ).toBeRejectedWithError(/Duplicate operation detected/);
+
+        // Should have retried once (2 calls total)
+        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(2);
+        expect(opLogStoreSpy.filterNewOps).toHaveBeenCalledTimes(2);
+      });
+
+      it('should NOT retry for non-duplicate errors', async () => {
+        const remoteOps: Operation[] = [
+          createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
+        ];
+
+        opLogStoreSpy.filterNewOps.and.returnValue(Promise.resolve(remoteOps));
+        opLogStoreSpy.appendBatch.and.rejectWith(new Error('Some other database error'));
+
+        await expectAsync(
+          service.applyNonConflictingOps(remoteOps),
+        ).toBeRejectedWithError(/Some other database error/);
+
+        // Should NOT have retried - only one call
+        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(1);
+      });
+
+      // This test verifies the retry behavior for issue #6213.
+      // When appendBatch throws "Duplicate operation detected", the service should
+      // retry with a fresh filterNewOps call (cache was invalidated by appendBatch).
+      it('should retry once on duplicate error and succeed when cache is refreshed', async () => {
+        const remoteOps: Operation[] = [
+          createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
+          createFullOp({ id: 'op-2', vectorClock: { client1: 2 } }),
+        ];
+
+        let appendCallCount = 0;
+        let filterCallCount = 0;
+
+        // First filterNewOps: returns all ops (stale cache)
+        // Second filterNewOps: returns empty (cache now fresh, ops already exist)
+        opLogStoreSpy.filterNewOps.and.callFake(async () => {
+          filterCallCount++;
+          if (filterCallCount === 1) return remoteOps; // Stale cache
+          return []; // Fresh cache - ops already exist
+        });
+
+        // First appendBatch: throws duplicate error
+        // Second appendBatch: would succeed (but won't be called since filterNewOps returns [])
+        opLogStoreSpy.appendBatch.and.callFake(async (ops: any[]) => {
+          appendCallCount++;
+          if (appendCallCount === 1) {
+            throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
+          }
+          return ops.map((_: any, i: number) => i + 1);
+        });
+
+        // After fix: should complete successfully with retry
+        await service.applyNonConflictingOps(remoteOps);
+
+        // Should have retried - filterNewOps called twice
+        expect(opLogStoreSpy.filterNewOps).toHaveBeenCalledTimes(2);
+        // appendBatch only called once (retry's filterNewOps returned [])
+        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

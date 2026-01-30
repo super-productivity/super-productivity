@@ -23,6 +23,7 @@
           color="primary"
           mat-stroked-button
           (click)="formEl.valid && updatePwAndResync()"
+          [disabled]="!formEl.valid"
         >
           <mat-icon>save</mat-icon>
           {{ T.F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT | translate }}
@@ -36,6 +37,7 @@
         color="warn"
         type="button"
         (click)="updatePWAndForceUpload()"
+        [disabled]="!passwordVal"
       >
         <mat-icon>cloud_upload</mat-icon>
         {{ T.F.SYNC.D_DECRYPT_ERROR.BTN_OVER_WRITE_REMOTE | translate }}

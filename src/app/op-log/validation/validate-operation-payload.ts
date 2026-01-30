@@ -390,9 +390,8 @@ const validateMultiEntityPayloadStructure = (
   }
 
   // Empty entityChanges is allowed (action may not have caused state changes)
-  if (payload.entityChanges.length === 0) {
-    warnings.push('MultiEntityPayload.entityChanges is empty');
-  } else {
+  // Most actions have empty entityChanges because actionPayload is sufficient for replay
+  if (payload.entityChanges.length > 0) {
     // Validate each entity change
     const changesResult = validateEntityChanges(payload.entityChanges);
     if (!changesResult.success) {

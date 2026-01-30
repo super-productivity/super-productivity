@@ -18,6 +18,7 @@ import {
   SchemaMigrationService,
 } from '../persistence/schema-migration.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { DUPLICATE_OPERATION_ERROR_PATTERN } from '../persistence/op-log-errors.const';
 import { T } from '../../t.const';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { LockService } from './lock.service';
@@ -326,22 +327,24 @@ export class RemoteOpsProcessingService {
     // Map op ID to seq for marking partial success
     const opIdToSeq = new Map<string, number>();
 
-    // Filter out duplicates in a single batch (more efficient than N individual hasOp calls)
-    const opsToApply = await this.opLogStore.filterNewOps(ops);
-    const duplicateCount = ops.length - opsToApply.length;
-    if (duplicateCount > 0) {
-      OpLog.verbose(
-        `RemoteOpsProcessingService: Skipping ${duplicateCount} duplicate op(s)`,
-      );
-    }
-
-    // Store operations with pending status before applying (single transaction for performance)
-    // If we crash after storing but before applying, these will be retried on startup
-    if (opsToApply.length > 0) {
-      const seqs = await this.opLogStore.appendBatch(opsToApply, 'remote', {
-        pendingApply: true,
-      });
-      opsToApply.forEach((op, i) => opIdToSeq.set(op.id, seqs[i]));
+    // Filter and append ops, with retry on duplicate detection (issue #6213)
+    // The race condition: filterNewOps may return ops as "new" using a stale cache,
+    // but another concurrent sync wrote them before appendBatch runs.
+    // When this happens, appendBatch throws "Duplicate operation detected" and
+    // invalidates the cache. We retry once with the now-fresh cache.
+    let opsToApply: Operation[];
+    try {
+      opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
+    } catch (e) {
+      if (e instanceof Error && e.message.includes(DUPLICATE_OPERATION_ERROR_PATTERN)) {
+        OpLog.warn(
+          'RemoteOpsProcessingService: Duplicate detected, retrying with fresh filter (issue #6213 recovery)',
+        );
+        // Cache was invalidated by appendBatch, retry with fresh filter
+        opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
+      } else {
+        throw e;
+      }
     }
 
     // Apply only NON-duplicate ops to NgRx store
@@ -362,6 +365,59 @@ export class RemoteOpsProcessingService {
         // Without this, ops created after a SYNC_IMPORT would be incorrectly
         // filtered by SyncImportFilterService as "invalidated by import".
         await this.opLogStore.mergeRemoteOpClocks(result.appliedOps);
+
+        // CRITICAL: Update protected client IDs for vector clock pruning.
+        // When a full-state op is applied, its client ID must be preserved in future
+        // vector clocks. Otherwise, pruning could remove it (if it has a low counter),
+        // causing new ops to appear CONCURRENT instead of GREATER_THAN with the import.
+        const appliedFullStateOp = result.appliedOps.find(
+          (op) =>
+            op.opType === OpType.SyncImport ||
+            op.opType === OpType.BackupImport ||
+            op.opType === OpType.Repair,
+        );
+        if (appliedFullStateOp) {
+          // CRITICAL FIX: Protect ALL client IDs in the import's vector clock, not just
+          // the import's own clientId. The import's vectorClock contains merged clocks
+          // from all clients at import time. If any of these are pruned from the local
+          // clock, new ops will appear CONCURRENT with the import instead of GREATER_THAN.
+          //
+          // Example: Import has {A_EemJ:1, B_HSxu:10342}. If we only protect B_HSxu,
+          // then A_EemJ gets pruned. New ops have {A_ypDK:6, B_HSxu:10714} (missing A_EemJ).
+          // Comparison: Import wins on A_EemJ (1>0), op wins on A_ypDK (6>0) → CONCURRENT!
+          const protectedIds = Object.keys(appliedFullStateOp.vectorClock);
+          await this.opLogStore.setProtectedClientIds(protectedIds);
+          OpLog.normal(
+            `RemoteOpsProcessingService: Updated protected client IDs from ${appliedFullStateOp.opType}: [${protectedIds.join(', ')}]`,
+          );
+
+          // CRITICAL FIX: Clear older full-state ops AFTER successfully storing the new one.
+          // This prevents the scenario where:
+          // 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
+          // 2. Client B uploads new SYNC_IMPORT with its own minimal clock
+          // 3. Client A downloads and stores B's SYNC_IMPORT
+          // 4. Without clearing, getLatestFullStateOpEntry might return X's old import
+          //    (if it has a higher UUIDv7 timestamp)
+          // 5. New operations appear CONCURRENT with X's import and get filtered
+          //
+          // We clear AFTER storing (not before) to ensure crash safety.
+          // We exclude the newly stored full-state op IDs so we don't delete what we just added.
+          const newFullStateOpIds = result.appliedOps
+            .filter(
+              (op) =>
+                op.opType === OpType.SyncImport ||
+                op.opType === OpType.BackupImport ||
+                op.opType === OpType.Repair,
+            )
+            .map((op) => op.id);
+          const clearedCount =
+            await this.opLogStore.clearFullStateOpsExcept(newFullStateOpIds);
+          if (clearedCount > 0) {
+            OpLog.normal(
+              `RemoteOpsProcessingService: Cleared ${clearedCount} old full-state op(s) after applying new one.`,
+            );
+          }
+        }
 
         OpLog.normal(
           `RemoteOpsProcessingService: Applied and marked ${appliedSeqs.length} remote ops`,
@@ -399,6 +455,53 @@ export class RemoteOpsProcessingService {
         throw result.failedOp.error;
       }
     }
+  }
+
+  /**
+   * Filters out already-applied ops and appends new ones to the store.
+   * Extracted as a helper to enable retry on duplicate detection (issue #6213).
+   *
+   * @param ops - Operations to filter and potentially append
+   * @param opIdToSeq - Map to populate with op ID -> sequence number mappings
+   * @returns The operations that were actually appended (after filtering)
+   * @throws If appendBatch fails (including "Duplicate operation detected" error)
+   */
+  private async _filterAndAppendOps(
+    ops: Operation[],
+    opIdToSeq: Map<string, number>,
+  ): Promise<Operation[]> {
+    // Filter out duplicates in a single batch (more efficient than N individual hasOp calls)
+    const opsToApply = await this.opLogStore.filterNewOps(ops);
+    const duplicateCount = ops.length - opsToApply.length;
+    if (duplicateCount > 0) {
+      OpLog.verbose(
+        `RemoteOpsProcessingService: Skipping ${duplicateCount} duplicate op(s)`,
+      );
+    }
+
+    // DIAGNOSTIC: Check if any full-state ops will be applied
+    const fullStateOps = opsToApply.filter(
+      (op) =>
+        op.opType === OpType.SyncImport ||
+        op.opType === OpType.BackupImport ||
+        op.opType === OpType.Repair,
+    );
+    if (fullStateOps.length > 0) {
+      OpLog.log(
+        `RemoteOpsProcessingService: APPLYING FULL-STATE OP(s): ${fullStateOps.map((op) => `${op.opType} from ${op.clientId}`).join(', ')}`,
+      );
+    }
+
+    // Store operations with pending status before applying (single transaction for performance)
+    // If we crash after storing but before applying, these will be retried on startup
+    if (opsToApply.length > 0) {
+      const seqs = await this.opLogStore.appendBatch(opsToApply, 'remote', {
+        pendingApply: true,
+      });
+      opsToApply.forEach((op, i) => opIdToSeq.set(op.id, seqs[i]));
+    }
+
+    return opsToApply;
   }
 
   /**

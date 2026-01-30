@@ -15,6 +15,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { SnackService } from '../../core/snack/snack.service';
 import { Log } from '../../core/log';
+import { confirmDialog } from '../../util/native-dialogs';
 import { CapacitorPlatformService } from '../../core/platform/capacitor-platform.service';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 
@@ -102,7 +103,7 @@ export class LocalBackupService {
     // --------
     if (IS_ELECTRON && typeof backupMeta !== 'boolean') {
       if (
-        confirm(
+        confirmDialog(
           this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP, {
             dir: backupMeta.folder,
             from: new Date(backupMeta.created).toLocaleString(),
@@ -118,7 +119,9 @@ export class LocalBackupService {
       // -------
     } else if (IS_ANDROID_WEB_VIEW && backupMeta === true) {
       if (
-        confirm(this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID))
+        confirmDialog(
+          this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID),
+        )
       ) {
         const backupData = await this.loadBackupAndroid();
         Log.log('backupData', backupData);
@@ -131,7 +134,9 @@ export class LocalBackupService {
       // ---
     } else if (this._platformService.isIOS() && backupMeta === true) {
       if (
-        confirm(this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID))
+        confirmDialog(
+          this._translateService.instant(T.CONFIRM.RESTORE_FILE_BACKUP_ANDROID),
+        )
       ) {
         const backupData = await this.loadBackupIOS();
         Log.log('iOS backupData loaded');

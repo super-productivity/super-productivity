@@ -9,7 +9,7 @@ export {
 
 export const DEFAULT_GITLAB_CFG: GitlabCfg = {
   isEnabled: false,
-  project: '',
+  project: null,
   gitlabBaseUrl: null,
   token: null,
   filterUsername: null,

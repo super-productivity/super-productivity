@@ -1,0 +1,6 @@
+
+### Bug Fixes
+
+* **android:** flush time tracking data when app goes to background #6207
+* **open-project:** make legacy config fields optional for backward compatibility
+* **schedule:** apply dialog max-height to schedule task dialog only

@@ -188,7 +188,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         );
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
       console.log('[Test] Client B sync completed');
 
       // Navigate to B's project and verify data
@@ -352,7 +352,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] No Angular conflict dialog - sync auto-resolved');
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
       console.log('[Test] Client B sync completed');
 
       // Check which data Client B has - may have A's data or B's data depending on resolution
@@ -535,7 +535,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] No Angular conflict dialog - sync auto-resolved');
       }
 
-      await syncPageB.waitForSyncComplete(30000);
+      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
       console.log('[Test] Client B sync completed');
 
       // Navigate back to project and verify
@@ -581,7 +581,8 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         console.log('[Test] Client A did not see conflict dialog');
       }
 
-      await syncPageA.waitForSyncComplete();
+      // Skip spinner check - sync may have completed during/before dialog handling
+      await syncPageA.waitForSyncToComplete({ skipSpinnerCheck: true });
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();

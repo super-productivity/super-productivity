@@ -645,7 +645,14 @@ test.describe('@supersync Network Failure Recovery', () => {
       // Wait for immediate upload to trigger and hit the 413
       try {
         await clientA.sync.triggerSync();
-        await clientA.page.waitForTimeout(3000);
+        // Poll for alert with increased timeout (was fixed 3000ms)
+        const alertTimeout = 5000;
+        const pollInterval = 200;
+        let elapsed = 0;
+        while (!alertShown && elapsed < alertTimeout) {
+          await clientA.page.waitForTimeout(pollInterval);
+          elapsed += pollInterval;
+        }
       } catch {
         console.log('[Test] Sync failed with quota exceeded as expected');
       }

@@ -106,7 +106,7 @@ export class MentionDirective implements OnChanges {
         return this.activeConfig?.triggerChar || '';
       }
 
-      return (this.activeConfig?.triggerChar || '') + itemValue;
+      return (this.activeConfig?.triggerChar || '') + itemValue + ' ';
     },
     mentionFilter: (searchString: string, items?: MentionItem[] | string[]) => {
       if (!items || !Array.isArray(items)) {

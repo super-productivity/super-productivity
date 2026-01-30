@@ -1,4 +1,4 @@
-import { type Page, type Locator } from '@playwright/test';
+import { type Page, type Locator, expect } from '@playwright/test';
 import { BasePage } from './base.page';
 
 export class SyncPage extends BasePage {
@@ -11,6 +11,9 @@ export class SyncPage extends BasePage {
   readonly saveBtn: Locator;
   readonly syncSpinner: Locator;
   readonly syncCheckIcon: Locator;
+  readonly encryptionPasswordInput: Locator;
+  readonly enableEncryptionBtn: Locator;
+  readonly disableEncryptionBtn: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -23,6 +26,17 @@ export class SyncPage extends BasePage {
     this.saveBtn = page.locator('mat-dialog-actions button[mat-stroked-button]');
     this.syncSpinner = page.locator('.sync-btn mat-icon.spin');
     this.syncCheckIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
+    // Encryption-related locators
+    // Note: encryptionPasswordInput is no longer used directly - password is entered in a dialog
+    this.encryptionPasswordInput = page.locator(
+      '.e2e-file-based-encrypt-key input[type="password"]',
+    );
+    // Enable encryption button is in Advanced Settings (file-based providers)
+    this.enableEncryptionBtn = page.locator(
+      '.e2e-file-based-enable-encryption-btn button',
+    );
+    // Disable encryption button is in the encryption status box (main view)
+    this.disableEncryptionBtn = page.locator('.e2e-disable-encryption-btn button');
   }
 
   async setupWebdavSync(config: {
@@ -30,6 +44,8 @@ export class SyncPage extends BasePage {
     username: string;
     password: string;
     syncFolderPath: string;
+    isEncryptionEnabled?: boolean;
+    encryptionPassword?: string;
   }): Promise<void> {
     // Try entire setup flow up to 2 times (dialog-level retry)
     for (let dialogAttempt = 0; dialogAttempt < 2; dialogAttempt++) {
@@ -172,7 +188,13 @@ export class SyncPage extends BasePage {
         await this.saveBtn.click();
 
         // Wait for dialog to close
+        await dialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
         await this.page.waitForTimeout(500);
+
+        if (config.isEncryptionEnabled && config.encryptionPassword) {
+          await this.waitForSyncReady();
+          await this.enableEncryption(config.encryptionPassword);
+        }
         return; // Success - exit the method
       }
 
@@ -220,5 +242,184 @@ export class SyncPage extends BasePage {
     await this.syncSpinner.waitFor({ state: 'hidden', timeout: 20000 }); // Reduced from 30s to 20s
     // Verify check icon appears
     await this.syncCheckIcon.waitFor({ state: 'visible' });
+  }
+
+  /**
+   * Waits for sync to be ready after page load.
+   * This ensures the provider config has been loaded from IndexedDB.
+   */
+  async waitForSyncReady(): Promise<void> {
+    // Wait for sync button to show the check icon (indicates provider is ready)
+    // The sync button shows sync_disabled when not ready, and check/done_all when ready
+    await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+  }
+
+  /**
+   * Expands the Advanced settings section in the sync dialog.
+   * The formly-collapsible component uses a custom structure with .collapsible-header
+   */
+  async expandAdvancedSettings(): Promise<void> {
+    // Find the Advanced collapsible header by its text content
+    const collapsibleHeader = this.page.locator(
+      'formly-collapsible .collapsible-header:has-text("Advanced")',
+    );
+
+    // Wait for it to be visible
+    await collapsibleHeader.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Check if the panel is already expanded by looking for .collapsible-panel sibling
+    const collapsiblePanel = this.page.locator('formly-collapsible .collapsible-panel');
+    const isExpanded = await collapsiblePanel.isVisible().catch(() => false);
+
+    if (!isExpanded) {
+      await collapsibleHeader.click();
+      // Wait for expansion animation
+      await this.page.waitForTimeout(500);
+      // Wait for panel to be visible
+      await collapsiblePanel.waitFor({ state: 'visible', timeout: 3000 });
+    }
+  }
+
+  /**
+   * Enables encryption for file-based providers (WebDAV, Dropbox, LocalFile).
+   *
+   * Flow:
+   * 1. Opens sync settings dialog
+   * 2. Expands Advanced settings
+   * 3. Clicks "Enable Encryption" button
+   * 4. Fills password in the enable encryption dialog
+   * 5. Confirms encryption
+   */
+  async enableEncryption(password: string): Promise<void> {
+    // Open sync settings dialog using right-click
+    await this.syncBtn.click({ button: 'right' });
+    const settingsDialog = this.page.locator(
+      'mat-dialog-container, .mat-mdc-dialog-container',
+    );
+    await settingsDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Expand advanced settings to access encryption button
+    await this.expandAdvancedSettings();
+
+    // Check if encryption is already enabled
+    const isEnabled = await this.disableEncryptionBtn.isVisible().catch(() => false);
+    if (isEnabled) {
+      // Encryption already enabled, close dialog and return
+      await this.page.keyboard.press('Escape');
+      await settingsDialog
+        .first()
+        .waitFor({ state: 'hidden', timeout: 5000 })
+        .catch(() => {});
+      return;
+    }
+
+    // Click the "Enable Encryption" button to open encryption dialog
+    await this.enableEncryptionBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(this.enableEncryptionBtn).toBeEnabled({ timeout: 5000 });
+    await this.enableEncryptionBtn.click();
+
+    // Wait for the encryption dialog to appear
+    // The dialog has title "Enable Encryption?" and contains password fields
+    const encryptionDialog = this.page.locator('mat-dialog-container').filter({
+      hasText: 'Enable Encryption?',
+    });
+    await encryptionDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Fill in the password fields directly by finding them within the dialog
+    const passwordInput = encryptionDialog.locator('input[type="password"]').first();
+    const confirmInput = encryptionDialog.locator('input[type="password"]').nth(1);
+
+    // Fill password field
+    await passwordInput.waitFor({ state: 'visible', timeout: 5000 });
+    await passwordInput.fill(password);
+
+    // Fill confirm password field
+    await confirmInput.waitFor({ state: 'visible', timeout: 5000 });
+    await confirmInput.fill(password);
+
+    // Wait a moment for validation
+    await this.page.waitForTimeout(300);
+
+    // Click the "Enable Encryption" button in this dialog
+    // It's the mat-flat-button with a lock icon
+    const confirmBtn = encryptionDialog.locator(
+      'button[mat-flat-button]:has-text("Enable Encryption")',
+    );
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
+    await confirmBtn.click();
+
+    // Wait for encryption dialog to close
+    // Use a unique element from the encryption dialog that won't exist after close
+    await encryptionDialog.waitFor({ state: 'hidden', timeout: 60000 });
+
+    // The settings dialog should auto-close after encryption is enabled
+    // Wait a moment for the state to settle
+    await this.page.waitForTimeout(500);
+
+    // Close settings dialog if still open
+    const isSettingsStillOpen = await settingsDialog
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (isSettingsStillOpen) {
+      await this.page.keyboard.press('Escape');
+      await settingsDialog
+        .first()
+        .waitFor({ state: 'hidden', timeout: 5000 })
+        .catch(() => {});
+    }
+  }
+
+  /**
+   * Disables encryption for file-based providers.
+   * Opens the sync settings dialog and clicks the "Disable Encryption" button.
+   * Note: The Disable Encryption button is in the main view (encryption status box),
+   * NOT in the Advanced Config section.
+   */
+  async disableEncryptionForFileBased(): Promise<void> {
+    // Open sync settings dialog using right-click
+    // (normal click triggers sync when sync is configured, right-click opens settings)
+    await this.syncBtn.click({ button: 'right' });
+    const dialog = this.page.locator('mat-dialog-container, .mat-mdc-dialog-container');
+    await dialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Wait for dialog to settle
+    await this.page.waitForTimeout(500);
+
+    // The Disable Encryption button is in the encryption status box (main view, not Advanced)
+    // Scroll to ensure visibility if needed
+    await this.disableEncryptionBtn.scrollIntoViewIfNeeded();
+    await this.disableEncryptionBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await this.disableEncryptionBtn.click();
+
+    // Wait for confirmation dialog to appear (it opens on top of the settings dialog)
+    // The confirmation dialog has title "Disable Encryption?"
+    const confirmDialog = this.page.locator('mat-dialog-container').filter({
+      hasText: 'Disable Encryption?',
+    });
+    await confirmDialog.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Click the confirm button in the confirmation dialog (the mat-flat-button with warn color)
+    const confirmBtn = confirmDialog.locator('button[mat-flat-button]');
+    await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
+    await confirmBtn.click();
+
+    // Wait for operation to complete - look for success snackbar or dialog close
+    await this.page.waitForTimeout(2000);
+
+    // Close any remaining dialogs
+    const dialogs = this.page.locator('mat-dialog-container');
+    const dialogCount = await dialogs.count();
+    for (let i = 0; i < dialogCount; i++) {
+      await this.page.keyboard.press('Escape');
+      await this.page.waitForTimeout(300);
+    }
+
+    // Ensure all dialogs are closed
+    await dialogs
+      .first()
+      .waitFor({ state: 'hidden', timeout: 5000 })
+      .catch(() => {});
   }
 }

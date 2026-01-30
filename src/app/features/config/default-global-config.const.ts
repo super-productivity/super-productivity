@@ -214,7 +214,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     superSync: {
       baseUrl: environment.production
         ? 'https://sync.super-productivity.com'
-        : 'http://localhost:1900',
+        : 'http://localhost:1901',
       userName: null,
       password: null,
       accessToken: null,

@@ -20,6 +20,16 @@ describe('WebDavHttpAdapter', () => {
     protected override get isAndroidWebView(): boolean {
       return this._isAndroidWebView;
     }
+
+    // Expose private method for testing
+    public testConvertCapacitorResponse(response: {
+      status: number;
+      headers?: Record<string, string>;
+      data?: unknown;
+      url?: string;
+    }): { status: number; headers: Record<string, string>; data: string } {
+      return (this as any)._convertCapacitorResponse(response);
+    }
   }
 
   describe('fetch mode (non-Android)', () => {
@@ -232,6 +242,95 @@ describe('WebDavHttpAdapter', () => {
         expect(e).toBeInstanceOf(HttpNotOkAPIError);
         expect((e as HttpNotOkAPIError).response.status).toBe(500);
       }
+    });
+  });
+
+  describe('_convertCapacitorResponse() data type handling', () => {
+    let testAdapter: TestableWebDavHttpAdapter;
+
+    beforeEach(() => {
+      testAdapter = new TestableWebDavHttpAdapter(false);
+    });
+
+    it('should pass through string data unchanged', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        headers: { content_type: 'text/plain' },
+        data: 'test string data',
+      });
+
+      expect(result.status).toBe(200);
+      expect(result.data).toBe('test string data');
+      expect(result.headers['content_type']).toBe('text/plain');
+    });
+
+    it('should handle null data by returning empty string', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: null,
+      });
+
+      expect(result.data).toBe('');
+    });
+
+    it('should handle undefined data by returning empty string', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: undefined,
+      });
+
+      expect(result.data).toBe('');
+    });
+
+    it('should convert ArrayBuffer data to string', () => {
+      const encoder = new TextEncoder();
+      const arrayBuffer = encoder.encode('ArrayBuffer content').buffer;
+
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: arrayBuffer,
+      });
+
+      expect(result.data).toBe('ArrayBuffer content');
+    });
+
+    it('should convert object data to JSON string', () => {
+      const objectData = { key: 'value', nested: { foo: 'bar' } };
+
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: objectData,
+      });
+
+      expect(result.data).toBe(JSON.stringify(objectData));
+    });
+
+    it('should convert number data to string', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: 42,
+      });
+
+      expect(result.data).toBe('42');
+    });
+
+    it('should convert boolean data to string', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: true,
+      });
+
+      expect(result.data).toBe('true');
+    });
+
+    it('should handle missing headers by returning empty object', () => {
+      const result = testAdapter.testConvertCapacitorResponse({
+        status: 200,
+        data: 'test',
+        headers: undefined,
+      });
+
+      expect(result.headers).toEqual({});
     });
   });
 

@@ -104,7 +104,9 @@ const _validityError = (errTxt: string, additionalInfo?: any): void => {
     if (environment.production) {
       try {
         PFLog.log('Validity Error Info string: ', JSON.stringify(additionalInfo));
-      } catch (e) {}
+      } catch (e) {
+        PFLog.warn('Failed to stringify validity error info:', e);
+      }
     }
   }
   if (errorCount <= 3) {
@@ -279,21 +281,15 @@ const validateTasksToProjectsAndTags = (
     const tag = d.tag.entities[tagId];
     if (!tag) continue;
 
-    // Self-healing for TODAY_TAG orphaned IDs
-    // TODAY_TAG is a virtual tag where taskIds stores ordering only.
-    // Orphaned IDs can occur during LWW conflict resolution when UPDATE
-    // wins over DELETE but TODAY_TAG.taskIds wasn't properly synced.
+    // TODAY_TAG is a virtual tag where taskIds stores ordering only (membership
+    // is determined by task.dueDay). Orphaned IDs can occur during LWW conflict
+    // resolution when UPDATE wins over DELETE. These are harmless - they just
+    // waste a few bytes in the ordering array. We log but don't fail validation.
     if (tagId === TODAY_TAG.id) {
       const orphanedIds = tag.taskIds.filter((tid) => !taskIds.has(tid));
       if (orphanedIds.length > 0) {
-        // Auto-repair: Remove orphaned IDs from TODAY_TAG.taskIds
-        const repairedTaskIds = tag.taskIds.filter((tid) => taskIds.has(tid));
-        d.tag.entities[TODAY_TAG.id] = {
-          ...tag,
-          taskIds: repairedTaskIds,
-        };
         PFLog.warn(
-          `[ValidateState] Self-healing: Removed ${orphanedIds.length} orphaned IDs from TODAY_TAG.taskIds`,
+          `[ValidateState] TODAY_TAG has ${orphanedIds.length} orphaned task IDs (harmless)`,
           { orphanedIds },
         );
       }

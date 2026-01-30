@@ -16,6 +16,8 @@ import { StateSnapshotService, AppStateSnapshot } from '../backup/state-snapshot
 import { Operation, OpType, RepairPayload } from '../core/operation.types';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { alertDialog } from '../../util/native-dialogs';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
@@ -54,6 +56,101 @@ export class OperationLogHydratorService {
 
   // Track if schema migration ran during this hydration (requires validation)
   private _migrationRanDuringHydration = false;
+
+  /**
+   * Finds the LAST full-state operation in an array and sets its client ID as protected.
+   * Uses reverse search because if multiple full-state ops exist, only the latest matters.
+   *
+   * This is critical for vector clock pruning: the SYNC_IMPORT client ID must be preserved
+   * in future vector clocks, otherwise pruning could remove it (if it has a low counter),
+   * causing new ops to appear CONCURRENT instead of GREATER_THAN with the import.
+   */
+  private async _setProtectedClientIdFromOps(ops: Operation[]): Promise<void> {
+    // Find LAST full-state op (not first) - if multiple imports exist, latest wins
+    for (let i = ops.length - 1; i >= 0; i--) {
+      const op = ops[i];
+      if (
+        op.opType === OpType.SyncImport ||
+        op.opType === OpType.BackupImport ||
+        op.opType === OpType.Repair
+      ) {
+        // Protect ALL client IDs in the import's vector clock, not just the import's clientId.
+        // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
+        const protectedIds = Object.keys(op.vectorClock);
+        await this.opLogStore.setProtectedClientIds(protectedIds);
+        OpLog.normal(
+          `OperationLogHydratorService: Set protected client IDs from ${op.opType}: [${protectedIds.join(', ')}]`,
+        );
+        return;
+      }
+    }
+  }
+
+  /**
+   * MIGRATION: Ensures protectedClientIds contains ALL vector clock keys from the stored SYNC_IMPORT.
+   *
+   * This handles two cases:
+   * 1. SYNC_IMPORT was processed with old code that didn't set protectedClientIds at all
+   * 2. SYNC_IMPORT was processed with buggy code that only set the import's clientId,
+   *    not ALL keys in its vectorClock (the bug we fixed)
+   *
+   * Without this migration:
+   * 1. Vector clock pruning would remove import's vectorClock entries (like A_EemJ)
+   * 2. New ops would have clocks missing those entries
+   * 3. Those ops would appear CONCURRENT with the import instead of GREATER_THAN
+   * 4. SyncImportFilterService would incorrectly filter them as "invalidated"
+   *
+   * This runs early in hydration, BEFORE any new operations are created.
+   */
+  private async _migrateProtectedClientIdsIfNeeded(): Promise<void> {
+    // Look for the latest full-state op in the entire ops log
+    const latestFullStateOp = await this.opLogStore.getLatestFullStateOp();
+    if (!latestFullStateOp) {
+      OpLog.normal(
+        'OperationLogHydratorService: No full-state op found in ops log, no migration needed',
+      );
+      return;
+    }
+
+    // Get all client IDs that SHOULD be protected (all keys in the import's vectorClock)
+    const requiredProtectedIds = Object.keys(latestFullStateOp.vectorClock);
+
+    // Check if protectedClientIds is already correctly set
+    const existingProtectedIds = await this.opLogStore.getProtectedClientIds();
+    const existingSet = new Set(existingProtectedIds);
+
+    // Check if all required IDs are already protected
+    const allProtected = requiredProtectedIds.every((id) => existingSet.has(id));
+
+    if (allProtected && existingProtectedIds.length > 0) {
+      OpLog.normal(
+        `OperationLogHydratorService: Protected client IDs already set: [${existingProtectedIds.join(', ')}]`,
+      );
+      return;
+    }
+
+    // MIGRATION: Some required IDs are missing - update to include ALL vectorClock keys
+    // This handles the bug where only the import's clientId was protected, not all vectorClock keys
+    const missingIds = requiredProtectedIds.filter((id) => !existingSet.has(id));
+    if (missingIds.length > 0) {
+      OpLog.warn(
+        `OperationLogHydratorService: MIGRATION - Missing protected IDs detected: [${missingIds.join(', ')}]`,
+      );
+    }
+
+    // CRITICAL: Also merge the SYNC_IMPORT's vectorClock into the local clock.
+    // The missing entries (like A_EemJ) may have been pruned from the local clock already.
+    // Without this, new ops would still be missing these entries even after setting protectedClientIds.
+    await this.opLogStore.mergeRemoteOpClocks([latestFullStateOp]);
+    OpLog.normal(
+      `OperationLogHydratorService: MIGRATION - Merged SYNC_IMPORT vectorClock into local clock`,
+    );
+
+    await this.opLogStore.setProtectedClientIds(requiredProtectedIds);
+    OpLog.normal(
+      `OperationLogHydratorService: MIGRATION - Set protected client IDs from ${latestFullStateOp.opType}: [${requiredProtectedIds.join(', ')}]`,
+    );
+  }
 
   async hydrateStore(): Promise<void> {
     OpLog.normal('OperationLogHydratorService: Starting hydration...');
@@ -165,6 +262,11 @@ export class OperationLogHydratorService {
           );
         }
 
+        // MIGRATION: Ensure protectedClientIds is set if a full-state op exists.
+        // This handles the case where a SYNC_IMPORT was processed with old code that
+        // didn't set protectedClientIds. Must run BEFORE any new ops are created.
+        await this._migrateProtectedClientIdsIfNeeded();
+
         // 3. Hydrate NgRx with (possibly repaired) snapshot
         // Cast to any - stateToLoad is AppStateSnapshot which is runtime-compatible but TypeScript can't verify
         this.store.dispatch(loadAllData({ appDataComplete: stateToLoad as any }));
@@ -197,12 +299,25 @@ export class OperationLogHydratorService {
               // (e.g., TODAY_TAG repair) will have the correct merged clock.
               // Without this, those operations get stale clocks and are rejected by the server.
               await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+              // FIX: Protect ALL client IDs in the import's vector clock
+              // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
+              const protectedIds = Object.keys(lastOp.vectorClock);
+              await this.opLogStore.setProtectedClientIds(protectedIds);
+              OpLog.normal(
+                `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds.join(', ')}]`,
+              );
               this.store.dispatch(
                 loadAllData({ appDataComplete: tailStateToLoad as any }),
               );
             } else {
               // FIX: Same fix for the else branch
               await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+              // FIX: Protect ALL client IDs in the import's vector clock
+              const protectedIdsElse = Object.keys(lastOp.vectorClock);
+              await this.opLogStore.setProtectedClientIds(protectedIdsElse);
+              OpLog.normal(
+                `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIdsElse.join(', ')}]`,
+              );
               this.store.dispatch(loadAllData({ appDataComplete: appData as any }));
             }
             // No snapshot save needed - full state ops already contain complete state
@@ -226,6 +341,8 @@ export class OperationLogHydratorService {
             // Merge replayed ops' clocks into local clock
             // This ensures subsequent ops have clocks that dominate these tail ops
             await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
+            // FIX: Set protected client ID if any replayed op is a full-state op
+            await this._setProtectedClientIdFromOps(opsToReplay);
 
             // CHECKPOINT C: Validate state after replaying tail operations
             // Must validate BEFORE saving snapshot to avoid persisting corrupted state
@@ -261,6 +378,11 @@ export class OperationLogHydratorService {
           return;
         }
 
+        // MIGRATION: Ensure protectedClientIds is set if a full-state op exists.
+        // This handles the case where a SYNC_IMPORT was processed with old code that
+        // didn't set protectedClientIds. Must run BEFORE any new ops are created.
+        await this._migrateProtectedClientIdsIfNeeded();
+
         // Optimization: If last op is SyncImport or Repair, skip replay and load directly
         const lastOp = allOps[allOps.length - 1].op;
         const appData = this._extractFullStateFromOp(lastOp);
@@ -283,10 +405,23 @@ export class OperationLogHydratorService {
             // FIX: Merge vector clock BEFORE dispatching loadAllData
             // Same fix as the tail ops branch - prevents stale clock bug
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+            // FIX: Protect ALL client IDs in the import's vector clock
+            // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
+            const protectedIds2 = Object.keys(lastOp.vectorClock);
+            await this.opLogStore.setProtectedClientIds(protectedIds2);
+            OpLog.normal(
+              `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2.join(', ')}]`,
+            );
             this.store.dispatch(loadAllData({ appDataComplete: stateToLoad as any }));
           } else {
             // FIX: Same fix for the else branch
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
+            // FIX: Protect ALL client IDs in the import's vector clock
+            const protectedIds2Else = Object.keys(lastOp.vectorClock);
+            await this.opLogStore.setProtectedClientIds(protectedIds2Else);
+            OpLog.normal(
+              `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2Else.join(', ')}]`,
+            );
             this.store.dispatch(loadAllData({ appDataComplete: appData as any }));
           }
           // No snapshot save needed - full state ops already contain complete state
@@ -308,6 +443,8 @@ export class OperationLogHydratorService {
 
           // Merge replayed ops' clocks into local clock
           await this.opLogStore.mergeRemoteOpClocks(opsToReplay);
+          // FIX: Set protected client ID if any replayed op is a full-state op
+          await this._setProtectedClientIdFromOps(opsToReplay);
 
           // CHECKPOINT C: Validate state after replaying all operations
           // Must validate BEFORE saving snapshot to avoid persisting corrupted state
@@ -334,10 +471,24 @@ export class OperationLogHydratorService {
       await this.retryFailedRemoteOps();
     } catch (e) {
       OpLog.err('OperationLogHydratorService: Error during hydration', e);
+
+      // Handle IndexedDB open failure with specific guidance
+      if (e instanceof IndexedDBOpenError) {
+        this._showIndexedDBOpenError(e);
+        throw e;
+      }
+
       try {
         await this.recoveryService.attemptRecovery();
       } catch (recoveryErr) {
         OpLog.err('OperationLogHydratorService: Recovery also failed', recoveryErr);
+
+        // Check if recovery failed due to IndexedDB issue
+        if (recoveryErr instanceof IndexedDBOpenError) {
+          this._showIndexedDBOpenError(recoveryErr);
+          throw recoveryErr;
+        }
+
         this.snackService.open({
           type: 'ERROR',
           msg: T.F.SYNC.S.HYDRATION_FAILED,
@@ -589,5 +740,49 @@ export class OperationLogHydratorService {
    */
   private async _runLegacyMigrationIfNeeded(): Promise<void> {
     // No-op: placeholder for future migrations
+  }
+
+  /**
+   * Shows a helpful error dialog when IndexedDB fails to open.
+   * Provides platform-specific guidance for "backing store" errors.
+   * Also logs full error details to console for debugging.
+   *
+   * @see https://github.com/johannesjo/super-productivity/issues/6255
+   */
+  private _showIndexedDBOpenError(error: IndexedDBOpenError): void {
+    // Log full error details to console for debugging (can be copied by users)
+    OpLog.err(
+      'IndexedDB open failed after all retries. Original error:',
+      error.originalError,
+    );
+
+    const originalMsg =
+      error.originalError instanceof Error
+        ? error.originalError.message
+        : String(error.originalError);
+
+    let message =
+      'Database Error - Cannot Load Data\n\n' +
+      'Super Productivity cannot open its database. ' +
+      'This may be caused by:\n\n' +
+      '- Low disk space\n' +
+      '- Temporary file lock (try closing other tabs)\n' +
+      '- Storage corruption\n\n';
+
+    if (error.isBackingStoreError) {
+      message +=
+        'Recovery steps:\n' +
+        '1. Close ALL browser tabs and windows\n' +
+        '2. Restart the app\n' +
+        '3. If using Linux Snap, try: snap set core experimental.refresh-app-awareness=true\n' +
+        '4. If issue persists, check available disk space\n\n';
+    }
+
+    message +=
+      'If the problem continues after restart, your browser storage may need to be cleared.\n\n' +
+      `Technical details: ${originalMsg}\n\n` +
+      '(Check browser console for full error details)';
+
+    alertDialog(message);
   }
 }

@@ -199,9 +199,15 @@
 >
   Super Productivity
   <a
+    (click)="copyVersionToClipboard(appVersion); $event?.preventDefault()"
+    href="#"
+    >{{ appVersion }}</a
+  >
+  –
+  <a
     href="https://github.com/super-productivity/super-productivity/blob/master/CHANGELOG.md"
     target="_blank"
-    >{{ appVersion }}</a
+    >Changelog</a
   >
   –
   <a

@@ -1,7 +1,12 @@
 import { WebdavBaseProvider } from './webdav-base-provider';
 import { SyncProviderId } from '../../provider.const';
-import { MissingCredentialsSPError } from '../../../core/errors/sync-errors';
+import {
+  MissingCredentialsSPError,
+  RemoteFileChangedUnexpectedly,
+  UploadRevToMatchMismatchAPIError,
+} from '../../../core/errors/sync-errors';
 import { WebdavPrivateCfg } from './webdav.model';
+import { WebdavApi } from './webdav-api';
 
 /**
  * Concrete implementation for testing the abstract WebdavBaseProvider
@@ -17,6 +22,11 @@ class TestWebdavProvider extends WebdavBaseProvider<SyncProviderId.WebDAV> {
   // Expose protected method for testing
   getFilePathTest(targetPath: string, cfg: WebdavPrivateCfg): string {
     return this._getFilePath(targetPath, cfg);
+  }
+
+  // Expose protected _api for testing
+  get api(): WebdavApi {
+    return this._api;
   }
 }
 
@@ -296,6 +306,40 @@ describe('WebdavBaseProvider', () => {
       const result = await provider.isReady();
 
       expect(result).toBe(true);
+    });
+  });
+
+  describe('uploadFile', () => {
+    const validCfg: WebdavPrivateCfg = {
+      baseUrl: 'http://example.com',
+      userName: 'user',
+      password: 'pass',
+      syncFolderPath: '/sync',
+      encryptKey: '',
+    };
+
+    beforeEach(() => {
+      spyOn(provider.privateCfg, 'load').and.returnValue(Promise.resolve(validCfg));
+    });
+
+    it('should translate RemoteFileChangedUnexpectedly to UploadRevToMatchMismatchAPIError', async () => {
+      const originalError = new RemoteFileChangedUnexpectedly(
+        'File was modified on remote (expected rev: 2023-01-01)',
+      );
+      spyOn(provider.api, 'upload').and.rejectWith(originalError);
+
+      await expectAsync(
+        provider.uploadFile('test.json', '{}', '2023-01-01', false),
+      ).toBeRejectedWithError(UploadRevToMatchMismatchAPIError);
+    });
+
+    it('should pass through other errors unchanged', async () => {
+      const otherError = new Error('Network error');
+      spyOn(provider.api, 'upload').and.rejectWith(otherError);
+
+      await expectAsync(
+        provider.uploadFile('test.json', '{}', '2023-01-01', false),
+      ).toBeRejectedWith(otherError);
     });
   });
 });

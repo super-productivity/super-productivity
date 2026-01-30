@@ -8,6 +8,7 @@ import { isFileBasedProvider, isOperationSyncCapable } from './operation-sync.ut
 import { OpLog } from '../../core/log';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { handleStorageQuotaError } from './sync-error-utils';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 const IMMEDIATE_UPLOAD_DEBOUNCE_MS = 2000;
 
@@ -49,6 +50,7 @@ export class ImmediateUploadService implements OnDestroy {
   private _providerManager = inject(SyncProviderManager);
   private _syncService = inject(OperationLogSyncService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _syncWrapper = inject(SyncWrapperService);
 
   private _uploadTrigger$ = new Subject<void>();
   private _subscription: Subscription | null = null;
@@ -120,6 +122,11 @@ export class ImmediateUploadService implements OnDestroy {
 
     // Don't overlap with full sync
     if (this._providerManager.isSyncInProgress) {
+      return false;
+    }
+
+    // Don't overlap with encryption operations (password change, enable/disable)
+    if (this._syncWrapper.isEncryptionOperationInProgress) {
       return false;
     }
 

@@ -263,12 +263,18 @@ test.describe('@supersync Time Tracking Advanced Sync', () => {
       console.log('[Concurrent Time Test] All synced');
 
       // ============ PHASE 5: Verify Consistent State ============
-      // Reload to ensure UI reflects final state
-      await clientA.page.reload();
+      // Reload to ensure UI reflects final state (use goto instead of reload for reliability)
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await waitForAppReady(clientA.page);
       await waitForTask(clientA.page, taskName);
 
-      await clientB.page.reload();
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await waitForAppReady(clientB.page);
       await waitForTask(clientB.page, taskName);
 

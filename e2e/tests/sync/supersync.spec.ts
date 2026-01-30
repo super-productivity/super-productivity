@@ -865,7 +865,11 @@ test.describe('@supersync SuperSync E2E', () => {
       console.log('[TimeTrack Test] Client B synced');
 
       // Reload to ensure UI reflects DB state (in case of sync UI glitch)
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await waitForAppReady(clientB.page);
 
       // ============ PHASE 7: Verify Time on Client B ============

@@ -135,7 +135,7 @@ export class ShortSyntaxEffects {
         }
 
         const actions: Action[] = [];
-        const { taskChanges } = r;
+        const { taskChanges, attachments } = r;
 
         // Build scheduling info from parsed short syntax
         let schedulingInfo:
@@ -192,6 +192,11 @@ export class ShortSyntaxEffects {
         const finalTaskChanges = { ...taskChanges };
         if (tagIds && tagIds.length && !isEqualTags) {
           finalTaskChanges.tagIds = unique(tagIds);
+        }
+
+        // Add parsed URL attachments to task (merge with existing)
+        if (attachments.length > 0) {
+          finalTaskChanges.attachments = [...(task.attachments || []), ...attachments];
         }
 
         // Use compound action for atomic state update

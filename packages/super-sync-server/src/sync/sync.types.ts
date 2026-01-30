@@ -146,6 +146,7 @@ export interface UploadOpsRequest {
   clientId: string;
   lastKnownServerSeq?: number;
   requestId?: string; // For request deduplication on retries
+  isCleanSlate?: boolean; // If true, server deletes all user data before accepting ops
 }
 
 export interface UploadResult {
@@ -154,6 +155,11 @@ export interface UploadResult {
   serverSeq?: number;
   error?: string;
   errorCode?: SyncErrorCode;
+  /**
+   * The existing entity's vector clock when rejecting due to conflict.
+   * Allows clients to create LWW updates that dominate the server's state.
+   */
+  existingClock?: VectorClock;
 }
 
 export interface UploadOpsResponse {

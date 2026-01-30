@@ -101,6 +101,7 @@ export class WebDavHttpAdapter {
             method: options.method,
             headers: options.headers,
             data: options.body,
+            responseType: 'text', // Explicitly request text to avoid iOS auto-detecting and returning non-string types
           });
           response = this._convertCapacitorResponse(capacitorResponse);
         }
@@ -155,10 +156,34 @@ export class WebDavHttpAdapter {
   }
 
   private _convertCapacitorResponse(response: HttpResponse): WebDavHttpResponse {
+    let data = response.data;
+
+    // Ensure data is a string - CapacitorHttp may return different types
+    // depending on Content-Type header when responseType is not specified
+    if (data === null || data === undefined) {
+      data = '';
+    } else if (typeof data !== 'string') {
+      // Log warning for debugging - this shouldn't happen with responseType: 'text'
+      // but we handle it defensively for iOS compatibility
+      PFLog.warn(
+        `${WebDavHttpAdapter.L}._convertCapacitorResponse() received non-string data type: ${typeof data}`,
+      );
+
+      // Try to convert to string based on actual type
+      if (data instanceof ArrayBuffer) {
+        data = new TextDecoder().decode(data);
+      } else if (typeof data === 'object') {
+        // CapacitorHttp may auto-parse JSON responses
+        data = JSON.stringify(data);
+      } else {
+        data = String(data);
+      }
+    }
+
     return {
       status: response.status,
       headers: response.headers || {},
-      data: response.data || '',
+      data,
     };
   }
 
