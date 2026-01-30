@@ -411,7 +411,8 @@ export class MagicNavConfigService {
       type: 'route',
       id: 'habits',
       label: T.MH.HABITS,
-      icon: 'repeat',
+      icon: 'check_box',
+      svgIcon: 'habit',
       route: '/habits',
     });
 
