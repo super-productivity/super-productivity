@@ -361,6 +361,91 @@ describe('migrate-legacy-backup', () => {
       expect(result2.task.ids.length).toBe(result1.task.ids.length);
     });
 
+    it('should NOT overwrite archiveYoung for v13-v15 data with empty timeTracking', () => {
+      // Simulates a v13-v15 backup: already has archiveYoung/archiveOld (migration 2 ran),
+      // has improvement (v13-v15 marker), but timeTracking.project is empty (no work tracked).
+      // Migration 2 must skip and preserve existing archiveYoung.
+      const data = createLegacyBackup({
+        // Remove v10 markers
+        taskArchive: undefined,
+        bookmark: undefined,
+        // Add v13+ shape: archives already split
+        archiveYoung: {
+          task: {
+            ids: ['arch-1'],
+            entities: {
+              'arch-1': {
+                id: 'arch-1',
+                projectId: 'proj-1',
+                title: 'Archived from v13',
+                subTaskIds: [],
+                timeSpentOnDay: {},
+                timeSpent: 0,
+                timeEstimate: 0,
+                isDone: true,
+                tagIds: [],
+                created: 1704000000000,
+                attachments: [],
+              },
+            },
+          },
+          timeTracking: { project: {}, tag: {} },
+          lastTimeTrackingFlush: 0,
+        },
+        archiveOld: {
+          task: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          lastTimeTrackingFlush: 0,
+        },
+        // Empty time tracking (the edge case trigger)
+        timeTracking: { project: {}, tag: {} },
+        // Still has improvement (v13-v15 detection marker)
+        improvement: { ids: [], entities: {}, hiddenImprovementBannerItems: [] },
+      });
+
+      // Remove workStart/workEnd from project (already extracted in v13)
+      delete data.project.entities['proj-1'].workStart;
+      delete data.project.entities['proj-1'].workEnd;
+
+      const result = migrateLegacyBackup(data) as any;
+
+      // archiveYoung must be preserved, NOT overwritten with empty
+      expect(result.archiveYoung.task.ids).toContain('arch-1');
+      expect(result.archiveYoung.task.ids.length).toBe(1);
+      expect(result.archiveYoung.task.entities['arch-1'].title).toBe('Archived from v13');
+    });
+
+    it('should NOT overwrite archiveYoung for v13-v15 data even with no archived tasks', () => {
+      // Same as above but archiveYoung has no tasks (empty but present).
+      // Migration 2 must still skip — presence of archiveYoung + archiveOld + timeTracking
+      // without taskArchive means migration 2 already ran.
+      const data = createLegacyBackup({
+        taskArchive: undefined,
+        bookmark: undefined,
+        archiveYoung: {
+          task: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          lastTimeTrackingFlush: 0,
+        },
+        archiveOld: {
+          task: { ids: [], entities: {} },
+          timeTracking: { project: {}, tag: {} },
+          lastTimeTrackingFlush: 0,
+        },
+        timeTracking: { project: {}, tag: {} },
+        improvement: { ids: [], entities: {}, hiddenImprovementBannerItems: [] },
+      });
+
+      delete data.project.entities['proj-1'].workStart;
+      delete data.project.entities['proj-1'].workEnd;
+
+      const result = migrateLegacyBackup(data) as any;
+
+      // Should still have empty archives (not re-created from nonexistent taskArchive)
+      expect(result.archiveYoung.task.ids.length).toBe(0);
+      expect(result.archiveOld.task.ids.length).toBe(0);
+    });
+
     it('should handle backup with no tasks gracefully', () => {
       const data = createLegacyBackup({
         task: { ids: [], entities: {}, currentTaskId: null, __modelVersion: 3.6 },

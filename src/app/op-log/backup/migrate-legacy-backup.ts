@@ -124,14 +124,12 @@ export const migrateLegacyBackup = (
 function _migration2ArchiveSplitAndTimeTracking(
   data: Record<string, any>,
 ): Record<string, any> {
-  // Skip if already migrated
-  if (
-    data.archiveYoung &&
-    data.archiveOld &&
-    data.timeTracking &&
-    data.timeTracking.project &&
-    Object.keys(data.timeTracking.project).length
-  ) {
+  // Skip if already migrated (archiveYoung with tasks means migration 2 already ran)
+  if (data.archiveYoung?.task?.ids?.length > 0 && data.archiveOld && data.timeTracking) {
+    return data;
+  }
+  // Also skip if archives exist with timeTracking data (migration ran, but no archived tasks)
+  if (data.archiveYoung && data.archiveOld && data.timeTracking && !data.taskArchive) {
     return data;
   }
   PFLog.log('migrateLegacyBackup: Running migration 2 (archive split + time tracking)');
