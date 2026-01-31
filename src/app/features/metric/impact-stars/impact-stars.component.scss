@@ -38,6 +38,13 @@
   height: 28px;
   transition: all 0.2s ease;
 }
+.impact-stars__star.is-active mat-icon {
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+}
 
 :host-context(.isDarkTheme) .impact-stars__star mat-icon {
   color: #fff;

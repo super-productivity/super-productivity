@@ -53,6 +53,43 @@ describe('GlobalConfigReducer', () => {
       expect(result.misc.isDisableAnimations).toBe(true);
     });
 
+    it('should fill missing tasks config fields with defaults', () => {
+      // Simulate loading config with missing tasks fields (e.g., from older app version)
+      const partialTasksConfig = {
+        isConfirmBeforeDelete: true,
+        // Missing: isAutoMarkParentAsDone, isAutoAddWorkedOnToToday, etc.
+      };
+
+      const incomingConfig = {
+        ...initialGlobalConfigState,
+        tasks: partialTasksConfig as any,
+      };
+
+      const result = globalConfigReducer(
+        initialGlobalConfigState,
+        loadAllData({
+          appDataComplete: { globalConfig: incomingConfig } as AppDataComplete,
+        }),
+      );
+
+      // Existing value preserved
+      expect(result.tasks.isConfirmBeforeDelete).toBe(true);
+      // Missing values filled from defaults
+      expect(result.tasks.isAutoMarkParentAsDone).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isAutoMarkParentAsDone,
+      );
+      expect(result.tasks.isAutoAddWorkedOnToToday).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isAutoAddWorkedOnToToday,
+      );
+      expect(result.tasks.isTrayShowCurrent).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isTrayShowCurrent,
+      );
+      expect(result.tasks.isMarkdownFormattingInNotesEnabled).toBe(
+        DEFAULT_GLOBAL_CONFIG.tasks.isMarkdownFormattingInNotesEnabled,
+      );
+      expect(result.tasks.notesTemplate).toBe(DEFAULT_GLOBAL_CONFIG.tasks.notesTemplate);
+    });
+
     it('should use syncProvider from snapshot when oldState has null (initial load)', () => {
       // This simulates app startup: oldState is initialGlobalConfigState with null syncProvider
       const oldState = initialGlobalConfigState; // syncProvider is null

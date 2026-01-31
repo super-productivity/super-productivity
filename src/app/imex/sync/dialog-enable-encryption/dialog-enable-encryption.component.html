@@ -1,0 +1,104 @@
+<h1 mat-dialog-title>
+  {{ textKeys.ENABLE_ENCRYPTION_TITLE | translate }}
+</h1>
+
+@if (!canProceed()) {
+  <mat-dialog-content>
+    <div class="info-box">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <div>
+        <p>{{ errorReason() | translate }}</p>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button
+      mat-button
+      type="button"
+      (click)="cancel()"
+    >
+      {{ T.G.CLOSE | translate }}
+    </button>
+  </mat-dialog-actions>
+} @else {
+  <mat-dialog-content>
+    <div class="warning-box">
+      <mat-icon aria-hidden="true">warning</mat-icon>
+      <p>{{ textKeys.ENABLE_ENCRYPTION_WARNING | translate }}</p>
+    </div>
+
+    <div class="password-fields">
+      <mat-form-field appearance="outline">
+        <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          type="password"
+          [(ngModel)]="password"
+          autocomplete="new-password"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          type="password"
+          [(ngModel)]="confirmPassword"
+          autocomplete="new-password"
+        />
+      </mat-form-field>
+
+      @if (passwordError) {
+        <div class="password-error">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ passwordError | translate }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="info-section">
+      <h3>{{ textKeys.ENABLE_ENCRYPTION_WHAT_HAPPENS | translate }}</h3>
+      <ul>
+        <li>{{ textKeys.ENABLE_ENCRYPTION_ITEM_1 | translate }}</li>
+        <li>{{ textKeys.ENABLE_ENCRYPTION_ITEM_2 | translate }}</li>
+        <li>{{ textKeys.ENABLE_ENCRYPTION_ITEM_3 | translate }}</li>
+      </ul>
+    </div>
+
+    <p class="note">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>{{ textKeys.ENABLE_ENCRYPTION_NOTE | translate }}</span>
+    </p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button
+      mat-button
+      type="button"
+      [disabled]="isLoading()"
+      (click)="cancel()"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+    <button
+      mat-flat-button
+      color="warn"
+      type="button"
+      [disabled]="isLoading() || !isPasswordValid"
+      (click)="confirm()"
+    >
+      @if (isLoading()) {
+        <mat-spinner
+          diameter="20"
+          aria-label="Processing"
+        ></mat-spinner>
+      } @else {
+        <ng-container>
+          <mat-icon aria-hidden="true">lock</mat-icon>
+          {{ textKeys.BTN_ENABLE_ENCRYPTION | translate }}
+        </ng-container>
+      }
+    </button>
+  </mat-dialog-actions>
+}

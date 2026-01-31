@@ -561,4 +561,161 @@ describe('bulkHydrationMetaReducer', () => {
       expect(callCount).toBe(2);
     });
   });
+
+  // =========================================================================
+  // Archive + LWW Update same-batch filtering (Bug B defense-in-depth)
+  // =========================================================================
+  describe('archive + LWW Update same-batch filtering', () => {
+    const createMoveToArchiveOp = (entityIds: string[]): Operation =>
+      createMockOperation({
+        id: `archive-op-${entityIds.join('-')}`,
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: entityIds[0],
+        entityIds,
+        payload: {
+          actionPayload: {
+            tasks: entityIds.map((id) => ({ id, title: `Task ${id}` })),
+          },
+          entityChanges: [],
+        },
+      });
+
+    const createLwwUpdateOp = (entityId: string): Operation =>
+      createMockOperation({
+        id: `lww-update-${entityId}`,
+        actionType: `[TASK] LWW Update` as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId,
+        payload: { id: entityId, title: 'LWW Updated Title' },
+      });
+
+    it('should skip LWW Update for entity archived in same batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const operations = [createMoveToArchiveOp([TASK_ID]), createLwwUpdateOp(TASK_ID)];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Only the archive op should be applied (1 call), LWW Update skipped
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
+    it('should apply LWW Update for non-archived entity normally', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      // Archive task-1, LWW Update targets task-2 (different entity)
+      const operations = [createMoveToArchiveOp([TASK_ID]), createLwwUpdateOp(TASK_ID_2)];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Both ops should be applied
+      expect(mockReducer).toHaveBeenCalledTimes(2);
+    });
+
+    it('should NOT skip moveToArchive op itself', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const operations = [createMoveToArchiveOp([TASK_ID])];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
+    it('should apply non-LWW-Update ops for archived entities normally', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      // Archive task-1, then a regular Update for task-1 (not LWW Update)
+      const regularUpdate = createMockOperation({
+        id: 'regular-update',
+        actionType: '[Task] Update Task' as ActionType,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: { task: { id: TASK_ID, changes: { title: 'Regular Update' } } },
+      });
+      const operations = [createMoveToArchiveOp([TASK_ID]), regularUpdate];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Both ops should be applied — only LWW Update pattern is filtered
+      expect(mockReducer).toHaveBeenCalledTimes(2);
+    });
+
+    it('should skip LWW Update even when it appears BEFORE moveToArchive in the batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      // LWW Update comes first, moveToArchive comes second — pre-scan should still catch it
+      const operations = [createLwwUpdateOp(TASK_ID), createMoveToArchiveOp([TASK_ID])];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Only the archive op should be applied (LWW Update skipped)
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
+    it('should skip multiple LWW Updates when multi-entity archive is in same batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      // Archive both task1 and task2, plus LWW Updates for each
+      const operations = [
+        createMoveToArchiveOp([TASK_ID, TASK_ID_2]),
+        createLwwUpdateOp(TASK_ID),
+        createLwwUpdateOp(TASK_ID_2),
+      ];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Only the archive op should be applied, both LWW Updates skipped
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+
+    it('should filter using entityId fallback when entityIds array is missing', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      // Archive op with only entityId, no entityIds — fallback should still filter
+      const archiveOpEntityIdOnly = createMockOperation({
+        id: 'archive-entityid-only',
+        actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        opType: OpType.Update,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: { tasks: [{ id: TASK_ID, title: 'Task' }] },
+          entityChanges: [],
+        },
+      });
+      // Remove entityIds to test the fallback
+      delete (archiveOpEntityIdOnly as any).entityIds;
+
+      const operations = [archiveOpEntityIdOnly, createLwwUpdateOp(TASK_ID)];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // With entityId fallback, the LWW Update should be skipped
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
+    });
+  });
 });

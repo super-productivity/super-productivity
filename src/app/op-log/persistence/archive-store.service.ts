@@ -3,6 +3,7 @@ import { IDBPDatabase, openDB } from 'idb';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import { DB_NAME, DB_VERSION, STORE_NAMES, SINGLETON_KEY } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
+import { ARCHIVE_STORE_NOT_INITIALIZED } from './op-log-errors.const';
 
 /**
  * Entry stored in archive_young or archive_old object stores.
@@ -72,9 +73,7 @@ export class ArchiveStoreService {
 
   private get db(): IDBPDatabase<ArchiveDBSchema> {
     if (!this._db) {
-      throw new Error(
-        'ArchiveStoreService not initialized. Ensure _ensureInit() is called.',
-      );
+      throw new Error(ARCHIVE_STORE_NOT_INITIALIZED);
     }
     return this._db;
   }
@@ -147,6 +146,38 @@ export class ArchiveStoreService {
     await this._ensureInit();
     const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
     return !!entry;
+  }
+
+  /**
+   * Atomically saves both archiveYoung and archiveOld in a single transaction.
+   *
+   * This ensures that either both writes succeed or neither does, preventing
+   * data loss if a failure occurs between the two writes.
+   *
+   * @param archiveYoung The archiveYoung data to save.
+   * @param archiveOld The archiveOld data to save.
+   */
+  async saveArchivesAtomic(
+    archiveYoung: ArchiveModel,
+    archiveOld: ArchiveModel,
+  ): Promise<void> {
+    await this._ensureInit();
+    const tx = this.db.transaction(
+      [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
+      'readwrite',
+    );
+    const now = Date.now();
+    await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
+      id: SINGLETON_KEY,
+      data: archiveYoung,
+      lastModified: now,
+    });
+    await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
+      id: SINGLETON_KEY,
+      data: archiveOld,
+      lastModified: now,
+    });
+    await tx.done;
   }
 
   /**

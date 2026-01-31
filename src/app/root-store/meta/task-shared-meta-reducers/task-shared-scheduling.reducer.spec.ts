@@ -3,6 +3,7 @@ import { taskSharedSchedulingMetaReducer } from './task-shared-scheduling.reduce
 import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import {
@@ -77,12 +78,12 @@ describe('taskSharedSchedulingMetaReducer', () => {
     it('should not change state when task is already correctly scheduled', () => {
       const now = Date.now();
       const testState = createStateWithExistingTasks([], [], [], ['task1']);
-      // Update the task to already have the correct dueWithTime and dueDay
+      // Update the task to already have the correct dueWithTime (dueDay should be undefined with mutual exclusivity)
       const task1 = testState[TASK_FEATURE_NAME].entities.task1 as Task;
       testState[TASK_FEATURE_NAME].entities.task1 = {
         ...task1,
         dueWithTime: now,
-        dueDay: getDbDateStr(),
+        dueDay: undefined, // Mutual exclusivity: dueDay is undefined when dueWithTime is set
       } as Task;
       const action = createScheduleAction({}, now);
 
@@ -90,21 +91,21 @@ describe('taskSharedSchedulingMetaReducer', () => {
       expect(mockReducer).toHaveBeenCalledWith(testState, action);
     });
 
-    it('should set dueDay to today when scheduling for today', () => {
+    it('should set dueDay to undefined when scheduling for today (mutual exclusivity)', () => {
       const now = Date.now();
       const testState = createStateWithExistingTasks(['task1'], [], [], []);
       const action = createScheduleAction({}, now);
 
       metaReducer(testState, action);
       expectStateUpdate(
-        expectTaskUpdate('task1', { dueWithTime: now, dueDay: getDbDateStr() }),
+        expectTaskUpdate('task1', { dueWithTime: now, dueDay: undefined }),
         action,
         mockReducer,
         testState,
       );
     });
 
-    it('should set dueDay to undefined when scheduling for a different day', () => {
+    it('should set dueDay to undefined when scheduling for a different day (mutual exclusivity)', () => {
       const testState = createStateWithExistingTasks(['task1'], [], [], ['task1']);
       // eslint-disable-next-line no-mixed-operators
       const tomorrowTimestamp = Date.now() + 24 * 60 * 60 * 1000;
@@ -112,11 +113,31 @@ describe('taskSharedSchedulingMetaReducer', () => {
 
       metaReducer(testState, action);
       expectStateUpdate(
-        expectTaskUpdate('task1', { dueWithTime: tomorrowTimestamp, dueDay: undefined }),
+        expectTaskUpdate('task1', {
+          dueWithTime: tomorrowTimestamp,
+          dueDay: undefined,
+        }),
         action,
         mockReducer,
         testState,
       );
+    });
+
+    it('should clear dueDay when scheduling with dueWithTime (mutual exclusivity)', () => {
+      // Mutual exclusivity pattern: setting dueWithTime clears dueDay
+      // Tasks scheduled with a specific time use dueWithTime as the source of truth
+      const testState = createStateWithExistingTasks(['task1'], [], [], []);
+      // eslint-disable-next-line no-mixed-operators
+      const tomorrowTimestamp = Date.now() + 24 * 60 * 60 * 1000;
+      const action = createScheduleAction({}, tomorrowTimestamp);
+
+      metaReducer(testState, action);
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+      // Mutual exclusivity: dueDay should be undefined when dueWithTime is set
+      expect(updatedTask.dueDay).toBeUndefined();
+      expect(updatedTask.dueWithTime).toBe(tomorrowTimestamp);
     });
   });
 
@@ -160,6 +181,49 @@ describe('taskSharedSchedulingMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+  });
+
+  describe('dismissReminderOnly action', () => {
+    it('should only clear remindAt and preserve dueDay and dueWithTime', () => {
+      const now = Date.now();
+      const today = getDbDateStr();
+      const testState = createStateWithExistingTasks([], [], [], ['task1']);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: today,
+        dueWithTime: now,
+        remindAt: now,
+      });
+
+      const action = TaskSharedActions.dismissReminderOnly({ id: 'task1' });
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+      expect(updatedTask.remindAt).toBeUndefined();
+      expect(updatedTask.dueDay).toBe(today);
+      expect(updatedTask.dueWithTime).toBe(now);
+    });
+
+    it('should not remove task from TODAY tag', () => {
+      const now = Date.now();
+      const testState = createStateWithExistingTasks([], [], [], ['task1', 'other-task']);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueWithTime: now,
+        remindAt: now,
+      });
+
+      const action = TaskSharedActions.dismissReminderOnly({ id: 'task1' });
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const todayTag = updatedState[TAG_FEATURE_NAME].entities.TODAY;
+
+      expect(todayTag.taskIds).toContain('task1');
+      expect(todayTag.taskIds).toContain('other-task');
     });
   });
 

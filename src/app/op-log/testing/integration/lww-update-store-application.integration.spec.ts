@@ -515,11 +515,11 @@ describe('LWW Update Store Application Integration', () => {
         meta: { isPersistent: true, entityType: 'UNKNOWN_TYPE', entityId: 'unknown1' },
       };
 
-      spyOn(console, 'warn');
+      // getLwwEntityType uses a Map derived from ENTITY_TYPES, so unknown types
+      // return undefined and the action is silently passed through (no warn).
       const resultState = composedReducer(initialState, action);
 
-      // Should warn and pass through
-      expect(console.warn).toHaveBeenCalled();
+      // State should be unchanged - unknown type is passed through
       expect(resultState).toEqual(initialState);
     });
   });

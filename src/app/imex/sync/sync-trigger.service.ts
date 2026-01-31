@@ -16,7 +16,6 @@ import {
   take,
   tap,
   throttleTime,
-  withLatestFrom,
 } from 'rxjs/operators';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { isOnline$ } from '../../util/is-online';
@@ -33,16 +32,14 @@ import { androidInterface } from '../../features/android/android-interface';
 import { ipcResume$, ipcSuspend$ } from '../../core/ipc-events';
 import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
-import { Store } from '@ngrx/store';
-import { selectCurrentTaskId } from '../../features/tasks/store/task.selectors';
 import { SyncLog } from '../../core/log';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { SyncProviderId } from '../../op-log/sync-exports';
 
 const MAX_WAIT_FOR_INITIAL_SYNC = 25000;
-const USER_INTERACTION_SYNC_CHECK_THROTTLE_TIME = 15 * 60 * 10000;
+/** 15 minutes in milliseconds - throttle time for user activity sync checks */
+const USER_ACTIVITY_SYNC_THROTTLE_TIME = 15 * 60 * 1000;
 
-// TODO naming
 @Injectable({
   providedIn: 'root',
 })
@@ -50,7 +47,6 @@ export class SyncTriggerService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dataInitStateService = inject(DataInitStateService);
   private readonly _idleService = inject(IdleService);
-  private readonly _store = inject(Store);
   private readonly _syncWrapperService = inject(SyncWrapperService);
 
   // Note: This was previously connected to PFAPI's onLocalMetaUpdate$, which was a no-op.
@@ -87,11 +83,11 @@ export class SyncTriggerService {
               fromEvent(document, 'visibilitychange'),
             ).pipe(
               mapTo('I_MOUSE_TOUCH_MOVE_OR_VISIBILITYCHANGE'),
-              throttleTime(USER_INTERACTION_SYNC_CHECK_THROTTLE_TIME),
+              throttleTime(USER_ACTIVITY_SYNC_THROTTLE_TIME),
             )
           : fromEvent(window, 'focus').pipe(
               mapTo('I_FOCUS_THROTTLED'),
-              throttleTime(USER_INTERACTION_SYNC_CHECK_THROTTLE_TIME),
+              throttleTime(USER_ACTIVITY_SYNC_THROTTLE_TIME),
             ),
     ),
   );
@@ -119,17 +115,6 @@ export class SyncTriggerService {
         throttleTime(SYNC_BEFORE_GOING_TO_SLEEP_THROTTLE_TIME),
       )
     : EMPTY;
-
-  private _onBlurWhenNotTracking$: Observable<string | never> = fromEvent(
-    window,
-    'blur',
-  ).pipe(
-    withLatestFrom(this._store.select(selectCurrentTaskId)),
-    filter(([, currentTaskId]) => !currentTaskId),
-    mapTo('I_BLUR_WHILE_NOT_TRACKING'),
-    // we throttle this to prevent lots of updates
-    throttleTime(10 * 60 * 1000),
-  );
 
   private _isOnlineTrigger$: Observable<string> = isOnline$.pipe(
     // skip initial online which always fires on page load
@@ -216,7 +201,6 @@ export class SyncTriggerService {
           this._isOnlineTrigger$,
           this._onIdleTrigger$,
           this._onElectronResumeTrigger$,
-          this._onBlurWhenNotTracking$,
         );
     return merge(
       // once immediately

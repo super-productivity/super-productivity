@@ -35,12 +35,12 @@ import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
  * }
  * ```
  *
- * ## Preventing Stale Operations During Sync
+ * ## Preventing Superseded Operations During Sync
  *
  * This service also notifies the operation capture meta-reducer to skip
  * capturing user interactions during sync. This prevents the "slow device
  * cascade" problem where user actions during sync create operations with
- * stale vector clocks that immediately conflict.
+ * superseded vector clocks that immediately conflict.
  *
  * ## Post-Sync Cooldown
  *
@@ -68,7 +68,7 @@ export class HydrationStateService {
    * Called by OperationApplierService before applying operations.
    *
    * Also notifies the meta-reducer to skip capturing local operations
-   * during this time to prevent stale vector clocks.
+   * during this time to prevent superseded vector clocks.
    */
   startApplyingRemoteOps(): void {
     this._isApplyingRemoteOps.set(true);

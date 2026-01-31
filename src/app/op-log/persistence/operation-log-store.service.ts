@@ -6,6 +6,7 @@ import {
   OpType,
   VectorClock,
 } from '../core/operation.types';
+import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
 import {
   encodeOperation,
@@ -22,7 +23,18 @@ import {
   BACKUP_KEY,
   OPS_INDEXES,
 } from './db-keys.const';
+import {
+  DUPLICATE_OPERATION_ERROR_MSG,
+  OPERATION_LOG_STORE_NOT_INITIALIZED,
+} from './op-log-errors.const';
 import { runDbUpgrade } from './db-upgrade';
+import { Log } from '../../core/log';
+import {
+  IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRY_BASE_DELAY_MS,
+} from '../core/operation-log.const';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
+import { vectorClockToString } from '../../core/util/vector-clock';
 
 /**
  * Vector clock entry stored in the vector_clock object store.
@@ -31,6 +43,16 @@ import { runDbUpgrade } from './db-upgrade';
 interface VectorClockEntry {
   clock: VectorClock;
   lastUpdate: number;
+  /**
+   * Client IDs that should never be pruned from vector clocks.
+   * Used to preserve the SYNC_IMPORT/BACKUP_IMPORT/REPAIR client's entry,
+   * which is needed for correct filtering of ops created after the import.
+   *
+   * Without this, pruning could remove low-counter entries (like an import's
+   * client with counter=1), causing new ops to have clocks that appear
+   * CONCURRENT with the import instead of GREATER_THAN.
+   */
+  protectedClientIds?: string[];
 }
 
 /**
@@ -171,11 +193,47 @@ export class OperationLogStoreService {
   private _vectorClockCache: VectorClock | null = null;
 
   async init(): Promise<void> {
-    this._db = await openDB<OpLogDB>(DB_NAME, DB_VERSION, {
-      upgrade: (db, oldVersion, _newVersion, transaction) => {
-        runDbUpgrade(db, oldVersion, transaction);
-      },
-    });
+    this._db = await this._openDbWithRetry();
+  }
+
+  /**
+   * Opens IndexedDB with retry logic and exponential backoff.
+   * Transient failures (file locks, temporary I/O issues) may resolve on retry.
+   *
+   * Total attempts = 1 initial + IDB_OPEN_RETRIES retries.
+   * With IDB_OPEN_RETRIES=3: attempts at 0ms, 500ms, 1500ms, 3500ms (total ~3.5s worst case).
+   *
+   * @throws IndexedDBOpenError if all retry attempts fail
+   * @see https://github.com/johannesjo/super-productivity/issues/6255
+   */
+  private async _openDbWithRetry(): Promise<IDBPDatabase<OpLogDB>> {
+    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+      try {
+        return await openDB<OpLogDB>(DB_NAME, DB_VERSION, {
+          upgrade: (db, oldVersion, _newVersion, transaction) => {
+            runDbUpgrade(db, oldVersion, transaction);
+          },
+        });
+      } catch (e) {
+        lastError = e;
+
+        if (attempt < totalAttempts) {
+          // Exponential backoff: 500ms, 1000ms, 2000ms for retries 1, 2, 3
+          const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          Log.warn(
+            `[OpLogStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
+            e,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // All retries exhausted - throw custom error with context
+    throw new IndexedDBOpenError(lastError);
   }
 
   private get db(): IDBPDatabase<OpLogDB> {
@@ -185,7 +243,7 @@ export class OperationLogStoreService {
       // or make methods async-ready (they are already async).
       // But we can't await in a getter.
       // Let's change the pattern: check in every method.
-      throw new Error('OperationLogStore not initialized. Ensure init() is called.');
+      throw new Error(OPERATION_LOG_STORE_NOT_INITIALIZED);
     }
     return this._db;
   }
@@ -217,7 +275,14 @@ export class OperationLogStoreService {
         source === 'remote' ? (options?.pendingApply ? 'pending' : 'applied') : undefined,
     };
     // seq is auto-incremented, returned for later reference
-    return this.db.add(STORE_NAMES.OPS, entry as StoredOperationLogEntry);
+    try {
+      return await this.db.add(STORE_NAMES.OPS, entry as StoredOperationLogEntry);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        throw new StorageQuotaExceededError();
+      }
+      throw e;
+    }
   }
 
   async appendBatch(
@@ -230,27 +295,42 @@ export class OperationLogStoreService {
     const store = tx.objectStore(STORE_NAMES.OPS);
     const seqs: number[] = [];
 
-    for (const op of ops) {
-      // Encode operation to compact format for storage efficiency
-      const compactOp = encodeOperation(op);
-      const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-        op: compactOp,
-        appliedAt: Date.now(),
-        source,
-        syncedAt: source === 'remote' ? Date.now() : undefined,
-        applicationStatus:
-          source === 'remote'
-            ? options?.pendingApply
-              ? 'pending'
-              : 'applied'
-            : undefined,
-      };
-      const seq = await store.add(entry as StoredOperationLogEntry);
-      seqs.push(seq as number);
-    }
+    try {
+      for (const op of ops) {
+        // Encode operation to compact format for storage efficiency
+        const compactOp = encodeOperation(op);
+        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+          op: compactOp,
+          appliedAt: Date.now(),
+          source,
+          syncedAt: source === 'remote' ? Date.now() : undefined,
+          applicationStatus:
+            source === 'remote'
+              ? options?.pendingApply
+                ? 'pending'
+                : 'applied'
+              : undefined,
+        };
+        const seq = await store.add(entry as StoredOperationLogEntry);
+        seqs.push(seq as number);
+      }
 
-    await tx.done;
-    return seqs;
+      await tx.done;
+      return seqs;
+    } catch (e) {
+      // Cache is stale if we hit a constraint error - invalidate to force refresh
+      // This handles the case where a previous sync partially wrote ops before failing,
+      // leaving the cache out of sync with IndexedDB. See issue #6213.
+      if (e instanceof DOMException && e.name === 'ConstraintError') {
+        this._appliedOpIdsCache = null;
+        this._cacheLastSeq = 0;
+        throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
+      }
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        throw new StorageQuotaExceededError();
+      }
+      throw e;
+    }
   }
 
   /**
@@ -295,7 +375,7 @@ export class OperationLogStoreService {
     } catch (e) {
       // Fallback for databases created before version 3 index migration
       // This handles the case where the bySourceAndStatus index doesn't exist
-      console.warn(
+      Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
       const allOps = await this.db.getAll(STORE_NAMES.OPS);
@@ -462,6 +542,62 @@ export class OperationLogStoreService {
         entry.op.opType === OpType.Repair;
 
       if (isFullStateOp) {
+        opsToDelete.push(entry.op.id);
+      }
+
+      cursor = await cursor.continue();
+    }
+
+    // Delete them in a write transaction
+    if (opsToDelete.length > 0) {
+      const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
+      for (const id of opsToDelete) {
+        await tx.store
+          .index(OPS_INDEXES.BY_ID)
+          .openCursor(id)
+          .then((c) => c?.delete());
+      }
+      await tx.done;
+      this._invalidateUnsyncedCache();
+    }
+
+    return opsToDelete.length;
+  }
+
+  /**
+   * Deletes all full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) from the local store,
+   * EXCEPT for the operation(s) with the specified ID(s).
+   *
+   * This is used when applying a new remote full-state operation. After successfully storing
+   * the new full-state op, we remove the old ones to prevent them from being used for filtering.
+   *
+   * The problem this solves:
+   * 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
+   * 2. Client B uploads new SYNC_IMPORT
+   * 3. Client A downloads and stores B's SYNC_IMPORT
+   * 4. Without clearing, getLatestFullStateOpEntry might return X's old import (if newer by UUIDv7)
+   * 5. New operations would appear CONCURRENT with X's import and get filtered
+   *
+   * @param excludeIds - IDs of operations to NOT delete (typically the newly stored import)
+   * @returns Number of operations deleted
+   */
+  async clearFullStateOpsExcept(excludeIds: string[]): Promise<number> {
+    await this._ensureInit();
+
+    const excludeIdSet = new Set(excludeIds);
+    const opsToDelete: string[] = [];
+
+    // Find all full-state ops except the excluded ones
+    let cursor = await this.db.transaction(STORE_NAMES.OPS).store.openCursor();
+
+    while (cursor) {
+      const entry = decodeStoredEntry(cursor.value);
+      const isFullStateOp =
+        entry.op.opType === OpType.SyncImport ||
+        entry.op.opType === OpType.BackupImport ||
+        entry.op.opType === OpType.Repair;
+
+      if (isFullStateOp && !excludeIdSet.has(entry.op.id)) {
         opsToDelete.push(entry.op.id);
       }
 
@@ -682,7 +818,7 @@ export class OperationLogStoreService {
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
-      console.warn(
+      Log.warn(
         'OperationLogStoreService: bySourceAndStatus index not found, using fallback scan',
       );
       const allOps = await this.db.getAll(STORE_NAMES.OPS);
@@ -1048,9 +1184,15 @@ export class OperationLogStoreService {
    */
   async setVectorClock(clock: VectorClock): Promise<void> {
     await this._ensureInit();
+    // Preserve existing protectedClientIds when updating the clock
+    // This is important because setVectorClock is called during hydration,
+    // and we don't want to lose the protected IDs that were set by a previous
+    // SYNC_IMPORT/BACKUP_IMPORT/REPAIR operation.
+    const existingEntry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    const protectedClientIds = existingEntry?.protectedClientIds ?? [];
     await this.db.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock, lastUpdate: Date.now() },
+      { clock, lastUpdate: Date.now(), protectedClientIds },
       SINGLETON_KEY,
     );
     this._vectorClockCache = clock;
@@ -1101,19 +1243,48 @@ export class OperationLogStoreService {
     // Get current local clock
     const currentClock = (await this.getVectorClock()) ?? {};
 
+    // DIAGNOSTIC LOGGING: Log current clock before merge
+    Log.debug(
+      `[OpLogStore] mergeRemoteOpClocks: BEFORE merge\n` +
+        `  Current clock: ${vectorClockToString(currentClock)}\n` +
+        `  Merging ${ops.length} remote ops`,
+    );
+
     // Merge all remote ops' clocks into the local clock
     const mergedClock = { ...currentClock };
     for (const op of ops) {
+      // Log each op's clock being merged (especially important for SYNC_IMPORT)
+      if (op.opType === OpType.SyncImport || op.opType === OpType.BackupImport) {
+        Log.log(
+          `[OpLogStore] mergeRemoteOpClocks: Merging FULL-STATE op ${op.opType}\n` +
+            `  Op ID:         ${op.id}\n` +
+            `  Op clientId:   ${op.clientId}\n` +
+            `  Op clock:      ${vectorClockToString(op.vectorClock)}`,
+        );
+      }
       for (const [clientId, counter] of Object.entries(op.vectorClock)) {
         mergedClock[clientId] = Math.max(mergedClock[clientId] ?? 0, counter);
       }
     }
 
+    // Preserve existing protectedClientIds when updating the clock
+    // This is critical: without this, vector clock pruning will remove the SYNC_IMPORT
+    // client ID, causing new ops to appear CONCURRENT with the import instead of GREATER_THAN
+    const existingEntry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    const protectedClientIds = existingEntry?.protectedClientIds ?? [];
+
+    // DIAGNOSTIC LOGGING: Log merged clock after merge
+    Log.debug(
+      `[OpLogStore] mergeRemoteOpClocks: AFTER merge\n` +
+        `  Merged clock:        ${vectorClockToString(mergedClock)}\n` +
+        `  Protected clientIds: ${JSON.stringify(protectedClientIds)}`,
+    );
+
     // Update the vector clock store
     await this.db.put(
-      'vector_clock',
-      { clock: mergedClock, lastUpdate: Date.now() },
-      'current',
+      STORE_NAMES.VECTOR_CLOCK,
+      { clock: mergedClock, lastUpdate: Date.now(), protectedClientIds },
+      SINGLETON_KEY,
     );
     this._vectorClockCache = mergedClock;
   }
@@ -1126,6 +1297,44 @@ export class OperationLogStoreService {
     await this._ensureInit();
     const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
     return entry ?? null;
+  }
+
+  /**
+   * Gets the protected client IDs that should never be pruned from vector clocks.
+   * These are client IDs from the latest SYNC_IMPORT/BACKUP_IMPORT/REPAIR operation.
+   *
+   * @returns Array of protected client IDs, or empty array if none set
+   */
+  async getProtectedClientIds(): Promise<string[]> {
+    await this._ensureInit();
+    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    return entry?.protectedClientIds ?? [];
+  }
+
+  /**
+   * Sets the protected client IDs that should never be pruned from vector clocks.
+   * Called after applying a full-state operation (SYNC_IMPORT/BACKUP_IMPORT/REPAIR)
+   * to ensure the import client's entry is preserved through future pruning.
+   *
+   * @param clientIds Client IDs to protect from pruning
+   */
+  async setProtectedClientIds(clientIds: string[]): Promise<void> {
+    await this._ensureInit();
+    const entry = await this.db.get(STORE_NAMES.VECTOR_CLOCK, SINGLETON_KEY);
+    if (entry) {
+      await this.db.put(
+        STORE_NAMES.VECTOR_CLOCK,
+        { ...entry, protectedClientIds: clientIds },
+        SINGLETON_KEY,
+      );
+    } else {
+      // No vector clock entry yet - create one with just the protected IDs
+      await this.db.put(
+        STORE_NAMES.VECTOR_CLOCK,
+        { clock: {}, lastUpdate: Date.now(), protectedClientIds: clientIds },
+        SINGLETON_KEY,
+      );
+    }
   }
 
   /**
@@ -1174,8 +1383,14 @@ export class OperationLogStoreService {
     // 2. Update vector clock to match the operation's clock (only for local ops)
     // The op.vectorClock already contains the incremented value from the caller.
     // We store it as the current clock so subsequent operations can build on it.
+    // IMPORTANT: Preserve protectedClientIds when updating the clock
     if (source === 'local') {
-      await vcStore.put({ clock: op.vectorClock, lastUpdate: Date.now() }, SINGLETON_KEY);
+      const existingEntry = await vcStore.get(SINGLETON_KEY);
+      const protectedClientIds = existingEntry?.protectedClientIds ?? [];
+      await vcStore.put(
+        { clock: op.vectorClock, lastUpdate: Date.now(), protectedClientIds },
+        SINGLETON_KEY,
+      );
       this._vectorClockCache = op.vectorClock;
     }
 

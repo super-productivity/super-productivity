@@ -1,17 +1,17 @@
 ---
-name: GitHub Wiki - Lint and (r)Sync
+name: Wiki Update
 
 'on':
   pull_request:
     branches: [master, main]
     paths:
-      - "docs/wiki/**"
+      - 'docs/wiki/**'
       - .github/workflows/wiki-sync.yml
       - .github/annotations/wiki-lint-problem-matcher.json
   push:
     branches: [master, main]
     paths:
-      - "docs/wiki/**"
+      - 'docs/wiki/**'
       - .github/workflows/wiki-sync.yml
       - .github/annotations/wiki-lint-problem-matcher.json
 
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint YAML and Markdown
+    name: Lint
     runs-on: ubuntu-latest
     env:
       GH_A9S: .github/annotations
@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -61,11 +61,12 @@ jobs:
           steps.problem_matcher.outcome == 'success'
         run: |
           pymarkdownlnt \
-            --disable-rules line-length \
+            --disable-rules line-length,no-inline-html \
             scan "docs/wiki"
 
   sync:
-    name: Publish to GitHub Wiki
+    name: (r)Sync
+    if: github.event_name == 'push'
     needs: lint
     runs-on: ubuntu-latest
     env:
@@ -81,13 +82,13 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           path: ${{ env.CODE_ROOT }}
 
       - name: Checkout Wiki
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}.wiki
           path: ${{ env.WIKI_ROOT }}

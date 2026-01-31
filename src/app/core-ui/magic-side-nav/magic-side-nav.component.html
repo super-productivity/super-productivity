@@ -44,6 +44,7 @@
     (keydown)="onNavKeyDown($event)"
     (swiperight)="onMobileNavSwipeRight()"
     swipeGesture
+    [swipeEnabled]="swipeEnabled()"
   >
     <!-- Desktop Toggle Button (inside sidenav) -->
     @if (!isMobile()) {

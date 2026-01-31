@@ -8,6 +8,7 @@ describe('isRelatedModelDataValid', () => {
   beforeEach(() => {
     // Suppress PFLog output during tests by spying on the methods
     spyOn(PFLog, 'log');
+    spyOn(PFLog, 'info');
     spyOn(PFLog, 'error');
     spyOn(PFLog, 'warn');
     spyOn(PFLog, 'err');
@@ -128,8 +129,8 @@ describe('isRelatedModelDataValid', () => {
     expect(result).toBe(true);
   });
 
-  describe('TODAY_TAG self-healing', () => {
-    it('should self-heal TODAY_TAG with orphaned task IDs and return true', () => {
+  describe('TODAY_TAG orphaned IDs handling', () => {
+    it('should pass validation for TODAY_TAG with orphaned task IDs and log warning', () => {
       const dataWithTodayTagOrphans: any = {
         project: { ids: [], entities: {} },
         tag: {
@@ -154,20 +155,21 @@ describe('isRelatedModelDataValid', () => {
 
       const result = isRelatedModelDataValid(dataWithTodayTagOrphans);
 
-      // Should pass because TODAY_TAG orphans are self-healed
+      // Should pass because TODAY_TAG orphans are harmless (virtual tag)
       expect(result).toBe(true);
-      // Verify self-healing logged a warning
-      expect(PFLog.warn).toHaveBeenCalledWith(
-        jasmine.stringContaining(
-          'Self-healing: Removed 2 orphaned IDs from TODAY_TAG.taskIds',
-        ),
+      // Verify warning was logged
+      expect(PFLog.info).toHaveBeenCalledWith(
+        jasmine.stringContaining('TODAY_TAG has 2 orphaned task IDs (harmless)'),
         jasmine.any(Object),
       );
-      // Verify the orphaned IDs were removed from the data
-      expect(dataWithTodayTagOrphans.tag.entities[TODAY_TAG.id].taskIds).toEqual([]);
+      // Validation should NOT mutate the data (read-only)
+      expect(dataWithTodayTagOrphans.tag.entities[TODAY_TAG.id].taskIds).toEqual([
+        'orphan-task-1',
+        'orphan-task-2',
+      ]);
     });
 
-    it('should keep valid task IDs in TODAY_TAG while removing orphans', () => {
+    it('should pass validation for TODAY_TAG with mixed valid and orphaned task IDs', () => {
       const dataWithMixedTodayTag: any = {
         project: { ids: [], entities: {} },
         tag: {
@@ -209,9 +211,10 @@ describe('isRelatedModelDataValid', () => {
       const result = isRelatedModelDataValid(dataWithMixedTodayTag);
 
       expect(result).toBe(true);
-      // TODAY_TAG should only have the valid task ID
+      // Validation should NOT mutate the data (read-only)
       expect(dataWithMixedTodayTag.tag.entities[TODAY_TAG.id].taskIds).toEqual([
         'validTask',
+        'orphanTask',
       ]);
     });
 

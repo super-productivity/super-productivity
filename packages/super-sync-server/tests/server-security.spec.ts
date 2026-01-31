@@ -326,3 +326,157 @@ describe('Email Verification Page', () => {
     expect(response.body).toBe('Token is required');
   });
 });
+
+describe('CORS with wildcard origins', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+    }
+  });
+
+  it('should allow requests from subdomain matching wildcard pattern', async () => {
+    const cors = await import('@fastify/cors');
+
+    app = Fastify();
+    await app.register(cors.default, {
+      origin: [/^https:\/\/[^\/]+\.preview\.example\.com$/],
+      methods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+      credentials: true,
+    });
+
+    app.get('/health', async () => ({ status: 'ok' }));
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://abc123.preview.example.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response.headers['access-control-allow-origin']).toBe(
+      'https://abc123.preview.example.com',
+    );
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('should reject requests from non-matching origin', async () => {
+    const cors = await import('@fastify/cors');
+
+    app = Fastify();
+    await app.register(cors.default, {
+      origin: [/^https:\/\/[^\/]+\.preview\.example\.com$/],
+      methods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+      credentials: true,
+    });
+
+    app.get('/health', async () => ({ status: 'ok' }));
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://evil.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('should allow multiple wildcard patterns', async () => {
+    const cors = await import('@fastify/cors');
+
+    app = Fastify();
+    await app.register(cors.default, {
+      origin: [
+        /^https:\/\/[^\/]+\.preview\.example\.com$/,
+        /^https:\/\/[^\/]+\.staging\.example\.com$/,
+      ],
+      methods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+      credentials: true,
+    });
+
+    app.get('/health', async () => ({ status: 'ok' }));
+    await app.ready();
+
+    // Test first pattern
+    const response1 = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://feature-123.preview.example.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response1.headers['access-control-allow-origin']).toBe(
+      'https://feature-123.preview.example.com',
+    );
+
+    // Test second pattern
+    const response2 = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://test.staging.example.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response2.headers['access-control-allow-origin']).toBe(
+      'https://test.staging.example.com',
+    );
+  });
+
+  it('should work with mixed string and RegExp origins', async () => {
+    const cors = await import('@fastify/cors');
+
+    app = Fastify();
+    await app.register(cors.default, {
+      origin: ['https://app.example.com', /^https:\/\/[^\/]+\.preview\.example\.com$/],
+      methods: ['GET', 'HEAD', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
+      credentials: true,
+    });
+
+    app.get('/health', async () => ({ status: 'ok' }));
+    await app.ready();
+
+    // Test string origin
+    const response1 = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://app.example.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response1.headers['access-control-allow-origin']).toBe(
+      'https://app.example.com',
+    );
+
+    // Test RegExp origin
+    const response2 = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: {
+        origin: 'https://pr-456.preview.example.com',
+        'access-control-request-method': 'GET',
+      },
+    });
+
+    expect(response2.headers['access-control-allow-origin']).toBe(
+      'https://pr-456.preview.example.com',
+    );
+  });
+});

@@ -1,4 +1,9 @@
-import { extractActionPayload, Operation, OpType } from '../core/operation.types';
+import {
+  extractActionPayload,
+  FULL_STATE_OP_TYPES,
+  Operation,
+  OpType,
+} from '../core/operation.types';
 import { PersistentAction } from '../core/persistent-action.interface';
 
 /**
@@ -14,21 +19,6 @@ import { PersistentAction } from '../core/persistent-action.interface';
 export const ACTION_TYPE_ALIASES: Record<string, string> = {
   // Example: '[Task] Update Task': '[Task] Update',
 };
-
-/**
- * OpTypes that contain full application state in their payload.
- * These need special handling during action conversion.
- *
- * MAINTAINABILITY NOTE: This set is manually maintained and must be updated
- * if new full-state operation types are added to the OpType enum. Consider
- * adding an `isFullState` property to the OpType definition or using a naming
- * convention check if this becomes a maintenance burden.
- */
-const FULL_STATE_OP_TYPES = new Set([
-  OpType.SyncImport,
-  OpType.BackupImport,
-  OpType.Repair,
-]);
 
 /**
  * Extracts the action payload for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, Repair).

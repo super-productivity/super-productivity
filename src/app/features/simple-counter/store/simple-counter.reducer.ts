@@ -101,13 +101,15 @@ const _reducer = createReducer<SimpleCounterState>(
   ),
 
   on(updateAllSimpleCounters, (state, { items }) => {
-    const allNewItemIds = items.map((item) => item.id);
+    // Use a Set to ensure unique IDs while preserving order
+    const allNewItemIds = [...new Set(items.map((item) => item.id))];
     const itemIdsToRemove = state.ids.filter((id) => !allNewItemIds.includes(id));
 
     let newState = state;
     newState = adapter.removeMany(itemIdsToRemove, newState);
     newState = adapter.upsertMany(items, newState);
-    return newState;
+    // Explicitly set ids order to match items order (upsertMany doesn't preserve order)
+    return { ...newState, ids: allNewItemIds };
   }),
 
   on(setSimpleCounterCounterToday, (state, { id, newVal, today }) => {

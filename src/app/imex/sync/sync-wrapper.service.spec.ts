@@ -25,6 +25,7 @@ import {
   SyncAlreadyInProgressError,
   LocalDataConflictError,
 } from '../../op-log/core/errors/sync-errors';
+import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { LegacySyncProvider } from './legacy-sync-provider.model';
 
 describe('SyncWrapperService', () => {
@@ -824,6 +825,151 @@ describe('SyncWrapperService', () => {
     });
   });
 
+  describe('isEncryptionOperationInProgress', () => {
+    it('should return false initially', () => {
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+
+    it('should return true during runWithSyncBlocked execution', async () => {
+      let capturedValue = false;
+
+      await service.runWithSyncBlocked(async () => {
+        capturedValue = service.isEncryptionOperationInProgress;
+      });
+
+      expect(capturedValue).toBe(true);
+    });
+
+    it('should return false after runWithSyncBlocked completes', async () => {
+      await service.runWithSyncBlocked(async () => {
+        // do nothing
+      });
+
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+
+    it('should return false after runWithSyncBlocked throws', async () => {
+      try {
+        await service.runWithSyncBlocked(async () => {
+          throw new Error('Test error');
+        });
+      } catch {
+        // expected
+      }
+
+      expect(service.isEncryptionOperationInProgress).toBe(false);
+    });
+  });
+
+  describe('runWithSyncBlocked()', () => {
+    it('should execute the operation and return its result', async () => {
+      const result = await service.runWithSyncBlocked(async () => {
+        return 'test-result';
+      });
+
+      expect(result).toBe('test-result');
+    });
+
+    it('should propagate errors from the operation', async () => {
+      const testError = new Error('Test operation error');
+
+      await expectAsync(
+        service.runWithSyncBlocked(async () => {
+          throw testError;
+        }),
+      ).toBeRejectedWith(testError);
+    });
+
+    it('should block sync during operation', async () => {
+      let syncResultDuringOperation: SyncStatus | 'HANDLED_ERROR' | undefined;
+
+      await service.runWithSyncBlocked(async () => {
+        // Try to sync during encryption operation
+        syncResultDuringOperation = await service.sync();
+      });
+
+      // Sync should have been blocked and returned HANDLED_ERROR
+      expect(syncResultDuringOperation).toBe('HANDLED_ERROR');
+    });
+
+    it('should allow sync after operation completes', async () => {
+      await service.runWithSyncBlocked(async () => {
+        // do nothing
+      });
+
+      // Sync should work after encryption operation completes
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should wait for ongoing sync to complete before starting operation', async () => {
+      const callOrder: string[] = [];
+
+      // Start a sync that takes a bit
+      let syncResolve: () => void;
+      const syncPromise = new Promise<void>((resolve) => {
+        syncResolve = resolve;
+      });
+
+      mockSyncService.downloadRemoteOps.and.callFake(async () => {
+        callOrder.push('sync-download-start');
+        await syncPromise;
+        callOrder.push('sync-download-end');
+        return { newOpsCount: 0, serverMigrationHandled: false, localWinOpsCreated: 0 };
+      });
+
+      // Start sync
+      const syncCall = service.sync();
+
+      // Give sync time to start
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Start encryption operation - should wait for sync
+      const encryptionOpPromise = service.runWithSyncBlocked(async () => {
+        callOrder.push('encryption-op');
+      });
+
+      // Let sync complete
+      syncResolve!();
+      await syncCall;
+      await encryptionOpPromise;
+
+      // Encryption operation should have waited for sync to complete
+      expect(callOrder).toEqual([
+        'sync-download-start',
+        'sync-download-end',
+        'encryption-op',
+      ]);
+    });
+  });
+
+  describe('sync() with encryption operation blocking', () => {
+    it('should return HANDLED_ERROR when encryption operation is in progress', async () => {
+      // Manually set the flag (simulating runWithSyncBlocked is active)
+      service['_isEncryptionOperationInProgress$'].next(true);
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+
+      // Clean up
+      service['_isEncryptionOperationInProgress$'].next(false);
+    });
+
+    it('should not call download or upload when encryption operation is in progress', async () => {
+      service['_isEncryptionOperationInProgress$'].next(true);
+
+      await service.sync();
+
+      expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+
+      // Clean up
+      service['_isEncryptionOperationInProgress$'].next(false);
+    });
+  });
+
   describe('syncProviderId$', () => {
     it('should convert LegacySyncProvider to SyncProviderId', (done) => {
       configSubject.next(createMockSyncConfig(LegacySyncProvider.SuperSync));
@@ -1092,6 +1238,134 @@ describe('SyncWrapperService', () => {
     it('should handle objects with toString()', () => {
       const errorObj = { toString: () => 'Error: timeout occurred' };
       expect(service['_isTimeoutError'](errorObj)).toBe(true);
+    });
+  });
+
+  describe('_sync() - LWW retry loop limit', () => {
+    it('should stop after MAX_LWW_REUPLOAD_RETRIES when upload always returns localWinOpsCreated', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          newOpsCount: 0,
+          serverMigrationHandled: false,
+          localWinOpsCreated: 0,
+        }),
+      );
+      // Upload always returns localWinOpsCreated: 2 (never resolves)
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({
+          uploadedCount: 2,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+          localWinOpsCreated: 2,
+        }),
+      );
+
+      const result = await service.sync();
+
+      // 1 initial upload + MAX_LWW_REUPLOAD_RETRIES retries
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(
+        1 + MAX_LWW_REUPLOAD_RETRIES,
+      );
+      // Should set UNKNOWN_OR_CHANGED since ops remain pending
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith(
+        'UNKNOWN_OR_CHANGED',
+      );
+      // Should return UpdateRemote to signal that unuploaded ops remain
+      expect(result).toBe(SyncStatus.UpdateRemote);
+    });
+
+    it('should exit early when retry returns localWinOpsCreated: 0', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          newOpsCount: 0,
+          serverMigrationHandled: false,
+          localWinOpsCreated: 0,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        return {
+          uploadedCount: 2,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+          // First call returns 1, second call returns 0 -> exits loop
+          localWinOpsCreated: uploadCallCount <= 1 ? 1 : 0,
+        };
+      });
+
+      const result = await service.sync();
+
+      // 1 initial upload + 1 retry (which returns 0) = 2 total
+      // The retry returns 0 so no more retries needed
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should treat null reupload result as 0 localWinOpsCreated and exit loop', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          newOpsCount: 0,
+          serverMigrationHandled: false,
+          localWinOpsCreated: 0,
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        if (uploadCallCount === 1) {
+          return {
+            uploadedCount: 1,
+            rejectedCount: 0,
+            piggybackedOps: [],
+            rejectedOps: [],
+            localWinOpsCreated: 2,
+          };
+        }
+        // Second call returns null (e.g., fresh client scenario)
+        return null;
+      });
+
+      const result = await service.sync();
+
+      // 1 initial + 1 retry (returns null -> treated as 0) = 2 total
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
+    });
+
+    it('should enter while loop when both download and upload produce LWW ops', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.resolve({
+          newOpsCount: 5,
+          serverMigrationHandled: false,
+          localWinOpsCreated: 2, // download produced LWW ops
+        }),
+      );
+
+      let uploadCallCount = 0;
+      mockSyncService.uploadPendingOps.and.callFake(async () => {
+        uploadCallCount++;
+        return {
+          uploadedCount: 3,
+          rejectedCount: 0,
+          piggybackedOps: [],
+          rejectedOps: [],
+          // First upload also produces LWW ops, subsequent do not
+          localWinOpsCreated: uploadCallCount === 1 ? 1 : 0,
+        };
+      });
+
+      const result = await service.sync();
+
+      // pendingLwwOps = download(2) + upload(1) = 3
+      // Retry 1: upload returns 0 -> exits loop
+      // Total uploads: 1 initial + 1 retry = 2
+      expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
+      expect(result).toBe(SyncStatus.InSync);
     });
   });
 });

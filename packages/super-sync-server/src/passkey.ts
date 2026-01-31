@@ -15,6 +15,7 @@ import { Logger } from './logger';
 import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail } from './email';
 import { Prisma } from '@prisma/client';
+import { loadConfigFromEnv } from './config';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -240,7 +241,24 @@ export const verifyRegistration = async (
       Logger.info(`Created new passkey user for ${email}`);
     }
 
-    // Send verification email
+    // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
+    const config = loadConfigFromEnv();
+    if (config.testMode?.autoVerifyUsers) {
+      await prisma.user.update({
+        where: { email: email.toLowerCase() },
+        data: {
+          isVerified: 1,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+        },
+      });
+      Logger.info(`[TEST_MODE] Auto-verified passkey user: ${email}`);
+      return {
+        message: 'Registration successful. Your account has been automatically verified.',
+      };
+    }
+
+    // Normal flow: send verification email
     const { sendVerificationEmail } = await import('./email');
     const emailSent = await sendVerificationEmail(email, verificationToken);
 

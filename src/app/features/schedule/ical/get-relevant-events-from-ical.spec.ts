@@ -1,3 +1,6 @@
+// Eager import ensures ical.js is in the webpack test bundle,
+// so the dynamic import() inside loadIcalModule() can resolve it.
+import 'ical.js';
 import { getRelevantEventsForCalendarIntegrationFromIcal } from './get-relevant-events-from-ical';
 
 describe('getRelevantEventsForCalendarIntegrationFromIcal', () => {

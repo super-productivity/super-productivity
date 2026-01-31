@@ -75,7 +75,7 @@ body.isDarkTheme {
   @include media-queries.mq(xs, max) {
     max-width: 96vw !important;
     max-height: calc(
-      95vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+      100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
     ) !important;
   }
 }

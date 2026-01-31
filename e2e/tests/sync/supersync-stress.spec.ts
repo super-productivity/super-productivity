@@ -48,7 +48,7 @@ test.describe('@supersync SuperSync Stress Tests', () => {
    *
    * Tests that many operations sync correctly without causing cascade conflicts.
    * This verifies the fix for the "slow device cascade" problem where user
-   * interactions during sync would create operations with stale vector clocks.
+   * interactions during sync would create operations with superseded vector clocks.
    *
    * Actions:
    * 1. Client A creates many tasks (simulating a day's work)

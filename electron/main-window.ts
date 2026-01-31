@@ -235,6 +235,14 @@ export const createWindow = async ({
     mainWinModule.isAppReady = true;
   });
 
+  // Register F11 key handler for fullscreen toggle
+  mainWin.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') {
+      event.preventDefault();
+      mainWin.setFullScreen(!mainWin.isFullScreen());
+    }
+  });
+
   // Listen for theme changes to update title bar overlay color and symbol
   if (isUseCustomWindowTitleBar && !IS_MAC) {
     ipcMain.on(IPC.UPDATE_TITLE_BAR_DARK_MODE, (ev, isDarkMode: boolean) => {
@@ -253,6 +261,14 @@ export const createWindow = async ({
   }
 
   return mainWin;
+};
+
+// isMaximized() can return an incorrect value after hide() — this is a known issue on certain platforms/configurations (electron#27838).
+// to ensure maximized window state is restored reliably across all platforms, we manually track maximized state before hiding
+let wasMaximizedBeforeHide: boolean = false;
+export const getWasMaximizedBeforeHide = (): boolean => wasMaximizedBeforeHide;
+export const setWasMaximizedBeforeHide = (value: boolean): void => {
+  wasMaximizedBeforeHide = value;
 };
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
@@ -300,6 +316,15 @@ function initWinEventListeners(app: Electron.App): void {
   // Handle hide event to show overlay
   mainWin.on('hide', () => {
     showOverlayWindow();
+  });
+
+  // Handle maximize and unmaximize events to change wasMaximizedBeforeHide flag accordingly
+  mainWin.on('maximize', () => {
+    setWasMaximizedBeforeHide(true);
+  });
+
+  mainWin.on('unmaximize', () => {
+    setWasMaximizedBeforeHide(false);
   });
 }
 
@@ -374,6 +399,7 @@ const appCloseHandler = (app: App): void => {
     if (!getIsQuiting()) {
       event.preventDefault();
       if (getIsMinimizeToTray()) {
+        setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
         showOverlayWindow();
         return;
@@ -412,6 +438,7 @@ const appMinimizeHandler = (app: App): void => {
     mainWin.on('minimize', (event: Event) => {
       if (getIsMinimizeToTray()) {
         event.preventDefault();
+        setWasMaximizedBeforeHide(mainWin.isMaximized());
         mainWin.hide();
         showOverlayWindow();
       } else {

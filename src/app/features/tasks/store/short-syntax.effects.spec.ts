@@ -198,6 +198,76 @@ describe('ShortSyntaxEffects', () => {
       tick(100);
       expect(emitted).toBe(false);
     }));
+
+    it('should add URL as attachment when updating task title with a URL', fakeAsync(() => {
+      const task = createTask('task-1', {
+        title: 'Check out www.example.com for more info',
+        attachments: [],
+      });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emittedAction: any = null;
+      effects.shortSyntax$.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { title: 'Check out www.example.com for more info' },
+          },
+        }),
+      );
+
+      tick(100);
+
+      expect(emittedAction).toBeDefined();
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges.attachments).toBeDefined();
+      expect(emittedAction.taskChanges.attachments.length).toBe(1);
+      expect(emittedAction.taskChanges.attachments[0].path).toContain('example.com');
+    }));
+
+    it('should preserve existing attachments when adding new URL attachment', fakeAsync(() => {
+      const existingAttachment = {
+        id: 'existing-attachment-1',
+        type: 'LINK' as const,
+        title: 'Existing Link',
+        path: 'https://existing.com',
+        originalImgPath: undefined,
+      };
+      const task = createTask('task-1', {
+        title: 'Check out www.newurl.com for details',
+        attachments: [existingAttachment],
+      });
+      taskServiceMock.getByIdOnce$.and.returnValue(of(task));
+
+      let emittedAction: any = null;
+      effects.shortSyntax$.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        TaskSharedActions.updateTask({
+          task: {
+            id: 'task-1',
+            changes: { title: 'Check out www.newurl.com for details' },
+          },
+        }),
+      );
+
+      tick(100);
+
+      expect(emittedAction).toBeDefined();
+      expect(emittedAction.type).toBe(TaskSharedActions.applyShortSyntax.type);
+      expect(emittedAction.taskChanges.attachments).toBeDefined();
+      expect(emittedAction.taskChanges.attachments.length).toBe(2);
+      // Check existing attachment is preserved
+      expect(emittedAction.taskChanges.attachments[0]).toEqual(existingAttachment);
+      // Check new attachment was added
+      expect(emittedAction.taskChanges.attachments[1].path).toContain('newurl.com');
+    }));
   });
 
   describe('shortSyntaxAddNewTags$', () => {

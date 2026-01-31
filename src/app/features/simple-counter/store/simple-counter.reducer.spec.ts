@@ -157,6 +157,64 @@ describe('SimpleCounterReducer', () => {
       expect(result.ids).toEqual([]);
       expect(result.entities).toEqual({});
     });
+
+    it('should preserve order when items are reordered', () => {
+      const counter1 = createCounter('counter1');
+      const counter2 = createCounter('counter2');
+      const counter3 = createCounter('counter3');
+      const existingState = createStateWithCounters([counter1, counter2, counter3]);
+
+      // Reorder: move counter1 to the end
+      const action = SimpleCounterActions.updateAllSimpleCounters({
+        items: [counter2, counter3, counter1],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['counter2', 'counter3', 'counter1']);
+    });
+
+    it('should preserve order when items are swapped', () => {
+      const counter1 = createCounter('counter1');
+      const counter2 = createCounter('counter2');
+      const existingState = createStateWithCounters([counter1, counter2]);
+
+      // Swap order
+      const action = SimpleCounterActions.updateAllSimpleCounters({
+        items: [counter2, counter1],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['counter2', 'counter1']);
+    });
+
+    it('should handle duplicate items in input by using unique IDs only', () => {
+      const counter1 = createCounter('counter1');
+      const counter2 = createCounter('counter2');
+      const existingState = createStateWithCounters([counter1, counter2]);
+
+      // Pass duplicate items - should still produce unique ids array
+      const action = SimpleCounterActions.updateAllSimpleCounters({
+        items: [counter1, counter2, counter1],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['counter1', 'counter2']);
+    });
+
+    it('should preserve order when adding new items at specific positions', () => {
+      const counter1 = createCounter('counter1');
+      const counter2 = createCounter('counter2');
+      const existingState = createStateWithCounters([counter1, counter2]);
+      const newCounter = createCounter('new-counter');
+
+      // Add new item in the middle
+      const action = SimpleCounterActions.updateAllSimpleCounters({
+        items: [counter1, newCounter, counter2],
+      });
+      const result = simpleCounterReducer(existingState, action);
+
+      expect(result.ids).toEqual(['counter1', 'new-counter', 'counter2']);
+    });
   });
 
   describe('set count operations', () => {

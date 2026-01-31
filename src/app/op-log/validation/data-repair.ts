@@ -281,6 +281,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     );
 
   PFLog.log('orphanArchivedYoungSubTasks', orphanArchivedYoungSubTasks);
+  const promotedYoungSubTaskIds: string[] = [];
   orphanArchivedYoungSubTasks.forEach((t: TaskCopy) => {
     // delete archived if duplicate
     if (taskState.ids.includes(t.id as string)) {
@@ -306,9 +307,16 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     }
     // make main if it doesn't
     else {
+      promotedYoungSubTaskIds.push(t.id);
       t.parentId = undefined;
     }
   });
+  if (promotedYoungSubTaskIds.length > 0) {
+    PFLog.warn(
+      `[data-repair] ${promotedYoungSubTaskIds.length} archived subtask(s) promoted to standalone tasks due to missing parent:`,
+      promotedYoungSubTaskIds,
+    );
+  }
 
   // Handle orphaned subtasks in archiveOld
   const orphanArchivedOldSubTasks: TaskCopy[] = taskArchiveOldState.ids
@@ -321,6 +329,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     );
 
   PFLog.log('orphanArchivedOldSubTasks', orphanArchivedOldSubTasks);
+  const promotedOldSubTaskIds: string[] = [];
   orphanArchivedOldSubTasks.forEach((t: TaskCopy) => {
     // delete archived if duplicate
     if (taskState.ids.includes(t.id as string)) {
@@ -346,9 +355,16 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     }
     // make main if it doesn't
     else {
+      promotedOldSubTaskIds.push(t.id);
       t.parentId = undefined;
     }
   });
+  if (promotedOldSubTaskIds.length > 0) {
+    PFLog.warn(
+      `[data-repair] ${promotedOldSubTaskIds.length} old archived subtask(s) promoted to standalone tasks due to missing parent:`,
+      promotedOldSubTaskIds,
+    );
+  }
 
   return data;
 };
@@ -365,6 +381,7 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     .filter((t: TaskCopy) => t.parentId && !taskState.ids.includes(t.parentId));
 
   PFLog.log('orphanUnArchivedSubTasks', orphanUnArchivedSubTasks);
+  const promotedUnArchivedSubTaskIds: string[] = [];
   orphanUnArchivedSubTasks.forEach((t: TaskCopy) => {
     // delete un-archived if duplicate in either archive
     if (taskArchiveYoungState.ids.includes(t.id as string)) {
@@ -412,9 +429,16 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     }
     // make main if parent doesn't exist anywhere
     else {
+      promotedUnArchivedSubTaskIds.push(t.id);
       t.parentId = undefined;
     }
   });
+  if (promotedUnArchivedSubTaskIds.length > 0) {
+    PFLog.warn(
+      `[data-repair] ${promotedUnArchivedSubTaskIds.length} unarchived subtask(s) promoted to standalone tasks due to missing parent:`,
+      promotedUnArchivedSubTaskIds,
+    );
+  }
 
   return data;
 };

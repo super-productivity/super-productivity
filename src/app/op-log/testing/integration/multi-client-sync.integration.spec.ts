@@ -20,7 +20,7 @@ import {
  * - Conflict detection works when clients edit the same entity
  * - Vector clocks converge correctly across 3+ clients
  * - Fresh client sync scenarios work properly
- * - Stale and duplicate operations are handled correctly
+ * - Superseded and duplicate operations are handled correctly
  *
  * Tests use real IndexedDB (via OperationLogStoreService) for realistic behavior.
  */
@@ -301,8 +301,8 @@ describe('Multi-Client Sync Integration', () => {
     });
   });
 
-  describe('Stale operation handling', () => {
-    it('should identify stale operations via vector clock comparison', async () => {
+  describe('Superseded operation handling', () => {
+    it('should identify superseded operations via vector clock comparison', async () => {
       const clientA = new TestClient('client-a-test');
 
       // Local state has progressed
@@ -314,14 +314,14 @@ describe('Multi-Client Sync Integration', () => {
       await storeService.append(op2, 'local');
       await storeService.append(op3, 'local');
 
-      // Simulate receiving an old/stale operation (lower vector clock)
-      const staleOp = { ...op1 }; // Same as first op
+      // Simulate receiving an old/superseded operation (lower vector clock)
+      const supersededOp = { ...op1 }; // Same as first op
 
-      // Compare stale op against current state
+      // Compare superseded op against current state
       const currentClock = await vectorClockService.getCurrentVectorClock();
-      const comparison = compareVectorClocks(staleOp.vectorClock, currentClock);
+      const comparison = compareVectorClocks(supersededOp.vectorClock, currentClock);
 
-      // Stale op should be dominated by current state
+      // Superseded op should be dominated by current state
       expect(comparison).toBe(VectorClockComparison.LESS_THAN);
     });
   });

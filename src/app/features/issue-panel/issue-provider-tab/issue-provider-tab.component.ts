@@ -29,14 +29,15 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { IssueService } from '../../issue/issue.service';
 import {
   catchError,
-  debounceTime,
+  debounce,
   distinctUntilChanged,
+  finalize,
   map,
   switchMap,
   tap,
 } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
-import { from, Observable, of } from 'rxjs';
+import { from, Observable, of, timer } from 'rxjs';
 import { selectAllTaskIssueIdsForIssueProvider } from '../../tasks/store/task.selectors';
 import { DialogEditIssueProviderComponent } from '../../issue/dialog-edit-issue-provider/dialog-edit-issue-provider.component';
 import { MatDialog } from '@angular/material/dialog';
@@ -128,30 +129,24 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
   // TODO add caching in sessionStorage
   issueItems$: Observable<{ added: SearchResultItem[]; notAdded: SearchResultItem[] }> =
     this.searchTxt$.pipe(
-      switchMap((st) => {
-        if (st.length < this.SEARCH_MIN_LENGTH) {
+      debounce(() => timer(400)),
+      switchMap((searchText) => {
+        if (searchText.length < this.SEARCH_MIN_LENGTH) {
           this.isLoading.set(false);
           return of({ added: [], notAdded: [] });
         }
-        return of(st).pipe(
-          debounceTime(400),
-          switchMap((searchText) => {
-            return this.issueProvider$.pipe(
-              distinctUntilChanged((a, b) => {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { pinnedSearch, ...restA } = a;
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { pinnedSearch: pinnedSearchB, ...restB } = b;
-                // return JSON.stringify(restA) === JSON.stringify(restB);
-                return JSON.stringify(restA) === JSON.stringify(restB);
-              }),
-              map((ip): [string, IssueProvider] => [searchText, ip as any]),
-            );
+        return this.issueProvider$.pipe(
+          distinctUntilChanged((a, b) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { pinnedSearch, ...restA } = a;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { pinnedSearch: pinnedSearchB, ...restB } = b;
+            return JSON.stringify(restA) === JSON.stringify(restB);
           }),
 
           tap(() => this.isLoading.set(true)),
 
-          switchMap(([searchText, issueProvider]: [string, IssueProvider]) =>
+          switchMap((issueProvider: IssueProvider) =>
             from(
               this._issueService.searchIssues(
                 searchText,
@@ -164,6 +159,7 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
                 this.isLoading.set(false);
                 return of(true);
               }),
+              tap(() => this.isLoading.set(false)),
               map((trueOnErrorOrItems) => {
                 if (trueOnErrorOrItems === true) {
                   return [];
@@ -181,19 +177,19 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
                 map((allIssueIdsForProvider) => {
                   const added: SearchResultItem[] = [];
                   const notAdded: SearchResultItem[] = [];
-                  items.forEach((item) => {
+                  for (const item of items) {
                     if (allIssueIdsForProvider.includes(item.issueData.id.toString())) {
                       added.push(item);
                     } else {
                       notAdded.push(item);
                     }
-                  });
+                  }
+
                   return { added, notAdded };
                 }),
               ),
           ),
-
-          tap(() => this.isLoading.set(false)),
+          finalize(() => this.isLoading.set(false)),
         );
       }),
     );

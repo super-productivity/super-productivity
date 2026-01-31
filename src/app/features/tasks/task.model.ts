@@ -88,7 +88,29 @@ export interface TaskCopy
   timeSpentOnDay: TimeSpentOnDay;
 
   // Additional app-specific fields
+
+  /**
+   * Scheduled time as Unix timestamp (ms). For tasks scheduled with a specific time.
+   *
+   * IMPORTANT: dueWithTime and dueDay follow a mutual exclusivity pattern:
+   * - When dueWithTime is set, dueDay MUST be undefined/null (not both set)
+   * - When reading, check dueWithTime FIRST (it takes priority over dueDay)
+   *
+   * @see docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
+   */
   dueWithTime?: number | null;
+
+  /**
+   * Scheduled date as ISO date string (YYYY-MM-DD). For tasks scheduled for all-day (no specific time).
+   *
+   * IMPORTANT: dueDay and dueWithTime follow a mutual exclusivity pattern:
+   * - When dueDay is set, dueWithTime should be undefined/null (for new data)
+   * - When dueWithTime is set, dueDay MUST be undefined/null (not both set)
+   * - When reading, check dueWithTime FIRST (it takes priority over dueDay)
+   * - Legacy data may have both fields set; handle via priority pattern
+   *
+   * @see docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
+   */
   dueDay?: string | null;
   hasPlannedTime?: boolean;
   attachments: TaskAttachment[];

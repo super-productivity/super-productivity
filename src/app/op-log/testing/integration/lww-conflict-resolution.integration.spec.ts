@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { OperationLogStoreService } from '../../persistence/operation-log-store.service';
 import { ActionType, OpType } from '../../core/operation.types';
+import { toLwwUpdateActionType } from '../../core/lww-update-action-types';
 import {
   compareVectorClocks,
   VectorClockComparison,
@@ -478,7 +479,7 @@ describe('LWW Conflict Resolution Integration', () => {
     });
   });
 
-  describe('Stale pending ops handling', () => {
+  describe('Superseded pending ops handling', () => {
     it('should reject all pending ops for an entity when remote wins', async () => {
       const clientA = new TestClient('client-a-test');
 
@@ -547,7 +548,7 @@ describe('LWW Conflict Resolution Integration', () => {
       const newClock = incrementVectorClock(mergedClock, clientA.clientId);
 
       const newUpdateOp = clientA.createOperation({
-        actionType: '[Task] LWW Update' as ActionType,
+        actionType: toLwwUpdateActionType('TASK'),
         opType: OpType.Update,
         entityType: 'TASK',
         entityId: 'task-1',

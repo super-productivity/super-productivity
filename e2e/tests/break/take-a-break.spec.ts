@@ -17,7 +17,6 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings page where break settings live
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
 
     // Verify we're on the settings page
     await expect(page).toHaveURL(/config/);
@@ -29,7 +28,6 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
 
     // Verify the settings page loaded with sections
     await expect(page.locator('.page-settings')).toBeVisible();
@@ -45,7 +43,6 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
 
     // Verify settings page loaded
     await expect(page.locator('.page-settings').first()).toBeVisible();
@@ -63,16 +60,14 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
     await expect(page.locator('.page-settings').first()).toBeVisible();
 
     // Navigate away
     await page.goto('/#/tag/TODAY');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('task-list').first()).toBeVisible();
 
     // Navigate back to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
 
     // Settings should still be accessible (use first() to avoid animation duplicates)
     await expect(page.locator('.page-settings').first()).toBeVisible();
@@ -83,7 +78,6 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
 
     await expect(page.locator('.page-settings')).toBeVisible();
 
@@ -108,12 +102,10 @@ test.describe('Take-a-Break Feature', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await page.waitForLoadState('networkidle');
     await expect(page.locator('.page-settings')).toBeVisible();
 
     // Navigate back to work view
     await page.goto('/#/tag/TODAY');
-    await page.waitForLoadState('networkidle');
 
     // Verify we're back at work view
     await expect(page).toHaveURL(/tag\/TODAY/);

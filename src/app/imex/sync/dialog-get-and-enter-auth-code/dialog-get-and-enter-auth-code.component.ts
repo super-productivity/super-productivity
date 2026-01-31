@@ -13,7 +13,6 @@ import { MatFormField, MatLabel, MatPrefix } from '@angular/material/form-field'
 import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
-import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { OAuthCallbackHandlerService } from '../oauth-callback-handler.service';
 import { Subscription } from 'rxjs';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -54,7 +53,8 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   T: typeof T = T;
   token?: string;
 
-  readonly isNativePlatform = IS_NATIVE_PLATFORM;
+  // Always use manual code entry flow (show input field)
+  readonly isNativePlatform = false;
   private _authCodeSub?: Subscription;
 
   constructor() {

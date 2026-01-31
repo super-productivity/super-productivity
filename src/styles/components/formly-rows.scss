@@ -14,3 +14,16 @@
     }
   }
 }
+
+// Encryption status box - groups password info and encryption action buttons
+.encryption-status-box {
+  border: 1px solid var(--standard-border-color);
+  border-radius: var(--standard-border-radius);
+  padding: var(--s);
+  margin: var(--s) 0;
+  background-color: var(--bg-color-lighter);
+
+  .password-set-info {
+    margin-bottom: var(--s2);
+  }
+}

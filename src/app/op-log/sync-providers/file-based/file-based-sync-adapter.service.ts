@@ -337,6 +337,7 @@ export class FileBasedSyncAdapterService {
         schemaVersion: number,
         isPayloadEncrypted: boolean | undefined,
         _opId: string, // Not used in file-based sync (operation IDs are client-local)
+        _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,
@@ -532,11 +533,18 @@ export class FileBasedSyncAdapterService {
           FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
         );
 
+      const isServerRevInconsistent = freshRev === revToMatch;
+      if (isServerRevInconsistent) {
+        OpLog.warn(
+          'FileBasedSyncAdapter: Rev unchanged after re-download, server has inconsistent timestamp handling. Force-uploading.',
+        );
+      }
+
       await provider.uploadFile(
         FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
         freshUploadData,
         freshRev,
-        false,
+        isServerRevInconsistent,
       );
 
       OpLog.normal('FileBasedSyncAdapter: Retry upload successful');
@@ -601,7 +609,7 @@ export class FileBasedSyncAdapterService {
     }
 
     // Step 2: Build merged sync data
-    const { newData, existingOps, mergedOps } = await this._buildMergedSyncData(
+    const { newData, existingOps } = await this._buildMergedSyncData(
       currentData,
       ops,
       clientId,
@@ -623,7 +631,10 @@ export class FileBasedSyncAdapterService {
     this._clearCachedSyncData(providerKey);
     this._expectedSyncVersions.set(providerKey, finalSyncVersion);
 
-    const latestSeq = mergedOps.length;
+    // Use finalSyncVersion (NOT mergedOps.length) to match download behavior (see line ~791).
+    // mergedOps.length is the total ops count, which can be much larger than syncVersion
+    // after many syncs, causing false "Server sequence decreased" warnings.
+    const latestSeq = finalSyncVersion;
 
     // Step 5: Collect piggybacked ops
     const newOps = this._collectPiggybackedOps(existingOps, providerKey, clientId);
@@ -795,18 +806,24 @@ export class FileBasedSyncAdapterService {
       this._persistState();
     }
 
-    // Write archive to IndexedDB if present (for late-joiners who missed archive ops)
-    // Only write on first download (sinceSeq === 0) to avoid overwriting local changes
-    if (isForceFromZero) {
-      if (syncData.archiveYoung) {
-        await this._archiveDbAdapter.saveArchiveYoung(syncData.archiveYoung);
-        OpLog.normal('FileBasedSyncAdapter: Wrote archiveYoung to IndexedDB');
-      }
-      if (syncData.archiveOld) {
-        await this._archiveDbAdapter.saveArchiveOld(syncData.archiveOld);
-        OpLog.normal('FileBasedSyncAdapter: Wrote archiveOld to IndexedDB');
-      }
-    }
+    // NOTE: Archives are NOT written to IndexedDB here. They are included in the
+    // snapshotState response and written to IndexedDB during hydrateFromRemoteSync()
+    // AFTER conflict resolution. Writing them here would corrupt local archives if
+    // the user chooses "Keep local" in a conflict dialog, because getStateSnapshotAsync()
+    // reads archives from IndexedDB which would then contain remote data while NgRx
+    // still has local entity data - causing cross-model validation failures.
+
+    // Build snapshotState that includes archives for proper hydration
+    // The entity models (task, project, tag, etc.) come from syncData.state
+    // Archives need to be merged in so hydrateFromRemoteSync can write them to IndexedDB
+    const snapshotStateWithArchives =
+      isForceFromZero && syncData.state
+        ? {
+            ...syncData.state,
+            ...(syncData.archiveYoung ? { archiveYoung: syncData.archiveYoung } : {}),
+            ...(syncData.archiveOld ? { archiveOld: syncData.archiveOld } : {}),
+          }
+        : undefined;
 
     const result = {
       ops: limitedOps,
@@ -819,7 +836,7 @@ export class FileBasedSyncAdapterService {
       gapDetected: needsGapDetection,
       // Include full state snapshot for fresh downloads (sinceSeq === 0)
       // This allows new clients to bootstrap with complete state, not just recent ops
-      ...(isForceFromZero && syncData.state ? { snapshotState: syncData.state } : {}),
+      ...(snapshotStateWithArchives ? { snapshotState: snapshotStateWithArchives } : {}),
     };
 
     return result;

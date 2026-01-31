@@ -3,6 +3,7 @@ import {
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
+  MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -20,6 +21,7 @@ import { SyncConfigService } from '../sync-config.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatDialogContent,
+    MatDialogTitle,
     MatFormField,
     MatLabel,
     MatInput,
@@ -39,13 +41,13 @@ export class DialogHandleDecryptErrorComponent {
   T: typeof T = T;
   passwordVal: string = '';
 
-  updatePWAndForceUpload(): void {
-    this._syncConfigService.updateEncryptionPassword(this.passwordVal);
+  async updatePWAndForceUpload(): Promise<void> {
+    await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
     this._matDialogRef.close({ isForceUpload: true });
   }
 
-  updatePwAndResync(): void {
-    this._syncConfigService.updateEncryptionPassword(this.passwordVal);
+  async updatePwAndResync(): Promise<void> {
+    await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
     this._matDialogRef.close({ isReSync: true });
   }
 

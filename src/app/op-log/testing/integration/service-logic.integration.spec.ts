@@ -231,7 +231,7 @@ describe('Service Logic Integration', () => {
           snapshotEntityKeys: Set<string> | undefined;
           hasNoSnapshotClock: boolean;
         },
-      ): { isStaleOrDuplicate: boolean; conflict: EntityConflict | null } => {
+      ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } => {
         const entityIdsToCheck =
           remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 
@@ -262,14 +262,14 @@ describe('Service Logic Integration', () => {
 
           const vcComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
 
-          // Skip stale operations (local already has newer state)
+          // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // No pending ops = no conflict possible
@@ -280,7 +280,7 @@ describe('Service Logic Integration', () => {
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
             return {
-              isStaleOrDuplicate: false,
+              isSupersededOrDuplicate: false,
               conflict: {
                 entityType: remoteOp.entityType,
                 entityId,
@@ -292,7 +292,7 @@ describe('Service Logic Integration', () => {
           }
         }
 
-        return { isStaleOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflict: null };
       },
     );
     applierSpy = jasmine.createSpyObj('OperationApplierService', ['applyOperations']);

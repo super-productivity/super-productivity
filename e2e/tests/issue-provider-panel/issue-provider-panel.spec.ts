@@ -45,17 +45,19 @@ test.describe('Issue Provider Panel', () => {
           .catch(() => null);
 
         if (dialogOpened) {
-          // Wait for dialog to be stable before clicking
-          await page.waitForTimeout(500);
+          // Wait for dialog container to be stable
+          const dialogContainer = page.locator('mat-dialog-container');
+          await dialogContainer.waitFor({ state: 'visible', timeout: 5000 });
 
-          // Try to click cancel, but handle case where dialog auto-closes
-          const cancelClicked = await page
-            .click(CANCEL_BTN, { timeout: 5000 })
+          // Try to click cancel within the dialog container
+          const cancelBtn = dialogContainer.locator('mat-dialog-actions button').first();
+          const cancelClicked = await cancelBtn
+            .click({ timeout: 5000 })
             .catch(() => false);
 
           if (cancelClicked !== false) {
             // Wait for dialog to close
-            await page.waitForSelector(CANCEL_BTN, { state: 'detached' });
+            await dialogContainer.waitFor({ state: 'detached', timeout: 5000 });
           }
 
           // Ensure we're back on the issue provider panel

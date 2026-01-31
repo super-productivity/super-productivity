@@ -1,7 +1,24 @@
 .content {
-  max-width: 300px;
+  max-width: 400px;
 }
 
 :host mat-form-field {
   margin-bottom: 0;
+  width: 100%;
+}
+
+.option-section {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.option-label {
+  margin-bottom: 12px;
+  font-size: 0.9em;
+}
+
+.divider {
+  margin: 24px 0;
+  border: none;
+  border-top: 1px solid rgba(128, 128, 128, 0.3);
 }

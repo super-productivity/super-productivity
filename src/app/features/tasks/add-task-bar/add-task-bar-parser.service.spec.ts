@@ -93,18 +93,18 @@ describe('AddTaskBarParserService', () => {
       mockStateService.updateAttachments.calls.reset();
     });
 
-    it('should handle empty text', () => {
-      service.parseAndUpdateText('', null, [], [], null as any);
+    it('should handle empty text', async () => {
+      await service.parseAndUpdateText('', null, [], [], null as any);
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
     });
 
-    it('should handle null config', () => {
-      service.parseAndUpdateText('test task', null, [], [], null as any);
+    it('should handle null config', async () => {
+      await service.parseAndUpdateText('test task', null, [], [], null as any);
       expect(mockStateService.updateCleanText).not.toHaveBeenCalled();
     });
 
     describe('Date Parsing', () => {
-      it('should handle default date when no date syntax present and no current state', () => {
+      it('should handle default date when no date syntax present and no current state', async () => {
         const defaultDate = '2024-01-15';
         const defaultTime = '09:00';
 
@@ -124,7 +124,7 @@ describe('AddTaskBarParserService', () => {
         };
         mockStateService.state.and.returnValue(mockState);
 
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
           mockProjects,
@@ -141,7 +141,7 @@ describe('AddTaskBarParserService', () => {
         expect(time).toBe(defaultTime);
       });
 
-      it('should preserve current date/time when no syntax present', () => {
+      it('should preserve current date/time when no syntax present', async () => {
         const currentDate = '2024-02-20';
         const currentTime = '14:30';
 
@@ -161,7 +161,7 @@ describe('AddTaskBarParserService', () => {
         };
         mockStateService.state.and.returnValue(mockState);
 
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Task without date syntax',
           mockConfig,
           mockProjects,
@@ -175,7 +175,7 @@ describe('AddTaskBarParserService', () => {
         expect(time).toBe(currentTime);
       });
 
-      it('should preserve current date but use default time when no current time', () => {
+      it('should preserve current date but use default time when no current time', async () => {
         const currentDate = '2024-02-20';
         const defaultTime = '09:00';
 
@@ -195,7 +195,7 @@ describe('AddTaskBarParserService', () => {
         };
         mockStateService.state.and.returnValue(mockState);
 
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Task text',
           mockConfig,
           mockProjects,
@@ -211,8 +211,8 @@ describe('AddTaskBarParserService', () => {
         expect(time).toBe(defaultTime);
       });
 
-      it('should handle no date or default date', () => {
-        service.parseAndUpdateText(
+      it('should handle no date or default date', async () => {
+        await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
           mockProjects,
@@ -226,10 +226,10 @@ describe('AddTaskBarParserService', () => {
         expect(time).toBeNull();
       });
 
-      it('should test date parsing integration with shortSyntax', () => {
+      it('should test date parsing integration with shortSyntax', async () => {
         // Since shortSyntax is complex and depends on external implementation,
         // we'll test the parser's handling of the parsed results
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Task with date syntax that may or may not be parsed',
           mockConfig,
           mockProjects,
@@ -241,11 +241,11 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateCleanText).toHaveBeenCalled();
       });
 
-      it('should handle default date and time when no syntax is found', () => {
+      it('should handle default date and time when no syntax is found', async () => {
         const defaultDate = '2024-01-15';
         const defaultTime = '09:00';
 
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Plain text task',
           mockConfig,
           mockProjects,
@@ -263,8 +263,8 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('Parsing Integration', () => {
-      it('should call updateEstimate when parsing text', () => {
-        service.parseAndUpdateText(
+      it('should call updateEstimate when parsing text', async () => {
+        await service.parseAndUpdateText(
           'Task with potential time estimate',
           mockConfig,
           mockProjects,
@@ -275,8 +275,8 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalled();
       });
 
-      it('should handle null time estimates', () => {
-        service.parseAndUpdateText(
+      it('should handle null time estimates', async () => {
+        await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
           mockProjects,
@@ -287,8 +287,8 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateEstimate).toHaveBeenCalledWith(null);
       });
 
-      it('should call updateSpent when parsing text', () => {
-        service.parseAndUpdateText(
+      it('should call updateSpent when parsing text', async () => {
+        await service.parseAndUpdateText(
           'Task with potential time spent',
           mockConfig,
           mockProjects,
@@ -299,8 +299,8 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateSpent).toHaveBeenCalled();
       });
 
-      it('should handle null time spent', () => {
-        service.parseAndUpdateText(
+      it('should handle null time spent', async () => {
+        await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
           mockProjects,
@@ -313,8 +313,8 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('Basic Parsing Tests', () => {
-      it('should update tags when parsing text', () => {
-        service.parseAndUpdateText(
+      it('should update tags when parsing text', async () => {
+        await service.parseAndUpdateText(
           'Task with tags',
           mockConfig,
           mockProjects,
@@ -326,10 +326,10 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateNewTagTitles).toHaveBeenCalled();
       });
 
-      it('should handle auto-detected projects', () => {
+      it('should handle auto-detected projects', async () => {
         mockStateService.isAutoDetected.and.returnValue(false);
 
-        service.parseAndUpdateText(
+        await service.parseAndUpdateText(
           'Simple task',
           mockConfig,
           mockProjects,
@@ -342,8 +342,8 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateDate).toHaveBeenCalled();
       });
 
-      it('should handle text with clean text update', () => {
-        service.parseAndUpdateText(
+      it('should handle text with clean text update', async () => {
+        await service.parseAndUpdateText(
           'Task text',
           mockConfig,
           mockProjects,
@@ -354,22 +354,22 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task text');
       });
 
-      it('should handle edge cases gracefully', () => {
+      it('should handle edge cases gracefully', async () => {
         const longText = 'Task ' + 'a'.repeat(1000);
 
-        expect(() => {
+        await expectAsync(
           service.parseAndUpdateText(
             longText,
             mockConfig,
             mockProjects,
             mockTags,
             mockDefaultProject,
-          );
-        }).not.toThrow();
+          ),
+        ).not.toBeRejected();
       });
 
-      it('should handle empty arrays for projects and tags', () => {
-        service.parseAndUpdateText(
+      it('should handle empty arrays for projects and tags', async () => {
+        await service.parseAndUpdateText(
           'Task with no matching items',
           mockConfig,
           [],
@@ -381,8 +381,8 @@ describe('AddTaskBarParserService', () => {
         expect(mockStateService.updateNewTagTitles).toHaveBeenCalled();
       });
 
-      it('should handle special characters in task text', () => {
-        service.parseAndUpdateText(
+      it('should handle special characters in task text', async () => {
+        await service.parseAndUpdateText(
           'Task with special chars !@#$%^&*()',
           mockConfig,
           mockProjects,
@@ -396,42 +396,42 @@ describe('AddTaskBarParserService', () => {
   });
 
   describe('resetPreviousResult', () => {
-    it('should reset previous result without error', () => {
+    it('should reset previous result without error', async () => {
       expect(() => service.resetPreviousResult()).not.toThrow();
     });
   });
 
   describe('removeShortSyntaxFromInput', () => {
-    it('should return same input for empty string', () => {
+    it('should return same input for empty string', async () => {
       expect(service.removeShortSyntaxFromInput('', 'tags')).toBe('');
     });
 
     describe('tags removal', () => {
-      it('should remove specific tag', () => {
+      it('should remove specific tag', async () => {
         const input = 'Task #important #urgent';
         const result = service.removeShortSyntaxFromInput(input, 'tags', 'important');
         expect(result).toBe('Task #urgent');
       });
 
-      it('should remove all tags when no specific tag provided', () => {
+      it('should remove all tags when no specific tag provided', async () => {
         const input = 'Task #important #urgent #todo';
         const result = service.removeShortSyntaxFromInput(input, 'tags');
         expect(result).toBe('Task');
       });
 
-      it('should handle tag removal case insensitively', () => {
+      it('should handle tag removal case insensitively', async () => {
         const input = 'Task #Important #URGENT';
         const result = service.removeShortSyntaxFromInput(input, 'tags', 'important');
         expect(result).toBe('Task #URGENT');
       });
 
-      it('should handle tags at the beginning of input', () => {
+      it('should handle tags at the beginning of input', async () => {
         const input = '#urgent Task content';
         const result = service.removeShortSyntaxFromInput(input, 'tags', 'urgent');
         expect(result).toBe('Task content');
       });
 
-      it('should handle tags at the end of input', () => {
+      it('should handle tags at the end of input', async () => {
         const input = 'Task content #urgent';
         const result = service.removeShortSyntaxFromInput(input, 'tags', 'urgent');
         expect(result).toBe('Task content');
@@ -439,25 +439,25 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('date removal', () => {
-      it('should remove date syntax', () => {
+      it('should remove date syntax', async () => {
         const input = 'Task @today @16:30 @2024-01-15';
         const result = service.removeShortSyntaxFromInput(input, 'date');
         expect(result).toBe('Task');
       });
 
-      it('should handle complex date formats', () => {
+      it('should handle complex date formats', async () => {
         const input = 'Meeting @tomorrow @next-week @2024-12-25';
         const result = service.removeShortSyntaxFromInput(input, 'date');
         expect(result).toBe('Meeting');
       });
 
-      it('should handle date at beginning', () => {
+      it('should handle date at beginning', async () => {
         const input = '@today Task content';
         const result = service.removeShortSyntaxFromInput(input, 'date');
         expect(result).toBe('Task content');
       });
 
-      it('should handle date at end', () => {
+      it('should handle date at end', async () => {
         const input = 'Task content @today';
         const result = service.removeShortSyntaxFromInput(input, 'date');
         expect(result).toBe('Task content');
@@ -465,7 +465,7 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('estimate removal', () => {
-      it('should remove various time estimate formats', () => {
+      it('should remove various time estimate formats', async () => {
         const testCases = [
           { input: 'Task t30m', expected: 'Task' },
           { input: 'Task 1h', expected: 'Task' },
@@ -484,63 +484,63 @@ describe('AddTaskBarParserService', () => {
         });
       });
 
-      it('should handle multiple time estimates', () => {
+      it('should handle multiple time estimates', async () => {
         const input = 'Task t30m another t1h final';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
         expect(result).toBe('Task another final');
       });
 
-      it('should handle time estimate at beginning', () => {
+      it('should handle time estimate at beginning', async () => {
         const input = 't30m Task content';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
         expect(result).toBe('Task content');
       });
 
-      it('should handle time estimate at end', () => {
+      it('should handle time estimate at end', async () => {
         const input = 'Task content t30m';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
         expect(result).toBe('Task content');
       });
 
-      it('should handle decimal hours', () => {
+      it('should handle decimal hours', async () => {
         const input = 'Task t2.5h content';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
         expect(result).toBe('Task content');
       });
 
-      it('should handle days format', () => {
+      it('should handle days format', async () => {
         const input = 'Task 3d content';
         const result = service.removeShortSyntaxFromInput(input, 'estimate');
         expect(result).toBe('Task content');
       });
     });
 
-    it('should clean up extra whitespace', () => {
+    it('should clean up extra whitespace', async () => {
       const input = 'Task   #tag   @today   t30m   end';
       const result = service.removeShortSyntaxFromInput(input, 'tags');
       expect(result).toBe('Task @today t30m end');
     });
 
-    it('should trim final result', () => {
+    it('should trim final result', async () => {
       const input = '  #tag Task #another  ';
       const result = service.removeShortSyntaxFromInput(input, 'tags');
       expect(result).toBe('Task');
     });
 
-    it('should handle mixed removal scenarios', () => {
+    it('should handle mixed removal scenarios', async () => {
       // Remove all tags and clean up spacing
       const input = 'Task #urgent #important content #todo';
       const result = service.removeShortSyntaxFromInput(input, 'tags');
       expect(result).toBe('Task content');
     });
 
-    it('should handle empty input after removal', () => {
+    it('should handle empty input after removal', async () => {
       const input = '#tag1 #tag2';
       const result = service.removeShortSyntaxFromInput(input, 'tags');
       expect(result).toBe('');
     });
 
-    it('should handle whitespace-only input after removal', () => {
+    it('should handle whitespace-only input after removal', async () => {
       const input = '  #tag1   #tag2  ';
       const result = service.removeShortSyntaxFromInput(input, 'tags');
       expect(result).toBe('');
@@ -578,7 +578,7 @@ describe('AddTaskBarParserService', () => {
       ];
     });
 
-    it('should handle date strings consistently across timezones', () => {
+    it('should handle date strings consistently across timezones', async () => {
       const dateStr = '2025-01-15';
       const timeStr = '14:30';
 
@@ -598,7 +598,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task with date',
         mockConfig,
         mockProjects,
@@ -612,7 +612,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateDate).toHaveBeenCalledWith(dateStr, timeStr);
     });
 
-    it('should handle dates near DST transitions', () => {
+    it('should handle dates near DST transitions', async () => {
       // Test spring forward (March DST transition in many timezones)
       const springDateStr = '2024-03-10';
       const springTimeStr = '02:30';
@@ -632,7 +632,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'DST test task',
         mockConfig,
         mockProjects,
@@ -648,7 +648,7 @@ describe('AddTaskBarParserService', () => {
       );
     });
 
-    it('should handle dates at year boundaries', () => {
+    it('should handle dates at year boundaries', async () => {
       // Test New Year's Eve
       const newYearDateStr = '2024-12-31';
       const newYearTimeStr = '23:59';
@@ -668,7 +668,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'New Year task',
         mockConfig,
         mockProjects,
@@ -684,7 +684,7 @@ describe('AddTaskBarParserService', () => {
       );
     });
 
-    it('should maintain date consistency when parsing date-only strings', () => {
+    it('should maintain date consistency when parsing date-only strings', async () => {
       const dateStr = '2025-01-01';
 
       const mockState = {
@@ -702,7 +702,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task',
         mockConfig,
         mockProjects,
@@ -716,7 +716,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateDate).toHaveBeenCalledWith(dateStr, null);
     });
 
-    it('should handle midnight time correctly', () => {
+    it('should handle midnight time correctly', async () => {
       const dateStr = '2025-01-15';
       const midnightTime = '00:00';
 
@@ -735,7 +735,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Midnight task',
         mockConfig,
         mockProjects,
@@ -758,13 +758,13 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('_arraysEqual', () => {
-      it('should return true for equal arrays', () => {
+      it('should return true for equal arrays', async () => {
         expect(serviceAny._arraysEqual(['a', 'b'], ['a', 'b'])).toBe(true);
         expect(serviceAny._arraysEqual([], [])).toBe(true);
         expect(serviceAny._arraysEqual([1, 2, 3], [1, 2, 3])).toBe(true);
       });
 
-      it('should return false for different arrays', () => {
+      it('should return false for different arrays', async () => {
         expect(serviceAny._arraysEqual(['a', 'b'], ['a', 'c'])).toBe(false);
         expect(serviceAny._arraysEqual(['a'], ['a', 'b'])).toBe(false);
         expect(serviceAny._arraysEqual([1, 2], [2, 1])).toBe(false);
@@ -772,7 +772,7 @@ describe('AddTaskBarParserService', () => {
         expect(serviceAny._arraysEqual([], [1])).toBe(false);
       });
 
-      it('should handle null and undefined values', () => {
+      it('should handle null and undefined values', async () => {
         expect(serviceAny._arraysEqual([null], [null])).toBe(true);
         expect(serviceAny._arraysEqual([undefined], [undefined])).toBe(true);
         expect(serviceAny._arraysEqual([null], [undefined])).toBe(false);
@@ -780,14 +780,14 @@ describe('AddTaskBarParserService', () => {
     });
 
     describe('_datesEqual', () => {
-      it('should return true for equal date strings', () => {
+      it('should return true for equal date strings', async () => {
         const dateStr1 = '2024-01-15';
         const dateStr2 = '2024-01-15';
         expect(serviceAny._datesEqual(dateStr1, dateStr2)).toBe(true);
         expect(serviceAny._datesEqual(null, null)).toBe(true);
       });
 
-      it('should return false for different date strings', () => {
+      it('should return false for different date strings', async () => {
         const dateStr1 = '2024-01-15';
         const dateStr2 = '2024-01-16';
         expect(serviceAny._datesEqual(dateStr1, dateStr2)).toBe(false);
@@ -795,13 +795,13 @@ describe('AddTaskBarParserService', () => {
         expect(serviceAny._datesEqual(null, dateStr1)).toBe(false);
       });
 
-      it('should handle same date strings', () => {
+      it('should handle same date strings', async () => {
         const dateStr1 = '2024-01-15';
         const dateStr2 = '2024-01-15';
         expect(serviceAny._datesEqual(dateStr1, dateStr2)).toBe(true);
       });
 
-      it('should handle different date strings', () => {
+      it('should handle different date strings', async () => {
         const dateStr1 = '2024-01-15';
         const dateStr2 = '2024-01-16';
         expect(serviceAny._datesEqual(dateStr1, dateStr2)).toBe(false);
@@ -835,7 +835,7 @@ describe('AddTaskBarParserService', () => {
       mockStateService.updateAttachments.calls.reset();
     });
 
-    it('should extract single HTTPS URL and update state', () => {
+    it('should extract single HTTPS URL and update state', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -851,7 +851,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task https://example.com',
         mockConfig,
         mockProjects,
@@ -868,7 +868,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Task');
     });
 
-    it('should extract file:// URL with FILE type', () => {
+    it('should extract file:// URL with FILE type', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -884,7 +884,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Document file:///home/user/doc.pdf',
         mockConfig,
         mockProjects,
@@ -901,7 +901,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Document');
     });
 
-    it('should detect image URLs as IMG type', () => {
+    it('should detect image URLs as IMG type', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -917,7 +917,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Screenshot https://example.com/image.png',
         mockConfig,
         mockProjects,
@@ -932,7 +932,7 @@ describe('AddTaskBarParserService', () => {
       expect(attachments[0].icon).toBe('image');
     });
 
-    it('should extract multiple URLs', () => {
+    it('should extract multiple URLs', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -948,7 +948,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Links https://example.com www.test.org',
         mockConfig,
         mockProjects,
@@ -964,7 +964,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateCleanText).toHaveBeenCalledWith('Links');
     });
 
-    it('should work with combined short syntax (URL + date + tag + estimate)', () => {
+    it('should work with combined short syntax (URL + date + tag + estimate)', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -983,7 +983,7 @@ describe('AddTaskBarParserService', () => {
       const mockTag = { id: 'urgent-id', title: 'urgent' } as Tag;
       const tagsWithUrgent = [mockTag];
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task https://github.com/pr/123 @tomorrow #urgent 30m',
         mockConfig,
         mockProjects,
@@ -1006,7 +1006,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateTagIdsFromTxt).toHaveBeenCalledWith(['urgent-id']);
     });
 
-    it('should not extract URLs from empty text', () => {
+    it('should not extract URLs from empty text', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -1022,7 +1022,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         '',
         mockConfig,
         mockProjects,
@@ -1033,7 +1033,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateAttachments).not.toHaveBeenCalled();
     });
 
-    it('should update attachments when URL changes', () => {
+    it('should update attachments when URL changes', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -1050,7 +1050,7 @@ describe('AddTaskBarParserService', () => {
       mockStateService.state.and.returnValue(mockState);
 
       // First parse
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task https://example.com',
         mockConfig,
         mockProjects,
@@ -1065,7 +1065,7 @@ describe('AddTaskBarParserService', () => {
       expect(firstAttachments[0].path).toBe('https://example.com');
 
       // Change URL
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task https://different.com',
         mockConfig,
         mockProjects,
@@ -1080,7 +1080,7 @@ describe('AddTaskBarParserService', () => {
       expect(secondAttachments[0].path).toBe('https://different.com');
     });
 
-    it('should clear attachments when URL removed from text', () => {
+    it('should clear attachments when URL removed from text', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -1097,7 +1097,7 @@ describe('AddTaskBarParserService', () => {
       mockStateService.state.and.returnValue(mockState);
 
       // First parse with URL
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task https://example.com',
         mockConfig,
         mockProjects,
@@ -1108,7 +1108,7 @@ describe('AddTaskBarParserService', () => {
       expect(mockStateService.updateAttachments).toHaveBeenCalledTimes(1);
 
       // Remove URL from text
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task',
         mockConfig,
         mockProjects,
@@ -1121,7 +1121,7 @@ describe('AddTaskBarParserService', () => {
       expect(attachments.length).toBe(0);
     });
 
-    it('should handle www URLs correctly', () => {
+    it('should handle www URLs correctly', async () => {
       const mockState = {
         projectId: 'default-project',
         tagIds: [],
@@ -1137,7 +1137,7 @@ describe('AddTaskBarParserService', () => {
       };
       mockStateService.state.and.returnValue(mockState);
 
-      service.parseAndUpdateText(
+      await service.parseAndUpdateText(
         'Task www.example.com',
         mockConfig,
         mockProjects,

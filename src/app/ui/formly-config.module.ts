@@ -40,7 +40,7 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
         { name: 'maxLength', message: 'Value is too long' },
       ],
       types: [
-        { name: 'slider', component: FormlySliderComponent, wrappers: ['form-field'] },
+        { name: 'slider', component: FormlySliderComponent },
         { name: 'link', component: FormlyLinkWidgetComponent },
         {
           name: 'duration',

@@ -121,12 +121,12 @@ export class DesktopPanelButtonsComponent {
   readonly isShowNotes = input.required<boolean>();
 
   readonly isIssuesPanelEnabled = computed(
-    () => this._configService.cfg()?.appFeatures.isIssuesPanelEnabled,
+    () => this._configService.appFeatures().isIssuesPanelEnabled,
   );
   readonly isScheduleDayPanelEnabled = computed(
-    () => this._configService.cfg()?.appFeatures.isScheduleDayPanelEnabled,
+    () => this._configService.appFeatures().isScheduleDayPanelEnabled,
   );
   readonly isProjectNotesEnabled = computed(
-    () => this._configService.cfg()?.appFeatures.isProjectNotesEnabled,
+    () => this._configService.appFeatures().isProjectNotesEnabled,
   );
 }

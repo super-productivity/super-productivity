@@ -63,7 +63,7 @@ const MAX_CONSECUTIVE_FAILURES_BEFORE_WARNING = 3;
  * This prevents the "slow device cascade" problem where:
  * 1. User syncs after a long time, many operations need to be applied
  * 2. User interacts with the app during sync (creates a task, clicks done, etc.)
- * 3. These interactions would be captured with stale vector clocks
+ * 3. These interactions would be captured with superseded vector clocks
  * 4. When uploaded, these ops would conflict with the remote ops just downloaded
  *
  * Instead, actions are buffered and processed after sync completes with fresh
@@ -100,7 +100,7 @@ export const getOperationCaptureService = (): OperationCaptureService | null => 
  * Called by HydrationStateService.startApplyingRemoteOps() and endApplyingRemoteOps().
  *
  * When true, local user interactions will not be captured as operations.
- * This prevents stale vector clocks and conflicts during sync.
+ * This prevents superseded vector clocks and conflicts during sync.
  */
 export const setIsApplyingRemoteOps = (value: boolean): void => {
   isApplyingRemoteOps = value;
@@ -120,13 +120,28 @@ export const getIsApplyingRemoteOps = (): boolean => {
 const MAX_DEFERRED_ACTIONS_WARNING = 10;
 
 /**
+ * Hard limit for deferred actions buffer.
+ * If reached, oldest actions are dropped to prevent unbounded memory growth.
+ */
+const MAX_DEFERRED_ACTIONS_HARD_LIMIT = 100;
+
+/**
  * Buffers an action for processing after sync completes.
  * Called by the meta-reducer when a persistent action arrives during sync.
  */
 export const bufferDeferredAction = (action: PersistentAction): void => {
+  // Hard limit: drop oldest action if buffer is full (sync stuck scenario)
+  if (deferredActions.length >= MAX_DEFERRED_ACTIONS_HARD_LIMIT) {
+    devError(
+      `[operationCaptureMetaReducer] Deferred actions buffer exceeded ${MAX_DEFERRED_ACTIONS_HARD_LIMIT} items. ` +
+        `Dropping oldest action. Sync may be stuck - consider reloading the app.`,
+    );
+    deferredActions.shift();
+  }
+
   deferredActions.push(action);
 
-  // Warn if buffer is growing unusually large - may indicate sync is stuck
+  // Soft warning at 10 items
   if (deferredActions.length > MAX_DEFERRED_ACTIONS_WARNING) {
     devError(
       `[operationCaptureMetaReducer] Deferred actions buffer has ${deferredActions.length} items - sync may be stuck or taking too long`,
@@ -178,7 +193,7 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
     if (isPersistentAction(action) && !(action as PersistentAction).meta.isRemote) {
       // Buffer actions during sync replay - they'll be processed after sync completes
       // with fresh vector clocks that include the newly-applied remote operations.
-      // This prevents stale operations that would immediately conflict.
+      // This prevents superseded operations that would immediately conflict.
       if (isApplyingRemoteOps) {
         OpLog.verbose(
           'operationCaptureMetaReducer: Buffering action for post-sync processing',

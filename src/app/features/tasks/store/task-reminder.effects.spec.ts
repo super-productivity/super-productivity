@@ -111,6 +111,38 @@ describe('TaskReminderEffects', () => {
       );
     });
 
+    it('should not throw when dueWithTime is NaN', () => {
+      // Prevent devError from throwing (it calls alert + confirm → throws if true)
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+      if (!jasmine.isSpy(window.confirm)) {
+        spyOn(window, 'confirm').and.returnValue(false);
+      } else {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      }
+
+      const action = TaskSharedActions.scheduleTaskWithTime({
+        task: mockTask,
+        dueWithTime: NaN,
+        remindAt: undefined,
+        isMoveToBacklog: false,
+      });
+
+      datePipe.transform.and.returnValue(null);
+      actions$ = of(action);
+
+      effects.snack$.subscribe();
+
+      expect(snackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          translateParams: jasmine.objectContaining({
+            date: '',
+          }),
+        }),
+      );
+    });
+
     it('should truncate long task titles', () => {
       const longTitleTask: Task = {
         ...mockTask,

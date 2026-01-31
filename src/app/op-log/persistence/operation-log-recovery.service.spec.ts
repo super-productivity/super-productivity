@@ -196,7 +196,7 @@ describe('OperationLogRecoveryService', () => {
       expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(['expired']);
     });
 
-    it('should reject all expired ops when all are stale', async () => {
+    it('should reject all expired ops when all are superseded', async () => {
       const now = Date.now();
       const expiredTime = now - PENDING_OPERATION_EXPIRY_MS - 100000;
       const pendingOps = [

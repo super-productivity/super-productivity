@@ -29,7 +29,12 @@ export { MIGRATIONS } from './migrations/index';
 
 // Vector clock types and comparison (shared between client and server)
 export type { VectorClock, VectorClockComparison } from './vector-clock';
-export { compareVectorClocks, mergeVectorClocks } from './vector-clock';
+export {
+  compareVectorClocks,
+  mergeVectorClocks,
+  limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
+} from './vector-clock';
 
 // Entity types (shared between client and server)
 export type { EntityType } from './entity-types';

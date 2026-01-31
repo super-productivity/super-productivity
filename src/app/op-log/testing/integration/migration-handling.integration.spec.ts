@@ -57,7 +57,7 @@ describe('Migration Handling Integration', () => {
               'checkOpForConflicts',
             ]);
             spy.checkOpForConflicts.and.returnValue({
-              isStaleOrDuplicate: false,
+              isSupersededOrDuplicate: false,
               conflict: null,
             });
             return spy;

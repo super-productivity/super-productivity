@@ -145,7 +145,10 @@ test.describe('Context Switching', () => {
     await expect(page).toHaveURL(/tag/);
 
     // Navigate back to TODAY tag by clicking "Today" in sidebar
-    await page.click('text=Today');
+    const todayNavItem = page.locator(
+      'magic-side-nav nav-item[data-tag-id="TODAY"] button.nav-link',
+    );
+    await todayNavItem.click();
     await page.waitForLoadState('networkidle');
 
     // Verify URL is TODAY tag
@@ -183,7 +186,10 @@ test.describe('Context Switching', () => {
     ).toBeVisible();
 
     // Navigate to TODAY tag
-    await page.click('text=Today');
+    const todayNavItem = page.locator(
+      'magic-side-nav nav-item[data-tag-id="TODAY"] button.nav-link',
+    );
+    await todayNavItem.click();
     await page.waitForLoadState('networkidle');
 
     // Navigate back to the project

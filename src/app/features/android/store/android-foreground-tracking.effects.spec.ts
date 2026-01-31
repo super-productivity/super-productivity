@@ -895,6 +895,422 @@ describe('AndroidForegroundTrackingEffects - flush await fix (issue #5842)', () 
   });
 });
 
+describe('AndroidForegroundTrackingEffects - flushOnPause logic (issue #6207)', () => {
+  /**
+   * Tests for the flushOnPause$ effect that ensures time tracking data
+   * is flushed to IndexedDB when the app goes to background.
+   * This prevents data loss if Android terminates the app while backgrounded.
+   */
+
+  let syncElapsedTimeSpy: jasmine.Spy;
+  let flushAccumulatedTimeSpy: jasmine.Spy;
+  let flushPendingOpsSpy: jasmine.Spy;
+
+  // Replicate the flushOnPause handler logic
+  // Note: The real _syncElapsedTimeForTask has internal try-catch that doesn't rethrow,
+  // so we model that behavior here with syncElapsedTimeWithErrorHandling
+  const handleOnPause = async (
+    currentTask: { id: string } | null,
+    syncElapsedTime: (taskId: string) => Promise<void>,
+    flushAccumulatedTime: () => void,
+    flushPendingOps: () => Promise<void>,
+  ): Promise<void> => {
+    // If there's a current task, sync elapsed time from native service first
+    // The real implementation's _syncElapsedTimeForTask has internal error handling
+    if (currentTask) {
+      await syncElapsedTime(currentTask.id);
+    }
+
+    // Flush accumulated time from TaskService (dispatches syncTimeSpent)
+    flushAccumulatedTime();
+
+    // Flush pending operations to IndexedDB to prevent data loss
+    await flushPendingOps();
+  };
+
+  // Helper that mirrors the real _syncElapsedTimeForTask error handling behavior
+  const handleOnPauseWithSyncErrorHandling = async (
+    currentTask: { id: string } | null,
+    syncElapsedTime: (taskId: string) => Promise<void>,
+    flushAccumulatedTime: () => void,
+    flushPendingOps: () => Promise<void>,
+    onSyncError?: (e: unknown) => void,
+  ): Promise<void> => {
+    // If there's a current task, sync elapsed time from native service first
+    // The real _syncElapsedTimeForTask catches errors internally and doesn't rethrow
+    if (currentTask) {
+      try {
+        await syncElapsedTime(currentTask.id);
+      } catch (e) {
+        // Real implementation logs and shows snackbar but doesn't rethrow
+        onSyncError?.(e);
+      }
+    }
+
+    // These always run regardless of sync errors
+    flushAccumulatedTime();
+    await flushPendingOps();
+  };
+
+  beforeEach(() => {
+    syncElapsedTimeSpy = jasmine.createSpy('syncElapsedTime').and.resolveTo(undefined);
+    flushAccumulatedTimeSpy = jasmine.createSpy('flushAccumulatedTime');
+    flushPendingOpsSpy = jasmine.createSpy('flushPendingOps').and.resolveTo(undefined);
+  });
+
+  it('should sync elapsed time when there is a current task', async () => {
+    const currentTask = { id: 'task-1' };
+
+    await handleOnPause(
+      currentTask,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+    );
+
+    expect(syncElapsedTimeSpy).toHaveBeenCalledWith('task-1');
+    expect(flushAccumulatedTimeSpy).toHaveBeenCalledTimes(1);
+    expect(flushPendingOpsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should NOT sync elapsed time when there is no current task', async () => {
+    await handleOnPause(
+      null,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+    );
+
+    expect(syncElapsedTimeSpy).not.toHaveBeenCalled();
+    // Should still flush accumulated time and pending ops
+    expect(flushAccumulatedTimeSpy).toHaveBeenCalledTimes(1);
+    expect(flushPendingOpsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should call operations in correct order: sync, flush accumulated, flush pending', async () => {
+    const currentTask = { id: 'task-1' };
+    const callOrder: string[] = [];
+
+    syncElapsedTimeSpy.and.callFake(async () => {
+      callOrder.push('sync');
+    });
+    flushAccumulatedTimeSpy.and.callFake(() => callOrder.push('flushAccumulated'));
+    flushPendingOpsSpy.and.callFake(async () => {
+      callOrder.push('flushPending');
+    });
+
+    await handleOnPause(
+      currentTask,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+    );
+
+    expect(callOrder).toEqual(['sync', 'flushAccumulated', 'flushPending']);
+  });
+
+  it('should await flushPendingOps to ensure data is persisted before returning', async () => {
+    const currentTask = { id: 'task-1' };
+    let flushCompleted = false;
+
+    flushPendingOpsSpy.and.callFake(async () => {
+      // Simulate async flush taking time
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      flushCompleted = true;
+    });
+
+    await handleOnPause(
+      currentTask,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+    );
+
+    // Verify flush completed before function returned
+    expect(flushCompleted).toBeTrue();
+  });
+
+  it('should still flush accumulated time and pending ops even when sync fails', async () => {
+    // This test models the real behavior: _syncElapsedTimeForTask has internal
+    // try-catch that catches errors and shows a snackbar, but doesn't rethrow.
+    // So flush operations should always run regardless of sync errors.
+    const currentTask = { id: 'task-1' };
+    const syncError = new Error('Sync failed');
+    let errorHandled = false;
+
+    syncElapsedTimeSpy.and.rejectWith(syncError);
+
+    await handleOnPauseWithSyncErrorHandling(
+      currentTask,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+      () => {
+        errorHandled = true;
+      },
+    );
+
+    // Sync was called and error was handled internally
+    expect(syncElapsedTimeSpy).toHaveBeenCalled();
+    expect(errorHandled).toBeTrue();
+
+    // Flush operations should still run even after sync error
+    expect(flushAccumulatedTimeSpy).toHaveBeenCalledTimes(1);
+    expect(flushPendingOpsSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should handle case with no task and still flush successfully', async () => {
+    await handleOnPause(
+      null,
+      syncElapsedTimeSpy,
+      flushAccumulatedTimeSpy,
+      flushPendingOpsSpy,
+    );
+
+    expect(flushAccumulatedTimeSpy).toHaveBeenCalledTimes(1);
+    expect(flushPendingOpsSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AndroidForegroundTrackingEffects - syncTimeSpent dispatch (issue #6207)', () => {
+  /**
+   * Tests for the fix: _syncElapsedTimeForTask must dispatch syncTimeSpent action
+   * in addition to calling addTimeSpent to ensure time is captured in operation log.
+   *
+   * The bug: addTimeSpent only updates local NgRx state but does NOT create an
+   * operation in the log. When syncing time from native service after app resume,
+   * this meant time would be lost if the app was closed before the next flush.
+   *
+   * The fix: After calling addTimeSpent (updates local state), also dispatch
+   * syncTimeSpent (creates operation in log for persistence).
+   */
+
+  let addTimeSpentSpy: jasmine.Spy;
+  let dispatchSpy: jasmine.Spy;
+  let resetTrackingStartSpy: jasmine.Spy;
+  let snackOpenSpy: jasmine.Spy;
+
+  // Replicate the fixed sync logic that dispatches syncTimeSpent
+  const syncElapsedTimeForTaskWithOpLog = async (
+    taskId: string,
+    elapsedJson: string | null,
+    getTask: (id: string) => Promise<{ id: string; timeSpent: number } | null>,
+    addTimeSpent: (task: unknown, duration: number, date: string) => void,
+    dispatch: (action: { taskId: string; date: string; duration: number }) => void,
+    resetTrackingStart: () => void,
+    snackOpen: (params: { msg: string; type: string }) => void,
+    todayStr: string,
+  ): Promise<void> => {
+    if (!elapsedJson || elapsedJson === 'null') {
+      return;
+    }
+
+    try {
+      const nativeData = JSON.parse(elapsedJson) as {
+        taskId: string;
+        elapsedMs: number;
+      };
+
+      if (nativeData.taskId !== taskId) {
+        return;
+      }
+
+      const task = await getTask(taskId);
+      if (!task) {
+        snackOpen({
+          msg: 'Time tracking sync failed - task not found',
+          type: 'WARNING',
+        });
+        return;
+      }
+
+      const currentTimeSpent = task.timeSpent || 0;
+      const duration = nativeData.elapsedMs - currentTimeSpent;
+
+      // Handle negative duration (service crash/reset)
+      // Keep app value to prevent data loss - just reset tracking interval
+      if (duration < 0) {
+        resetTrackingStart();
+        return;
+      }
+
+      if (duration > 0) {
+        addTimeSpent(task, duration, todayStr);
+        // Also dispatch syncTimeSpent to capture in operation log
+        dispatch({ taskId: task.id, date: todayStr, duration });
+        resetTrackingStart();
+      }
+    } catch (e) {
+      snackOpen({
+        msg: 'Time tracking sync failed - please check your tracked time',
+        type: 'WARNING',
+      });
+    }
+  };
+
+  beforeEach(() => {
+    addTimeSpentSpy = jasmine.createSpy('addTimeSpent');
+    dispatchSpy = jasmine.createSpy('dispatch');
+    resetTrackingStartSpy = jasmine.createSpy('resetTrackingStart');
+    snackOpenSpy = jasmine.createSpy('snackService.open');
+  });
+
+  it('should dispatch syncTimeSpent after addTimeSpent for positive duration', async () => {
+    const nativeElapsed = 900000; // 15 minutes
+    const appTimeSpent = 60000; // 1 minute
+    const expectedDuration = nativeElapsed - appTimeSpent; // 14 minutes
+
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: nativeElapsed });
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: appTimeSpent,
+    });
+
+    await syncElapsedTimeForTaskWithOpLog(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      dispatchSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    expect(addTimeSpentSpy).toHaveBeenCalledWith(
+      { id: 'task-1', timeSpent: appTimeSpent },
+      expectedDuration,
+      '2024-01-01',
+    );
+
+    // Key assertion: syncTimeSpent dispatched with correct params
+    expect(dispatchSpy).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      date: '2024-01-01',
+      duration: expectedDuration,
+    });
+  });
+
+  it('should NOT dispatch syncTimeSpent for negative duration (keeps app value)', async () => {
+    const nativeElapsed = 30000; // 30 seconds (native service restarted)
+    const appTimeSpent = 600000; // 10 minutes
+
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: nativeElapsed });
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: appTimeSpent,
+    });
+
+    await syncElapsedTimeForTaskWithOpLog(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      dispatchSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    // For negative duration, keep app value - don't update time
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    // Should still reset tracking start to prevent double-counting
+    expect(resetTrackingStartSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should NOT dispatch syncTimeSpent when duration is zero', async () => {
+    const elapsedMs = 60000;
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs });
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: elapsedMs, // Same as native - no sync needed
+    });
+
+    await syncElapsedTimeForTaskWithOpLog(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      dispatchSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalled();
+  });
+
+  it('should NOT dispatch syncTimeSpent when task not found', async () => {
+    const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: 60000 });
+    const getTask = async (): Promise<null> => null;
+
+    await syncElapsedTimeForTaskWithOpLog(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      dispatchSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(snackOpenSpy).toHaveBeenCalled();
+  });
+
+  it('should ensure operation log capture for time synced from native on resume', async () => {
+    // This test verifies the specific scenario from issue #6207:
+    // 1. User backgrounds app for extended period (native counts time)
+    // 2. User reopens app (syncOnResume$ fires, calls _syncElapsedTimeForTask)
+    // 3. Time must be captured in operation log so it persists if app closes quickly
+
+    const backgroundTimeMs = 720000; // 12 minutes tracked while backgrounded
+    const existingTimeMs = 120000; // 2 minutes tracked before backgrounding
+    const syncDuration = backgroundTimeMs; // Duration to sync (difference)
+
+    const elapsedJson = JSON.stringify({
+      taskId: 'task-1',
+      elapsedMs: existingTimeMs + backgroundTimeMs, // Total native elapsed
+    });
+
+    const getTask = async (): Promise<{ id: string; timeSpent: number }> => ({
+      id: 'task-1',
+      timeSpent: existingTimeMs, // App only knows about pre-background time
+    });
+
+    await syncElapsedTimeForTaskWithOpLog(
+      'task-1',
+      elapsedJson,
+      getTask,
+      addTimeSpentSpy,
+      dispatchSpy,
+      resetTrackingStartSpy,
+      snackOpenSpy,
+      '2024-01-01',
+    );
+
+    // addTimeSpent updates local NgRx state immediately
+    expect(addTimeSpentSpy).toHaveBeenCalledWith(
+      { id: 'task-1', timeSpent: existingTimeMs },
+      syncDuration,
+      '2024-01-01',
+    );
+
+    // syncTimeSpent creates operation for persistence - THIS IS THE FIX
+    expect(dispatchSpy).toHaveBeenCalledWith({
+      taskId: 'task-1',
+      date: '2024-01-01',
+      duration: syncDuration,
+    });
+
+    // Without the dispatch, the 12 minutes would be lost if app closes before flush
+  });
+});
+
 describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #5842)', () => {
   /**
    * Tests for enhanced error handling in _syncElapsedTimeForTask:
@@ -944,8 +1360,8 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
       const duration = nativeData.elapsedMs - currentTimeSpent;
 
       // Handle negative duration (service crash/reset)
+      // Keep app value to prevent data loss - just reset tracking interval
       if (duration < 0) {
-        addTimeSpent(task, nativeData.elapsedMs, todayStr);
         resetTrackingStart();
         return;
       }
@@ -968,7 +1384,7 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
     snackOpenSpy = jasmine.createSpy('snackService.open');
   });
 
-  it('should handle negative duration by trusting native service value', async () => {
+  it('should handle negative duration by keeping app value to prevent data loss', async () => {
     const nativeElapsed = 30000; // 30 seconds (native service crashed and restarted)
     const appTimeSpent = 600000; // 10 minutes (app has more time)
     const elapsedJson = JSON.stringify({ taskId: 'task-1', elapsedMs: nativeElapsed });
@@ -987,12 +1403,9 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
       '2024-01-01',
     );
 
-    // Should add the native elapsed value directly (not the negative duration)
-    expect(addTimeSpentSpy).toHaveBeenCalledWith(
-      { id: 'task-1', timeSpent: appTimeSpent },
-      nativeElapsed,
-      '2024-01-01',
-    );
+    // Should NOT update time - keep app's higher value to prevent data loss
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
+    // Should still reset tracking start to prevent double-counting
     expect(resetTrackingStartSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -1058,7 +1471,8 @@ describe('AndroidForegroundTrackingEffects - enhanced error handling (issue #584
     );
 
     // Should handle gracefully without user notification (logged as warning)
-    expect(addTimeSpentSpy).toHaveBeenCalled();
+    // App value is preserved - no update needed
+    expect(addTimeSpentSpy).not.toHaveBeenCalled();
     expect(resetTrackingStartSpy).toHaveBeenCalled();
     expect(snackOpenSpy).not.toHaveBeenCalled();
   });

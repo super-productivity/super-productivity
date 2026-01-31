@@ -37,6 +37,7 @@ import {
 import { Log } from '../../core/log';
 import { DialogArchiveCompressionComponent } from '../../features/archive/dialog-archive-compression/dialog-archive-compression.component';
 import { DataValidationFailedError } from '../../op-log/core/errors/sync-errors';
+import { alertDialog } from '../../util/native-dialogs';
 
 @Component({
   selector: 'file-imex',
@@ -183,7 +184,7 @@ export class FileImexComponent implements OnInit {
     // TODO: consider if this check is still relevant or can be removed/updated
     const v1Data = oldData as { config?: unknown; tasks?: unknown };
     if (v1Data.config && Array.isArray(v1Data.tasks)) {
-      alert('V1 Data. Migration not supported any more.');
+      alertDialog('V1 Data. Migration not supported any more.');
       // Potentially also use snackService here or log an error.
       // For now, keeping alert as per original logic.
       return;

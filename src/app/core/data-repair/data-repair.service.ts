@@ -7,6 +7,7 @@ import { getLastValidityError } from '../../op-log/validation/is-related-model-d
 import { IS_ELECTRON } from '../../app.constants';
 import { AppDataComplete } from '../../op-log/model/model-config';
 import { Log } from '../log';
+import { alertDialog, confirmDialog } from '../../util/native-dialogs';
 
 @Injectable({
   providedIn: 'root',
@@ -17,10 +18,10 @@ export class DataRepairService {
   isRepairPossibleAndConfirmed(dataIn: AppDataCompleteLegacy | AppDataComplete): boolean {
     if (!isDataRepairPossible(dataIn)) {
       Log.log({ dataIn });
-      alert('Data damaged, repair not possible.');
+      alertDialog('Data damaged, repair not possible.');
       return false;
     }
-    const isConfirmed = confirm(
+    const isConfirmed = confirmDialog(
       this._translateService.instant(T.CONFIRM.AUTO_FIX, {
         validityError: getLastValidityError() || 'Unknown validity error',
       }),

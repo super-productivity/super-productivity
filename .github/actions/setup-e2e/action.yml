@@ -1,0 +1,50 @@
+name: 'Setup E2E Environment'
+description: 'Shared setup for E2E test jobs: Node, npm install, Playwright browsers'
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      with:
+        node-version: 20
+
+    - name: Reconfigure git to use HTTP authentication
+      shell: bash
+      run: >
+        git config --global url."https://github.com/".insteadOf
+        ssh://git@github.com/
+
+    - name: Get npm cache directory
+      id: npm-cache-dir
+      shell: bash
+      run: |
+        echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+      id: npm-cache
+      with:
+        path: ${{ steps.npm-cache-dir.outputs.dir }}
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Install npm Packages
+      shell: bash
+      run: npm i
+
+    - name: Cache Playwright Browsers
+      uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+    - name: Install Playwright Browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: npx playwright install --with-deps chromium
+
+    - name: Install Playwright Dependencies (on cache hit)
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: npx playwright install-deps chromium

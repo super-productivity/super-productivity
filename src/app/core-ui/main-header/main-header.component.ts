@@ -156,13 +156,13 @@ export class MainHeaderComponent implements OnDestroy {
     this._metricService.getFocusSummaryForDay(this._dateService.todayStr()),
   );
   readonly isTimeTrackingEnabled = computed(() => {
-    return this.globalConfigService.cfg()?.appFeatures.isTimeTrackingEnabled;
+    return this.globalConfigService.appFeatures().isTimeTrackingEnabled;
   });
   readonly isFocusModeEnabled = computed(() => {
-    return this.globalConfigService.cfg()?.appFeatures.isFocusModeEnabled;
+    return this.globalConfigService.appFeatures().isFocusModeEnabled;
   });
   readonly isSyncIconEnabled = computed(() => {
-    return this.globalConfigService.cfg()?.appFeatures.isSyncIconEnabled;
+    return this.globalConfigService.appFeatures().isSyncIconEnabled;
   });
 
   // Check if there are any undone tasks that can be tracked
@@ -174,7 +174,7 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _userProfileService = inject(UserProfileService);
   isUserProfilesEnabled = computed(() => {
     return (
-      this.globalConfigService.cfg()?.appFeatures.isEnableUserProfiles &&
+      this.globalConfigService.appFeatures().isEnableUserProfiles &&
       this._userProfileService.isInitialized()
     );
   });

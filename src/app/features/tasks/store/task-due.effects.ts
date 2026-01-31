@@ -10,15 +10,20 @@ import {
   switchMap,
   withLatestFrom,
 } from 'rxjs/operators';
-import { EMPTY, of } from 'rxjs';
+import { combineLatest, EMPTY, of } from 'rxjs';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Store } from '@ngrx/store';
-import { selectOverdueTasksOnToday, selectTasksDueForDay } from './task.selectors';
+import {
+  selectOverdueTasksOnToday,
+  selectTasksDueForDay,
+  selectTasksWithDueTimeForRange,
+} from './task.selectors';
 import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDateRangeForDay } from '../../../util/get-date-range-for-day';
 import { TaskLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { environment } from '../../../../environments/environment';
@@ -130,11 +135,27 @@ export class TaskDueEffects {
           switchMap(() => this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$),
           switchMap(() => {
             const todayStr = getDbDateStr();
-            return this._store$.select(selectTasksDueForDay, { day: todayStr }).pipe(
+            const todayRange = getDateRangeForDay(Date.now());
+            return combineLatest([
+              this._store$.select(selectTasksDueForDay, { day: todayStr }),
+              this._store$.select(selectTasksWithDueTimeForRange, todayRange),
+            ]).pipe(
               first(),
               withLatestFrom(this._store$.select(selectTodayTaskIds)),
-              map(([tasksDueToday, todayTaskIds]) => {
-                const missingTaskIds = tasksDueToday
+              map(([[tasksDueByDay, tasksDueByTime], todayTaskIds]) => {
+                // Merge both lists, deduplicating by ID.
+                // Tasks with dueWithTime set have dueDay cleared (mutual exclusivity),
+                // so we must check both selectors to catch all tasks due today.
+                const seenIds = new Set<string>();
+                const allTasksDueToday = [...tasksDueByDay, ...tasksDueByTime].filter(
+                  (task) => {
+                    if (seenIds.has(task.id)) return false;
+                    seenIds.add(task.id);
+                    return true;
+                  },
+                );
+
+                const missingTaskIds = allTasksDueToday
                   .filter((task) => !todayTaskIds.includes(task.id))
                   // Exclude subtasks whose parent is already in TODAY
                   // (preventParentAndSubTaskInTodayList$ will remove them anyway,
@@ -146,8 +167,9 @@ export class TaskDueEffects {
 
                 // Debug log to investigate repeated operations
                 TaskLog.log('[TaskDueEffects] ensureTasksDueTodayInTodayTag check:', {
-                  tasksDueTodayCount: tasksDueToday.length,
-                  tasksDueTodayIds: tasksDueToday.map((t) => t.id),
+                  tasksDueByDayCount: tasksDueByDay.length,
+                  tasksDueByTimeCount: tasksDueByTime.length,
+                  tasksDueTodayIds: allTasksDueToday.map((t) => t.id),
                   todayTaskIdsCount: todayTaskIds.length,
                   missingTaskIds,
                   willDispatch: missingTaskIds.length > 0,
@@ -157,7 +179,7 @@ export class TaskDueEffects {
                   TaskLog.err(
                     '[TaskDueEffects] Found tasks due today missing from TODAY tag:',
                     {
-                      tasksDueToday: tasksDueToday.length,
+                      tasksDueToday: allTasksDueToday.length,
                       todayTaskIds: todayTaskIds.length,
                       missingTaskIds,
                     },

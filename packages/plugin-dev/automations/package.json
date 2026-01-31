@@ -29,7 +29,7 @@
     "eslint-plugin-solid": "^0.14.5",
     "jsdom": "^27.2.0",
     "prettier": "^3.6.2",
-    "solid-js": "^1.9.10",
+    "solid-js": "^1.9.11",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
     "vite-plugin-solid": "^2.11.10",

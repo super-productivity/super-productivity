@@ -8,6 +8,7 @@ import {
   OpType,
   VectorClock,
 } from '../core/operation.types';
+import { toLwwUpdateActionType } from '../core/lww-update-action-types';
 import { OperationApplierService } from '../apply/operation-applier.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { OpLog } from '../../core/log';
@@ -17,8 +18,11 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
+import { DUPLICATE_OPERATION_ERROR_PATTERN } from '../persistence/op-log-errors.const';
 import {
   compareVectorClocks,
+  incrementVectorClock,
+  limitVectorClockSize,
   mergeVectorClocks,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
@@ -26,13 +30,15 @@ import { devError } from '../../util/dev-error';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import {
   getEntityConfig,
+  getPayloadKey,
   isAdapterEntity,
   isSingletonEntity,
   isMapEntity,
   isArrayEntity,
 } from '../core/entity-registry';
 import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
-import { LWWOperationFactory } from './lww-operation-factory.service';
+import { uuidv7 } from '../../util/uuid-v7';
+import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 
 /**
  * Represents the result of LWW (Last-Write-Wins) conflict resolution.
@@ -65,7 +71,7 @@ interface LWWResolution {
  * ## Safety Features
  * - **Duplicate detection**: Skips ops already in the store
  * - **Crash safety**: Marks ops as rejected BEFORE applying
- * - **Stale op rejection**: When remote wins, rejects ALL pending ops for affected entities
+ * - **Superseded op rejection**: When remote wins, rejects ALL pending ops for affected entities
  *   (prevents uploading ops with outdated vector clocks)
  * - **Batch application**: All ops applied together for correct dependency sorting
  * - **Post-resolution validation**: Runs state validation and repair after resolution
@@ -80,7 +86,72 @@ export class ConflictResolutionService {
   private snackService = inject(SnackService);
   private validateStateService = inject(ValidateStateService);
   private clientIdProvider = inject(CLIENT_ID_PROVIDER);
-  private lwwOperationFactory = inject(LWWOperationFactory);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LWW OPERATION FACTORY METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Creates a new LWW Update operation for syncing local state.
+   *
+   * LWW Update operations are synthetic operations created during conflict resolution
+   * to carry the winning local state to remote clients. They are created when:
+   * 1. Local state wins LWW conflict resolution
+   * 2. Superseded local operations need to be re-uploaded with merged clocks
+   *
+   * These operations use dynamically constructed action types (e.g., '[TASK] LWW Update')
+   * that are matched by regex in lwwUpdateMetaReducer.
+   *
+   * @param entityType - Type of the entity being updated
+   * @param entityId - ID of the entity being updated
+   * @param entityState - Current state of the entity to sync
+   * @param clientId - Client creating this operation
+   * @param vectorClock - Merged vector clock (should dominate all conflicting ops)
+   * @param timestamp - Preserved timestamp for correct LWW semantics
+   * @returns New UPDATE operation ready for upload
+   */
+  createLWWUpdateOp(
+    entityType: EntityType,
+    entityId: string,
+    entityState: unknown,
+    clientId: string,
+    vectorClock: VectorClock,
+    timestamp: number,
+  ): Operation {
+    // NOTE: LWW Update action types (e.g., '[TASK] LWW Update') are intentionally
+    // NOT in the ActionType enum. They are dynamically constructed here and matched
+    // by regex in lwwUpdateMetaReducer. This is by design - LWW ops are synthetic,
+    // created during conflict resolution to carry the winning local state to remote clients.
+    return {
+      id: uuidv7(),
+      actionType: toLwwUpdateActionType(entityType),
+      opType: OpType.Update,
+      entityType,
+      entityId,
+      payload: entityState,
+      clientId,
+      vectorClock,
+      timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
+  }
+
+  /**
+   * Merges multiple vector clocks and increments for the given client.
+   * Used when creating LWW Update operations that need to dominate
+   * all previously known clocks.
+   *
+   * @param clocks - Array of vector clocks to merge
+   * @param clientId - Client ID to increment in the final clock
+   * @returns Merged and incremented vector clock
+   */
+  mergeAndIncrementClocks(clocks: VectorClock[], clientId: string): VectorClock {
+    let mergedClock: VectorClock = {};
+    for (const clock of clocks) {
+      mergedClock = mergeVectorClocks(mergedClock, clock);
+    }
+    return incrementVectorClock(mergedClock, clientId);
+  }
 
   /**
    * Validates the current state after conflict resolution and repairs if necessary.
@@ -314,35 +385,30 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // Batch process remote-wins ops: filter duplicates and append in batch
+    // Uses retry to handle race condition (issue #6213)
     // ─────────────────────────────────────────────────────────────────────────
     if (remoteWinsOps.length > 0) {
-      const newRemoteWinsOps = await this.opLogStore.filterNewOps(remoteWinsOps);
-      const skippedCount = remoteWinsOps.length - newRemoteWinsOps.length;
+      const result = await this._filterAndAppendOpsWithRetry(remoteWinsOps, 'remote', {
+        pendingApply: true,
+      });
+      const skippedCount = remoteWinsOps.length - result.ops.length;
       if (skippedCount > 0) {
         OpLog.verbose(
           `ConflictResolutionService: Skipping ${skippedCount} duplicate ops (LWW remote)`,
         );
       }
-      if (newRemoteWinsOps.length > 0) {
-        const seqs = await this.opLogStore.appendBatch(newRemoteWinsOps, 'remote', {
-          pendingApply: true,
-        });
-        for (let i = 0; i < newRemoteWinsOps.length; i++) {
-          allStoredOps.push({ id: newRemoteWinsOps[i].id, seq: seqs[i] });
-          allOpsToApply.push(newRemoteWinsOps[i]);
-        }
+      for (let i = 0; i < result.ops.length; i++) {
+        allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
+        allOpsToApply.push(result.ops[i]);
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Batch process local-wins remote ops: filter duplicates and append in batch
+    // Uses retry to handle race condition (issue #6213)
     // ─────────────────────────────────────────────────────────────────────────
     if (localWinsRemoteOps.length > 0) {
-      const newLocalWinsRemoteOps =
-        await this.opLogStore.filterNewOps(localWinsRemoteOps);
-      if (newLocalWinsRemoteOps.length > 0) {
-        await this.opLogStore.appendBatch(newLocalWinsRemoteOps, 'remote');
-      }
+      await this._filterAndAppendOpsWithRetry(localWinsRemoteOps, 'remote');
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -368,7 +434,7 @@ export class ConflictResolutionService {
           if (!localOpsToReject.includes(op.id)) {
             localOpsToReject.push(op.id);
             OpLog.normal(
-              `ConflictResolutionService: Also rejecting stale op ${op.id} for entity ${entityKey}`,
+              `ConflictResolutionService: Also rejecting superseded op ${op.id} for entity ${entityKey}`,
             );
           }
         }
@@ -377,15 +443,17 @@ export class ConflictResolutionService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3: Add non-conflicting remote ops to the batch
+    // Uses retry to handle race condition (issue #6213)
     // ─────────────────────────────────────────────────────────────────────────
-    const newNonConflictingOps = await this.opLogStore.filterNewOps(nonConflictingOps);
-    if (newNonConflictingOps.length > 0) {
-      const seqs = await this.opLogStore.appendBatch(newNonConflictingOps, 'remote', {
-        pendingApply: true,
-      });
-      for (let i = 0; i < newNonConflictingOps.length; i++) {
-        allStoredOps.push({ id: newNonConflictingOps[i].id, seq: seqs[i] });
-        allOpsToApply.push(newNonConflictingOps[i]);
+    if (nonConflictingOps.length > 0) {
+      const result = await this._filterAndAppendOpsWithRetry(
+        nonConflictingOps,
+        'remote',
+        { pendingApply: true },
+      );
+      for (let i = 0; i < result.ops.length; i++) {
+        allStoredOps.push({ id: result.ops[i].id, seq: result.seqs[i] });
+        allOpsToApply.push(result.ops[i]);
       }
     }
 
@@ -505,6 +573,36 @@ export class ConflictResolutionService {
     const resolutions: LWWResolution[] = [];
 
     for (const conflict of conflicts) {
+      // ── moveToArchive always wins over other operations ──
+      // Archive is an explicit user intent ("I'm done with these tasks").
+      // Allowing other operations (field-level updates, deletes) to win via LWW
+      // would either resurrect archived entities via lwwUpdateMetaReducer.addOne()
+      // (Bug B) or lose archived data.
+      const localHasArchive = conflict.localOps.some(
+        (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      );
+      const remoteHasArchive = conflict.remoteOps.some(
+        (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+      );
+
+      if (localHasArchive || remoteHasArchive) {
+        if (remoteHasArchive) {
+          // Remote archive wins — will be applied normally
+          resolutions.push({ conflict, winner: 'remote' });
+        } else {
+          // Local archive wins — re-create archive op with merged clock.
+          const localWinOp = await this._createArchiveWinOp(conflict);
+          resolutions.push({ conflict, winner: 'local', localWinOp });
+        }
+        OpLog.normal(
+          `ConflictResolutionService: Archive wins over concurrent operation ` +
+            `(${remoteHasArchive ? 'remote' : 'local'} archive) for ` +
+            `${conflict.entityType}:${conflict.entityId}`,
+        );
+        continue;
+      }
+
+      // ── Normal LWW timestamp comparison ──
       // Get max timestamp from each side
       const localMaxTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
       const remoteMaxTimestamp = Math.max(
@@ -593,10 +691,11 @@ export class ConflictResolutionService {
       ...conflict.localOps.map((op) => op.vectorClock),
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
-    const newClock = this.lwwOperationFactory.mergeAndIncrementClocks(
-      allClocks,
-      clientId,
-    );
+    const mergedClock = this.mergeAndIncrementClocks(allClocks, clientId);
+    // Prune to match what the regular capture pipeline produces, preventing
+    // infinite rejection loops when server compares pruned vs unpruned clocks
+    const protectedClientIds = await this.opLogStore.getProtectedClientIds();
+    const newClock = limitVectorClockSize(mergedClock, clientId, protectedClientIds);
 
     // Preserve the maximum timestamp from local ops.
     // This is critical for LWW semantics: we're creating a new op to carry the
@@ -604,7 +703,7 @@ export class ConflictResolutionService {
     // it to win. Using Date.now() would give it an unfair advantage in future conflicts.
     const preservedTimestamp = Math.max(...conflict.localOps.map((op) => op.timestamp));
 
-    return this.lwwOperationFactory.createLWWUpdateOp(
+    return this.createLWWUpdateOp(
       conflict.entityType,
       conflict.entityId,
       entityState,
@@ -612,6 +711,49 @@ export class ConflictResolutionService {
       newClock,
       preservedTimestamp,
     );
+  }
+
+  /**
+   * Creates a replacement archive operation with merged vector clock.
+   * Used when local moveToArchive wins a conflict — the original op will be
+   * rejected, so we create a new one with a clock that dominates all parties.
+   */
+  private async _createArchiveWinOp(
+    conflict: EntityConflict,
+  ): Promise<Operation | undefined> {
+    const clientId = await this.clientIdProvider.loadClientId();
+    if (!clientId) {
+      OpLog.err('ConflictResolutionService: Cannot create archive-win op - no client ID');
+      return undefined;
+    }
+
+    const archiveOp = conflict.localOps.find(
+      (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+    )!;
+
+    const allClocks = [
+      ...conflict.localOps.map((op) => op.vectorClock),
+      ...conflict.remoteOps.map((op) => op.vectorClock),
+    ];
+    const mergedClock = this.mergeAndIncrementClocks(allClocks, clientId);
+    // Prune to match what the regular capture pipeline produces, preventing
+    // infinite rejection loops when server compares pruned vs unpruned clocks
+    const protectedClientIds = await this.opLogStore.getProtectedClientIds();
+    const newClock = limitVectorClockSize(mergedClock, clientId, protectedClientIds);
+
+    return {
+      id: uuidv7(),
+      actionType: archiveOp.actionType,
+      opType: archiveOp.opType,
+      entityType: archiveOp.entityType,
+      entityId: archiveOp.entityId,
+      entityIds: archiveOp.entityIds,
+      payload: archiveOp.payload,
+      clientId,
+      vectorClock: newClock,
+      timestamp: archiveOp.timestamp,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    };
   }
 
   /**
@@ -638,7 +780,8 @@ export class ConflictResolutionService {
     // For TAG: payload.tag
     // etc.
     const payload = deleteOp.payload as Record<string, unknown>;
-    const entityKey = conflict.entityType.toLowerCase();
+    const entityKey =
+      getPayloadKey(conflict.entityType) || conflict.entityType.toLowerCase();
 
     return payload[entityKey];
   }
@@ -675,7 +818,7 @@ export class ConflictResolutionService {
         return {
           ...remoteOp,
           // Convert to LWW Update action type so lwwUpdateMetaReducer can recreate the entity
-          actionType: `[${remoteOp.entityType}] LWW Update` as ActionType,
+          actionType: toLwwUpdateActionType(remoteOp.entityType),
         };
       }
       return remoteOp;
@@ -770,7 +913,7 @@ export class ConflictResolutionService {
    *
    * @param remoteOp - The remote operation to check
    * @param ctx - Context containing local state for conflict detection
-   * @returns Object indicating if op is stale/duplicate and any detected conflict
+   * @returns Object indicating if op is superseded/duplicate and any detected conflict
    */
   checkOpForConflicts(
     remoteOp: Operation,
@@ -781,7 +924,7 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
       hasNoSnapshotClock: boolean;
     },
-  ): { isStaleOrDuplicate: boolean; conflict: EntityConflict | null } {
+  ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } {
     const entityIdsToCheck =
       remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 
@@ -797,15 +940,15 @@ export class ConflictResolutionService {
         hasNoSnapshotClock: ctx.hasNoSnapshotClock,
       });
 
-      if (result.isStaleOrDuplicate) {
-        return { isStaleOrDuplicate: true, conflict: null };
+      if (result.isSupersededOrDuplicate) {
+        return { isSupersededOrDuplicate: true, conflict: null };
       }
       if (result.conflict) {
-        return { isStaleOrDuplicate: false, conflict: result.conflict };
+        return { isSupersededOrDuplicate: false, conflict: result.conflict };
       }
     }
 
-    return { isStaleOrDuplicate: false, conflict: null };
+    return { isSupersededOrDuplicate: false, conflict: null };
   }
 
   /**
@@ -822,13 +965,13 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
       hasNoSnapshotClock: boolean;
     },
-  ): { isStaleOrDuplicate: boolean; conflict: EntityConflict | null } {
+  ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } {
     const localFrontier = this._buildEntityFrontier(entityKey, ctx);
     const localFrontierIsEmpty = Object.keys(localFrontier).length === 0;
 
     // FAST PATH: No local state means remote is newer by default
     if (ctx.localOpsForEntity.length === 0 && localFrontierIsEmpty) {
-      return { isStaleOrDuplicate: false, conflict: null };
+      return { isSupersededOrDuplicate: false, conflict: null };
     }
 
     let vcComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
@@ -840,12 +983,12 @@ export class ConflictResolutionService {
       localFrontierIsEmpty,
     });
 
-    // Skip stale operations (local already has newer state)
+    // Skip superseded operations (local already has newer state)
     if (vcComparison === VectorClockComparison.GREATER_THAN) {
       OpLog.verbose(
-        `ConflictResolutionService: Skipping stale remote op (local dominates): ${remoteOp.id}`,
+        `ConflictResolutionService: Skipping superseded remote op (local dominates): ${remoteOp.id}`,
       );
-      return { isStaleOrDuplicate: true, conflict: null };
+      return { isSupersededOrDuplicate: true, conflict: null };
     }
 
     // Skip duplicate operations (already applied)
@@ -853,18 +996,18 @@ export class ConflictResolutionService {
       OpLog.verbose(
         `ConflictResolutionService: Skipping duplicate remote op: ${remoteOp.id}`,
       );
-      return { isStaleOrDuplicate: true, conflict: null };
+      return { isSupersededOrDuplicate: true, conflict: null };
     }
 
     // No pending ops = no conflict possible
     if (ctx.localOpsForEntity.length === 0) {
-      return { isStaleOrDuplicate: false, conflict: null };
+      return { isSupersededOrDuplicate: false, conflict: null };
     }
 
     // CONCURRENT = true conflict
     if (vcComparison === VectorClockComparison.CONCURRENT) {
       return {
-        isStaleOrDuplicate: false,
+        isSupersededOrDuplicate: false,
         conflict: {
           entityType: remoteOp.entityType,
           entityId,
@@ -875,7 +1018,7 @@ export class ConflictResolutionService {
       };
     }
 
-    return { isStaleOrDuplicate: false, conflict: null };
+    return { isSupersededOrDuplicate: false, conflict: null };
   }
 
   /**
@@ -1016,5 +1159,47 @@ export class ConflictResolutionService {
 
     // Default: manual - let user decide
     return 'manual';
+  }
+
+  /**
+   * Filters out already-applied ops and appends new ones to the store, with retry on duplicate detection.
+   * Handles the race condition where filterNewOps uses a stale cache (issue #6213).
+   *
+   * @param ops - Operations to filter and potentially append
+   * @param source - Source of operations ('local' or 'remote')
+   * @param options - Options for appendBatch (e.g., pendingApply)
+   * @returns Object containing the filtered ops and their sequence numbers (if applicable)
+   */
+  private async _filterAndAppendOpsWithRetry(
+    ops: Operation[],
+    source: 'local' | 'remote',
+    options?: { pendingApply?: boolean },
+  ): Promise<{ ops: Operation[]; seqs: number[] }> {
+    const attemptFilterAndAppend = async (): Promise<{
+      ops: Operation[];
+      seqs: number[];
+    }> => {
+      const filteredOps = await this.opLogStore.filterNewOps(ops);
+      if (filteredOps.length === 0) {
+        return { ops: [], seqs: [] };
+      }
+      // Only pass options if defined to maintain original call signature
+      const seqs = options
+        ? await this.opLogStore.appendBatch(filteredOps, source, options)
+        : await this.opLogStore.appendBatch(filteredOps, source);
+      return { ops: filteredOps, seqs };
+    };
+
+    try {
+      return await attemptFilterAndAppend();
+    } catch (e) {
+      if (e instanceof Error && e.message.includes(DUPLICATE_OPERATION_ERROR_PATTERN)) {
+        OpLog.warn(
+          'ConflictResolutionService: Duplicate detected, retrying with fresh filter (issue #6213 recovery)',
+        );
+        return await attemptFilterAndAppend();
+      }
+      throw e;
+    }
   }
 }

@@ -33,6 +33,7 @@ import { IpcRendererEvent } from 'electron';
 import { environment } from '../../../environments/environment';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
+import { alertDialog } from '../../util/native-dialogs';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -340,7 +341,7 @@ export class StartupService {
           const details = `${usageInMib} out of ${quotaInMib} MiB used (${percentUsed}%)`;
           Log.log(details);
           if (quotaInMib - usageInMib <= 333) {
-            alert(
+            alertDialog(
               `There is only very little disk space available (${
                 quotaInMib - usageInMib
               }mb). This might affect how the app is running.`,

@@ -259,25 +259,24 @@ export class FocusModeEffects {
 
   // Detect when work session timer completes and dispatch completeFocusSession
   // Only triggers when timer STOPS (isRunning becomes false) with elapsed >= duration
+  // Note: This effect should dispatch completeFocusSession regardless of isManualBreakStart setting.
+  // The isManualBreakStart check belongs in autoStartBreakOnSessionComplete$ (which already has it),
+  // NOT here. Bug #6206: The session MUST complete to transition to SessionDone screen.
   detectSessionCompletion$ = createEffect(() =>
     this.store.select(selectors.selectTimer).pipe(
       skipWhileApplyingRemoteOps(),
-      withLatestFrom(
-        this.store.select(selectors.selectMode),
-        this.store.select(selectFocusModeConfig),
-      ),
+      withLatestFrom(this.store.select(selectors.selectMode)),
       // Only consider emissions where timer just stopped running
       distinctUntilChanged(
         ([prevTimer], [currTimer]) => prevTimer.isRunning === currTimer.isRunning,
       ),
       filter(
-        ([timer, mode, config]) =>
+        ([timer, mode]) =>
           timer.purpose === 'work' &&
           !timer.isRunning &&
           timer.duration > 0 &&
           timer.elapsed >= timer.duration &&
-          mode !== FocusModeMode.Flowtime &&
-          !config?.isManualBreakStart,
+          mode !== FocusModeMode.Flowtime,
       ),
 
       map(() => actions.completeFocusSession({ isManual: false })),

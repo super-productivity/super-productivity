@@ -165,6 +165,11 @@ export interface OpUploadResult {
   error?: string;
   /** Structured error code for programmatic handling */
   errorCode?: string;
+  /**
+   * The existing entity's vector clock when rejecting due to conflict.
+   * Allows clients to create LWW updates that dominate the server's state.
+   */
+  existingClock?: Record<string, number>;
 }
 
 /**
@@ -235,11 +240,13 @@ export interface OperationSyncCapable {
    * @param ops Operations to upload
    * @param clientId Client identifier
    * @param lastKnownServerSeq Last known server sequence (for piggyback download)
+   * @param isCleanSlate If true, server deletes all user data before accepting ops
    */
   uploadOps(
     ops: SyncOperation[],
     clientId: string,
     lastKnownServerSeq?: number,
+    isCleanSlate?: boolean,
   ): Promise<OpUploadResponse>;
 
   /**
@@ -274,6 +281,7 @@ export interface OperationSyncCapable {
    * @param schemaVersion Schema version of the state
    * @param isPayloadEncrypted Whether the state payload is E2E encrypted
    * @param opId Client's operation ID - server MUST use this ID to prevent ID mismatch bugs
+   * @param isCleanSlate If true, server deletes all user data before accepting the snapshot
    */
   uploadSnapshot(
     state: unknown,
@@ -283,6 +291,8 @@ export interface OperationSyncCapable {
     schemaVersion: number,
     isPayloadEncrypted: boolean | undefined,
     opId: string,
+    isCleanSlate?: boolean,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse>;
 
   /**

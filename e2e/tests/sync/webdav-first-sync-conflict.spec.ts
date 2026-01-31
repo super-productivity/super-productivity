@@ -9,6 +9,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   dismissTourIfVisible,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
 
@@ -146,8 +147,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await expect(pageA.locator('task', { hasText: taskA })).not.toBeVisible();
     console.log('[Test] Verified Client A received Client B data');
 
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   test('should show conflict dialog and allow USE_REMOTE to download remote data', async ({
@@ -234,8 +234,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     await expect(pageB.locator('task', { hasText: taskB })).not.toBeVisible();
     console.log('[Test] Verified Client B has remote task, not local task');
 
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -366,8 +365,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     // testing sync propagation, not the conflict dialog regression.
     // The key assertion is that NO conflict dialog appeared on the second sync.
 
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -528,8 +526,6 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     });
     console.log('[Test] Verified Client B kept its local task');
 
-    await contextA.close();
-    await contextB.close();
-    await contextC.close();
+    await closeContextsSafely(contextA, contextB, contextC);
   });
 });

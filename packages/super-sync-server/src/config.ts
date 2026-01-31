@@ -9,12 +9,21 @@ export type CorsOrigin = string | RegExp;
  * Supports wildcard subdomain syntax: https://*.example.com
  * Converts wildcards to safe RegExp patterns.
  *
+ * SECURITY: The generated pattern only allows alphanumeric characters and
+ * hyphens in the subdomain portion to prevent domain confusion attacks.
+ * For example, https://*.example.com will NOT match https://evil.com.example.com
+ *
  * @param origin - CORS origin string (exact match or wildcard pattern)
  * @returns CorsOrigin (string for exact match, RegExp for wildcard)
  * @throws Error if wildcard pattern is invalid or unsafe
  */
 export const parseCorsOrigin = (origin: string): CorsOrigin => {
   const trimmed = origin.trim();
+
+  // Validate non-empty
+  if (!trimmed) {
+    throw new Error('CORS origin cannot be empty');
+  }
 
   // No wildcard - return as-is for exact match
   if (!trimmed.includes('*')) {
@@ -39,12 +48,15 @@ export const parseCorsOrigin = (origin: string): CorsOrigin => {
 
   const [, protocol, domain, port] = match;
 
-  // Convert to safe RegExp: https://*.example.com -> /^https:\/\/[^\/]+\.example\.com$/
-  const escapedDomain = domain.replace(/\./g, '\\.');
+  // Convert to safe RegExp: https://*.example.com -> /^https:\/\/[a-zA-Z0-9-]+\.example\.com$/i
+  // Only allow alphanumeric and hyphens in subdomain (prevents domain confusion)
+  // Normalize domain to lowercase (browsers send Origin header in lowercase per RFC 6454)
+  const escapedDomain = domain.toLowerCase().replace(/\./g, '\\.');
   const portPart = port ? port.replace(/\./g, '\\.') : '';
-  const pattern = `^${protocol}:\\/\\/[^\\/]+\\.${escapedDomain}${portPart}$`;
+  const pattern = `^${protocol}:\\/\\/[a-zA-Z0-9-]+\\.${escapedDomain}${portPart}$`;
 
-  return new RegExp(pattern);
+  // Use case-insensitive flag to handle uppercase/lowercase variations
+  return new RegExp(pattern, 'i');
 };
 
 export interface PrivacyConfig {
@@ -175,7 +187,8 @@ export const loadConfigFromEnv = (
   }
   if (process.env.CORS_ORIGINS) {
     const origins = process.env.CORS_ORIGINS.split(',').map((o) => o.trim());
-    // Block wildcard in production - this is a security vulnerability
+
+    // Block universal wildcard in production - security vulnerability
     if (origins.includes('*')) {
       if (process.env.NODE_ENV === 'production') {
         throw new Error(
@@ -186,8 +199,26 @@ export const loadConfigFromEnv = (
       Logger.warn(
         'CORS_ORIGINS contains wildcard (*). This is insecure and not recommended for production.',
       );
+      // Parse non-wildcard origins, keep * as-is
+      try {
+        config.cors.allowedOrigins = origins.map((o) =>
+          o === '*' ? o : parseCorsOrigin(o),
+        );
+      } catch (err) {
+        throw new Error(
+          `Invalid CORS_ORIGINS configuration: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    } else {
+      // Parse each origin (converts wildcard patterns to RegExp)
+      try {
+        config.cors.allowedOrigins = origins.map(parseCorsOrigin);
+      } catch (err) {
+        throw new Error(
+          `Invalid CORS_ORIGINS configuration: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
-    config.cors.allowedOrigins = origins;
     // If origins are provided, implicitly enable CORS if not explicitly disabled
     if (process.env.CORS_ENABLED === undefined) {
       config.cors.enabled = true;

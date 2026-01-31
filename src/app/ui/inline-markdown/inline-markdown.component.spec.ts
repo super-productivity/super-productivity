@@ -547,7 +547,7 @@ describe('InlineMarkdownComponent', () => {
 
     it('should not emit if model is undefined', () => {
       // Arrange
-      component.model = undefined;
+      component.model = '';
       fixture.detectChanges();
 
       const wrapper1 = document.createElement('li');

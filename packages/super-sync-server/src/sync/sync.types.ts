@@ -3,10 +3,18 @@ import {
   VectorClock,
   VectorClockComparison,
   compareVectorClocks,
+  limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
 } from '@sp/shared-schema';
 
 // Re-export for consumers of this module
-export { VectorClock, VectorClockComparison, compareVectorClocks };
+export {
+  VectorClock,
+  VectorClockComparison,
+  compareVectorClocks,
+  limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
+};
 
 // Structured error codes for client handling
 export const SYNC_ERROR_CODES = {
@@ -26,6 +34,8 @@ export const SYNC_ERROR_CODES = {
 
   // Conflict errors (409)
   CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
+  CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
+  /** @deprecated Use CONFLICT_SUPERSEDED. Keep for backward compat with older clients. */
   CONFLICT_STALE: 'CONFLICT_STALE',
   DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
 
@@ -146,6 +156,7 @@ export interface UploadOpsRequest {
   clientId: string;
   lastKnownServerSeq?: number;
   requestId?: string; // For request deduplication on retries
+  isCleanSlate?: boolean; // If true, server deletes all user data before accepting ops
 }
 
 export interface UploadResult {
@@ -154,6 +165,11 @@ export interface UploadResult {
   serverSeq?: number;
   error?: string;
   errorCode?: SyncErrorCode;
+  /**
+   * The existing entity's vector clock when rejecting due to conflict.
+   * Allows clients to create LWW updates that dominate the server's state.
+   */
+  existingClock?: VectorClock;
 }
 
 export interface UploadOpsResponse {

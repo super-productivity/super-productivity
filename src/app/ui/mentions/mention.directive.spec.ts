@@ -97,7 +97,7 @@ describe('MentionDirective', () => {
       const validItem = { label: 'test-tag', id: '1' };
       const result = mentionSelect(validItem);
 
-      expect(result).toBe('@test-tag');
+      expect(result).toBe('@test-tag ');
       expect(logWarnSpy).not.toHaveBeenCalled();
     });
 
@@ -111,7 +111,7 @@ describe('MentionDirective', () => {
       const validItem = { title: 'custom-tag', id: '1' };
       const result = mentionSelect(validItem);
 
-      expect(result).toBe('#custom-tag');
+      expect(result).toBe('#custom-tag ');
       expect(logWarnSpy).not.toHaveBeenCalled();
     });
 

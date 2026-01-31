@@ -19,7 +19,7 @@ export interface ShortSyntaxTag {
   projectId?: string;
 }
 
-export const shortSyntaxToTags = ({
+export const shortSyntaxToTags = async ({
   val,
   tags,
   projects,
@@ -31,8 +31,8 @@ export const shortSyntaxToTags = ({
   projects: Project[];
   defaultColor: string;
   shortSyntaxConfig: ShortSyntaxConfig;
-}): ShortSyntaxTag[] => {
-  const r = shortSyntax(
+}): Promise<ShortSyntaxTag[]> => {
+  const r = await shortSyntax(
     {
       title: val,
       tagIds: [],

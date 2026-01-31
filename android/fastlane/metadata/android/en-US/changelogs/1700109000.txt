@@ -1,0 +1,26 @@
+
+### Bug Fixes
+
+* **android:** keep app time value when native reports less to prevent data loss
+* **android:** persist time synced from native service to operation log (0b47ef1), closes #6207
+* **archive:** make lastTimeTrackingFlush optional for backwards compatibility (f08083a), closes #6200
+* **e2e:** improve SuperSync encryption test reliability
+* **electron:** restore input focus after native dialogs (851d510), closes electron/electron#19977 electron/electron#20821 #6221
+* improve code clarity and add data repair warnings (#6239)
+* **ios:** hide Support us and Contribute links on iOS
+* **markdown:** handle gapped checklists without breaking layout (#6244)
+* **op-log:** add retry logic for IndexedDB open failures (#6255)
+* **sync:** add 1s buffer to WebDAV If-Unmodified-Since header (f005e2b), closes #6218
+* **sync:** add retry logic for duplicate operation detection (#6213)
+* **task-repeat:** prevent date overflow when calculating monthly repeat
+* **tasks:** prevent scheduled tasks from appearing in both today and tomorrow
+* **ui:** remove duplicate checkbox rendering in markdown (23f2c10), closes #6228
+
+
+### Features
+
+* **short-syntax:** Automatically add a trailing space after inserting tag, project or time via Short Syntax. (#6118) (#6248)
+* **sync:** add warning for Local File sync about file-syncing tools (e4fcad0), closes #6249
+
+
+

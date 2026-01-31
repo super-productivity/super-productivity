@@ -1,11 +1,22 @@
 @if (value) {
   <div class="value">{{ value }}</div>
 }
-<button
-  mat-flat-button
-  [color]="to.btnType || 'primary'"
-  (click)="onClick()"
-  [matTooltip]="to.tooltip ? (to.tooltip | translate) : ''"
->
-  {{ (to.text | translate) || 'Click Me' }}
-</button>
+@if (to.btnStyle === 'stroked') {
+  <button
+    mat-stroked-button
+    [color]="to.btnType || 'primary'"
+    (click)="onClick()"
+    [matTooltip]="to.tooltip ? (to.tooltip | translate) : ''"
+  >
+    {{ (to.text | translate) || 'Click Me' }}
+  </button>
+} @else {
+  <button
+    mat-flat-button
+    [color]="to.btnType || 'primary'"
+    (click)="onClick()"
+    [matTooltip]="to.tooltip ? (to.tooltip | translate) : ''"
+  >
+    {{ (to.text | translate) || 'Click Me' }}
+  </button>
+}

@@ -20,7 +20,6 @@ mac:
   category: public.app-category.productivity
   #  entitlements: build/entitlements.mac.plist
   #  entitlementsInherit: build/entitlements.mac.plist
-  icon: build/icon-mac.icns
   hardenedRuntime: false
   gatekeeperAssess: false
   provisioningProfile: embedded.provisionprofile
@@ -32,4 +31,3 @@ mas:
   category: public.app-category.productivity
   entitlements: build/entitlements.mas.plist
   entitlementsInherit: build/entitlements.mas.inherit.plist
-  icon: build/icon-mac.icns

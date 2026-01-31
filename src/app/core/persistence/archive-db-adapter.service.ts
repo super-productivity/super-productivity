@@ -52,4 +52,18 @@ export class ArchiveDbAdapter {
   async saveArchiveOld(data: ArchiveModel): Promise<void> {
     return this._archiveStore.saveArchiveOld(data);
   }
+
+  /**
+   * Atomically saves both archiveYoung and archiveOld in a single transaction.
+   *
+   * This ensures that either both writes succeed or neither does, preventing
+   * data loss if a failure occurs between the two writes (e.g., during flush
+   * from young to old).
+   */
+  async saveArchivesAtomic(
+    archiveYoung: ArchiveModel,
+    archiveOld: ArchiveModel,
+  ): Promise<void> {
+    return this._archiveStore.saveArchivesAtomic(archiveYoung, archiveOld);
+  }
 }

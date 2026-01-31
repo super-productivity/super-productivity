@@ -1,0 +1,32 @@
+
+### Bug Fixes
+
+* **ci:** disable no-inline-html rule in wiki markdown linter
+* **config:** merge defaults for tasks config on data load
+* **config:** prevent crash when appFeatures is undefined (e8e4ed6), closes #6182
+* **e2e:** add retry logic for flaky provider dropdown clicks
+* **gitlab:** use null as default for project field (3c6d036), closes #6138
+* **markdown:** restore inline formatting and links for marked v17 (02959b5), closes #6181
+* **mobile-nav:** fix hamburger menu not working with background image (61590fd), closes #6177 #6133
+* **mobile:** prevent menu flash on Android by disabling swipe during animation
+* **sync:** distinguish permanent rejections from resolved conflicts
+* **sync:** handle DELETE operations in StaleOperationResolverService
+* **sync:** improve hideExpression null safety and E2E test reliability
+* **sync:** preserve SYNC_IMPORT client ID through vector clock pruning
+* **sync:** remove state mutation from cross-model validation
+* **sync:** return existingClock in conflict rejections to fix infinite loop
+* **tasks:** allow subtask drag-drop reordering in Today/Tag views
+* **tasks:** handle undefined config in createNewTaskWithDefaults (df3f68c), closes #6199
+* **ui:** restore filled icons for impact stars and play button
+### Features
+
+* **dropbox:** add Capacitor HTTP support for native platforms
+* **i18n:** update turkish (#6170)
+* **sync:** enhance vector clock management and improve error handling in sync process
+* **sync:** re-enable repair system with user confirmation
+* **tools:** enhance translation management script (#6171)
+* **ui:** Desktop Full Screen Mode (F11) #5851 (#6183)
+### Performance Improvements
+
+* **ci:** optimize E2E workflow with shared build and Playwright caching
+* **e2e:** split scheduled CI into parallel jobs and reduce wait times

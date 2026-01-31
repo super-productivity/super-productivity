@@ -280,7 +280,7 @@ describe('operationCaptureMetaReducer', () => {
      * The problem being solved:
      * 1. User syncs after 12 hours, many operations need to be applied
      * 2. User interacts with the app during sync (creates a task, clicks done, etc.)
-     * 3. If captured immediately, these operations have stale vector clocks
+     * 3. If captured immediately, these operations have superseded vector clocks
      * 4. When uploaded, these ops conflict with recently-downloaded remote ops
      *
      * The solution:

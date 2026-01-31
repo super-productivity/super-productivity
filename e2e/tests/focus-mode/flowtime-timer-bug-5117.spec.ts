@@ -40,9 +40,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
 
     // Locators
     const focusModeOverlay = page.locator('focus-mode-overlay');
-    const mainFocusButton = page
-      .getByRole('button')
-      .filter({ hasText: 'center_focus_strong' });
+    const mainFocusButton = page.locator('main-header focus-button button');
 
     // Mode selector buttons - using the segmented button group
     const flowtimeButton = page.locator('segmented-button-group button', {
@@ -66,6 +64,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     await workViewPage.addTask('FlowTimeTestTask');
 
     // Step 1: Open focus mode
+    await expect(mainFocusButton).toBeVisible({ timeout: 5000 });
     await mainFocusButton.click();
     await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 
@@ -180,9 +179,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     const workViewPage = new WorkViewPage(page, testPrefix);
 
     const focusModeOverlay = page.locator('focus-mode-overlay');
-    const mainFocusButton = page
-      .getByRole('button')
-      .filter({ hasText: 'center_focus_strong' });
+    const mainFocusButton = page.locator('main-header focus-button button');
     const flowtimeButton = page.locator('segmented-button-group button', {
       hasText: 'Flowtime',
     });
@@ -198,6 +195,7 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     await workViewPage.addTask('FlowTimeTestTask2');
 
     // Open focus mode
+    await expect(mainFocusButton).toBeVisible({ timeout: 5000 });
     await mainFocusButton.click();
     await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
 

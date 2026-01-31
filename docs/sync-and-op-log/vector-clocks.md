@@ -266,7 +266,7 @@ opLog(2, 'Vector clock comparison', {
 
 1. **Clock Drift**: Ensure client IDs are stable and unique
 2. **Migration Issues**: Check both vector clock and Lamport fields during transition
-3. **Overflow Protection**: Clocks reset to 1 when approaching MAX_SAFE_INTEGER
+3. **Overflow Protection**: Clocks throw error when approaching MAX_SAFE_INTEGER (requires SYNC_IMPORT to reset)
 
 ## Best Practices
 
@@ -278,13 +278,65 @@ opLog(2, 'Vector clock comparison', {
 
 ## Current Implementation Status
 
-| Feature                         | Status         | Notes                                  |
-| ------------------------------- | -------------- | -------------------------------------- |
-| Vector clock conflict detection | ✅ Implemented | Used by both PFAPI and Operation Log   |
-| Entity-level conflict detection | ✅ Implemented | Operation Log tracks per-entity clocks |
-| User conflict resolution UI     | ✅ Implemented | `DialogConflictResolutionComponent`    |
-| Client pruning (max 50 entries) | ✅ Implemented | `limitVectorClockSize()`               |
-| Overflow protection             | ✅ Implemented | Clocks reset at MAX_SAFE_INTEGER       |
+| Feature                                     | Status         | Notes                                  |
+| ------------------------------------------- | -------------- | -------------------------------------- |
+| Vector clock conflict detection             | ✅ Implemented | Used by both PFAPI and Operation Log   |
+| Entity-level conflict detection             | ✅ Implemented | Operation Log tracks per-entity clocks |
+| User conflict resolution UI                 | ✅ Implemented | `DialogConflictResolutionComponent`    |
+| Client pruning (MAX_VECTOR_CLOCK_SIZE = 10) | ✅ Implemented | `limitVectorClockSize()`               |
+| Overflow protection                         | ✅ Implemented | Clocks throw error at MAX_SAFE_INTEGER |
+| Protected client IDs                        | ✅ Implemented | Preserves all keys from full-state ops |
+
+## Protected Client IDs
+
+### Why Protection is Needed
+
+Vector clock pruning removes entries for inactive clients to limit clock size. However, this creates a problem for SYNC_IMPORT operations:
+
+1. SYNC_IMPORT has vectorClock `{A: 1, B: 5, C: 3}` (all clients known at import time)
+2. Without protection, pruning might remove `A` and `C` (inactive) from future clocks
+3. New ops would have vectorClock `{B: 6}` (missing A and C)
+4. Comparison: `{B: 6}` vs `{A: 1, B: 5, C: 3}` = **CONCURRENT** (A wins in import, B wins in op)
+5. Bug: Op is incorrectly filtered as "invalidated by SYNC_IMPORT"
+
+### How Protection Works
+
+When a full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) is applied:
+
+1. ALL keys from its vectorClock are marked as "protected"
+2. Protected client IDs are stored in IndexedDB alongside the vector clock
+3. `limitVectorClockSize()` excludes protected IDs from pruning
+4. Future ops maintain entries for all protected clients
+
+### Code Flow
+
+```
+SYNC_IMPORT applied
+    ↓
+setProtectedClientIds(Object.keys(op.vectorClock))
+    ↓
+Protected IDs stored: ['A', 'B', 'C']
+    ↓
+Future vector clock operations:
+    ↓
+limitVectorClockSize() → preserves A, B, C → new op clock: {A: 1, B: 6, C: 3}
+    ↓
+Comparison: {A: 1, B: 6, C: 3} vs {A: 1, B: 5, C: 3} = GREATER_THAN ✓
+```
+
+### Migration
+
+For existing data where protected IDs were incomplete:
+
+- `_migrateProtectedClientIdsIfNeeded()` runs during hydration
+- Finds latest full-state op and ensures ALL its vectorClock keys are protected
+- Merges the full-state op's vectorClock to restore any pruned entries
+
+### Related Code
+
+- `OperationLogStoreService.setProtectedClientIds()` - Stores protected IDs
+- `limitVectorClockSize()` - Excludes protected IDs from pruning
+- `RemoteOpsProcessingService.processRemoteOps()` - Calls setProtectedClientIds when applying full-state ops
 
 ## Future Improvements
 

@@ -73,8 +73,9 @@ export const getFirstRepeatOccurrence = (
       }
 
       // Otherwise, move to next month
-      checkDate.setMonth(checkDate.getMonth() + 1);
+      // Set date to 1 first to avoid overflow (e.g., Jan 29 + 1 month would overflow to Mar 1 in non-leap years)
       checkDate.setDate(1);
+      checkDate.setMonth(checkDate.getMonth() + 1);
       const lastDayOfMonth = new Date(
         checkDate.getFullYear(),
         checkDate.getMonth() + 1,

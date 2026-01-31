@@ -3,6 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import * as zlib from 'zlib';
 import { testState, resetTestState } from './sync.service.test-state';
 import { Operation, MS_PER_DAY } from '../src/sync/sync.types';
+import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
 
 // Mock the database module with Prisma mocks
 vi.mock('../src/db', async () => {
@@ -330,7 +331,7 @@ describe('Sync Operations', () => {
 
       expect(snapshot.state).toEqual({});
       expect(snapshot.serverSeq).toBe(0);
-      expect(snapshot.schemaVersion).toBe(1);
+      expect(snapshot.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     });
 
     it('should generate snapshot reflecting all operations', async () => {

@@ -1,4 +1,14 @@
 // taken from https://github.com/aaronpk/pkce-vanilla-js/blob/master/index.html
+import { sha256 as hashWasmSha256 } from 'hash-wasm';
+
+// Convert hex string to ArrayBuffer (needed for hash-wasm fallback)
+const hexStringToArrayBuffer = (hex: string): ArrayBuffer => {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes.buffer;
+};
 
 // Generate a secure random string using the browser crypto functions
 const generateRandomString = (length: number): string => {
@@ -15,18 +25,22 @@ const generateRandomString = (length: number): string => {
 
 // Calculate the SHA256 hash of the input text.
 // Returns a promise that resolves to an ArrayBuffer
-const sha256 = (plain: string): Promise<ArrayBuffer> => {
+const sha256 = async (plain: string): Promise<ArrayBuffer> => {
   const encoder = new TextEncoder();
   const data = encoder.encode(plain);
-  // NOTE: crypto.subtle is supposed to be undefined in insecure contexts
+
+  // Use WebCrypto if available (secure context)
+  // NOTE: crypto.subtle is undefined in insecure contexts (e.g., Android Capacitor http://localhost)
   // @see https://www.chromium.org/blink/webcrypto
-  if (window.crypto?.subtle === undefined) {
-    throw new Error(
-      'WebCrypto API (subtle.digest) is only supported in secure contexts.',
-    );
+  if (window.crypto?.subtle !== undefined) {
+    return window.crypto.subtle.digest('SHA-256', data);
   }
 
-  return window.crypto.subtle.digest('SHA-256', data);
+  // Fallback to hash-wasm for insecure contexts (e.g., Android Capacitor serves from http://localhost)
+  // We can't use WebCrypto in insecure contexts, so we use hash-wasm which is already a dependency
+  // (used for Argon2id encryption) and provides a pure WebAssembly implementation
+  const hexHash = await hashWasmSha256(data);
+  return hexStringToArrayBuffer(hexHash);
 };
 
 // Base64-urlencodes the input string

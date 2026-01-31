@@ -154,7 +154,7 @@ export class SyncService {
     if (comparison === 'LESS_THAN') {
       return {
         hasConflict: true,
-        reason: `Stale operation: server has newer version of ${op.entityType}:${entityId}`,
+        reason: `Superseded operation: server has newer version of ${op.entityType}:${entityId}`,
         existingClock,
       };
     }
@@ -174,6 +174,7 @@ export class SyncService {
     userId: number,
     clientId: string,
     ops: Operation[],
+    isCleanSlate?: boolean,
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const now = Date.now();
@@ -182,6 +183,30 @@ export class SyncService {
       // Use transaction to acquire write lock and ensure atomicity
       await prisma.$transaction(
         async (tx) => {
+          // If clean slate requested, delete all existing data first
+          if (isCleanSlate) {
+            Logger.info(
+              `[user:${userId}] Clean slate requested - deleting all user data`,
+            );
+
+            // Delete all operations
+            await tx.operation.deleteMany({ where: { userId } });
+
+            // Delete all devices
+            await tx.syncDevice.deleteMany({ where: { userId } });
+
+            // Reset sync state (delete if exists)
+            await tx.userSyncState.deleteMany({ where: { userId } });
+
+            // Reset storage usage
+            await tx.user.update({
+              where: { id: userId },
+              data: { storageUsedBytes: BigInt(0) },
+            });
+
+            Logger.info(`[user:${userId}] Clean slate completed - all data deleted`);
+          }
+
           // Ensure user has sync state row (init if needed)
           // We assume user exists in `users` table because of foreign key,
           // but if `uploadOps` is called, authentication should have verified user existence.
@@ -230,6 +255,12 @@ export class SyncService {
           isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
         },
       );
+
+      // Clear caches after clean slate transaction completes successfully
+      if (isCleanSlate) {
+        this.rateLimitService.clearForUser(userId);
+        this.snapshotService.clearForUser(userId);
+      }
     } catch (err) {
       // Transaction failed - all operations were rolled back
       const errorMessage = (err as Error).message || 'Unknown error';
@@ -330,7 +361,7 @@ export class SyncService {
         const isConcurrent = conflict.reason?.includes('Concurrent');
         const errorCode = isConcurrent
           ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_STALE;
+          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,
@@ -347,6 +378,7 @@ export class SyncService {
           accepted: false,
           error: conflict.reason,
           errorCode,
+          existingClock: conflict.existingClock,
         };
       }
 
@@ -366,7 +398,7 @@ export class SyncService {
         const isConcurrent = finalConflict.reason?.includes('Concurrent');
         const errorCode = isConcurrent
           ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_STALE;
+          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,
@@ -383,6 +415,7 @@ export class SyncService {
           accepted: false,
           error: finalConflict.reason,
           errorCode,
+          existingClock: finalConflict.existingClock,
         };
       }
 

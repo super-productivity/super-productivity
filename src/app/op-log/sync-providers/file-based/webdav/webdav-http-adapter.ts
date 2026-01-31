@@ -46,15 +46,6 @@ export interface WebDavHttpResponse {
 
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
-  private static readonly WEBDAV_METHODS = [
-    'PROPFIND',
-    'MKCOL',
-    'MOVE',
-    'COPY',
-    'LOCK',
-    'UNLOCK',
-    'PROPPATCH',
-  ];
 
   // Make platform checks testable by making them class properties
   protected get isAndroidWebView(): boolean {
@@ -70,15 +61,9 @@ export class WebDavHttpAdapter {
       let response: WebDavHttpResponse;
 
       if (this.isNativePlatform) {
-        // Check if this is a WebDAV method
-        const isWebDavMethod = WebDavHttpAdapter.WEBDAV_METHODS.includes(
-          options.method.toUpperCase(),
-        );
-
-        // On Android, use custom WebDavHttp plugin for WebDAV methods (better retry handling)
-        // On iOS, use CapacitorHttp for all methods (including WebDAV)
-        if (isWebDavMethod && this.isAndroidWebView) {
-          // Use our custom WebDAV plugin for WebDAV methods on Android
+        if (this.isAndroidWebView) {
+          // On Android, use OkHttp plugin for ALL methods.
+          // CapacitorHttp returns empty bodies for some WebDAV providers (e.g. Koofr).
           PFLog.log(
             `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
           );
@@ -90,9 +75,7 @@ export class WebDavHttpAdapter {
           });
           response = this._convertWebDavResponse(webdavResponse);
         } else {
-          // Use standard CapacitorHttp for:
-          // - All methods on iOS (including WebDAV)
-          // - Regular HTTP methods on Android
+          // On iOS, use CapacitorHttp for all methods (no WebDavHttp plugin on iOS)
           PFLog.log(
             `${WebDavHttpAdapter.L}.request() using CapacitorHttp for ${options.method}`,
           );
@@ -101,6 +84,7 @@ export class WebDavHttpAdapter {
             method: options.method,
             headers: options.headers,
             data: options.body,
+            responseType: 'text', // Explicitly request text to avoid iOS auto-detecting and returning non-string types
           });
           response = this._convertCapacitorResponse(capacitorResponse);
         }
@@ -155,10 +139,34 @@ export class WebDavHttpAdapter {
   }
 
   private _convertCapacitorResponse(response: HttpResponse): WebDavHttpResponse {
+    let data = response.data;
+
+    // Ensure data is a string - CapacitorHttp may return different types
+    // depending on Content-Type header when responseType is not specified
+    if (data === null || data === undefined) {
+      data = '';
+    } else if (typeof data !== 'string') {
+      // Log warning for debugging - this shouldn't happen with responseType: 'text'
+      // but we handle it defensively for iOS compatibility
+      PFLog.warn(
+        `${WebDavHttpAdapter.L}._convertCapacitorResponse() received non-string data type: ${typeof data}`,
+      );
+
+      // Try to convert to string based on actual type
+      if (data instanceof ArrayBuffer) {
+        data = new TextDecoder().decode(data);
+      } else if (typeof data === 'object') {
+        // CapacitorHttp may auto-parse JSON responses
+        data = JSON.stringify(data);
+      } else {
+        data = String(data);
+      }
+    }
+
     return {
       status: response.status,
       headers: response.headers || {},
-      data: response.data || '',
+      data,
     };
   }
 

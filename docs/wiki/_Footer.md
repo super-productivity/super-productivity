@@ -1,3 +1,3 @@
-# Footer
+# Wiki Under Construction
 
-Footer. Any valid markdown can go here.
+If you have further questions, please refer to the [discussions page](https://github.com/super-productivity/super-productivity/discussions)

@@ -35,7 +35,7 @@ export class AddTaskBarParserService {
     return a === b;
   }
 
-  parseAndUpdateText(
+  async parseAndUpdateText(
     text: string,
     config: ShortSyntaxConfig | null,
     allProjects: Project[],
@@ -43,7 +43,7 @@ export class AddTaskBarParserService {
     defaultProject: Project,
     defaultDate?: string,
     defaultTime?: string,
-  ): void {
+  ): Promise<void> {
     if (!text || !config) {
       this._previousParseResult = null;
       return;
@@ -51,7 +51,7 @@ export class AddTaskBarParserService {
 
     // Get current tags from state to preserve pre-selected tags
     const currentState = this._stateService.state();
-    const parseResult = shortSyntax(
+    const parseResult = await shortSyntax(
       { title: text, tagIds: currentState.tagIdsFromTxt },
       config,
       allTags,

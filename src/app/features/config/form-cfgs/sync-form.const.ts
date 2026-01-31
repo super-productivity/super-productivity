@@ -7,7 +7,16 @@ import { IS_ELECTRON } from '../../../app.constants';
 import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
-import { openDisableEncryptionDialog } from '../../../imex/sync/encryption-password-dialog-opener.service';
+import {
+  closeAllDialogs,
+  openDisableEncryptionDialog,
+  openDisableEncryptionDialogForFileBased,
+  openEnableEncryptionDialog,
+  openEnableEncryptionDialogForFileBased,
+  openEncryptionPasswordChangeDialog,
+  openEncryptionPasswordChangeDialogForFileBased,
+} from '../../../imex/sync/encryption-password-dialog-opener.service';
+import { alertDialog } from '../../../util/native-dialogs';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -128,6 +137,13 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       key: 'localFileSync',
       fieldGroup: [
         {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.LOCAL_FILE.INFO_TEXT,
+          },
+        },
+        {
           type: 'btn',
           key: 'syncFolderPath',
           templateOptions: {
@@ -150,6 +166,13 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       resetOnHide: true,
       key: 'localFileSync',
       fieldGroup: [
+        {
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            text: T.F.SYNC.FORM.LOCAL_FILE.INFO_TEXT,
+          },
+        },
         {
           type: 'btn',
           key: 'safFolderUri',
@@ -181,154 +204,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       }),
     },
 
-    // SuperSync provider form fields
-    // NOTE: We use hideExpression on individual fields instead of the fieldGroup
-    // because Formly doesn't include values from hidden fieldGroups in the model output
-    {
-      key: 'superSync',
-      fieldGroup: [
-        {
-          hideExpression: (m, v, field) =>
-            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
-          type: 'btn',
-          templateOptions: {
-            text: T.F.SYNC.FORM.SUPER_SYNC.BTN_GET_TOKEN,
-            tooltip: T.F.SYNC.FORM.SUPER_SYNC.LOGIN_INSTRUCTIONS,
-            btnType: 'primary',
-            centerBtn: true,
-            onClick: (field: any) => {
-              const baseUrl = field.model.baseUrl;
-              if (baseUrl) {
-                window.open(baseUrl, '_blank');
-              } else {
-                alert('Please enter a Server URL first');
-              }
-            },
-          },
-        },
-        {
-          hideExpression: (m, v, field) =>
-            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
-          resetOnHide: true,
-          key: 'accessToken',
-          type: 'textarea',
-          className: 'e2e-accessToken',
-          templateOptions: {
-            label: T.F.SYNC.FORM.SUPER_SYNC.L_ACCESS_TOKEN,
-            description: T.F.SYNC.FORM.SUPER_SYNC.ACCESS_TOKEN_DESCRIPTION,
-            rows: 3,
-          },
-          expressions: {
-            'props.required': (field: FormlyFieldConfig) =>
-              field?.parent?.parent?.model?.syncProvider === LegacySyncProvider.SuperSync,
-          },
-        },
-        // Advanced settings for SuperSync
-        {
-          type: 'collapsible',
-          hideExpression: (m, v, field) =>
-            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
-          props: { label: T.G.ADVANCED_CFG },
-          fieldGroup: [
-            // E2E Encryption for SuperSync
-            {
-              key: 'isEncryptionEnabled',
-              type: 'checkbox',
-              className: 'e2e-isEncryptionEnabled',
-              templateOptions: {
-                label: T.F.SYNC.FORM.SUPER_SYNC.L_ENABLE_E2E_ENCRYPTION,
-                description: T.F.SYNC.FORM.SUPER_SYNC.E2E_ENCRYPTION_DESCRIPTION,
-              },
-              hooks: {
-                onInit: (field: FormlyFieldConfig) => {
-                  // Track previous value to detect changes from true to false
-                  let previousValue = field?.formControl?.value;
-                  // Guard to prevent multiple dialogs opening simultaneously
-                  let isDialogOpen = false;
-
-                  const subscription = field?.formControl?.valueChanges.subscribe(
-                    async (newValue) => {
-                      // Only intercept when changing from true (enabled) to false (disabled)
-                      if (previousValue === true && newValue === false && !isDialogOpen) {
-                        isDialogOpen = true;
-                        try {
-                          // Open confirmation dialog
-                          const result = await openDisableEncryptionDialog();
-
-                          if (!result?.success) {
-                            // User cancelled - reset to true
-                            field?.formControl?.setValue(true, { emitEvent: false });
-                            previousValue = true;
-                            return;
-                          }
-                          // User confirmed and encryption was disabled successfully
-                          previousValue = newValue;
-                        } finally {
-                          isDialogOpen = false;
-                        }
-                      } else if (!isDialogOpen) {
-                        previousValue = newValue;
-                      }
-                    },
-                  );
-
-                  // Store subscription for cleanup
-                  (field as any)._encryptionToggleSubscription = subscription;
-                },
-                onDestroy: (field: FormlyFieldConfig) => {
-                  // Clean up subscription to prevent memory leaks
-                  const subscription = (field as any)._encryptionToggleSubscription;
-                  if (subscription) {
-                    subscription.unsubscribe();
-                  }
-                },
-              },
-            },
-            {
-              hideExpression: (model: any) => !model.isEncryptionEnabled,
-              type: 'tpl',
-              className: 'tpl warn-text',
-              templateOptions: {
-                tag: 'div',
-                text: T.F.SYNC.FORM.SUPER_SYNC.ENCRYPTION_WARNING,
-              },
-            },
-            {
-              hideExpression: (model: any) => !model.isEncryptionEnabled,
-              resetOnHide: true,
-              key: 'encryptKey',
-              type: 'input',
-              className: 'e2e-encryptKey',
-              templateOptions: {
-                type: 'password',
-                label: T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD,
-              },
-              expressions: {
-                'props.required': (field: FormlyFieldConfig) =>
-                  field?.parent?.parent?.parent?.model?.syncProvider ===
-                    LegacySyncProvider.SuperSync && field?.model?.isEncryptionEnabled,
-              },
-            },
-            // Server URL
-            {
-              key: 'baseUrl',
-              type: 'input',
-              className: 'e2e-baseUrl',
-              templateOptions: {
-                label: T.F.SYNC.FORM.SUPER_SYNC.L_SERVER_URL,
-                description: T.F.SYNC.FORM.SUPER_SYNC.SERVER_URL_DESCRIPTION,
-              },
-              expressions: {
-                'props.required': (field: FormlyFieldConfig) =>
-                  field?.parent?.parent?.parent?.model?.syncProvider ===
-                  LegacySyncProvider.SuperSync,
-              },
-            },
-          ],
-        },
-      ],
-    },
-
     {
       key: 'syncInterval',
       type: 'duration',
@@ -358,6 +233,73 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       },
     },
 
+    // Encryption status box - shown when encryption is enabled (for any provider)
+    {
+      hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+        !(field?.parent?.model?.isEncryptionEnabled ?? false),
+      className: 'encryption-status-box',
+      fieldGroup: [
+        {
+          type: 'tpl',
+          className: 'tpl',
+          templateOptions: {
+            tag: 'div',
+            class: 'password-set-info',
+            text: T.F.SYNC.FORM.PASSWORD_SET_INFO,
+          },
+        },
+        {
+          type: 'btn',
+          className: 'e2e-change-password-btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.BTN_CHANGE_PASSWORD,
+            btnType: 'primary',
+            btnStyle: 'stroked',
+            onClick: async (field: FormlyFieldConfig) => {
+              const isSuperSync =
+                field?.parent?.parent?.model?.syncProvider ===
+                LegacySyncProvider.SuperSync;
+              const result = isSuperSync
+                ? await openEncryptionPasswordChangeDialog()
+                : await openEncryptionPasswordChangeDialogForFileBased();
+              return result?.success ? true : false;
+            },
+          },
+        },
+        {
+          type: 'btn',
+          className: 'e2e-disable-encryption-btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.BTN_DISABLE_ENCRYPTION,
+            btnType: 'primary',
+            btnStyle: 'stroked',
+            onClick: async (field: FormlyFieldConfig) => {
+              const isSuperSync =
+                field?.parent?.parent?.model?.syncProvider ===
+                LegacySyncProvider.SuperSync;
+              const result = isSuperSync
+                ? await openDisableEncryptionDialog()
+                : await openDisableEncryptionDialogForFileBased();
+              if (
+                result?.success &&
+                result?.encryptionRemoved &&
+                field?.parent?.parent?.model
+              ) {
+                field.parent.parent.model.isEncryptionEnabled = false;
+                // Also clear encryptKey if we're in file-based provider context
+                if (!isSuperSync && field?.parent?.parent?.model) {
+                  field.parent.parent.model.encryptKey = '';
+                }
+                // Close the parent settings dialog
+                closeAllDialogs();
+              }
+              return result?.success ? true : false;
+            },
+          },
+        },
+      ],
+    },
+
     // COMMON SETTINGS
     // Hide for SuperSync - uses fixed settings (no compression config, encryption handled separately)
     {
@@ -373,43 +315,113 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             label: T.F.SYNC.FORM.L_ENABLE_COMPRESSION,
           },
         },
-        // Hide for SuperSync since it has dedicated E2E encryption fields above
+        // Enable encryption button for file-based providers (shown when encryption is disabled)
         {
-          hideExpression: (m: any, v: any, field: any) =>
-            field?.parent?.parent?.model.syncProvider === LegacySyncProvider.SuperSync,
-          key: 'isEncryptionEnabled',
-          type: 'checkbox',
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model.syncProvider === LegacySyncProvider.SuperSync ||
+            m.isEncryptionEnabled,
+          type: 'btn',
+          className: 'e2e-file-based-enable-encryption-btn',
           templateOptions: {
-            label: T.F.SYNC.FORM.L_ENABLE_ENCRYPTION,
+            text: T.F.SYNC.FORM.FILE_BASED.BTN_ENABLE_ENCRYPTION,
+            btnType: 'primary',
+            onClick: async (field: FormlyFieldConfig) => {
+              const result = await openEnableEncryptionDialogForFileBased();
+              if (result?.success && field?.model) {
+                field.model.isEncryptionEnabled = true;
+              }
+              return result?.success ? true : false;
+            },
+          },
+        },
+      ],
+    },
+
+    // SuperSync provider form fields
+    // NOTE: We use hideExpression on individual fields instead of the fieldGroup
+    // because Formly doesn't include values from hidden fieldGroups in the model output
+    {
+      key: 'superSync',
+      fieldGroup: [
+        {
+          hideExpression: (m, v, field) =>
+            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
+          type: 'btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.SUPER_SYNC.BTN_GET_TOKEN,
+            tooltip: T.F.SYNC.FORM.SUPER_SYNC.LOGIN_INSTRUCTIONS,
+            btnType: 'primary',
+            centerBtn: true,
+            onClick: (field: any) => {
+              const baseUrl = field.model.baseUrl;
+              if (baseUrl) {
+                window.open(baseUrl, '_blank');
+              } else {
+                alertDialog('Please enter a Server URL first');
+              }
+            },
           },
         },
         {
-          hideExpression: (m: any, v: any, field: any) =>
-            field?.parent?.parent?.model.syncProvider === LegacySyncProvider.SuperSync ||
-            !m.isEncryptionEnabled,
-          type: 'tpl',
-          className: `tpl`,
+          hideExpression: (m, v, field) =>
+            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
+          key: 'accessToken',
+          type: 'textarea',
+          className: 'e2e-accessToken',
           templateOptions: {
-            tag: 'div',
-            text: T.F.SYNC.FORM.L_ENCRYPTION_NOTES,
-          },
-        },
-        {
-          hideExpression: (m: any, v: any, field: any) =>
-            field?.parent?.parent?.model.syncProvider === LegacySyncProvider.SuperSync ||
-            !m.isEncryptionEnabled,
-          resetOnHide: true,
-          key: 'encryptKey',
-          type: 'input',
-          templateOptions: {
-            type: 'password',
-            label: T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD,
+            label: T.F.SYNC.FORM.SUPER_SYNC.L_ACCESS_TOKEN,
+            description: T.F.SYNC.FORM.SUPER_SYNC.ACCESS_TOKEN_DESCRIPTION,
+            rows: 3,
           },
           expressions: {
             'props.required': (field: FormlyFieldConfig) =>
-              field?.parent?.parent?.model?.syncProvider !==
-                LegacySyncProvider.SuperSync && field?.model?.isEncryptionEnabled,
+              field?.parent?.parent?.model?.syncProvider === LegacySyncProvider.SuperSync,
           },
+        },
+        // Advanced settings for SuperSync
+        {
+          type: 'collapsible',
+          hideExpression: (m, v, field) =>
+            field?.parent?.parent?.model.syncProvider !== LegacySyncProvider.SuperSync,
+          props: { label: T.G.ADVANCED_CFG },
+          fieldGroup: [
+            // Enable encryption button for SuperSync (shown when encryption is disabled)
+            {
+              // Note: Using (m, v, field) signature for btn type fields to ensure
+              // hideExpression works correctly with the btn component.
+              // Using ?? false to ensure button stays hidden if field is undefined.
+              hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+                field?.model?.isEncryptionEnabled ?? false,
+              type: 'btn',
+              className: 'e2e-enable-encryption-btn',
+              templateOptions: {
+                text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
+                btnType: 'primary',
+                onClick: async (field: FormlyFieldConfig) => {
+                  const result = await openEnableEncryptionDialog();
+                  if (result?.success && field?.model) {
+                    field.model.isEncryptionEnabled = true;
+                  }
+                  return result?.success ? true : false;
+                },
+              },
+            },
+            // Server URL
+            {
+              key: 'baseUrl',
+              type: 'input',
+              className: 'e2e-baseUrl',
+              templateOptions: {
+                label: T.F.SYNC.FORM.SUPER_SYNC.L_SERVER_URL,
+                description: T.F.SYNC.FORM.SUPER_SYNC.SERVER_URL_DESCRIPTION,
+              },
+              expressions: {
+                'props.required': (field: FormlyFieldConfig) =>
+                  field?.parent?.parent?.parent?.model?.syncProvider ===
+                  LegacySyncProvider.SuperSync,
+              },
+            },
+          ],
         },
       ],
     },

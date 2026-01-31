@@ -1,19 +1,29 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { Operation } from '../core/operation.types';
+import { Operation, VectorClock } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
-import { MAX_REJECTED_OPS_BEFORE_WARNING } from '../core/operation-log.const';
-import { StaleOperationResolverService } from './stale-operation-resolver.service';
-import { DownloadCallback } from '../core/types/sync-results.types';
+import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
+import { DownloadCallback, RejectedOpInfo } from '../core/types/sync-results.types';
 import { handleStorageQuotaError } from './sync-error-utils';
 
 // Re-export for consumers that import from this service
 export type {
   DownloadResultForRejection,
   DownloadCallback,
+  RejectedOpInfo,
 } from '../core/types/sync-results.types';
+
+/**
+ * Result of handling rejected operations.
+ */
+export interface RejectionHandlingResult {
+  /** Number of merged ops created from conflict resolution (these need to be uploaded) */
+  mergedOpsCreated: number;
+  /** Number of operations that were permanently rejected (validation errors, etc.) */
+  permanentRejectionCount: number;
+}
 
 /**
  * Handles operations that were rejected by the server during upload.
@@ -22,7 +32,7 @@ export type {
  * - Categorizing rejections (permanent vs concurrent modification)
  * - Marking permanent rejections as rejected
  * - Resolving concurrent modifications by downloading and merging clocks
- * - Creating merged operations for stale local ops
+ * - Creating merged operations for superseded local ops
  *
  * This service is used by OperationLogSyncService after upload to handle
  * any operations that the server rejected.
@@ -33,7 +43,7 @@ export type {
 export class RejectedOpsHandlerService {
   private opLogStore = inject(OperationLogStoreService);
   private snackService = inject(SnackService);
-  private staleOperationResolver = inject(StaleOperationResolverService);
+  private supersededOperationResolver = inject(SupersededOperationResolverService);
 
   /**
    * Handles operations that were rejected by the server.
@@ -54,21 +64,25 @@ export class RejectedOpsHandlerService {
    *
    * @param rejectedOps - Operations rejected by the server with error messages
    * @param downloadCallback - Callback to trigger download for concurrent modification resolution
-   * @returns Number of merged ops created (caller should trigger follow-up upload if > 0)
+   * @returns Result with merged ops count and permanent rejection count
    */
   async handleRejectedOps(
-    rejectedOps: Array<{ opId: string; error?: string; errorCode?: string }>,
+    rejectedOps: RejectedOpInfo[],
     downloadCallback?: DownloadCallback,
-  ): Promise<number> {
+  ): Promise<RejectionHandlingResult> {
     if (rejectedOps.length === 0) {
-      return 0;
+      return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
     }
 
     let mergedOpsCreated = 0;
 
     // Separate concurrent modification rejections from permanent failures
-    // For concurrent mods, we collect the full operation for later processing
-    const concurrentModificationOps: Array<{ opId: string; op: Operation }> = [];
+    // For concurrent mods, we collect the full operation and existingClock for later processing
+    const concurrentModificationOps: Array<{
+      opId: string;
+      op: Operation;
+      existingClock?: VectorClock;
+    }> = [];
     const permanentlyRejectedOps: string[] = [];
 
     for (const rejected of rejectedOps) {
@@ -86,7 +100,7 @@ export class RejectedOpsHandlerService {
       // INTERNAL_ERROR = transient server error (transaction rollback, DB issue, etc.)
       // These should be retried on next sync, not permanently rejected
       if (rejected.errorCode === 'INTERNAL_ERROR') {
-        OpLog.warn(
+        OpLog.normal(
           `RejectedOpsHandlerService: Transient error for op ${rejected.opId}, will retry: ${rejected.error || 'unknown'}`,
         );
         continue;
@@ -119,19 +133,21 @@ export class RejectedOpsHandlerService {
       // Check if this is a conflict that needs resolution via merge
       // These happen when another client uploaded a conflicting operation.
       // Use errorCode for reliable detection (string matching is fragile).
-      // FIX: Also handle CONFLICT_STALE the same as CONFLICT_CONCURRENT.
-      // CONFLICT_STALE occurs when operations have incomplete vector clocks
-      // (e.g., due to stale clock bug) and should be resolved via merge, not rejected.
+      // FIX: Also handle CONFLICT_SUPERSEDED the same as CONFLICT_CONCURRENT.
+      // CONFLICT_SUPERSEDED occurs when operations have incomplete vector clocks
+      // (e.g., due to superseded clock bug) and should be resolved via merge, not rejected.
       const needsConflictResolution =
         rejected.errorCode === 'CONFLICT_CONCURRENT' ||
-        rejected.errorCode === 'CONFLICT_STALE';
+        rejected.errorCode === 'CONFLICT_SUPERSEDED' ||
+        rejected.errorCode === 'CONFLICT_STALE'; // TODO: remove after all servers are updated
 
       if (needsConflictResolution) {
         concurrentModificationOps.push({
           opId: rejected.opId,
           op: entry.op,
+          existingClock: rejected.existingClock,
         });
-        OpLog.warn(
+        OpLog.normal(
           `RejectedOpsHandlerService: Concurrent modification for ${entry.op.entityType}:${entry.op.entityId}, ` +
             `will resolve after download check`,
         );
@@ -150,8 +166,8 @@ export class RejectedOpsHandlerService {
         `RejectedOpsHandlerService: Marked ${permanentlyRejectedOps.length} server-rejected ops as rejected`,
       );
 
-      // Notify user if significant number of ops were rejected without conflict resolution
-      if (permanentlyRejectedOps.length >= MAX_REJECTED_OPS_BEFORE_WARNING) {
+      // Notify user when any ops are permanently rejected
+      if (permanentlyRejectedOps.length > 0) {
         this.snackService.open({
           type: 'ERROR',
           msg: T.F.SYNC.S.UPLOAD_OPS_REJECTED,
@@ -168,19 +184,26 @@ export class RejectedOpsHandlerService {
       );
     }
 
-    return mergedOpsCreated;
+    return {
+      mergedOpsCreated,
+      permanentRejectionCount: permanentlyRejectedOps.length,
+    };
   }
 
   /**
    * Resolves concurrent modification rejections by downloading and merging.
    */
   private async _resolveConcurrentModifications(
-    concurrentModificationOps: Array<{ opId: string; op: Operation }>,
+    concurrentModificationOps: Array<{
+      opId: string;
+      op: Operation;
+      existingClock?: VectorClock;
+    }>,
     downloadCallback: DownloadCallback,
   ): Promise<number> {
     let mergedOpsCreated = 0;
 
-    OpLog.warn(
+    OpLog.normal(
       `RejectedOpsHandlerService: ${concurrentModificationOps.length} ops had concurrent modifications. ` +
         `Triggering download to check for new remote ops...`,
     );
@@ -189,18 +212,31 @@ export class RejectedOpsHandlerService {
       // Try to download new remote ops - if there are any, conflict detection will handle them
       const downloadResult = await downloadCallback();
 
-      // Helper to check which ops are still pending
+      // Helper to check which ops are still pending, preserving existingClock from rejection
       const getStillPendingOps = async (): Promise<
-        Array<{ opId: string; op: Operation }>
+        Array<{ opId: string; op: Operation; existingClock?: VectorClock }>
       > => {
-        const pending: Array<{ opId: string; op: Operation }> = [];
-        for (const { opId, op } of concurrentModificationOps) {
+        const pending: Array<{
+          opId: string;
+          op: Operation;
+          existingClock?: VectorClock;
+        }> = [];
+        for (const { opId, op, existingClock } of concurrentModificationOps) {
           const entry = await this.opLogStore.getOpById(opId);
           if (entry && !entry.syncedAt && !entry.rejectedAt) {
-            pending.push({ opId, op });
+            pending.push({ opId, op, existingClock });
           }
         }
         return pending;
+      };
+
+      // Helper to extract entity clocks from still-pending ops for merging
+      const extractEntityClocks = (
+        ops: Array<{ existingClock?: VectorClock }>,
+      ): VectorClock[] => {
+        return ops
+          .map((item) => item.existingClock)
+          .filter((clock): clock is VectorClock => clock !== undefined);
       };
 
       // If download got new ops, conflict detection already happened in _processRemoteOps
@@ -212,36 +248,46 @@ export class RejectedOpsHandlerService {
           // Normal download returned 0 ops but concurrent ops still pending.
           // This means our local clock is likely missing entries the server has.
           // Try a FORCE download from seq 0 to get ALL op clocks.
-          OpLog.warn(
+          OpLog.normal(
             `RejectedOpsHandlerService: Download returned no new ops but ${stillPendingOps.length} ` +
               `concurrent ops still pending. Forcing full download from seq 0...`,
           );
 
           const forceDownloadResult = await downloadCallback({ forceFromSeq0: true });
 
-          // Use the clocks from force download to resolve stale ops
+          // Use the clocks from force download to resolve superseded ops
+          // Also merge in entity clocks from server rejection responses
+          const entityClocks = extractEntityClocks(stillPendingOps);
           if (
             forceDownloadResult.allOpClocks &&
             forceDownloadResult.allOpClocks.length > 0
           ) {
+            const allExtraClocks = [...forceDownloadResult.allOpClocks, ...entityClocks];
             OpLog.normal(
-              `RejectedOpsHandlerService: Got ${forceDownloadResult.allOpClocks.length} clocks from force download`,
+              `RejectedOpsHandlerService: Got ${forceDownloadResult.allOpClocks.length} clocks from force download` +
+                (entityClocks.length > 0
+                  ? ` + ${entityClocks.length} entity clocks from rejection`
+                  : ''),
             );
-            mergedOpsCreated += await this.staleOperationResolver.resolveStaleLocalOps(
-              stillPendingOps,
-              forceDownloadResult.allOpClocks,
-              forceDownloadResult.snapshotVectorClock,
-            );
-          } else if (forceDownloadResult.snapshotVectorClock) {
-            // Force download returned no individual clocks but we have snapshot clock
+            mergedOpsCreated +=
+              await this.supersededOperationResolver.resolveSupersededLocalOps(
+                stillPendingOps,
+                allExtraClocks,
+                forceDownloadResult.snapshotVectorClock,
+              );
+          } else if (forceDownloadResult.snapshotVectorClock || entityClocks.length > 0) {
+            // Force download returned no individual clocks but we have snapshot clock or entity clocks
             OpLog.normal(
-              `RejectedOpsHandlerService: Using snapshotVectorClock from force download`,
+              `RejectedOpsHandlerService: Using ${forceDownloadResult.snapshotVectorClock ? 'snapshotVectorClock' : ''}` +
+                `${forceDownloadResult.snapshotVectorClock && entityClocks.length > 0 ? ' + ' : ''}` +
+                `${entityClocks.length > 0 ? `${entityClocks.length} entity clocks from rejection` : ''}`,
             );
-            mergedOpsCreated += await this.staleOperationResolver.resolveStaleLocalOps(
-              stillPendingOps,
-              undefined,
-              forceDownloadResult.snapshotVectorClock,
-            );
+            mergedOpsCreated +=
+              await this.supersededOperationResolver.resolveSupersededLocalOps(
+                stillPendingOps,
+                entityClocks.length > 0 ? entityClocks : undefined,
+                forceDownloadResult.snapshotVectorClock,
+              );
           } else {
             // Force download returned no clocks but we have concurrent ops.
             // This is an unrecoverable edge case - cannot safely resolve without server clocks.
@@ -266,15 +312,21 @@ export class RejectedOpsHandlerService {
         if (stillPendingOps.length > 0) {
           // Ops still pending after download - conflict detection didn't resolve them
           // This can happen if downloaded ops were for different entities
-          OpLog.warn(
+          // Merge entity clocks from rejection responses into extraClocks
+          const entityClocks = extractEntityClocks(stillPendingOps);
+          OpLog.normal(
             `RejectedOpsHandlerService: Download got ${downloadResult.newOpsCount} ops but ${stillPendingOps.length} ` +
-              `concurrent ops still pending. Resolving locally with merged clocks...`,
+              `concurrent ops still pending. Resolving locally with merged clocks...` +
+              (entityClocks.length > 0
+                ? ` (including ${entityClocks.length} entity clocks from rejection)`
+                : ''),
           );
-          mergedOpsCreated += await this.staleOperationResolver.resolveStaleLocalOps(
-            stillPendingOps,
-            undefined,
-            downloadResult.snapshotVectorClock,
-          );
+          mergedOpsCreated +=
+            await this.supersededOperationResolver.resolveSupersededLocalOps(
+              stillPendingOps,
+              entityClocks.length > 0 ? entityClocks : undefined,
+              downloadResult.snapshotVectorClock,
+            );
         }
       }
     } catch (e) {
@@ -282,6 +334,16 @@ export class RejectedOpsHandlerService {
         'RejectedOpsHandlerService: Failed to download after concurrent modification detection',
         e,
       );
+      // Mark ops as failed so they can be retried on next sync, and re-throw
+      // so caller knows resolution failed
+      for (const { opId } of concurrentModificationOps) {
+        const entry = await this.opLogStore.getOpById(opId);
+        // Only reject if still pending (not synced or already rejected)
+        if (entry && !entry.syncedAt && !entry.rejectedAt) {
+          await this.opLogStore.markRejected([opId]);
+        }
+      }
+      throw e;
     }
 
     return mergedOpsCreated;

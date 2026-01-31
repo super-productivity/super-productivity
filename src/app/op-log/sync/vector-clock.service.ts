@@ -130,7 +130,7 @@ export class VectorClockService {
    * - If NO: use an empty clock (the entity is new, so any remote op is valid)
    *
    * Without this distinction, new entities created on other clients after
-   * compaction could be incorrectly rejected as "stale" because the snapshot
+   * compaction could be incorrectly rejected as "superseded" because the snapshot
    * clock contains high counters from unrelated work.
    *
    * @returns Set of entity keys, or undefined if snapshot doesn't have this data

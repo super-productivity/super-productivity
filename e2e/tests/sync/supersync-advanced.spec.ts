@@ -89,7 +89,11 @@ test.describe('@supersync SuperSync Advanced', () => {
 
       // If the page needs a refresh to show all synced tasks, reload and wait
       // This handles bulk dispatch UI update timing issues
-      await clientB.page.reload();
+      // Use goto instead of reload - more reliable with service workers
+      await clientB.page.goto(clientB.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await waitForAppReady(clientB.page);
       await waitForTask(clientB.page, `Task-${testRunId}-1`);
 
@@ -197,8 +201,20 @@ test.describe('@supersync SuperSync Advanced', () => {
       await tagItem.waitFor({ state: 'visible' });
       await tagItem.click();
 
-      // Close menu (press Escape)
+      // Close menu by pressing Escape multiple times (submenu + main menu)
+      // First escape closes the submenu, second closes the main context menu
       await clientB.page.keyboard.press('Escape');
+      await clientB.page.waitForTimeout(200);
+      await clientB.page.keyboard.press('Escape');
+      await clientB.page.waitForTimeout(200);
+      // If menus are still open, click on the page body to dismiss
+      const menuCount = await clientB.page.locator('.mat-mdc-menu-panel').count();
+      if (menuCount > 0) {
+        // Click on the task list area to dismiss any remaining menus
+        await clientB.page.locator('.work-view').click({ position: { x: 10, y: 10 } });
+      }
+      // Ensure all overlays are closed (backdrops, etc.)
+      await clientB.sync.ensureOverlaysClosed();
 
       // Verify tag is gone on B
       await expect(

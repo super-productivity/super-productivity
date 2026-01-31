@@ -14,6 +14,9 @@ export interface PersistentActionMeta {
 export interface PersistentAction extends Action {
   type: string; // Standard NgRx action type
   meta: PersistentActionMeta;
+  // NOTE: `any` is intentional here - NgRx action payloads are dynamic and the code
+  // immediately casts to specific action types. Using `unknown` would require double
+  // casts (as unknown as SpecificType) throughout the codebase without type safety benefit.
   [key: string]: any; // Dynamic payload properties (NgRx action payloads)
 }
 

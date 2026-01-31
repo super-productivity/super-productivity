@@ -56,7 +56,7 @@ export class ShortcutService {
   );
   backlogPos?: number;
   readonly isFocusModeEnabled = computed(
-    () => this._configService.cfg()?.appFeatures.isFocusModeEnabled,
+    () => this._configService.appFeatures().isFocusModeEnabled,
   );
 
   constructor() {

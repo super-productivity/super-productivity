@@ -17,6 +17,7 @@ import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service'
 import { devError } from '../../util/dev-error';
 import { TranslateService } from '@ngx-translate/core';
 import { LOCK_NAMES } from '../core/operation-log.const';
+import { alertDialog } from '../../util/native-dialogs';
 
 /**
  * Service responsible for creating REPAIR operations.
@@ -111,20 +112,21 @@ export class RepairOperationService {
   /**
    * Shows a blocking alert and logs devError when repair happens.
    * Uses native alert() to prevent reload until user acknowledges.
-   * This should ideally never happen - repair is a safety net for corruption.
+   * Always shows alert since user already confirmed the repair.
    */
   private _notifyUser(summary: RepairSummary): void {
     const totalFixes = this._getTotalFixes(summary);
-    if (totalFixes > 0) {
-      const errorMsg = `Data repair executed: ${totalFixes} issues fixed. Summary: ${JSON.stringify(summary)}`;
-      devError(errorMsg);
 
-      const title = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.TITLE);
-      const msg = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.MSG, {
-        count: totalFixes.toString(),
-      });
-      alert(`${title}\n\n${msg}`);
-    }
+    // Always log
+    const errorMsg = `Data repair executed: ${totalFixes} issues fixed. Summary: ${JSON.stringify(summary)}`;
+    devError(errorMsg);
+
+    // Always show alert after repair completes (user already confirmed)
+    const title = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.TITLE);
+    const msg = this.translateService.instant(T.F.SYNC.D_DATA_REPAIRED.MSG, {
+      count: totalFixes.toString(),
+    });
+    alertDialog(`${title}\n\n${msg}`);
   }
 
   /**

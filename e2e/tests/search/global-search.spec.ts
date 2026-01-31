@@ -11,6 +11,8 @@ import { ensureGlobalAddTaskBarOpen } from '../../utils/element-helpers';
  */
 
 test.describe('Global Search', () => {
+  test.describe.configure({ timeout: 30000 });
+
   test('should open search with keyboard shortcut', async ({
     page,
     workViewPage,

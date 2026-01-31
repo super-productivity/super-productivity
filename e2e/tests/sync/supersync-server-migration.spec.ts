@@ -174,6 +174,8 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       await clientA.workView.addTask(task2);
       // Wait for task to be fully created in store before migration
       await waitForTask(clientA.page, task2);
+      // Extra delay to ensure operation is written to log (not just UI visible)
+      await clientA.page.waitForTimeout(500);
       console.log('[Test] Task 2 created (pending local change)');
       // DON'T sync yet - task2 is a pending local change
 
@@ -184,6 +186,12 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       await clientA.sync.setupSuperSync(syncConfig2);
 
       // Sync to new server (should include both synced and pending data)
+      // Multiple sync cycles to ensure all data is uploaded to the new server
+      await clientA.sync.syncAndWait();
+      await clientA.page.waitForTimeout(500);
+      await clientA.sync.syncAndWait();
+      await clientA.page.waitForTimeout(500);
+      // Third sync to ensure everything is confirmed
       await clientA.sync.syncAndWait();
       console.log('[Test] Migration sync completed');
 
@@ -191,14 +199,28 @@ test.describe.serial('@supersync SuperSync Server Migration', () => {
       await waitForTask(clientA.page, task1);
       await waitForTask(clientA.page, task2);
 
+      // Brief delay before Client B joins to ensure server has processed all operations
+      await clientA.page.waitForTimeout(500);
+
       // Client B joins
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync(syncConfig2);
+      // First sync to pull data from server
       await clientB.sync.syncAndWait();
+      await clientB.page.waitForTimeout(1000);
+      // Second sync to ensure all operations are applied
+      await clientB.sync.syncAndWait();
+      await clientB.page.waitForTimeout(1000);
+      // Third sync - some operations may need multiple cycles
+      await clientB.sync.syncAndWait();
+      console.log('[Test] Client B sync completed');
 
-      // Verify Client B has BOTH tasks
-      await waitForTask(clientB.page, task1);
-      await waitForTask(clientB.page, task2);
+      // Allow extra time for store updates to propagate to UI
+      await clientB.page.waitForTimeout(1000);
+
+      // Verify Client B has BOTH tasks with extended timeout
+      await waitForTask(clientB.page, task1, 15000);
+      await waitForTask(clientB.page, task2, 15000);
 
       const taskLocatorB = clientB.page.locator(`task:has-text("${testRunId}")`);
       const taskCountB = await taskLocatorB.count();

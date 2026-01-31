@@ -8,6 +8,7 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 
 /**
@@ -155,8 +156,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     console.log('[Provider Switch Test] SUCCESS: Both clients have 3 tasks');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -327,8 +327,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
 
     console.log('[Concurrent Join Test] PASSED: Both clients have 3 tasks');
 
-    await contextA.close();
-    await contextC.close();
+    await closeContextsSafely(contextA, contextC);
   });
 
   /**
@@ -472,9 +471,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
 
     console.log('[Three Client Test] PASSED: All 3 clients have 4 tasks');
 
-    await contextA.close();
-    await contextB.close();
-    await contextC.close();
+    await closeContextsSafely(contextA, contextB, contextC);
   });
 
   test('should handle bidirectional sync after provider switch', async ({
@@ -565,8 +562,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
       '[Bidirectional Test] SUCCESS: Both clients have 4 tasks after multiple sync rounds',
     );
 
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -663,7 +659,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
 
     console.log('[Multi Local Ops Test] PASSED: Local tasks replaced with remote');
 
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 });

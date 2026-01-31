@@ -141,7 +141,7 @@ describe('WrappedProviderService', () => {
 
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledWith(
         dropboxProvider,
-        { isEncrypt: true, isCompress: true },
+        { isEncrypt: false, isCompress: true },
         undefined,
       );
     });

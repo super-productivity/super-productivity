@@ -1,0 +1,24 @@
+
+### Bug Fixes
+
+* **dropbox:** use hash-wasm fallback for PKCE on Android
+* **encryption:** use @noble/ciphers fallback for AES-GCM on mobile
+* **issue-providers:** make newer fields optional for backwards compatibility (5657308), closes #6215
+* lint
+* **op-log:** remove noisy warning for empty entityChanges
+* **sync:** ensure all client IDs in vectorClock are protected during SYNC_IMPORT operations
+* **sync:** ensure protected client IDs are set after SYNC_IMPORT to prevent pruning issues
+* **sync:** handle duplicate operation IDs gracefully in appendBatch (ab6df00), closes #6213
+* **sync:** handle MissingRefreshTokenAPIError for Dropbox re-auth (48f9967), closes #6212
+* **sync:** improve error visibility in SuperSync operations
+* **sync:** prevent ImmediateUploadService from triggering during encryption ops
+* **sync:** prevent race condition in encryption password change
+* **sync:** show clear error when encryption unavailable on Android
+* **test:** update mock client ID references in clean-slate tests
+* **touch:** limit click blocking to submenu triggers only
+### Features
+
+* **boards:** move tasks to and from backlog when dragging to a panel with backlogState set (#6209)
+* Copy Version Number #5108 (#6184)
+* **sync:** add encryption disable flow for file-based providers
+* **sync:** make encryption actions explicit

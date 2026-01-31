@@ -4,6 +4,7 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { concatMap, filter, tap } from 'rxjs/operators';
 import { truncate } from '../../../util/truncate';
+import { devError } from '../../../util/dev-error';
 import { T } from '../../../t.const';
 import { SnackService } from '../../../core/snack/snack.service';
 import { TaskService } from '../task.service';
@@ -30,6 +31,11 @@ export class TaskReminderEffects {
       this._localActions$.pipe(
         ofType(TaskSharedActions.scheduleTaskWithTime),
         tap(({ task, remindAt, dueWithTime }) => {
+          if (!Number.isFinite(dueWithTime)) {
+            devError(
+              'scheduleTaskWithTime dispatched with invalid dueWithTime: ' + dueWithTime,
+            );
+          }
           const formattedDate = this._datePipe.transform(dueWithTime, 'short');
           this._snackService.open({
             type: 'SUCCESS',

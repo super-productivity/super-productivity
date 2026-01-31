@@ -139,27 +139,46 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
     this._scheduleExternalDragService.setActiveTask(null);
   }
 
-  enterPredicate(drag: CdkDrag, drop: CdkDropList): boolean {
+  enterPredicate = (drag: CdkDrag, drop: CdkDropList): boolean => {
     // TODO this gets called very often for nested lists. Maybe there are possibilities to optimize
     const task = drag.data;
-    // const targetModelId = drag.dropContainer.data.listModelId;
     const targetModelId = drop.data.listModelId;
     const isSubtask = !!task.parentId;
-    // TaskLog.log(drag.data.id, { isSubtask, targetModelId, drag, drop });
-    // return true;
+
     if (targetModelId === 'OVERDUE' || targetModelId === 'LATER_TODAY') {
       return false;
-    } else if (isSubtask) {
+    }
+
+    if (isSubtask) {
+      const isToTopLevelList = targetModelId === 'DONE' || targetModelId === 'UNDONE';
+
+      if (isToTopLevelList) {
+        // Check if subtask is appearing as a top-level item in the target list
+        // by checking if its parent is NOT in the target list's tasks
+        const targetTasks: TaskWithSubTasks[] = drop.data.allTasks || [];
+        const parentInTargetList = targetTasks.some((t) => t.id === task.parentId);
+
+        // If parent is NOT in the target list, subtask appears as top-level, allow move
+        if (!parentInTargetList) {
+          return true;
+        }
+        // Parent is in the list, so this subtask should stay nested under parent
+        return false;
+      }
+
+      // Subtasks can move within subtask lists (where listModelId is a task ID)
       if (!PARENT_ALLOWED_LISTS.includes(targetModelId)) {
         return true;
       }
-    } else {
-      if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
-        return true;
-      }
+      return false;
+    }
+
+    // Parent tasks: allow drops to PARENT_ALLOWED_LISTS
+    if (PARENT_ALLOWED_LISTS.includes(targetModelId)) {
+      return true;
     }
     return false;
-  }
+  };
 
   async drop(
     srcFilteredTasks: TaskWithSubTasks[],
@@ -302,8 +321,12 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
         }),
       );
     } else if (target === 'OVERDUE') {
+      // Cannot drop into OVERDUE list
       return;
-    } else if (src === 'OVERDUE' && (target === 'UNDONE' || target === 'DONE')) {
+    } else if (src === 'OVERDUE' && !isTargetRegularList) {
+      // OVERDUE tasks can only be moved to UNDONE or DONE, not BACKLOG or subtask lists
+      return;
+    } else if (src === 'OVERDUE' && isTargetRegularList) {
       const workContextType = this._workContextService
         .activeWorkContextType as WorkContextType;
       const afterTaskId = getAnchorFromDragDrop(taskId, newOrderedIds);

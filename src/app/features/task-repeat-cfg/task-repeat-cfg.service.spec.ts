@@ -1145,6 +1145,326 @@ describe('TaskRepeatCfgService', () => {
     });
   });
 
+  describe('Multi-day recurring task with startTime (#6269)', () => {
+    // Reproduction test: Simulates a daily recurring task with startTime across multiple days.
+    // Tests that _getActionsForTaskRepeatCfg creates correct actions for each day.
+
+    const createDailyCfgWithTime = (
+      startDateStr: string,
+      lastCreationDayStr: string,
+    ): TaskRepeatCfg => ({
+      ...DEFAULT_TASK_REPEAT_CFG,
+      id: 'daily-time-cfg',
+      title: 'Daily Standup',
+      projectId: 'project-A',
+      repeatCycle: 'DAILY',
+      repeatEvery: 1,
+      startDate: startDateStr,
+      lastTaskCreationDay: lastCreationDayStr,
+      startTime: '09:00',
+      remindAt: TaskReminderOptionId.AtStart,
+      tagIds: [],
+    });
+
+    it('should create task with dueWithTime for day 1', async () => {
+      const day1 = new Date();
+      day1.setHours(10, 0, 0, 0);
+      const day1Str = formatIsoDate(day1);
+
+      const yesterday = new Date(day1);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const weekAgo = new Date(day1);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      const cfg = createDailyCfgWithTime(weekAgoStr, yesterdayStr);
+      const expectedId = getRepeatableTaskId(cfg.id, day1Str);
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || mockTask.projectId,
+      }));
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, day1.getTime());
+
+      // Should create: addTask, updateTaskRepeatCfg, scheduleTaskWithTime
+      expect(actions.length).toBe(3);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+      expect(actions[1].type).toBe(updateTaskRepeatCfg.type);
+      expect(actions[2].type).toBe(TaskSharedActions.scheduleTaskWithTime.type);
+
+      // Verify the task has correct dueDay
+      const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskAction.task.dueDay).toBe(day1Str);
+      expect(addTaskAction.task.id).toBe(expectedId);
+
+      // Verify scheduleTaskWithTime sets dueWithTime
+      const scheduleAction = actions[2] as ReturnType<
+        typeof TaskSharedActions.scheduleTaskWithTime
+      >;
+      expect(scheduleAction.dueWithTime).toBeDefined();
+      expect(scheduleAction.remindAt).toBeDefined();
+    });
+
+    it('should create tasks for consecutive days (day 2 and day 3)', async () => {
+      const day1 = new Date();
+      day1.setHours(10, 0, 0, 0);
+      const day1Str = formatIsoDate(day1);
+
+      const weekAgo = new Date(day1);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      // For day 2: lastTaskCreationDay = day1
+      const day2 = new Date(day1);
+      day2.setDate(day2.getDate() + 1);
+      const day2Str = formatIsoDate(day2);
+
+      const cfgAfterDay1 = createDailyCfgWithTime(weekAgoStr, day1Str);
+      const expectedIdDay2 = getRepeatableTaskId(cfgAfterDay1.id, day2Str);
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || mockTask.projectId,
+      }));
+
+      const actionsDay2 = await service._getActionsForTaskRepeatCfg(
+        cfgAfterDay1,
+        day2.getTime(),
+      );
+
+      expect(actionsDay2.length).toBe(3);
+      const addTaskDay2 = actionsDay2[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskDay2.task.dueDay).toBe(day2Str);
+      expect(addTaskDay2.task.id).toBe(expectedIdDay2);
+
+      // For day 3: lastTaskCreationDay = day2
+      const day3 = new Date(day2);
+      day3.setDate(day3.getDate() + 1);
+      const day3Str = formatIsoDate(day3);
+
+      const cfgAfterDay2 = createDailyCfgWithTime(weekAgoStr, day2Str);
+      const expectedIdDay3 = getRepeatableTaskId(cfgAfterDay2.id, day3Str);
+
+      const actionsDay3 = await service._getActionsForTaskRepeatCfg(
+        cfgAfterDay2,
+        day3.getTime(),
+      );
+
+      expect(actionsDay3.length).toBe(3);
+      const addTaskDay3 = actionsDay3[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskDay3.task.dueDay).toBe(day3Str);
+      expect(addTaskDay3.task.id).toBe(expectedIdDay3);
+    });
+  });
+
+  describe('Sync scenario: lastTaskCreationDay set but task missing (#6269)', () => {
+    // Reproduction test: When Device A creates a task and syncs the repeat config
+    // (with updated lastTaskCreationDay) but the task entity hasn't synced yet,
+    // Device B should NOT attempt to create a duplicate because lastTaskCreationDay
+    // blocks it. The task entity will arrive via sync separately.
+
+    it('should NOT create task when lastTaskCreationDay is already today (sync race)', async () => {
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+      const todayStr = formatIsoDate(today);
+
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      // Config already has lastTaskCreationDay = today (synced from Device A)
+      const cfgWithTodayCreation: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'sync-race-cfg',
+        title: 'Synced Task',
+        projectId: 'project-A',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: weekAgoStr,
+        lastTaskCreationDay: todayStr,
+        tagIds: [],
+      };
+
+      // No tasks exist locally (task hasn't synced yet)
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+
+      // devError calls window.confirm; return false so it doesn't throw
+      const confirmSpy = window.confirm as jasmine.Spy;
+      confirmSpy.and.returnValue(false);
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgWithTodayCreation,
+        today.getTime(),
+      );
+
+      // getNewestPossibleDueDate returns null because lastTaskCreationDay === today
+      // blocks the loop (checkDate <= lastTaskCreation). devError fires, returns [].
+      expect(actions).toEqual([]);
+
+      confirmSpy.and.returnValue(true);
+    });
+  });
+
+  describe('workContextId mismatch (#6269)', () => {
+    // Reproduction test: When a repeat config has projectId='project-A' but
+    // the active work context is 'project-B', the created task should still
+    // have projectId='project-A' (from config), but the addTask action's
+    // workContextId uses the ACTIVE context.
+
+    it('should use active work context for addTask, not the config projectId', async () => {
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      // Config is for project-A
+      const cfgForProjectA: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'ctx-mismatch-cfg',
+        title: 'Project A Task',
+        projectId: 'project-A',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: weekAgoStr,
+        lastTaskCreationDay: yesterdayStr,
+        tagIds: [],
+      };
+
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || undefined,
+      }));
+
+      const actions = await service._getActionsForTaskRepeatCfg(
+        cfgForProjectA,
+        today.getTime(),
+      );
+
+      expect(actions.length).toBeGreaterThan(0);
+      const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+
+      // Task entity has projectId from config
+      expect(addTaskAction.task.projectId).toBe('project-A');
+
+      // After fix: The addTask action uses the config's projectId, not the active context.
+      // This ensures correct behavior regardless of which project is active on this device.
+      expect(addTaskAction.workContextId).toBe('project-A');
+      expect(addTaskAction.workContextType).toBe(WorkContextType.PROJECT);
+    });
+  });
+
+  describe('Overdue scheduled task removal + new instance creation (#6269)', () => {
+    // Reproduction test: Verifies that when a recurring task has dueWithTime
+    // set to yesterday (past) and dueDay is undefined (mutual exclusivity),
+    // a new task instance can still be created for today.
+
+    it('should create a new task instance for today even when yesterday instance had dueWithTime', async () => {
+      const today = new Date();
+      today.setHours(10, 0, 0, 0);
+      const todayStr = formatIsoDate(today);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = formatIsoDate(yesterday);
+
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = formatIsoDate(weekAgo);
+
+      // The config was last created yesterday
+      const cfg: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'overdue-cfg',
+        title: 'Daily Standup',
+        projectId: 'project-A',
+        repeatCycle: 'DAILY',
+        repeatEvery: 1,
+        startDate: weekAgoStr,
+        lastTaskCreationDay: yesterdayStr,
+        startTime: '09:00',
+        remindAt: TaskReminderOptionId.AtStart,
+        tagIds: [],
+      };
+
+      // Yesterday's task exists with dueWithTime (dueDay undefined due to mutual exclusivity)
+      const yesterdayTaskId = getRepeatableTaskId(cfg.id, yesterdayStr);
+      const yesterdayTask: TaskWithSubTasks = {
+        ...mockTaskWithSubTasks,
+        id: yesterdayTaskId,
+        // Set created to yesterday so getDbDateStr(created) != today
+        created: yesterday.getTime(),
+        dueDay: undefined,
+        dueWithTime: new Date(
+          yesterday.getFullYear(),
+          yesterday.getMonth(),
+          yesterday.getDate(),
+          9,
+          0,
+        ).getTime(),
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([yesterdayTask]));
+      taskService.createNewTaskWithDefaults.and.callFake((args: any) => ({
+        ...mockTask,
+        id: args.id || mockTask.id,
+        dueDay: args.additional?.dueDay,
+        projectId: args.additional?.projectId || mockTask.projectId,
+      }));
+
+      const actions = await service._getActionsForTaskRepeatCfg(cfg, today.getTime());
+
+      // Should create new task for today (yesterday's task has different ID and dueDay)
+      expect(actions.length).toBe(3);
+      expect(actions[0].type).toBe(TaskSharedActions.addTask.type);
+
+      const addTaskAction = actions[0] as ReturnType<typeof TaskSharedActions.addTask>;
+      expect(addTaskAction.task.dueDay).toBe(todayStr);
+      expect(addTaskAction.task.id).toBe(getRepeatableTaskId(cfg.id, todayStr));
+    });
+
+    it('should detect overdue task correctly when dueWithTime is in the past and dueDay is undefined', () => {
+      // This test documents the overdue detection logic from selectOverdueTasks:
+      // A task with dueWithTime < todayStart is considered overdue, regardless of dueDay.
+      const today = new Date();
+      const todayStart = new Date(today);
+      todayStart.setHours(0, 0, 0, 0);
+
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      // Task with dueWithTime = yesterday 9am, dueDay = undefined (mutual exclusivity)
+      const yesterdayDueWithTime = new Date(
+        yesterday.getFullYear(),
+        yesterday.getMonth(),
+        yesterday.getDate(),
+        9,
+        0,
+      ).getTime();
+
+      // Verify the overdue condition: dueWithTime < todayStart
+      expect(yesterdayDueWithTime < todayStart.getTime()).toBe(true);
+      // Verify dueDay check: when dueDay is undefined, the dueWithTime check catches it
+      expect(undefined as string | undefined).toBeFalsy();
+    });
+  });
+
   describe('addTaskRepeatCfgToTask dispatch (#5594)', () => {
     // Note: First occurrence calculation and lastTaskCreationDay updates
     // are handled by the updateTaskAfterMakingItRepeatable$ effect.

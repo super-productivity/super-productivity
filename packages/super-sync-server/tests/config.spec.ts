@@ -76,6 +76,22 @@ describe('parseCorsOrigin', () => {
       const result = parseCorsOrigin('https://*.example.com');
       expect((result as RegExp).test('https://foo.example.com/path')).toBe(false);
     });
+
+    it('should normalize domain to lowercase for case-insensitive matching', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      const result = parseCorsOrigin('https://*.EXAMPLE.COM');
+
+      // Browsers send Origin header in lowercase per RFC 6454
+      expect((result as RegExp).test('https://sub.example.com')).toBe(true);
+      expect((result as RegExp).test('https://sub.EXAMPLE.COM')).toBe(true);
+    });
+
+    it('should normalize subdomain pattern domain to lowercase', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      const result = parseCorsOrigin('https://*.Preview.Example.COM');
+
+      expect((result as RegExp).test('https://abc.preview.example.com')).toBe(true);
+    });
   });
 
   describe('validation errors', () => {
@@ -113,6 +129,102 @@ describe('parseCorsOrigin', () => {
         'wildcard only allowed as subdomain',
       );
     });
+
+    it('should reject empty origin', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      expect(() => parseCorsOrigin('')).toThrow('cannot be empty');
+    });
+
+    it('should reject whitespace-only origin', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      expect(() => parseCorsOrigin('   ')).toThrow('cannot be empty');
+    });
+  });
+
+  describe('parseCorsOrigin security', () => {
+    it('should reject domain confusion in wildcard patterns', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      const result = parseCorsOrigin('https://*.super-productivity-preview.pages.dev');
+
+      expect(
+        (result as RegExp).test('https://evil.com.super-productivity-preview.pages.dev'),
+      ).toBe(false);
+      expect(
+        (result as RegExp).test('https://a.b.super-productivity-preview.pages.dev'),
+      ).toBe(false);
+    });
+
+    it('should only allow alphanumeric and hyphens in wildcard subdomains', async () => {
+      const { parseCorsOrigin } = await importConfig();
+      const result = parseCorsOrigin('https://*.example.com');
+
+      // Should match valid subdomains
+      expect((result as RegExp).test('https://abc123.example.com')).toBe(true);
+      expect((result as RegExp).test('https://abc-123.example.com')).toBe(true);
+
+      // Should reject subdomains with dots
+      expect((result as RegExp).test('https://sub.domain.example.com')).toBe(false);
+      expect((result as RegExp).test('https://evil.com.example.com')).toBe(false);
+    });
+  });
+});
+
+describe('loadConfigFromEnv - CORS_ORIGINS parsing', () => {
+  beforeEach(() => {
+    resetEnv();
+  });
+
+  afterEach(() => {
+    resetEnv();
+  });
+
+  it('should parse comma-separated origins with wildcards', async () => {
+    process.env.CORS_ORIGINS =
+      'https://app.example.com,https://*.preview.example.com,http://localhost:4200';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.cors.allowedOrigins).toHaveLength(3);
+    expect(config.cors.allowedOrigins![0]).toBe('https://app.example.com');
+    expect(config.cors.allowedOrigins![1]).toBeInstanceOf(RegExp);
+    expect(config.cors.allowedOrigins![2]).toBe('http://localhost:4200');
+  });
+
+  it('should throw error on invalid wildcard pattern in CORS_ORIGINS', async () => {
+    process.env.CORS_ORIGINS = 'https://*';
+
+    const { loadConfigFromEnv } = await importConfig();
+    expect(() => loadConfigFromEnv()).toThrow('wildcard only allowed as subdomain');
+  });
+
+  it('should handle wildcard syntax in CORS_ORIGINS', async () => {
+    process.env.CORS_ORIGINS = 'https://*.super-productivity-preview.pages.dev';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.cors.allowedOrigins).toHaveLength(1);
+    const pattern = config.cors.allowedOrigins![0] as RegExp;
+    expect(pattern.test('https://abc123.super-productivity-preview.pages.dev')).toBe(
+      true,
+    );
+  });
+
+  it('should parse wildcard patterns even when universal wildcard is present', async () => {
+    process.env.CORS_ORIGINS = 'https://app.com,*,https://*.preview.com';
+
+    const { loadConfigFromEnv } = await importConfig();
+    const config = loadConfigFromEnv();
+
+    expect(config.cors.allowedOrigins).toHaveLength(3);
+    expect(config.cors.allowedOrigins![0]).toBe('https://app.com');
+    expect(config.cors.allowedOrigins![1]).toBe('*');
+    expect(config.cors.allowedOrigins![2]).toBeInstanceOf(RegExp);
+
+    // Verify the RegExp works
+    const pattern = config.cors.allowedOrigins![2] as RegExp;
+    expect(pattern.test('https://abc123.preview.com')).toBe(true);
   });
 });
 

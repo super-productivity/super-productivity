@@ -112,7 +112,7 @@ export class NavItemComponent {
   // Events
   clicked = output<void>();
 
-  private readonly _allUndoneTaskIds = toSignal(this._store.select(selectAllDoneIds), {
+  private readonly _allDoneTaskIds = toSignal(this._store.select(selectAllDoneIds), {
     initialValue: [],
   });
 
@@ -121,9 +121,9 @@ export class NavItemComponent {
     const wc = this.workContext();
     if (!wc || wc.taskIds.length === 0) return 0;
 
-    const allUndoneTaskIds = this._allUndoneTaskIds();
+    const allDoneTaskIds = this._allDoneTaskIds();
     const undoneTaskCount = wc.taskIds.filter(
-      (tid) => !allUndoneTaskIds.includes(tid),
+      (tid) => !allDoneTaskIds.includes(tid),
     ).length;
     return undoneTaskCount;
   });

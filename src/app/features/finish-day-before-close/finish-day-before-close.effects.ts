@@ -20,6 +20,7 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from '../../t.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { confirmDialog } from '../../util/native-dialogs';
 
 const EXEC_BEFORE_CLOSE_ID = 'FINISH_DAY_BEFORE_CLOSE_EFFECT';
 
@@ -75,7 +76,7 @@ export class FinishDayBeforeCloseEffects {
             const doneTasks = todayMainTasks.filter((t) => t.isDone);
             if (doneTasks.length) {
               if (
-                !confirm(
+                !confirmDialog(
                   this._translateService.instant(
                     T.F.FINISH_DAY_BEFORE_EXIT.C.FINISH_DAY_BEFORE_EXIT,
                     {

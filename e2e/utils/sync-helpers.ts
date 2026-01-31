@@ -165,8 +165,8 @@ export const waitForSyncComplete = async (
     // The icon is small (10px) and absolutely positioned, so use count() check
     const syncStateIcon = page.locator('.sync-btn mat-icon.sync-state-ico');
     if ((await syncStateIcon.count()) > 0) {
-      // Add extra wait to ensure IndexedDB writes complete and state settles
-      await page.waitForTimeout(500);
+      // Brief wait for any final state updates to flush through
+      await page.waitForTimeout(200);
       return 'success';
     }
 
@@ -180,8 +180,8 @@ export const waitForSyncComplete = async (
         // Final check - make sure sync button is still there and no error shown
         const syncBtnVisible = await syncPage.syncBtn.isVisible().catch(() => false);
         if (syncBtnVisible) {
-          // Add extra wait to ensure IndexedDB writes complete and state settles
-          await page.waitForTimeout(500);
+          // Brief wait for any final state updates to flush through
+          await page.waitForTimeout(200);
           return 'success';
         }
       }
@@ -207,7 +207,7 @@ export const waitForSyncComplete = async (
       }
     }
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(300);
   }
 
   throw new Error(`Sync timeout after ${timeout}ms: Success icon did not appear`);
@@ -253,4 +253,38 @@ export const simulateNetworkFailure = async (page: Page): Promise<void> => {
  */
 export const restoreNetwork = async (page: Page): Promise<void> => {
   await page.unroute('**/127.0.0.1:2345/**');
+};
+
+/**
+ * Safely close multiple browser contexts with proper error handling
+ * for Playwright trace file race conditions.
+ *
+ * When tests pass on retry with `trace: 'retain-on-failure'`, trace files
+ * may still be writing asynchronously while context disposal happens synchronously.
+ * This causes ENOENT errors that fail otherwise-passing tests.
+ *
+ * @param contexts - Browser contexts to close (null/undefined values are ignored)
+ */
+export const closeContextsSafely = async (
+  ...contexts: (BrowserContext | null | undefined)[]
+): Promise<void> => {
+  for (const context of contexts) {
+    if (!context) continue;
+    try {
+      await context.close();
+    } catch (error) {
+      if (error instanceof Error) {
+        const ignorableErrors = [
+          'ENOENT',
+          'Target page, context or browser has been closed',
+          'Protocol error',
+          'End of central directory record',
+        ];
+        if (!ignorableErrors.some((msg) => error.message.includes(msg))) {
+          throw error;
+        }
+        // Silently ignore trace-related cleanup errors
+      }
+    }
+  }
 };

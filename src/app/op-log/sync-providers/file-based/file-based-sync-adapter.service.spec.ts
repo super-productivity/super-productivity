@@ -398,6 +398,75 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(2);
     });
 
+    it('should force upload on retry when freshRev equals original revToMatch', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1 });
+      // Initial download returns rev-1
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      let uploadCalls = 0;
+      mockProvider.uploadFile.and.callFake(
+        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
+          uploadCalls++;
+          if (uploadCalls === 1) {
+            return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
+          }
+          return Promise.resolve({ rev: 'rev-2' });
+        },
+      );
+
+      // Download to populate cache with rev-1
+      await adapter.downloadOps(0);
+
+      // Re-download on retry also returns rev-1 (same rev = server timestamp inconsistency)
+      // mockProvider.downloadFile already returns rev-1
+
+      const op = createMockSyncOp();
+      const result = await adapter.uploadOps([op], 'client1');
+
+      expect(result.results[0].accepted).toBe(true);
+      expect(uploadCalls).toBe(2);
+
+      // Retry upload should be called with isForceOverwrite: true
+      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
+      expect(retryCall[3]).toBe(true); // isForceOverwrite
+    });
+
+    it('should use conditional upload on retry when freshRev differs', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1 });
+      // Initial download returns rev-1
+      mockProvider.downloadFile.and.returnValues(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+        // Re-download on retry returns rev-2 (different rev = real concurrent modification)
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-2' }),
+      );
+
+      let uploadCalls = 0;
+      mockProvider.uploadFile.and.callFake(
+        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
+          uploadCalls++;
+          if (uploadCalls === 1) {
+            return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
+          }
+          return Promise.resolve({ rev: 'rev-3' });
+        },
+      );
+
+      // Download to populate cache with rev-1
+      await adapter.downloadOps(0);
+
+      const op = createMockSyncOp();
+      const result = await adapter.uploadOps([op], 'client1');
+
+      expect(result.results[0].accepted).toBe(true);
+      expect(uploadCalls).toBe(2);
+
+      // Retry upload should be called with isForceOverwrite: false
+      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
+      expect(retryCall[3]).toBe(false); // isForceOverwrite
+    });
+
     it('should clear cache after successful upload', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(
@@ -970,21 +1039,30 @@ describe('FileBasedSyncAdapterService', () => {
     });
 
     describe('downloadOps', () => {
-      it('should write archive to IndexedDB on first download (sinceSeq=0)', async () => {
+      // NOTE: Archives are NOT written to IndexedDB during downloadOps anymore.
+      // They are included in snapshotState and written during hydrateFromRemoteSync.
+      // This prevents corrupting local archives if user chooses "Keep local" in conflict dialog.
+
+      it('should NOT write archive to IndexedDB on first download - archives go in snapshotState', async () => {
         const syncData = createMockSyncData({
           archiveYoung: mockArchiveYoung,
           archiveOld: mockArchiveOld,
+          state: { tasks: [] },
         });
         mockProvider.downloadFile.and.returnValue(
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          mockArchiveYoung,
-        );
-        expect(mockArchiveDbAdapter.saveArchiveOld).toHaveBeenCalledWith(mockArchiveOld);
+        // Archives should NOT be written during downloadOps
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // Archives should be included in snapshotState instead
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toEqual(mockArchiveYoung);
+        expect((result.snapshotState as any).archiveOld).toEqual(mockArchiveOld);
       });
 
       it('should NOT write archive on subsequent downloads (sinceSeq > 0)', async () => {
@@ -1004,7 +1082,7 @@ describe('FileBasedSyncAdapterService', () => {
 
       it('should handle missing archive gracefully (backward compatibility)', async () => {
         // Old sync file without archive fields
-        const syncData = createMockSyncData();
+        const syncData = createMockSyncData({ state: { tasks: [] } });
         delete (syncData as any).archiveYoung;
         delete (syncData as any).archiveOld;
 
@@ -1012,27 +1090,37 @@ describe('FileBasedSyncAdapterService', () => {
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
         // Should not attempt to save undefined archive
         expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // snapshotState should still be returned but without archives
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toBeUndefined();
+        expect((result.snapshotState as any).archiveOld).toBeUndefined();
       });
 
-      it('should handle partial archive (only archiveYoung)', async () => {
+      it('should include partial archive (only archiveYoung) in snapshotState', async () => {
         const syncData = createMockSyncData({
           archiveYoung: mockArchiveYoung,
+          state: { tasks: [] },
         });
         mockProvider.downloadFile.and.returnValue(
           Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
         );
 
-        await adapter.downloadOps(0);
+        const result = await adapter.downloadOps(0);
 
-        expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalledWith(
-          mockArchiveYoung,
-        );
+        // Archives should NOT be written during downloadOps
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
         expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+
+        // Only archiveYoung should be in snapshotState
+        expect(result.snapshotState).toBeDefined();
+        expect((result.snapshotState as any).archiveYoung).toEqual(mockArchiveYoung);
+        expect((result.snapshotState as any).archiveOld).toBeUndefined();
       });
     });
   });

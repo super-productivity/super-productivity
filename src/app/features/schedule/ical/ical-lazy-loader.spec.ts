@@ -1,3 +1,6 @@
+// Eager import ensures ical.js is in the webpack test bundle,
+// so the dynamic import() inside loadIcalModule() can resolve it.
+import 'ical.js';
 import { loadIcalModule } from './ical-lazy-loader';
 
 describe('ical-lazy-loader', () => {

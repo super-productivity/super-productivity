@@ -1,6 +1,7 @@
 /**
  * Utility functions for handling common sync errors.
  */
+import { alertDialog } from '../../util/native-dialogs';
 
 /**
  * Storage quota exceeded error message shown to users.
@@ -24,7 +25,7 @@ export const handleStorageQuotaError = (message: string | undefined): boolean =>
     message.includes('STORAGE_QUOTA_EXCEEDED') ||
     message.includes('Storage quota exceeded')
   ) {
-    alert(STORAGE_QUOTA_ALERT);
+    alertDialog(STORAGE_QUOTA_ALERT);
     return true;
   }
   return false;

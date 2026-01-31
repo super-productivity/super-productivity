@@ -590,7 +590,7 @@ export const MAX_VERSION_SKIP = 5; // Max versions ahead we'll attempt to load
            ┌───────────────────┼───────────────────┐
            ▼                   ▼                   ▼
     Load Snapshot         Replay Ops         Receive Remote Ops
-    (stale version)       (mixed versions)   (newer/older version)
+    (superseded version)       (mixed versions)   (newer/older version)
            │                   │                   │
            ▼                   ▼                   ▼
     Run migrations       Apply ops as-is     Migrate if needed
@@ -1180,8 +1180,8 @@ interface OperationSyncCapable {
 async uploadPendingOps(syncProvider: OperationSyncCapable): Promise<void> {
   const pendingOps = await this.opLogStore.getUnsynced();
 
-  // Upload in batches (up to 100 ops per request)
-  for (const chunk of chunkArray(pendingOps, 100)) {
+  // Upload in batches (up to 25 ops per request)
+  for (const chunk of chunkArray(pendingOps, 25)) {
     const response = await syncProvider.uploadOps(
       chunk.map(entry => toSyncOperation(entry.op)),
       clientId,
@@ -1414,6 +1414,45 @@ When operations are rejected (either local or remote):
 - Rejected ops remain in the log for history/debugging
 - `getUnsynced()` excludes rejected ops (won't re-upload)
 - Compaction may eventually delete old rejected ops
+
+### Archive-Wins Rule
+
+When a `moveToArchive` operation conflicts with a field-level update (e.g., rename, time tracking changes), the archive operation **always wins** regardless of timestamps. This bypasses the normal LWW timestamp comparison because archiving represents explicit user intent that should not be reversed by a concurrent field update.
+
+**Rationale:** If Client A archives a task and Client B concurrently renames it, the archive must win — otherwise, the LWW update would "resurrect" the archived task back into the active store by replacing its state.
+
+**Implementation:** `ConflictResolutionService` checks whether either the local or remote side contains a `TASK_SHARED_MOVE_TO_ARCHIVE` action. If so, the archive side wins automatically, and a new archive operation is created with a merged vector clock (via `_createArchiveWinOp()`).
+
+This is the **first level** of archive resurrection prevention. The **second level** is in the `bulkOperationsMetaReducer` (see [Area 10: Bulk Application](#area-10-bulk-application) in the quick reference), which pre-scans operation batches for archive operations and skips any LWW Update operations targeting entities being archived in the same batch. This two-level defense handles the 3+ client scenario where LWW Updates can arrive before or after archive ops in the same batch.
+
+**Key files:**
+
+- `src/app/op-log/sync/conflict-resolution.service.ts` — Archive-wins check and `_createArchiveWinOp()`
+- `src/app/op-log/apply/bulk-hydration.meta-reducer.ts` — Pre-scan archive filtering
+
+### Superseded Operation Handling for moveToArchive
+
+The `SupersededOperationResolverService` treats `moveToArchive` as a special case alongside DELETE operations. When a `moveToArchive` op is rejected by the server due to concurrent conflicts, it is **re-created with a merged vector clock** instead of being discarded.
+
+This is necessary because `moveToArchive` removes entities from the NgRx store (via the archive reducer), so `getCurrentEntityState()` returns `undefined` for archived entities. Without this special handling, the superseded operation resolver would be unable to re-create the operation, and archived tasks would be lost.
+
+**Implementation:** Before entity-by-entity processing, `SupersededOperationResolverService` identifies bulk semantic operations like `moveToArchive` and re-creates them with the original payload and a merged vector clock, preserving the full task data in `MultiEntityPayload` format.
+
+**Key file:** `src/app/op-log/sync/superseded-operation-resolver.service.ts`
+
+### Singleton Entity LWW Updates
+
+The `lwwUpdateMetaReducer` handles LWW Update actions (created when the local side wins a conflict) differently depending on the entity's storage pattern:
+
+| Storage Pattern | Entity Types                                          | LWW Update Behavior                                                             |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Adapter**     | TASK, PROJECT, TAG, NOTE, TASK_REPEAT_CFG, etc.       | Individual entity replacement via NgRx entity adapter (`updateOne` or `addOne`) |
+| **Singleton**   | GLOBAL_CONFIG, TIME_TRACKING, MENU_TREE, WORK_CONTEXT | Entire feature state replaced with the winning data                             |
+| **Unsupported** | Map, array, virtual patterns                          | Logged as warning; not supported for LWW                                        |
+
+For **adapter entities**, the meta-reducer also syncs relationships (e.g., `project.taskIds` when `projectId` changes, `tag.taskIds` when `tagIds` changes, `TODAY_TAG.taskIds` when `dueDay` changes, `parent.subTaskIds` when `parentId` changes).
+
+**Key file:** `src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts`
 
 ### User Notification
 

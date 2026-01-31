@@ -133,7 +133,7 @@ This document establishes the core rules and principles for designing the Operat
 
 - **Rule:** Normal operations should be batched with reasonable limits.
 - **Limits:**
-  - **Max batch size:** 100 operations per batch for normal sync uploads.
+  - **Max batch size:** 25 operations per batch for normal sync uploads.
   - **Max payload size:** 1 MB per batch to prevent timeout issues.
 - **Exception:** `SYNC_IMPORT` and `BACKUP_IMPORT` bypass these limits but must be clearly marked as bulk operations and trigger immediate snapshot creation afterward.
 

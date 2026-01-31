@@ -10,7 +10,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
-import { Operation, OpType, ActionType } from '../core/operation.types';
+import { ActionType, Operation, OpType } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
@@ -238,6 +238,18 @@ export class ServerMigrationService {
 
     // Append to operation log - will be uploaded via snapshot endpoint
     await this.opLogStore.append(op, 'local');
+
+    // CRITICAL: Set protected client IDs to include ALL vector clock keys from the SYNC_IMPORT.
+    // When new operations are created after this SYNC_IMPORT, limitVectorClockSize() is called
+    // which prunes low-counter entries. Without protecting all these IDs, subsequent ops
+    // would have incomplete clocks (missing the pruned entries), causing them to appear
+    // CONCURRENT with this SYNC_IMPORT instead of GREATER_THAN. This leads to the bug where
+    // other clients filter out legitimate ops as "invalidated by SYNC_IMPORT".
+    const protectedIds = Object.keys(newClock);
+    await this.opLogStore.setProtectedClientIds(protectedIds);
+    OpLog.normal(
+      `ServerMigrationService: Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,
+    );
 
     OpLog.normal(
       'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +

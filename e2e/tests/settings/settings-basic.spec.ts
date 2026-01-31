@@ -82,13 +82,12 @@ test.describe('Settings', () => {
     await page.goto('/#/config');
     await page.waitForLoadState('networkidle');
 
-    // Verify settings page is visible
-    await expect(page.locator('.page-settings')).toBeVisible();
+    // Verify settings page data is rendered
+    await expect(page.locator('.settings-container')).toBeVisible();
 
     // Should have multiple config sections for different config areas
-    const sections = page.locator('config-section');
-    const sectionCount = await sections.count();
-    expect(sectionCount).toBeGreaterThan(1);
+    const sections = page.locator('.tab-content .config-section');
+    await expect.poll(() => sections.count()).toBeGreaterThan(1);
   });
 
   test('should have form elements in settings', async ({ page, workViewPage }) => {

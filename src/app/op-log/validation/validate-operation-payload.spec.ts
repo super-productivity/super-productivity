@@ -468,7 +468,7 @@ describe('validateOperationPayload', () => {
       });
       const result = validateOperationPayload(op);
       expect(result.success).toBe(true);
-      expect(result.warnings).toContain('MultiEntityPayload.entityChanges is empty');
+      expect(result.warnings).toBeUndefined();
     });
 
     it('should reject MultiEntityPayload with null actionPayload', () => {

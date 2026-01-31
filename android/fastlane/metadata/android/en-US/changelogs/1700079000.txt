@@ -1,0 +1,26 @@
+
+### Bug Fixes
+
+* **e2e:** resolve flaky WebDAV tests and fix encryption test failures
+* emit legacy PBKDF2 deprecation warning only after successful decryption
+* **markdown:** prevent duplicate checkbox rendering in markdown (#6229) (b3c548e), closes #6228 #6228
+* remove debug logging and fix isLoading reset in encryption dialog
+* **simple-counter:** preserve order when reordering counters in settings (98f4009), closes #6232
+* **sync:** allow force overwrite on encryption password
+* **sync:** clear dropbox tokens when sync disabled
+* **sync:** clear old full-state ops when new SYNC_IMPORT is applied
+* **sync:** ensure server deletes existing data before accepting new SYNC_IMPORT
+* **sync:** handle dropbox refresh auth failure
+* **sync:** handle encryption password entry
+* **sync:** invalidate appliedOpIds cache on ConstraintError (a712e43), closes #6213
+* **sync:** preserve SuperSync encryption password from race condition
+* **sync:** prevent archive corruption during "Keep local" conflict resolution
+* **sync:** reflect file-based encryption state in UI
+* **sync:** translate WebDAV 412 error for retry mechanism (edcb2cb), closes #6218
+* **sync:** update currentProviderPrivateCfg$ observable when enabling encryption
+* **ui:** add missing checkbox renderer for marked options
+* use providerManager.setProviderConfig to prevent file-based encryption password loss
+### Features
+
+* **sync:** close parent settings dialog after disabling encryption
+* **sync:** unify encryption status UI into a styled box

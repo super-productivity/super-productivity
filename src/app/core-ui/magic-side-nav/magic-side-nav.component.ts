@@ -82,6 +82,9 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
   isFullMode = signal(true);
   isMobile = signal(false);
   showMobileMenuOverlay = signal(false);
+  // Temporarily disable swipe during menu open animation to prevent
+  // the touch event from the toggle button being captured as a swipe
+  swipeEnabled = signal(true);
 
   // Animate only for compactMode/fullMode toggle
   animateWidth = signal(false);
@@ -235,7 +238,18 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   toggleMobileNav(): void {
+    const isOpening = !this.showMobileMenuOverlay();
     this.showMobileMenuOverlay.update((show) => !show);
+
+    // On mobile, briefly disable swipe gesture to prevent
+    // the touch event from the toggle button from being captured by
+    // the drawer's swipe handler during its enter animation.
+    if (isOpening && this.isMobile()) {
+      this.swipeEnabled.set(false);
+      window.setTimeout(() => {
+        this.swipeEnabled.set(true);
+      }, 300); // Match animation duration (225ms) + buffer
+    }
   }
 
   onMobileNavSwipeRight(): void {

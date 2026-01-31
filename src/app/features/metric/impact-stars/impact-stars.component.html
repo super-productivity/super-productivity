@@ -12,6 +12,7 @@
     <button
       type="button"
       class="impact-stars__star"
+      [class.is-active]="isActive(idx)"
       role="radio"
       [attr.aria-checked]="value() === idx"
       [attr.aria-label]="idx + ' ' + starLabel(idx)"

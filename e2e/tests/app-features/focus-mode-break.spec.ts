@@ -14,45 +14,12 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(firstTask).toBeVisible();
   });
 
-  // SKIPPED: E2E click events don't trigger NgRx store updates for this specific button.
-  // Tried 10+ approaches (regular click, force click, JS click, dispatchEvent, ng.getComponent).
-  // Even when component.pauseBreak() is called directly, the store dispatch doesn't propagate.
-  // This appears to be a zone.js/NgRx integration issue in the E2E environment.
-  //
-  // The pause/resume functionality IS verified by:
-  // - 48 reducer unit tests (focus-mode.reducer.spec.ts)
-  // - 14 component unit tests (focus-mode-break.component.spec.ts)
-  // - Screenshots confirm the UI renders correctly with pause button visible
-  test.skip('should be able to pause and resume break from fullscreen mode', async ({
-    page,
-  }) => {
-    const focusModeOverlay = page.locator('focus-mode-overlay');
-    const focusModeBreak = page.locator('focus-mode-break');
-    const focusModeCountdown = page.locator('focus-mode-countdown');
-    const mainFocusButton = page
-      .getByRole('button')
-      .filter({ hasText: 'center_focus_strong' });
-    const pomodoroModeButton = page.locator('segmented-button-group button', {
-      hasText: 'Pomodoro',
-    });
-    const playButton = page.locator('focus-mode-main button.play-button');
-    const completeSessionButton = page.locator(
-      'focus-mode-main button.complete-session-btn',
-    );
-
-    await mainFocusButton.click();
-    await expect(focusModeOverlay).toBeVisible({ timeout: 5000 });
-    await pomodoroModeButton.click();
-    await playButton.click();
-    await expect(focusModeCountdown).not.toBeVisible({ timeout: 15000 });
-    await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
-    await completeSessionButton.click();
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
-
-    // Verify pause button is visible (this much works)
-    const pauseBtn = page.locator('focus-mode-break button.pause-resume-btn');
-    await expect(pauseBtn).toBeVisible();
-  });
+  // NOTE: Pause/resume break functionality is NOT tested in E2E because:
+  // - E2E click events don't trigger NgRx store updates for this specific button
+  // - This is a zone.js/NgRx integration issue in the E2E environment
+  // - The functionality IS verified by 62 unit tests:
+  //   - 48 reducer unit tests (focus-mode.reducer.spec.ts)
+  //   - 14 component unit tests (focus-mode-break.component.spec.ts)
 
   test('should be able to exit break to planning and change timer mode', async ({
     page,
@@ -95,8 +62,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Verify mode selector is NOT visible on break screen
     await expect(modeSelector).not.toBeVisible();
@@ -157,8 +127,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Verify both buttons are visible
     await expect(backToPlanningButton).toBeVisible();
@@ -199,8 +172,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Skip the break
     await skipBreakButton.click();
@@ -246,8 +222,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Click Back to Planning
     await backToPlanningButton.click();

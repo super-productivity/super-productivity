@@ -169,7 +169,9 @@ export class ArchiveService {
     // ------------------------------------------------
     // Check if it's time to flush archiveYoung to archiveOld
     const archiveOld = (await this._archiveDbAdapter.loadArchiveOld()) || DEFAULT_ARCHIVE;
+    // If lastTimeTrackingFlush is undefined (legacy backup), treat as needing flush
     const isFlushArchiveOld =
+      archiveOld.lastTimeTrackingFlush === undefined ||
       now - archiveOld.lastTimeTrackingFlush > ARCHIVE_ALL_YOUNG_TO_OLD_THRESHOLD;
 
     if (!isFlushArchiveOld) {

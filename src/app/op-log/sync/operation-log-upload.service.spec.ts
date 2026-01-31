@@ -607,6 +607,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           false, // isPayloadEncrypted
           'op-1', // op.id
+          undefined, // isCleanSlate
         );
       });
 
@@ -624,6 +625,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           false, // isPayloadEncrypted
           'op-1', // op.id
+          undefined, // isCleanSlate
         );
       });
 
@@ -641,6 +643,7 @@ describe('OperationLogUploadService', () => {
           jasmine.anything(),
           false, // isPayloadEncrypted
           'op-1', // op.id
+          undefined, // isCleanSlate
         );
       });
 
@@ -814,8 +817,8 @@ describe('OperationLogUploadService', () => {
         // Get the call arguments
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
 
-        // Verify all 7 args are passed including op.id
-        expect(callArgs.length).toBe(7);
+        // Verify all 8 args are passed including op.id and isCleanSlate
+        expect(callArgs.length).toBe(8);
 
         // Verify specific args
         expect(callArgs[1]).toBe('client-1'); // clientId
@@ -823,6 +826,8 @@ describe('OperationLogUploadService', () => {
 
         // CRITICAL: Verify op.id is passed as 7th argument
         expect(callArgs[6]).toBe('my-backup-import-id');
+        // 8th argument is isCleanSlate (undefined when not specified)
+        expect(callArgs[7]).toBeUndefined();
       });
 
       it('should pass vectorClock and schemaVersion to snapshot upload', async () => {
@@ -862,7 +867,27 @@ describe('OperationLogUploadService', () => {
           42,
           false, // isPayloadEncrypted
           'op-1', // op.id
+          undefined, // isCleanSlate
         );
+      });
+
+      /**
+       * CRITICAL: Verify isCleanSlate is passed through snapshot upload path.
+       *
+       * This is essential for the clean slate mechanism used during encryption
+       * password changes. When isCleanSlate=true, the server must delete all
+       * existing data atomically before accepting the new snapshot.
+       */
+      it('should pass isCleanSlate to snapshot upload when provided', async () => {
+        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
+
+        await service.uploadPendingOps(mockApiProvider, { isCleanSlate: true });
+
+        // Verify uploadSnapshot was called with isCleanSlate=true
+        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
+        const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
+        expect(callArgs[7]).toBe(true); // 8th argument is isCleanSlate
       });
 
       describe('SYNC_IMPORT_EXISTS handling', () => {

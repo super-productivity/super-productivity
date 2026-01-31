@@ -7,6 +7,11 @@ export interface RejectedOpInfo {
   opId: string;
   error?: string;
   errorCode?: string;
+  /**
+   * The existing entity's vector clock when rejecting due to conflict.
+   * Allows clients to create LWW updates that dominate the server's state.
+   */
+  existingClock?: VectorClock;
 }
 
 /**
@@ -49,6 +54,16 @@ export interface DownloadResult {
    * Contains the complete application state for bootstrapping a new client.
    */
   snapshotState?: unknown;
+  /**
+   * True when operations were downloaded AND ALL of them have isPayloadEncrypted: false.
+   * This indicates another client disabled encryption. The receiving client should
+   * update its local config to match (isEncryptionEnabled: false, encryptKey: undefined).
+   *
+   * False/undefined when:
+   * - No operations were downloaded (cannot determine encryption state)
+   * - Any operation has isPayloadEncrypted: true (server still has encrypted data)
+   */
+  serverHasOnlyUnencryptedData?: boolean;
 }
 
 /**
@@ -67,10 +82,27 @@ export interface UploadResult {
    */
   localWinOpsCreated?: number;
   /**
+   * Number of operations that were permanently rejected (validation errors, etc.).
+   * Transient errors (INTERNAL_ERROR) and resolved conflicts (CONFLICT_CONCURRENT)
+   * are NOT counted here. Only operations that will never sync successfully.
+   * Set by OperationLogSyncService.uploadPendingOps from RejectedOpsHandlerService.
+   */
+  permanentRejectionCount?: number;
+  /**
    * True when piggybacked ops were limited (more ops exist on server).
    * Caller should trigger a download to get the remaining operations.
    */
   hasMorePiggyback?: boolean;
+  /**
+   * True when piggybacked operations were received AND ALL of them have isPayloadEncrypted: false.
+   * This indicates another client disabled encryption. The receiving client should
+   * update its local config to match (isEncryptionEnabled: false, encryptKey: undefined).
+   *
+   * False/undefined when:
+   * - No piggybacked operations were received (cannot determine encryption state)
+   * - Any piggybacked operation has isPayloadEncrypted: true (server still has encrypted data)
+   */
+  piggybackHasOnlyUnencryptedData?: boolean;
 }
 
 /**
@@ -82,6 +114,27 @@ export interface UploadOptions {
    * Use this for operations that must be atomic with the upload, such as server migration checks.
    */
   preUploadCallback?: () => Promise<void>;
+
+  /**
+   * If true, instructs server to delete all existing user data before accepting uploaded operations.
+   * Used for clean slate operations like encryption password changes or full imports.
+   */
+  isCleanSlate?: boolean;
+
+  /**
+   * If true, skip processing of piggybacked operations returned by the server.
+   * Used for force upload scenarios (like password changes) where piggybacked ops
+   * may be encrypted with a different key and would cause DecryptError.
+   * When SYNC_IMPORT is uploaded, piggybacked ops are irrelevant anyway as they'll be superseded.
+   */
+  skipPiggybackProcessing?: boolean;
+
+  /**
+   * If true, skip the server migration check (which downloads ops to verify server state).
+   * Used for force upload scenarios where we're intentionally overwriting remote data.
+   * Without this, the download would fail with DecryptError when password has changed.
+   */
+  skipServerMigrationCheck?: boolean;
 }
 
 /**

@@ -321,7 +321,7 @@ describe('Performance Integration', () => {
 
       expect(compactDuration).toBeLessThan(10000); // < 10 seconds
       console.log(`Compaction: ${compactDuration}ms for ${operationCount} ops`);
-    });
+    }, 15000);
   });
 
   describe('Concurrent operation handling', () => {

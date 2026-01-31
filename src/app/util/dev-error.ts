@@ -1,5 +1,6 @@
 import { environment } from '../../environments/environment';
 import { Log } from '../core/log';
+import { alertDialog, confirmDialog } from './native-dialogs';
 
 let isShowAlert = true;
 
@@ -9,10 +10,10 @@ export const devError = (errStr: string | Error | unknown): void => {
     // TODO add super simple snack message if possible
   } else {
     if (isShowAlert) {
-      alert('devERR: ' + errStr);
+      alertDialog('devERR: ' + errStr);
       isShowAlert = false;
     }
-    if (confirm(`Throw an error for error? ––– ${errStr}`)) {
+    if (confirmDialog(`Throw an error for error? ––– ${errStr}`)) {
       throw new Error(errStr as string);
     }
   }
