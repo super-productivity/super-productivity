@@ -985,25 +985,25 @@
         "TITLE": "Налаштуйте синхронізацію"
       },
       "D_PERMISSION": {
-        "DISABLE_SYNC": "Disable sync",
-        "PERM_FILE": "Give permission",
-        "TEXT": "<p>Your file permission for local syncing has been revoked.</p>",
-        "TITLE": "Sync: Local file permission denied"
+        "DISABLE_SYNC": "Вимкнути синхронізацію",
+        "PERM_FILE": "Надати доступ",
+        "TEXT": "<p>Права доступу до файлової системи для локальної синхронізації були скасовані</p>",
+        "TITLE": "Синхронізація: Відмовлено в доступі до файлової системи"
       },
       "D_RESTORE": {
-        "TITLE": "Restore from History",
-        "LOADING": "Loading restore points...",
-        "NO_POINTS": "No restore points available. Restore points are created when you sync or import data.",
-        "INTRO": "Select a point in time to restore your data to:",
-        "WARNING": "This will replace ALL your current data with the selected backup. This action cannot be undone!",
-        "BTN_RESTORE": "Restore",
-        "TYPE_SYNC_IMPORT": "Full sync import",
-        "TYPE_BACKUP_IMPORT": "Backup restore",
-        "TYPE_REPAIR": "Auto-repair",
-        "CONFIRM_TITLE": "Confirm Restore",
-        "CONFIRM_MSG": "Are you absolutely sure you want to restore to <strong>{{timestamp}}</strong>?<br><br>This will <strong>completely replace</strong> all your current data and <strong>cannot be undone</strong>.",
-        "ERROR_LOADING": "Failed to load restore points",
-        "ERROR_RESTORE": "Failed to restore data"
+        "TITLE": "Відновити з історії",
+        "LOADING": "Завантаження точок відновлення...",
+        "NO_POINTS": "Немає доступних точок відновлення. Точки відновлення створюються під час синхронізації або імпорту даних.",
+        "INTRO": "Виберіть момент часу для відновлення даних:",
+        "WARNING": "Це замінить УСІ ваші поточні дані вибраною резервною копією. Цю дію неможливо скасувати!",
+        "BTN_RESTORE": "Відновити",
+        "TYPE_SYNC_IMPORT": "Повний імпорт синхронізації",
+        "TYPE_BACKUP_IMPORT": "Відновлення з резервної копії",
+        "TYPE_REPAIR": "Автоматичне виправлення",
+        "CONFIRM_TITLE": "Підтвердити відновлення",
+        "CONFIRM_MSG": "Ви точно впевнені, що хочете відновити дані до стану на <strong>{{timestamp}}</strong>?<br><br>Це <strong>повністю замінить</strong> усі ваші поточні дані, і цю дію <strong>неможливо скасувати</strong>.",
+        "ERROR_LOADING": "Не вдалося завантажити точки відновлення",
+        "ERROR_RESTORE": "Не вдалося відновити дані"
       },
       "FORM": {
         "DROPBOX": {
@@ -2304,7 +2304,7 @@
     "LAST": "Останній:",
     "NEXT": "Наступний",
     "NO_REPEATABLE_TASKS": "Наразі немає повторюваних завдань. Ви можете запланувати завдання, вибравши \"Повторити завдання\" на бічній панелі завдання. Щоб відкрити її, клацніть на крайній правій іконці, яка з'являється при наведенні на завдання (або просто натисніть на завдання на мобільному пристрої).",
-    "NO_SCHEDULED": "Наразі немає запланованих завдань. Ви можете запланувати завдання, вибравши \"Запланувати завдання\" в контекстному меню завдання. Щоб відкрити його, клацніть правою кнопною миші (довге натискання на мобільному пристрої) на завданні.",
+    "NO_SCHEDULED": "Наразі немає запланованих завдань. Ви можете запланувати завдання, вибравши \"Запланувати завдання\" в контекстному меню завдання. Щоб відкрити його, клацніть правою кнопкою миші (довге натискання на мобільному пристрої) на завданні.",
     "NO_SCHEDULED_TITLE": "Заплановані завдання на день",
     "REPEATED_TASKS": "Повторювані завдання",
     "SCHEDULED_TASKS": "Заплановані завдання",
