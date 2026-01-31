@@ -68,7 +68,6 @@ export class RedmineCommonInterfacesService implements IssueServiceInterface {
   }
 
   getAddTaskData(issue: RedmineIssue): Partial<Readonly<TaskCopy>> & { title: string } {
-    console.warn(issue);
     return {
       title: formatRedmineIssueTitle(issue),
       issueWasUpdated: false,
