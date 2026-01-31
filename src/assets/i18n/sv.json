@@ -1534,7 +1534,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Czech",
+      "CS": "Czech",
       "DE": "Deutsch",
       "EN": "English",
       "ES": "Español",
@@ -1572,7 +1572,10 @@
       "TIME_LOCALE_RU_RU": "Russian - 24-hour",
       "TIME_LOCALE_ZH_CN": "Chinese (Simplified) - 24-hour",
       "TIME_LOCALE_JA_JP": "Japanese - 24-hour",
-      "TIME_LOCALE_KO_KR": "Korean - 12-hour AM/PM"
+      "TIME_LOCALE_KO_KR": "Korean - 12-hour AM/PM",
+      "TIME_LOCALE_CS_CZ": "Czech - 24-hour",
+      "TIME_LOCALE_SK_SK": "Slovak - 24-hour",
+      "TIME_LOCALE_UK_UA": "Ukrainian - 24-hour"
     },
     "MISC": {
       "FIRST_DAY_OF_WEEK": "Veckans första dag",

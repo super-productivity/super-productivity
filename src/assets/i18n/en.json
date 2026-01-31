@@ -1912,7 +1912,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Czech",
+      "CS": "Czech",
       "DE": "Deutsch",
       "EN": "English",
       "ES": "Español",
@@ -1948,6 +1948,9 @@
       "TIME_LOCALE_RU_RU": "Russian: 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_TR_TR": "Turkish: 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_ZH_CN": "Chinese (Simplified): 24-hour, YYYY/MM/DD",
+      "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
+      "TIME_LOCALE_SK_SK": "Slovak: 24-hour, DD. MM. YYYY",
+      "TIME_LOCALE_UK_UA": "Ukrainian: 24-hour, DD.MM.YYYY",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",

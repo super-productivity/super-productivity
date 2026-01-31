@@ -1929,7 +1929,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Czech",
+      "CS": "Czech",
       "DE": "Deutsch",
       "EN": "English",
       "ES": "Español",
@@ -1965,6 +1965,9 @@
       "TIME_LOCALE_RU_RU": "俄语：24小时制，日.月.年",
       "TIME_LOCALE_TR_TR": "土耳其语：24小时制，日.月.年",
       "TIME_LOCALE_ZH_CN": "简体中文：24小时制，年/月/日",
+      "TIME_LOCALE_CS_CZ": "捷克语：24小时制，日. 月. 年",
+      "TIME_LOCALE_SK_SK": "斯洛伐克语：24小时制，日. 月. 年",
+      "TIME_LOCALE_UK_UA": "乌克兰语：24小时制，日.月.年",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
