@@ -5,35 +5,51 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { WorklogService } from '../../worklog/worklog.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { defer, from } from 'rxjs';
-import { first, map, switchMap } from 'rxjs/operators';
+import { combineLatestWith, first, map, switchMap, tap } from 'rxjs/operators';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { Task } from '../../tasks/task.model';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconButton } from '@angular/material/button';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
 import { ShareService } from '../../../core/share/share.service';
-import { DateAdapter } from '@angular/material/core';
 import {
   DayData,
   WeekData,
   HeatmapComponent,
 } from '../../../ui/heatmap/heatmap.component';
+import { DateAdapter } from '@angular/material/core';
+
+interface YearlyActivityData {
+  dayMap: Map<string, DayData>;
+  startDate: Date;
+  endDate: Date;
+}
 
 @Component({
   selector: 'activity-heatmap',
   templateUrl: './activity-heatmap.component.html',
   styleUrls: ['./activity-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslatePipe, MatIconButton, MatTooltip, MatIcon, HeatmapComponent],
+  imports: [
+    HeatmapComponent,
+    TranslatePipe,
+    MatFormFieldModule,
+    MatIconButton,
+    MatSelectModule,
+    MatTooltip,
+    MatIcon,
+  ],
 })
 export class ActivityHeatmapComponent {
   private readonly _worklogService = inject(WorklogService);
@@ -43,7 +59,18 @@ export class ActivityHeatmapComponent {
   private readonly _snackService = inject(SnackService);
   private readonly _shareService = inject(ShareService);
   private readonly _dateAdapter = inject(DateAdapter);
-
+  private readonly _userSelectedYear = signal<number | null>(null);
+  availableYears = signal<number[]>([]);
+  selectedYear = computed(() => {
+    const userSelection = this._userSelectedYear();
+    const availableYears = this.availableYears();
+    // If user has made a selection and it's valid, use it
+    if (userSelection !== null && availableYears.includes(userSelection)) {
+      return userSelection;
+    }
+    // Otherwise, default to most recent year with data or the current year
+    return availableYears.length > 0 ? availableYears[0] : new Date().getFullYear();
+  });
   T: typeof T = T;
   weeks: WeekData[] = [];
   isSharing = signal(false);
@@ -51,6 +78,10 @@ export class ActivityHeatmapComponent {
     this._workContextService.activeWorkContextTitle$,
     { initialValue: '' },
   );
+
+  onYearChange(year: number): void {
+    this._userSelectedYear.set(year); // Only update user selection
+  }
 
   // Day labels adjusted for first day of week
   readonly dayLabels = computed(() => {
@@ -62,18 +93,38 @@ export class ActivityHeatmapComponent {
   // Raw data signals
   private readonly _rawHeatmapData = toSignal(
     this._workContextService.activeWorkContext$.pipe(
-      switchMap((context) => {
+      combineLatestWith(toObservable(this.selectedYear)),
+      switchMap(([context, userSelectedYear]) => {
         // Special case: TODAY tag shows ALL data from all tasks
         if (context.id === TODAY_TAG.id) {
-          // Use defer to ensure the Promise is created fresh each time
           return defer(() => from(this._loadAllTasks())).pipe(
-            map((tasks) => this._buildHeatmapDataFromTasks(tasks)),
+            tap((tasks) => {
+              // Only side effect: update available years
+              const yearsWithData = this._extractAvailableYears(tasks);
+              this.availableYears.set(yearsWithData);
+              // No selectedYear mutation here!
+            }),
+            map((tasks) => {
+              // Use computed selectedYear value
+              const currentlySelectedYear = this.selectedYear();
+              return this._buildHeatmapDataForGivenYear(tasks, currentlySelectedYear);
+            }),
           );
         }
 
         // Normal case: use context-filtered worklog
         return this._worklogService.worklog$.pipe(
-          map((worklog) => this._buildHeatmapData(worklog)),
+          tap((worklog) => {
+            // Only side effect: update available years
+            const yearsWithData = this._extractAvailableYearsFromWorklog(worklog);
+            this.availableYears.set(yearsWithData);
+            // No selectedYear mutation here!
+          }),
+          map((worklog) => {
+            // Use computed selectedYear value
+            const currentlySelectedYear = this.selectedYear();
+            return this._buildHeatmapDataFromWorklog(worklog, currentlySelectedYear);
+          }),
         );
       }),
     ),
@@ -120,19 +171,17 @@ export class ActivityHeatmapComponent {
     return allTasks;
   }
 
-  private _buildHeatmapDataFromTasks(tasks: Task[]): {
-    dayMap: Map<string, DayData>;
-    startDate: Date;
-    endDate: Date;
-  } | null {
+  private _buildHeatmapDataForGivenYear(
+    tasks: Task[],
+    year: number,
+  ): YearlyActivityData | null {
     const dayMap = new Map<string, DayData>();
-    const now = new Date();
-    const oneYearAgo = new Date(now);
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
 
-    // Initialize all days in the past year
-    const currentDate = new Date(oneYearAgo);
-    while (currentDate <= now) {
+    // Initialize all days in the specified year
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
       const dateStr = this._getDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
@@ -144,21 +193,20 @@ export class ActivityHeatmapComponent {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Extract time spent data from all tasks
+    // Extract time spent data for the specific year
     let maxTasks = 0;
     let maxTime = 0;
     const taskCountPerDay = new Map<string, Set<string>>();
-
     tasks.forEach((task) => {
       if (task.timeSpentOnDay) {
         Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+          const dateYear = parseInt(dateStr.substring(0, 4), 10);
+          if (dateYear !== year) return;
           const timeSpent = task.timeSpentOnDay[dateStr];
           const dayData = dayMap.get(dateStr);
-
           if (dayData && timeSpent > 0) {
             dayData.timeSpent += timeSpent;
             maxTime = Math.max(maxTime, dayData.timeSpent);
-
             // Track unique tasks per day
             if (!taskCountPerDay.has(dateStr)) {
               taskCountPerDay.set(dateStr, new Set());
@@ -178,8 +226,7 @@ export class ActivityHeatmapComponent {
       }
     });
 
-    // Calculate levels (0-4) based on activity
-    // Prioritize time spent (80%) over task count (20%)
+    // Calculate activity levels
     dayMap.forEach((day) => {
       if (day.taskCount === 0 && day.timeSpent === 0) {
         day.level = 0;
@@ -188,7 +235,6 @@ export class ActivityHeatmapComponent {
         const timeRatio = maxTime > 0 ? day.timeSpent / maxTime : 0;
         // eslint-disable-next-line no-mixed-operators
         const combinedRatio = timeRatio * 0.8 + taskRatio * 0.2;
-
         if (combinedRatio > 0.75) {
           day.level = 4;
         } else if (combinedRatio > 0.5) {
@@ -200,15 +246,13 @@ export class ActivityHeatmapComponent {
         }
       }
     });
-
-    return {
-      dayMap,
-      startDate: oneYearAgo,
-      endDate: now,
-    };
+    return { dayMap, startDate, endDate };
   }
 
-  private _buildHeatmapData(worklog: any): {
+  private _buildHeatmapDataFromWorklog(
+    worklog: any,
+    year: number,
+  ): {
     dayMap: Map<string, DayData>;
     startDate: Date;
     endDate: Date;
@@ -216,67 +260,56 @@ export class ActivityHeatmapComponent {
     if (!worklog) {
       return null;
     }
-
+    // Day map contains properties for each day of the year, regardless
+    // whether that day has any logged work or not
     const dayMap = new Map<string, DayData>();
-    const now = new Date();
-    const oneYearAgo = new Date(now);
-    oneYearAgo.setFullYear(now.getFullYear() - 1);
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(year, 11, 31);
 
-    // Initialize all days in the past year
-    const currentDate = new Date(oneYearAgo);
-    while (currentDate <= now) {
-      const dateStr = this._getDateStr(currentDate);
+    // Initialize all days in the specified year
+    const curDate = new Date(startDate);
+    while (curDate <= endDate) {
+      const dateStr = this._getDateStr(curDate);
       dayMap.set(dateStr, {
-        date: new Date(currentDate),
+        date: new Date(curDate),
         dateStr,
         taskCount: 0,
         timeSpent: 0,
         level: 0,
       });
-      currentDate.setDate(currentDate.getDate() + 1);
+      curDate.setDate(curDate.getDate() + 1);
     }
 
-    // Extract data from worklog
+    // Extract data from worklog for the specified year
     let maxTasks = 0;
     let maxTime = 0;
-
-    Object.keys(worklog).forEach((yearKeyIN) => {
-      const yearKey = +yearKeyIN;
-      const year = worklog[yearKey];
-
-      if (year && year.ent) {
-        Object.keys(year.ent).forEach((monthKeyIN) => {
-          const monthKey = +monthKeyIN;
-          const month = year.ent[monthKey];
-
-          if (month && month.ent) {
-            Object.keys(month.ent).forEach((dayKeyIN) => {
-              const dayKey = +dayKeyIN;
-              const day = month.ent[dayKey];
-
-              if (day) {
-                const dateStr = day.dateStr;
-                const existing = dayMap.get(dateStr);
-
-                if (existing) {
-                  const taskCount = day.logEntries.length;
-                  const timeSpent = day.timeSpent;
-
-                  existing.taskCount = taskCount;
-                  existing.timeSpent = timeSpent;
-
-                  maxTasks = Math.max(maxTasks, taskCount);
-                  maxTime = Math.max(maxTime, timeSpent);
-                }
+    const yearData = worklog[year];
+    if (yearData && yearData.ent) {
+      Object.keys(yearData.ent).forEach((monthKey) => {
+        const month = +monthKey;
+        const monthData = yearData.ent[month];
+        if (monthData && monthData.ent) {
+          Object.keys(monthData.ent).forEach((dayKey) => {
+            const day = +dayKey;
+            const dayData = monthData.ent[day];
+            if (day) {
+              const dateStr = dayData.dateStr;
+              const existing = dayMap.get(dateStr);
+              if (existing) {
+                const taskCount = dayData.logEntries.length;
+                const timeSpent = dayData.timeSpent;
+                existing.taskCount = taskCount;
+                existing.timeSpent = timeSpent;
+                maxTasks = Math.max(maxTasks, taskCount);
+                maxTime = Math.max(maxTime, timeSpent);
               }
-            });
-          }
-        });
-      }
-    });
+            }
+          });
+        }
+      });
+    }
 
-    // Calculate levels (0-4) based on activity
-    // Prioritize time spent (80%) over task count (20%)
+    // Calculate levels
     dayMap.forEach((day) => {
       if (day.taskCount === 0 && day.timeSpent === 0) {
         day.level = 0;
@@ -297,11 +330,10 @@ export class ActivityHeatmapComponent {
         }
       }
     });
-
     return {
       dayMap,
-      startDate: oneYearAgo,
-      endDate: now,
+      startDate,
+      endDate,
     };
   }
 
@@ -401,6 +433,72 @@ export class ActivityHeatmapComponent {
     }
 
     return { weeks, monthLabels };
+  }
+
+  getDayClass(day: DayData | null): string {
+    if (!day) {
+      return 'day empty';
+    }
+    return `day level-${day.level}`;
+  }
+
+  getDayTitle(day: DayData | null): string {
+    if (!day) {
+      return '';
+    }
+    return `${day.dateStr}: ${day.taskCount} tasks, ${this._formatTime(day.timeSpent)}`;
+  }
+
+  private _formatTime(ms: number): string {
+    const hours = Math.floor(ms / (1000 * 60 * 60));
+    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  }
+
+  private _extractAvailableYears(tasks: Task[]): number[] {
+    const yearsSet = new Set<number>();
+    const currentYear = new Date().getFullYear();
+    tasks.forEach((task) => {
+      if (task.timeSpentOnDay) {
+        Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
+          const timeSpent = task.timeSpentOnDay[dateStr];
+          if (timeSpent > 0) {
+            // dateStr is in ISO format YYYY-MM-DD, so extract the
+            // first four characters to get the year
+            const year = parseInt(dateStr.substring(0, 4), 10);
+            // Validate and collect year
+            if (!isNaN(year) && year <= currentYear) {
+              yearsSet.add(year);
+            }
+          }
+        });
+      }
+    });
+    // Sort years in descending order, i.e. latest years
+    // come first so that they will be displayed first in the
+    // select menu
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }
+
+  private _extractAvailableYearsFromWorklog(worklog: any): number[] {
+    if (!worklog) return [];
+    const yearSet = new Set<number>();
+    const curYear = new Date().getFullYear();
+    Object.keys(worklog).forEach((key) => {
+      const year = parseInt(key, 10);
+      if (!isNaN(year) && year <= curYear) {
+        // Check if this year has any data
+        const yearData = worklog[year];
+        if (yearData && yearData.ent && Object.keys(yearData.ent).length > 0) {
+          yearSet.add(year);
+        }
+      }
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
   }
 
   async shareHeatmap(): Promise<void> {
