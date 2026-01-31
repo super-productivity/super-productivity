@@ -226,7 +226,7 @@
     "core-js": "^3.47.0",
     "cross-env": "^7.0.3",
     "detect-it": "^4.0.1",
-    "electron": "37.10.3",
+    "electron": "^38.8.0",
     "electron-builder": "^26.4.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
