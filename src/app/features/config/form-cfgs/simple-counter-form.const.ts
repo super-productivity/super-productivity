@@ -132,10 +132,34 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
             },
           },
           {
+            key: 'streakMode',
+            type: 'select',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isTrackStreaks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_MODE,
+              required: true,
+              options: [
+                {
+                  label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_MODE_SPECIFIC_DAYS,
+                  value: 'specific-days',
+                },
+                {
+                  label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_MODE_WEEKLY_FREQUENCY,
+                  value: 'weekly-frequency',
+                },
+              ],
+              getInitialValue: () => 'specific-days',
+            },
+          },
+          {
             key: 'streakWeekDays',
             type: 'multicheckbox',
             expressions: {
-              hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isTrackStreaks,
+              hide: (fCfg: FormlyFieldConfig) =>
+                !fCfg.model.isTrackStreaks ||
+                (fCfg.model.streakMode && fCfg.model.streakMode !== 'specific-days'),
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_WEEKDAYS,
@@ -149,6 +173,24 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
                 { label: T.F.TASK_REPEAT.F.SATURDAY, value: 6 },
                 { label: T.F.TASK_REPEAT.F.SUNDAY, value: 0 },
               ],
+            },
+          },
+          {
+            key: 'streakWeeklyFrequency',
+            type: 'input',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                !fCfg.model.isTrackStreaks ||
+                !fCfg.model.streakMode ||
+                fCfg.model.streakMode !== 'weekly-frequency',
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_WEEKLY_FREQUENCY,
+              type: 'number',
+              min: 1,
+              max: 7,
+              required: true,
+              getInitialValue: () => 3,
             },
           },
         ],

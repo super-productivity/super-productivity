@@ -13,7 +13,13 @@
         class="main-btn stopwatch"
         mat-icon-button
       >
-        <mat-icon>{{ sc.icon }}</mat-icon>
+        @if (sc.icon && sc.icon.startsWith(':')) {
+          <mat-icon [svgIcon]="sc.icon"></mat-icon>
+        } @else if (sc.icon) {
+          <mat-icon>{{ sc.icon }}</mat-icon>
+        } @else {
+          <div class="habit-initial">{{ sc.title.charAt(0).toUpperCase() }}</div>
+        }
         @if (isSuccess()) {
           <mat-icon class="check-ico">check</mat-icon>
         }
@@ -32,7 +38,13 @@
         color=""
         mat-icon-button
       >
-        <mat-icon>{{ sc.icon }}</mat-icon>
+        @if (sc.icon && sc.icon.startsWith(':')) {
+          <mat-icon [svgIcon]="sc.icon"></mat-icon>
+        } @else if (sc.icon) {
+          <mat-icon>{{ sc.icon }}</mat-icon>
+        } @else {
+          <div class="habit-initial">{{ sc.title.charAt(0).toUpperCase() }}</div>
+        }
         @if (isSuccess()) {
           <mat-icon class="check-ico">check</mat-icon>
         }
@@ -60,7 +72,13 @@
         class="main-btn repeated-countdown"
         mat-icon-button
       >
-        <mat-icon>{{ sc.icon }}</mat-icon>
+        @if (sc.icon && sc.icon.startsWith(':')) {
+          <mat-icon [svgIcon]="sc.icon"></mat-icon>
+        } @else if (sc.icon) {
+          <mat-icon>{{ sc.icon }}</mat-icon>
+        } @else {
+          <div class="habit-initial">{{ sc.title.charAt(0).toUpperCase() }}</div>
+        }
         @if (isSuccess()) {
           <mat-icon class="check-ico">check</mat-icon>
         }

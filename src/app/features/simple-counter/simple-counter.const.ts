@@ -14,6 +14,7 @@ export const EMPTY_SIMPLE_COUNTER: SimpleCounter = {
   isOn: false,
   isTrackStreaks: true,
   streakMinValue: 1,
+  streakMode: 'specific-days',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   streakWeekDays: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: false, 0: false },
 };

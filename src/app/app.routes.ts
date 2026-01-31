@@ -62,6 +62,13 @@ export const APP_ROUTES: Routes = [
     canActivate: [FocusOverlayOpenGuard],
   },
   {
+    path: 'habits',
+    loadComponent: () =>
+      import('./pages/habit-page/habit-page.component').then((m) => m.HabitPageComponent),
+    data: { page: 'habits' },
+    canActivate: [FocusOverlayOpenGuard],
+  },
+  {
     path: 'tag/:id/tasks',
     // eagerly loaded
     component: TagTaskPageComponent,

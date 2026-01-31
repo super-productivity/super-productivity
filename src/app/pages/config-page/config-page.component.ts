@@ -97,6 +97,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   T: typeof T = T;
 
   selectedTabIndex = 0;
+  expandedSection: string | null = null;
 
   // @todo - find better names for tabs configs forms
   // Tab-specific form configurations
@@ -179,6 +180,10 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
             this.selectedTabIndex = tabIndex;
             this._cd.detectChanges();
           }
+        }
+        if (params['section'] !== undefined) {
+          this.expandedSection = params['section'];
+          this._cd.detectChanges();
         }
       }),
     );

@@ -5,8 +5,8 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
   display: inline-flex;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   color: var(--progress-circle-color, var(--c-accent));
 }
 
@@ -37,6 +37,7 @@
     opacity: 0.5;
     stroke-width: 2;
   }
+
   50% {
     opacity: 1;
     stroke-width: 2;

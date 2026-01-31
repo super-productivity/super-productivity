@@ -85,7 +85,7 @@ export class MainHeaderComponent implements OnDestroy {
   private readonly _dateService = inject(DateService);
 
   T: typeof T = T;
-  isShowSimpleCounterBtnsMobile = signal(false);
+  isShowSimpleCounterBtnsDropdown = signal(false);
 
   isXs = this.layoutService.isXs;
   isXxxs = this.layoutService.isXxxs;
