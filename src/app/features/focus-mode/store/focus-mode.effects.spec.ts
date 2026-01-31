@@ -448,7 +448,7 @@ describe('FocusModeEffects', () => {
               (a) => a.type === actions.startBreak.type,
             ) as any;
             // Verify getBreakDuration was called with cycle 4
-            // Because we decrement cycle by 1 to get last focus session's cycle 
+            // Because we decrement cycle by 1 to get last focus session's cycle
             expect(getBreakDurationSpy).toHaveBeenCalledWith(4);
             expect(startBreakAction).toBeDefined();
             expect(startBreakAction.isLongBreak).toBeTrue();

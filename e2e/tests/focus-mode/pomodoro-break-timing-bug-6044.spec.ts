@@ -198,8 +198,8 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       }
       await skipBreakAndStartNextSession(page);
 
-      // Session 4 - CRITICAL TEST: After session 4, cycle becomes 5, 
-      // We decrment cycle by 1 to get last cycle.
+      // Session 4 - CRITICAL TEST: After session 4, cycle becomes 5,
+      // We decrement cycle by 1 to get last cycle
       await completeSession(page);
 
       // Wait for break screen
