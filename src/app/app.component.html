@@ -58,7 +58,10 @@
           </div>
         </right-panel>
         <global-progress-bar></global-progress-bar>
-        <div class="bg-overlay"></div>
+        <div
+          class="bg-overlay"
+          [style.opacity]="bgOpacity()"
+        ></div>
       </main>
 
       <!-- Mobile Bottom Navigation -->
