@@ -16,7 +16,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           // TODO add translation
           { label: 'System default', value: null },
           { label: T.GCF.LANG.AR, value: LanguageCode.ar },
-          { label: T.GCF.LANG.CZ, value: LanguageCode.cs },
+          { label: T.GCF.LANG.CS, value: LanguageCode.cs },
           { label: T.GCF.LANG.DE, value: LanguageCode.de },
           { label: T.GCF.LANG.ES, value: LanguageCode.es },
           { label: T.GCF.LANG.EN, value: LanguageCode.en },

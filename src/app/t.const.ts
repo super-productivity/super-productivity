@@ -1897,7 +1897,7 @@ const T = {
     },
     LANG: {
       AR: 'GCF.LANG.AR',
-      CZ: 'GCF.LANG.CZ',
+      CS: 'GCF.LANG.CS',
       DE: 'GCF.LANG.DE',
       EN: 'GCF.LANG.EN',
       ES: 'GCF.LANG.ES',
