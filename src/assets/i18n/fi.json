@@ -1590,7 +1590,7 @@
     },
     "LANG": {
       "AR": "Arabia",
-      "CZ": "Tšekki",
+      "CS": "Tšekki",
       "DE": "Saksa",
       "EN": "Englanti",
       "ES": "Espanja",
@@ -1626,6 +1626,9 @@
       "TIME_LOCALE_RU_RU": "Venäjä - 24-tuntinen",
       "TIME_LOCALE_TR_TR": "Turkki - 24-tuntinen",
       "TIME_LOCALE_ZH_CN": "Kiina (yksinkertaistettu) - 24-tuntinen",
+      "TIME_LOCALE_CS_CZ": "Checo: 24-tuntinen, DD. MM. AAAA",
+      "TIME_LOCALE_SK_SK": "Slovakia: 24-tuntinen, DD. MM. AAAA",
+      "TIME_LOCALE_UK_UA": "Ukrainian: 24-tuntinen, DD.MM.AAAA",
       "TITLE": "Kieli & Alue",
       "TR": "Turkki",
       "UK": "Ukraina",

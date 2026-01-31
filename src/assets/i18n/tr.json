@@ -1824,7 +1824,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Czech",
+      "CS": "Czech",
       "DE": "Deutsch",
       "EN": "English",
       "ES": "Español",
@@ -1860,6 +1860,9 @@
       "TIME_LOCALE_RU_RU": "Russian: 24-saat, DD.MM.YYYY",
       "TIME_LOCALE_TR_TR": "Türk: 24-saat, DD.MM.YYYY",
       "TIME_LOCALE_ZH_CN": "Chinese (Simplified): 24-saat, YYYY/MM/DD",
+      "TIME_LOCALE_CS_CZ": "Czech: 24-saat, DD. MM. YYYY",
+      "TIME_LOCALE_SK_SK": "Slovak: 24-saat, DD. MM. YYYY",
+      "TIME_LOCALE_UK_UA": "Ukrainian: 24-saat, DD.MM.YYYY",
       "TITLE": "Dil",
       "TR": "Türkçe",
       "UK": "Українська",

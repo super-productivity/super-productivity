@@ -1588,7 +1588,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Checa",
+      "CS": "Checa",
       "DE": "Alemán",
       "EN": "Inglés",
       "ES": "Español",
@@ -1624,6 +1624,9 @@
       "TIME_LOCALE_RU_RU": "Ruso: 24 horas, DD.MM.AAAA",
       "TIME_LOCALE_TR_TR": "Turco: 24 horas, DD.MM.AAAA",
       "TIME_LOCALE_ZH_CN": "Chino (Simplificado): 24 horas, AAAA/MM/DD",
+      "TIME_LOCALE_CS_CZ": "Checo: 24 horas, DD. MM. AAAA",
+      "TIME_LOCALE_SK_SK": "Eslovaco: 24 horas, DD. MM. AAAA",
+      "TIME_LOCALE_UK_UA": "Ucraniano: 24 horas, DD.MM.AAAA",
       "TITLE": "Localización",
       "TR": "Turco",
       "UK": "Ucraniano",

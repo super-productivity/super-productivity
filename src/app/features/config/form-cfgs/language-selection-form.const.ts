@@ -16,7 +16,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           // TODO add translation
           { label: 'System default', value: null },
           { label: T.GCF.LANG.AR, value: LanguageCode.ar },
-          { label: T.GCF.LANG.CZ, value: LanguageCode.cz },
+          { label: T.GCF.LANG.CS, value: LanguageCode.cs },
           { label: T.GCF.LANG.DE, value: LanguageCode.de },
           { label: T.GCF.LANG.ES, value: LanguageCode.es },
           { label: T.GCF.LANG.EN, value: LanguageCode.en },
@@ -82,6 +82,9 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.TIME_LOCALE_ZH_CN, value: DateTimeLocales.zh_cn },
           { label: T.GCF.LANG.TIME_LOCALE_JA_JP, value: DateTimeLocales.ja_jp },
           { label: T.GCF.LANG.TIME_LOCALE_KO_KR, value: DateTimeLocales.ko_kr },
+          { label: T.GCF.LANG.TIME_LOCALE_UK_UA, value: DateTimeLocales.uk_ua },
+          { label: T.GCF.LANG.TIME_LOCALE_CS_CZ, value: DateTimeLocales.cs_cz },
+          { label: T.GCF.LANG.TIME_LOCALE_SK_SK, value: DateTimeLocales.sk_sk },
         ],
       },
     },

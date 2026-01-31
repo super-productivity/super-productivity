@@ -85,7 +85,7 @@ export class PluginManagementComponent {
   private readonly _languageNames: Record<string, string> = {
     ar: 'Arabic',
     de: 'German',
-    cz: 'Czech',
+    cs: 'Czech',
     en: 'English',
     es: 'Spanish',
     fa: 'Persian',

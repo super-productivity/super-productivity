@@ -1590,7 +1590,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Tsjechisch",
+      "CS": "Tsjechisch",
       "DE": "Duits",
       "EN": "Engels",
       "ES": "Español",
@@ -1626,6 +1626,9 @@
       "TIME_LOCALE_RU_RU": "Russisch: 24-uurs, DD.MM.JJJJ",
       "TIME_LOCALE_TR_TR": "Turks: 24-uurs, DD.MM.JJJJ",
       "TIME_LOCALE_ZH_CN": "Chinees (Vereenvoudigd): 24-uurs, JJJJ/MM/DD",
+      "TIME_LOCALE_CS_CZ": "Tsjechisch: 24-uurs, DD. MM. JJJJ",
+      "TIME_LOCALE_SK_SK": "Slovakisch: 24-uurs, DD. MM. JJJJ",
+      "TIME_LOCALE_UK_UA": "Oekraïens: 24-uurs, DD.MM.JJJJ",
       "TITLE": "Taal",
       "TR": "Türkçe",
       "UK": "Українська",
