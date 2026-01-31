@@ -1588,7 +1588,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Tschechisch",
+      "CS": "Tschechisch",
       "DE": "Deutsch",
       "EN": "Englisch",
       "ES": "Español",
@@ -1624,6 +1624,9 @@
       "TIME_LOCALE_RU_RU": "Russisch - 24 Stunden",
       "TIME_LOCALE_TR_TR": "Türkisch - 24 Stunden",
       "TIME_LOCALE_ZH_CN": "Chinesisch (vereinfacht) - 24 Stunden",
+      "TIME_LOCALE_CS_CZ": "Tschechisch - 24 Stunden",
+      "TIME_LOCALE_SK_SK": "Slowakisch - 24 Stunden",
+      "TIME_LOCALE_UK_UA": "Ukrainisch - 24 Stunden",
       "TITLE": "Sprache",
       "TR": "Türkçe",
       "UK": "Українська",
