@@ -30,7 +30,7 @@ import localeSv from '@angular/common/locales/sv';
 export enum LanguageCode {
   ar = 'ar',
   de = 'de',
-  cz = 'cz',
+  cs = 'cs',
   en = 'en',
   es = 'es',
   fa = 'fa',
@@ -89,6 +89,9 @@ export const DateTimeLocales = {
   zh_cn: `${LanguageCode.zh}-cn`,
   ja_jp: `${LanguageCode.ja}-jp`,
   ko_kr: `${LanguageCode.ko}-kr`,
+  cs_cz: `${LanguageCode.cs}-cz`,
+  sk_sk: `${LanguageCode.sk}-sk`,
+  uk_ua: `${LanguageCode.uk}-ua`,
 } as const;
 
 export type DateTimeLocale = (typeof DateTimeLocales)[keyof typeof DateTimeLocales];
@@ -114,7 +117,8 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   ko: localeKo,
   zh_tw: localeZh,
   ar: localeAr,
-  cz: localeCs,
+  cs_cz: localeCs,
+  cs: localeCs,
   fa: localeFa,
   fi: localeFi,
   fr: localeFr,
@@ -125,7 +129,9 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   nl: localeNl,
   nb: localeNb,
   hr: localeHr,
+  uk_ua: localeUk,
   uk: localeUk,
+  sk_sk: localeSk,
   sk: localeSk,
   sv: localeSv,
   tr: localeTr,
