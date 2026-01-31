@@ -61,7 +61,7 @@ services:
 
   # Super Productivity app
   app:
-    image: super-productivity/super-productivity:latest
+    image: johannesjo/super-productivity:latest
     ports:
       - '8080:80'
     environment:
