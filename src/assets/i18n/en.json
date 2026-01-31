@@ -2096,7 +2096,7 @@
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",
-    "ALL_PLANNED_LIST": "Planned / Recur",
+    "ALL_PLANNED_LIST": "Scheduled",
     "BOARDS": "Boards",
     "COPY_TASK_LIST_MARKDOWN": "Copy to Clipboard",
     "CREATE_PROJECT": "Create Project",
