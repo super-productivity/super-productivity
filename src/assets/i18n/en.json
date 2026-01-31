@@ -799,6 +799,15 @@
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activity",
+        "INVALID_DATE": "The entered value is not a date!",
+        "POST_TIME": "Post Time",
+        "STARTED": "Started",
+        "SUBMIT_TIME_FOR": "Submit time to Redmine for",
+        "TIME_SPENT": "Time Spent",
+        "TITLE": "Redmine: Submit Worklog"
+      },
       "FORM": {
         "API_KEY": "API access key",
         "HOST": "Host (e.g. https://redmine.org)",
@@ -807,7 +816,10 @@
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me"
+        "SCOPE_CREATED": "Created by me",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for Redmine project",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed"
       },
       "FORM_SECTION": {
         "HELP": "<p>Here you can configure Super Productivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>",
@@ -819,6 +831,9 @@
         "MARK_AS_CHECKED": "Mark updates as checked",
         "PRIORITY": "Priority",
         "STATUS": "Status"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: Successfully created time entry for {{issueTitle}}"
       }
     },
     "REFLECTION_NOTE": {

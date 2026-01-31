@@ -73,6 +73,7 @@ import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close
 import { GitlabIssueEffects } from '../features/issue/providers/gitlab/gitlab-issue.effects';
 import { JiraIssueEffects } from '../features/issue/providers/jira/jira-issue.effects';
 import { OpenProjectEffects } from '../features/issue/providers/open-project/open-project.effects';
+import { RedmineEffects } from '../features/issue/providers/redmine/redmine.effects';
 import { ReminderCountdownEffects } from '../features/reminder/store/reminder-countdown.effects';
 import { SyncEffects } from '../imex/sync/sync.effects';
 import { boardsFeature } from '../features/boards/store/boards.reducer';
@@ -179,6 +180,7 @@ import {
     EffectsModule.forFeature([GitlabIssueEffects]),
     EffectsModule.forFeature([JiraIssueEffects]),
     EffectsModule.forFeature([OpenProjectEffects]),
+    EffectsModule.forFeature([RedmineEffects]),
     EffectsModule.forFeature([ReminderCountdownEffects]),
     EffectsModule.forFeature([SyncEffects]),
     EffectsModule.forFeature([PluginHooksEffects]),

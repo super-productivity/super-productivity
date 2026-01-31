@@ -6,6 +6,7 @@ import {
 import { IssueProviderRedmine } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 import { RedmineCfg } from './redmine.model';
+import { JIRA_WORK_LOG_EXPORT_FORM_OPTIONS } from '../jira/jira.const';
 
 export enum ScopeOptions {
   all = 'all',
@@ -22,6 +23,8 @@ export const DEFAULT_REDMINE_CFG: RedmineCfg = {
   isAutoPoll: false,
   isSearchIssuesFromRedmine: false,
   isAutoAddToBacklog: false,
+  isShowTimeTrackingDialog: false,
+  isShowTimeTrackingDialogForEachSubTask: false,
 };
 
 export const REDMINE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderRedmine>[] = [
@@ -76,7 +79,37 @@ export const REDMINE_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderRedmine>
     type: 'collapsible',
     // todo translate
     props: { label: 'Advanced Config' },
-    fieldGroup: [...ISSUE_PROVIDER_COMMON_FORM_FIELDS],
+    fieldGroup: [
+      ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
+      {
+        key: 'isShowTimeTrackingDialog',
+        type: 'checkbox',
+
+        templateOptions: {
+          label: T.F.REDMINE.FORM.IS_SHOW_TIME_TRACKING_DIALOG,
+          description: T.F.REDMINE.FORM.IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION,
+        },
+      },
+      {
+        key: 'isShowTimeTrackingDialogForEachSubTask',
+        type: 'checkbox',
+        hideExpression: (model: any) =>
+          !model.isShowTimeTrackingDialog || !model.isEnabled,
+        templateOptions: {
+          label: T.F.REDMINE.FORM.IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK,
+        },
+      },
+      {
+        key: 'timeTrackingDialogDefaultTime',
+        type: 'select',
+        hideExpression: (model: any) =>
+          !model.isShowTimeTrackingDialog || !model.isEnabled,
+        templateOptions: {
+          label: T.F.JIRA.FORM_ADV.WORKLOG_DEFAULT_TIME_MODE,
+          options: JIRA_WORK_LOG_EXPORT_FORM_OPTIONS,
+        },
+      },
+    ],
   },
 ];
 

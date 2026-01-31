@@ -8,6 +8,8 @@ import { throwHandledError } from '../../../../util/throw-handled-error';
 import { T } from '../../../../t.const';
 import { ISSUE_PROVIDER_HUMANIZED, REDMINE_TYPE } from '../../issue.const';
 import {
+  RedmineActivity,
+  RedmineActivityResult,
   RedmineIssue,
   RedmineIssueResult,
   RedmineSearchResult,
@@ -58,6 +60,48 @@ export class RedmineApiService {
       },
       cfg,
     ).pipe(map((res: RedmineIssueResult) => (res && res.issues ? res.issues : [])));
+  }
+
+  getActivitiesForTrackTime$(cfg: RedmineCfg): Observable<RedmineActivity[]> {
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}/enumerations/time_entry_activities.json`,
+      },
+      cfg,
+    ).pipe(map((res: RedmineActivityResult) => res?.time_entry_activities ?? []));
+  }
+
+  trackTime$({
+    cfg,
+    issueId,
+    spentOn,
+    hours,
+    comment,
+    activityId,
+  }: {
+    cfg: RedmineCfg;
+    issueId: number;
+    spentOn: string;
+    hours: number;
+    comment: string;
+    activityId: number;
+  }): Observable<any> {
+    return this._sendRequest$(
+      {
+        method: 'POST',
+        url: `${cfg.host}/time_entries.json`,
+        data: {
+          time_entry: {
+            issue_id: issueId,
+            spent_on: spentOn,
+            hours,
+            activity_id: activityId,
+            comments: comment,
+          },
+        },
+      },
+      cfg,
+    );
   }
 
   getById$(issueId: number, cfg: RedmineCfg): Observable<RedmineIssue> {

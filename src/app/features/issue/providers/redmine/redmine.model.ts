@@ -1,4 +1,5 @@
 import { BaseIssueProviderCfg } from '../../issue.model';
+import { JiraWorklogExportDefaultTime } from '../jira/jira.model';
 
 export interface RedmineCfg extends BaseIssueProviderCfg {
   projectId: string | null;
@@ -8,4 +9,7 @@ export interface RedmineCfg extends BaseIssueProviderCfg {
   isAutoPoll?: boolean;
   isSearchIssuesFromRedmine?: boolean;
   isAutoAddToBacklog?: boolean;
+  isShowTimeTrackingDialog: boolean;
+  isShowTimeTrackingDialogForEachSubTask: boolean;
+  timeTrackingDialogDefaultTime?: JiraWorklogExportDefaultTime;
 }
