@@ -156,7 +156,7 @@ const skipBreakAndStartNextSession = async (page: Page): Promise<void> => {
 
 test.describe('Bug #6044: Pomodoro break timing', () => {
   test.describe('Long break timing fix', () => {
-    test('should show long break after completing 3rd session (cycle becomes 4)', async ({
+    test('should show long break after completing 4th session (cycle becomes 5)', async ({
       page,
       testPrefix,
     }) => {
@@ -187,25 +187,37 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       }
       await skipBreakAndStartNextSession(page);
 
-      // Session 3 - CRITICAL TEST: After session 3, cycle becomes 4, triggering LONG break
+      // Session 3
+      await completeSession(page);
+
+      // Should get a break (short)
+      breakType = await getBreakType(page);
+      expect(breakType).not.toBeNull();
+      if (breakType === 'short') {
+        console.log('✓ Session 3 → Short break (correct)');
+      }
+      await skipBreakAndStartNextSession(page);
+
+      // Session 4 - CRITICAL TEST: After session 4, cycle becomes 5,
+      // We decrement cycle by 1 to get last cycle
       await completeSession(page);
 
       // Wait for break screen
       const breakScreen = page.locator('focus-mode-break');
       await expect(breakScreen).toBeVisible({ timeout: 5000 });
 
-      // Verify it's a LONG break (cycle is now 4, and 4 % 4 === 0)
+      // Verify it's a LONG break (cycle is now 5, and 5 - 1 % 4 === 0)
       breakType = await getBreakType(page);
       expect(breakType).toBe('long');
-      console.log('✓ Session 3 → LONG break (correct - bug #6044 fixed!)');
+      console.log('✓ Session 4 → LONG break (correct - bug #6044 fixed!)');
 
       // Take a screenshot for verification
       await page.screenshot({
-        path: 'e2e/screenshots/bug-6044-long-break-after-session-3.png',
+        path: 'e2e/screenshots/bug-6044-long-break-after-session-4.png',
       });
     });
 
-    test('should show short break after completing 4th session (cycle becomes 5)', async ({
+    test('should show short break after completing 5th session (cycle becomes 6)', async ({
       page,
       testPrefix,
     }) => {
@@ -213,8 +225,8 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       await openFocusModeWithTask(page, workViewPage, 'Session4BreakTest');
       await selectPomodoroMode(page);
 
-      // Complete sessions 1-3, skipping breaks
-      for (let i = 1; i <= 3; i++) {
+      // Complete sessions 1-4, skipping breaks
+      for (let i = 1; i <= 4; i++) {
         if (i > 1) {
           await skipBreakAndStartNextSession(page);
         } else {
@@ -224,33 +236,33 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
         console.log(`✓ Completed session ${i}`);
       }
 
-      // After session 3, cycle = 4, we should get a LONG break
+      // After session 4, cycle = 5, we should get a LONG break
       let breakType = await getBreakType(page);
       expect(breakType).toBe('long');
-      console.log('✓ Session 3 → Long break (cycle=4)');
+      console.log('✓ Session 4 → Long break (cycle=5)');
 
-      // Skip the long break and start session 4
+      // Skip the long break and start session 5
       await skipBreakAndStartNextSession(page);
 
-      // Session 4 - After completion, cycle becomes 5, should trigger SHORT break
+      // Session 5 - After completion, cycle becomes 6, should trigger SHORT break
       await completeSession(page);
 
       // Wait for break screen
       const breakScreen = page.locator('focus-mode-break');
       await expect(breakScreen).toBeVisible({ timeout: 5000 });
 
-      // Verify it's a SHORT break (cycle=5, 5 % 4 !== 0)
+      // Verify it's a SHORT break (cycle=6, 6 - 1 % 4 !== 0)
       breakType = await getBreakType(page);
       expect(breakType).toBe('short');
-      console.log('✓ Session 4 → Short break (correct - bug #6044 fixed!)');
+      console.log('✓ Session 5 → Short break (correct - bug #6044 fixed!)');
 
       // Take a screenshot for verification
       await page.screenshot({
-        path: 'e2e/screenshots/bug-6044-short-break-after-session-4.png',
+        path: 'e2e/screenshots/bug-6044-short-break-after-session-5.png',
       });
     });
 
-    test('should show long breaks after sessions 3 and 7 (cycles 4 and 8)', async ({
+    test('should show long breaks after sessions 4 and 8 (cycles 5 and 9)', async ({
       page,
       testPrefix,
     }) => {
@@ -259,7 +271,7 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       await selectPomodoroMode(page);
 
       // Complete sessions 1-7 quickly
-      for (let i = 1; i <= 7; i++) {
+      for (let i = 1; i <= 8; i++) {
         if (i > 1) {
           await skipBreakAndStartNextSession(page);
         } else {
@@ -267,8 +279,8 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
         }
         await completeSession(page);
 
-        // Check break type after sessions 3 and 7 (when cycle becomes 4 and 8)
-        if (i === 3 || i === 7) {
+        // Check break type after sessions 4 and 8 (when cycle becomes 5 and 9)
+        if (i === 4 || i === 8) {
           const breakType = await getBreakType(page);
           expect(breakType).toBe('long');
           console.log(`✓ Session ${i} → LONG break (cycle=${i + 1})`);
@@ -277,13 +289,13 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
 
       // Take a screenshot for verification
       await page.screenshot({
-        path: 'e2e/screenshots/bug-6044-long-break-after-session-7.png',
+        path: 'e2e/screenshots/bug-6044-long-break-after-session-8.png',
       });
     });
   });
 
   test.describe('Break cycle pattern verification', () => {
-    test('should follow correct pattern: S S L S S S L S', async ({
+    test('should follow correct pattern: S S S L S S S L S', async ({
       page,
       testPrefix,
     }) => {
@@ -291,28 +303,29 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       await openFocusModeWithTask(page, workViewPage, 'BreakPatternTest');
       await selectPomodoroMode(page);
 
-      // Correct pattern: Long break when cycle % 4 === 0
+      // Correct pattern: Long break when cycle - 1 % 4 === 0
       // Session 1 → cycle 2 → short
       // Session 2 → cycle 3 → short
-      // Session 3 → cycle 4 → LONG (4 % 4 === 0)
-      // Session 4 → cycle 5 → short
+      // Session 3 → cycle 4 → short
+      // Session 4 → cycle 5 → LONG (5 - 1 % 4 === 0)
       // Session 5 → cycle 6 → short
       // Session 6 → cycle 7 → short
-      // Session 7 → cycle 8 → LONG (8 % 4 === 0)
+      // Session 7 → cycle 8 → LONG (8 - 1 % 4 === 0)
       // Session 8 → cycle 9 → short
       const expectedPattern = [
         'short', // Session 1
         'short', // Session 2
-        'long', // Session 3
-        'short', // Session 4
+        'short', //Session 3
+        'long', // Session 4
         'short', // Session 5
         'short', // Session 6
-        'long', // Session 7
-        'short', // Session 8
+        'short', // Session 7
+        'long', // Session 8
+        'short', // Session 9
       ];
       const actualPattern: string[] = [];
 
-      for (let i = 1; i <= 8; i++) {
+      for (let i = 1; i <= 9; i++) {
         if (i > 1) {
           await skipBreakAndStartNextSession(page);
         } else {
@@ -330,7 +343,7 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
 
       // Verify the entire pattern matches expectations
       expect(actualPattern).toEqual(expectedPattern);
-      console.log('✓ Break pattern is correct: S S L S S S L S');
+      console.log('✓ Break pattern is correct: S S S L S S S L S');
     });
   });
 });

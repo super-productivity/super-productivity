@@ -100,7 +100,8 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
     const config = this.focusModeConfig();
     const strategy = this._strategyFactory.getStrategy(mode);
 
-    const breakInfo = strategy.getBreakDuration(cycle);
+    // Decrease cycle by 1 because break comes after a focus session
+    const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
     if (breakInfo) {
       // Pause task tracking during break if enabled
       const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
