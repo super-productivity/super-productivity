@@ -109,5 +109,18 @@ export const MISC_SETTINGS_FORM_CFG: ConfigFormSection<MiscConfig> = {
         ],
       },
     },
+    {
+      key: 'defaultBackgroundOverlayOpacity',
+      type: 'input',
+      defaultValue: 0,
+      templateOptions: {
+        required: true,
+        label: T.GCF.MISC.DEFAULT_BACKGROUND_OVERLAY_OPACITY,
+        description: T.GCF.MISC.DEFAULT_BACKGROUND_OVERLAY_OPACITY_HINT,
+        type: 'number',
+        min: 0,
+        max: 10,
+      },
+    },
   ],
 };

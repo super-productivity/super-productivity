@@ -2020,7 +2020,9 @@
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
       "THEME_SELECT_LABEL": "Select Theme",
-      "TITLE": "Misc Settings"
+      "TITLE": "Misc Settings",
+      "DEFAULT_BACKGROUND_OVERLAY_OPACITY": "Default background overlay opacity",
+      "DEFAULT_BACKGROUND_OVERLAY_OPACITY_HINT": "The default opacity of the background overlay (0 = transparent, 10 = opaque). Default is 0. Adjust this value to make the background more or less transparent."
     },
     "TASKS": {
       "DEFAULT_PROJECT": "Default project to use for tasks if none is specified",

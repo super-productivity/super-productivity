@@ -170,6 +170,12 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     ),
   );
 
+  protected bgOpacity = computed(() => {
+    const baseOpacity =
+      this._globalConfigService.misc()?.defaultBackgroundOverlayOpacity ?? 0;
+    return baseOpacity * 0.1;
+  });
+
   private _isOverlayShownFromStore = toSignal(this._store.select(selectIsOverlayShown), {
     initialValue: false,
   });
