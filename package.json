@@ -168,7 +168,7 @@
     "@angular/cli": "^21.0.5",
     "@angular/common": "^21.0.8",
     "@angular/compiler": "^21.0.8",
-    "@angular/compiler-cli": "^21.0.8",
+    "@angular/compiler-cli": "^21.1.2",
     "@angular/core": "^21.0.8",
     "@angular/forms": "^21.0.8",
     "@angular/language-service": "^21.0.8",
