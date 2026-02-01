@@ -233,7 +233,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     this.modelCopy.set(textareaEl.nativeElement.value);
 
     if (this.modelCopy() !== this.model) {
-      this.model = this.modelCopy();
+      this.model = this.modelCopy() || '';
       this.changed.emit(this.modelCopy() as string);
     }
   }
@@ -400,7 +400,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
         // Update the markdown string
         if (this.modelCopy() !== this.model) {
-          this.model = this.modelCopy();
+          this.model = this.modelCopy() || '';
           this.changed.emit(this.modelCopy() as string);
         }
       }
