@@ -31,7 +31,7 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^8.3.0",
-    "@prisma/client": "5.22.0",
+    "@prisma/client": "7.3.0",
     "@simplewebauthn/server": "^13.2.2",
     "@simplewebauthn/types": "^12.0.0",
     "@sp/shared-schema": "*",
