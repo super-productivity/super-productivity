@@ -2,10 +2,7 @@
  * Cybr Theme for Super Productivity
  * Author: Dastan (https://github.com/dastanmedetbekov)
  * Colors: Cybr Colors by Kevin Scherrer (https://github.com/scherrer-txt/cybrcolors)
- * Font: Geist Mono by Vercel
  */
-
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;700&display=swap');
 
 :root {
   --transition-fast: 150ms ease-in-out;
@@ -155,7 +152,8 @@ body:not(.isDarkTheme) {
 body.isDarkTheme {
   background-color: var(--cybr-no0);
   color: var(--cybr-re0) !important;
-  font-family: 'Geist Mono', 'Courier New', monospace !important;
+  font-family:
+    'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace !important;
   transition:
     background-color var(--transition-normal),
     color var(--transition-normal);
@@ -164,7 +162,8 @@ body.isDarkTheme {
 body.isDarkTheme .page-wrapper {
   color: var(--cybr-re0) !important;
   background-color: var(--cybr-no0);
-  font-family: 'Geist Mono', 'Courier New', monospace !important;
+  font-family:
+    'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace !important;
 }
 
 /* Links */
@@ -680,7 +679,7 @@ body.isDarkTheme .mat-expansion-panel.mat-expanded {
 }
 
 /* Scanline Effect */
-body.isDarkTheme::before {
+body.isDarkTheme::after {
   content: '';
   position: fixed;
   top: 0;
@@ -694,8 +693,8 @@ body.isDarkTheme::before {
     var(--cybr-no0) 1px,
     var(--cybr-no0) 2px
   );
-  z-index: 9999;
-  opacity: 0.3;
+  z-index: 2;
+  opacity: 0.15;
 }
 
 /* Neon Pulse Animation */
@@ -714,9 +713,18 @@ body.isDarkTheme button.mat-mdc-raised-button:active {
   animation: neon-pulse 2s ease-in-out infinite;
 }
 
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  body.isDarkTheme .task-c.isCurrent,
+  body.isDarkTheme button.mat-mdc-raised-button:active {
+    animation: none;
+    box-shadow: 0 0 8px var(--cybr-gr1);
+  }
+}
+
 /* Print Styles */
 @media print {
-  body.isDarkTheme::before {
+  body.isDarkTheme::after {
     display: none;
   }
   body.isDarkTheme * {
