@@ -78,7 +78,7 @@ All configuration is done via environment variables.
 | `PORT`         | `1900`                               | Server port                                                                    |
 | `DATABASE_URL` | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`) |
 | `JWT_SECRET`   | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                           |
-| `PUBLIC_URL`   | -                                    | Public URL used for email links (e.g. `https://sync.example.com`)              |
+| `PUBLIC_URL`   | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`)              |
 | `CORS_ORIGINS` | `https://app.super-productivity.com` | Allowed CORS origins                                                           |
 | `SMTP_HOST`    | -                                    | SMTP Server for emails                                                         |
 
