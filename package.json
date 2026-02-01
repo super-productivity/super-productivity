@@ -286,7 +286,7 @@
     "@lmdb/lmdb-linux-x64": "^3.4.3",
     "@lmdb/lmdb-win32-x64": "^3.2.0",
     "@rollup/rollup-darwin-x64": "4.53.3",
-    "@rollup/rollup-linux-x64-gnu": "4.55.3",
+    "@rollup/rollup-linux-x64-gnu": "4.57.1",
     "@rollup/rollup-win32-x64-msvc": "4.52.3"
   },
   "workspaces": [
