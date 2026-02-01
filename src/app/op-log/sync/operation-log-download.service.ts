@@ -115,7 +115,7 @@ export class OperationLogDownloadService implements OnDestroy {
       );
 
       if (forceFromSeq0) {
-        OpLog.warn(
+        OpLog.normal(
           'OperationLogDownloadService: Forced download from seq 0 to rebuild clock state',
         );
       }
@@ -168,7 +168,7 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // Handle gap detection: server was reset or client has stale lastServerSeq
         if (response.gapDetected && !hasResetForGap) {
-          OpLog.warn(
+          OpLog.normal(
             `OperationLogDownloadService: Gap detected (sinceSeq=${sinceSeq}, latestSeq=${response.latestSeq}). ` +
               `Resetting to 0 and re-downloading.`,
           );
@@ -303,7 +303,7 @@ export class OperationLogDownloadService implements OnDestroy {
         !snapshotState
       ) {
         needsFullStateUpload = true;
-        OpLog.warn(
+        OpLog.normal(
           'OperationLogDownloadService: Server migration detected - gap on empty server. ' +
             'Full state upload will be required.',
         );

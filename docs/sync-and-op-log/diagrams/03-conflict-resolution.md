@@ -166,12 +166,34 @@ flowchart LR
     style BackupCreated fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
 ```
 
+### Archive-Wins Exception
+
+When a `moveToArchive` operation conflicts with a field-level update (rename, time tracking, etc.), the **archive operation always wins** regardless of timestamps. This bypasses the normal LWW timestamp comparison because archiving represents explicit user intent that should not be reversed.
+
+```mermaid
+flowchart TD
+    subgraph ArchiveCheck["Archive-Wins Check (Before LWW)"]
+        Conflict["Conflict detected"] --> IsArchive{"Does either side<br/>contain moveToArchive?"}
+
+        IsArchive -->|"Yes"| ArchiveWins["🏆 ARCHIVE WINS<br/>Regardless of timestamps"]
+        IsArchive -->|"No"| NormalLWW["Proceed to normal<br/>LWW timestamp comparison"]
+    end
+
+    ArchiveWins --> CreateOp["Create new archive op<br/>with merged vector clock<br/>via _createArchiveWinOp()"]
+
+    style ArchiveWins fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    style NormalLWW fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+```
+
+**Why?** Without this rule, a concurrent field-level LWW Update could "resurrect" an archived task by replacing its state in the active store. The archive-wins rule is the first level of defense; the `bulkOperationsMetaReducer` provides a second level by pre-scanning batches for archive ops (see [06-archive-operations.md](./06-archive-operations.md)).
+
 ### Key Implementation Details
 
 | Aspect                 | Implementation                                                              |
 | ---------------------- | --------------------------------------------------------------------------- |
 | **Timestamp Source**   | `Math.max(...Object.values(vectorClock))` - max timestamp from vector clock |
 | **Tie Breaker**        | Remote wins (ensures convergence across all clients)                        |
+| **Archive Exception**  | `moveToArchive` always wins over field-level updates, bypassing timestamps  |
 | **Safety Backup**      | Created via `BackupService` before any resolution                           |
 | **Local Win Update**   | New `OpType.UPD` operation created with merged vector clock                 |
 | **Vector Clock Merge** | `mergeVectorClocks(localClock, remoteClock)` for local-win ops              |
@@ -184,7 +206,7 @@ flowchart LR
 
 When a SYNC_IMPORT or BACKUP_IMPORT operation is received, it represents an explicit user action to restore **all clients** to a specific point in time. Operations created without knowledge of the import are filtered out using vector clock comparison.
 
-### The Problem: Stale Operations After Import
+### The Problem: Superseded Operations After Import
 
 ```mermaid
 sequenceDiagram

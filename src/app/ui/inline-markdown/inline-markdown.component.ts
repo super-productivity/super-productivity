@@ -110,9 +110,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
-  @Input() set model(v: string | undefined) {
-    this._model = v;
-    this.modelCopy.set(v);
+  @Input() set model(v: string) {
+    this._model = v || '';
+    this.modelCopy.set(v || '');
 
     // Start resolving but don't update the rendered model yet
     if (v) {

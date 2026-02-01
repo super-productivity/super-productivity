@@ -40,11 +40,12 @@ import {
   first,
   map,
   startWith,
+  switchMap,
   timeout,
   withLatestFrom,
 } from 'rxjs/operators';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { BehaviorSubject, combineLatest, Observable } from 'rxjs';
+import { BehaviorSubject, combineLatest, from, Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import {
@@ -228,14 +229,16 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       this._workContextService.activeWorkContext$,
       this._globalConfigService.shortSyntax$,
     ),
-    map(([val, tags, projects, activeWorkContext, shortSyntaxConfig]) =>
-      shortSyntaxToTags({
-        val,
-        tags,
-        projects,
-        defaultColor: activeWorkContext?.theme?.primary || DEFAULT_PROJECT_COLOR,
-        shortSyntaxConfig,
-      }),
+    switchMap(([val, tags, projects, activeWorkContext, shortSyntaxConfig]) =>
+      from(
+        shortSyntaxToTags({
+          val,
+          tags,
+          projects,
+          defaultColor: activeWorkContext?.theme?.primary || DEFAULT_PROJECT_COLOR,
+          shortSyntaxConfig,
+        }),
+      ),
     ),
     startWith([]),
   );
@@ -354,21 +357,26 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
       this.defaultProject$,
       this.defaultDateAndTime$,
     ])
-      .pipe(takeUntilDestroyed(this._destroyRef))
-      .subscribe(
-        ([title, config, allTags, allProjects, defaultProject, defaultDateInfo]) => {
-          const { date, time } = defaultDateInfo;
-          this._parserService.parseAndUpdateText(
-            title || '',
-            config,
-            allProjects,
-            allTags,
-            defaultProject!,
-            date,
-            time,
-          );
-        },
-      );
+      .pipe(
+        switchMap(
+          ([title, config, allTags, allProjects, defaultProject, defaultDateInfo]) => {
+            const { date, time } = defaultDateInfo;
+            return from(
+              this._parserService.parseAndUpdateText(
+                title || '',
+                config,
+                allProjects,
+                allTags,
+                defaultProject!,
+                date,
+                time,
+              ),
+            );
+          },
+        ),
+        takeUntilDestroyed(this._destroyRef),
+      )
+      .subscribe();
   }
 
   private _setupSuggestions(): void {

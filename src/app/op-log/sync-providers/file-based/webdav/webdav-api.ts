@@ -154,6 +154,13 @@ export class WebdavApi {
         method: WebDavHttpMethod.GET,
       });
 
+      // Guard against empty response body (e.g. CapacitorHttp on some Android providers)
+      if (!response.data || response.data.length === 0) {
+        throw new InvalidDataSPError(
+          `Download of ${path} returned empty response body (HTTP ${response.status}).`,
+        );
+      }
+
       // Validate it's not an HTML error page
       this.xmlParser.validateResponseContent(
         response.data,

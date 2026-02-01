@@ -176,7 +176,7 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
         // Click the "Change & Attempt Decrypt" button to retry with new password
         const resyncBtn = decryptErrorDialog
           .locator('button')
-          .filter({ hasText: /change.*decrypt|attempt.*decrypt/i })
+          .filter({ hasText: /retry.*decrypt/i })
           .first();
         await resyncBtn.click();
         console.log('[WrongPassword] Clicked Change & Attempt Decrypt button');

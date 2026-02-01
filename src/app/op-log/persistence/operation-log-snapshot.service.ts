@@ -8,6 +8,7 @@ import {
 import { VectorClockService } from '../sync/vector-clock.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OpLog } from '../../core/log';
+import { extractEntityKeysFromState } from './extract-entity-keys';
 
 type StateCache = MigratableStateCache;
 
@@ -72,6 +73,9 @@ export class OperationLogSnapshotService {
       const vectorClock = await this.vectorClockService.getCurrentVectorClock();
       const lastSeq = await this.opLogStore.getLastSeq();
 
+      // Extract entity keys for conflict detection after compaction
+      const snapshotEntityKeys = extractEntityKeysFromState(currentState);
+
       // Save snapshot
       await this.opLogStore.saveStateCache({
         state: currentState,
@@ -79,6 +83,7 @@ export class OperationLogSnapshotService {
         vectorClock,
         compactedAt: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
+        snapshotEntityKeys,
       });
 
       OpLog.normal('OperationLogSnapshotService: Saved new snapshot');

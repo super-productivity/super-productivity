@@ -515,7 +515,7 @@ export class RemoteOpsProcessingService {
    * | Result       | Meaning                        | Action                    |
    * |--------------|--------------------------------|---------------------------|
    * | LESS_THAN    | Remote is newer                | Apply (non-conflicting)   |
-   * | GREATER_THAN | Local is newer (remote stale)  | Skip remote op            |
+   * | GREATER_THAN | Local is newer (remote superseded) | Skip remote op       |
    * | EQUAL        | Same op (duplicate)            | Skip remote op            |
    * | CONCURRENT   | True conflict                  | Add to conflicts list     |
    *
@@ -560,7 +560,7 @@ export class RemoteOpsProcessingService {
 
       if (result.conflict) {
         conflicts.push(result.conflict);
-      } else if (!result.isStaleOrDuplicate) {
+      } else if (!result.isSupersededOrDuplicate) {
         nonConflicting.push(remoteOp);
       }
 

@@ -479,7 +479,7 @@ export class OperationLogSyncService {
         newOpsCount: 0,
         // Include all op clocks from forced download (even though no new ops)
         allOpClocks: result.allOpClocks,
-        // Include snapshot vector clock for stale op resolution
+        // Include snapshot vector clock for superseded op resolution
         snapshotVectorClock: result.snapshotVectorClock,
       };
     }

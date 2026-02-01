@@ -18,6 +18,7 @@ import {
   WebCryptoNotAvailableError,
   MissingRefreshTokenAPIError,
 } from '../../op-log/core/errors/sync-errors';
+import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { SyncConfig } from '../../features/config/global-config.model';
 import { TranslateService } from '@ngx-translate/core';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -299,15 +300,29 @@ export class SyncWrapperService {
         );
       }
 
-      // 3. If LWW created local-win ops, upload them
-      const totalLocalWinOps =
+      // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
+      let lwwRetries = 0;
+      let pendingLwwOps =
         (downloadResult.localWinOpsCreated ?? 0) +
         (uploadResult?.localWinOpsCreated ?? 0);
-      if (totalLocalWinOps > 0) {
+      while (pendingLwwOps > 0 && lwwRetries < MAX_LWW_REUPLOAD_RETRIES) {
+        lwwRetries++;
         SyncLog.log(
-          `SyncWrapperService: Re-uploading ${totalLocalWinOps} local-win op(s) from LWW...`,
+          `SyncWrapperService: Re-uploading ${pendingLwwOps} local-win op(s) from LWW ` +
+            `(attempt ${lwwRetries}/${MAX_LWW_REUPLOAD_RETRIES})...`,
         );
-        await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+        const reuploadResult =
+          await this._opLogSyncService.uploadPendingOps(syncCapableProvider);
+        pendingLwwOps = reuploadResult?.localWinOpsCreated ?? 0;
+      }
+      if (pendingLwwOps > 0) {
+        SyncLog.warn(
+          `SyncWrapperService: LWW re-upload still has ${pendingLwwOps} pending ops after ` +
+            `${MAX_LWW_REUPLOAD_RETRIES} retries. Will retry on next sync.`,
+        );
+        // Don't claim IN_SYNC — there are known unuploaded ops.
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return SyncStatus.UpdateRemote;
       }
 
       // 4. Check for permanent rejection failures - these are critical failures that should

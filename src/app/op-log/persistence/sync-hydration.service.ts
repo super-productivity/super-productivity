@@ -184,16 +184,16 @@ export class SyncHydrationService {
           'SyncHydrationService: Skipping SYNC_IMPORT creation (file-based bootstrap)',
         );
 
-        // CRITICAL: Reject any local pending ops since they're now based on stale state.
+        // CRITICAL: Reject any local pending ops since they're now based on superseded state.
         // Without SYNC_IMPORT, SyncImportFilterService won't automatically filter them.
-        // These ops have stale clocks and payloads that don't match the new snapshot.
+        // These ops have superseded clocks and payloads that don't match the new snapshot.
         const unsyncedOps = await this.opLogStore.getUnsynced();
         if (unsyncedOps.length > 0) {
           const opIds = unsyncedOps.map((entry) => entry.op.id);
           await this.opLogStore.markRejected(opIds);
           OpLog.normal(
             `SyncHydrationService: Rejected ${unsyncedOps.length} local pending op(s) ` +
-              `(stale after file-based sync snapshot)`,
+              `(superseded after file-based sync snapshot)`,
           );
 
           // Notify user that local changes were discarded

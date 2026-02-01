@@ -750,7 +750,7 @@ describe('SuperSyncProvider', () => {
       expect(result.newOps!.length).toBe(1);
     });
 
-    it('should return response with CONFLICT_STALE rejection', async () => {
+    it('should return response with CONFLICT_SUPERSEDED rejection', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       const mockResponse = {
@@ -758,8 +758,8 @@ describe('SuperSyncProvider', () => {
           {
             opId: 'op-123',
             accepted: false,
-            error: 'Stale operation: server has newer version of TASK:task-1',
-            errorCode: 'CONFLICT_STALE',
+            error: 'Superseded operation: server has newer version of TASK:task-1',
+            errorCode: 'CONFLICT_SUPERSEDED',
           },
         ],
         latestSeq: 5,
@@ -775,7 +775,7 @@ describe('SuperSyncProvider', () => {
       const result = await provider.uploadOps([createMockOperation()], 'client-1');
 
       expect(result.results[0].accepted).toBe(false);
-      expect(result.results[0].errorCode).toBe('CONFLICT_STALE');
+      expect(result.results[0].errorCode).toBe('CONFLICT_SUPERSEDED');
     });
 
     it('should return response with DUPLICATE_OPERATION rejection', async () => {

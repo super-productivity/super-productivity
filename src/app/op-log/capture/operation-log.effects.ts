@@ -411,7 +411,7 @@ export class OperationLogEffects {
    *
    * When users interact with the app during sync (creating tasks, marking done, etc.),
    * the meta-reducer buffers these actions instead of capturing them immediately.
-   * This is because immediate capture would create operations with stale vector clocks
+   * This is because immediate capture would create operations with superseded vector clocks
    * that don't include the newly-applied remote operations.
    *
    * After sync completes, this method is called to:

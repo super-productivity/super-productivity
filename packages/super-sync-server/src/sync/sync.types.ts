@@ -3,10 +3,18 @@ import {
   VectorClock,
   VectorClockComparison,
   compareVectorClocks,
+  limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
 } from '@sp/shared-schema';
 
 // Re-export for consumers of this module
-export { VectorClock, VectorClockComparison, compareVectorClocks };
+export {
+  VectorClock,
+  VectorClockComparison,
+  compareVectorClocks,
+  limitVectorClockSize,
+  MAX_VECTOR_CLOCK_SIZE,
+};
 
 // Structured error codes for client handling
 export const SYNC_ERROR_CODES = {
@@ -26,6 +34,8 @@ export const SYNC_ERROR_CODES = {
 
   // Conflict errors (409)
   CONFLICT_CONCURRENT: 'CONFLICT_CONCURRENT',
+  CONFLICT_SUPERSEDED: 'CONFLICT_SUPERSEDED',
+  /** @deprecated Use CONFLICT_SUPERSEDED. Keep for backward compat with older clients. */
   CONFLICT_STALE: 'CONFLICT_STALE',
   DUPLICATE_OPERATION: 'DUPLICATE_OPERATION',
 

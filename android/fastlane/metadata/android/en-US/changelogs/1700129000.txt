@@ -1,0 +1,47 @@
+
+### Bug Fixes
+
+* apply code review fixes across sync, electron, and issue panel
+* **ci:** grant tool permissions for code-review plugin
+* **e2e:** replace hard-coded timeout with state-based waits in disableEncryptionForFileBased
+* **e2e:** replace hard-coded waits with state-based waits in focus-mode-break and take-a-break
+* **electron:** remove duplicate lines in main-window close/minimize handlers
+* Issue polling debounce not working (#6276)
+* mac os icon
+* **note-fullscreen-dialog:** change max-height to ensure the note takes the full mobile screen (#6277)
+* **op-log:** use atomic IndexedDB transaction for archive flush
+* README development links (#6261)
+* **reminder:** preserve Today membership when starting task from reminder popup (0cf5a3d), closes #6263
+* **sync:** accept compact clientId format in pfapi validation (c14fec3), closes #6274
+* **sync:** add empty-data guard, backward compat test, and state-based E2E waits
+* **sync:** add server pruning log, harden test coverage for vector clocks
+* **sync:** add warning for preserved IDs exceeding MAX_VECTOR_CLOCK_SIZE in vector clock pruning
+* **sync:** address review findings for singleton LWW update
+* **sync:** force-upload on retry when WebDAV server has inconsistent timestamps
+* **sync:** guard empty intersection in vector clock comparison and fix LWW return value
+* **sync:** handle singleton entity LWW updates in lwwUpdateMetaReducer
+* **sync:** harden vector clock comparison and fix docs
+* **sync:** harden vector clock pruning and post-review sync fixes
+* **sync:** improve vector clock pruning awareness and harden tests
+* **sync:** include snapshotEntityKeys in hydration snapshot to prevent unnecessary compaction
+* **sync:** preserve moveToArchive operations during conflict resolution
+* **sync:** prevent infinite LWW auto-resolve loop for TAG:TODAY
+* **sync:** prevent LWW Update from resurrecting archived tasks
+* **sync:** prune vector clocks in conflict/superseded resolution paths
+* **sync:** return CONCURRENT instead of EQUAL when pruned clocks have non-shared keys
+* **sync:** route all Android HTTP methods through OkHttp to fix empty WebDAV responses (169f60c), closes #6262
+* **sync:** use syncVersion instead of ops count for upload latestSeq
+* **tasks:** ensure scheduled recurring tasks stay in TODAY tag (#6269)
+* **tasks:** guard against NaN dueWithTime crashing DatePipe on startup
+* **test:** update E2E selectors for decrypt dialog and fix worklog task lookup
+* **test:** update unknown entity type test for Set/Map-based LWW lookup
+* **window:** restore maximized window state from startup/minimized/tray (#6268) (4167633), closes #5466
+
+
+### Features
+
+* increase max vector clock size to 10 to reduce need for pruning
+* **sync:** improve decrypt error dialog UX
+### Performance Improvements
+
+* lazy load ical.js and chrono-node to reduce initial bundle size

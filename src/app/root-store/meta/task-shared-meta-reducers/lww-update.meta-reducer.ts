@@ -1,8 +1,13 @@
 import { Action, ActionReducer, MetaReducer } from '@ngrx/store';
 import { EntityAdapter } from '@ngrx/entity';
 import { RootState } from '../../root-state';
-import { EntityType } from '../../../op-log/core/operation.types';
-import { getEntityConfig, isAdapterEntity } from '../../../op-log/core/entity-registry';
+import {
+  getEntityConfig,
+  isAdapterEntity,
+  isSingletonEntity,
+} from '../../../op-log/core/entity-registry';
+import { getLwwEntityType } from '../../../op-log/core/lww-update-action-types';
+import { devError } from '../../../util/dev-error';
 import {
   PROJECT_FEATURE_NAME,
   projectAdapter,
@@ -19,12 +24,6 @@ import { Task } from '../../../features/tasks/task.model';
 import { unique } from '../../../util/unique';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { OpLog } from '../../../core/log';
-
-/**
- * Regex to match LWW Update action types.
- * Matches patterns like '[TASK] LWW Update', '[PROJECT] LWW Update', etc.
- */
-const LWW_UPDATE_REGEX = /^\[([A-Z_]+)\] LWW Update$/;
 
 /**
  * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
@@ -368,27 +367,23 @@ export const lwwUpdateMetaReducer: MetaReducer = (
   return (state: unknown, action: Action) => {
     if (!state) return reducer(state, action);
 
-    const match = action.type.match(LWW_UPDATE_REGEX);
-    if (!match) {
+    const entityType = getLwwEntityType(action.type);
+    if (!entityType) {
       // Not an LWW Update action, pass through
       return reducer(state, action);
     }
-
-    const entityType = match[1] as EntityType;
     const config = getEntityConfig(entityType);
 
-    if (!config || !isAdapterEntity(config)) {
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Unknown or non-adapter entity type: ${entityType}`,
-      );
+    if (!config) {
+      OpLog.warn(`lwwUpdateMetaReducer: Unknown entity type: ${entityType}`);
+      devError(`lwwUpdateMetaReducer: Unknown entity type: ${entityType}`);
       return reducer(state, action);
     }
 
-    const { featureName, adapter } = config;
-    if (!featureName || !adapter) {
-      OpLog.warn(
-        `lwwUpdateMetaReducer: Missing featureName or adapter for: ${entityType}`,
-      );
+    const { featureName } = config;
+    if (!featureName) {
+      OpLog.warn(`lwwUpdateMetaReducer: Missing featureName for: ${entityType}`);
+      devError(`lwwUpdateMetaReducer: Missing featureName for: ${entityType}`);
       return reducer(state, action);
     }
 
@@ -397,16 +392,46 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
     if (!featureState) {
       OpLog.warn(`lwwUpdateMetaReducer: Feature state not found: ${featureName}`);
+      devError(`lwwUpdateMetaReducer: Feature state not found: ${featureName}`);
       return reducer(state, action);
     }
 
-    // Extract entity data from action (exclude 'type' and 'meta')
+    // Extract entity data from action (exclude 'type' and 'meta').
+    // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
+    // If a singleton or adapter state gains such a key, it would be silently dropped.
     const actionAny = action as unknown as Record<string, unknown>;
     const entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
       if (key !== 'type' && key !== 'meta') {
         entityData[key] = actionAny[key];
       }
+    }
+
+    // Singleton entities: replace entire feature state with the winning data
+    if (isSingletonEntity(config)) {
+      if (Object.keys(entityData).length === 0) {
+        OpLog.warn(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
+        devError(`lwwUpdateMetaReducer: Empty singleton data for: ${entityType}`);
+        return reducer(state, action);
+      }
+      const updatedState: RootState = {
+        ...rootState,
+        [featureName]: { ...entityData },
+      };
+      return reducer(updatedState, action);
+    }
+
+    if (!isAdapterEntity(config)) {
+      OpLog.warn(`lwwUpdateMetaReducer: Unsupported storage pattern for: ${entityType}`);
+      devError(`lwwUpdateMetaReducer: Unsupported storage pattern for: ${entityType}`);
+      return reducer(state, action);
+    }
+
+    const { adapter } = config;
+    if (!adapter) {
+      OpLog.warn(`lwwUpdateMetaReducer: Missing adapter for: ${entityType}`);
+      devError(`lwwUpdateMetaReducer: Missing adapter for: ${entityType}`);
+      return reducer(state, action);
     }
 
     if (!entityData['id']) {

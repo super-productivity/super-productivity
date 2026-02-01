@@ -854,27 +854,31 @@ export const hasTaskInWorklog = async (
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 
-  // Try to expand week rows to see task entries
+  // Expand week rows that aren't already expanded
   const weekRows = client.page.locator('.week-row');
   const weekCount = await weekRows.count();
   for (let i = 0; i < Math.min(weekCount, 3); i++) {
     const row = weekRows.nth(i);
     if (await row.isVisible()) {
-      await row.click().catch(() => {});
-      await client.page.waitForTimeout(UI_SETTLE_SMALL);
+      const isExpanded = await row.evaluate((el) => el.classList.contains('isExpanded'));
+      if (!isExpanded) {
+        await row.click().catch(() => {});
+        await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
+      }
     }
   }
 
-  // Search for the task in worklog entries
+  // Wait for expanded task table, then search for the task
   const escapedName = escapeForSelector(taskName);
   const taskEntry = client.page.locator(
-    `.task-summary-table .task-title:has-text("${escapedName}"), ` +
-      `.worklog-task:has-text("${escapedName}"), ` +
-      `worklog-task:has-text("${escapedName}")`,
+    `.task-summary-table .task-title:has-text("${escapedName}")`,
   );
 
-  const count = await taskEntry.count().catch(() => 0);
-  return count > 0;
+  return taskEntry
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
 };
 
 /**

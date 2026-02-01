@@ -422,9 +422,7 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       await passwordInput.fill(newPassword);
 
       // Click "Update Password & Resync" button
-      const updateButton = decryptErrorDialog.locator(
-        'button:has-text("Update"), button:has-text("Resync"), button:has-text("Change")',
-      );
+      const updateButton = decryptErrorDialog.locator('button:has-text("Retry Decrypt")');
       await updateButton.first().click();
 
       // Wait for dialog to close

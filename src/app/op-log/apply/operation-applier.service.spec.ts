@@ -562,22 +562,32 @@ describe('OperationApplierService', () => {
       expect(callOrder).toEqual(['endApplyingRemoteOps', 'processDeferredActions']);
     });
 
-    it('should call processDeferredActions before startPostSyncCooldown', async () => {
+    it('should call startPostSyncCooldown before endApplyingRemoteOps to close timing gap', async () => {
       const callOrder: string[] = [];
+
+      mockHydrationState.startPostSyncCooldown.and.callFake(() => {
+        callOrder.push('startPostSyncCooldown');
+      });
+
+      mockHydrationState.endApplyingRemoteOps.and.callFake(() => {
+        callOrder.push('endApplyingRemoteOps');
+      });
 
       mockOperationLogEffects.processDeferredActions.and.callFake(() => {
         callOrder.push('processDeferredActions');
         return Promise.resolve();
       });
 
-      mockHydrationState.startPostSyncCooldown.and.callFake(() => {
-        callOrder.push('startPostSyncCooldown');
-      });
-
       const op = createMockOperation('op-1');
       await service.applyOperations([op]);
 
-      expect(callOrder).toEqual(['processDeferredActions', 'startPostSyncCooldown']);
+      // Cooldown starts BEFORE ending remote ops to prevent the timing gap
+      // where isInSyncWindow() returns false and selector-based effects can fire.
+      expect(callOrder).toEqual([
+        'startPostSyncCooldown',
+        'endApplyingRemoteOps',
+        'processDeferredActions',
+      ]);
     });
 
     it('should call processDeferredActions even when archive handling fails', async () => {

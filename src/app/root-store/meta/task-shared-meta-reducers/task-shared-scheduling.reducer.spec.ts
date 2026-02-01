@@ -3,6 +3,7 @@ import { taskSharedSchedulingMetaReducer } from './task-shared-scheduling.reduce
 import { TaskSharedActions } from '../task-shared.actions';
 import { RootState } from '../../root-state';
 import { TASK_FEATURE_NAME } from '../../../features/tasks/store/task.reducer';
+import { TAG_FEATURE_NAME } from '../../../features/tag/store/tag.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { Action, ActionReducer } from '@ngrx/store';
 import {
@@ -180,6 +181,49 @@ describe('taskSharedSchedulingMetaReducer', () => {
         mockReducer,
         testState,
       );
+    });
+  });
+
+  describe('dismissReminderOnly action', () => {
+    it('should only clear remindAt and preserve dueDay and dueWithTime', () => {
+      const now = Date.now();
+      const today = getDbDateStr();
+      const testState = createStateWithExistingTasks([], [], [], ['task1']);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueDay: today,
+        dueWithTime: now,
+        remindAt: now,
+      });
+
+      const action = TaskSharedActions.dismissReminderOnly({ id: 'task1' });
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities.task1;
+
+      expect(updatedTask.remindAt).toBeUndefined();
+      expect(updatedTask.dueDay).toBe(today);
+      expect(updatedTask.dueWithTime).toBe(now);
+    });
+
+    it('should not remove task from TODAY tag', () => {
+      const now = Date.now();
+      const testState = createStateWithExistingTasks([], [], [], ['task1', 'other-task']);
+      testState[TASK_FEATURE_NAME].entities.task1 = createMockTask({
+        id: 'task1',
+        dueWithTime: now,
+        remindAt: now,
+      });
+
+      const action = TaskSharedActions.dismissReminderOnly({ id: 'task1' });
+      metaReducer(testState, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      const todayTag = updatedState[TAG_FEATURE_NAME].entities.TODAY;
+
+      expect(todayTag.taskIds).toContain('task1');
+      expect(todayTag.taskIds).toContain('other-task');
     });
   });
 

@@ -154,7 +154,7 @@ export class SyncService {
     if (comparison === 'LESS_THAN') {
       return {
         hasConflict: true,
-        reason: `Stale operation: server has newer version of ${op.entityType}:${entityId}`,
+        reason: `Superseded operation: server has newer version of ${op.entityType}:${entityId}`,
         existingClock,
       };
     }
@@ -361,7 +361,7 @@ export class SyncService {
         const isConcurrent = conflict.reason?.includes('Concurrent');
         const errorCode = isConcurrent
           ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_STALE;
+          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,
@@ -398,7 +398,7 @@ export class SyncService {
         const isConcurrent = finalConflict.reason?.includes('Concurrent');
         const errorCode = isConcurrent
           ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_STALE;
+          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,

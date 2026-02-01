@@ -938,10 +938,12 @@
         "VECTOR_COMPARISON_LOCAL_LESS": "Local < Remote"
       },
       "D_DECRYPT_ERROR": {
-        "BTN_OVER_WRITE_REMOTE": "Change & Overwrite Remote",
-        "CHANGE_PW_AND_DECRYPT": "Change & Attempt Decrypt",
-        "P1": "Your remote data is encrypted and decryption failed. Please enter the correct password!",
-        "P2": "Or you can also change your password, which will overwrite all remote data.",
+        "BTN_OVER_WRITE_REMOTE": "Use This Password & Overwrite Remote",
+        "CHANGE_PW_AND_DECRYPT": "Retry Decrypt",
+        "TITLE": "Decryption Failed",
+        "P1": "Your remote data is encrypted and decryption failed.",
+        "P2_FORGOT_PW": "If you <strong>forgot your password</strong>, enter the correct password and click \"Retry Decrypt\".",
+        "P3_PW_CHANGED": "If you <strong>changed your password on another device</strong>, enter your new password and click \"Overwrite Remote\". This will upload your local data to the server.",
         "PASSWORD": "Password"
       },
       "D_ENTER_PASSWORD": {

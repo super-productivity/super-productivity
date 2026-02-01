@@ -11,14 +11,21 @@ describe('WebDavHttpAdapter', () => {
   let adapter: WebDavHttpAdapter;
   let fetchSpy: jasmine.Spy;
 
-  // Helper class to override isAndroidWebView for testing
+  // Helper class to override platform checks for testing
   class TestableWebDavHttpAdapter extends WebDavHttpAdapter {
-    constructor(private _isAndroidWebView: boolean) {
+    constructor(
+      private _isAndroidWebView: boolean,
+      private _isNativePlatform: boolean = false,
+    ) {
       super();
     }
 
     protected override get isAndroidWebView(): boolean {
       return this._isAndroidWebView;
+    }
+
+    protected override get isNativePlatform(): boolean {
+      return this._isNativePlatform;
     }
 
     // Expose private method for testing
@@ -334,106 +341,21 @@ describe('WebDavHttpAdapter', () => {
     });
   });
 
-  // CapacitorHttp tests for Android WebView mode
+  // OkHttp mode tests for Android WebView
   // Note: We're skipping these tests because they require mocking the WebDavHttp plugin
-  // which is registered at module load time and difficult to mock properly in Jasmine
-  xdescribe('CapacitorHttp mode (Android)', () => {
+  // which is registered at module load time and difficult to mock properly in Jasmine.
+  // On Android, ALL methods (including GET, PUT, DELETE, HEAD) are routed through OkHttp
+  // because CapacitorHttp returns empty bodies for some WebDAV providers (e.g. Koofr).
+  xdescribe('OkHttp mode (Android)', () => {
     let capacitorHttpSpy: jasmine.Spy;
 
     beforeEach(() => {
-      adapter = new TestableWebDavHttpAdapter(true);
+      adapter = new TestableWebDavHttpAdapter(true, true);
       capacitorHttpSpy = spyOn(CapacitorHttp, 'request');
     });
 
-    it('should use CapacitorHttp for PROPFIND method', async () => {
-      const mockResponse = {
-        status: 207,
-        headers: { content_type: 'application/xml' },
-        data: '<xml>response</xml>',
-        url: 'http://example.com/test',
-      };
-      capacitorHttpSpy.and.returnValue(Promise.resolve(mockResponse));
-
-      const result = await adapter.request({
-        url: 'http://example.com/test',
-        method: 'PROPFIND',
-        headers: { CONTENT_TYPE: 'application/xml' },
-        body: '<xml>propfind</xml>',
-      });
-
-      expect(capacitorHttpSpy).toHaveBeenCalledWith({
-        url: 'http://example.com/test',
-        method: 'PROPFIND',
-        headers: { CONTENT_TYPE: 'application/xml' },
-        data: '<xml>propfind</xml>',
-      });
-      expect(result.status).toBe(207);
-    });
-
-    it('should use CapacitorHttp for MKCOL method', async () => {
-      const mockResponse = {
-        status: 201,
-        headers: {},
-        data: '',
-        url: 'http://example.com/newfolder',
-      };
-      capacitorHttpSpy.and.returnValue(Promise.resolve(mockResponse));
-
-      const result = await adapter.request({
-        url: 'http://example.com/newfolder',
-        method: 'MKCOL',
-      });
-
-      expect(capacitorHttpSpy).toHaveBeenCalledWith({
-        url: 'http://example.com/newfolder',
-        method: 'MKCOL',
-        headers: undefined,
-        data: null,
-      });
-      expect(result.status).toBe(201);
-    });
-
-    it('should use CapacitorHttp for standard HTTP methods', async () => {
-      const mockResponse = {
-        status: 200,
-        headers: { content_type: 'text/plain' },
-        data: 'file content',
-      };
-      capacitorHttpSpy.and.returnValue(Promise.resolve(mockResponse));
-
-      const result = await adapter.request({
-        url: 'http://example.com/file.txt',
-        method: 'GET',
-      });
-
-      expect(capacitorHttpSpy).toHaveBeenCalledWith({
-        url: 'http://example.com/file.txt',
-        method: 'GET',
-        headers: undefined,
-        data: null,
-      });
-      expect(result.status).toBe(200);
-    });
-
-    it('should handle WebDAV methods case-insensitively', async () => {
-      const mockResponse = {
-        status: 207,
-        headers: {},
-        data: '<xml/>',
-        url: 'http://example.com/test',
-      };
-      capacitorHttpSpy.and.returnValue(Promise.resolve(mockResponse));
-
-      await adapter.request({
-        url: 'http://example.com/test',
-        method: 'propfind', // lowercase
-      });
-
-      expect(capacitorHttpSpy).toHaveBeenCalled();
-    });
-
-    it('should handle all WebDAV methods', async () => {
-      const webDavMethods = [
+    it('should use OkHttp for all methods on Android including GET', async () => {
+      const allMethods = [
         'PROPFIND',
         'MKCOL',
         'MOVE',
@@ -441,24 +363,19 @@ describe('WebDavHttpAdapter', () => {
         'LOCK',
         'UNLOCK',
         'PROPPATCH',
+        'GET',
+        'PUT',
+        'DELETE',
+        'HEAD',
       ];
-      const mockResponse = {
-        status: 200,
-        headers: {},
-        data: '',
-        url: 'http://example.com/test',
-      };
-      capacitorHttpSpy.and.returnValue(Promise.resolve(mockResponse));
-
-      for (const method of webDavMethods) {
-        capacitorHttpSpy.calls.reset();
-
+      for (const method of allMethods) {
         await adapter.request({
           url: 'http://example.com/test',
           method: method,
         });
 
-        expect(capacitorHttpSpy).toHaveBeenCalled();
+        // CapacitorHttp should NOT be called — all methods go through OkHttp on Android
+        expect(capacitorHttpSpy).not.toHaveBeenCalled();
       }
     });
   });

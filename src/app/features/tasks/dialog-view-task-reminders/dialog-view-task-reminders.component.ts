@@ -305,7 +305,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       }
     }
     this._taskService.setCurrentId(task.id);
-    this.dismiss(task);
+    this.dismissReminderOnly(task);
   }
 
   markTaskAsDone(task: TaskWithReminderData): void {

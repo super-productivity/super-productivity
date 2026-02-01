@@ -3,11 +3,10 @@ import {
   VectorClock as SharedVectorClock,
   compareVectorClocks as sharedCompareVectorClocks,
   mergeVectorClocks as sharedMergeVectorClocks,
-} from '@sp/shared-schema';
-import {
+  limitVectorClockSize as sharedLimitVectorClockSize,
   MAX_VECTOR_CLOCK_SIZE,
-  MIN_CLIENT_ID_LENGTH,
-} from '../../op-log/core/operation-log.const';
+} from '@sp/shared-schema';
+import { MIN_CLIENT_ID_LENGTH } from '../../op-log/core/operation-log.const';
 
 /**
  * Vector Clock implementation for distributed synchronization
@@ -148,9 +147,10 @@ export const compareVectorClocks = (
     return VectorClockComparison.GREATER_THAN;
   }
 
-  // Delegate to shared implementation and convert string result to enum
+  // Delegate to shared implementation and convert string result to enum.
+  // Safe cast: shared implementation returns the same string literals as enum values.
   const result = sharedCompareVectorClocks(a!, b!);
-  return VectorClockComparison[result];
+  return result as VectorClockComparison;
 };
 
 /**
@@ -278,24 +278,35 @@ export const hasVectorClockChanges = (
     }
   }
 
-  // CRITICAL FIX: Check if reference has any clients missing from current
-  // This detects when a client's entry has been removed/corrupted
+  // Check if reference has any clients missing from current.
+  // This detects when a client's entry has been removed/corrupted.
+  // However, after legitimate pruning (limitVectorClockSize), low-counter entries
+  // are removed. When the current clock is at MAX size, missing keys are expected
+  // and don't indicate corruption — they were pruned away.
+  const currentSize = Object.keys(current!).length;
   for (const [clientId, refVal] of Object.entries(reference!)) {
     if (refVal > 0 && !(clientId in current!)) {
-      PFLog.error('Vector clock change detected: client missing from current', {
-        clientId,
-        refValue: refVal,
-        currentClock: vectorClockToString(current),
-        referenceClock: vectorClockToString(reference),
-      });
+      if (currentSize >= MAX_VECTOR_CLOCK_SIZE) {
+        // Current clock was likely pruned — missing keys are expected.
+        PFLog.verbose(
+          'Vector clock: reference client missing from current (likely pruned)',
+          { clientId, refValue: refVal },
+        );
+      } else {
+        // Current clock is small enough that pruning couldn't have removed this key.
+        PFLog.warn('Vector clock change detected: client missing from current', {
+          clientId,
+          refValue: refVal,
+          currentClock: vectorClockToString(current),
+          referenceClock: vectorClockToString(reference),
+        });
+      }
       return true;
     }
   }
 
   return false;
 };
-
-// MAX_VECTOR_CLOCK_SIZE imported from operation-log.const.ts
 
 /**
  * Metrics for vector clock operations
@@ -307,7 +318,9 @@ export interface VectorClockMetrics {
 }
 
 /**
- * Limits the size of a vector clock by keeping only the most active clients
+ * Limits the size of a vector clock by keeping only the most active clients.
+ * Wraps the shared implementation from @sp/shared-schema with client-side logging.
+ *
  * @param clock The vector clock to limit
  * @param currentClientId The current client's ID (always preserved)
  * @param protectedClientIds Additional client IDs to always preserve (e.g., from latest SYNC_IMPORT).
@@ -321,15 +334,27 @@ export const limitVectorClockSize = (
   protectedClientIds: string[] = [],
 ): VectorClock => {
   const entries = Object.entries(clock);
-
   if (entries.length <= MAX_VECTOR_CLOCK_SIZE) {
     return clock;
   }
 
-  // Build set of clients to always preserve
-  const alwaysPreserve = new Set([currentClientId, ...protectedClientIds]);
+  const allPreserveIds = [currentClientId, ...protectedClientIds];
 
-  PFLog.warn('Vector clock pruning triggered', {
+  // Warn if we have more preserved IDs than MAX_VECTOR_CLOCK_SIZE.
+  // This means some "protected" IDs will be dropped, which could cause
+  // incorrect CONCURRENT comparisons with full-state operations.
+  if (allPreserveIds.length > MAX_VECTOR_CLOCK_SIZE) {
+    PFLog.warn(
+      'Vector clock pruning: preserveClientIds exceeds MAX_VECTOR_CLOCK_SIZE, some protected IDs will be dropped',
+      {
+        preserveCount: allPreserveIds.length,
+        maxSize: MAX_VECTOR_CLOCK_SIZE,
+        dropped: allPreserveIds.length - MAX_VECTOR_CLOCK_SIZE,
+      },
+    );
+  }
+
+  PFLog.info('Vector clock pruning triggered', {
     originalSize: entries.length,
     maxSize: MAX_VECTOR_CLOCK_SIZE,
     currentClientId,
@@ -337,27 +362,7 @@ export const limitVectorClockSize = (
     pruned: entries.length - MAX_VECTOR_CLOCK_SIZE,
   });
 
-  // Sort by value (descending) to keep most active clients
-  entries.sort(([, a], [, b]) => b - a);
-
-  // Always keep preserved clients first
-  const limited: VectorClock = {};
-  for (const id of alwaysPreserve) {
-    if (clock[id] !== undefined) {
-      limited[id] = clock[id];
-    }
-  }
-
-  // Add top active non-preserved clients up to limit
-  let count = Object.keys(limited).length;
-  for (const [clientId, value] of entries) {
-    if (!alwaysPreserve.has(clientId) && count < MAX_VECTOR_CLOCK_SIZE) {
-      limited[clientId] = value;
-      count++;
-    }
-  }
-
-  return limited;
+  return sharedLimitVectorClockSize(clock, allPreserveIds);
 };
 
 /**

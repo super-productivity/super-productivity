@@ -20,7 +20,7 @@ import { waitForAppReady } from '../../utils/waits';
  * BUG SCENARIO:
  * 1. Client A creates SYNC_IMPORT with clock {A: 1}
  * 2. Client B receives it, merges clocks → {A: 1, B: x, ...other clients...}
- * 3. When B has 91+ clients, pruning triggers (MAX_VECTOR_CLOCK_SIZE = 8)
+ * 3. When B has 91+ clients, pruning triggers (MAX_VECTOR_CLOCK_SIZE = 10)
  * 4. A's entry (counter=1, lowest) gets PRUNED
  * 5. New tasks from B have clock {B: y} - MISSING A's entry!
  * 6. Comparison: {A: 0} vs {A: 1} → CONCURRENT
@@ -332,7 +332,7 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
   });
 
   // NOTE: The "Reload after SYNC_IMPORT" scenario is already covered by
-  // supersync-stale-clock-regression.spec.ts tests. That test verifies that
-  // reloading after receiving SYNC_IMPORT doesn't cause stale clock issues.
+  // supersync-superseded-clock-regression.spec.ts tests. That test verifies that
+  // reloading after receiving SYNC_IMPORT doesn't cause superseded clock issues.
   // Combined with the pruning fix verified above, the full scenario is covered.
 });

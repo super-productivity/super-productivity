@@ -46,15 +46,6 @@ export interface WebDavHttpResponse {
 
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
-  private static readonly WEBDAV_METHODS = [
-    'PROPFIND',
-    'MKCOL',
-    'MOVE',
-    'COPY',
-    'LOCK',
-    'UNLOCK',
-    'PROPPATCH',
-  ];
 
   // Make platform checks testable by making them class properties
   protected get isAndroidWebView(): boolean {
@@ -70,15 +61,9 @@ export class WebDavHttpAdapter {
       let response: WebDavHttpResponse;
 
       if (this.isNativePlatform) {
-        // Check if this is a WebDAV method
-        const isWebDavMethod = WebDavHttpAdapter.WEBDAV_METHODS.includes(
-          options.method.toUpperCase(),
-        );
-
-        // On Android, use custom WebDavHttp plugin for WebDAV methods (better retry handling)
-        // On iOS, use CapacitorHttp for all methods (including WebDAV)
-        if (isWebDavMethod && this.isAndroidWebView) {
-          // Use our custom WebDAV plugin for WebDAV methods on Android
+        if (this.isAndroidWebView) {
+          // On Android, use OkHttp plugin for ALL methods.
+          // CapacitorHttp returns empty bodies for some WebDAV providers (e.g. Koofr).
           PFLog.log(
             `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
           );
@@ -90,9 +75,7 @@ export class WebDavHttpAdapter {
           });
           response = this._convertWebDavResponse(webdavResponse);
         } else {
-          // Use standard CapacitorHttp for:
-          // - All methods on iOS (including WebDAV)
-          // - Regular HTTP methods on Android
+          // On iOS, use CapacitorHttp for all methods (no WebDavHttp plugin on iOS)
           PFLog.log(
             `${WebDavHttpAdapter.L}.request() using CapacitorHttp for ${options.method}`,
           );

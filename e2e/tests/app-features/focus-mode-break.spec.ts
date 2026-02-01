@@ -62,8 +62,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Verify mode selector is NOT visible on break screen
     await expect(modeSelector).not.toBeVisible();
@@ -124,8 +127,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Verify both buttons are visible
     await expect(backToPlanningButton).toBeVisible();
@@ -166,8 +172,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Skip the break
     await skipBreakButton.click();
@@ -213,8 +222,11 @@ test.describe('Focus Mode - Break Controls (Issue #5995)', () => {
     await expect(completeSessionButton).toBeVisible({ timeout: 20000 });
     await completeSessionButton.click();
 
-    // In Pomodoro mode, break auto-starts after session completion
-    await expect(focusModeBreak).toBeVisible({ timeout: 10000 });
+    // Wait for session-done transition to complete before checking for break
+    await expect(completeSessionButton).not.toBeVisible({ timeout: 10000 });
+
+    // In Pomodoro mode, break auto-starts after session completion via effects chain
+    await expect(focusModeBreak).toBeVisible({ timeout: 15000 });
 
     // Click Back to Planning
     await backToPlanningButton.click();

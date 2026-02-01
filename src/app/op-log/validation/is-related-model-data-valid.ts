@@ -288,7 +288,7 @@ const validateTasksToProjectsAndTags = (
     if (tagId === TODAY_TAG.id) {
       const orphanedIds = tag.taskIds.filter((tid) => !taskIds.has(tid));
       if (orphanedIds.length > 0) {
-        PFLog.warn(
+        PFLog.info(
           `[ValidateState] TODAY_TAG has ${orphanedIds.length} orphaned task IDs (harmless)`,
           { orphanedIds },
         );

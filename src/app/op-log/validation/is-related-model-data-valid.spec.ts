@@ -8,6 +8,7 @@ describe('isRelatedModelDataValid', () => {
   beforeEach(() => {
     // Suppress PFLog output during tests by spying on the methods
     spyOn(PFLog, 'log');
+    spyOn(PFLog, 'info');
     spyOn(PFLog, 'error');
     spyOn(PFLog, 'warn');
     spyOn(PFLog, 'err');
@@ -157,7 +158,7 @@ describe('isRelatedModelDataValid', () => {
       // Should pass because TODAY_TAG orphans are harmless (virtual tag)
       expect(result).toBe(true);
       // Verify warning was logged
-      expect(PFLog.warn).toHaveBeenCalledWith(
+      expect(PFLog.info).toHaveBeenCalledWith(
         jasmine.stringContaining('TODAY_TAG has 2 orphaned task IDs (harmless)'),
         jasmine.any(Object),
       );

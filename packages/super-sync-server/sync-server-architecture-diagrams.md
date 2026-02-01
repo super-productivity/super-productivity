@@ -203,7 +203,7 @@ flowchart TB
         Compare -->|GREATER_THAN| Accept[Accept<br/>Valid successor]
         Compare -->|EQUAL + same client| Accept
         Compare -->|CONCURRENT| Concurrent[Reject<br/>CONFLICT_CONCURRENT]
-        Compare -->|LESS_THAN| Stale[Reject<br/>CONFLICT_STALE]
+        Compare -->|LESS_THAN| Superseded[Reject<br/>CONFLICT_SUPERSEDED]
     end
 ```
 
@@ -306,7 +306,7 @@ sequenceDiagram
         Server->>Server: Validate IDs format
         Server->>DB: Check vector clock conflict
         alt Conflict detected
-            Server->>Server: Mark as CONFLICT_CONCURRENT or CONFLICT_STALE
+            Server->>Server: Mark as CONFLICT_CONCURRENT or CONFLICT_SUPERSEDED
         else No conflict
             Server->>Server: Mark as ACCEPTED
         end
@@ -321,7 +321,7 @@ sequenceDiagram
 
     Server-->>Client: {results[], latestSeq, requestId}
 
-    Note over Client,Server: results[] contains status per op:<br/>ACCEPTED, DUPLICATE_OP,<br/>CONFLICT_CONCURRENT, CONFLICT_STALE
+    Note over Client,Server: results[] contains status per op:<br/>ACCEPTED, DUPLICATE_OP,<br/>CONFLICT_CONCURRENT, CONFLICT_SUPERSEDED
 ```
 
 ## 1.10 Download Operations - GET /api/sync/ops

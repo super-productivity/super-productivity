@@ -4,8 +4,7 @@ import { CaldavCfg } from './caldav.model';
 import DavClient, { namespaces as NS } from '@nextcloud/cdav-library';
 // @ts-ignore
 import Calendar from 'cdav-library/models/calendar';
-// @ts-ignore
-import ICAL from 'ical.js';
+import { loadIcalModule } from '../../../schedule/ical/ical-lazy-loader';
 
 import { from, Observable, throwError } from 'rxjs';
 import { CaldavIssue, CaldavIssueStatus } from './caldav-issue.model';
@@ -122,7 +121,8 @@ export class CaldavClientService {
     return await calendar.calendarQuery([query]);
   }
 
-  private static _mapTask(task: CalDavTaskData): CaldavIssue {
+  private static async _mapTask(task: CalDavTaskData): Promise<CaldavIssue> {
+    const ICAL = await loadIcalModule();
     const jCal = ICAL.parse(task.data);
     const comp = new ICAL.Component(jCal);
     const todo = comp.getFirstSubcomponent('vtodo');
@@ -140,8 +140,8 @@ export class CaldavClientService {
       completed: !!todo.getFirstPropertyValue('completed'),
       item_url: task.url,
       summary: (todo.getFirstPropertyValue('summary') as string) || '',
-      start: (todo.getFirstPropertyValue('dtstart') as ICAL.Time)?.toJSDate().getTime(),
-      due: (todo.getFirstPropertyValue('due') as ICAL.Time)?.toJSDate().getTime(),
+      start: (todo.getFirstPropertyValue('dtstart') as any)?.toJSDate().getTime(),
+      due: (todo.getFirstPropertyValue('due') as any)?.toJSDate().getTime(),
       note: (todo.getFirstPropertyValue('description') as string) || undefined,
       status: (todo.getFirstPropertyValue('status') as CaldavIssueStatus) || undefined,
       priority: +(todo.getFirstPropertyValue('priority') as string) || undefined,
@@ -347,12 +347,13 @@ export class CaldavClientService {
     const tasks = await CaldavClientService._getAllTodos(cal, filterOpen).catch((err) =>
       this._handleNetErr(err),
     );
-    return tasks
-      .map((t) => CaldavClientService._mapTask(t))
-      .filter(
-        (t: CaldavIssue) =>
-          !filterCategory || !cfg.categoryFilter || t.labels.includes(cfg.categoryFilter),
-      );
+    const mappedTasks = await Promise.all(
+      tasks.map((t) => CaldavClientService._mapTask(t)),
+    );
+    return mappedTasks.filter(
+      (t: CaldavIssue) =>
+        !filterCategory || !cfg.categoryFilter || t.labels.includes(cfg.categoryFilter),
+    );
   }
 
   private async _getTask(cfg: CaldavCfg, uid: string): Promise<CaldavIssue> {
@@ -369,7 +370,7 @@ export class CaldavClientService {
       throw new Error('ISSUE NOT FOUND: ' + uid);
     }
 
-    return CaldavClientService._mapTask(task[0]);
+    return await CaldavClientService._mapTask(task[0]);
   }
 
   private async _updateTask(
@@ -406,6 +407,7 @@ export class CaldavClientService {
     }
 
     const task = tasks[0];
+    const ICAL = await loadIcalModule();
     const jCal = ICAL.parse(task.data);
     const comp = new ICAL.Component(jCal);
     const todo = comp.getFirstSubcomponent('vtodo');

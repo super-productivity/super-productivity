@@ -246,9 +246,16 @@ export class TaskRepeatCfgService {
     )[] = [
       TaskSharedActions.addTask({
         task: taskWithTargetDates,
-        workContextType: this._workContextService
-          .activeWorkContextType as WorkContextType,
-        workContextId: this._workContextService.activeWorkContextId as string,
+        // Use the repeat config's projectId when available to ensure the task
+        // is associated with the correct project regardless of which project is
+        // currently active on this device. Falls back to active context for
+        // tag-based repeat configs without a project.
+        workContextType: taskRepeatCfg.projectId
+          ? WorkContextType.PROJECT
+          : (this._workContextService.activeWorkContextType as WorkContextType),
+        workContextId: taskRepeatCfg.projectId
+          ? taskRepeatCfg.projectId
+          : (this._workContextService.activeWorkContextId as string),
         isAddToBacklog: false,
         isAddToBottom,
       }),

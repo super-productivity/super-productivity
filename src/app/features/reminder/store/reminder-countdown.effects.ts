@@ -164,9 +164,9 @@ export class ReminderCountdownEffects {
   }
 
   private _startTask(task: TaskWithReminder): void {
-    // Unschedule the task (clears remindAt)
+    // Only dismiss the reminder, preserve dueDay/dueWithTime so task stays in Today
     this._store.dispatch(
-      TaskSharedActions.unscheduleTask({
+      TaskSharedActions.dismissReminderOnly({
         id: task.id,
       }),
     );

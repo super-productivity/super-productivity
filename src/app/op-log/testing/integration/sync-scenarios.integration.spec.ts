@@ -492,7 +492,7 @@ describe('Sync Scenarios Integration', () => {
      * Scenario 5.2: Concurrent Updates Both Reach Server
      *
      * Note: This tests that concurrent edits are both uploaded to the server.
-     * Stale op detection (via vector clock comparison) happens in
+     * Superseded op detection (via vector clock comparison) happens in
      * OperationLogSyncService.processRemoteOps(), which is tested separately.
      *
      * This test verifies the protocol: both concurrent ops reach the server

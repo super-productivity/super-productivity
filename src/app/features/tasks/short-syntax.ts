@@ -1,4 +1,3 @@
-import { casual } from 'chrono-node';
 import { Task, TaskCopy } from './task.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { stringToMs } from '../../ui/duration/string-to-ms.pipe';
@@ -37,44 +36,53 @@ const CH_TAG = '#';
 const CH_DUE = '@';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE})`;
 
-const customDateParser = casual.clone();
-customDateParser.refiners.push({
-  refine: (context, results) => {
-    results.forEach((result) => {
-      const { refDate, text, start } = result;
-      const regex = / [5-9][0-9]$/;
-      const yearIndex = text.search(regex);
-      // The year pattern in Chrono's source code is (?:[1-9][0-9]{0,3}\\s{0,2}(?:BE|AD|BC|BCE|CE)|[1-2][0-9]{3}|[5-9][0-9]|2[0-5]).
-      // This means any two-digit numeric value from 50 to 99 will be considered a year.
-      // Link: https://github.com/wanasit/chrono/blob/54e7ff12f9185e735ee860c25922b2ab2367d40b/src/locales/en/constants.ts#L234C30-L234C108
-      // When someone creates a task like "Test @25/4 90m", Chrono will return the year as 1990, which is an undesirable behaviour in most cases.
-      if (yearIndex !== -1) {
-        result.text = text.slice(0, yearIndex);
-        const current = new Date();
-        let year = current.getFullYear();
-        // If the parsed month is smaller than the current month,
-        // it means the time is for next year. For example, parsed month is March
-        // and it is currently April
-        const impliedDate = start.get('day');
-        const impliedMonth = start.get('month');
-        // Due to the future-forward nature of the date parser, there are two scenarios that the implied year is next year:
-        // - Implied month is smaller than current month i.e. 20/3 vs 2/4
-        // - Same month but the implied date is before the current date i.e. 14/4 vs 20/4
-        if (
-          (impliedMonth && impliedMonth < refDate.getMonth() + 1) ||
-          (impliedMonth === refDate.getMonth() + 1 &&
-            impliedDate &&
-            impliedDate < refDate.getDate())
-        ) {
-          // || (impliedMonth === refDate.getMonth() + 1 && impliedDay && impliedDay < refDate.getDay())
-          year += 1;
-        }
-        result.start.assign('year', year);
-      }
+let customDateParserPromise: Promise<any> | null = null;
+let customDateParserCache: any = null;
+
+const loadCustomDateParser = (): Promise<any> => {
+  if (customDateParserCache) {
+    return Promise.resolve(customDateParserCache);
+  }
+  if (!customDateParserPromise) {
+    customDateParserPromise = import('chrono-node').then(({ casual }) => {
+      const parser = casual.clone();
+      parser.refiners.push({
+        refine: (context: unknown, results: any[]) => {
+          results.forEach((result) => {
+            const { refDate, text, start } = result;
+            const regex = / [5-9][0-9]$/;
+            const yearIndex = text.search(regex);
+            // The year pattern in Chrono's source code is (?:[1-9][0-9]{0,3}\\s{0,2}(?:BE|AD|BC|BCE|CE)|[1-2][0-9]{3}|[5-9][0-9]|2[0-5]).
+            // This means any two-digit numeric value from 50 to 99 will be considered a year.
+            // Link: https://github.com/wanasit/chrono/blob/54e7ff12f9185e735ee860c25922b2ab2367d40b/src/locales/en/constants.ts#L234C30-L234C108
+            // When someone creates a task like "Test @25/4 90m", Chrono will return
+            // the year as 1990, which is an undesirable behaviour in most cases.
+            if (yearIndex !== -1) {
+              result.text = text.slice(0, yearIndex);
+              const current = new Date();
+              let year = current.getFullYear();
+              const impliedDate = start.get('day');
+              const impliedMonth = start.get('month');
+              if (
+                (impliedMonth && impliedMonth < refDate.getMonth() + 1) ||
+                (impliedMonth === refDate.getMonth() + 1 &&
+                  impliedDate &&
+                  impliedDate < refDate.getDate())
+              ) {
+                year += 1;
+              }
+              result.start.assign('year', year);
+            }
+          });
+          return results;
+        },
+      });
+      customDateParserCache = parser;
+      return parser;
     });
-    return results;
-  },
-});
+  }
+  return customDateParserPromise;
+};
 
 // The following project name extraction pattern attempts to improve on the
 // previous version by not immediately terminating upon encountering a short
@@ -97,14 +105,14 @@ const SHORT_SYNTAX_URL_REG_EX = new RegExp(
   'gi',
 );
 
-export const shortSyntax = (
+export const shortSyntax = async (
   task: Task | Partial<Task>,
   config: ShortSyntaxConfig,
   allTags?: Tag[],
   allProjects?: Project[],
   now = new Date(),
   mode: 'combine' | 'replace' = 'combine',
-):
+): Promise<
   | {
       taskChanges: Partial<Task>;
       newTagTitles: string[];
@@ -112,7 +120,8 @@ export const shortSyntax = (
       projectId: string | undefined;
       attachments: TaskAttachment[];
     }
-  | undefined => {
+  | undefined
+> => {
   if (!task.title) {
     return;
   }
@@ -130,7 +139,10 @@ export const shortSyntax = (
     taskChanges = parseTimeSpentChanges(task);
     taskChanges = {
       ...taskChanges,
-      ...parseScheduledDate({ ...task, title: taskChanges.title || task.title }, now),
+      ...(await parseScheduledDate(
+        { ...task, title: taskChanges.title || task.title },
+        now,
+      )),
     };
   }
 
@@ -365,14 +377,18 @@ const parseTagChanges = (
   };
 };
 
-const parseScheduledDate = (task: Partial<TaskCopy>, now: Date): DueChanges => {
+const parseScheduledDate = async (
+  task: Partial<TaskCopy>,
+  now: Date,
+): Promise<DueChanges> => {
   if (!task.title) {
     return {};
   }
   const rr = task.title.match(SHORT_SYNTAX_DUE_REG_EX);
 
   if (rr && rr[0]) {
-    const parsedDateArr = customDateParser.parse(rr[0], now, {
+    const dateParser = await loadCustomDateParser();
+    const parsedDateArr = dateParser.parse(rr[0], now, {
       forwardDate: true,
     });
 
