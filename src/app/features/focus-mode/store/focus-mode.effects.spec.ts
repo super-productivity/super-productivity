@@ -2939,9 +2939,9 @@ describe('FocusModeEffects', () => {
     });
 
     // Bug #6044: Manual break start should use cycle directly for break duration calculation
-    it('should dispatch long break when cycle=4 with manual break start (Bug #6044)', (done) => {
+    it('should dispatch long break when cycle=5 with manual break start (Bug #6044)', (done) => {
       // Bug #6044 fix: After session 4 completes, incrementCycleOnSessionComplete$ runs first,
-      // setting cycle to 4. When user manually clicks start, we use cycle directly (no adjustment).
+      // setting cycle to 5. When user manually clicks start, we use cycle directly (no adjustment).
       // This matches the auto-start behavior for consistent break timing.
       const getBreakDurationSpy = jasmine
         .createSpy('getBreakDuration')
@@ -2961,7 +2961,7 @@ describe('FocusModeEffects', () => {
       });
 
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectors.selectCurrentCycle, 4); // Cycle 4 = long break
+      store.overrideSelector(selectors.selectCurrentCycle, 5); // Cycle 5 = long break, After work session 4
       store.refreshState();
 
       const timer = createMockTimer({
@@ -2986,9 +2986,9 @@ describe('FocusModeEffects', () => {
       buttonActions.action.fn();
 
       setTimeout(() => {
-        // Verify getBreakDuration was called with cycle 3
+        // Verify getBreakDuration was called with cycle 4
         // Because we decrement cycle by 1 to get last focus session's cycle
-        expect(getBreakDurationSpy).toHaveBeenCalledWith(3);
+        expect(getBreakDurationSpy).toHaveBeenCalledWith(4);
 
         const startBreakCall = dispatchSpy.calls
           .all()
