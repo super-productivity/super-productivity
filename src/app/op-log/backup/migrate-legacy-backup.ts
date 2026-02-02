@@ -515,9 +515,9 @@ function _migrateTasksForMigration3(
       (task.issueType as any) === 'CALENDAR' ? 'ICAL' : task.issueType || undefined;
     task.issueWasUpdated = task.issueWasUpdated || undefined;
     task.issueLastUpdated = task.issueLastUpdated || undefined;
-    task.issueAttachmentNr = task.issueAttachmentNr || undefined;
+    task.issueAttachmentNr = task.issueAttachmentNr ?? undefined;
     task.issueTimeTracked = task.issueTimeTracked || undefined;
-    task.issuePoints = task.issuePoints || undefined;
+    task.issuePoints = task.issuePoints ?? undefined;
     task.reminderId = task.reminderId || undefined;
     task.parentId = task.parentId || undefined;
     task.doneOn = task.doneOn || undefined;

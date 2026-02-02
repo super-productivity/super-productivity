@@ -446,6 +446,32 @@ describe('migrate-legacy-backup', () => {
       expect(result.archiveOld.task.ids.length).toBe(0);
     });
 
+    it('should preserve issueAttachmentNr of 0 (not coerce to undefined)', () => {
+      const data = createLegacyBackup();
+      data.task.entities['task-1'].issueAttachmentNr = 0;
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].issueAttachmentNr).toBe(0);
+    });
+
+    it('should preserve issuePoints of 0 (not coerce to undefined)', () => {
+      const data = createLegacyBackup();
+      data.task.entities['task-1'].issuePoints = 0;
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].issuePoints).toBe(0);
+    });
+
+    it('should normalize null issueAttachmentNr and issuePoints to undefined', () => {
+      const data = createLegacyBackup();
+      data.task.entities['task-1'].issueAttachmentNr = null;
+      data.task.entities['task-1'].issuePoints = null;
+      const result = migrateLegacyBackup(data) as any;
+
+      expect(result.task.entities['task-1'].issueAttachmentNr).toBeUndefined();
+      expect(result.task.entities['task-1'].issuePoints).toBeUndefined();
+    });
+
     it('should handle backup with no tasks gracefully', () => {
       const data = createLegacyBackup({
         task: { ids: [], entities: {}, currentTaskId: null, __modelVersion: 3.6 },
