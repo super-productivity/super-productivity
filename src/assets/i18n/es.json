@@ -170,7 +170,7 @@
       "ADD_TIME_MINUTE": "Añadir 1 minuto",
       "B": {
         "BREAK_RUNNING": "Descanso en curso",
-        "END_SESSION": "FInalizar sesión",
+        "END_SESSION": "Finalizar sesión",
         "PAUSE": "Pausa",
         "POMODORO_BREAK_RUNNING": "El descanso #{{cycleNr}} está en curso",
         "POMODORO_SESSION_RUNNING": "La sesión Pomodoro #{{cycleNr}} está en curso",
