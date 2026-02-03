@@ -438,6 +438,110 @@ describe('InlineMarkdownComponent', () => {
     });
   });
 
+  describe('toggleChecklistMode', () => {
+    it('should preserve unsaved textarea content when adding checklist item while focused', () => {
+      // Arrange
+      const originalValue = 'original text';
+      const unsavedValue = 'unsaved typed content';
+      spyOn(component.changed, 'emit');
+
+      component.model = originalValue;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(true);
+
+      const mockTextareaEl = {
+        nativeElement: { value: unsavedValue, focus: () => {}, style: {} },
+      };
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component, 'wrapperEl').and.returnValue({
+        nativeElement: { style: {} },
+      } as any);
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert
+      expect(component.changed.emit).toHaveBeenCalledWith(unsavedValue);
+      expect(component.modelCopy()).toContain(unsavedValue);
+      expect(component.modelCopy()).toContain('- [ ] ');
+    });
+
+    it('should not emit when textarea value matches model', () => {
+      // Arrange
+      const value = 'same text';
+      spyOn(component.changed, 'emit');
+
+      component.model = value;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(true);
+
+      const mockTextareaEl = {
+        nativeElement: { value, focus: () => {}, style: {} },
+      };
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component, 'wrapperEl').and.returnValue({
+        nativeElement: { style: {} },
+      } as any);
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert
+      expect(component.changed.emit).not.toHaveBeenCalled();
+    });
+
+    it('should work from preview mode when textarea is not visible', () => {
+      // Arrange
+      const value = 'some text';
+      spyOn(component.changed, 'emit');
+
+      component.model = value;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert
+      expect(component.changed.emit).not.toHaveBeenCalled();
+      expect(component['_toggleShowEdit']).toHaveBeenCalled();
+    });
+
+    it('should create first checklist item when isDefaultText', () => {
+      // Arrange
+      spyOn(component.changed, 'emit');
+
+      component.model = '';
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(false);
+
+      spyOn(component, 'textareaEl').and.returnValue(undefined);
+      spyOn(component, 'isDefaultText').and.returnValue(true);
+      spyOn<any>(component, '_toggleShowEdit');
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert
+      expect(component.modelCopy()).toBe('- [ ] ');
+    });
+  });
+
   describe('_handleCheckboxClick edge cases', () => {
     let mockPreviewEl: { element: { nativeElement: HTMLElement } };
 

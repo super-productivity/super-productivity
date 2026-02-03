@@ -29,11 +29,10 @@ export type { DownloadResult } from '../core/types/sync-results.types';
 /**
  * Handles downloading remote operations from storage.
  *
- * CURRENT ARCHITECTURE (as of Dec 2025):
- * - Only SuperSync uses operation log sync (it implements OperationSyncCapable)
+ * CURRENT ARCHITECTURE:
  * - SuperSync uses API-based sync via `_downloadRemoteOpsViaApi()`
- * - Legacy providers (WebDAV, Dropbox, LocalFile) do NOT use operation log sync at all
- *   They use pfapi's model-level LWW sync instead (see sync.service.ts:104)
+ * - File-based providers (WebDAV, Dropbox, LocalFile) also use operation log sync
+ *   via `FileBasedSyncAdapterService` which creates `OperationSyncCapable` adapters
  *
  * This service only handles downloading and filtering - conflict detection
  * and application are handled by OperationLogSyncService.

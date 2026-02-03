@@ -2256,6 +2256,48 @@ describe('ConflictResolutionService', () => {
         jasmine.any(Object),
       );
     });
+
+    it('should prevent entity resurrection when multiple conflicts exist for same entity with local archive', async () => {
+      const now = Date.now();
+      // Two conflicts for the same entity (task-1):
+      // - Conflict 1: local archive vs remote field update
+      // - Conflict 2: local field update vs remote field update (no archive in THIS conflict)
+      // Pre-scan detects that task-1 has a local archive across ALL conflicts.
+      // Conflict 2 must NOT apply remote ops (which would resurrect the archived entity).
+      const conflicts: EntityConflict[] = [
+        createConflict(
+          'task-1',
+          [createArchiveOp('local-archive', 'client-a', now)],
+          [createOpWithTimestamp('remote-status-update', 'client-b', now + 5000)],
+        ),
+        createConflict(
+          'task-1',
+          [createOpWithTimestamp('local-title-update', 'client-a', now - 1000)],
+          [createOpWithTimestamp('remote-notes-update', 'client-b', now + 5000)],
+        ),
+      ];
+
+      const result = await service.autoResolveConflictsLWW(conflicts);
+
+      // Archive-win op should be created (from Conflict 1)
+      expect(result.localWinOpsCreated).toBe(1);
+      expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        }),
+        'local',
+      );
+
+      // No remote ops should be applied to the store — both conflicts resolve
+      // as local-wins, so allOpsToApply is empty and applyOperations is never called.
+      // This prevents remote-notes-update from resurrecting the entity via addOne().
+      expect(mockOperationApplier.applyOperations).not.toHaveBeenCalled();
+
+      // Both sets of remote ops should be rejected (stored for history but not applied)
+      expect(mockOpLogStore.markRejected).toHaveBeenCalledWith(
+        jasmine.arrayContaining(['remote-status-update', 'remote-notes-update']),
+      );
+    });
   });
 
   describe('vector clock pruning in conflict resolution', () => {
@@ -2556,6 +2598,154 @@ describe('ConflictResolutionService', () => {
       // Local archive wins over remote DELETE
       expect(result.localWinOpsCreated).toBe(1);
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
+    });
+  });
+
+  describe('checkOpForConflicts', () => {
+    const buildCtx = (overrides: {
+      localPendingOpsByEntity?: Map<string, Operation[]>;
+      appliedFrontierByEntity?: Map<string, VectorClock>;
+      snapshotVectorClock?: VectorClock;
+      snapshotEntityKeys?: Set<string>;
+      hasNoSnapshotClock?: boolean;
+    }): {
+      localPendingOpsByEntity: Map<string, Operation[]>;
+      appliedFrontierByEntity: Map<string, VectorClock>;
+      snapshotVectorClock: VectorClock | undefined;
+      snapshotEntityKeys: Set<string>;
+      hasNoSnapshotClock: boolean;
+    } => ({
+      localPendingOpsByEntity: overrides.localPendingOpsByEntity ?? new Map(),
+      appliedFrontierByEntity: overrides.appliedFrontierByEntity ?? new Map(),
+      snapshotVectorClock: overrides.snapshotVectorClock,
+      snapshotEntityKeys: overrides.snapshotEntityKeys ?? new Set(),
+      hasNoSnapshotClock: overrides.hasNoSnapshotClock ?? true,
+    });
+
+    it('should mark CONCURRENT remote op as superseded when entity no longer in state', async () => {
+      // Scenario: Client A archived a task (already synced), Client B sends a
+      // concurrent update. Client A has no pending ops, but local frontier
+      // shows CONCURRENT clocks. Entity is gone from NgRx store.
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        vectorClock: { clientB: 1 },
+      };
+
+      // Local frontier has {clientA: 1} from an already-synced archive op,
+      // producing CONCURRENT with remote's {clientB: 1}
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      // Entity no longer in state (archived/deleted)
+      mockStore.select.and.returnValue(of(undefined));
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(true);
+      expect(result.conflict).toBeNull();
+    });
+
+    it('should NOT mark CONCURRENT remote op as superseded when entity still in state', async () => {
+      // Same CONCURRENT scenario, but entity still exists (no archive/delete)
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        vectorClock: { clientB: 1 },
+      };
+
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      // Entity still exists in state
+      mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Still here' }));
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(false);
+      expect(result.conflict).toBeNull();
+    });
+
+    it('should mark CONCURRENT remote op as superseded when entity state is null', async () => {
+      // Some selectors may return null instead of undefined for missing entities
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        vectorClock: { clientB: 1 },
+      };
+
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      mockStore.select.and.returnValue(of(null));
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(true);
+      expect(result.conflict).toBeNull();
+    });
+
+    it('should NOT check entity state for LESS_THAN remote op with no pending ops', async () => {
+      // LESS_THAN means remote is newer — should apply normally without entity check
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientA'),
+        entityId: 'task-1',
+        vectorClock: { clientA: 2 },
+      };
+
+      // Local frontier has {clientA: 1}, remote has {clientA: 2} = LESS_THAN
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(false);
+      expect(result.conflict).toBeNull();
+      // Should NOT have called store.select for entity state check
+      expect(mockStore.select).not.toHaveBeenCalled();
+    });
+
+    it('should detect CONCURRENT conflict when pending local ops exist', async () => {
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        vectorClock: { clientB: 1 },
+      };
+
+      const localOp: Operation = {
+        ...createMockOp('local-1', 'clientA'),
+        entityId: 'task-1',
+        vectorClock: { clientA: 1 },
+      };
+
+      const localPendingOpsByEntity = new Map<string, Operation[]>();
+      localPendingOpsByEntity.set('TASK:task-1', [localOp]);
+
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity, appliedFrontierByEntity }),
+      );
+
+      expect(result.isSupersededOrDuplicate).toBe(false);
+      expect(result.conflict).not.toBeNull();
+      expect(result.conflict!.entityId).toBe('task-1');
+      // Should NOT have called store.select — pending ops exist, so normal conflict path
+      expect(mockStore.select).not.toHaveBeenCalled();
     });
   });
 });

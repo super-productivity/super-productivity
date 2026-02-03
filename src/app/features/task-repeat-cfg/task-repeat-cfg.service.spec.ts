@@ -451,16 +451,19 @@ describe('TaskRepeatCfgService', () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
-    it('should not create task if task with matching dueDay already exists (legacy check)', async () => {
+    it('should not create task if task with matching created date already exists (legacy check)', async () => {
       const today = new Date();
       const targetDayDate = today.getTime();
-      const expectedDueDay = getDbDateStr(targetDayDate);
 
-      // Existing task has a different ID but same dueDay (legacy task)
+      // Compute the expected creation timestamp (noon on target day, same as service does)
+      const targetCreatedDate = new Date(targetDayDate);
+      targetCreatedDate.setHours(12, 0, 0, 0);
+
+      // Existing task has a different ID but same created date (legacy task without deterministic ID)
       const existingLegacyTask = {
         ...mockTaskWithSubTasks,
         id: 'legacy-random-id-12345',
-        dueDay: expectedDueDay,
+        created: targetCreatedDate.getTime(),
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([existingLegacyTask]),
@@ -469,6 +472,39 @@ describe('TaskRepeatCfgService', () => {
       await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
 
       expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should create task even if existing task has matching dueDay but different created date (#6192)', async () => {
+      const today = new Date();
+      const targetDayDate = today.getTime();
+      const expectedDueDay = getDbDateStr(targetDayDate);
+      const expectedId = getRepeatableTaskId(mockTaskRepeatCfg.id, expectedDueDay);
+
+      // Simulate: yesterday's recurring task was rescheduled to today via "Add to Today",
+      // which mutated dueDay to today. The created date is still yesterday (noon).
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(12, 0, 0, 0);
+
+      const rescheduledTask = {
+        ...mockTaskWithSubTasks,
+        id: 'legacy-random-id-yesterday',
+        dueDay: expectedDueDay, // mutated to today by planTasksForToday
+        created: yesterday.getTime(), // still yesterday
+      };
+      taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
+        of([rescheduledTask]),
+      );
+      taskService.createNewTaskWithDefaults.and.returnValue({
+        ...mockTask,
+        id: expectedId,
+        dueDay: expectedDueDay,
+      });
+
+      await service.createRepeatableTask(mockTaskRepeatCfg, targetDayDate);
+
+      // A new task should be created because the existing task's created date is yesterday
+      expect(dispatchSpy).toHaveBeenCalled();
     });
 
     it('should generate same deterministic ID for same config and day', async () => {
@@ -536,17 +572,20 @@ describe('TaskRepeatCfgService', () => {
       expect(actions).toEqual([]);
     });
 
-    it('should return empty array if legacy task with same dueDay exists', async () => {
+    it('should return empty array if legacy task with same created date exists', async () => {
       // Use today's date since mockTaskRepeatCfg has startDate=today
       const today = new Date();
       const targetDayDate = today.getTime();
-      const expectedDueDay = getDbDateStr(targetDayDate);
 
-      // Legacy task with random ID but matching dueDay
+      // Compute the expected creation timestamp (noon on target day, same as service does)
+      const targetCreatedDate = new Date(targetDayDate);
+      targetCreatedDate.setHours(12, 0, 0, 0);
+
+      // Legacy task with random ID but matching created date
       const legacyTask = {
         ...mockTaskWithSubTasks,
         id: 'old-random-nanoid-xyz',
-        dueDay: expectedDueDay,
+        created: targetCreatedDate.getTime(),
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(of([legacyTask]));
 
@@ -558,7 +597,7 @@ describe('TaskRepeatCfgService', () => {
       expect(actions).toEqual([]);
     });
 
-    it('should create task if no task with matching ID or dueDay exists', async () => {
+    it('should create task if no task with matching ID or created date exists', async () => {
       // Use today's date since mockTaskRepeatCfg has startDate=today
       const today = new Date();
       const targetDayDate = today.getTime();
@@ -568,11 +607,12 @@ describe('TaskRepeatCfgService', () => {
       // Different task exists (different day - yesterday)
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(12, 0, 0, 0);
       const yesterdayStr = getDbDateStr(yesterday);
       const differentDayTask = {
         ...mockTaskWithSubTasks,
         id: `rpt_test-cfg-id_${yesterdayStr}`,
-        dueDay: yesterdayStr,
+        created: yesterday.getTime(),
       };
       taskService.getTasksWithSubTasksByRepeatCfgId$.and.returnValue(
         of([differentDayTask]),

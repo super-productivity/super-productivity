@@ -1,0 +1,15 @@
+.form-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.suffix-wrapper {
+  line-height: 24px;
+
+  button {
+    width: 24px;
+    height: 24px;
+  }
+}

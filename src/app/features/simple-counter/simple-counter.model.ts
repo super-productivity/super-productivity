@@ -17,7 +17,9 @@ export interface SimpleCounterCfgFields {
   isTrackStreaks?: boolean;
   // can be undefined due to how form works :(
   streakMinValue?: number;
+  streakMode?: 'specific-days' | 'weekly-frequency';
   streakWeekDays?: { [key: number]: boolean };
+  streakWeeklyFrequency?: number;
 
   // adv cfg
   // repeated countdown reminder

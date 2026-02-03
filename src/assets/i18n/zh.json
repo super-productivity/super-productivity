@@ -2225,13 +2225,6 @@
     "UNPLAN_ALL_TASKS": "取消计划所有任务",
     "WORKLOG": "工作日志"
   },
-  "MIGRATE": {
-    "C_DOWNLOAD_BACKUP": "您想要下载旧数据的备份（可用于旧版本的超级生产力）吗？",
-    "DETECTED_LEGACY": "检测到旧数据。我们将为您迁移它！",
-    "E_MIGRATION_FAILED": "迁移失败！错误：",
-    "E_RESTART_FAILED": "自动重启失败。请手动重启应用！",
-    "SUCCESS": "迁移全部完成！现在重启应用..."
-  },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "从今日添加任务",
     "ARCHIVED_TASKS": {

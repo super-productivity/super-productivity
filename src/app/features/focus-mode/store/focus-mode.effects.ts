@@ -540,6 +540,23 @@ export class FocusModeEffects {
     ),
   );
 
+  // Stop tracking when exiting break to planning (if sync enabled)
+  // Without this, tracking continues running orphaned after the focus session is reset
+  stopTrackingOnExitBreakToPlanning$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(actions.exitBreakToPlanning),
+      withLatestFrom(
+        this.store.select(selectFocusModeConfig),
+        this.taskService.currentTaskId$,
+      ),
+      filter(
+        ([_, config, currentTaskId]) =>
+          !!config?.isSyncSessionWithTracking && !!currentTaskId,
+      ),
+      map(() => unsetCurrentTask()),
+    ),
+  );
+
   // Pause on idle
   pauseOnIdle$ = createEffect(() =>
     this.actions$.pipe(

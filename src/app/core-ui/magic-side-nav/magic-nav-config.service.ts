@@ -98,6 +98,9 @@ export class MagicNavConfigService {
   private readonly isDonatePageEnabled = computed(
     () => this._configService.appFeatures().isDonatePageEnabled,
   );
+  private readonly isHabitsEnabled = computed(
+    () => this._configService.appFeatures().isHabitsEnabled,
+  );
 
   constructor() {
     // TODO these should probably live in the _menuTreeService
@@ -404,6 +407,17 @@ export class MagicNavConfigService {
         label: T.MH.BOARDS,
         icon: 'grid_view',
         route: '/boards',
+      });
+    }
+
+    if (this.isHabitsEnabled()) {
+      items.push({
+        type: 'route',
+        id: 'habits',
+        label: T.MH.HABITS,
+        icon: 'check_box',
+        svgIcon: 'habit',
+        route: '/habits',
       });
     }
 

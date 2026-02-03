@@ -220,9 +220,12 @@ describe('Service Logic Integration', () => {
     conflictServiceSpy.autoResolveConflictsLWW.and.returnValue(
       Promise.resolve({ localWinOpsCreated: 0 }),
     );
-    // Intelligent mock that implements the actual conflict detection logic
+    // Simplified mock that implements core conflict detection logic.
+    // NOTE: Does not replicate the CONCURRENT + no-pending-ops entity-exists check
+    // from the real service (that check calls getCurrentEntityState to block ops for
+    // archived/deleted entities). This is acceptable for integration tests of the pipeline.
     conflictServiceSpy.checkOpForConflicts.and.callFake(
-      (
+      async (
         remoteOp: Operation,
         ctx: {
           localPendingOpsByEntity: Map<string, Operation[]>;
@@ -231,7 +234,10 @@ describe('Service Logic Integration', () => {
           snapshotEntityKeys: Set<string> | undefined;
           hasNoSnapshotClock: boolean;
         },
-      ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } => {
+      ): Promise<{
+        isSupersededOrDuplicate: boolean;
+        conflict: EntityConflict | null;
+      }> => {
         const entityIdsToCheck =
           remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 

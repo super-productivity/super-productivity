@@ -10,7 +10,7 @@
       "CHANGE_BACKGROUND": "Cambiar fondo"
     },
     "SKIP_SYNC_WAIT": "Omitir espera para sincronizar",
-    "UPDATE_WEB_APP": "Nueva versión disponible. ¿Cargar nueva versión?"
+    "UPDATE_WEB_APP": "Nueva versión disponible. ¿Quieres cargar la nueva versión?"
   },
   "BL": {
     "NO_TASKS": "Actualmente no hay tareas en tu backlog"
@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Editar adjunto",
         "LABELS": {
           "IMG": "Imagen",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Selecciona un tipo",
         "TYPES": {
@@ -64,12 +64,12 @@
         "EISENHAUER_MATRIX": "Matriz de Eisenhower",
         "IN_PROGRESS": "En Progreso",
         "KANBAN": "Kanban",
-        "NOT_URGENT_IMPORTANT": "No Urgente e Importante",
+        "NOT_URGENT_IMPORTANT": "Importante pero No Urgente",
         "NOT_URGENT_NOT_IMPORTANT": "No Urgente y No Importante",
         "TO_DO": "Por Hacer",
         "URGENT": "Urgente",
         "URGENT_IMPORTANT": "Urgente e Importante",
-        "URGENT_NOT_IMPORTANT": "Urgente y No Importante"
+        "URGENT_NOT_IMPORTANT": "Urgente pero No Importante"
       },
       "FORM": {
         "ADD_NEW_PANEL": "Añadir nuevo panel",
@@ -94,7 +94,7 @@
         "CREATE_NEW_TAGS_MSG": "Se necesitan crear {{nr}} nuevas etiquetas para que este tablero funcione",
         "EDIT_BOARD": "Editar tablero",
         "NO_PANELS_BTN": "Configurar tablero",
-        "NO_PANELS_MSG": "Este tablero no tiene paneles configurados. Añádele algunos paneles."
+        "NO_PANELS_MSG": "Este tablero no tiene paneles configurados. Añádele algunos."
       }
     },
     "CALDAV": {
@@ -139,7 +139,7 @@
     },
     "D_RATE": {
       "A_HOW": "Cómo y dónde calificar",
-      "BTN_DONT_BOTHER": "No me molestes otra vez",
+      "BTN_DONT_BOTHER": "No me molestes de nuevo",
       "TITLE": "🙈 Por favor, perdónanos, pero...",
       "TXT": "¡Ayudarías inmensamente al proyecto al <strong>darle una buena calificación, si te gusta!</strong>"
     },
@@ -169,8 +169,8 @@
     "FOCUS_MODE": {
       "ADD_TIME_MINUTE": "Añadir 1 minuto",
       "B": {
-        "BREAK_RUNNING": "El descanso está en curso",
-        "END_SESSION": "Terminar sesión",
+        "BREAK_RUNNING": "Descanso en curso",
+        "END_SESSION": "Finalizar sesión",
         "PAUSE": "Pausa",
         "POMODORO_BREAK_RUNNING": "El descanso #{{cycleNr}} está en curso",
         "POMODORO_SESSION_RUNNING": "La sesión Pomodoro #{{cycleNr}} está en curso",
@@ -210,7 +210,7 @@
       "RESUME_SESSION": "Reanudar sesión",
       "SELECT_MODE": "Elige tu modo de enfoque",
       "SELECT_TASK": "Selecciona la tarea en la que concentrarte",
-      "SELECT_TASK_TO_FOCUS": "Seleccionar tarea para enfocar",
+      "SELECT_TASK_TO_FOCUS": "Seleccionar tarea para enfocarte",
       "SESSION_COMPLETED": "¡Sesión de enfoque completada!",
       "SHORT_BREAK": "Descanso corto",
       "SHORT_BREAK_TITLE": "Descanso corto - Ciclo {{cycle}}",
@@ -727,7 +727,7 @@
         "HELP": "Ajustes de tema para tu proyecto.",
         "L_BACKGROUND_IMAGE_DARK": "URL de la imagen de fondo (tema oscuro)",
         "L_BACKGROUND_IMAGE_LIGHT": "URL de la imagen de fondo (tema claro)",
-        "L_COLOR_ACCENT": "Acentuar el color",
+        "L_COLOR_ACCENT": "Color de acento",
         "L_COLOR_PRIMARY": "Color primario",
         "L_COLOR_WARN": "Color de advertencia / error",
         "L_HUE_ACCENT": "Umbral para texto oscuro sobre fondo de color de acento",
@@ -1801,7 +1801,7 @@
   },
   "MH": {
     "ADD_NEW_TASK": "Añadir nueva Tarea",
-    "ALL_PLANNED_LIST": "Planificado / Repetir",
+    "ALL_PLANNED_LIST": "Planificado / Recurrente",
     "BOARDS": "Tableros",
     "COPY_TASK_LIST_MARKDOWN": "Copiar al Portapapeles",
     "CREATE_PROJECT": "Crear Proyecto",
@@ -1818,7 +1818,7 @@
       "CONTRIBUTE": "Contribuir",
       "GET_HELP_ONLINE": "Obtener ayuda online",
       "KEYBOARD": "Tutorial: Teclado Avanzado",
-      "REDDIT_COMMUNITY": "Comunidad Reddit",
+      "REDDIT_COMMUNITY": "Comunidad de Reddit",
       "REPORT_A_PROBLEM": "Reportar un problema",
       "START_WELCOME": "Iniciar Tour de Bienvenida",
       "SYNC": "Tutorial: Configurar Sync"
@@ -1826,7 +1826,7 @@
     "METRICS": "Métricas",
     "NO_TASKS_TO_TRACK": "Agrega una tarea primero para comenzar a rastrear el tiempo",
     "PLANNER": "Planificador",
-    "PROJECT_MENU": "Menú de Proyecto",
+    "PROJECT_MENU": "Menú del Proyecto",
     "PROJECTS": "Proyectos",
     "QUICK_HISTORY": "Historial Rápido",
     "SCHEDULE": "Cronograma",
@@ -2013,7 +2013,7 @@
     "SAVE": "Guardar"
   },
   "V": {
-    "E_DATETIME": "¡El valor introducido no es una fecha y hora!",
+    "E_DATETIME": "¡El valor introducido no es válido como fecha y hora!",
     "E_DURATION": "Por favor introduce una duración válida (p. ej. 1h)",
     "E_MAX": "No debería ser mayor que {{val}}",
     "E_MAX_LENGTH": "Debería tener máx {{val}} caracteres de largo",
@@ -2031,7 +2031,7 @@
     "FINISH_DAY": "Finalizar Día",
     "FINISH_DAY_TOOLTIP": "Evalúa tu día, mueve todas las tareas hechas al archivo (opcionalmente) y/o planifica tu próximo día.",
     "LATER_TODAY": "Más Tarde Hoy",
-    "MOVE_DONE_TO_ARCHIVE": "Mover hechas al archivo",
+    "MOVE_DONE_TO_ARCHIVE": "Mover tareas hechas al archivo",
     "NO_DONE_TASKS": "Actualmente no hay tareas hechas",
     "NO_PLANNED_TASK_ALL_DONE": "todas las tareas hechas",
     "NO_PLANNED_TASKS": "sin tareas planificadas",
@@ -2040,7 +2040,7 @@
     "TIME_ESTIMATED": "Tiempo Estimado:",
     "TODAY_REMAINING": "Restante hoy:",
     "WITHOUT_BREAK": "Sin descanso:",
-    "WORKING_TODAY": "Trabajando hoy:",
+    "WORKING_TODAY": "Trabajado hoy:",
     "WORKING_TODAY_ARCHIVED": "Tiempo trabajado hoy en tareas archivadas"
   }
 }

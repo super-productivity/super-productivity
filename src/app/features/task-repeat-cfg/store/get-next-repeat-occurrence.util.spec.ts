@@ -717,6 +717,69 @@ describe('getNextRepeatOccurrence()', () => {
     });
   });
 
+  describe('Biweekly with weekdays (#6298)', () => {
+    // Issue #6298: "Every 2 weeks Mon-Fri" starting Monday Feb 2, 2026
+    // Friday was incorrectly shifted to the next week due to Math.round in getDiffInWeeks
+    const START_DATE = new Date(2026, 1, 2); // Monday Feb 2, 2026
+
+    const biweeklyCfg = (lastCreationDay: Date): TaskRepeatCfg =>
+      dummyRepeatable('BIWEEKLY', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        monday: true,
+        tuesday: true,
+        wednesday: true,
+        thursday: true,
+        friday: true,
+        lastTaskCreationDay: getDbDateStr(lastCreationDay),
+      });
+
+    it('should include Friday of week 0 (same week as start)', () => {
+      // After Thursday Feb 5, next should be Friday Feb 6 (still week 0)
+      const cfg = biweeklyCfg(new Date(2026, 1, 5)); // Thu Feb 5
+      testCase(cfg, new Date(2026, 1, 5), START_DATE, new Date(2026, 1, 6)); // Fri Feb 6
+    });
+
+    it('should NOT include any day in week 1 (off-week)', () => {
+      // After Friday Feb 6 (end of week 0), next should jump to Monday Feb 16 (week 2)
+      const cfg = biweeklyCfg(new Date(2026, 1, 6)); // Fri Feb 6
+      testCase(cfg, new Date(2026, 1, 6), START_DATE, new Date(2026, 1, 16)); // Mon Feb 16
+    });
+
+    it('should produce correct 4-week schedule from Monday start', () => {
+      // Week 0 (active): Mon Feb 2 - Fri Feb 6
+      // Week 1 (off): no tasks
+      // Week 2 (active): Mon Feb 16 - Fri Feb 20
+      // Week 3 (off): no tasks
+
+      // Starting from the start date, walk through the schedule
+      let cfg = biweeklyCfg(new Date(2026, 0, 1)); // before start
+      testCase(cfg, new Date(2026, 1, 1), START_DATE, new Date(2026, 1, 2)); // Mon Feb 2
+
+      cfg = biweeklyCfg(new Date(2026, 1, 2));
+      testCase(cfg, new Date(2026, 1, 2), START_DATE, new Date(2026, 1, 3)); // Tue Feb 3
+
+      cfg = biweeklyCfg(new Date(2026, 1, 3));
+      testCase(cfg, new Date(2026, 1, 3), START_DATE, new Date(2026, 1, 4)); // Wed Feb 4
+
+      cfg = biweeklyCfg(new Date(2026, 1, 4));
+      testCase(cfg, new Date(2026, 1, 4), START_DATE, new Date(2026, 1, 5)); // Thu Feb 5
+
+      cfg = biweeklyCfg(new Date(2026, 1, 5));
+      testCase(cfg, new Date(2026, 1, 5), START_DATE, new Date(2026, 1, 6)); // Fri Feb 6
+
+      // Skip week 1 entirely, jump to week 2
+      cfg = biweeklyCfg(new Date(2026, 1, 6));
+      testCase(cfg, new Date(2026, 1, 6), START_DATE, new Date(2026, 1, 16)); // Mon Feb 16
+
+      cfg = biweeklyCfg(new Date(2026, 1, 16));
+      testCase(cfg, new Date(2026, 1, 16), START_DATE, new Date(2026, 1, 17)); // Tue Feb 17
+
+      cfg = biweeklyCfg(new Date(2026, 1, 20));
+      testCase(cfg, new Date(2026, 1, 20), START_DATE, new Date(2026, 2, 2)); // Mon Mar 2 (week 4)
+    });
+  });
+
   describe('Edge cases', () => {
     it('should return null for unknown repeat cycle', () => {
       const cfg = dummyRepeatable('ID1', {

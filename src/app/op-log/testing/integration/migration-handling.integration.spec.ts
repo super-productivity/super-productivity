@@ -56,7 +56,7 @@ describe('Migration Handling Integration', () => {
               'autoResolveConflictsLWW',
               'checkOpForConflicts',
             ]);
-            spy.checkOpForConflicts.and.returnValue({
+            spy.checkOpForConflicts.and.resolveTo({
               isSupersededOrDuplicate: false,
               conflict: null,
             });

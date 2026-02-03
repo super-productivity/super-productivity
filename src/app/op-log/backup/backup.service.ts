@@ -22,6 +22,7 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
+import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 
 /**
  * Service for handling backup import and export operations.
@@ -89,12 +90,21 @@ export class BackupService {
 
       if ('crossModelVersion' in data && 'timestamp' in data && 'data' in data) {
         backupData = data.data;
-        // crossModelVersion was used for cross-model migrations, which are now removed
       } else {
         backupData = data as AppDataComplete;
       }
 
-      // 2. Validate data
+      // 2. Migrate legacy backups (pre-v14) that have the old data shape
+      if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
+        PFLog.normal(
+          'BackupService: Detected legacy backup format, running migration...',
+        );
+        backupData = migrateLegacyBackup(
+          backupData as unknown as Record<string, unknown>,
+        );
+      }
+
+      // 3. Validate data
       const validationResult = validateFull(backupData);
       let validatedData = backupData;
 
@@ -120,13 +130,13 @@ export class BackupService {
         }
       }
 
-      // 3. Persist to operation log
+      // 4. Persist to operation log
       await this._persistImportToOperationLog(validatedData, isForceConflict);
 
-      // 4. Dispatch to NgRx
+      // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
 
-      // 5. Write archive data to IndexedDB
+      // 6. Write archive data to IndexedDB
       // ArchiveOperationHandler._handleLoadAllData() skips local imports (isRemote=false),
       // so we must write archive data here for local backup imports.
       await this._writeArchivesToIndexedDB(validatedData);

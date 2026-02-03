@@ -791,6 +791,58 @@ describe('FocusModeEffects', () => {
     });
   });
 
+  describe('stopTrackingOnExitBreakToPlanning$', () => {
+    it('should dispatch unsetCurrentTask when sync is enabled and task is being tracked', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next('task-123');
+
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe((action) => {
+        expect(action).toEqual(unsetCurrentTask());
+        done();
+      });
+    });
+
+    it('should not dispatch when sync is disabled', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next('task-123');
+
+      const result: any[] = [];
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
+        next: (action) => result.push(action),
+        complete: () => {
+          expect(result.length).toBe(0);
+          done();
+        },
+      });
+    });
+
+    it('should not dispatch when no task is being tracked', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next(null);
+
+      const result: any[] = [];
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
+        next: (action) => result.push(action),
+        complete: () => {
+          expect(result.length).toBe(0);
+          done();
+        },
+      });
+    });
+  });
+
   describe('pauseOnIdle$', () => {
     it('should dispatch pauseFocusSession when openIdleDialog is dispatched', (done) => {
       actions$ = of(

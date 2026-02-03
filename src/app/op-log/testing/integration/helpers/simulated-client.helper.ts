@@ -44,6 +44,7 @@ import { TestClient } from './test-client.helper';
  */
 export class SimulatedClient {
   readonly clientId: string;
+  downloadLimit = 500;
   private testClient: TestClient;
   private lastKnownServerSeq: number = 0;
 
@@ -75,6 +76,33 @@ export class SimulatedClient {
 
     await this.store.append(op, 'local');
     return op;
+  }
+
+  /**
+   * Create and store a batch of local operations.
+   * Uses testClient.createOperation() per op for correct vector clock increments,
+   * then stores all at once via appendBatch().
+   */
+  async createLocalOpsBatch(
+    items: Array<{
+      entityType: string;
+      entityId: string;
+      opType: OpType;
+      actionType: string;
+      payload: Record<string, unknown>;
+    }>,
+  ): Promise<Operation[]> {
+    const ops = items.map((item) =>
+      this.testClient.createOperation({
+        actionType: item.actionType,
+        opType: item.opType,
+        entityType: item.entityType as any,
+        entityId: item.entityId,
+        payload: item.payload,
+      }),
+    );
+    await this.store.appendBatch(ops, 'local');
+    return ops;
   }
 
   /**
@@ -153,7 +181,7 @@ export class SimulatedClient {
     const response = server.downloadOps(
       this.lastKnownServerSeq,
       this.clientId, // Exclude own ops
-      500,
+      this.downloadLimit,
     );
 
     // Update last known seq based on received ops to ensure pagination works

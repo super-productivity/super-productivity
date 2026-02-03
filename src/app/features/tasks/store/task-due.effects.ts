@@ -28,6 +28,7 @@ import { TaskLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { environment } from '../../../../environments/environment';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
+import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 
 @Injectable()
 export class TaskDueEffects {
@@ -47,8 +48,11 @@ export class TaskDueEffects {
           // Keep listening for date changes throughout the app lifecycle
           this._globalTrackingIntervalService.todayDateStr$.pipe(
             distinctUntilChanged(),
-            // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
-            filter(() => !this._hydrationState.isApplyingRemoteOps()),
+            // Wait for sync window to end instead of dropping the emission (#6192)
+            waitForSyncWindow(
+              this._hydrationState,
+              'TaskDueEffects:createRepeatableTasksAndAddDueToday$',
+            ),
             switchMap((dateStr) => {
               TaskLog.log(
                 '[TaskDueEffects] Date changed, processing tasks for:',
@@ -82,8 +86,11 @@ export class TaskDueEffects {
         // Keep listening for date changes throughout the app lifecycle
         this._globalTrackingIntervalService.todayDateStr$.pipe(
           distinctUntilChanged(),
-          // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
-          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          // Wait for sync window to end instead of dropping the emission (#6192)
+          waitForSyncWindow(
+            this._hydrationState,
+            'TaskDueEffects:removeOverdueFormToday$',
+          ),
           switchMap((dateStr) => {
             TaskLog.log('[TaskDueEffects] Date changed, removing overdue for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
@@ -125,10 +132,13 @@ export class TaskDueEffects {
         // Keep listening for date changes throughout the app lifecycle
         this._globalTrackingIntervalService.todayDateStr$.pipe(
           distinctUntilChanged(),
-          // Skip if we're currently applying remote operations (prevents effects firing during sync replay)
-          filter(() => !this._hydrationState.isApplyingRemoteOps()),
+          // Wait for sync window to end instead of dropping the emission (#6192)
+          waitForSyncWindow(
+            this._hydrationState,
+            'TaskDueEffects:ensureTasksDueTodayInTodayTag$',
+          ),
           switchMap((dateStr) => {
-            TaskLog.log('[TaskDueEffects] Date changed, ensuring tasks for:', dateStr);
+            TaskLog.log('[TaskDueEffects] Ensuring tasks for:', dateStr);
             return this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$;
           }),
           debounceTime(2000), // Wait a bit longer to ensure all other effects have run

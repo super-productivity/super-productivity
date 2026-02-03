@@ -56,6 +56,11 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       templateOptions: { label: T.GCF.APP_FEATURES.DONATE_PAGE },
     },
     {
+      key: 'isHabitsEnabled',
+      type: 'checkbox',
+      templateOptions: { label: T.GCF.APP_FEATURES.HABITS },
+    },
+    {
       key: 'isEnableUserProfiles',
       type: 'checkbox',
       templateOptions: {

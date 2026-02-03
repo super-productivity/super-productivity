@@ -50,9 +50,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    // Multi-client import tests need extra time for sync operations
-    testInfo.setTimeout(120000);
+  }) => {
+    test.slow();
+
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -153,9 +153,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    // Multi-client import tests need extra time for sync operations
-    testInfo.setTimeout(120000);
+  }) => {
+    test.slow();
+
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -263,9 +263,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
+  }) => {
     // USE_REMOTE involves downloading server state, which takes longer
-    testInfo.setTimeout(180000);
+    test.slow();
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -323,7 +323,10 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
 
       // Wait for sync to fully complete after USE_REMOTE (downloads server state)
       // This is more reliable than a fixed timeout as it waits for actual sync completion
-      await clientB.sync.waitForSyncToComplete(30000);
+      await clientB.sync.waitForSyncToComplete({
+        timeout: 30000,
+        skipSpinnerCheck: true,
+      });
       console.log('[USE_REMOTE] Client B chose USE_REMOTE');
 
       // ============ PHASE 4: Verify Client B State ============
@@ -365,9 +368,9 @@ test.describe('@supersync @import-conflict Sync Import Conflict Dialog', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    // CANCEL test verifies both clients, needs extra time
-    testInfo.setTimeout(180000);
+  }) => {
+    test.slow();
+
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
