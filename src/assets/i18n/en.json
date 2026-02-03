@@ -31,7 +31,7 @@
   },
   "DIALOG_UNSPLASH_PICKER": {
     "BY": "by",
-    "NO_RESULTS": "No images found. Try a different search term.",
+    "NO_RESULTS": "No images found. Please try a different search term.",
     "SEARCH_LABEL": "Search images",
     "SEARCH_PLACEHOLDER": "e.g. nature, mountains, abstract",
     "TITLE": "Select Background Image from Unsplash"
@@ -87,7 +87,7 @@
       },
       "V": {
         "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Do you really want to delete this board?",
+        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
         "CREATE_NEW_TAGS_BTN": "Create Tags",
         "CREATE_NEW_TAGS_MSG": "{{nr}} new tags needs to be created for this board to work",
         "CREATE_NEW_TAG_BTN": "Create Tag",
@@ -150,14 +150,14 @@
         "L_INTERVAL": "Interval to repeat phrase",
         "L_TEXT": "Text",
         "L_TEXT_DESCRIPTION": "e.g. \"Work on ${currentTaskTitle}!\"",
-        "L_VOICE": "Select a Voice",
+        "L_VOICE": "Select a voice",
         "L_VOICE_DESCRIPTION": "Choose a voice",
         "TITLE": "Voice Reminder"
       }
     },
     "DROPBOX": {
       "S": {
-        "OFFLINE": "Dropbox: Unable to sync, because offline",
+        "OFFLINE": "Dropbox: Unable to sync because offline",
         "SYNC_ERROR": "Dropbox: Error while syncing",
         "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable version."
       }
@@ -170,7 +170,7 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} completed tasks in your Today list not yet moved to the archive. Do you really want to quit without finishing your day?"
+        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} completed tasks in your Today list not yet moved to the archive. Are you sure you want to quit without finishing your day?"
       }
     },
     "FOCUS_MODE": {
@@ -238,7 +238,7 @@
       "FORM": {
         "HOST": "Host (e.g. https://try.gitea.io)",
         "REPO_FULL_NAME": "Username or Organization name/project",
-        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL, when viewing the project in a web browser.",
+        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL when viewing the project in a web browser.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -313,7 +313,7 @@
         "SOURCE_GROUP": "Group",
         "SOURCE_PROJECT": "Project",
         "SUBMIT_TIMELOGS": "Submit timelogs to GitLab",
-        "SUBMIT_TIMELOGS_DESCRIPTION": "Show Time Tracking Dialog after clicking on \"Finish Day\"",
+        "SUBMIT_TIMELOGS_DESCRIPTION": "Show time tracking dialog after clicking on \"Finish Day\"",
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
@@ -335,7 +335,7 @@
       }
     },
     "ISSUE": {
-      "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your web browser. Please download the Desktop or Android version of Super Productivity!",
+      "CROSS_ORIGIN_BROWSER_WARNING": "This integration will likely not work in your web browser. Please download the desktop or Android version of Super Productivity!",
       "DEFAULT": {
         "ISSUES_STR": "issues",
         "ISSUE_STR": "issue"
@@ -450,7 +450,7 @@
         "WORKLOG_DEFAULT_YESTERDAY": "Fill only time spent yesterday"
       },
       "FORM_CRED": {
-        "ALLOW_SELF_SIGNED": "Allow self signed certificate",
+        "ALLOW_SELF_SIGNED": "Allow self-signed certificate",
         "HOST": "Host (e.g. https://my-host.de:1234)",
         "PASSWORD": "Token / Password",
         "USER_NAME": "Email / Username",
@@ -678,7 +678,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for OpenProject project",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed",
         "PROJECT_ID": "Project ID",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL, when viewing the project in the web browser.",
+        "PROJECT_ID_DESCRIPTION": "Can be found as part of the URL when viewing the project in the web browser.",
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
@@ -851,7 +851,7 @@
     },
     "SCHEDULE": {
       "D_INITIAL": {
-        "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended) regular tasks will never show up outside of these boundaries.</p>",
+        "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
         "TITLE": "Schedule"
       },
       "END": "Work End",
@@ -868,7 +868,7 @@
     "SEARCH_BAR": {
       "INFO": "Start typing to search for tasks",
       "NO_RESULTS": "No tasks found matching your search",
-      "PLACEHOLDER": "Search for task or task description"
+      "PLACEHOLDER": "Search for task or task notes"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -882,24 +882,24 @@
         "L_COUNTER": "Count"
       },
       "FORM": {
-        "ADD_NEW": "Add simple counter/ habit",
-        "HELP": "Here you can configure simple buttons which will appear at the top right. They can either be timers or just a simple counter which is counted up by clicking on it. By enabling 'Track Streaks' you can use these for habit tracking.",
+        "ADD_NEW": "Add simple counter / habit",
+        "HELP": "Here you can configure simple buttons which will appear at the top right. They can either be timers or simple counters that are counted up by clicking on them. By enabling 'Track Streaks' you can use these for habit tracking.",
         "L_COUNTDOWN_DURATION": "Countdown duration",
         "L_DAILY_GOAL": "Daily goal for successful streak",
         "L_ICON": "Icon",
         "L_ICON_ON": "Icon when toggled on",
         "L_IS_ENABLED": "Enabled",
         "L_TITLE": "Title",
-        "L_TRACK_STREAKS": "Track Streaks",
+        "L_TRACK_STREAKS": "Track streaks",
         "L_TYPE": "Type",
         "L_WEEKDAYS": "Weekdays to check for streak",
         "L_STREAK_MODE": "Streak tracking mode",
         "L_STREAK_MODE_SPECIFIC_DAYS": "Specific weekdays",
-        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Weekly frequency (e.g., 3 times per week)",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Weekly frequency (e.g. 3 times per week)",
         "L_WEEKLY_FREQUENCY": "Completions per week",
         "TITLE": "Simple Counters & Habit Tracking",
-        "TYPE_CLICK_COUNTER": "Click Counter",
-        "TYPE_REPEATED_COUNTDOWN": "Repeated Countdown",
+        "TYPE_CLICK_COUNTER": "Click counter",
+        "TYPE_REPEATED_COUNTDOWN": "Repeated countdown",
         "TYPE_STOPWATCH": "Stopwatch"
       },
       "HABIT_TRACKER": {
@@ -921,7 +921,7 @@
       "BTN_SYNC_NOW": "Sync Now",
       "BTN_RESTORE_FROM_HISTORY": "Restore from History",
       "C": {
-        "FORCE_UPLOAD": "Forcing an upload of your data could lead to data loss. Continue?"
+        "FORCE_UPLOAD": "Forcing an upload of your data could lead to data loss. Are you sure you want to continue?"
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
@@ -1042,7 +1042,7 @@
           "L_SYNC_FILE_NAME": "Sync File Name"
         },
         "LOCAL_FILE": {
-          "INFO_TEXT": "Local File sync stores data in a folder on your device. <strong>Important:</strong> Do not use file-syncing tools like Syncthing, Resilio, or similar to sync this folder between devices - they can cause conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "Local file sync stores data in a folder on your device. <strong>Important:</strong> Do not use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices - they can cause conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
@@ -1061,7 +1061,7 @@
           "CHANGE_PASSWORD_WARNING": "WARNING: This will permanently delete ALL sync history and backups on the server. Previous versions cannot be recovered. Your current data will be re-uploaded with the new password. All other devices will need the new password.",
           "FORCE_OVERWRITE_INFO": "If you can't sync because you don't know the current encryption password, you can overwrite the server with your local data and a new password.",
           "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
-          "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Continue?",
+          "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Are you sure you want to continue?",
           "CHANGE_PASSWORD_SUCCESS": "Encryption password changed successfully",
           "L_NEW_PASSWORD": "New Encryption Password",
           "L_CONFIRM_PASSWORD": "Confirm Password",
@@ -1112,14 +1112,14 @@
           "NOTE": "Your local data will be replaced with the imported data regardless of this choice.",
           "BTN_CONTINUE": "Import and Change Encryption"
         },
-        "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
+        "L_ENABLE_COMPRESSION": "Enable compression (faster data transfer)",
         "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Keep your data private from your sync provider",
-        "L_ENABLE_SYNCING": "Enable Syncing",
+        "L_ENABLE_SYNCING": "Enable syncing",
         "L_ENCRYPTION_NOTES": "IMPORTANT NOTES: You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please note that <strong>you will NOT be able to access your data, if you forget this password! There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart most attacks, but <strong>there is no guarantee.</strong>",
         "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET IT!)",
-        "L_SYNC_INTERVAL": "Sync Interval",
+        "L_SYNC_INTERVAL": "Sync interval",
         "L_MANUAL_SYNC_ONLY": "Only sync manually (disable automatic sync)",
-        "L_SYNC_PROVIDER": "Sync Provider",
+        "L_SYNC_PROVIDER": "Sync provider",
         "PASSWORD_SET_INFO": "🔒 Encryption password is set.",
         "BTN_CHANGE_PASSWORD": "Change Password",
         "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
@@ -1194,7 +1194,7 @@
         "HYDRATION_FAILED": "Failed to load data. Please reload the app.",
         "INTEGRITY_CHECK_FAILED": "Data integrity issue detected. Auto-repair attempted. If you experience issues, please reload the app.",
         "IMPORTING": "Importing data",
-        "INCOMPLETE_CFG": "Authentication for sync failed. Please check your Config!",
+        "INCOMPLETE_CFG": "Authentication for sync failed. Please check your config!",
         "INCOMPLETE_OP_SYNC": "Sync incomplete: {{count}} operation file(s) failed to download",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
         "INITIAL_SYNC_ERROR": "Initial Sync failed",
@@ -1206,9 +1206,9 @@
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
-        "STORAGE_QUOTA_EXCEEDED": "Sync server storage is full. Your changes are NOT syncing. Please archive old tasks or upgrade your plan.",
+        "STORAGE_QUOTA_EXCEEDED": "Sync server storage is full. Your changes are NOT syncing! Please archive old tasks or upgrade your plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
-        "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have a lot of archived tasks. Your data was NOT synced.\n\nPlease contact support for assistance.",
+        "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have many archived tasks. Your data was NOT synced!\n\nPlease contact support for assistance.",
         "SUCCESS_DOWNLOAD": "Synced data from remote",
         "SUCCESS_VIA_BUTTON": "Data successfully synced",
         "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}",
@@ -1289,7 +1289,7 @@
       },
       "S": {
         "ARCHIVE_CLEANUP_FAILED": "Failed to clean up archived data for deleted tag",
-        "UPDATED": "Tag Settings were updated"
+        "UPDATED": "Tag settings were updated"
       },
       "TTL": {
         "ADD_NEW_TAG": "Add new Tag"
@@ -1316,12 +1316,12 @@
     "TASK": {
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Attachments",
-        "ADD_SUB_TASK": "Add Subtask",
+        "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Attachments ({{nr}})",
         "DUE": "Planned for",
-        "FROM_PARENT": "(from Parent)",
-        "LOCAL_ATTACHMENTS": "Local Attachments",
-        "NOTES": "Description",
+        "FROM_PARENT": "(from parent)",
+        "LOCAL_ATTACHMENTS": "Local attachments",
+        "NOTES": "Note",
         "PARENT": "Parent",
         "REMINDER": "Reminder",
         "REPEAT": "Recur",
@@ -1368,7 +1368,7 @@
         "DROP_ATTACHMENT": "Drop here to attach to \"{{title}}\"",
         "DUPLICATE": "Duplicate",
         "EDIT_SCHEDULED": "Reschedule",
-        "FOCUS_SESSION": "Start Focus Session",
+        "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
         "MOVE_TO_BACKLOG": "Move to backlog",
         "MOVE_TO_OTHER_PROJECT": "Move to project",
@@ -1379,8 +1379,8 @@
         "OPEN_TIME": "Time tracking",
         "REMOVE_FROM_MY_DAY": "Remove from Today",
         "SCHEDULE": "Schedule task",
-        "TOGGLE_ATTACHMENTS": "Show/Hide attachments",
-        "TOGGLE_DETAIL_PANEL": "Show/Hide additional info",
+        "TOGGLE_ATTACHMENTS": "Show/hide attachments",
+        "TOGGLE_DETAIL_PANEL": "Show/hide additional info",
         "TOGGLE_DONE": "Toggle completion status",
         "TOGGLE_SUB_TASK_VISIBILITY": "Toggle subtask visibility",
         "TOGGLE_TAGS": "Toggle tags",
@@ -1691,7 +1691,7 @@
           "FULL_HALF_HOURS": "full half hours",
           "FULL_HOURS": "full hours",
           "FULL_QUARTERS": "full quarters",
-          "NOTES": "Task Descriptions",
+          "NOTES": "Task Notes",
           "PARENT_TASK": "Parent Task",
           "PARENT_TASK_TITLES_ONLY": "Parent Task Titles only",
           "PROJECTS": "Project Names",
@@ -1780,8 +1780,8 @@
     "ICON_INP_DESCRIPTION": "All UTF-8 emojis are also supported!",
     "INBOX_PROJECT_TITLE": "Inbox",
     "MINUTES": "{{m}} minutes",
-    "MOVE_BACKWARD": "Move Backward",
-    "MOVE_FORWARD": "Move Forward",
+    "MOVE_BACKWARD": "Move backward",
+    "MOVE_FORWARD": "Move forward",
     "NEXT": "Next",
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
@@ -1801,20 +1801,20 @@
   "GCF": {
     "APP_FEATURES": {
       "BOARDS": "Boards",
-      "DONATE_PAGE": "Donate Page",
-      "FOCUS_MODE": "Focus Mode",
+      "DONATE_PAGE": "Donate page",
+      "FOCUS_MODE": "Focus mode",
       "HABITS": "Habits",
       "HELP": "Enable or disable specific app features across the UI.",
-      "ISSUES_PANEL": "Issues Panel",
+      "ISSUES_PANEL": "Issues panel",
       "PLANNER": "Planner",
-      "PROJECT_NOTES": "Project Notes",
+      "PROJECT_NOTES": "Project notes",
       "SCHEDULE": "Schedule",
-      "SCHEDULE_DAY_PANEL": "Schedule Day Panel",
-      "SYNC_BUTTON": "Sync Button",
-      "TIME_TRACKING": "Stopwatch Time Tracking",
+      "SCHEDULE_DAY_PANEL": "Schedule day panel",
+      "SYNC_BUTTON": "Sync button",
+      "TIME_TRACKING": "Stopwatch time tracking",
       "TITLE": "App Features",
-      "USER_PROFILES": "User profiles (Experimental)",
-      "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature, no guarantees. Make sure to have a backup!)"
+      "USER_PROFILES": "User profiles (experimental)",
+      "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature. No guarantees. Make sure to have a backup!)"
     },
     "AUTO_BACKUPS": {
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
@@ -1834,7 +1834,7 @@
       "TITLE": "Evaluation & Metrics"
     },
     "FOCUS_MODE": {
-      "HELP": "Focus Mode opens up a distraction-free screen to help you focus on your current task.",
+      "HELP": "Focus mode opens a distraction-free screen to help you focus on your current task.",
       "L_IS_PLAY_TICK": "Play ticking sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
@@ -1858,18 +1858,18 @@
       "ADD_NEW_NOTE": "Add new note",
       "ADD_NEW_PROJECT": "Add new project",
       "ADD_NEW_TASK": "Add new task",
-      "APP_WIDE_SHORTCUTS": "Global Shortcuts (application wide)",
+      "APP_WIDE_SHORTCUTS": "Global Shortcuts (application-wide)",
       "COLLAPSE_SUB_TASKS": "Collapse subtasks",
       "EXPAND_SUB_TASKS": "Expand subtasks",
       "GLOBAL_ADD_NOTE": "Add new note",
       "GLOBAL_ADD_TASK": "Add new task",
-      "GLOBAL_SHOW_HIDE": "Show/Hide Super Productivity",
+      "GLOBAL_SHOW_HIDE": "Show/hide Super Productivity",
       "GLOBAL_TOGGLE_TASK_START": "Toggle time tracking for last active task",
-      "GO_TO_DAILY_AGENDA": "Go to Agenda",
-      "GO_TO_FOCUS_MODE": "Enter Focus Mode",
+      "GO_TO_DAILY_AGENDA": "Go to agenda",
+      "GO_TO_FOCUS_MODE": "Enter focus mode",
       "GO_TO_SCHEDULE": "Go to Schedule",
       "GO_TO_SCHEDULED_VIEW": "Go to scheduled tasks",
-      "GO_TO_SETTINGS": "Go to Settings",
+      "GO_TO_SETTINGS": "Go to settings",
       "GO_TO_WORK_VIEW": "Go to Work view and focus first task",
       "HELP": "<p>Here you can configure all keyboard shortcuts.</p> <p>Click on the text input and enter the desired keyboard key or key combination. Press <strong>Enter</strong> to save or <strong>Escape</strong> to abort.</p> <p>There are three types of shortcuts:</p> <ul> <li> <strong>Global shortcuts:</strong> When the app is running it will trigger the action from every other application. </li> <li> <strong>Application level shortcuts:</strong> Will trigger from every screen of the application, but not if you're currently editing a text field. </li> <li> <strong>Task level shortcuts:</strong> They will only trigger if you have selected a task via mouse or keyboard and usually trigger an action specifically related to that one task.</li> </ul><p>Press <strong>Escape</strong> to remove a shortcut.",
       "MOVE_TASK_DOWN": "Move task down in the list",
@@ -1878,7 +1878,7 @@
       "MOVE_TASK_UP": "Move task up in the list",
       "MOVE_TO_BACKLOG": "Move task to task backlog",
       "MOVE_TO_REGULARS_TASKS": "Move task to Today's task list",
-      "OPEN_PROJECT_NOTES": "Show/Hide notes",
+      "OPEN_PROJECT_NOTES": "Show/hide notes",
       "PLUGIN_SHORTCUTS": "Plugin Shortcuts",
       "SAVE_NOTE": "Save note",
       "SELECT_NEXT_TASK": "Select next task",
@@ -1892,19 +1892,19 @@
       "TASK_EDIT_TITLE": "Edit title",
       "TASK_MOVE_TO_PROJECT": "Open move task to project menu",
       "TASK_OPEN_CONTEXT_MENU": "Open task context menu",
-      "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimation / time spent",
+      "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimate / time spent",
       "TASK_SCHEDULE": "Schedule task",
       "TASK_UNSCHEDULE": "Unschedule task",
       "TASK_SHORTCUTS": "Tasks",
-      "TASK_SHORTCUTS_INFO": "The following shortcuts apply for the currently selected task (selected via tab or mouse).",
-      "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/Hide additional task info",
+      "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",
+      "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/hide additional task info",
       "TASK_TOGGLE_DONE": "Toggle completed state",
       "TITLE": "Keyboard Shortcuts",
-      "TOGGLE_BACKLOG": "Show/Hide task backlog",
-      "TOGGLE_ISSUE_PANEL": "Show/Hide issue Provider Panel",
-      "TOGGLE_PLAY": "Start/Stop task",
-      "TOGGLE_SIDE_NAV": "Focus Sidenav",
-      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle Filter/Group/Sort panel",
+      "TOGGLE_BACKLOG": "Show/hide task backlog",
+      "TOGGLE_ISSUE_PANEL": "Show/hide issue provider panel",
+      "TOGGLE_PLAY": "Start/stop task",
+      "TOGGLE_SIDE_NAV": "Focus sidenav",
+      "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Toggle filter/group/sort panel",
       "TRIGGER_SYNC": "Trigger sync (if configured)",
       "ZOOM_DEFAULT": "Zoom default (desktop only)",
       "ZOOM_IN": "Zoom in (desktop only)",
@@ -1936,7 +1936,7 @@
       "TIME_LOCALE": "Datetime format locale",
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
-      "TIME_LOCALE_DESCRIPTION": "NOTE: This option cannot change the time input format (12/24 hour) because it is controlled by your OS",
+      "TIME_LOCALE_DESCRIPTION": "NOTE: This option cannot change the time input format (12/24 hour) because it is controlled by your OS.",
       "TIME_LOCALE_EN_GB": "English (UK): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_EN_US": "English (US): 12-hour AM/PM, MM/DD/YYYY",
       "TIME_LOCALE_ES_ES": "Spanish: 24-hour, DD/MM/YYYY",
@@ -1969,11 +1969,11 @@
       "IS_DISABLE_ANIMATIONS": "Disable all animations",
       "IS_DISABLE_CELEBRATION": "Disable celebration in daily summary",
       "IS_MINIMIZE_TO_TRAY": "Minimize to tray (desktop only)",
-      "IS_OVERLAY_INDICATOR_ENABLED": "Enable overlay indicator window (desktop Linux/GNOME only)",
+      "IS_OVERLAY_INDICATOR_ENABLED": "Enable overlay indicator window (Linux/GNOME only)",
       "IS_SHOW_TIP_LONGER": "Show productivity tip on app start a little longer",
-      "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (desktop Mac only)",
+      "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "Show current countdown in the tray / status menu (macOS only)",
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "Use custom title bar (Windows/Linux only)",
-      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect.",
       "START_OF_NEXT_DAY": "Start time of the next day",
       "START_OF_NEXT_DAY_HINT": "Time (hour) from which you want to determine the next day has started. Default is midnight, which is 0.",
       "THEME": "Theme",
@@ -1987,7 +1987,7 @@
       "IS_AUTO_MARK_PARENT_AS_DONE": "Automatically mark parent task as completed when all subtasks are completed",
       "IS_CONFIRM_BEFORE_DELETE": "Confirm before deleting tasks",
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
-      "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (desktop Mac/Windows only)",
+      "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
       "TITLE": "Tasks"
     },
@@ -2029,7 +2029,7 @@
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Take a break reminder sound",
-      "DONE_SOUND": "Task marked completed sound",
+      "DONE_SOUND": "Task completed sound",
       "IS_INCREASE_DONE_PITCH": "Increase pitch for every task completed",
       "TITLE": "Sound",
       "TRACK_TIME_SOUND": "Track time reminder sound",
@@ -2051,7 +2051,7 @@
       "TITLE": "Break Reminder"
     },
     "TIME_TRACKING": {
-      "HELP": "The time tracking reminder is a banner that will show up in case you forgot to start time tracking.",
+      "HELP": "The time tracking reminder is a banner that will appear if you forgot to start time tracking.",
       "L_DEFAULT_ESTIMATE": "Default time estimate for new tasks",
       "L_DEFAULT_ESTIMATE_SUB_TASKS": "Default time estimate for new subtasks",
       "L_IS_AUTO_START_NEXT_TASK": "Start tracking next task when marking current task completed",
@@ -2131,31 +2131,31 @@
     "ADD_NEW_TASK": "Add new Task",
     "ALL_PLANNED_LIST": "Planned / Recur",
     "BOARDS": "Boards",
-    "COPY_TASK_LIST_MARKDOWN": "Copy to Clipboard",
-    "CREATE_PROJECT": "Create Project",
-    "CREATE_TAG": "Create Tag",
-    "DELETE_PROJECT": "Delete Project",
-    "DELETE_TAG": "Delete Tag",
+    "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
+    "CREATE_PROJECT": "Create project",
+    "CREATE_TAG": "Create tag",
+    "DELETE_PROJECT": "Delete project",
+    "DELETE_TAG": "Delete tag",
     "DONATE": "Support us",
     "DUPLICATE_PROJECT": "Duplicate",
-    "ENTER_FOCUS_MODE": "Enter Focus Mode",
+    "ENTER_FOCUS_MODE": "Enter focus mode",
     "GO_TO_TASK_LIST": "Go to task list",
     "HABITS": "Habits",
     "HELP": "Help",
     "HM": {
-      "CALENDARS": "Howto: Connect Calendars",
+      "CALENDARS": "How to: Connect calendars",
       "CONTRIBUTE": "Contribute",
       "GET_HELP_ONLINE": "Get help online",
-      "KEYBOARD": "Howto: Advanced Keyboard",
-      "REDDIT_COMMUNITY": "Reddit Community",
+      "KEYBOARD": "How to: Advanced keyboard",
+      "REDDIT_COMMUNITY": "Reddit community",
       "REPORT_A_PROBLEM": "Report a problem",
-      "START_WELCOME": "Start Welcome Tour",
-      "SYNC": "Howto: Configure Sync"
+      "START_WELCOME": "Start welcome tour",
+      "SYNC": "How to: Configure sync"
     },
     "METRICS": "Metrics",
     "NO_TASKS_TO_TRACK": "Add a task first to start tracking time",
     "NOTES": "Notes",
-    "NOTES_PANEL_INFO": "Notes can only be shown from the schedule and the regular task list views.",
+    "NOTES_PANEL_INFO": "Notes can only be shown in the schedule and the regular task list views.",
     "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the 'Create Project' button.",
     "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",
     "PLANNER": "Planner",
@@ -2163,7 +2163,7 @@
     "PROJECT_MENU": "Project Menu",
     "PROJECT_SETTINGS": "Project Settings",
     "PROJECTS": "Projects",
-    "QUICK_HISTORY": "Quick History",
+    "QUICK_HISTORY": "Quick history",
     "SCHEDULE": "Schedule",
     "SEARCH": "Search",
     "SETTINGS": "Settings",
@@ -2172,10 +2172,10 @@
     "TAGS": "Tags",
     "TASKS": "Tasks",
     "TASK_LIST": "Task List",
-    "TOGGLE_SHOW_BOOKMARKS": "Show/Hide Bookmarks",
-    "TOGGLE_SHOW_ISSUE_PANEL": "Show/Hide Issue Provider Panel",
-    "TOGGLE_SHOW_NOTES": "Show/Hide Project Notes",
-    "TOGGLE_TRACK_TIME": "Start/Stop tracking time",
+    "TOGGLE_SHOW_BOOKMARKS": "Show/hide bookmarks",
+    "TOGGLE_SHOW_ISSUE_PANEL": "Show/hide issue provider panel",
+    "TOGGLE_SHOW_NOTES": "Show/hide project notes",
+    "TOGGLE_TRACK_TIME": "Start/stop tracking time",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
     "WORKLOG": "Worklog"
@@ -2318,7 +2318,7 @@
     "NO_PLUGINS_INSTALLED": "No plugins are currently installed",
     "PLUGINS": "Plugins",
     "PRIVACY_POLICY": "Privacy Policy",
-    "FAILED_TO_COPY_TO_CLIPBOARD": "Failed to copy to Clipboard",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Failed to copy to clipboard",
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "Provide Feedback",
     "RELOAD": "Reload",
@@ -2338,7 +2338,7 @@
   "SCHEDULE": {
     "LAST": "Last:",
     "NEXT": "Next",
-    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Make Recurring\" in the task's side panel. To open it, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
+    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Recur\" in the task's side panel. To open the side panel, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
     "NO_SCHEDULED": "There are currently no scheduled tasks of this type. You can schedule a task by choosing \"Schedule Task\" in the task's context menu. To open it, right-click (long press on mobile) on a task.",
     "NO_SCHEDULED_TITLE": "Scheduled Tasks for Day",
     "REPEATED_TASKS": "Recurring Tasks",
