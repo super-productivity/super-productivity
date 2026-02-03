@@ -772,7 +772,11 @@ export class OperationLogSyncService {
       }
 
       // Process all remote ops (no confirmation needed - user already chose USE_REMOTE)
-      await this.remoteOpsProcessingService.processRemoteOps(result.newOps);
+      // Skip conflict detection because the NgRx store was just reset to empty state,
+      // which causes all entities to appear missing and CONCURRENT ops to be discarded.
+      await this.remoteOpsProcessingService.processRemoteOps(result.newOps, {
+        skipConflictDetection: true,
+      });
 
       // Update lastServerSeq
       if (result.latestServerSeq !== undefined) {

@@ -799,6 +799,15 @@
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activity",
+        "INVALID_DATE": "The entered value is not a date!",
+        "POST_TIME": "Post Time",
+        "STARTED": "Started",
+        "SUBMIT_TIME_FOR": "Submit time to Redmine for",
+        "TIME_SPENT": "Time Spent",
+        "TITLE": "Redmine: Submit Worklog"
+      },
       "FORM": {
         "API_KEY": "API access key",
         "HOST": "Host (e.g. https://redmine.org)",
@@ -807,7 +816,10 @@
         "SCOPE": "Scope",
         "SCOPE_ALL": "All",
         "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me"
+        "SCOPE_CREATED": "Created by me",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for Redmine project",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when subtasks are completed"
       },
       "FORM_SECTION": {
         "HELP": "<p>Here you can configure Super Productivity to list open Redmine (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p><p>In addition you can automatically import all open issues.</p>",
@@ -819,6 +831,9 @@
         "MARK_AS_CHECKED": "Mark updates as checked",
         "PRIORITY": "Priority",
         "STATUS": "Status"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: Successfully created time entry for {{issueTitle}}"
       }
     },
     "REFLECTION_NOTE": {
@@ -872,15 +887,27 @@
         "L_COUNTDOWN_DURATION": "Countdown duration",
         "L_DAILY_GOAL": "Daily goal for successful streak",
         "L_ICON": "Icon",
+        "L_ICON_ON": "Icon when toggled on",
         "L_IS_ENABLED": "Enabled",
         "L_TITLE": "Title",
         "L_TRACK_STREAKS": "Track Streaks",
         "L_TYPE": "Type",
         "L_WEEKDAYS": "Weekdays to check for streak",
+        "L_STREAK_MODE": "Streak tracking mode",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Specific weekdays",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Weekly frequency (e.g., 3 times per week)",
+        "L_WEEKLY_FREQUENCY": "Completions per week",
         "TITLE": "Simple Counters & Habit Tracking",
         "TYPE_CLICK_COUNTER": "Click Counter",
         "TYPE_REPEATED_COUNTDOWN": "Repeated Countdown",
         "TYPE_STOPWATCH": "Stopwatch"
+      },
+      "HABIT_TRACKER": {
+        "PREV_WEEK": "Previous week",
+        "NEXT_WEEK": "Next week",
+        "TODAY": "Today",
+        "ADD_HABIT": "Add a new habit",
+        "MANAGE_HABITS": "Manage habits"
       },
       "S": {
         "GOAL_REACHED_1": "You reached your goal for today!",
@@ -1723,7 +1750,12 @@
     "STATUS_PREPARING": "Preparing migration...",
     "STATUS_BACKUP": "Creating backup of your data...",
     "STATUS_MIGRATING": "Migrating data...",
-    "STATUS_COMPLETE": "Migration complete!"
+    "STATUS_COMPLETE": "Migration complete!",
+    "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",
+    "DETECTED_LEGACY": "Detected legacy data. We will migrate it for you!",
+    "E_MIGRATION_FAILED": "Migration failed with error:",
+    "E_RESTART_FAILED": "Automatic restart failed. Please restart the app manually!",
+    "SUCCESS": "Migration done! Restarting app now..."
   },
   "G": {
     "ADD": "Add",
@@ -1771,6 +1803,7 @@
       "BOARDS": "Boards",
       "DONATE_PAGE": "Donate Page",
       "FOCUS_MODE": "Focus Mode",
+      "HABITS": "Habits",
       "HELP": "Enable or disable specific app features across the UI.",
       "ISSUES_PANEL": "Issues Panel",
       "PLANNER": "Planner",
@@ -2107,6 +2140,7 @@
     "DUPLICATE_PROJECT": "Duplicate",
     "ENTER_FOCUS_MODE": "Enter Focus Mode",
     "GO_TO_TASK_LIST": "Go to task list",
+    "HABITS": "Habits",
     "HELP": "Help",
     "HM": {
       "CALENDARS": "Howto: Connect Calendars",
@@ -2145,13 +2179,6 @@
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
     "WORKLOG": "Worklog"
-  },
-  "MIGRATE": {
-    "C_DOWNLOAD_BACKUP": "Do you want to download a backup of your legacy data (can be used with older versions of Super Productivity)?",
-    "DETECTED_LEGACY": "Detected legacy data. We will migrate it for you!",
-    "E_MIGRATION_FAILED": "Migration failed with error:",
-    "E_RESTART_FAILED": "Automatic restart failed. Please restart the app manually!",
-    "SUCCESS": "Migration done! Restarting app now..."
   },
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "System Update",

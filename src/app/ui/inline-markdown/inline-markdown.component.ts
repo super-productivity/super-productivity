@@ -260,6 +260,18 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   toggleChecklistMode(ev: Event): void {
     ev.preventDefault();
     ev.stopPropagation();
+
+    // If currently editing, save the current textarea content before toggling.
+    // This prevents content loss when mousedown.preventDefault() blocks the blur event.
+    const textareaEl = this.textareaEl();
+    if (this.isShowEdit() && textareaEl) {
+      const currentValue = textareaEl.nativeElement.value;
+      if (currentValue !== this.model) {
+        this.model = currentValue;
+        this.changed.emit(currentValue);
+      }
+    }
+
     this.isChecklistMode.set(true);
     this._toggleShowEdit();
 

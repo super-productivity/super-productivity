@@ -207,14 +207,15 @@ export class TaskRepeatCfgService {
     const targetDateStr = getDbDateStr(targetCreated);
 
     // Generate the deterministic ID that would be used for this task.
-    // This ensures both local dueDay check AND ID check prevent duplicates.
+    // This ensures both local created-date check AND ID check prevent duplicates.
     const expectedTaskId = getRepeatableTaskId(taskRepeatCfg.id, targetDateStr);
 
-    // Check if a task already exists with this deterministic ID or dueDay.
-    // The ID check handles cases where another device created the task but it hasn't
-    // fully synced yet (the task exists locally but dueDay might differ during migration).
+    // Check if a task already exists with this deterministic ID or creation date.
+    // We use `created` (immutable, set to noon on the repeat-schedule day) instead of
+    // `dueDay` because dueDay is mutable — planTasksForToday changes it when users
+    // reschedule overdue tasks to today, causing false-positive duplicate matches (#6192).
     const taskAlreadyExists = existingTaskInstances.some((taskI) => {
-      const existingDateStr = taskI.dueDay || getDbDateStr(taskI.created);
+      const existingDateStr = getDbDateStr(taskI.created);
       return taskI.id === expectedTaskId || existingDateStr === targetDateStr;
     });
 

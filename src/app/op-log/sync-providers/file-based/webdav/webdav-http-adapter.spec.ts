@@ -5,7 +5,6 @@ import {
   RemoteFileNotFoundAPIError,
   TooManyRequestsAPIError,
 } from '../../../core/errors/sync-errors';
-import { CapacitorHttp } from '@capacitor/core';
 
 describe('WebDavHttpAdapter', () => {
   let adapter: WebDavHttpAdapter;
@@ -13,33 +12,16 @@ describe('WebDavHttpAdapter', () => {
 
   // Helper class to override platform checks for testing
   class TestableWebDavHttpAdapter extends WebDavHttpAdapter {
-    constructor(
-      private _isAndroidWebView: boolean,
-      private _isNativePlatform: boolean = false,
-    ) {
+    constructor(private _isNativePlatform: boolean = false) {
       super();
-    }
-
-    protected override get isAndroidWebView(): boolean {
-      return this._isAndroidWebView;
     }
 
     protected override get isNativePlatform(): boolean {
       return this._isNativePlatform;
     }
-
-    // Expose private method for testing
-    public testConvertCapacitorResponse(response: {
-      status: number;
-      headers?: Record<string, string>;
-      data?: unknown;
-      url?: string;
-    }): { status: number; headers: Record<string, string>; data: string } {
-      return (this as any)._convertCapacitorResponse(response);
-    }
   }
 
-  describe('fetch mode (non-Android)', () => {
+  describe('fetch mode (non-native)', () => {
     beforeEach(() => {
       adapter = new TestableWebDavHttpAdapter(false);
       fetchSpy = jasmine.createSpy('fetch');
@@ -252,109 +234,17 @@ describe('WebDavHttpAdapter', () => {
     });
   });
 
-  describe('_convertCapacitorResponse() data type handling', () => {
-    let testAdapter: TestableWebDavHttpAdapter;
-
-    beforeEach(() => {
-      testAdapter = new TestableWebDavHttpAdapter(false);
-    });
-
-    it('should pass through string data unchanged', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        headers: { content_type: 'text/plain' },
-        data: 'test string data',
-      });
-
-      expect(result.status).toBe(200);
-      expect(result.data).toBe('test string data');
-      expect(result.headers['content_type']).toBe('text/plain');
-    });
-
-    it('should handle null data by returning empty string', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: null,
-      });
-
-      expect(result.data).toBe('');
-    });
-
-    it('should handle undefined data by returning empty string', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: undefined,
-      });
-
-      expect(result.data).toBe('');
-    });
-
-    it('should convert ArrayBuffer data to string', () => {
-      const encoder = new TextEncoder();
-      const arrayBuffer = encoder.encode('ArrayBuffer content').buffer;
-
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: arrayBuffer,
-      });
-
-      expect(result.data).toBe('ArrayBuffer content');
-    });
-
-    it('should convert object data to JSON string', () => {
-      const objectData = { key: 'value', nested: { foo: 'bar' } };
-
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: objectData,
-      });
-
-      expect(result.data).toBe(JSON.stringify(objectData));
-    });
-
-    it('should convert number data to string', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: 42,
-      });
-
-      expect(result.data).toBe('42');
-    });
-
-    it('should convert boolean data to string', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: true,
-      });
-
-      expect(result.data).toBe('true');
-    });
-
-    it('should handle missing headers by returning empty object', () => {
-      const result = testAdapter.testConvertCapacitorResponse({
-        status: 200,
-        data: 'test',
-        headers: undefined,
-      });
-
-      expect(result.headers).toEqual({});
-    });
-  });
-
-  // OkHttp mode tests for Android WebView
+  // Native mode tests (Android + iOS)
   // Note: We're skipping these tests because they require mocking the WebDavHttp plugin
   // which is registered at module load time and difficult to mock properly in Jasmine.
-  // On Android, ALL methods (including GET, PUT, DELETE, HEAD) are routed through OkHttp
-  // because CapacitorHttp returns empty bodies for some WebDAV providers (e.g. Koofr).
-  xdescribe('OkHttp mode (Android)', () => {
-    let capacitorHttpSpy: jasmine.Spy;
-
+  // On native platforms, ALL methods are routed through the WebDavHttp plugin
+  // because CapacitorHttp has issues with WebDAV responses on both Android and iOS.
+  xdescribe('native mode (Android + iOS)', () => {
     beforeEach(() => {
-      adapter = new TestableWebDavHttpAdapter(true, true);
-      capacitorHttpSpy = spyOn(CapacitorHttp, 'request');
+      adapter = new TestableWebDavHttpAdapter(true);
     });
 
-    it('should use OkHttp for all methods on Android including GET', async () => {
+    it('should use WebDavHttp plugin for all methods on native platforms', async () => {
       const allMethods = [
         'PROPFIND',
         'MKCOL',
@@ -373,9 +263,6 @@ describe('WebDavHttpAdapter', () => {
           url: 'http://example.com/test',
           method: method,
         });
-
-        // CapacitorHttp should NOT be called — all methods go through OkHttp on Android
-        expect(capacitorHttpSpy).not.toHaveBeenCalled();
       }
     });
   });

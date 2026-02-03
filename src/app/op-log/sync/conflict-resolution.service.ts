@@ -572,27 +572,65 @@ export class ConflictResolutionService {
   ): Promise<LWWResolution[]> {
     const resolutions: LWWResolution[] = [];
 
+    // ── Pre-scan: find entities with archive ops in ANY conflict ──
+    // Multiple conflicts can exist for the same entity (e.g., field updates + archive).
+    // When any conflict for an entity involves an archive op, ALL conflicts for that
+    // entity must resolve as archive-wins. Otherwise, non-archive conflicts would
+    // resolve via normal LWW, potentially creating local-win update ops that
+    // resurrect the archived entity via lwwUpdateMetaReducer.addOne().
+    const entitiesWithLocalArchive = new Set<string>();
+    const entitiesWithRemoteArchive = new Set<string>();
+    for (const conflict of conflicts) {
+      const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
+      if (
+        conflict.localOps.some(
+          (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        )
+      ) {
+        entitiesWithLocalArchive.add(entityKey);
+      }
+      if (
+        conflict.remoteOps.some(
+          (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+        )
+      ) {
+        entitiesWithRemoteArchive.add(entityKey);
+      }
+    }
+
     for (const conflict of conflicts) {
       // ── moveToArchive always wins over other operations ──
       // Archive is an explicit user intent ("I'm done with these tasks").
       // Allowing other operations (field-level updates, deletes) to win via LWW
       // would either resurrect archived entities via lwwUpdateMetaReducer.addOne()
       // (Bug B) or lose archived data.
-      const localHasArchive = conflict.localOps.some(
-        (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-      );
-      const remoteHasArchive = conflict.remoteOps.some(
-        (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
-      );
+      const entityKey = toEntityKey(conflict.entityType, conflict.entityId);
+      const localHasArchive = entitiesWithLocalArchive.has(entityKey);
+      const remoteHasArchive = entitiesWithRemoteArchive.has(entityKey);
 
       if (localHasArchive || remoteHasArchive) {
         if (remoteHasArchive) {
           // Remote archive wins — will be applied normally
           resolutions.push({ conflict, winner: 'remote' });
         } else {
-          // Local archive wins — re-create archive op with merged clock.
-          const localWinOp = await this._createArchiveWinOp(conflict);
-          resolutions.push({ conflict, winner: 'local', localWinOp });
+          // Local archive wins. Only create the archive-win op for the conflict
+          // that actually contains the archive action. For other conflicts affecting
+          // the same entity, resolve as remote to reject local ops (the entity is
+          // being archived, so these local updates are irrelevant).
+          const thisConflictHasArchive = conflict.localOps.some(
+            (op) => op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          );
+          if (thisConflictHasArchive) {
+            const localWinOp = await this._createArchiveWinOp(conflict);
+            resolutions.push({ conflict, winner: 'local', localWinOp });
+          } else {
+            // Entity is being archived locally — don't apply remote ops for
+            // non-archive conflicts to avoid transient entity resurrection via
+            // lwwUpdateMetaReducer.addOne(). Resolve as local-wins without a
+            // localWinOp: local ops get rejected (superseded by the archive-win
+            // op from the sibling conflict), remote ops get stored but not applied.
+            resolutions.push({ conflict, winner: 'local' });
+          }
         }
         OpLog.normal(
           `ConflictResolutionService: Archive wins over concurrent operation ` +
@@ -915,7 +953,7 @@ export class ConflictResolutionService {
    * @param ctx - Context containing local state for conflict detection
    * @returns Object indicating if op is superseded/duplicate and any detected conflict
    */
-  checkOpForConflicts(
+  async checkOpForConflicts(
     remoteOp: Operation,
     ctx: {
       localPendingOpsByEntity: Map<string, Operation[]>;
@@ -924,7 +962,7 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
       hasNoSnapshotClock: boolean;
     },
-  ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } {
+  ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
     const entityIdsToCheck =
       remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 
@@ -932,7 +970,7 @@ export class ConflictResolutionService {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);
       const localOpsForEntity = ctx.localPendingOpsByEntity.get(entityKey) || [];
 
-      const result = this._checkEntityForConflict(remoteOp, entityId, entityKey, {
+      const result = await this._checkEntityForConflict(remoteOp, entityId, entityKey, {
         localOpsForEntity,
         appliedFrontier: ctx.appliedFrontierByEntity.get(entityKey),
         snapshotVectorClock: ctx.snapshotVectorClock,
@@ -954,7 +992,7 @@ export class ConflictResolutionService {
   /**
    * Checks a single entity for conflict with a remote operation.
    */
-  private _checkEntityForConflict(
+  private async _checkEntityForConflict(
     remoteOp: Operation,
     entityId: string,
     entityKey: string,
@@ -965,7 +1003,7 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
       hasNoSnapshotClock: boolean;
     },
-  ): { isSupersededOrDuplicate: boolean; conflict: EntityConflict | null } {
+  ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
     const localFrontier = this._buildEntityFrontier(entityKey, ctx);
     const localFrontierIsEmpty = Object.keys(localFrontier).length === 0;
 
@@ -999,8 +1037,24 @@ export class ConflictResolutionService {
       return { isSupersededOrDuplicate: true, conflict: null };
     }
 
-    // No pending ops = no conflict possible
+    // No pending local ops
     if (ctx.localOpsForEntity.length === 0) {
+      if (vcComparison === VectorClockComparison.CONCURRENT) {
+        // CONCURRENT + no pending ops = entity may have been archived/deleted
+        // by an already-synced operation. Check current state.
+        const entityState = await this.getCurrentEntityState(
+          remoteOp.entityType,
+          entityId,
+        );
+        if (entityState === undefined || entityState === null) {
+          OpLog.normal(
+            `ConflictResolutionService: Skipping CONCURRENT remote op ${remoteOp.id} ` +
+              `for ${remoteOp.entityType}:${entityId} - entity no longer in state ` +
+              `(archive/delete wins over concurrent update)`,
+          );
+          return { isSupersededOrDuplicate: true, conflict: null };
+        }
+      }
       return { isSupersededOrDuplicate: false, conflict: null };
     }
 
@@ -1034,9 +1088,15 @@ export class ConflictResolutionService {
       snapshotEntityKeys: Set<string> | undefined;
     },
   ): VectorClock {
-    // Use snapshot clock only for entities that existed at snapshot time
-    const entityExistedAtSnapshot =
-      ctx.snapshotEntityKeys === undefined || ctx.snapshotEntityKeys.has(entityKey);
+    // Use snapshot clock only for entities that existed at snapshot time.
+    // When snapshotEntityKeys is undefined (old format), only use the snapshot
+    // clock if we have an applied frontier for this entity. Without both
+    // snapshotEntityKeys AND appliedFrontier, using the snapshot clock would
+    // inflate the frontier for genuinely NEW entities (never seen locally),
+    // causing their remote ops to be incorrectly discarded as superseded/concurrent.
+    const entityExistedAtSnapshot = ctx.snapshotEntityKeys
+      ? ctx.snapshotEntityKeys.has(entityKey)
+      : ctx.appliedFrontier !== undefined;
     const fallbackClock = entityExistedAtSnapshot ? ctx.snapshotVectorClock : {};
     const baselineClock = ctx.appliedFrontier || fallbackClock || {};
 

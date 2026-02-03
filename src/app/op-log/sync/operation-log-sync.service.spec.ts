@@ -1227,6 +1227,7 @@ describe('OperationLogSyncService', () => {
 
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith(
         mockOps,
+        { skipConflictDetection: true },
       );
     });
 

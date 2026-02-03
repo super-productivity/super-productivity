@@ -49,12 +49,23 @@ export type RedmineIssue = Readonly<{
   author: RedmineAuthor;
   category: RedmineCategory;
   subject: string;
+  title: string;
   description: string;
   done_ratio: number;
   custom_fields: RedmineCustomField[];
   created_on: string;
   updated_on: string;
   url: string | null;
+}>;
+
+export type RedmineActivity = Readonly<{
+  id: number;
+  name: string;
+  is_default: boolean;
+}>;
+
+export type RedmineActivityResult = Readonly<{
+  time_entry_activities: RedmineActivity[];
 }>;
 
 export type RedmineSearchResultItem = Readonly<{

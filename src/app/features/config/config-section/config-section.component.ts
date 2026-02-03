@@ -49,12 +49,12 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
   @Input() section?: ConfigFormSection<{ [key: string]: any }>;
+  @Input() isExpanded: boolean = false;
   readonly save = output<{
     sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
     config: any;
   }>();
   readonly customFormRef = viewChild('customForm', { read: ViewContainerRef });
-  isExpanded: boolean = false;
   private _subs: Subscription = new Subscription();
   private _instance?: Component;
   private _viewDestroyTimeout?: number;

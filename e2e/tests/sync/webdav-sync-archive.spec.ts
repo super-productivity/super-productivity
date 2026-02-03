@@ -455,16 +455,26 @@ test.describe('@webdav WebDAV Archive Sync', () => {
     // With archive-wins rule, archive always wins regardless of timestamps.
     // Archive is an explicit user intent ("I'm done with these tasks"),
     // so it takes priority over concurrent edits.
+    // TODO: Navigation is a workaround for Angular not re-rendering task list
+    // after remote sync ops are applied to NgRx. Investigate whether the root
+    // cause is in HydrationStateService cooldown or change detection.
+    await pageA.goto('/#/tag/TODAY/tasks');
+    await pageA.waitForLoadState('networkidle');
+    await workViewPageA.waitForTaskList();
+
+    await pageB.goto('/#/tag/TODAY/tasks');
+    await pageB.waitForLoadState('networkidle');
+    await workViewPageB.waitForTaskList();
+
+    // With archive-wins rule, archive always wins regardless of timestamps
+    await expect(pageA.locator('task')).toHaveCount(0, { timeout: 30000 });
+    await expect(pageB.locator('task')).toHaveCount(0, { timeout: 30000 });
+
     const taskCountA = await pageA.locator('task').count();
     const taskCountB = await pageB.locator('task').count();
-
     console.log(
       `[Archive Edit] Final state: A=${taskCountA} tasks, B=${taskCountB} tasks`,
     );
-
-    // With archive-wins rule, archive always wins regardless of timestamps
-    expect(taskCountA).toBe(0);
-    expect(taskCountB).toBe(0);
 
     console.log(
       `[Archive Edit] ✓ Archive vs edit conflict resolved - archive won (as expected)`,

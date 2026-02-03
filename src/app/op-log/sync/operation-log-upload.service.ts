@@ -36,11 +36,10 @@ export type {
 /**
  * Handles uploading local pending operations to remote storage.
  *
- * CURRENT ARCHITECTURE (as of Dec 2025):
- * - Only SuperSync uses operation log sync (it implements OperationSyncCapable)
+ * CURRENT ARCHITECTURE:
  * - SuperSync uses API-based sync via `_uploadPendingOpsViaApi()`
- * - Legacy providers (WebDAV, Dropbox, LocalFile) do NOT use operation log sync at all
- *   They use pfapi's model-level LWW sync instead (see sync.service.ts:104)
+ * - File-based providers (WebDAV, Dropbox, LocalFile) also use operation log sync
+ *   via `FileBasedSyncAdapterService` which creates `OperationSyncCapable` adapters
  */
 @Injectable({
   providedIn: 'root',

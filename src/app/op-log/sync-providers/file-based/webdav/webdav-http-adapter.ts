@@ -1,5 +1,4 @@
-import { CapacitorHttp, HttpResponse, registerPlugin } from '@capacitor/core';
-import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
+import { registerPlugin } from '@capacitor/core';
 import { PFLog } from '../../../../core/log';
 import {
   AuthFailSPError,
@@ -47,11 +46,7 @@ export interface WebDavHttpResponse {
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
 
-  // Make platform checks testable by making them class properties
-  protected get isAndroidWebView(): boolean {
-    return IS_ANDROID_WEB_VIEW;
-  }
-
+  // Make platform check testable by making it a class property
   protected get isNativePlatform(): boolean {
     return Capacitor.isNativePlatform();
   }
@@ -61,33 +56,19 @@ export class WebDavHttpAdapter {
       let response: WebDavHttpResponse;
 
       if (this.isNativePlatform) {
-        if (this.isAndroidWebView) {
-          // On Android, use OkHttp plugin for ALL methods.
-          // CapacitorHttp returns empty bodies for some WebDAV providers (e.g. Koofr).
-          PFLog.log(
-            `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
-          );
-          const webdavResponse = await WebDavHttp.request({
-            url: options.url,
-            method: options.method,
-            headers: options.headers,
-            data: options.body,
-          });
-          response = this._convertWebDavResponse(webdavResponse);
-        } else {
-          // On iOS, use CapacitorHttp for all methods (no WebDavHttp plugin on iOS)
-          PFLog.log(
-            `${WebDavHttpAdapter.L}.request() using CapacitorHttp for ${options.method}`,
-          );
-          const capacitorResponse = await CapacitorHttp.request({
-            url: options.url,
-            method: options.method,
-            headers: options.headers,
-            data: options.body,
-            responseType: 'text', // Explicitly request text to avoid iOS auto-detecting and returning non-string types
-          });
-          response = this._convertCapacitorResponse(capacitorResponse);
-        }
+        // On native platforms (Android + iOS), use the WebDavHttp plugin.
+        // This bypasses CapacitorHttp which has issues with WebDAV responses
+        // (empty bodies on Android/Koofr, broken JSON auto-parsing on iOS).
+        PFLog.log(
+          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
+        );
+        const webdavResponse = await WebDavHttp.request({
+          url: options.url,
+          method: options.method,
+          headers: options.headers,
+          data: options.body,
+        });
+        response = this._convertWebDavResponse(webdavResponse);
       } else {
         // Use fetch for other platforms
         try {
@@ -136,38 +117,6 @@ export class WebDavHttpAdapter {
       });
       throw new HttpNotOkAPIError(errorResponse);
     }
-  }
-
-  private _convertCapacitorResponse(response: HttpResponse): WebDavHttpResponse {
-    let data = response.data;
-
-    // Ensure data is a string - CapacitorHttp may return different types
-    // depending on Content-Type header when responseType is not specified
-    if (data === null || data === undefined) {
-      data = '';
-    } else if (typeof data !== 'string') {
-      // Log warning for debugging - this shouldn't happen with responseType: 'text'
-      // but we handle it defensively for iOS compatibility
-      PFLog.warn(
-        `${WebDavHttpAdapter.L}._convertCapacitorResponse() received non-string data type: ${typeof data}`,
-      );
-
-      // Try to convert to string based on actual type
-      if (data instanceof ArrayBuffer) {
-        data = new TextDecoder().decode(data);
-      } else if (typeof data === 'object') {
-        // CapacitorHttp may auto-parse JSON responses
-        data = JSON.stringify(data);
-      } else {
-        data = String(data);
-      }
-    }
-
-    return {
-      status: response.status,
-      headers: response.headers || {},
-      data,
-    };
   }
 
   private _convertWebDavResponse(response: WebDavHttpPluginResponse): WebDavHttpResponse {

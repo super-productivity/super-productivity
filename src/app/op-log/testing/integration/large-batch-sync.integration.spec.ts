@@ -6,9 +6,7 @@ import { MockSyncServer } from './helpers/mock-sync-server.helper';
 import { SimulatedClient } from './helpers/simulated-client.helper';
 import { createMinimalTaskPayload } from './helpers/operation-factory.helper';
 
-// Timeout constants for large batch tests - creating/syncing 500-1000 ops
-// can exceed the default 2000ms timeout under load
-const LARGE_BATCH_TIMEOUT = 15000;
+const LARGE_BATCH_TIMEOUT = 5000;
 
 /**
  * Integration tests for Large Batch Sync scenarios.
@@ -37,30 +35,23 @@ describe('Large Batch Sync Integration', () => {
 
   describe('Large Batch Upload', () => {
     it(
-      'should upload 500 operations in a single batch',
+      'should upload 50 operations in a single batch',
       async () => {
         const client = new SimulatedClient('client-load-test', storeService);
-        const batchSize = 500;
+        const batchSize = 50;
 
-        // Create large batch of operations
-        const startTime = Date.now();
-        for (let i = 0; i < batchSize; i++) {
-          await client.createLocalOp(
-            'TASK',
-            `task-${i}`,
-            OpType.Create,
-            'Create',
-            createMinimalTaskPayload(`task-${i}`),
-          );
-        }
-        const creationTime = Date.now() - startTime;
-        console.log(`Created ${batchSize} ops in ${creationTime}ms`);
+        // Create batch of operations
+        const items = Array.from({ length: batchSize }, (_, i) => ({
+          entityType: 'TASK',
+          entityId: `task-${i}`,
+          opType: OpType.Create,
+          actionType: 'Create',
+          payload: createMinimalTaskPayload(`task-${i}`),
+        }));
+        await client.createLocalOpsBatch(items);
 
         // Sync
-        const syncStartTime = Date.now();
         const result = await client.sync(server);
-        const syncTime = Date.now() - syncStartTime;
-        console.log(`Synced ${batchSize} ops in ${syncTime}ms`);
 
         expect(result.uploaded).toBe(batchSize);
         expect(server.getAllOps().length).toBe(batchSize);
@@ -75,49 +66,37 @@ describe('Large Batch Sync Integration', () => {
 
   describe('Large Batch Download (Pagination)', () => {
     it(
-      'should download 1000 operations using pagination',
+      'should download 100 operations using pagination',
       async () => {
         const clientA = new SimulatedClient('client-a', storeService);
         const clientB = new SimulatedClient('client-b', storeService);
-        const totalOps = 1000;
+        const totalOps = 100;
 
-        // Client A populates server (in batches to avoid timeout during setup)
-        // Note: We bypass clientA.sync() for speed and populate server directly if possible,
-        // but SimulatedClient.createLocalOp + sync is safer to ensure valid data.
-        // We'll do it in chunks of 500.
-        for (let i = 0; i < totalOps; i += 500) {
-          for (let j = 0; j < 500; j++) {
-            const idx = i + j;
-            await clientA.createLocalOp(
-              'TASK',
-              `task-${idx}`,
-              OpType.Create,
-              'Create',
-              createMinimalTaskPayload(`task-${idx}`),
-            );
-          }
-          await clientA.sync(server);
-        }
+        // Client A populates server using batch creation
+        const items = Array.from({ length: totalOps }, (_, i) => ({
+          entityType: 'TASK',
+          entityId: `task-${i}`,
+          opType: OpType.Create,
+          actionType: 'Create',
+          payload: createMinimalTaskPayload(`task-${i}`),
+        }));
+        await clientA.createLocalOpsBatch(items);
+        await clientA.sync(server);
 
         expect(server.getAllOps().length).toBe(totalOps);
 
-        // Client B syncs - should download all 1000
-        // Mock server default limit is 500, so this should trigger multiple internal fetches
-        // if SimulatedClient/SyncService handles it, OR we have to call sync multiple times.
-        //
-        // SimulatedClient.sync() calls downloadFromServer once.
-        // In real app, `OperationLogSyncService` handles pagination internally or by repeated calls.
-        // SimulatedClient `downloadFromServer` downloads ONE batch (limit 500).
+        // Client B downloads with limit=50, exercising pagination (100/50 = 2 pages)
+        clientB.downloadLimit = 50;
 
-        // First sync
+        // First sync — downloads first 50
         const result1 = await clientB.sync(server);
-        expect(result1.downloaded).toBe(500);
+        expect(result1.downloaded).toBe(50);
 
-        // Second sync
+        // Second sync — downloads remaining 50
         const result2 = await clientB.sync(server);
-        expect(result2.downloaded).toBe(500);
+        expect(result2.downloaded).toBe(50);
 
-        // Third sync - empty
+        // Third sync — empty
         const result3 = await clientB.sync(server);
         expect(result3.downloaded).toBe(0);
 

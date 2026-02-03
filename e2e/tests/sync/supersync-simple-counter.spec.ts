@@ -107,71 +107,70 @@ const createSimpleCounter = async (
 };
 
 /**
- * Helper to get the counter value from the header by title (using mat-tooltip)
- * Desktop counters have [matTooltip]="title" which Angular renders as ng-reflect-message
+ * Helper to ensure the counter dropdown in the header is open.
+ * Counters are inside a `.mobile-dropdown` that is hidden by default
+ * (counter buttons have opacity: 0 and pointer-events: none).
+ * Click the timer icon button to toggle the `isVisible` class.
  */
-const getCounterValue = async (
-  client: SimulatedE2EClient,
-  counterTitle: string,
-): Promise<string> => {
-  // Wait for simple counters to be rendered
-  await client.page.waitForTimeout(500);
+const ensureCounterDropdownOpen = async (client: SimulatedE2EClient): Promise<void> => {
+  // Wait for the dropdown wrapper to exist (counters must be configured first)
+  const wrapper = client.page.locator('.mobile-dropdown-wrapper');
+  await wrapper.waitFor({ state: 'visible', timeout: 15000 });
 
-  // Find the counter by its tooltip (title)
-  // Angular Material's matTooltip directive sets ng-reflect-message attribute
-  const counterBtn = client.page.locator(
-    `simple-counter-button[ng-reflect-message="${counterTitle}"]`,
-  );
-
-  // If not found by ng-reflect, try finding by the wrapper
-  if (!(await counterBtn.isVisible({ timeout: 2000 }).catch(() => false))) {
-    // Alternative: find by checking all counters
-    const allCounters = client.page.locator('simple-counter-button');
-    const count = await allCounters.count();
-    console.log(`Found ${count} simple counter buttons`);
-
-    // Return last counter's value if we can't find by title
-    if (count > 0) {
-      const lastCounter = allCounters.last();
-      const label = lastCounter.locator('.label');
-      if (await label.isVisible()) {
-        return (await label.textContent()) || '0';
-      }
-      return '0';
-    }
-    return '0';
+  const visibleDropdown = client.page.locator('.mobile-dropdown.isVisible');
+  // Already open — nothing to do
+  if ((await visibleDropdown.count()) > 0) {
+    return;
   }
-
-  await expect(counterBtn).toBeVisible({ timeout: 10000 });
-  const label = counterBtn.locator('.label');
-  // If no label exists (count is 0), return '0'
-  if (!(await label.isVisible())) {
-    return '0';
-  }
-  return (await label.textContent()) || '0';
+  // Click the timer icon to open the dropdown
+  const toggleBtn = wrapper.locator('> button');
+  await toggleBtn.click();
+  // Wait for the isVisible class to be added
+  await visibleDropdown.waitFor({ state: 'attached', timeout: 5000 });
+  // Wait for counter buttons inside to become visible after CSS transition (opacity + transform)
+  await visibleDropdown
+    .locator('simple-counter-button')
+    .first()
+    .waitFor({ state: 'visible', timeout: 5000 });
 };
 
 /**
- * Helper to increment a click counter by title
+ * Helper to get the counter value from the header.
+ * Opens the counter dropdown first, then reads the `.label` text from the last counter button.
  */
-const incrementClickCounter = async (
-  client: SimulatedE2EClient,
-  counterTitle: string,
-): Promise<void> => {
-  // Find the counter by its tooltip (title)
-  const counterBtn = client.page.locator(
-    `simple-counter-button[ng-reflect-message="${counterTitle}"]`,
+const getCounterValue = async (client: SimulatedE2EClient): Promise<string> => {
+  await client.page.waitForTimeout(500);
+  await ensureCounterDropdownOpen(client);
+
+  const allCounters = client.page.locator(
+    '.mobile-dropdown.isVisible simple-counter-button',
   );
+  const count = await allCounters.count();
+  console.log(`Found ${count} simple counter buttons in dropdown`);
 
-  // If not found by ng-reflect, use last counter
-  if (!(await counterBtn.isVisible({ timeout: 2000 }).catch(() => false))) {
-    const allCounters = client.page.locator('simple-counter-button');
+  if (count > 0) {
     const lastCounter = allCounters.last();
-    await lastCounter.locator('.main-btn').click();
-    return;
+    const label = lastCounter.locator('.label');
+    if (await label.isVisible()) {
+      return (await label.textContent()) || '0';
+    }
+    return '0';
   }
+  return '0';
+};
 
-  await counterBtn.locator('.main-btn').click();
+/**
+ * Helper to increment a click counter.
+ * Opens the counter dropdown first, then clicks the `.main-btn` of the last counter.
+ */
+const incrementClickCounter = async (client: SimulatedE2EClient): Promise<void> => {
+  await ensureCounterDropdownOpen(client);
+
+  const allCounters = client.page.locator(
+    '.mobile-dropdown.isVisible simple-counter-button',
+  );
+  const lastCounter = allCounters.last();
+  await lastCounter.locator('.main-btn').click();
 };
 
 test.describe('@supersync Simple Counter Sync', () => {
@@ -214,12 +213,12 @@ test.describe('@supersync Simple Counter Sync', () => {
 
       // Increment 3 times
       for (let i = 0; i < 3; i++) {
-        await incrementClickCounter(clientA, counterTitle);
+        await incrementClickCounter(clientA);
         await clientA.page.waitForTimeout(200);
       }
 
       // Verify Client A shows 3
-      const valueA = await getCounterValue(clientA, counterTitle);
+      const valueA = await getCounterValue(clientA);
       expect(valueA).toBe('3');
       console.log(`Client A counter value: ${valueA}`);
 
@@ -239,7 +238,7 @@ test.describe('@supersync Simple Counter Sync', () => {
       await clientB.page.waitForTimeout(1000);
 
       // Verify Client B sees the same value
-      const valueB = await getCounterValue(clientB, counterTitle);
+      const valueB = await getCounterValue(clientB);
       console.log(`Client B counter value: ${valueB}`);
       expect(valueB).toBe('3');
 
@@ -287,12 +286,12 @@ test.describe('@supersync Simple Counter Sync', () => {
       await clientA.page.waitForTimeout(500);
 
       // Increment to 2
-      await incrementClickCounter(clientA, counterTitle);
+      await incrementClickCounter(clientA);
       await clientA.page.waitForTimeout(200);
-      await incrementClickCounter(clientA, counterTitle);
+      await incrementClickCounter(clientA);
       await clientA.page.waitForTimeout(200);
 
-      const valueA = await getCounterValue(clientA, counterTitle);
+      const valueA = await getCounterValue(clientA);
       expect(valueA).toBe('2');
       console.log(`Client A counter value: ${valueA}`);
 
@@ -308,15 +307,15 @@ test.describe('@supersync Simple Counter Sync', () => {
       await clientB.page.waitForTimeout(1000);
 
       // Verify B got the value from A
-      let valueB = await getCounterValue(clientB, counterTitle);
+      let valueB = await getCounterValue(clientB);
       expect(valueB).toBe('2');
       console.log(`Client B after sync: ${valueB}`);
 
       // B increments (should be 3)
-      await incrementClickCounter(clientB, counterTitle);
+      await incrementClickCounter(clientB);
       await clientB.page.waitForTimeout(200);
 
-      valueB = await getCounterValue(clientB, counterTitle);
+      valueB = await getCounterValue(clientB);
       expect(valueB).toBe('3');
       console.log(`Client B after increment: ${valueB}`);
 
@@ -332,7 +331,7 @@ test.describe('@supersync Simple Counter Sync', () => {
       await clientC.page.waitForTimeout(1000);
 
       // Verify C sees 3 (not 0 or any other wrong value)
-      const valueC = await getCounterValue(clientC, counterTitle);
+      const valueC = await getCounterValue(clientC);
       console.log(`Client C counter value: ${valueC}`);
       expect(valueC).toBe('3');
 

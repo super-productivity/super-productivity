@@ -1,0 +1,147 @@
+<form
+  (submit)="$event.preventDefault(); postTime()"
+  class="mat-body"
+  name="time-estimate-form"
+>
+  <h1 mat-dialog-title>
+    <mat-icon
+      class="dialog-header-icon"
+      svgIcon="redmine"
+    ></mat-icon>
+    <span>{{ T.F.REDMINE.DIALOG_TRACK_TIME.TITLE | translate }}</span>
+  </h1>
+
+  <mat-dialog-content>
+    <p>
+      {{ T.F.REDMINE.DIALOG_TRACK_TIME.SUBMIT_TIME_FOR | translate }}<br />
+      <strong>
+        <a
+          [href]="redmineIssue?.url"
+          target="_blank"
+        >
+          #{{ redmineIssue.id }} {{ redmineIssue.subject }}</a
+        ></strong
+      >.
+    </p>
+    <br />
+    <br />
+
+    <div class="form-wrapper">
+      <mat-form-field>
+        <mat-label>{{ T.F.REDMINE.DIALOG_TRACK_TIME.TIME_SPENT | translate }}</mat-label>
+        <input
+          [(ngModel)]="timeSpent"
+          inputDuration="optional"
+          matInput
+          name="timeSpent"
+          required
+          type="text"
+        />
+        <div
+          class="suffix-wrapper"
+          matSuffix
+          [matMenuTriggerFor]="contextMenu"
+          [matTooltip]="T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT_TOOLTIP | translate"
+        >
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon style="font-size: 24px">add</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon style="font-size: 24px">timer</mat-icon>
+          </button>
+        </div>
+      </mat-form-field>
+
+      <mat-menu #contextMenu="matMenu">
+        <ng-template matMenuContent>
+          @for (opt of defaultTimeOptions; track opt) {
+            <button
+              mat-menu-item
+              type="button"
+              (click)="fill(opt.value)"
+            >
+              {{ opt.label | translate }} ({{
+                getTimeToLogForMode(opt.value) | msToString
+              }})
+            </button>
+          }
+        </ng-template>
+      </mat-menu>
+
+      @if (defaultTimeCheckboxContent) {
+        <mat-checkbox
+          [@expandFade]
+          [checked]="defaultTimeCheckboxContent.isChecked"
+          (change)="defaultTimeCheckboxContent.isChecked = $event.checked"
+          style="margin-bottom: 20px"
+          >{{ defaultTimeCheckboxContent.label | translate }}
+        </mat-checkbox>
+      }
+
+      <mat-form-field>
+        <mat-label>{{ T.F.REDMINE.DIALOG_TRACK_TIME.STARTED | translate }}</mat-label>
+        <input
+          [(ngModel)]="started"
+          matInput
+          name="date"
+          required
+          type="datetime-local"
+        />
+        <mat-error>{{
+          T.F.REDMINE.DIALOG_TRACK_TIME.INVALID_DATE | translate
+        }}</mat-error>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>{{ T.F.REDMINE.DIALOG_TRACK_TIME.ACTIVITY | translate }}</mat-label>
+        <mat-select
+          [(ngModel)]="activityId"
+          name="activity"
+        >
+          @for (activity of activities$ | async; track activity) {
+            <mat-option [value]="activity.id"> {{ activity.name }} </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field>
+        <mat-label>Comment</mat-label>
+        <textarea
+          [(ngModel)]="comment"
+          cdkAutosizeMaxRows="5"
+          cdkAutosizeMinRows="2"
+          cdkTextareaAutosize
+          matInput
+          name="comment"
+        ></textarea>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <div class="wrap-buttons">
+      <button
+        (click)="close()"
+        color="primary"
+        mat-button
+        type="button"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+      <button
+        color="primary"
+        mat-stroked-button
+        type="submit"
+      >
+        <mat-icon>save</mat-icon>
+        {{ T.F.REDMINE.DIALOG_TRACK_TIME.POST_TIME | translate }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+</form>

@@ -8,6 +8,12 @@ const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
 
+export const ARGON2_PARAMS = {
+  parallelism: 1,
+  iterations: 3,
+  memorySize: 65536, // 64 MB - memorySize is in KiB
+};
+
 // ============================================================================
 // WEBCRYPTO AVAILABILITY CHECK
 // ============================================================================
@@ -63,12 +69,12 @@ const deriveKeyBytesArgon = async (
   salt: Uint8Array,
 ): Promise<Uint8Array> => {
   return await argon2id({
-    password: password,
-    salt: salt,
+    password,
+    salt,
     hashLength: KEY_LENGTH,
-    parallelism: 1,
-    iterations: 3,
-    memorySize: 65536, // 64 MB
+    parallelism: ARGON2_PARAMS.parallelism,
+    iterations: ARGON2_PARAMS.iterations,
+    memorySize: ARGON2_PARAMS.memorySize,
     outputType: 'binary',
   });
 };

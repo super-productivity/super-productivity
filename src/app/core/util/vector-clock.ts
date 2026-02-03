@@ -284,25 +284,39 @@ export const hasVectorClockChanges = (
   // are removed. When the current clock is at MAX size, missing keys are expected
   // and don't indicate corruption — they were pruned away.
   const currentSize = Object.keys(current!).length;
+  const missingPrunedKeys: string[] = [];
+  let hasMissingUnpruned = false;
   for (const [clientId, refVal] of Object.entries(reference!)) {
     if (refVal > 0 && !(clientId in current!)) {
       if (currentSize >= MAX_VECTOR_CLOCK_SIZE) {
-        // Current clock was likely pruned — missing keys are expected.
-        PFLog.verbose(
-          'Vector clock: reference client missing from current (likely pruned)',
-          { clientId, refValue: refVal },
-        );
+        // Current clock was likely pruned — collect for batch log below.
+        missingPrunedKeys.push(clientId);
       } else {
         // Current clock is small enough that pruning couldn't have removed this key.
+        hasMissingUnpruned = true;
         PFLog.warn('Vector clock change detected: client missing from current', {
           clientId,
           refValue: refVal,
           currentClock: vectorClockToString(current),
           referenceClock: vectorClockToString(reference),
         });
+        break;
       }
-      return true;
     }
+  }
+
+  if (missingPrunedKeys.length > 0) {
+    PFLog.verbose(
+      `Vector clock: ${missingPrunedKeys.length} reference client(s) missing from current (likely pruned)`,
+      { missingKeys: missingPrunedKeys },
+    );
+  }
+
+  if (hasMissingUnpruned || missingPrunedKeys.length > 0) {
+    // Intentionally conservative: return true even when missing keys were
+    // likely pruned. Re-uploading is safe (server deduplicates), but skipping
+    // could silently lose data if the key was actually corrupted.
+    return true;
   }
 
   return false;

@@ -108,7 +108,6 @@ export const compareVectorClocks = (
   // non-shared keys, the clocks may have genuinely different causal histories.
   // Returning EQUAL would cause silent data loss (skip as duplicate).
   // Returning CONCURRENT triggers LWW conflict resolution (safe direction).
-  if (bothPossiblyPruned && aOnlyCount > 0 && bOnlyCount > 0) return 'CONCURRENT';
   if (bothPossiblyPruned && (aOnlyCount > 0 || bOnlyCount > 0)) return 'CONCURRENT';
   return 'EQUAL';
 };

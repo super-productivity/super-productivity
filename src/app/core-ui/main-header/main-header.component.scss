@@ -248,11 +248,16 @@ page-title {
 
 .spin {
   animation: spin 1.5s linear infinite;
+  will-change: transform;
 }
 
 @keyframes spin {
+  from {
+    transform: rotate(0deg) translateZ(0);
+  }
+
   to {
-    transform: rotate(-360deg);
+    transform: rotate(-360deg) translateZ(0);
   }
 }
 
@@ -340,6 +345,9 @@ page-title {
     width: 28px;
     height: 28px;
     line-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 

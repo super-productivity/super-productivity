@@ -6,7 +6,7 @@ import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatMenu, MatMenuContent, MatMenuTrigger } from '@angular/material/menu';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -172,6 +172,7 @@ export class PageTitleComponent {
   private _workContextService = inject(WorkContextService);
   readonly taskViewCustomizerService = inject(TaskViewCustomizerService);
   private readonly _configService = inject(GlobalConfigService);
+  private _translateService = inject(TranslateService);
 
   readonly T = T;
 
@@ -210,16 +211,26 @@ export class PageTitleComponent {
   );
   isWorkViewPage = toSignal(this._isWorkViewPage$, { initialValue: false });
 
+  private _isHabitsSection$ = this._router.events.pipe(
+    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+    map((event) => !!event.urlAfterRedirects.match(/(habits)$/)),
+    startWith(!!this._router.url.match(/(habits)$/)),
+  );
+  isHabitsSection = toSignal(this._isHabitsSection$, { initialValue: false });
+
   // Override title for special routes
   displayTitle = computed(() => {
     if (this.isScheduleSection()) {
-      return 'Schedule';
+      return this._translateService.instant(T.MH.SCHEDULE);
     }
     if (this.isPlannerSection()) {
-      return 'Planner';
+      return this._translateService.instant(T.MH.PLANNER);
     }
     if (this.isBoardsSection()) {
-      return 'Boards';
+      return this._translateService.instant(T.MH.BOARDS);
+    }
+    if (this.isHabitsSection()) {
+      return this._translateService.instant(T.MH.HABITS);
     }
     return this.activeWorkContextTitle();
   });

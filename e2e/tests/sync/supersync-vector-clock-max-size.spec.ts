@@ -28,6 +28,8 @@ import {
  * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-vector-clock-max-size.spec.ts
  */
 
+const ERROR_SNACK_TIMEOUT = { timeout: 3000 };
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW Retry', () => {
@@ -119,8 +121,8 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       // No error snackbars
       const errorSnackA = clientA.page.locator('simple-snack-bar.error');
       const errorSnackB = clientB.page.locator('simple-snack-bar.error');
-      await expect(errorSnackA).not.toBeVisible({ timeout: 3000 });
-      await expect(errorSnackB).not.toBeVisible({ timeout: 3000 });
+      await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
+      await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
       console.log('[LWW Retry] Test PASSED - sync completed without hanging');
     } finally {
@@ -216,8 +218,8 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       // No error snackbars
       const errorSnackA = clientA.page.locator('simple-snack-bar.error');
       const errorSnackB = clientB.page.locator('simple-snack-bar.error');
-      await expect(errorSnackA).not.toBeVisible({ timeout: 3000 });
-      await expect(errorSnackB).not.toBeVisible({ timeout: 3000 });
+      await expect(errorSnackA).not.toBeVisible(ERROR_SNACK_TIMEOUT);
+      await expect(errorSnackB).not.toBeVisible(ERROR_SNACK_TIMEOUT);
 
       // Both clients should see the second task
       await expectTaskOnAllClients([clientA, clientB], task2Name);
@@ -325,7 +327,7 @@ test.describe('@supersync @vector-clock-max-size Vector Clock Max Size and LWW R
       // No error snackbars on any client
       for (const client of allClients) {
         const errorSnack = client.page.locator('simple-snack-bar.error');
-        await expect(errorSnack).not.toBeVisible({ timeout: 3000 });
+        await expect(errorSnack).not.toBeVisible(ERROR_SNACK_TIMEOUT);
       }
 
       console.log('[3-Client] Test PASSED - all 3 clients converged with 9 tasks');

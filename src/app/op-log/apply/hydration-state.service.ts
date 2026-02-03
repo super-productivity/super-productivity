@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { computed, Injectable, signal } from '@angular/core';
+import { toObservable } from '@angular/core/rxjs-interop';
 import { setIsApplyingRemoteOps } from '../capture/operation-capture.meta-reducer';
 import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
 
@@ -47,13 +48,35 @@ import { POST_SYNC_COOLDOWN_MS } from '../core/operation-log.const';
  * When effects use `skipDuringSyncWindow()` operator, they are suppressed not
  * only during op application but also for a short cooldown period after sync.
  * This prevents the timing gap where selectors re-evaluate with new state and
- * effects fire immediately, creating conflicting operations. See `isInSyncWindow()`.
+ * effects fire immediately, creating conflicting operations. See `isInSyncWindow`.
  */
 @Injectable({ providedIn: 'root' })
 export class HydrationStateService {
   private _isApplyingRemoteOps = signal(false);
   private _isInPostSyncCooldown = signal(false);
   private _cooldownTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Computed signal: true when in the extended sync window where selector-based
+   * effects that modify shared state (like TODAY_TAG) should be suppressed.
+   *
+   * This includes:
+   * - During remote op application (isApplyingRemoteOps)
+   * - During post-sync cooldown period
+   *
+   * Use `skipDuringSyncWindow()` operator for effects that should be
+   * suppressed during this extended window.
+   */
+  isInSyncWindow = computed(
+    () => this._isApplyingRemoteOps() || this._isInPostSyncCooldown(),
+  );
+
+  /**
+   * Observable that emits whenever the sync window state changes.
+   * Emits `true` while in the sync window, `false` when it ends.
+   * Use with `waitForSyncWindow()` operator for effects that must
+   * defer (not drop) emissions during sync.
+   */
+  isInSyncWindow$ = toObservable(this.isInSyncWindow);
 
   /**
    * Returns true if remote operations are currently being applied.
@@ -87,23 +110,8 @@ export class HydrationStateService {
   }
 
   /**
-   * Returns true if we're in the extended sync window where selector-based
-   * effects that modify shared state (like TODAY_TAG) should be suppressed.
-   *
-   * This includes:
-   * - During remote op application (isApplyingRemoteOps)
-   * - During post-sync cooldown period
-   *
-   * Use `skipDuringSyncWindow()` operator for effects that should be
-   * suppressed during this extended window.
-   */
-  isInSyncWindow(): boolean {
-    return this._isApplyingRemoteOps() || this._isInPostSyncCooldown();
-  }
-
-  /**
    * Starts a cooldown period after sync completes.
-   * During this window, `isInSyncWindow()` returns true.
+   * During this window, `isInSyncWindow` signal returns true.
    *
    * This prevents the timing gap where:
    * 1. Sync finishes, isApplyingRemoteOps = false

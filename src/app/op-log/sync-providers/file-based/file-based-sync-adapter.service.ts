@@ -655,6 +655,11 @@ export class FileBasedSyncAdapterService {
 
     // Build response
     const startingSeq = latestSeq - ops.length;
+    if (startingSeq < 0) {
+      OpLog.warn(
+        `FileBasedSyncAdapter: Negative startingSeq (${startingSeq}) — latestSeq=${latestSeq}, ops.length=${ops.length}`,
+      );
+    }
     return {
       results: ops.map((op, i) => ({
         opId: op.id,

@@ -18,11 +18,6 @@
     <img src="https://github.com/user-attachments/assets/15384cae-8ba3-4474-bc2c-13e7765c2dd1" alt="animated" />
 </a>
 </p>
-<br>
-
-<p align="center">
-      <img src="https://repobeats.axiom.co/api/embed/61f9b9de1bc34a2b526faf6d356120bdae7f4249.svg" alt="analytics" />
-</p>
 
 <br>
 <br>
