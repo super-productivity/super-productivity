@@ -915,7 +915,7 @@
         "LAST_WRITE": "最后写入",
         "LOCAL": "本地",
         "LOCAL_REMOTE": "本地 -> 远程",
-        "NEVER": "从不",
+        "OVERWRITE_WARNING": "警告: {{targetName}} 数据包含大约 {{targetChanges}} 次更改，而 {{sourceName}} 数据只有 {{sourceChanges}} 次更改。您确定要用 {{sourceName}} 版本覆盖 {{targetName}} 数据吗？此操作无法撤消。",
         "OVERWRITE_WARNING": "警告: {{targetName}} 数据包含大约 {{targetChanges}} 次更改，而 {{sourceName}} 数据只有 {{sourceChanges}} 次更改。您确定要用 {{sourceName}} 版本覆盖 {{targetName}} 数据吗？此操作无法撤消。",        "REMOTE": "远程",
         "REMOTE": "远程",
         "RESULT": "结果",
