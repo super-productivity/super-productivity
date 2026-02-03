@@ -295,7 +295,7 @@
         "T_TITLE": "标题",
         "T_TO_BE_SUBMITTED": "待提交",
         "TITLE": "向 GitLab 提交问题花费的时间",
-        "TOTAL_MSG": "您今天将向 <em> 个不同的事项提交总计 <em> 的工作时间。"
+        "TOTAL_MSG": "您今天将向 <em>{{nrOfTasksToSubmit}}</em> 个不同的事项提交总计 <em>{{totalTimeToSubmit}}</em> 的工作时间。"
       },
       "FORM": {
         "FILTER": "自定义筛选",
@@ -451,7 +451,7 @@
       },
       "FORM_CRED": {
         "ALLOW_SELF_SIGNED": "允许自签名证书",
-        "HOST": "主机（例如：http://my-host.de:1234）",
+        "HOST": "主机（例如：https://my-host.de:1234）",
         "PASSWORD": "令牌 / 密码",
         "USE_PAT": "改用个人访问令牌（旧版）",
         "USER_NAME": "电子邮件 / 用户名",
