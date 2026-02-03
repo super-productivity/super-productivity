@@ -625,21 +625,38 @@ test.describe('@supersync SuperSync Edge Cases', () => {
       await waitForTask(clientB.page, taskName);
 
       // 3. Client A deletes the task using keyboard shortcut (triggers undo snackbar)
-      await deleteTask(clientA, taskName);
-
-      // Verify task is deleted locally
-      const taskLocatorA = clientA.page
+      // Inline the delete instead of using deleteTask helper to avoid wasting
+      // snackbar time on the 2s dialog-detection timeout. The snackbar only
+      // lasts 5s, so we need to click Undo quickly.
+      // Click the drag handle (not the title) to focus without entering edit mode.
+      const taskEl = clientA.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
         .first();
-      await expect(taskLocatorA).not.toBeVisible({ timeout: 5000 });
+      await taskEl.locator('.drag-handle').click();
+      await clientA.page.keyboard.press('Backspace');
 
-      // 4. Client A clicks Undo (snackbar should be visible)
-      // The snackbar appears for 5 seconds with an "Undo" action
-      // Use snack-custom .action selector (app uses custom snackbar component)
-      const undoButton = clientA.page.locator(
-        'snack-custom button.action, .mat-mdc-snack-bar-container button',
+      // 4. Handle the optional confirmation dialog, then click Undo.
+      // The dialog appears within ~500ms if it's going to show. Use a short
+      // timeout so we don't eat too much of the 5s snackbar window.
+      const confirmBtn = clientA.page.locator(
+        'mat-dialog-actions button:has-text("Delete")',
       );
-      await undoButton.waitFor({ state: 'visible', timeout: 8000 });
+      const dialogAppeared = await confirmBtn
+        .waitFor({ state: 'visible', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (dialogAppeared) {
+        await confirmBtn.click();
+        await clientA.page
+          .locator('mat-dialog-container')
+          .waitFor({ state: 'hidden', timeout: 5000 });
+      }
+
+      // The undo snackbar lasts 5s starting from the actual deletion.
+      // Without dialog: ~2s elapsed (dialog check). With dialog: just started.
+      const undoButton = clientA.page.locator('snack-custom button.action');
+      await undoButton.waitFor({ state: 'visible', timeout: 5000 });
       await undoButton.click();
 
       // Wait for undo to complete and persist
