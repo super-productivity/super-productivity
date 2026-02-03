@@ -9,21 +9,19 @@ import {
   decryptWithDerivedKey,
   clearSessionKeyCache,
   getSessionKeyCacheStats,
-  ARGON2_PARAMS,
+  setArgon2ParamsForTesting,
 } from './encryption';
 
 describe('Encryption', () => {
   const PASSWORD = 'super_secret_password';
   const DATA = 'some very secret data';
 
-  const ORIGINAL_ARGON2_PARAMS = { ...ARGON2_PARAMS };
-
   beforeAll(() => {
-    Object.assign(ARGON2_PARAMS, { memorySize: 8, iterations: 1 });
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
   });
 
   afterAll(() => {
-    Object.assign(ARGON2_PARAMS, ORIGINAL_ARGON2_PARAMS);
+    setArgon2ParamsForTesting();
   });
 
   it('should encrypt and decrypt data correctly', async () => {

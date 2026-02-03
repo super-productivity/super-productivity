@@ -278,11 +278,13 @@ export const selectAllTasks = createSelector(
   selectTaskFeatureState,
   (state: TaskState): Task[] => {
     const all = selectAll(state);
-    const filtered = all.filter((task): task is Task => !!task);
-    if (filtered.length !== all.length) {
+    // Only filter when undefined entities exist — otherwise return the original
+    // memoized array from selectAll to avoid breaking NgRx selector memoization.
+    if (all.some((task) => !task)) {
       devError('selectAllTasks: found undefined entities in task state');
+      return all.filter((task): task is Task => !!task);
     }
-    return filtered;
+    return all;
   },
 );
 

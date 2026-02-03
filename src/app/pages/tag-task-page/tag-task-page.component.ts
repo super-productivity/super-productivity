@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { WorkContextService } from '../../features/work-context/work-context.service';
-import { AsyncPipe } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { WorkViewComponent } from '../../features/work-view/work-view.component';
 
 @Component({
@@ -8,8 +8,12 @@ import { WorkViewComponent } from '../../features/work-view/work-view.component'
   templateUrl: './tag-task-page.component.html',
   styleUrls: ['./tag-task-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AsyncPipe, WorkViewComponent],
+  imports: [WorkViewComponent],
 })
 export class TagTaskPageComponent {
-  workContextService = inject(WorkContextService);
+  private _workContextService = inject(WorkContextService);
+
+  backlogTasks = toSignal(this._workContextService.backlogTasks$, { initialValue: [] });
+  doneTasks = toSignal(this._workContextService.doneTasks$, { initialValue: [] });
+  undoneTasks = toSignal(this._workContextService.undoneTasks$, { initialValue: [] });
 }

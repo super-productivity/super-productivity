@@ -414,13 +414,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await syncPageC.triggerSync();
     await waitForSyncComplete(pageC, syncPageC);
 
-    // TODO: Navigation is a workaround for Angular not re-rendering task list
-    // after remote sync ops are applied to NgRx. Investigate whether the root
-    // cause is in HydrationStateService cooldown or change detection.
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
-
     // C should have 2 tasks (from A and B)
     await expect(pageC.locator('task')).toHaveCount(2, { timeout: 30000 });
     console.log('[Three Client Test] C: Joined and received 2 tasks');
@@ -455,11 +448,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await syncPageC.triggerSync();
     await waitForSyncComplete(pageC, syncPageC);
 
-    // TODO: Navigation workaround — see comment above for pageC's first sync
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
-
     // CRITICAL: C should have B's task (this was the bug!)
     await expect(pageC.locator('task')).toHaveCount(4, { timeout: 30000 });
     await expect(pageC.locator('task', { hasText: taskB2 })).toBeVisible({
@@ -470,19 +458,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     // A syncs to verify full sync
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
-
-    // TODO: Navigation workaround — see comment above for pageC's first sync
-    await pageA.goto('/#/tag/TODAY/tasks');
-    await pageA.waitForLoadState('networkidle');
-    await workViewPageA.waitForTaskList();
-
-    await pageB.goto('/#/tag/TODAY/tasks');
-    await pageB.waitForLoadState('networkidle');
-    await workViewPageB.waitForTaskList();
-
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
 
     // All clients should have 4 tasks
     await expect(pageA.locator('task')).toHaveCount(4, { timeout: 30000 });
