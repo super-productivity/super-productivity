@@ -226,7 +226,7 @@ export const selectTrackableTasksForActiveContext = createSelector(
         devError('Task not found');
       } else if (task.subTaskIds && task.subTaskIds.length) {
         trackableTasks = trackableTasks.concat(
-          task.subTaskIds.map((sid) => entities[sid] as Task),
+          task.subTaskIds.map((sid) => entities[sid]).filter((t): t is Task => !!t),
         );
       } else {
         trackableTasks.push(task);
@@ -250,9 +250,10 @@ export const selectTrackableTasksActiveContextFirst = createSelector(
     // Use Set for O(1) lookup instead of O(n) .includes() in filter
     const activeContextIdSet = new Set(forActiveContext.map((item) => item.id));
     const otherTasks = s.ids
-      .map((id) => s.entities[id] as Task)
+      .map((id) => s.entities[id])
       .filter(
-        (task) =>
+        (task): task is Task =>
+          !!task &&
           (!!task.parentId || task.subTaskIds.length === 0) &&
           !activeContextIdSet.has(task.id),
       );

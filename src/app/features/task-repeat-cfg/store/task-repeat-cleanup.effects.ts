@@ -33,10 +33,11 @@ export class TaskRepeatCleanupEffects {
    * where a user simply didn't finish yesterday's recurring task.
    *
    * Uses a 3s debounce to run AFTER createRepeatableTasksAndAddDueToday$ (1s debounce).
+   * Uses afterInitialSyncDoneStrict$ to ensure sync has completed (including for SuperSync).
    */
   cleanupDuplicateRepeatInstances$ = createEffect(
     () => {
-      return this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+      return this._syncTriggerService.afterInitialSyncDoneStrict$.pipe(
         first(),
         switchMap(() =>
           this._globalTrackingIntervalService.todayDateStr$.pipe(

@@ -435,9 +435,14 @@ export class FileBasedSyncAdapterService {
 
     // Merge recentOps - add new ops, trim to limit
     const existingOps = currentData?.recentOps || [];
-    const mergedOps = [...existingOps, ...compactOps].slice(
-      -FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS,
-    );
+    const combinedOps = [...existingOps, ...compactOps];
+    const mergedOps = combinedOps.slice(-FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS);
+    if (combinedOps.length > mergedOps.length) {
+      OpLog.warn(
+        `FileBasedSyncAdapter: Trimmed ${combinedOps.length - mergedOps.length} old ops ` +
+          `from recentOps (${combinedOps.length} → ${mergedOps.length})`,
+      );
+    }
 
     // Load archive data from IndexedDB to include in sync file
     const archiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
@@ -464,7 +469,8 @@ export class FileBasedSyncAdapterService {
 
   /**
    * Uploads sync data with retry on revision mismatch.
-   * Returns the final sync version after upload.
+   * Returns the final sync version and (if a retry occurred) the fresh existingOps
+   * from the last retry so the caller can use them for piggyback collection.
    */
   private async _uploadWithRetry(
     provider: SyncProviderServiceInterface<SyncProviderId>,
@@ -473,7 +479,8 @@ export class FileBasedSyncAdapterService {
     newData: FileBasedSyncData,
     revToMatch: string | null,
     ops: SyncOperation[],
-  ): Promise<number> {
+  ): Promise<{ finalSyncVersion: number; freshExistingOps?: CompactOperation[] }> {
+    // Initial attempt
     const uploadData = await this._encryptAndCompressHandler.compressAndEncryptData(
       cfg,
       encryptKey,
@@ -488,16 +495,30 @@ export class FileBasedSyncAdapterService {
         revToMatch,
         false,
       );
-      return newData.syncVersion;
+      return { finalSyncVersion: newData.syncVersion };
     } catch (e) {
       if (!(e instanceof UploadRevToMatchMismatchAPIError)) {
         throw e;
       }
+    }
 
-      // Another client uploaded between our download and upload - retry once
+    // Retry loop on revision mismatch
+    const maxRetries = FILE_BASED_SYNC_CONSTANTS.MAX_UPLOAD_RETRIES;
+    const compactOps = ops.map((op) => this._syncOpToCompact(op));
+    let previousRev = revToMatch;
+    let latestFreshExistingOps: CompactOperation[] | undefined;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Exponential backoff with jitter: base * 2^(attempt-1) + random(0..50%)
+      const baseDelay = FILE_BASED_SYNC_CONSTANTS.RETRY_BASE_DELAY_MS;
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      const jitter = Math.random() * delay * 0.5;
+      const totalDelay = Math.round(delay + jitter);
+
       OpLog.normal(
-        'FileBasedSyncAdapter: Rev mismatch detected, re-downloading and retrying...',
+        `FileBasedSyncAdapter: Rev mismatch detected, retry ${attempt}/${maxRetries} after ${totalDelay}ms...`,
       );
+      await new Promise((resolve) => setTimeout(resolve, totalDelay));
 
       const { data: freshData, rev: freshRev } = await this._downloadSyncFile(
         provider,
@@ -506,19 +527,35 @@ export class FileBasedSyncAdapterService {
       );
 
       // Re-merge operations with fresh data
-      const compactOps = ops.map((op) => this._syncOpToCompact(op));
       const freshExistingOps = freshData.recentOps || [];
-      const freshMergedOps = [...freshExistingOps, ...compactOps].slice(
+      latestFreshExistingOps = freshExistingOps;
+      const freshCombinedOps = [...freshExistingOps, ...compactOps];
+      const freshMergedOps = freshCombinedOps.slice(
         -FILE_BASED_SYNC_CONSTANTS.MAX_RECENT_OPS,
       );
+      if (freshCombinedOps.length > freshMergedOps.length) {
+        OpLog.warn(
+          `FileBasedSyncAdapter: Trimmed ${freshCombinedOps.length - freshMergedOps.length} old ops ` +
+            `from recentOps on retry ${attempt} (${freshCombinedOps.length} → ${freshMergedOps.length})`,
+        );
+      }
 
       let freshMergedClock = freshData.vectorClock || {};
       for (const op of ops) {
         freshMergedClock = mergeVectorClocks(freshMergedClock, op.vectorClock);
       }
 
+      // Re-read current state and archives — originals from first attempt may be stale
+      const freshState = await this._stateSnapshotService.getStateSnapshot();
+      const freshArchiveYoung = await this._archiveDbAdapter.loadArchiveYoung();
+      const freshArchiveOld = await this._archiveDbAdapter.loadArchiveOld();
+
       const freshNewData: FileBasedSyncData = {
         ...newData,
+        state: freshState,
+        archiveYoung: freshArchiveYoung,
+        archiveOld: freshArchiveOld,
+        schemaVersion: freshData.schemaVersion || newData.schemaVersion,
         syncVersion: freshData.syncVersion + 1,
         vectorClock: freshMergedClock,
         recentOps: freshMergedOps,
@@ -533,23 +570,39 @@ export class FileBasedSyncAdapterService {
           FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
         );
 
-      const isServerRevInconsistent = freshRev === revToMatch;
+      // Compare against previous attempt's rev (not original revToMatch)
+      const isServerRevInconsistent = freshRev === previousRev;
       if (isServerRevInconsistent) {
         OpLog.warn(
           'FileBasedSyncAdapter: Rev unchanged after re-download, server has inconsistent timestamp handling. Force-uploading.',
         );
       }
 
-      await provider.uploadFile(
-        FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
-        freshUploadData,
-        freshRev,
-        isServerRevInconsistent,
-      );
-
-      OpLog.normal('FileBasedSyncAdapter: Retry upload successful');
-      return freshNewData.syncVersion;
+      try {
+        await provider.uploadFile(
+          FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
+          freshUploadData,
+          freshRev,
+          isServerRevInconsistent,
+        );
+        OpLog.normal(`FileBasedSyncAdapter: Retry ${attempt} upload successful`);
+        return {
+          finalSyncVersion: freshNewData.syncVersion,
+          freshExistingOps: latestFreshExistingOps,
+        };
+      } catch (retryErr) {
+        if (!(retryErr instanceof UploadRevToMatchMismatchAPIError)) {
+          throw retryErr;
+        }
+        // If force-upload was used (isServerRevInconsistent), this shouldn't happen
+        // but if it does, let the loop continue
+        previousRev = freshRev;
+      }
     }
+
+    throw new Error(
+      `FileBasedSyncAdapter: Upload failed after ${maxRetries} retries due to repeated revision mismatches`,
+    );
   }
 
   /**
@@ -617,7 +670,7 @@ export class FileBasedSyncAdapterService {
     );
 
     // Step 3: Upload with retry on revision mismatch
-    const finalSyncVersion = await this._uploadWithRetry(
+    const { finalSyncVersion, freshExistingOps } = await this._uploadWithRetry(
       provider,
       cfg,
       encryptKey,
@@ -637,7 +690,16 @@ export class FileBasedSyncAdapterService {
     const latestSeq = finalSyncVersion;
 
     // Step 5: Collect piggybacked ops
-    const newOps = this._collectPiggybackedOps(existingOps, providerKey, clientId);
+    // Use fresh existingOps from retry if available — the original existingOps
+    // were captured before upload and may be missing ops uploaded by other clients
+    // during the retry window.
+    const opsForPiggyback = freshExistingOps ?? existingOps;
+    if (freshExistingOps) {
+      OpLog.normal(
+        `FileBasedSyncAdapter: Using fresh existingOps from retry (${freshExistingOps.length} ops) for piggyback collection`,
+      );
+    }
+    const newOps = this._collectPiggybackedOps(opsForPiggyback, providerKey, clientId);
 
     // Mark all ops as processed
     for (const serverOp of newOps) {

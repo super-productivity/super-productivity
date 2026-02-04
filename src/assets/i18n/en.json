@@ -513,6 +513,11 @@
         "WELCOME_USER": "Welcome {{user}}!"
       }
     },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Image pasted successfully",
+      "SIZE_EXCEEDED": "Image size ({{actualSize}}) exceeds maximum allowed size ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Storage quota exceeded. Please free up space or reduce image sizes."
+    },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "Add the pasted Markdown list to the notes of subtask \"{{parentTaskTitle}}\"?",
       "CONFIRM_PARENT_TASKS": "Create <strong>{{tasksCount}} new tasks</strong> from the pasted Markdown list?",
@@ -1828,6 +1833,36 @@
       "CHECK_UPDATES": "Check for remote updates every X",
       "HELP": "You can integrate calendars to be reminded and add them as tasks within Super Productivity. The integration works by using the iCal format. For this to work your calendars need to be accessible either over the internet or via file system.",
       "SHOW_BANNER_THRESHOLD": "Show a notification X before the event (blank for disabled)"
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Delete image",
+      "DELETE_ALL": "Delete All",
+      "DELETE_ALL_SUCCESS": "All clipboard images deleted successfully",
+      "DELETE_SUCCESS": "Clipboard image deleted successfully",
+      "ERROR_DELETING": "Failed to delete clipboard image",
+      "ERROR_DELETING_ALL": "Failed to delete all clipboard images",
+      "ERROR_LOADING": "Failed to load clipboard images",
+      "HELP": "Manage images pasted from clipboard. For browser version, images are stored in IndexedDB. For desktop version, configure the storage path.",
+      "LOADING": "Loading images...",
+      "MANAGE_DESCRIPTION": "View and delete images stored from pasting in markdown fields",
+      "MANAGE_TITLE": "Manage Stored Images",
+      "MANAGER_TITLE": "Clipboard Images",
+      "NO_IMAGES": "No clipboard images stored",
+      "OPEN_MANAGER": "Manage Images",
+      "PATH_DESCRIPTION": "Configure where clipboard images are stored on your filesystem (leave empty for default location)",
+      "PATH_LABEL": "Image Storage Path",
+      "PATH_PLACEHOLDER": "Leave empty for default location",
+      "PATH_TITLE": "Storage Location",
+      "SELECT_PATH": "Select Folder",
+      "SELECT_PATH_TITLE": "Select Clipboard Images Folder",
+      "SORT_BY": "Sort by",
+      "SORT_LARGEST": "Largest first",
+      "SORT_NEWEST": "Newest first",
+      "SORT_OLDEST": "Oldest first",
+      "SORT_SMALLEST": "Smallest first",
+      "TITLE": "Clipboard Images",
+      "TOTAL_IMAGES": "Total images",
+      "TOTAL_SIZE": "Total size"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Hide evaluation sheet in daily summary",

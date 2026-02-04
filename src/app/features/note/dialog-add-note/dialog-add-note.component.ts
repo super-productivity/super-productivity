@@ -8,9 +8,10 @@ import { MarkdownComponent } from 'ngx-markdown';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SnackService } from '../../../core/snack/snack.service';
+import { AsyncPipe } from '@angular/common';
 
 @Component({
   // selector: 'dialog-add-note',
@@ -29,7 +30,9 @@ import { SnackService } from '../../../core/snack/snack.service';
     MatTooltip,
     MatIcon,
     MatButton,
+    MatIconButton,
     TranslatePipe,
+    AsyncPipe,
   ],
 })
 export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {

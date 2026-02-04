@@ -218,3 +218,24 @@
     transform: translate(100%, 50%);
   }
 }
+
+.image-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: var(--this-upper-height);
+  background-color: var(--attachment-bg);
+  color: var(--text-color-less-intense);
+  font-size: 12px;
+
+  mat-icon {
+    margin-bottom: 4px;
+    opacity: 0.7;
+  }
+
+  span {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+}

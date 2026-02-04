@@ -1,28 +1,36 @@
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
+  OnInit,
   output,
+  signal,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { MatButton, MatIconButton } from '@angular/material/button';
-import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatButton } from '@angular/material/button';
+import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { MatIcon } from '@angular/material/icon';
+import { MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
-import { TranslatePipe } from '@ngx-translate/core';
 import { MarkdownComponent } from 'ngx-markdown';
+import { TranslatePipe } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { T } from '../../t.const';
 import { isSmallScreen } from '../../util/is-small-screen';
 import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
+import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
+import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
+import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -32,22 +40,27 @@ const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TE
   templateUrl: './dialog-fullscreen-markdown.component.html',
   styleUrls: ['./dialog-fullscreen-markdown.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  standalone: true,
   imports: [
     FormsModule,
     MarkdownComponent,
-    MatButtonToggleGroup,
-    MatButtonToggle,
-    MatTooltip,
-    MatIcon,
     MatButton,
+    MatButtonToggle,
+    MatButtonToggleGroup,
+    MatIcon,
     MatIconButton,
+    MatTooltip,
     TranslatePipe,
   ],
 })
-export class DialogFullscreenMarkdownComponent implements AfterViewInit {
+export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit {
   private readonly _destroyRef = inject(DestroyRef);
+  private readonly _clipboardImageService = inject(ClipboardImageService);
+  private readonly _taskAttachmentService = inject(TaskAttachmentService);
+  private readonly _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
+  private readonly _cdr = inject(ChangeDetectorRef);
   _matDialogRef = inject<MatDialogRef<DialogFullscreenMarkdownComponent>>(MatDialogRef);
-  data: { content: string } = inject(MAT_DIALOG_DATA) || { content: '' };
+  data: { content: string; taskId?: string } = inject(MAT_DIALOG_DATA) || { content: '' };
 
   T: typeof T = T;
   viewMode: ViewMode = isSmallScreen() ? 'TEXT_ONLY' : 'SPLIT';
@@ -55,8 +68,20 @@ export class DialogFullscreenMarkdownComponent implements AfterViewInit {
   readonly textareaEl = viewChild<ElementRef>('textareaEl');
   readonly contentChanged = output<string>();
   private readonly _contentChanges$ = new Subject<string>();
+  private _currentPastePlaceholder: string | null = null;
+
+  /**
+   * Resolved content with blob URLs for images (for preview rendering).
+   * Initialized in ngOnInit with raw content, updated asynchronously when images resolve.
+   */
+  resolvedContent = signal<string>('');
+  // Plain property for markdown component compatibility
+  resolvedContentData: string | undefined;
 
   constructor() {
+    // Set initial content synchronously for immediate rendering
+    this.resolvedContentData = this.data.content || '';
+
     const lastViewMode = localStorage.getItem(LS.LAST_FULLSCREEN_EDIT_VIEW_MODE);
     if (
       ALL_VIEW_MODES.includes(lastViewMode as ViewMode) &&
@@ -71,11 +96,24 @@ export class DialogFullscreenMarkdownComponent implements AfterViewInit {
       }
     }
 
+    // Sync signal to plain property for markdown component
+    effect(() => {
+      this.resolvedContentData = this.resolvedContent();
+      this._cdr.markForCheck();
+    });
+
     // Auto-save with debounce
     this._contentChanges$
       .pipe(debounceTime(500), takeUntilDestroyed(this._destroyRef))
       .subscribe((value) => {
         this.contentChanged.emit(value);
+      });
+
+    // Update resolved content when content changes (for preview with images)
+    this._contentChanges$
+      .pipe(debounceTime(100), takeUntilDestroyed(this._destroyRef))
+      .subscribe((value) => {
+        this._updateResolvedContent(value);
       });
 
     // Handle Escape key - save and close
@@ -91,6 +129,13 @@ export class DialogFullscreenMarkdownComponent implements AfterViewInit {
       });
   }
 
+  async ngOnInit(): Promise<void> {
+    // Update resolved content asynchronously for image processing
+    if (this.data.content) {
+      await this._updateResolvedContent(this.data.content);
+    }
+  }
+
   ngAfterViewInit(): void {
     // Focus textarea if present (not in PARSED view mode)
     this.textareaEl()?.nativeElement?.focus();
@@ -100,6 +145,22 @@ export class DialogFullscreenMarkdownComponent implements AfterViewInit {
     if (ev.key === 'Enter' && ev.ctrlKey) {
       this.close();
     }
+  }
+
+  async pasteHandler(ev: ClipboardEvent): Promise<void> {
+    await this._clipboardPasteHandler.handlePaste(ev, {
+      currentPlaceholder: {
+        get: () => this._currentPastePlaceholder,
+        set: (val) => (this._currentPastePlaceholder = val),
+      },
+      getContent: () => this.data.content,
+      setContent: (content) => {
+        this.data.content = content;
+        this._contentChanges$.next(content);
+      },
+      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTaskId: () => this.data.taskId || null,
+    });
   }
 
   ngModelChange(content: string): void {
@@ -149,6 +210,11 @@ export class DialogFullscreenMarkdownComponent implements AfterViewInit {
         this._contentChanges$.next(this.data.content);
       }
     }
+  }
+
+  private async _updateResolvedContent(content: string): Promise<void> {
+    const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
+    this.resolvedContent.set(resolved);
   }
 
   // =========================================================================

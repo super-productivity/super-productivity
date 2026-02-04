@@ -158,6 +158,7 @@
         #textareaEl
         [(ngModel)]="data.content"
         (keydown)="keydownHandler($event)"
+        (paste)="pasteHandler($event)"
         (ngModelChange)="ngModelChange($event)"
         rows="1"
         tabindex="3"
@@ -165,13 +166,13 @@
     </div>
   }
   @if (viewMode === 'PARSED' || viewMode === 'SPLIT') {
-    <div
+    <markdown
       #previewEl
       (click)="clickPreview($event)"
-      markdown
-      [data]="data.content"
+      [data]="resolvedContentData"
+      [disableSanitizer]="true"
       class="markdown-preview markdown"
-    ></div>
+    ></markdown>
   }
 </div>
 

@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  effect,
   ElementRef,
   HostBinding,
   inject,
@@ -25,6 +26,10 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 import { isMarkdownChecklist } from '../../features/markdown-checklist/is-markdown-checklist';
 import { fadeInAnimation } from '../animations/fade.ani';
 import { DialogFullscreenMarkdownComponent } from '../dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
+import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
+import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
+import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
+import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -34,18 +39,30 @@ const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
   styleUrls: ['./inline-markdown.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [fadeInAnimation],
-  imports: [FormsModule, MarkdownComponent, MatIconButton, MatTooltip, MatIcon],
+  imports: [
+    FormsModule,
+    MarkdownComponent,
+    MatIconButton,
+    MatTooltip,
+    MatIcon,
+    ResolveClipboardImagesDirective,
+  ],
 })
 export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _cd = inject(ChangeDetectorRef);
   private _globalConfigService = inject(GlobalConfigService);
   private _matDialog = inject(MatDialog);
+  private _clipboardImageService = inject(ClipboardImageService);
+  private _taskAttachmentService = inject(TaskAttachmentService);
+  private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
+  private _currentPastePlaceholder: string | null = null;
 
   readonly isLock = input<boolean>(false);
   readonly isShowControls = input<boolean>(false);
   readonly isShowChecklistToggle = input<boolean>(false);
   readonly isDefaultText = input<boolean>(false);
-  readonly placeholderTxt = input<string>('');
+  readonly placeholderTxt = input<string | undefined>(undefined);
+  readonly taskId = input<string | undefined>(undefined);
 
   readonly changed = output<string>();
   readonly focused = output<Event>();
@@ -58,16 +75,27 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   isHideOverflow = signal(false);
   isChecklistMode = signal(false);
   isShowEdit = signal(false);
-  modelCopy = signal<string>('');
+  modelCopy = signal<string | undefined>(undefined);
+  resolvedModel = signal<string | undefined>(undefined);
+  // Plain property for markdown component compatibility
+  resolvedMarkdownData: string | undefined;
 
   isMarkdownFormattingEnabled = computed(() => {
     const tasks = this._globalConfigService.tasks();
     return tasks?.isMarkdownFormattingInNotesEnabled ?? true;
   });
+
+  isTurnOffMarkdownParsing = computed(() => !this.isMarkdownFormattingEnabled());
   private _hideOverFlowTimeout: number | undefined;
 
   constructor() {
     this.resizeParsedToFit();
+
+    // Sync signal to plain property for markdown component
+    effect(() => {
+      this.resolvedMarkdownData = this.resolvedModel();
+      this._cd.markForCheck();
+    });
   }
 
   @HostBinding('class.isFocused') get isFocused(): boolean {
@@ -85,6 +113,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   @Input() set model(v: string) {
     this._model = v || '';
     this.modelCopy.set(v || '');
+
+    // Start resolving but don't update the rendered model yet
+    if (v) {
+      this._updateResolvedModel(v);
+    } else {
+      this.resolvedModel.set(undefined);
+    }
 
     if (!this.isShowEdit()) {
       window.setTimeout(() => {
@@ -148,6 +183,27 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     }
   }
 
+  async pasteHandler(ev: ClipboardEvent): Promise<void> {
+    await this._clipboardPasteHandler.handlePaste(ev, {
+      currentPlaceholder: {
+        get: () => this._currentPastePlaceholder,
+        set: (val) => (this._currentPastePlaceholder = val),
+      },
+      getContent: () => this._model || '',
+      setContent: (content) => {
+        this.modelCopy.set(content);
+        this._model = content;
+        this.changed.emit(content);
+      },
+      getTextarea: () => this.textareaEl()?.nativeElement || null,
+      getTaskId: () => this.taskId() || null,
+      onPasteComplete: async (content) => {
+        this.resizeTextareaToFit();
+        await this._updateResolvedModel(content);
+      },
+    });
+  }
+
   clickPreview($event: MouseEvent): void {
     if (($event.target as HTMLElement).tagName === 'A') {
       // Let links work normally
@@ -177,7 +233,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     this.modelCopy.set(textareaEl.nativeElement.value);
 
     if (this.modelCopy() !== this.model) {
-      this.model = this.modelCopy();
+      this.model = this.modelCopy() || '';
       this.changed.emit(this.modelCopy() as string);
     }
   }
@@ -205,6 +261,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       autoFocus: 'textarea',
       data: {
         content: this.modelCopy(),
+        taskId: this.taskId(),
       },
     });
 
@@ -355,10 +412,22 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
         // Update the markdown string
         if (this.modelCopy() !== this.model) {
-          this.model = this.modelCopy();
+          this.model = this.modelCopy() || '';
           this.changed.emit(this.modelCopy() as string);
         }
       }
     }
+  }
+
+  private async _updateResolvedModel(content: string | undefined): Promise<void> {
+    if (!content) {
+      this.resolvedModel.set(content);
+      this._cd.markForCheck();
+      return;
+    }
+
+    // First resolve all URLs in the markdown
+    const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
+    this.resolvedModel.set(resolved);
   }
 }

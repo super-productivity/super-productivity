@@ -21,8 +21,14 @@
   &[data-horizontal-scroll] {
     .week-header {
       // Force width to match grid width for horizontal scrolling
-      width: 100%;
+      width: fit-content;
       min-width: 100%;
+
+      // Match grid-container column widths exactly
+      grid-template-columns: var(--schedule-time-width) repeat(
+          var(--nr-of-days),
+          minmax(var(--schedule-day-width), 1fr)
+        );
     }
 
     .grid-container {
@@ -32,18 +38,8 @@
           minmax(var(--schedule-day-width), 1fr)
         );
       // Force grid to size based on content, not container
-      width: 100%;
+      width: fit-content;
       min-width: 100%;
-    }
-
-    .days {
-      // Match grid-container column widths exactly
-      grid-template-columns: var(--schedule-time-width) repeat(
-          var(--nr-of-days),
-          minmax(var(--schedule-day-width), 1fr)
-        );
-      // Ensure days container matches grid width
-      width: 100%;
     }
   }
 
@@ -123,10 +119,19 @@
 }
 
 .week-header {
-  display: block;
+  display: grid;
+  grid-auto-flow: column;
+  // Use start alignment to match grid-container
+  place-content: start;
+  text-align: center;
+  grid-auto-columns: 1fr;
+  grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
+  // Ensure full width to match grid-container
+  width: 100%;
+  box-sizing: border-box;
+
   position: sticky;
   top: 0;
-  border-top: 1px solid var(--extra-border-color);
   border-bottom: 1px solid var(--extra-border-color);
   box-shadow: var(--whiteframe-shadow-1dp);
   z-index: 10;
@@ -149,19 +154,6 @@
       display: none;
     }
   }
-}
-
-.days {
-  grid-auto-flow: column;
-  display: grid;
-  // Use start alignment to match grid-container
-  place-content: start;
-  text-align: center;
-  grid-auto-columns: 1fr;
-  grid-template-columns: var(--schedule-time-width) repeat(var(--nr-of-days), 1fr);
-  // Ensure full width to match grid-container
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .day {
@@ -195,6 +187,11 @@
   padding-right: 6px;
   line-height: 1.2;
   text-align: right;
+
+  // To prevent overlapsing first time ("00:00") by .week-header
+  &:first-of-type {
+    height: 5px;
+  }
 }
 
 .col {

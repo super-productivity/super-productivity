@@ -97,6 +97,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
   },
+  clipboardImages: {
+    imagePath: null,
+  },
   pomodoro: {
     duration: 25 * minute,
     breakDuration: 5 * minute,

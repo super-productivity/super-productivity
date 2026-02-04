@@ -201,6 +201,7 @@
         [isShowChecklistToggle]="true"
         [isDefaultText]="!task().notes"
         [model]="task().notes || defaultTaskNotes()"
+        [taskId]="task().id"
       ></inline-markdown>
     </ng-container>
   </task-detail-item>
