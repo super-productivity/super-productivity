@@ -26,10 +26,22 @@ import { alertDialog } from '../../../util/native-dialogs';
  * @returns Array of Formly field configurations
  */
 const createWebdavFormFields = (options: {
+  infoText?: string;
   corsInfoText: string;
   baseUrlDescription: string;
 }): FormlyFieldConfig[] => {
   return [
+    ...(options.infoText
+      ? [
+          {
+            type: 'tpl',
+            templateOptions: {
+              tag: 'p',
+              text: options.infoText,
+            },
+          },
+        ]
+      : []),
     // Hide CORS info for Electron and native mobile apps (iOS/Android) since they handle CORS natively
     ...(!IS_ELECTRON && !IS_NATIVE_PLATFORM
       ? [
@@ -198,6 +210,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       resetOnHide: false,
       key: 'webDav',
       fieldGroup: createWebdavFormFields({
+        infoText: T.F.SYNC.FORM.WEB_DAV.INFO,
         corsInfoText: T.F.SYNC.FORM.WEB_DAV.CORS_INFO,
         baseUrlDescription:
           '* https://your-next-cloud/nextcloud/remote.php/dav/files/yourUserName/',
