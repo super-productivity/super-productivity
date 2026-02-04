@@ -34,3 +34,5 @@
 - [[4.13-Repeating-Tasks]]
 - [[4.14-How-Time-Is-Logged]]
 - [[4.15-Timers-and-Focus-Mode]]
+- [[4.16-Break-Reminders]]
+- [[4.17-Idle-Time]]
