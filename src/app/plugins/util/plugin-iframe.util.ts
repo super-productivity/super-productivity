@@ -60,7 +60,7 @@ export const createPluginCssInjection = (): string => {
         --scrollbar-thumb: ${getVar('--scrollbar-thumb')};
         --scrollbar-thumb-hover: ${getVar('--scrollbar-thumb-hover')};
         --scrollbar-track: ${getVar('--scrollbar-track')};
-        
+
         /* Shadow system */
         --whiteframe-shadow-1dp: ${getVar('--whiteframe-shadow-1dp')};
         --whiteframe-shadow-2dp: ${getVar('--whiteframe-shadow-2dp')};
@@ -70,7 +70,7 @@ export const createPluginCssInjection = (): string => {
         --whiteframe-shadow-8dp: ${getVar('--whiteframe-shadow-8dp')};
         --whiteframe-shadow-12dp: ${getVar('--whiteframe-shadow-12dp')};
         --whiteframe-shadow-24dp: ${getVar('--whiteframe-shadow-24dp')};
-        
+
         /* Spacing system */
         --s: ${getVar('--s')};
         --s-quarter: ${getVar('--s-quarter')};
@@ -78,7 +78,7 @@ export const createPluginCssInjection = (): string => {
         --s2: ${getVar('--s2')};
         --s3: ${getVar('--s3')};
         --s4: ${getVar('--s4')};
-        
+
         /* Transition system */
         --transition-duration-xs: ${getVar('--transition-duration-xs')};
         --transition-duration-s: ${getVar('--transition-duration-s')};
@@ -86,7 +86,7 @@ export const createPluginCssInjection = (): string => {
         --transition-duration-l: ${getVar('--transition-duration-l')};
         --transition-standard: ${getVar('--transition-standard')};
         --ani-standard-timing: ${getVar('--ani-standard-timing')};
-        
+
         /* Font stack */
         --font-primary-stack: ${getVar('--font-primary-stack')};
 

@@ -88,6 +88,7 @@ export const PLUGIN_UI_KIT_CSS = `
   input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--c-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-primary) 25%, transparent);
   }
 
   input:disabled, textarea:disabled, select:disabled {
@@ -172,6 +173,17 @@ export const PLUGIN_UI_KIT_CSS = `
 
   ::placeholder {
     color: var(--text-color-muted);
+  }
+
+  /* Utility classes */
+  .text-muted { color: var(--text-color-muted); }
+  .text-primary { color: var(--c-primary); }
+
+  /* Page transition */
+  .page-fade { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 </style>
 `;

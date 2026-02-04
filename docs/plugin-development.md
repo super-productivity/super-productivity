@@ -256,6 +256,12 @@ Iframe plugins automatically receive:
 - `<div class="card">` — Card with background, shadow, rounded corners, and border
 - `<div class="card card-clickable">` — Adds hover lift effect and primary border highlight
 
+**Utility classes:**
+
+- `.text-muted` — Muted text color (`var(--text-color-muted)`)
+- `.text-primary` — Primary theme color (`var(--c-primary)`)
+- `.page-fade` — Fade-in animation (0.3s ease)
+
 **Key CSS variables:**
 
 - `--bg`, `--bg-darker` — Background colors
