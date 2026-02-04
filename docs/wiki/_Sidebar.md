@@ -16,6 +16,8 @@
 - [[3.04-Short-Syntax]]
 - [[3.05-Web-App-vs-Desktop]]
 - [[3.06-User-Data]]
+- [[3.07-Issue-Integration-Comparison]]
+- [[3.08-Sync-Integration-Comparison]]
 
 ## [[4.00-Concepts]]
 
@@ -42,3 +44,4 @@
 - [[4.22-Quick-History]]
 - [[4.21-Worklog]]
 - [[4.23-Managing-Your-Data]]
+- [[4.24-Integrations]]
