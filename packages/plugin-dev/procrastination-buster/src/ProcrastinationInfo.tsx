@@ -129,7 +129,7 @@ export const ProcrastinationInfo: Component<ProcrastinationInfoProps> = (props) 
 
       <div class="action-buttons">
         <button
-          class="primary-button"
+          class="btn-primary"
           onClick={props.onBackToWork}
         >
           {backToWork()}

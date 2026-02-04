@@ -45,13 +45,19 @@ export function RuleList(props: RuleListProps) {
             ref={fileInputRef!}
             onChange={handleFileChange}
           />
-          <button class="outline" onClick={handleImportClick} style={{ 'margin-right': '0.5rem' }}>
+          <button
+            class="btn-outline"
+            onClick={handleImportClick}
+            style={{ 'margin-right': '0.5rem' }}
+          >
             Import
           </button>
-          <button class="outline" onClick={props.onExport} style={{ 'margin-right': '0.5rem' }}>
+          <button class="btn-outline" onClick={props.onExport} style={{ 'margin-right': '0.5rem' }}>
             Export
           </button>
-          <button onClick={props.onCreate}>+ New Rule</button>
+          <button class="btn-primary" onClick={props.onCreate}>
+            + New Rule
+          </button>
         </div>
       </div>
 
@@ -95,15 +101,13 @@ export function RuleList(props: RuleListProps) {
                   </td>
                   <td style={{ 'text-align': 'right', 'white-space': 'nowrap' }}>
                     <button
-                      class="outline"
+                      class="btn-outline"
                       onClick={() => props.onEdit(rule)}
                       style={{ 'margin-right': '0.5rem' }}
                     >
                       Edit
                     </button>
-                    <button class="outline contrast" onClick={() => props.onDelete(rule)}>
-                      Delete
-                    </button>
+                    <button onClick={() => props.onDelete(rule)}>Delete</button>
                   </td>
                 </tr>
               )}

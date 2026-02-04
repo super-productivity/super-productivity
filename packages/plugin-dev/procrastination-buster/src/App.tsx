@@ -80,7 +80,7 @@ const App: Component = () => {
       <Show when={currentView() !== 'home'}>
         <header class="header page-fade">
           <button
-            class="back-button"
+            class="btn-outline"
             onClick={handleBack}
           >
             {backButton()}
@@ -95,7 +95,7 @@ const App: Component = () => {
             <h2>{homeTitle()}</h2>
             <p class="text-muted">{homeSubtitle()}</p>
             <button
-              class="info-button"
+              class="btn-outline"
               onClick={() => setCurrentView('info')}
             >
               {learnMoreButton()}
@@ -146,7 +146,7 @@ const App: Component = () => {
                         <p class="strategy-text">{text}</p>
                         <Show when={hasAction}>
                           <button
-                            class="strategy-action-btn"
+                            class="btn-primary"
                             onClick={() => sendPluginMessage('START_POMODORO')}
                             title={actionButtonTitle()}
                           >

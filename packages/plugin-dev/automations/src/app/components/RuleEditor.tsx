@@ -123,20 +123,20 @@ export function RuleEditor(props: RuleEditorProps) {
           <div class="grid">
             <div style={{ 'text-align': 'left' }}>
               {localRule().id && (
-                <button class="outline contrast" onClick={() => props.onDelete(localRule())}>
-                  Delete Rule
-                </button>
+                <button onClick={() => props.onDelete(localRule())}>Delete Rule</button>
               )}
             </div>
             <div style={{ 'text-align': 'right' }}>
               <button
-                class="outline secondary"
+                class="btn-outline"
                 onClick={props.onCancel}
                 style={{ 'margin-right': '0.5rem' }}
               >
                 Cancel
               </button>
-              <button onClick={saveLocalRule}>Save Rule</button>
+              <button class="btn-primary" onClick={saveLocalRule}>
+                Save Rule
+              </button>
             </div>
           </div>
         }
@@ -237,7 +237,7 @@ export function RuleEditor(props: RuleEditorProps) {
                           </td>
                           <td style={{ 'text-align': 'right' }}>
                             <button
-                              class="outline"
+                              class="btn-outline"
                               onClick={() => {
                                 setEditingConditionIndex(i());
                                 setIsConditionDialogOpen(true);
@@ -246,12 +246,7 @@ export function RuleEditor(props: RuleEditorProps) {
                             >
                               Edit
                             </button>
-                            <button
-                              class="outline contrast"
-                              onClick={() => handleRemoveCondition(i())}
-                            >
-                              ✕
-                            </button>
+                            <button onClick={() => handleRemoveCondition(i())}>✕</button>
                           </td>
                         </tr>
                       )}
@@ -300,7 +295,7 @@ export function RuleEditor(props: RuleEditorProps) {
                       </td>
                       <td style={{ 'text-align': 'right' }}>
                         <button
-                          class="outline"
+                          class="btn-outline"
                           onClick={() => {
                             setEditingActionIndex(i());
                             setIsActionDialogOpen(true);
@@ -309,9 +304,7 @@ export function RuleEditor(props: RuleEditorProps) {
                         >
                           Edit
                         </button>
-                        <button class="outline contrast" onClick={() => handleRemoveAction(i())}>
-                          ✕
-                        </button>
+                        <button onClick={() => handleRemoveAction(i())}>✕</button>
                       </td>
                     </tr>
                   )}

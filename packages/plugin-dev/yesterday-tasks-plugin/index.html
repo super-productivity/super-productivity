@@ -8,48 +8,33 @@
     />
     <title>Yesterday's Tasks</title>
     <style>
+      /* Theme vars + UI Kit are injected automatically before this style block.
+         Only plugin-specific layout rules are needed here. */
+
       body {
-        font-family: 'Open Sans', sans-serif;
-        margin: 0;
-        padding: 20px;
-        color: var(--text-color);
+        padding: var(--s3);
       }
-
-      /* Light mode (default) */
-      :root {
-        --text-color: var(--text-color);
-        --border-color: var(--separator-color);
-        --primary-color: var(--c-primary);
-      }
-
-      /* Dark mode */
 
       .container {
         max-width: 800px;
         margin: 0 auto;
       }
 
-      h1 {
-        margin-bottom: 10px;
-        font-size: 14px;
-      }
-
       .date {
-        font-size: 14px;
-        margin-bottom: 20px;
-        opacity: 0.7;
+        margin-bottom: var(--s3);
+        color: var(--text-color-muted);
       }
 
       .loading,
       .no-tasks {
         text-align: center;
-        padding: 40px;
-        color: var(--text-secondary);
+        padding: var(--s4);
+        color: var(--text-color-muted);
       }
 
       .task-item {
-        padding: 8px 0;
-        border-bottom: 1px solid var(--border-color);
+        padding: var(--s) 0;
+        border-bottom: 1px solid var(--divider-color);
         display: flex;
         align-items: flex-start;
       }
@@ -60,11 +45,10 @@
 
       .task-title {
         flex: 1;
-        margin-right: 16px;
+        margin-right: var(--s2);
       }
 
       .task-time {
-        font-weight: 400;
         white-space: nowrap;
         min-width: 60px;
         text-align: right;
@@ -72,11 +56,11 @@
 
       .project-tag {
         display: inline-block;
-        padding: 2px 8px;
-        margin-left: 8px;
-        font-size: 12px;
-        opacity: 0.7;
-        border: 1px solid var(--border-color);
+        padding: var(--s-quarter) var(--s);
+        margin-left: var(--s);
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        border: 1px solid var(--divider-color);
         border-radius: 12px;
       }
     </style>

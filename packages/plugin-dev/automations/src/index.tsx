@@ -1,5 +1,4 @@
 import { render } from 'solid-js/web';
-import '@picocss/pico/css/pico.classless.css';
 import App from './app/App';
 
 // Mount the Solid.js app

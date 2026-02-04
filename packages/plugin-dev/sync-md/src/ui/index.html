@@ -8,175 +8,62 @@
     />
     <title>sync.md Configuration</title>
     <style>
-      /* Reset and base styles */
-      :root {
-        --bg-primary: #fff;
-        --bg-secondary: #f5f5f5;
-        --bg-tertiary: #e0e0e0;
-        --text-primary: #333;
-        --text-secondary: #666;
-        --text-muted: #999;
-        --border-color: #ddd;
-        --border-color-focus: #2196f3;
-        --accent-primary: #2196f3;
-        --accent-primary-hover: #1976d2;
-        --success-bg: #e8f5e9;
-        --success-text: #2e7d32;
-        --success-border: #c8e6c9;
-        --error-bg: #ffebee;
-        --error-text: #c62828;
-        --error-border: #ffcdd2;
-        --info-bg: #e3f2fd;
-        --info-text: #1565c0;
-        --info-border: #bbdefb;
-      }
-
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg-primary: #2a2a2a;
-          --bg-secondary: #333;
-          --bg-tertiary: #444;
-          --text-primary: #e0e0e0;
-          --text-secondary: #ccc;
-          --text-muted: #aaa;
-          --border-color: #444;
-          --border-color-focus: #4a9eff;
-          --accent-primary: #1976d2;
-          --accent-primary-hover: #1565c0;
-          --success-bg: #1b3a1b;
-          --success-text: #81c784;
-          --success-border: #2e5f2e;
-          --error-bg: #4a1414;
-          --error-text: #ef5350;
-          --error-border: #6f2020;
-          --info-bg: #1e3a5f;
-          --info-text: #64b5f6;
-          --info-border: #2962a0;
-        }
-      }
-
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
+      /*
+       * sync.md Plugin Styles
+       * UI Kit provides base element styles (body, headings, buttons, inputs, etc.)
+       * Only plugin-specific layout and component rules here.
+       */
 
       body {
-        font-family: 'Open Sans', 'Helvetica Neue', Arial, sans-serif;
-        font-size: 14px;
-        line-height: 1.5;
-        color: var(--text-primary);
+        padding: var(--s3);
         background: transparent;
-        padding: 20px;
       }
 
-      /* Container */
       .container {
         max-width: 600px;
         margin: 0 auto;
       }
 
-      /* Header */
-      h1 {
-        font-size: 24px;
-        font-weight: 600;
-        margin-bottom: 8px;
-      }
-
       .subtitle {
-        color: var(--text-secondary);
-        margin-bottom: 24px;
+        color: var(--text-color-muted);
+        margin-bottom: var(--s3);
       }
 
-      /* Form elements */
       .form-group {
-        margin-bottom: 20px;
+        margin-bottom: var(--s3);
       }
 
       label {
         display: block;
         font-weight: 500;
-        margin-bottom: 6px;
-        color: var(--text-secondary);
-      }
-
-      input[type='text'],
-      select {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 14px;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        transition: border-color 0.2s;
-      }
-
-      input[type='text']:focus,
-      select:focus {
-        outline: none;
-        border-color: var(--border-color-focus);
-        background: var(--bg-secondary);
+        margin-bottom: var(--s-half);
+        color: var(--text-color-muted);
       }
 
       .help-text {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin-top: 4px;
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        margin-top: var(--s-half);
       }
 
-      /* Buttons */
       .button-group {
         display: flex;
-        gap: 12px;
-        margin-top: 24px;
+        gap: var(--s);
+        margin-top: var(--s3);
       }
 
       .warning {
-        border: 1px solid var(--accent-primary);
-        border-radius: 4px;
-        padding: 4px 8px;
+        border: 1px solid var(--c-primary);
+        border-radius: var(--card-border-radius);
+        padding: var(--s-half) var(--s);
         font-weight: bold;
-      }
-
-      button {
-        padding: 10px 20px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-        transition: all 0.2s;
-      }
-
-      button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      .btn-primary {
-        background: var(--accent-primary);
-        border-color: var(--accent-primary);
-        color: white;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        background: var(--accent-primary-hover);
-        border-color: var(--accent-primary-hover);
-      }
-
-      .btn-secondary:hover:not(:disabled) {
-        background: var(--bg-tertiary);
-        border-color: var(--border-color);
       }
 
       /* Status messages */
       .status {
-        padding: 12px 16px;
-        border-radius: 6px;
-        margin-top: 20px;
+        padding: var(--s) var(--s2);
+        border-radius: var(--card-border-radius);
+        margin-top: var(--s3);
         display: none;
       }
 
@@ -185,21 +72,21 @@
       }
 
       .status.info {
-        background: var(--info-bg);
-        color: var(--info-text);
-        border: 1px solid var(--info-border);
+        background: color-mix(in srgb, var(--c-primary) 15%, transparent);
+        color: var(--c-primary);
+        border: 1px solid color-mix(in srgb, var(--c-primary) 30%, transparent);
       }
 
       .status.success {
-        background: var(--success-bg);
-        color: var(--success-text);
-        border: 1px solid var(--success-border);
+        background: color-mix(in srgb, var(--color-success) 15%, transparent);
+        color: var(--color-success);
+        border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
       }
 
       .status.error {
-        background: var(--error-bg);
-        color: var(--error-text);
-        border: 1px solid var(--error-border);
+        background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+        color: var(--color-danger);
+        border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
       }
 
       /* Loading spinner */
@@ -207,11 +94,11 @@
         display: inline-block;
         width: 14px;
         height: 14px;
-        border: 2px solid var(--border-color);
-        border-top: 2px solid var(--border-color-focus);
+        border: 2px solid var(--divider-color);
+        border-top: 2px solid var(--c-primary);
         border-radius: 50%;
         animation: spin 1s linear infinite;
-        margin-left: 8px;
+        margin-left: var(--s);
         vertical-align: middle;
       }
 
@@ -234,17 +121,8 @@
         right: 8px;
         top: 50%;
         transform: translateY(-50%);
-        padding: 6px 12px;
-        font-size: 12px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        cursor: pointer;
-        color: var(--text-primary);
-      }
-
-      .test-file-btn:hover {
-        background: var(--bg-secondary);
+        padding: var(--s-quarter) var(--s);
+        font-size: 0.85em;
       }
     </style>
   </head>

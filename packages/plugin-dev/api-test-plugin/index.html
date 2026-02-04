@@ -8,213 +8,229 @@
     />
     <title>API Test Plugin Dashboard</title>
     <style>
+      /* Theme vars + UI Kit are injected automatically.
+         Only layout rules that the UI Kit can't provide. */
+
       body {
-        font-family: monospace;
-        margin: 0;
-        padding: 20px;
-        /* Use injected CSS variables for theming */
-        background: var(--bg, transparent);
-        color: var(--text-color, #ccc);
-      }
-
-      h1 {
-        font-size: 18px;
-        margin: 0 0 20px 0;
-      }
-
-      h2 {
-        font-size: 14px;
-        margin: 0 0 10px 0;
-      }
-
-      h3 {
-        font-size: 12px;
-        margin: 0 0 8px 0;
-      }
-
-      .test-section {
-        margin-bottom: 20px;
-        border-left: 2px solid var(--divider-color, #666);
-        padding-left: 10px;
+        padding: var(--s3);
       }
 
       .button-grid {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      button {
-        padding: 6px 12px;
-        border: 1px solid var(--divider-color, #666);
-        background: var(--card-bg, transparent);
-        color: var(--text-color, #ccc);
-        font-size: 12px;
-        font-family: monospace;
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: var(--select-hover-bg, rgba(255, 255, 255, 0.1));
-        border-color: var(--c-primary, #999);
-      }
-
-      .run-all {
-        display: block;
-        width: 100%;
-        margin-bottom: 20px;
-        border-color: var(--color-success, #4caf50);
-        color: var(--color-success, #4caf50);
-      }
-
-      .run-all:hover {
-        background: var(--color-overlay-light-10, rgba(76, 175, 80, 0.1));
-      }
-
-      .console {
-        background: var(--card-bg, rgba(0, 0, 0, 0.3));
-        color: var(--text-color, #ccc);
-        padding: 10px;
-        font-size: 11px;
-        max-height: 200px;
-        overflow-y: auto;
-        margin-top: 20px;
-        border: 1px solid var(--divider-color, #333);
-      }
-
-      .console-entry {
-        margin: 2px 0;
-      }
-
-      .console-entry.success {
-        color: var(--color-success, #4caf50);
-      }
-
-      .console-entry.error {
-        color: var(--color-danger, #f44336);
-      }
-
-      .console-entry.info {
-        color: var(--text-color-muted, #999);
-      }
-
-      .api-info {
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid var(--divider-color, #333);
+        gap: var(--s);
       }
 
       .api-list {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 8px;
+        gap: var(--s-half);
       }
 
-      .api-item {
-        padding: 4px 8px;
-        border: 1px solid var(--divider-color, #444);
-        font-size: 11px;
-        color: var(--text-color-muted, #999);
+      .console {
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .console-entry.success {
+        color: var(--color-success);
+      }
+
+      .console-entry.error {
+        color: var(--color-danger);
+      }
+
+      .console-entry.info {
+        color: var(--text-color-muted);
       }
     </style>
   </head>
   <body>
     <h1>API Test Plugin</h1>
 
-    <div class="api-info">
-      <h3>Available API Methods</h3>
-      <div class="api-list">
-        <div class="api-item">getTasks()</div>
-        <div class="api-item">getArchivedTasks()</div>
-        <div class="api-item">getCurrentContextTasks()</div>
-        <div class="api-item">addTask(data)</div>
-        <div class="api-item">updateTask(id, data)</div>
-        <div class="api-item">getAllProjects()</div>
-        <div class="api-item">addProject(data)</div>
-        <div class="api-item">updateProject(id, data)</div>
-        <div class="api-item">getAllTags()</div>
-        <div class="api-item">addTag(data)</div>
-        <div class="api-item">updateTag(id, data)</div>
-        <div class="api-item">showSnack(config)</div>
-        <div class="api-item">notify(config)</div>
-        <div class="api-item">openDialog(config)</div>
-        <div class="api-item">persistDataSynced(data)</div>
-        <div class="api-item">loadSyncedData()</div>
-        <div class="api-item">registerHook(hook, handler)</div>
-        <div class="api-item">registerHeaderButton(config)</div>
-        <div class="api-item">registerMenuEntry(config)</div>
-        <div class="api-item">registerShortcut(config)</div>
-        <div class="api-item">setCounter(key, value)</div>
-        <div class="api-item">getCounter(key)</div>
-        <div class="api-item">incrementCounter(key, amount)</div>
-        <div class="api-item">decrementCounter(key, amount)</div>
-        <div class="api-item">deleteCounter(key)</div>
-        <div class="api-item">getAllCounters()</div>
-      </div>
+    <h3>Available API Methods</h3>
+    <p class="api-list">
+      <code>getTasks()</code>
+      <code>getArchivedTasks()</code>
+      <code>getCurrentContextTasks()</code>
+      <code>addTask(data)</code>
+      <code>updateTask(id, data)</code>
+      <code>getAllProjects()</code>
+      <code>addProject(data)</code>
+      <code>updateProject(id, data)</code>
+      <code>getAllTags()</code>
+      <code>addTag(data)</code>
+      <code>updateTag(id, data)</code>
+      <code>showSnack(config)</code>
+      <code>notify(config)</code>
+      <code>openDialog(config)</code>
+      <code>persistDataSynced(data)</code>
+      <code>loadSyncedData()</code>
+      <code>registerHook(hook, handler)</code>
+      <code>registerHeaderButton(config)</code>
+      <code>registerMenuEntry(config)</code>
+      <code>registerShortcut(config)</code>
+      <code>setCounter(key, value)</code>
+      <code>getCounter(key)</code>
+      <code>incrementCounter(key, amount)</code>
+      <code>decrementCounter(key, amount)</code>
+      <code>deleteCounter(key)</code>
+      <code>getAllCounters()</code>
+    </p>
+    <hr />
+
+    <button onclick="runAllTests()">Run All API Tests</button>
+
+    <hr />
+
+    <h2>Data Persistence Tests</h2>
+    <div class="button-grid">
+      <button onclick="testPersistData()">Test Save Data</button>
+      <button onclick="testLoadData()">Test Load Data</button>
     </div>
 
-    <button
-      class="run-all"
-      onclick="runAllTests()"
-    >
-      Run All API Tests
-    </button>
-
-    <div class="test-section">
-      <h2>Data Persistence Tests</h2>
-      <div class="button-grid">
-        <button onclick="testPersistData()">Test Save Data</button>
-        <button onclick="testLoadData()">Test Load Data</button>
-      </div>
+    <h2>Task Operations</h2>
+    <div class="button-grid">
+      <button onclick="testGetTasks()">Get All Tasks</button>
+      <button onclick="testGetArchivedTasks()">Get Archived Tasks</button>
+      <button onclick="testGetContextTasks()">Get Context Tasks</button>
+      <button onclick="testCreateTask()">Create Test Task</button>
+      <button onclick="testUpdateTask()">Update Last Task</button>
     </div>
 
-    <div class="test-section">
-      <h2>Task Operations</h2>
-      <div class="button-grid">
-        <button onclick="testGetTasks()">Get All Tasks</button>
-        <button onclick="testGetArchivedTasks()">Get Archived Tasks</button>
-        <button onclick="testGetContextTasks()">Get Context Tasks</button>
-        <button onclick="testCreateTask()">Create Test Task</button>
-        <button onclick="testUpdateTask()">Update Last Task</button>
-      </div>
+    <h2>Project &amp; Tag Operations</h2>
+    <div class="button-grid">
+      <button onclick="testGetProjects()">Get All Projects</button>
+      <button onclick="testCreateProject()">Create Test Project</button>
+      <button onclick="testGetTags()">Get All Tags</button>
+      <button onclick="testCreateTag()">Create Test Tag</button>
     </div>
 
-    <div class="test-section">
-      <h2>Project & Tag Operations</h2>
-      <div class="button-grid">
-        <button onclick="testGetProjects()">Get All Projects</button>
-        <button onclick="testCreateProject()">Create Test Project</button>
-        <button onclick="testGetTags()">Get All Tags</button>
-        <button onclick="testCreateTag()">Create Test Tag</button>
-      </div>
+    <h2>UI Operations</h2>
+    <div class="button-grid">
+      <button onclick="testSnackSuccess()">Success Snack</button>
+      <button onclick="testSnackError()">Error Snack</button>
+      <button onclick="testSnackCustom()">Info Snack</button>
+      <button onclick="testNotification()">Show Notification</button>
+      <button onclick="testDialog()">Open Dialog</button>
     </div>
 
-    <div class="test-section">
-      <h2>UI Operations</h2>
-      <div class="button-grid">
-        <button onclick="testSnackSuccess()">Success Snack</button>
-        <button onclick="testSnackError()">Error Snack</button>
-        <button onclick="testSnackCustom()">Info Snack</button>
-        <button onclick="testNotification()">Show Notification</button>
-        <button onclick="testDialog()">Open Dialog</button>
-      </div>
+    <h2>Advanced Dialog Examples</h2>
+    <div class="button-grid">
+      <button onclick="showTaskPlannerDialog()">Task Planner</button>
+      <button onclick="showAnalyticsDialog()">Analytics Dashboard</button>
     </div>
 
-    <div class="test-section">
-      <h2>Advanced Dialog Examples</h2>
-      <div class="button-grid">
-        <button onclick="showTaskPlannerDialog()">Task Planner</button>
-        <button onclick="showAnalyticsDialog()">Analytics Dashboard</button>
-      </div>
-    </div>
-
-    <div
+    <pre
       class="console"
       id="console"
-    >
-      <div class="console-entry info">Console output will appear here...</div>
+    ><span class="console-entry info">Console output will appear here...</span></pre>
+
+    <hr />
+
+    <h2>UI Kit Component Showcase</h2>
+
+    <h3>Headings</h3>
+    <h1>Heading 1</h1>
+    <h2>Heading 2</h2>
+    <h3>Heading 3</h3>
+    <h4>Heading 4</h4>
+    <h5>Heading 5</h5>
+    <h6>Heading 6</h6>
+
+    <h3>Text</h3>
+    <p>
+      This is a paragraph with <strong>bold</strong>, <em>italic</em>, and
+      <a href="#">link</a> styles.
+    </p>
+    <p>Inline <code>code</code> is styled automatically.</p>
+
+    <h3>Buttons</h3>
+    <div class="button-grid">
+      <button>Default</button>
+      <button class="btn-primary">Primary</button>
+      <button class="btn-outline">Outline</button>
+      <button disabled>Disabled</button>
+      <button
+        class="btn-primary"
+        disabled
+      >
+        Primary Disabled
+      </button>
+      <button
+        class="btn-outline"
+        disabled
+      >
+        Outline Disabled
+      </button>
     </div>
+
+    <h3>Inputs</h3>
+    <input
+      type="text"
+      placeholder="Text input"
+    />
+    <textarea placeholder="Textarea"></textarea>
+    <select>
+      <option>Select option 1</option>
+      <option>Select option 2</option>
+      <option>Select option 3</option>
+    </select>
+    <label><input type="checkbox" /> Checkbox label</label>
+
+    <h3>Code Block</h3>
+    <pre><code>const tasks = await PluginAPI.getTasks();
+console.log(tasks.length);</code></pre>
+
+    <h3>Table</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>getTasks()</code></td>
+          <td>Get all active tasks</td>
+        </tr>
+        <tr>
+          <td><code>addTask(data)</code></td>
+          <td>Create a new task</td>
+        </tr>
+        <tr>
+          <td><code>showSnack(cfg)</code></td>
+          <td>Show a notification</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Lists</h3>
+    <ul>
+      <li>Unordered list item 1</li>
+      <li>Unordered list item 2</li>
+      <li>Unordered list item 3</li>
+    </ul>
+    <ol>
+      <li>Ordered list item 1</li>
+      <li>Ordered list item 2</li>
+      <li>Ordered list item 3</li>
+    </ol>
+
+    <h3>Cards</h3>
+    <div class="card">
+      <h4>Default Card</h4>
+      <p>A static card with background, shadow, and border.</p>
+    </div>
+    <br />
+    <div class="card card-clickable">
+      <h4>Clickable Card</h4>
+      <p>Hover to see the lift effect and primary border highlight.</p>
+    </div>
+
+    <h3>Horizontal Rule</h3>
+    <hr />
 
     <script>
       let lastTaskId = null;
@@ -223,18 +239,18 @@
 
       // Console logging
       function log(message, type = 'info') {
-        const console = document.getElementById('console');
-        const entry = document.createElement('div');
+        const con = document.getElementById('console');
+        const entry = document.createElement('span');
         entry.className = `console-entry ${type}`;
-        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-        console.appendChild(entry);
-        console.scrollTop = console.scrollHeight;
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n`;
+        con.appendChild(entry);
+        con.scrollTop = con.scrollHeight;
       }
 
       // Clear console
       function clearConsole() {
         document.getElementById('console').innerHTML =
-          '<div class="console-entry info">Console cleared. Starting new test run...</div>';
+          '<span class="console-entry info">Console cleared. Starting new test run...\n</span>';
       }
 
       // Test functions
