@@ -1056,7 +1056,7 @@ describe('OperationLogDownloadService', () => {
                   serverSeq: 1,
                   receivedAt: Date.now(),
                   op: {
-                    id: 'op-stale',
+                    id: 'op-superseded',
                     clientId: 'c1',
                     actionType: '[Task] Add' as ActionType,
                     opType: OpType.Create,
@@ -1106,7 +1106,7 @@ describe('OperationLogDownloadService', () => {
 
           const result = await service.downloadRemoteOps(mockApiProvider);
 
-          // Should only contain the fresh op, not the stale one
+          // Should only contain the fresh op, not the superseded one
           expect(result.newOps.length).toBe(1);
           expect(result.newOps[0].id).toBe('op-fresh');
         });
@@ -1536,7 +1536,7 @@ describe('OperationLogDownloadService', () => {
           // Should have been triggered by the gapDetected path, not the alternative path
           expect(result.needsFullStateUpload).toBeTrue();
           // The warning should mention the gap-based detection
-          expect(OpLog.warn).toHaveBeenCalledWith(
+          expect(OpLog.normal).toHaveBeenCalledWith(
             jasmine.stringContaining('gap on empty server'),
           );
         });

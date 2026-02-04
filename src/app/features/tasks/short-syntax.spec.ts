@@ -49,11 +49,11 @@ const ALL_TAGS: Tag[] = [
 ];
 const CONFIG = DEFAULT_GLOBAL_CONFIG.shortSyntax;
 
-const getPlannedDateTimestampFromShortSyntaxReturnValue = (
+const getPlannedDateTimestampFromShortSyntaxReturnValue = async (
   taskInput: TaskCopy,
   now: Date = new Date(),
-): number => {
-  const r = shortSyntax(taskInput, CONFIG, undefined, undefined, now);
+): Promise<number> => {
+  const r = await shortSyntax(taskInput, CONFIG, undefined, undefined, now);
   const parsedDateInMilliseconds = r?.taskChanges?.dueWithTime as number;
   return parsedDateInMilliseconds;
 };
@@ -131,13 +131,13 @@ const checkIfCorrectDateMonthAndYear = (
 };
 
 describe('shortSyntax', () => {
-  it('should ignore for no short syntax', () => {
-    const r = shortSyntax(TASK, CONFIG);
+  it('should ignore for no short syntax', async () => {
+    const r = await shortSyntax(TASK, CONFIG);
     expect(r).toEqual(undefined);
   });
 
-  it('should ignore if the changes cause no further changes', () => {
-    const r = shortSyntax(
+  it('should ignore if the changes cause no further changes', async () => {
+    const r = await shortSyntax(
       {
         ...TASK,
         title: 'So what shall I do',
@@ -148,12 +148,12 @@ describe('shortSyntax', () => {
   });
 
   describe('should work for time short syntax', () => {
-    it('', () => {
+    it('', async () => {
       const t = {
         ...TASK,
         title: 'Fun title 10m/1h',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -170,12 +170,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('', () => {
+    it('', async () => {
       const t = {
         ...TASK,
         title: 'Fun title whatever 1h/120m',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -192,12 +192,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('', () => {
+    it('', async () => {
       const t = {
         ...TASK,
         title: 'Fun title whatever 1.5h',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -210,12 +210,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('', () => {
+    it('', async () => {
       const t = {
         ...TASK,
         title: 'Fun title whatever 1.5h/2.5h',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -232,21 +232,21 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should ignore time short syntax when disabled', () => {
+    it('should ignore time short syntax when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title whatever 1h/120m',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableDue: false });
+      const r = await shortSyntax(t, { ...CONFIG, isEnableDue: false });
       expect(r).toEqual(undefined);
     });
 
-    it('with time spent only', () => {
+    it('with time spent only', async () => {
       const t = {
         ...TASK,
         title: 'Task description 30m/',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -263,7 +263,7 @@ describe('shortSyntax', () => {
   });
 
   describe('should recognize short syntax for date', () => {
-    it('should correctly parse schedule syntax with time only', () => {
+    it('should correctly parse schedule syntax with time only', async () => {
       const t = {
         ...TASK,
         title: 'Test @4pm',
@@ -271,10 +271,8 @@ describe('shortSyntax', () => {
       // Use fixed date at 10am to avoid race conditions with real system time
       // and ensure we're safely before 4pm for same-day scheduling
       const now = new Date(2024, 0, 15, 10, 0, 0, 0); // Jan 15, 2024 at 10:00 AM
-      const parsedDateInMilliseconds = getPlannedDateTimestampFromShortSyntaxReturnValue(
-        t,
-        now,
-      );
+      const parsedDateInMilliseconds =
+        await getPlannedDateTimestampFromShortSyntaxReturnValue(t, now);
       const parsedDate = new Date(parsedDateInMilliseconds);
       const isSetToSameDay = checkSameDay(parsedDate, now);
       expect(isSetToSameDay).toBeTrue();
@@ -282,34 +280,32 @@ describe('shortSyntax', () => {
       expect(isTimeSetCorrectly).toBeTrue();
     });
 
-    it('should ignore schedule syntax with time only when disabled', () => {
+    it('should ignore schedule syntax with time only when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Test @4pm',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableDue: false });
+      const r = await shortSyntax(t, { ...CONFIG, isEnableDue: false });
       expect(r).toEqual(undefined);
     });
 
-    it('should ignore day of the week when disabled', () => {
+    it('should ignore day of the week when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Test @Friday',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableDue: false });
+      const r = await shortSyntax(t, { ...CONFIG, isEnableDue: false });
       expect(r).toEqual(undefined);
     });
 
-    it('should correctly parse day of the week', () => {
+    it('should correctly parse day of the week', async () => {
       const t = {
         ...TASK,
         title: 'Test @Friday',
       };
       const now = new Date('Fri Feb 09 2024 11:31:29 ');
-      const parsedDateInMilliseconds = getPlannedDateTimestampFromShortSyntaxReturnValue(
-        t,
-        now,
-      );
+      const parsedDateInMilliseconds =
+        await getPlannedDateTimestampFromShortSyntaxReturnValue(t, now);
       const parsedDate = new Date(parsedDateInMilliseconds);
       expect(parsedDate.getDay()).toEqual(5);
       const dayIncrement = 0;
@@ -324,36 +320,36 @@ describe('shortSyntax', () => {
       expect(isDateSetCorrectly).toBeTrue();
     });
 
-    it('should properly remove date syntax when there is a space after @', () => {
+    it('should properly remove date syntax when there is a space after @', async () => {
       const t = {
         ...TASK,
         title: 'Test @ tomorrow 19:00',
       };
       // set a fixed date to avoid test flakiness
       const now = new Date('2025-12-05T10:00:00');
-      const r = shortSyntax(t, CONFIG, undefined, undefined, now);
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
 
       expect(r?.taskChanges.title).toBe('Test');
       expect(r?.taskChanges.dueDay).toBeNull();
     });
 
-    it('should properly remove date syntax when there is a space after @ for simple number', () => {
+    it('should properly remove date syntax when there is a space after @ for simple number', async () => {
       const t = {
         ...TASK,
         title: 'Test @ 4',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r?.taskChanges.title).toBe('Test');
       expect(r?.taskChanges.dueDay).toBeNull();
     });
 
-    it('should properly remove date syntax with date format like 12/20/25', () => {
+    it('should properly remove date syntax with date format like 12/20/25', async () => {
       const t = {
         ...TASK,
         title: 'Test @ 12/20/25 19:00',
       };
       const now = new Date('2025-12-05T10:00:00');
-      const r = shortSyntax(t, CONFIG, undefined, undefined, now);
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
 
       expect(r?.taskChanges.title).toBe('Test');
       expect(r?.taskChanges.dueDay).toBeNull();
@@ -365,14 +361,14 @@ describe('shortSyntax', () => {
       expect(scheduledDate.getHours()).toBe(19);
     });
 
-    it('should schedule overdue task to future when using inline @ syntax', () => {
+    it('should schedule overdue task to future when using inline @ syntax', async () => {
       const t = {
         ...TASK,
         title: 'Overdue task @tomorrow 14:00',
         dueDay: '2025-12-01', // Simulating an overdue task
       };
       const now = new Date('2025-12-05T10:00:00');
-      const r = shortSyntax(t, CONFIG, undefined, undefined, now);
+      const r = await shortSyntax(t, CONFIG, undefined, undefined, now);
 
       expect(r?.taskChanges.title).toBe('Overdue task');
       expect(r?.taskChanges.dueDay).toBeNull(); // Should clear the old dueDay
@@ -387,42 +383,42 @@ describe('shortSyntax', () => {
   });
 
   describe('tags', () => {
-    it('should not trigger for tasks with starting # (e.g. github issues)', () => {
+    it('should not trigger for tasks with starting # (e.g. github issues)', async () => {
       const t = {
         ...TASK,
         title: '#134 Fun title',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should not trigger for tasks with starting # (e.g. github issues) when disabled', () => {
+    it('should not trigger for tasks with starting # (e.g. github issues) when disabled', async () => {
       const t = {
         ...TASK,
         title: '#134 Fun title',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should not parse numeric tag when it is the first word in the title', () => {
+    it('should not parse numeric tag when it is the first word in the title', async () => {
       const t = {
         ...TASK,
         title: '#123 Task description',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should not trigger for tasks with starting # (e.g. github issues) when adding tags', () => {
+    it('should not trigger for tasks with starting # (e.g. github issues) when adding tags', async () => {
       const t = {
         ...TASK,
         title: '#134 Fun title #blu',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -436,22 +432,22 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not trigger for multiple tasks when disabled', () => {
+    it('should not trigger for multiple tasks when disabled', async () => {
       const t = {
         ...TASK,
         title: '#134 Fun title #blu',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should add tag when it is the first word in the title', () => {
+    it('should add tag when it is the first word in the title', async () => {
       const t = {
         ...TASK,
         title: '#blu Fun title',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -465,12 +461,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should add multiple tags even if the first tag is at the beginning', () => {
+    it('should add multiple tags even if the first tag is at the beginning', async () => {
       const t = {
         ...TASK,
         title: '#blu #hihi Fun title',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -484,12 +480,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work with tags', () => {
+    it('should work with tags', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #A',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -503,32 +499,32 @@ describe('shortSyntax', () => {
       });
     });
 
-    it("shouldn't work with tags when disabled", () => {
+    it("shouldn't work with tags when disabled", async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #A',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should not trigger for # without space before', () => {
+    it('should not trigger for # without space before', async () => {
       const t = {
         ...TASK,
         title: 'Fun title#blu',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should not trigger for # without space before but parse other tags', () => {
+    it('should not trigger for # without space before but parse other tags', async () => {
       const t = {
         ...TASK,
         title: 'Fun title#blu #bla',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -542,13 +538,13 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not overwrite existing tags', () => {
+    it('should not overwrite existing tags', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #hihi',
         tagIds: ['blu_id', 'A', 'multi_word_id'],
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -562,24 +558,24 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not overwrite existing tags when disabled', () => {
+    it('should not overwrite existing tags when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #hihi',
         tagIds: ['blu_id', 'A', 'multi_word_id'],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should add new tag names', () => {
+    it('should add new tag names', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #idontexist',
         tagIds: [],
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: ['idontexist'],
@@ -593,24 +589,24 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not add new tag names when disabled', () => {
+    it('should not add new tag names when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #idontexist',
         tagIds: [],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should remove tags not existing on title', () => {
+    it('should remove tags not existing on title', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #bla',
         tagIds: ['blu_id', 'bla_id', 'hihi_id'],
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined, 'replace');
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS, undefined, undefined, 'replace');
 
       expect(r).toEqual({
         newTagTitles: [],
@@ -624,24 +620,24 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not remove tags not existing on title when disabled', () => {
+    it('should not remove tags not existing on title when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu #bla',
         tagIds: ['blu_id', 'bla_id', 'hihi_id'],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should add new "asd #asd" tag', () => {
+    it('should add new "asd #asd" tag', async () => {
       const t = {
         ...TASK,
         title: 'asd #asd',
         tagIds: [],
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: ['asd'],
@@ -654,13 +650,13 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work for edge case #3728', () => {
+    it('should work for edge case #3728', async () => {
       const t = {
         ...TASK,
         title: 'Test tag error #testing #someNewTag3',
         tagIds: [],
       };
-      const r = shortSyntax(t, CONFIG, [
+      const r = await shortSyntax(t, CONFIG, [
         ...ALL_TAGS,
         { ...DEFAULT_TAG, id: 'testing_id', title: 'testing' },
       ]);
@@ -677,25 +673,25 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not add new "asd #asd" tag when disabled', () => {
+    it('should not add new "asd #asd" tag when disabled', async () => {
       const t = {
         ...TASK,
         title: 'asd #asd',
         tagIds: [],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should add tags for sub tasks', () => {
+    it('should add tags for sub tasks', async () => {
       const t = {
         ...TASK,
         parentId: 'SOMEPARENT',
         title: 'Fun title #blu #idontexist',
         tagIds: [],
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
 
       expect(r).toEqual({
         newTagTitles: ['idontexist'],
@@ -706,25 +702,25 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not add tags for sub tasks when disabled', () => {
+    it('should not add tags for sub tasks when disabled', async () => {
       const t = {
         ...TASK,
         parentId: 'SOMEPARENT',
         title: 'Fun title #blu #idontexist',
         tagIds: [],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
 
-    it('should remove tag from title if task already has tag', () => {
+    it('should remove tag from title if task already has tag', async () => {
       const t = {
         ...TASK,
         title: 'Test tag #testing',
         tagIds: ['testing_id'],
       };
-      const r = shortSyntax(t, CONFIG, [
+      const r = await shortSyntax(t, CONFIG, [
         ...ALL_TAGS,
         { ...DEFAULT_TAG, id: 'testing_id', title: 'testing' },
       ]);
@@ -740,13 +736,13 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should create new tag and remove both from title if task already has one given tag', () => {
+    it('should create new tag and remove both from title if task already has one given tag', async () => {
       const t = {
         ...TASK,
         title: 'Test tag #testing #blu',
         tagIds: ['blu_id'],
       };
-      const r = shortSyntax(t, CONFIG, [
+      const r = await shortSyntax(t, CONFIG, [
         ...ALL_TAGS,
         { ...DEFAULT_TAG, id: 'blu_id', title: 'blu' },
       ]);
@@ -762,13 +758,13 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should add existing tag and remove both from title if task already has one given tag', () => {
+    it('should add existing tag and remove both from title if task already has one given tag', async () => {
       const t = {
         ...TASK,
         title: 'Test tag #testing #blu',
         tagIds: ['blu_id'],
       };
-      const r = shortSyntax(t, CONFIG, [
+      const r = await shortSyntax(t, CONFIG, [
         ...ALL_TAGS,
         { ...DEFAULT_TAG, id: 'blu_id', title: 'blu' },
         { ...DEFAULT_TAG, id: 'testing_id', title: 'testing' },
@@ -786,24 +782,24 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should not remove tag from title if task already has tag when disabled', () => {
+    it('should not remove tag from title if task already has tag when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Test tag #testing',
         tagIds: ['testing_id'],
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
 
       expect(r).toEqual(undefined);
     });
   });
   describe('should work with tags and time estimates combined', () => {
-    it('tag before time estimate', () => {
+    it('tag before time estimate', async () => {
       const t = {
         ...TASK,
         title: 'Fun title #blu 10m/1h',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -821,12 +817,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('time estimate before tag', () => {
+    it('time estimate before tag', async () => {
       const t = {
         ...TASK,
         title: 'Fun title 10m/1h #blu',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -843,12 +839,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('time estimate disabled', () => {
+    it('time estimate disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title 10m/1h #blu',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableDue: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableDue: false }, ALL_TAGS);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -861,12 +857,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('tags disabled', () => {
+    it('tags disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title 10m/1h #blu',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableTag: false }, ALL_TAGS);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -898,12 +894,12 @@ describe('shortSyntax', () => {
       ] as any;
     });
 
-    it('should work', () => {
+    it('should work', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +ProjectEasyShort',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -915,30 +911,30 @@ describe('shortSyntax', () => {
       });
     });
 
-    it("shouldn't work when disabled", () => {
+    it("shouldn't work when disabled", async () => {
       const t = {
         ...TASK,
         title: 'Fun title +ProjectEasyShort',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableProject: false }, [], projects);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableProject: false }, [], projects);
       expect(r).toEqual(undefined);
     });
 
-    it('should not parse without missing whitespace before', () => {
+    it('should not parse without missing whitespace before', async () => {
       const t = {
         ...TASK,
         title: 'Fun title+ProjectEasyShort',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual(undefined);
     });
 
-    it('should work together with time estimates', () => {
+    it('should work together with time estimates', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +ProjectEasyShort 10m/1h',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -955,12 +951,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work together with time estimates when disabled', () => {
+    it('should work together with time estimates when disabled', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +ProjectEasyShort 10m/1h',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableProject: false }, [], projects);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableProject: false }, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -977,12 +973,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work together with disabled time estimates', () => {
+    it('should work together with disabled time estimates', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +ProjectEasyShort 10m/1h',
       };
-      const r = shortSyntax(t, { ...CONFIG, isEnableDue: false }, [], projects);
+      const r = await shortSyntax(t, { ...CONFIG, isEnableDue: false }, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -994,12 +990,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work with only the beginning of a project title if it is at least 3 chars long', () => {
+    it('should work with only the beginning of a project title if it is at least 3 chars long', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +Project',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1011,12 +1007,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work with multi word project titles', () => {
+    it('should work with multi word project titles', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +Some Project Title',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1028,12 +1024,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work with multi word project titles partial', () => {
+    it('should work with multi word project titles partial', async () => {
       const t = {
         ...TASK,
         title: 'Fun title +Some Pro',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1045,12 +1041,12 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work with multi word project titles partial written without white space', () => {
+    it('should work with multi word project titles partial written without white space', async () => {
       const t = {
         ...TASK,
         title: 'Other fun title +SomePro',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1062,16 +1058,16 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should ignore non existing', () => {
+    it('should ignore non existing', async () => {
       const t = {
         ...TASK,
         title: 'Other fun title +Non existing project',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual(undefined);
     });
 
-    it('should prefer shortest prefix full project title match', () => {
+    it('should prefer shortest prefix full project title match', async () => {
       const t = {
         ...TASK,
         title: 'Task +print',
@@ -1079,7 +1075,7 @@ describe('shortSyntax', () => {
       projects = ['printer', 'imprints', 'print', 'printable'].map(
         (title) => ({ id: title, title }) as Project,
       );
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1093,7 +1089,7 @@ describe('shortSyntax', () => {
   });
 
   describe('combined', () => {
-    it('should work when time comes first', () => {
+    it('should work when time comes first', async () => {
       const projects = [
         {
           title: 'ProjectEasyShort',
@@ -1104,7 +1100,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Fun title 10m/1h +ProjectEasyShort',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: [],
         remindAt: null,
@@ -1121,7 +1117,7 @@ describe('shortSyntax', () => {
       });
     });
 
-    it('should work for project first', () => {
+    it('should work for project first', async () => {
       const projects = [
         {
           title: 'ProjectEasyShort',
@@ -1132,7 +1128,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Some task +ProjectEasyShort 30m #tag',
       };
-      const r = shortSyntax(t, CONFIG, [], projects);
+      const r = await shortSyntax(t, CONFIG, [], projects);
       expect(r).toEqual({
         newTagTitles: ['tag'],
         remindAt: null,
@@ -1145,7 +1141,7 @@ describe('shortSyntax', () => {
         },
       });
     });
-    it('should correctly parse scheduled date, project, time spent and estimate', () => {
+    it('should correctly parse scheduled date, project, time spent and estimate', async () => {
       const projects = [
         {
           title: 'Project',
@@ -1162,13 +1158,13 @@ describe('shortSyntax', () => {
         title: taskInput,
       };
       const parsedDateInMilliseconds =
-        getPlannedDateTimestampFromShortSyntaxReturnValue(t);
+        await getPlannedDateTimestampFromShortSyntaxReturnValue(t);
       const parsedDate = new Date(parsedDateInMilliseconds);
       // The parsed day and time should be Friday, or 5, and time is 16 hours and 0 minute
       expect(parsedDate.getDay()).toEqual(5);
       const isTimeSetCorrectly = checkIfDateHasCorrectTime(parsedDate, 16, 0);
       expect(isTimeSetCorrectly).toBeTrue();
-      const parsedTaskInfo = shortSyntax(t, CONFIG, [], projects);
+      const parsedTaskInfo = await shortSyntax(t, CONFIG, [], projects);
       expect(parsedTaskInfo?.projectId).toEqual(projects[0].id);
       // The time spent value is stored to the property equal to today
       // in format YYYY-MM-DD of the object `timeSpentOnDay`
@@ -1180,12 +1176,12 @@ describe('shortSyntax', () => {
         3600 * 2 * 1000,
       );
     });
-    it('should correctly parse scheduled date and multiple tags', () => {
+    it('should correctly parse scheduled date and multiple tags', async () => {
       const t = {
         ...TASK,
         title: 'Test @fri 4pm #html #css',
       };
-      const plannedTimestamp = getPlannedDateTimestampFromShortSyntaxReturnValue(t);
+      const plannedTimestamp = await getPlannedDateTimestampFromShortSyntaxReturnValue(t);
       const isPlannedDateAndTimeCorrect = checkIfCorrectDateAndTime(
         plannedTimestamp,
         'friday',
@@ -1193,26 +1189,26 @@ describe('shortSyntax', () => {
         0,
       );
       expect(isPlannedDateAndTimeCorrect).toBeTrue();
-      const parsedTaskInfo = shortSyntax(t, CONFIG, []);
+      const parsedTaskInfo = await shortSyntax(t, CONFIG, []);
       expect(parsedTaskInfo?.newTagTitles.includes('html')).toBeTrue();
       expect(parsedTaskInfo?.newTagTitles.includes('css')).toBeTrue();
     });
 
-    it('should parse scheduled date using local time zone when unspecified', () => {
+    it('should parse scheduled date using local time zone when unspecified', async () => {
       const t = {
         ...TASK,
         title: '@2030-10-12T13:37',
       };
-      const plannedTimestamp = getPlannedDateTimestampFromShortSyntaxReturnValue(t);
+      const plannedTimestamp = await getPlannedDateTimestampFromShortSyntaxReturnValue(t);
       expect(checkIfCorrectDateAndTime(plannedTimestamp, 'saturday', 13, 37)).toBeTrue();
     });
 
-    it('should work when all are disabled', () => {
+    it('should work when all are disabled', async () => {
       const t = {
         ...TASK,
         title: 'Test @fri 4pm #html #css +ProjectEasyShort',
       };
-      const r = shortSyntax(t, {
+      const r = await shortSyntax(t, {
         isEnableDue: false,
         isEnableProject: false,
         isEnableTag: false,
@@ -1238,12 +1234,12 @@ describe('shortSyntax', () => {
     for (const taskTemplate of taskTemplates) {
       for (const project of projects) {
         const taskTitle = taskTemplate.replaceAll('*', `+${project.title}`);
-        it(`should parse project "${project.title}" from "${taskTitle}"`, () => {
+        it(`should parse project "${project.title}" from "${taskTitle}"`, async () => {
           const task = {
             ...TASK,
             title: taskTitle,
           };
-          const result = shortSyntax(task, CONFIG, ALL_TAGS, projects);
+          const result = await shortSyntax(task, CONFIG, ALL_TAGS, projects);
           expect(result?.projectId).toBe(project.id);
         });
       }
@@ -1258,7 +1254,7 @@ describe('shortSyntax', () => {
     const today = new Date();
     const minuteEstimate = 90;
 
-    it('should correctly parse year and time estimate when the input date only has month and day of the month', () => {
+    it('should correctly parse year and time estimate when the input date only has month and day of the month', async () => {
       const tomorrow = new Date(today.getTime() + oneDayInMilliseconds);
       const inputMonth = tomorrow.getMonth() + 1;
       const inputMonthName = MONTH_SHORT_NAMES[tomorrow.getMonth()];
@@ -1267,7 +1263,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: `Test @${inputMonthName} ${inputDayOfTheMonth} ${minuteEstimate}m`,
       };
-      const parsedTaskInfo = shortSyntax(t, CONFIG, []);
+      const parsedTaskInfo = await shortSyntax(t, CONFIG, []);
       const taskChanges = parsedTaskInfo?.taskChanges;
       const dueWithTime = taskChanges?.dueWithTime as number;
       expect(
@@ -1281,7 +1277,7 @@ describe('shortSyntax', () => {
       expect(taskChanges?.timeEstimate).toEqual(minuteEstimate * 60 * 1000);
     });
 
-    it('should correctly parse year and time estimate when the input date contains month, day of the month and time', () => {
+    it('should correctly parse year and time estimate when the input date contains month, day of the month and time', async () => {
       const time = '4pm';
       const tomorrow = new Date(today.getTime() + oneDayInMilliseconds);
       const inputMonth = tomorrow.getMonth() + 1;
@@ -1291,7 +1287,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: `Test @${inputMonthName} ${inputDayOfTheMonth} ${time} ${minuteEstimate}m`,
       };
-      const parsedTaskInfo = shortSyntax(t, CONFIG, []);
+      const parsedTaskInfo = await shortSyntax(t, CONFIG, []);
       const taskChanges = parsedTaskInfo?.taskChanges;
       const dueWithTime = taskChanges?.dueWithTime as number;
       expect(
@@ -1331,12 +1327,12 @@ describe('shortSyntax', () => {
         timeSpentOnDay === undefined
           ? 'no time spent on day'
           : 'time spent on day of ' + timeSpentOnDay
-      } from "${title}"`, () => {
+      } from "${title}"`, async () => {
         const task = {
           ...TASK,
           title,
         };
-        const result = shortSyntax(task, CONFIG, [], []);
+        const result = await shortSyntax(task, CONFIG, [], []);
         expect(result?.taskChanges.timeEstimate).toBe(timeEstimate);
         expect(result?.taskChanges.timeSpentOnDay?.[getDbDateStr()]).toBe(timeSpentOnDay);
       });
@@ -1344,12 +1340,12 @@ describe('shortSyntax', () => {
   });
 
   describe('URL attachments', () => {
-    it('should extract single URL with https protocol', () => {
+    it('should extract single URL with https protocol', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments).toBeDefined();
       expect(r?.attachments.length).toBe(1);
@@ -1359,12 +1355,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should extract single URL with http protocol', () => {
+    it('should extract single URL with http protocol', async () => {
       const t = {
         ...TASK,
         title: 'Task http://example.com',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('http://example.com');
@@ -1372,12 +1368,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should extract single URL with file:// protocol', () => {
+    it('should extract single URL with file:// protocol', async () => {
       const t = {
         ...TASK,
         title: 'Task file:///path/to/document.pdf',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///path/to/document.pdf');
@@ -1386,12 +1382,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should extract single URL with www prefix', () => {
+    it('should extract single URL with www prefix', async () => {
       const t = {
         ...TASK,
         title: 'Task www.example.com',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('//www.example.com');
@@ -1399,12 +1395,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should handle multiple URLs with mixed protocols', () => {
+    it('should handle multiple URLs with mixed protocols', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com www.test.org file:///home/doc.txt',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(3);
       expect(r?.attachments[0].path).toBe('https://example.com');
@@ -1416,12 +1412,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should detect image URLs as IMG type for https', () => {
+    it('should detect image URLs as IMG type for https', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com/image.png',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].type).toBe('IMG');
@@ -1429,12 +1425,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should detect image URLs as IMG type for file://', () => {
+    it('should detect image URLs as IMG type for file://', async () => {
       const t = {
         ...TASK,
         title: 'Task file:///path/to/image.jpg',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].type).toBe('IMG');
@@ -1442,12 +1438,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should work correctly with combined short syntax', () => {
+    it('should work correctly with combined short syntax', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com @tomorrow #urgent 30m',
       };
-      const r = shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com');
@@ -1457,23 +1453,23 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.dueWithTime).toBeDefined();
     });
 
-    it('should clean URLs from title properly', () => {
+    it('should clean URLs from title properly', async () => {
       const t = {
         ...TASK,
         title: 'Task with https://example.com in middle',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.taskChanges.title).toBe('Task with in middle');
       expect(r?.attachments.length).toBe(1);
     });
 
-    it('should handle Windows file paths', () => {
+    it('should handle Windows file paths', async () => {
       const t = {
         ...TASK,
         title: 'Task file:///C:/Users/name/document.pdf',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///C:/Users/name/document.pdf');
@@ -1481,12 +1477,12 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should handle Unix file paths', () => {
+    it('should handle Unix file paths', async () => {
       const t = {
         ...TASK,
         title: 'Task file:///home/user/document.txt',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///home/user/document.txt');
@@ -1494,45 +1490,45 @@ describe('shortSyntax', () => {
       expect(r?.taskChanges.title).toBe('Task');
     });
 
-    it('should not parse URLs for issue tasks', () => {
+    it('should not parse URLs for issue tasks', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com',
         issueId: 'ISSUE-123',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeUndefined();
     });
 
-    it('should handle URLs with trailing punctuation', () => {
+    it('should handle URLs with trailing punctuation', async () => {
       const t = {
         ...TASK,
         title: 'Check https://example.com.',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com');
       expect(r?.taskChanges.title).toBe('Check .');
     });
 
-    it('should extract basename as attachment title', () => {
+    it('should extract basename as attachment title', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com/path/to/file.pdf',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].title).toBe('file');
     });
 
-    it('should extract basename correctly for URLs with trailing slash', () => {
+    it('should extract basename correctly for URLs with trailing slash', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com/projects/',
       };
-      const r = shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com/projects/');

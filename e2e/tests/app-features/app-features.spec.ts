@@ -1,5 +1,18 @@
 import { Page } from 'playwright/test';
 import { test, expect } from '../../fixtures/test.fixture';
+import { waitForAngularStability } from '../../utils/waits';
+
+// Navigate to config page and wait for it to be ready
+const goToConfig = async (page: Page): Promise<void> => {
+  await page.goto('/#/config');
+  await waitForAngularStability(page);
+};
+
+// Navigate to main view and wait for it to be ready
+const goToMainView = async (page: Page): Promise<void> => {
+  await page.goto('/#/tag/TODAY');
+  await waitForAngularStability(page);
+};
 
 test.describe('App Features', () => {
   // check simple feature toggles which effectively just hide ui elements
@@ -17,19 +30,19 @@ test.describe('App Features', () => {
       locator: (page: Page) => page.getByRole('menuitem', { name: 'Boards' }),
     },
     {
-      label: 'Schedule Day Panel',
+      label: 'Schedule day panel',
       locator: (page: Page) => page.locator('.e2e-toggle-schedule-day-panel'),
     },
     {
-      label: 'Issues Panel',
+      label: 'Issues panel',
       locator: (page: Page) => page.locator('.e2e-toggle-issue-provider-panel'),
     },
     {
-      label: 'Project Notes',
+      label: 'Project notes',
       locator: (page: Page) => page.locator('.e2e-toggle-notes-btn'),
     },
     {
-      label: 'Sync Button',
+      label: 'Sync button',
       locator: (page: Page) => page.locator('.sync-btn'),
     },
   ].forEach((feature) => {
@@ -49,7 +62,7 @@ test.describe('App Features', () => {
       });
 
       // Go to settings page
-      await page.goto('/#/config');
+      await goToConfig(page);
 
       // expand "App Features" and wait for switch to be visible
       await appFeaturesSection.click();
@@ -63,13 +76,13 @@ test.describe('App Features', () => {
       await expect(featureSwitch).not.toBeChecked();
 
       // Navigate to main view
-      await page.goto('/#/tag/TODAY');
+      await goToMainView(page);
 
       // Feature's element should not be present when disabled
       await expect(featureElement).not.toBeAttached();
 
       // Re-enable the feature
-      await page.goto('/#/config');
+      await goToConfig(page);
 
       // expand "App Features" and wait for switch to be visible and interactable
       await appFeaturesSection.click();
@@ -80,7 +93,7 @@ test.describe('App Features', () => {
       await expect(featureSwitch).toBeChecked();
 
       // Go back to main view and expect feature's element to be visible
-      await page.goto('/#/tag/TODAY');
+      await goToMainView(page);
       await expect(featureElement).toBeAttached();
     });
   });

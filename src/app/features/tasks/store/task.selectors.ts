@@ -57,15 +57,18 @@ export const mapSubTasksToTask = (
   if (!task) {
     return null;
   }
+  const subTasks: Task[] = [];
+  for (const id of task.subTaskIds) {
+    const subTask = s.entities[id];
+    if (subTask) {
+      subTasks.push(subTask);
+    } else {
+      devError('Task data not found for ' + id);
+    }
+  }
   return {
     ...task,
-    subTasks: task.subTaskIds.map((id) => {
-      const subTask = s.entities[id] as Task;
-      if (!subTask) {
-        devError('Task data not found for ' + id);
-      }
-      return subTask;
-    }),
+    subTasks,
   };
 };
 
@@ -271,7 +274,19 @@ export const selectCurrentTaskParentOrCurrent = createSelector(
   },
 );
 
-export const selectAllTasks = createSelector(selectTaskFeatureState, selectAll);
+export const selectAllTasks = createSelector(
+  selectTaskFeatureState,
+  (state: TaskState): Task[] => {
+    const all = selectAll(state);
+    // Only filter when undefined entities exist — otherwise return the original
+    // memoized array from selectAll to avoid breaking NgRx selector memoization.
+    if (all.some((task) => !task)) {
+      devError('selectAllTasks: found undefined entities in task state');
+      return all.filter((task): task is Task => !!task);
+    }
+    return all;
+  },
+);
 
 export const selectAllTasksWithSubTasks = createSelector(
   selectAllTasks,

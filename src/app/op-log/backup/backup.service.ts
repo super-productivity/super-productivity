@@ -13,7 +13,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { validateFull } from '../validation/validation-fn';
 import { dataRepair } from '../validation/data-repair';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import {
   AppDataComplete,
   CROSS_MODEL_VERSION,
@@ -22,6 +22,7 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
+import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 
 /**
  * Service for handling backup import and export operations.
@@ -89,18 +90,27 @@ export class BackupService {
 
       if ('crossModelVersion' in data && 'timestamp' in data && 'data' in data) {
         backupData = data.data;
-        // crossModelVersion was used for cross-model migrations, which are now removed
       } else {
         backupData = data as AppDataComplete;
       }
 
-      // 2. Validate data
+      // 2. Migrate legacy backups (pre-v14) that have the old data shape
+      if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
+        OpLog.normal(
+          'BackupService: Detected legacy backup format, running migration...',
+        );
+        backupData = migrateLegacyBackup(
+          backupData as unknown as Record<string, unknown>,
+        );
+      }
+
+      // 3. Validate data
       const validationResult = validateFull(backupData);
       let validatedData = backupData;
 
       if (!validationResult.isValid) {
         // Try to repair
-        PFLog.normal('BackupService: Validation failed, attempting repair...', {
+        OpLog.normal('BackupService: Validation failed, attempting repair...', {
           success: validationResult.typiaResult.success,
           errors:
             'errors' in validationResult.typiaResult
@@ -120,13 +130,13 @@ export class BackupService {
         }
       }
 
-      // 3. Persist to operation log
+      // 4. Persist to operation log
       await this._persistImportToOperationLog(validatedData, isForceConflict);
 
-      // 4. Dispatch to NgRx
+      // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
 
-      // 5. Write archive data to IndexedDB
+      // 6. Write archive data to IndexedDB
       // ArchiveOperationHandler._handleLoadAllData() skips local imports (isRemote=false),
       // so we must write archive data here for local backup imports.
       await this._writeArchivesToIndexedDB(validatedData);
@@ -147,24 +157,24 @@ export class BackupService {
     importedData: AppDataComplete,
     isForceConflict: boolean,
   ): Promise<void> {
-    PFLog.normal('BackupService: Persisting import to operation log...');
+    OpLog.normal('BackupService: Persisting import to operation log...');
 
     // 1. Backup current state before clearing operations
     let backupSucceeded = true;
     try {
       const existingStateCache = await this._opLogStore.loadStateCache();
       if (existingStateCache?.state) {
-        PFLog.normal('BackupService: Backing up current state before import...');
+        OpLog.normal('BackupService: Backing up current state before import...');
         await this._opLogStore.saveImportBackup(existingStateCache.state);
       }
     } catch (e) {
-      PFLog.warn('BackupService: Failed to backup state before import:', e);
+      OpLog.warn('BackupService: Failed to backup state before import:', e);
       backupSucceeded = false;
     }
 
     // 2. Clear all old operations to prevent IndexedDB bloat
     if (backupSucceeded) {
-      PFLog.normal('BackupService: Clearing old operations before import...');
+      OpLog.normal('BackupService: Clearing old operations before import...');
       await this._opLogStore.clearAllOperations();
     }
 
@@ -209,7 +219,7 @@ export class BackupService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
 
-    PFLog.normal('BackupService: Import persisted to operation log.');
+    OpLog.normal('BackupService: Import persisted to operation log.');
   }
 
   /**

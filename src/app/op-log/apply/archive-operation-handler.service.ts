@@ -290,6 +290,9 @@ export class ArchiveOperationHandler {
    * This operation is deterministic - given the same timestamp and archive state,
    * it will produce the same result on all clients.
    *
+   * Uses atomic transaction to ensure both archiveYoung and archiveOld are
+   * written together - either both succeed or neither does.
+   *
    * @localBehavior SKIP - Flush performed by ArchiveService.moveTasksToArchiveAndFlushArchiveIfDue() before dispatch
    * @remoteBehavior Executes - Uses ArchiveDbAdapter for direct IndexedDB access (bypasses PfapiService)
    */
@@ -300,63 +303,26 @@ export class ArchiveOperationHandler {
 
     const timestamp = (action as ReturnType<typeof flushYoungToOld>).timestamp;
 
-    // Load original state for potential rollback using ArchiveDbAdapter
+    // Load current state using ArchiveDbAdapter
     // Default to empty archives if they don't exist (first-time usage)
-    const originalArchiveYoung =
+    const currentArchiveYoung =
       (await this._archiveDbAdapter.loadArchiveYoung()) ?? createEmptyArchiveModel();
-    const originalArchiveOld =
+    const currentArchiveOld =
       (await this._archiveDbAdapter.loadArchiveOld()) ?? createEmptyArchiveModel();
 
     const newSorted = sortTimeTrackingAndTasksFromArchiveYoungToOld({
-      archiveYoung: originalArchiveYoung,
-      archiveOld: originalArchiveOld,
+      archiveYoung: currentArchiveYoung,
+      archiveOld: currentArchiveOld,
       threshold: ARCHIVE_TASK_YOUNG_TO_OLD_THRESHOLD,
       now: timestamp,
     });
 
-    try {
-      await this._archiveDbAdapter.saveArchiveYoung({
-        ...newSorted.archiveYoung,
-        lastTimeTrackingFlush: timestamp,
-      });
-
-      await this._archiveDbAdapter.saveArchiveOld({
-        ...newSorted.archiveOld,
-        lastTimeTrackingFlush: timestamp,
-      });
-    } catch (e) {
-      // Attempt rollback: restore BOTH archiveYoung and archiveOld to original state
-      OpLog.err('Archive flush failed, attempting rollback...', e);
-      const rollbackErrors: Error[] = [];
-
-      // Rollback archiveYoung
-      try {
-        if (originalArchiveYoung) {
-          await this._archiveDbAdapter.saveArchiveYoung(originalArchiveYoung);
-        }
-      } catch (rollbackErr) {
-        rollbackErrors.push(rollbackErr as Error);
-      }
-
-      // Rollback archiveOld
-      try {
-        if (originalArchiveOld) {
-          await this._archiveDbAdapter.saveArchiveOld(originalArchiveOld);
-        }
-      } catch (rollbackErr) {
-        rollbackErrors.push(rollbackErr as Error);
-      }
-
-      if (rollbackErrors.length > 0) {
-        OpLog.err(
-          'Archive flush rollback FAILED - archive may be inconsistent',
-          rollbackErrors,
-        );
-      } else {
-        OpLog.log('Archive flush rollback successful');
-      }
-      throw e; // Re-throw original error
-    }
+    // Atomic write: both archives written in a single IndexedDB transaction.
+    // If either write fails, the entire transaction is rolled back automatically.
+    await this._archiveDbAdapter.saveArchivesAtomic(
+      { ...newSorted.archiveYoung, lastTimeTrackingFlush: timestamp },
+      { ...newSorted.archiveOld, lastTimeTrackingFlush: timestamp },
+    );
 
     OpLog.log(
       '______________________\nFLUSHED ALL FROM ARCHIVE YOUNG TO OLD (via remote op handler)\n_______________________',

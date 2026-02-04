@@ -49,8 +49,12 @@ const computeOrderedTaskIdsForToday = (
   const todayStr = getDbDateStr();
   const storedOrder = todayTag?.taskIds || [];
 
-  // Find all tasks where dueWithTime is for today OR dueDay === today
-  // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity pattern)
+  // IMPORTANT: Implements dueDay/dueWithTime mutual exclusivity pattern
+  // - Check dueWithTime FIRST (it takes priority over dueDay)
+  // - Only check dueDay if dueWithTime is not set
+  // - If dueWithTime is set, do NOT check dueDay (even for legacy data with both fields)
+  // - This ensures correct behavior with both new data (only one field set) and legacy data (both fields set)
+  // See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
   const tasksForToday: string[] = [];
   for (const taskId of Object.keys(taskEntities)) {
     const task = taskEntities[taskId];

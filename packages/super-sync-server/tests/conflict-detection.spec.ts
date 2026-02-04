@@ -170,7 +170,12 @@ vi.mock('../src/db', async () => {
 });
 
 import { initSyncService, getSyncService } from '../src/sync/sync.service';
-import { Operation, SYNC_ERROR_CODES, VectorClock } from '../src/sync/sync.types';
+import {
+  Operation,
+  SYNC_ERROR_CODES,
+  VectorClock,
+  MAX_VECTOR_CLOCK_SIZE,
+} from '../src/sync/sync.types';
 
 describe('Conflict Detection', () => {
   const userId = 1;
@@ -230,7 +235,7 @@ describe('Conflict Detection', () => {
       expect(result2[0].accepted).toBe(true);
     });
 
-    it('should reject operation when incoming clock is LESS_THAN existing (stale)', async () => {
+    it('should reject operation when incoming clock is LESS_THAN existing (superseded)', async () => {
       const service = getSyncService();
       const entityId = 'task-1';
 
@@ -244,7 +249,7 @@ describe('Conflict Detection', () => {
       const result1 = await service.uploadOps(userId, clientA, [op1]);
       expect(result1[0].accepted).toBe(true);
 
-      // Second op with clock {a: 1} - LESS_THAN {a: 2} (stale)
+      // Second op with clock {a: 1} - LESS_THAN {a: 2} (superseded)
       const op2 = createOp({
         entityId,
         clientId: clientB,
@@ -252,8 +257,8 @@ describe('Conflict Detection', () => {
       });
       const result2 = await service.uploadOps(userId, clientB, [op2]);
       expect(result2[0].accepted).toBe(false);
-      expect(result2[0].errorCode).toBe(SYNC_ERROR_CODES.CONFLICT_STALE);
-      expect(result2[0].error).toContain('Stale operation');
+      expect(result2[0].errorCode).toBe(SYNC_ERROR_CODES.CONFLICT_SUPERSEDED);
+      expect(result2[0].error).toContain('Superseded operation');
     });
 
     it('should reject operation when clocks are CONCURRENT', async () => {
@@ -309,7 +314,7 @@ describe('Conflict Detection', () => {
       expect(result[0].existingClock).toEqual({ [clientA]: 1 });
     });
 
-    it('should return existingClock in rejection response for stale conflicts', async () => {
+    it('should return existingClock in rejection response for superseded conflicts', async () => {
       const service = getSyncService();
       const entityId = 'task-1';
 
@@ -322,7 +327,7 @@ describe('Conflict Detection', () => {
       });
       await service.uploadOps(userId, clientA, [op1]);
 
-      // Second op with clock {a: 1} - LESS_THAN {a: 2} (stale)
+      // Second op with clock {a: 1} - LESS_THAN {a: 2} (superseded)
       const op2 = createOp({
         entityId,
         clientId: clientB,
@@ -400,7 +405,7 @@ describe('Conflict Detection', () => {
       });
       await service.uploadOps(userId, clientA, [op1]);
 
-      // SYNC_IMPORT with stale clock should still be accepted
+      // SYNC_IMPORT with superseded clock should still be accepted
       const op2 = createOp({
         entityId,
         clientId: clientB,
@@ -450,7 +455,7 @@ describe('Conflict Detection', () => {
       });
       await service.uploadOps(userId, clientA, [op1]);
 
-      // REPAIR with stale clock should still be accepted
+      // REPAIR with superseded clock should still be accepted
       const op2 = createOp({
         entityId,
         clientId: clientB,
@@ -522,7 +527,7 @@ describe('Conflict Detection', () => {
       });
       expect((await service.uploadOps(userId, clientC, [op3]))[0].accepted).toBe(true);
 
-      // Client A tries to update with stale clock {a: 2} (doesn't know about B, C)
+      // Client A tries to update with superseded clock {a: 2} (doesn't know about B, C)
       const op4 = createOp({
         entityId,
         clientId: clientA,
@@ -698,11 +703,11 @@ describe('Conflict Detection', () => {
       expect(result2[0].error).toContain('Equal vector clocks from different clients');
     });
 
-    it('should handle very large vector clocks', async () => {
+    it('should handle very large vector clocks by pruning to MAX_VECTOR_CLOCK_SIZE', async () => {
       const service = getSyncService();
       const entityId = 'task-1';
 
-      // Create clock with many entries (under the 100 limit)
+      // Create clock with many entries (under the 100 sanitize limit but over MAX_VECTOR_CLOCK_SIZE)
       const largeClock: VectorClock = {};
       for (let i = 0; i < 50; i++) {
         largeClock[`client-${i}`] = i + 1;
@@ -717,9 +722,44 @@ describe('Conflict Detection', () => {
       const result = await service.uploadOps(userId, clientA, [op1]);
       expect(result[0].accepted).toBe(true);
 
-      // Verify the clock was stored correctly
+      // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE (10).
+      // clientA ('client-a') is not in the clock, so only the 10 most active
+      // clients are kept (client-40 through client-49 with values 41-50).
       const ops = await service.getOpsSince(userId, 0);
-      expect(ops[0].op.vectorClock).toEqual(largeClock);
+      const storedClock = ops[0].op.vectorClock;
+      expect(Object.keys(storedClock).length).toBe(10);
+      // The most active clients should be preserved
+      for (let i = 40; i < 50; i++) {
+        expect(storedClock[`client-${i}`]).toBe(i + 1);
+      }
+    });
+
+    it('should preserve uploading client ID during server-side clock pruning', async () => {
+      const service = getSyncService();
+      const entityId = 'task-1';
+
+      // Create clock with many entries where the uploading client (clientA) IS in the clock
+      // but has a low counter value that would normally be pruned
+      const largeClock: VectorClock = { [clientA]: 2 }; // Low counter
+      for (let i = 0; i < 50; i++) {
+        largeClock[`client-${i}`] = 100 + i; // All have higher counters
+      }
+
+      const op = createOp({
+        entityId,
+        clientId: clientA,
+        vectorClock: largeClock,
+        opType: 'CRT',
+      });
+      const result = await service.uploadOps(userId, clientA, [op]);
+      expect(result[0].accepted).toBe(true);
+
+      // Verify the clock was pruned to MAX_VECTOR_CLOCK_SIZE
+      const ops = await service.getOpsSince(userId, 0);
+      const storedClock = ops[0].op.vectorClock;
+      expect(Object.keys(storedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      // clientA should be preserved despite having the lowest counter
+      expect(storedClock[clientA]).toBe(2);
     });
 
     it('should handle first operation on entity (no existing op to conflict with)', async () => {

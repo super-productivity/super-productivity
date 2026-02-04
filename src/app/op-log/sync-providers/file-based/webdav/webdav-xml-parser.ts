@@ -1,4 +1,4 @@
-import { PFLog } from '../../../../core/log';
+import { SyncLog } from '../../../../core/log';
 import { RemoteFileNotFoundAPIError } from '../../../core/errors/sync-errors';
 
 export interface FileMeta {
@@ -48,7 +48,7 @@ export class WebdavXmlParser {
         : WebdavXmlParser.MAX_XML_SIZE * 10; // Allow larger files for actual file content (100MB)
 
     if (content.length > maxSize) {
-      PFLog.error(
+      SyncLog.error(
         `${WebdavXmlParser.L}.validateResponseContent() Content too large: ${content.length} bytes`,
       );
       throw new Error(
@@ -57,7 +57,7 @@ export class WebdavXmlParser {
     }
 
     if (this.isHtmlResponse(content)) {
-      PFLog.error(
+      SyncLog.error(
         `${WebdavXmlParser.L}.${operation}() received HTML error page instead of ${expectedContentDescription}`,
         {
           path,
@@ -86,7 +86,7 @@ export class WebdavXmlParser {
   parseMultiplePropsFromXml(xmlText: string, basePath: string): FileMeta[] {
     // Validate XML size
     if (xmlText.length > WebdavXmlParser.MAX_XML_SIZE) {
-      PFLog.error(
+      SyncLog.error(
         `${WebdavXmlParser.L}.parseMultiplePropsFromXml() XML too large: ${xmlText.length} bytes`,
       );
       throw new RemoteFileNotFoundAPIError(
@@ -96,7 +96,7 @@ export class WebdavXmlParser {
 
     // Basic XML validation
     if (!xmlText.trim().startsWith('<?xml') && !xmlText.trim().startsWith('<')) {
-      PFLog.error(
+      SyncLog.error(
         `${WebdavXmlParser.L}.parseMultiplePropsFromXml() Invalid XML: doesn't start with <?xml or <`,
       );
       return [];
@@ -108,7 +108,7 @@ export class WebdavXmlParser {
 
       const parserError = xmlDoc.querySelector('parsererror');
       if (parserError) {
-        PFLog.err(
+        SyncLog.err(
           `${WebdavXmlParser.L}.parseMultiplePropsFromXml() XML parsing error`,
           parserError.textContent,
         );
@@ -147,7 +147,10 @@ export class WebdavXmlParser {
 
       return results;
     } catch (error) {
-      PFLog.err(`${WebdavXmlParser.L}.parseMultiplePropsFromXml() parsing error`, error);
+      SyncLog.err(
+        `${WebdavXmlParser.L}.parseMultiplePropsFromXml() parsing error`,
+        error,
+      );
       return [];
     }
   }

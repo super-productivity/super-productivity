@@ -1590,7 +1590,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Tchèque",
+      "CS": "Tchèque",
       "DE": "Deutsch",
       "EN": "Anglais",
       "ES": "Espagnol",
@@ -1626,6 +1626,9 @@
       "TIME_LOCALE_RU_RU": "Russe - 24 heures",
       "TIME_LOCALE_TR_TR": "Turc - 24 heures",
       "TIME_LOCALE_ZH_CN": "Chinois (Simplifié) - 24 heures",
+      "TIME_LOCALE_CS_CZ": "Tchèque - 24 heures",
+      "TIME_LOCALE_SK_SK": "Slovak - 24 heures",
+      "TIME_LOCALE_UK_UA": "Ukrainien - 24 heures",
       "TITLE": "Langue",
       "TR": "Türkçe",
       "UK": "Українська",

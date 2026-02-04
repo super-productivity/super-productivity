@@ -9,11 +9,20 @@ import {
   decryptWithDerivedKey,
   clearSessionKeyCache,
   getSessionKeyCacheStats,
+  setArgon2ParamsForTesting,
 } from './encryption';
 
 describe('Encryption', () => {
   const PASSWORD = 'super_secret_password';
   const DATA = 'some very secret data';
+
+  beforeAll(() => {
+    setArgon2ParamsForTesting({ parallelism: 1, memorySize: 8, iterations: 1 });
+  });
+
+  afterAll(() => {
+    setArgon2ParamsForTesting();
+  });
 
   it('should encrypt and decrypt data correctly', async () => {
     const encrypted = await encrypt(DATA, PASSWORD);
@@ -30,7 +39,7 @@ describe('Encryption', () => {
     } catch (e) {
       // Success
     }
-  }, 10000); // 10s timeout for expensive Argon2id operations
+  }, 5000);
 
   describe('Legacy Compatibility', () => {
     // Helper to simulate legacy encryption (PBKDF2)
@@ -309,7 +318,7 @@ describe('Encryption', () => {
         } catch (e) {
           // Success
         }
-      }, 10000); // 10s timeout for expensive Argon2id operations
+      }, 5000);
 
       it('should throw error for corrupted data (not fall back to legacy)', async () => {
         // Create valid Argon2 encrypted data and corrupt it

@@ -174,7 +174,7 @@ Conflict detection uses vector clocks to determine causal relationships.
     │       │       │            │
     ▼       ▼       ▼            ▼
   Skip    Skip   Has local   TRUE CONFLICT
-  (dup)  (stale) pending?     → Collect
+  (dup) (superseded) pending?  → Collect
                     │
               ┌─────┴─────┐
               ▼           ▼
@@ -190,7 +190,7 @@ Conflict detection uses vector clocks to determine causal relationships.
 | Comparison     | Meaning           | Has Local Pending? | Action                   |
 | -------------- | ----------------- | ------------------ | ------------------------ |
 | `EQUAL`        | Same operation    | N/A                | Skip (duplicate)         |
-| `GREATER_THAN` | Local is newer    | N/A                | Skip (stale remote)      |
+| `GREATER_THAN` | Local is newer    | N/A                | Skip (superseded remote) |
 | `LESS_THAN`    | Remote is newer   | No                 | Apply remote             |
 | `LESS_THAN`    | Remote is newer   | Yes                | Apply (remote dominates) |
 | `CONCURRENT`   | Neither dominates | No                 | Apply remote             |
@@ -225,7 +225,7 @@ Last-Write-Wins automatically resolves conflicts using timestamps.
 │      │   • Current state from NgRx store                       │
 │      │   • Merged clock (all ops) + increment                  │
 │      │   • Preserved original timestamp                        │
-│      ├─ Reject old local ops (stale clocks)                    │
+│      ├─ Reject old local ops (superseded clocks)               │
 │      ├─ Store remote ops, mark rejected                        │
 │      └─ New op will sync on next cycle                         │
 │                                                                 │
@@ -245,18 +245,27 @@ Last-Write-Wins automatically resolves conflicts using timestamps.
 
 **Key Invariants:**
 
-| Invariant                         | Reason                                        |
-| --------------------------------- | --------------------------------------------- |
-| Preserve original timestamp       | Prevents unfair advantage in future conflicts |
-| Merge ALL clocks                  | New op dominates everything known             |
-| Reject ALL pending ops for entity | Prevents stale ops from being uploaded        |
-| Mark rejected BEFORE applying     | Crash safety                                  |
-| Remote wins on tie                | Server-authoritative                          |
+| Invariant                         | Reason                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| Archive-wins rule                 | `moveToArchive` always wins over field-level updates, bypassing timestamps |
+| Preserve original timestamp       | Prevents unfair advantage in future conflicts                              |
+| Merge ALL clocks                  | New op dominates everything known                                          |
+| Reject ALL pending ops for entity | Prevents superseded ops from being uploaded                                |
+| Mark rejected BEFORE applying     | Crash safety                                                               |
+| Remote wins on tie                | Server-authoritative                                                       |
+
+**Superseded Operation Special Cases:**
+
+| Operation Type  | Superseded Handling                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| Regular UPDATE  | Re-created with current entity state + merged clock                                           |
+| DELETE          | Re-created with original payload + merged clock (entity gone from store)                      |
+| `moveToArchive` | Re-created with original payload + merged clock (entity removed from NgRx by archive reducer) |
 
 **Key Files:**
 
-- `conflict-resolution.service.ts` - LWW resolution
-- `stale-operation-resolver.service.ts` - Stale op handling
+- `conflict-resolution.service.ts` - LWW resolution + archive-wins rule
+- `superseded-operation-resolver.service.ts` - Superseded op handling (incl. moveToArchive special case)
 
 ---
 
@@ -362,51 +371,67 @@ Meta-reducers enable atomic multi-entity changes in a single reducer pass.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   META-REDUCER CHAIN                            │
+│              META-REDUCER CHAIN (8 Phases, 15 Entries)          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  Action Dispatched                                              │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 1: operationCaptureMetaReducer                    │   │
-│  │          Captures persistent actions → FIFO queue       │   │
+│  │ Phase 1: operationCaptureMetaReducer    [MUST BE FIRST] │   │
+│  │          Captures original state BEFORE modifications   │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │ Phase 2: bulkOperationsMetaReducer                      │   │
-│  │          Applies bulk ops during sync/hydration         │   │
+│  │          Unwraps bulk dispatches for hydration/sync     │   │
+│  │          Pre-scans for archive ops to prevent           │   │
+│  │          resurrection via LWW Update                    │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 3: lwwUpdateMetaReducer                           │   │
-│  │          Handles LWW Update actions (conflict wins)     │   │
+│  │ Phase 3: undoTaskDeleteMetaReducer                      │   │
+│  │          Captures task context before deletion          │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 4: Tag/Project/IssueProvider Shared Reducers      │   │
-│  │          Cascade deletions across entities              │   │
+│  │ Phase 4: Core CRUD Meta-Reducers (dependency order)     │   │
+│  │          • taskSharedCrudMetaReducer                     │   │
+│  │          • taskBatchUpdateMetaReducer                    │   │
+│  │          • taskSharedLifecycleMetaReducer                │   │
+│  │          • taskSharedSchedulingMetaReducer               │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 5: Planner/ShortSyntax Shared Reducers            │   │
-│  │          Handle task movements and parsing              │   │
+│  │ Phase 5: Entity-Specific Cascades                       │   │
+│  │          • projectSharedMetaReducer                      │   │
+│  │          • tagSharedMetaReducer                          │   │
+│  │          • issueProviderSharedMetaReducer                │   │
+│  │          • taskRepeatCfgSharedMetaReducer                │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 6: Feature Reducers (task, project, tag, etc.)    │   │
-│  │          Core state updates                             │   │
+│  │ Phase 6: plannerSharedMetaReducer                       │   │
+│  │          Syncs with task.dueDay and TODAY_TAG           │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Phase 7: validateAndFixDataConsistency                  │   │
-│  │          Repair any inconsistencies                     │   │
+│  │ Phase 7: Synthetic Multi-Step Operations                │   │
+│  │          • shortSyntaxSharedMetaReducer                  │   │
+│  │          • lwwUpdateMetaReducer                          │   │
+│  │            (adapter / singleton / unsupported patterns)  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│        │                                                        │
+│        ▼                                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Phase 8: actionLoggerReducer            [MUST BE LAST]  │   │
+│  │          Pure logging only                              │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │        │                                                        │
 │        ▼                                                        │
@@ -414,6 +439,13 @@ Meta-reducers enable atomic multi-entity changes in a single reducer pass.
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Critical Ordering Rules:**
+
+- `operationCaptureMetaReducer` must be at index 0 (captures pre-modification state)
+- `bulkOperationsMetaReducer` must be at index 1 (unwraps bulk before other reducers run)
+- `actionLoggerReducer` must be last (logs final state)
+- Development mode validates these constraints at startup
 
 **Why Meta-Reducers for Multi-Entity Changes?**
 
@@ -544,8 +576,15 @@ Bulk application optimizes performance by applying many operations in a single d
 │           │                                                     │
 │           ▼ (in bulkOperationsMetaReducer)                     │
 │  ┌────────────────────────────────────────┐                    │
+│  │  // Pre-scan: collect archived IDs     │                    │
+│  │  archivedIds = findArchiveOps(ops)     │                    │
+│  │                                        │                    │
 │  │  for (op of operations) {              │                    │
 │  │    action = convertOpToAction(op)      │                    │
+│  │    // Skip LWW Updates for archived    │                    │
+│  │    if (isLwwUpdate(action) &&          │                    │
+│  │        archivedIds.has(entityId))      │                    │
+│  │      continue;                         │                    │
 │  │    state = reducer(state, action)      │                    │
 │  │  }                                     │                    │
 │  │  return state                          │                    │

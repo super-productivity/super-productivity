@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "17.0.9",
+  "version": "17.0.12",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -158,7 +158,7 @@
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^21.0.5",
-    "@angular-eslint/builder": "^21.1.0",
+    "@angular-eslint/builder": "^21.2.0",
     "@angular-eslint/eslint-plugin": "^21.1.0",
     "@angular-eslint/eslint-plugin-template": "^21.1.0",
     "@angular-eslint/schematics": "^21.1.0",
@@ -227,7 +227,7 @@
     "cross-env": "^7.0.3",
     "detect-it": "^4.0.1",
     "electron": "37.10.3",
-    "electron-builder": "^26.4.0",
+    "electron-builder": "^26.7.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
@@ -238,7 +238,7 @@
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.3",
-    "glob": "^9.3.5",
+    "glob": "^13.0.0",
     "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "ical.js": "^2.2.1",
@@ -286,7 +286,7 @@
     "@lmdb/lmdb-linux-x64": "^3.4.3",
     "@lmdb/lmdb-win32-x64": "^3.2.0",
     "@rollup/rollup-darwin-x64": "4.53.3",
-    "@rollup/rollup-linux-x64-gnu": "4.55.3",
+    "@rollup/rollup-linux-x64-gnu": "4.57.1",
     "@rollup/rollup-win32-x64-msvc": "4.52.3"
   },
   "workspaces": [

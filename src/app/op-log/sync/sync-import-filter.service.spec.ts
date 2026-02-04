@@ -783,7 +783,7 @@ describe('SyncImportFilterService', () => {
        * THE BUG SCENARIO:
        * 1. Client A creates SYNC_IMPORT with clock {clientA: 1}
        * 2. Client B receives it, merges clocks → {clientA: 1, clientB: 9746, ...}
-       * 3. B has 91 clients in clock, pruning triggers (limit is 8)
+       * 3. B has 91 clients in clock, pruning triggers (limit is 10)
        * 4. clientA has counter=1 (lowest) → PRUNED by limitVectorClockSize()
        * 5. New task on B has clock {clientB: 9747} - MISSING clientA!
        * 6. Comparison: {clientA: 0 (missing)} vs {clientA: 1} → CONCURRENT

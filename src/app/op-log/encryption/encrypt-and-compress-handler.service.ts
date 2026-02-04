@@ -2,7 +2,7 @@ import {
   extractSyncFileStateFromPrefix,
   getSyncFilePrefix,
 } from '../util/sync-file-prefix';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import {
   deriveKeyFromPassword,
   encryptWithDerivedKey,
@@ -72,7 +72,7 @@ export class EncryptAndCompressHandlerService {
       isEncrypt,
       modelVersion,
     });
-    PFLog.normal(
+    OpLog.normal(
       `${EncryptAndCompressHandlerService.L}.${this.compressAndEncrypt.name}()`,
       {
         prefix,
@@ -110,7 +110,7 @@ export class EncryptAndCompressHandlerService {
   }> {
     const { isCompressed, isEncrypted, modelVersion, cleanDataStr } =
       extractSyncFileStateFromPrefix(dataStr);
-    PFLog.normal(
+    OpLog.normal(
       `${EncryptAndCompressHandlerService.L}.${this.decompressAndDecrypt.name}()`,
       { isCompressed, isEncrypted, modelVersion },
     );

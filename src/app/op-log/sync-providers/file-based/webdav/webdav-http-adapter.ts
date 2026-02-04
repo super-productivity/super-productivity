@@ -1,6 +1,5 @@
-import { CapacitorHttp, HttpResponse, registerPlugin } from '@capacitor/core';
-import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
-import { PFLog } from '../../../../core/log';
+import { registerPlugin } from '@capacitor/core';
+import { SyncLog } from '../../../../core/log';
 import {
   AuthFailSPError,
   PotentialCorsError,
@@ -46,21 +45,8 @@ export interface WebDavHttpResponse {
 
 export class WebDavHttpAdapter {
   private static readonly L = 'WebDavHttpAdapter';
-  private static readonly WEBDAV_METHODS = [
-    'PROPFIND',
-    'MKCOL',
-    'MOVE',
-    'COPY',
-    'LOCK',
-    'UNLOCK',
-    'PROPPATCH',
-  ];
 
-  // Make platform checks testable by making them class properties
-  protected get isAndroidWebView(): boolean {
-    return IS_ANDROID_WEB_VIEW;
-  }
-
+  // Make platform check testable by making it a class property
   protected get isNativePlatform(): boolean {
     return Capacitor.isNativePlatform();
   }
@@ -70,41 +56,19 @@ export class WebDavHttpAdapter {
       let response: WebDavHttpResponse;
 
       if (this.isNativePlatform) {
-        // Check if this is a WebDAV method
-        const isWebDavMethod = WebDavHttpAdapter.WEBDAV_METHODS.includes(
-          options.method.toUpperCase(),
+        // On native platforms (Android + iOS), use the WebDavHttp plugin.
+        // This bypasses CapacitorHttp which has issues with WebDAV responses
+        // (empty bodies on Android/Koofr, broken JSON auto-parsing on iOS).
+        SyncLog.log(
+          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
         );
-
-        // On Android, use custom WebDavHttp plugin for WebDAV methods (better retry handling)
-        // On iOS, use CapacitorHttp for all methods (including WebDAV)
-        if (isWebDavMethod && this.isAndroidWebView) {
-          // Use our custom WebDAV plugin for WebDAV methods on Android
-          PFLog.log(
-            `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
-          );
-          const webdavResponse = await WebDavHttp.request({
-            url: options.url,
-            method: options.method,
-            headers: options.headers,
-            data: options.body,
-          });
-          response = this._convertWebDavResponse(webdavResponse);
-        } else {
-          // Use standard CapacitorHttp for:
-          // - All methods on iOS (including WebDAV)
-          // - Regular HTTP methods on Android
-          PFLog.log(
-            `${WebDavHttpAdapter.L}.request() using CapacitorHttp for ${options.method}`,
-          );
-          const capacitorResponse = await CapacitorHttp.request({
-            url: options.url,
-            method: options.method,
-            headers: options.headers,
-            data: options.body,
-            responseType: 'text', // Explicitly request text to avoid iOS auto-detecting and returning non-string types
-          });
-          response = this._convertCapacitorResponse(capacitorResponse);
-        }
+        const webdavResponse = await WebDavHttp.request({
+          url: options.url,
+          method: options.method,
+          headers: options.headers,
+          data: options.body,
+        });
+        response = this._convertWebDavResponse(webdavResponse);
       } else {
         // Use fetch for other platforms
         try {
@@ -141,7 +105,7 @@ export class WebDavHttpAdapter {
         throw e;
       }
 
-      PFLog.error(`${WebDavHttpAdapter.L}.request() error`, {
+      SyncLog.error(`${WebDavHttpAdapter.L}.request() error`, {
         url: options.url,
         method: options.method,
         error: e,
@@ -153,38 +117,6 @@ export class WebDavHttpAdapter {
       });
       throw new HttpNotOkAPIError(errorResponse);
     }
-  }
-
-  private _convertCapacitorResponse(response: HttpResponse): WebDavHttpResponse {
-    let data = response.data;
-
-    // Ensure data is a string - CapacitorHttp may return different types
-    // depending on Content-Type header when responseType is not specified
-    if (data === null || data === undefined) {
-      data = '';
-    } else if (typeof data !== 'string') {
-      // Log warning for debugging - this shouldn't happen with responseType: 'text'
-      // but we handle it defensively for iOS compatibility
-      PFLog.warn(
-        `${WebDavHttpAdapter.L}._convertCapacitorResponse() received non-string data type: ${typeof data}`,
-      );
-
-      // Try to convert to string based on actual type
-      if (data instanceof ArrayBuffer) {
-        data = new TextDecoder().decode(data);
-      } else if (typeof data === 'object') {
-        // CapacitorHttp may auto-parse JSON responses
-        data = JSON.stringify(data);
-      } else {
-        data = String(data);
-      }
-    }
-
-    return {
-      status: response.status,
-      headers: response.headers || {},
-      data,
-    };
   }
 
   private _convertWebDavResponse(response: WebDavHttpPluginResponse): WebDavHttpResponse {
@@ -266,7 +198,7 @@ export class WebDavHttpAdapter {
       // However, without making a test request, we can't be certain
 
       // Log a warning about the ambiguity
-      PFLog.warn(
+      SyncLog.warn(
         `${WebDavHttpAdapter.L}._isCorsError() Ambiguous network error - might be CORS:`,
         error,
       );

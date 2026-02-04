@@ -669,6 +669,7 @@ export const taskReducer = createReducer<TaskState>(
         changes: {
           dueDay: day,
           dueWithTime: undefined,
+          remindAt: undefined,
         },
       },
       state,
@@ -676,10 +677,16 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(TaskSharedActions.removeTasksFromTodayTag, (state, { taskIds }) => {
+    const validTaskIds = taskIds.filter((id) => !!state.entities[id]);
+    if (validTaskIds.length !== taskIds.length) {
+      devError(
+        `removeTasksFromTodayTag: ${taskIds.length - validTaskIds.length} orphan ID(s) filtered`,
+      );
+    }
     return {
       ...state,
       // we do this to maintain the order of tasks when they are moved to overdue
-      ids: [...taskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
+      ids: [...validTaskIds, ...state.ids.filter((id) => !taskIds.includes(id))],
     };
   }),
 );

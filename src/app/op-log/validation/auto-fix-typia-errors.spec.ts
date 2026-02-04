@@ -3,7 +3,7 @@ import { createAppDataCompleteMock } from '../../util/app-data-mock';
 import { createValidate } from 'typia';
 import { initialTaskState } from '../../features/tasks/store/task.reducer';
 import { DEFAULT_TASK, TaskState } from '../../features/tasks/task.model';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 
 interface TestInterface {
   globalConfig: {
@@ -24,8 +24,8 @@ describe('autoFixTypiaErrors', () => {
   let errSpy: jasmine.Spy;
 
   beforeEach(() => {
-    // Spy on PFLog.err to prevent test output cluttering
-    errSpy = spyOn(PFLog, 'err').and.stub();
+    // Spy on OpLog.err to prevent test output cluttering
+    errSpy = spyOn(OpLog, 'err').and.stub();
   });
 
   afterEach(() => {

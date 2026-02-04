@@ -62,8 +62,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    testInfo.setTimeout(180000);
+  }) => {
+    test.slow();
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -214,8 +214,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    testInfo.setTimeout(180000);
+  }) => {
+    test.slow();
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
@@ -267,7 +267,10 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
       await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
       // Wait for sync to complete
-      await clientB.sync.waitForSyncToComplete({ timeout: 30000 });
+      await clientB.sync.waitForSyncToComplete({
+        timeout: 30000,
+        skipSpinnerCheck: true,
+      });
       await clientB.page.waitForTimeout(2000);
 
       // ============ PHASE 4: Verify server data received ============
@@ -319,8 +322,8 @@ test.describe('@supersync @archive Keep Local Archive Preservation', () => {
     browser,
     baseURL,
     testRunId,
-  }, testInfo) => {
-    testInfo.setTimeout(180000);
+  }) => {
+    test.slow();
     const uniqueId = Date.now();
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;

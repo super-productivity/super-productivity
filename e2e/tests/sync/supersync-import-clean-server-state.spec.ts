@@ -21,7 +21,7 @@ import { ImportPage } from '../../pages/import.page';
  * 2. Old full-state ops should be cleared when new SYNC_IMPORT is applied
  *
  * Without these fixes, clients joining after a SYNC_IMPORT could receive
- * stale operations that were concurrent with but superseded by the import.
+ * superseded operations that were concurrent with but superseded by the import.
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true

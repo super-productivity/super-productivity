@@ -11,9 +11,9 @@ import {
 } from '../../issue.model';
 import { REDMINE_POLL_INTERVAL } from './redmine.const';
 import {
-  formatRedmineIssueSubject,
-  formatRedmineIssueSubjectForSnack,
-} from './format-redmine-issue-subject.utils';
+  formatRedmineIssueTitle,
+  formatRedmineIssueTitleForSnack,
+} from './format-redmine-issue-title.utils';
 import { RedmineCfg } from './redmine.model';
 import { isRedmineEnabled } from './is-redmine-enabled.util';
 import { RedmineApiService } from '../redmine/redmine-api.service';
@@ -69,7 +69,7 @@ export class RedmineCommonInterfacesService implements IssueServiceInterface {
 
   getAddTaskData(issue: RedmineIssue): Partial<Readonly<TaskCopy>> & { title: string } {
     return {
-      title: formatRedmineIssueSubject(issue),
+      title: formatRedmineIssueTitle(issue),
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updated_on).getTime(),
     };
@@ -108,7 +108,7 @@ export class RedmineCommonInterfacesService implements IssueServiceInterface {
           issueWasUpdated: true,
         },
         issue,
-        issueTitle: formatRedmineIssueSubjectForSnack(issue),
+        issueTitle: formatRedmineIssueTitleForSnack(issue),
       };
     }
 

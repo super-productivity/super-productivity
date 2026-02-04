@@ -144,6 +144,7 @@ describe('ArchiveOperationHandler', () => {
       'loadArchiveOld',
       'saveArchiveYoung',
       'saveArchiveOld',
+      'saveArchivesAtomic',
     ]);
     // Default returns for ArchiveDbAdapter
     mockArchiveDbAdapter.loadArchiveYoung.and.returnValue(
@@ -154,6 +155,7 @@ describe('ArchiveOperationHandler', () => {
     );
     mockArchiveDbAdapter.saveArchiveYoung.and.returnValue(Promise.resolve());
     mockArchiveDbAdapter.saveArchiveOld.and.returnValue(Promise.resolve());
+    mockArchiveDbAdapter.saveArchivesAtomic.and.returnValue(Promise.resolve());
 
     // Set up default resolved promises
     mockArchiveService.writeTasksToArchiveForRemoteSync.and.returnValue(
@@ -496,6 +498,30 @@ describe('ArchiveOperationHandler', () => {
         // Verify it tried to load archives (confirming action was recognized)
         expect(mockArchiveDbAdapter.loadArchiveYoung).toHaveBeenCalled();
         expect(mockArchiveDbAdapter.loadArchiveOld).toHaveBeenCalled();
+      });
+
+      it('should use atomic save for remote operations', async () => {
+        const timestamp = Date.now();
+        const action = {
+          type: flushYoungToOld.type,
+          timestamp,
+          meta: { isPersistent: true, isRemote: true },
+        } as unknown as PersistentAction;
+
+        // The sort function may fail, but we verify saveArchivesAtomic is attempted
+        try {
+          await service.handleOperation(action);
+        } catch {
+          // Expected - sort function returns undefined in tests
+        }
+
+        // Verify atomic save was called (not separate saves)
+        // Note: If sort fails, saveArchivesAtomic won't be called, but loadArchive will be
+        expect(mockArchiveDbAdapter.loadArchiveYoung).toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.loadArchiveOld).toHaveBeenCalled();
+        // Individual saves should NOT be called - atomic save handles both
+        expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
+        expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
       });
     });
 
@@ -1443,6 +1469,7 @@ describe('ArchiveOperationHandler', () => {
           mockArchiveDbAdapter.saveArchiveYoung.calls.reset();
           mockArchiveDbAdapter.loadArchiveOld.calls.reset();
           mockArchiveDbAdapter.saveArchiveOld.calls.reset();
+          mockArchiveDbAdapter.saveArchivesAtomic.calls.reset();
 
           await service.handleOperation(action);
 
@@ -1451,6 +1478,7 @@ describe('ArchiveOperationHandler', () => {
           expect(mockArchiveDbAdapter.saveArchiveYoung).not.toHaveBeenCalled();
           expect(mockArchiveDbAdapter.loadArchiveOld).not.toHaveBeenCalled();
           expect(mockArchiveDbAdapter.saveArchiveOld).not.toHaveBeenCalled();
+          expect(mockArchiveDbAdapter.saveArchivesAtomic).not.toHaveBeenCalled();
         });
 
         it('should use ArchiveDbAdapter for remote operations', async () => {

@@ -6,7 +6,7 @@ import { sendLoginMagicLinkEmail } from './email';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
-const JWT_EXPIRY = '7d';
+const JWT_EXPIRY = '365d';
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LOGIN_MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 

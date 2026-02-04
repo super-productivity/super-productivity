@@ -142,6 +142,27 @@ describe('OperationLogSnapshotService', () => {
       );
     });
 
+    it('should include snapshotEntityKeys in saved snapshot', async () => {
+      const stateData = {
+        task: { ids: ['t1', 't2'] },
+        project: { ids: ['p1'] },
+        globalConfig: { someSetting: true },
+      };
+      mockStateSnapshotService.getStateSnapshot.and.returnValue(stateData as any);
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({ client1: 1 });
+      mockOpLogStore.getLastSeq.and.resolveTo(5);
+      mockOpLogStore.saveStateCache.and.resolveTo(undefined);
+
+      await service.saveCurrentStateAsSnapshot();
+
+      const savedCache = mockOpLogStore.saveStateCache.calls.mostRecent().args[0];
+      expect(savedCache.snapshotEntityKeys).toBeDefined();
+      expect(savedCache.snapshotEntityKeys).toContain('TASK:t1');
+      expect(savedCache.snapshotEntityKeys).toContain('TASK:t2');
+      expect(savedCache.snapshotEntityKeys).toContain('PROJECT:p1');
+      expect(savedCache.snapshotEntityKeys).toContain('GLOBAL_CONFIG:GLOBAL_CONFIG');
+    });
+
     it('should not throw when save fails', async () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue({} as any);
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({});

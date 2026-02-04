@@ -423,11 +423,11 @@ describe('FocusModeEffects', () => {
       });
 
       it('should dispatch long break after 4th session (Bug #6044)', (done) => {
-        // Bug #6044 fix: Effect now listens to incrementCycle, so cycle value is already correct
-        // When cycle=4 (after increment from 3 to 4), break should be long break
+        // Bug #6044 fix: Effect now listens to incrementCycle
+        // When cycle=5 (after increment from 4 to 5), break should be long break
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectors.selectCurrentCycle, 4);
+        store.overrideSelector(selectors.selectCurrentCycle, 5);
         store.refreshState();
 
         const getBreakDurationSpy = jasmine
@@ -447,7 +447,8 @@ describe('FocusModeEffects', () => {
             const startBreakAction = actionsArr.find(
               (a) => a.type === actions.startBreak.type,
             ) as any;
-            // Verify getBreakDuration was called with cycle 4 (no adjustment needed)
+            // Verify getBreakDuration was called with cycle 4
+            // Because we decrement cycle by 1 to get last focus session's cycle
             expect(getBreakDurationSpy).toHaveBeenCalledWith(4);
             expect(startBreakAction).toBeDefined();
             expect(startBreakAction.isLongBreak).toBeTrue();
@@ -457,10 +458,10 @@ describe('FocusModeEffects', () => {
       });
 
       it('should dispatch short break after 5th session (Bug #6044)', (done) => {
-        // Bug #6044 fix: Verify that session 5 gets a short break, not long break
+        // Bug #6044 fix: Verify that session 5 (cycle 6) gets a short break, not long break
         actions$ = of(actions.incrementCycle());
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-        store.overrideSelector(selectors.selectCurrentCycle, 5);
+        store.overrideSelector(selectors.selectCurrentCycle, 6);
         store.refreshState();
 
         const getBreakDurationSpy = jasmine
@@ -481,6 +482,7 @@ describe('FocusModeEffects', () => {
               (a) => a.type === actions.startBreak.type,
             ) as any;
             // Verify getBreakDuration was called with cycle 5
+            // Because we decrement cycle by 1 to get last focus session's cycle
             expect(getBreakDurationSpy).toHaveBeenCalledWith(5);
             expect(startBreakAction).toBeDefined();
             expect(startBreakAction.isLongBreak).toBeFalse();
@@ -787,6 +789,58 @@ describe('FocusModeEffects', () => {
       effects.cancelSession$.subscribe((action) => {
         expect(action).toEqual(unsetCurrentTask());
         done();
+      });
+    });
+  });
+
+  describe('stopTrackingOnExitBreakToPlanning$', () => {
+    it('should dispatch unsetCurrentTask when sync is enabled and task is being tracked', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next('task-123');
+
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe((action) => {
+        expect(action).toEqual(unsetCurrentTask());
+        done();
+      });
+    });
+
+    it('should not dispatch when sync is disabled', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next('task-123');
+
+      const result: any[] = [];
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
+        next: (action) => result.push(action),
+        complete: () => {
+          expect(result.length).toBe(0);
+          done();
+        },
+      });
+    });
+
+    it('should not dispatch when no task is being tracked', (done) => {
+      actions$ = of(actions.exitBreakToPlanning({ pausedTaskId: null }));
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+      } as any);
+      store.refreshState();
+      currentTaskId$.next(null);
+
+      const result: any[] = [];
+      effects.stopTrackingOnExitBreakToPlanning$.subscribe({
+        next: (action) => result.push(action),
+        complete: () => {
+          expect(result.length).toBe(0);
+          done();
+        },
       });
     });
   });
@@ -2937,9 +2991,9 @@ describe('FocusModeEffects', () => {
     });
 
     // Bug #6044: Manual break start should use cycle directly for break duration calculation
-    it('should dispatch long break when cycle=4 with manual break start (Bug #6044)', (done) => {
+    it('should dispatch long break when cycle=5 with manual break start (Bug #6044)', (done) => {
       // Bug #6044 fix: After session 4 completes, incrementCycleOnSessionComplete$ runs first,
-      // setting cycle to 4. When user manually clicks start, we use cycle directly (no adjustment).
+      // setting cycle to 5. When user manually clicks start, we use cycle directly (no adjustment).
       // This matches the auto-start behavior for consistent break timing.
       const getBreakDurationSpy = jasmine
         .createSpy('getBreakDuration')
@@ -2959,7 +3013,7 @@ describe('FocusModeEffects', () => {
       });
 
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectors.selectCurrentCycle, 4); // Cycle 4 = long break
+      store.overrideSelector(selectors.selectCurrentCycle, 5); // Cycle 5 = long break, After work session 4
       store.refreshState();
 
       const timer = createMockTimer({
@@ -2984,9 +3038,9 @@ describe('FocusModeEffects', () => {
       buttonActions.action.fn();
 
       setTimeout(() => {
-        // Verify getBreakDuration was called with Cycle 3
-        // Cycle 3 because we have to decrement to get past cycle
-        expect(getBreakDurationSpy).toHaveBeenCalledWith(3);
+        // Verify getBreakDuration was called with cycle 4
+        // Because we decrement cycle by 1 to get last focus session's cycle
+        expect(getBreakDurationSpy).toHaveBeenCalledWith(4);
 
         const startBreakCall = dispatchSpy.calls
           .all()

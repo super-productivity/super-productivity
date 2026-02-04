@@ -36,11 +36,10 @@ export type {
 /**
  * Handles uploading local pending operations to remote storage.
  *
- * CURRENT ARCHITECTURE (as of Dec 2025):
- * - Only SuperSync uses operation log sync (it implements OperationSyncCapable)
+ * CURRENT ARCHITECTURE:
  * - SuperSync uses API-based sync via `_uploadPendingOpsViaApi()`
- * - Legacy providers (WebDAV, Dropbox, LocalFile) do NOT use operation log sync at all
- *   They use pfapi's model-level LWW sync instead (see sync.service.ts:104)
+ * - File-based providers (WebDAV, Dropbox, LocalFile) also use operation log sync
+ *   via `FileBasedSyncAdapterService` which creates `OperationSyncCapable` adapters
  */
 @Injectable({
   providedIn: 'root',
@@ -140,7 +139,7 @@ export class OperationLogUploadService {
           // download flow bring in the remote data. Our local ops will then be
           // uploaded as regular operations.
           if (result.errorCode === 'SYNC_IMPORT_EXISTS') {
-            OpLog.warn(
+            OpLog.normal(
               `OperationLogUploadService: Server already has SYNC_IMPORT from another client. ` +
                 `Deleting local SYNC_IMPORT and proceeding with normal sync flow.`,
             );
@@ -155,7 +154,7 @@ export class OperationLogUploadService {
           // (e.g., validation error, conflict). Network errors should be retried.
           const isNetworkError = this._isNetworkError(result.error);
           if (isNetworkError) {
-            OpLog.warn(
+            OpLog.normal(
               `OperationLogUploadService: Full-state op ${entry.op.id} failed due to network error, will retry: ${result.error}`,
             );
             // Don't mark as rejected - leave as unsynced for retry
@@ -335,7 +334,7 @@ export class OperationLogUploadService {
           }
           rejectedCount += rejected.length;
 
-          OpLog.warn(
+          OpLog.normal(
             `OperationLogUploadService: ${rejected.length} ops were rejected by server (will be handled after piggybacked ops)`,
             rejected.map((r) => ({ opId: r.opId, error: r.error })),
           );

@@ -910,5 +910,29 @@ describe('Task Selectors', () => {
       expect(parentTask!.subTasks.length).toBe(2);
       expect(parentTask!.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
     });
+
+    it('should handle missing subtask references in selectTaskByIdWithSubTaskData', () => {
+      (window.confirm as jasmine.Spy).and.returnValue(false);
+      const badState = {
+        ...mockState,
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          entities: {
+            ...mockTaskState.entities,
+            task1: {
+              ...mockTasks.task1,
+              subTaskIds: ['subtask1', 'nonExistentSubtask', 'subtask2'],
+            },
+          },
+        },
+      };
+
+      const result = fromSelectors.selectTaskByIdWithSubTaskData(badState, {
+        id: 'task1',
+      });
+      expect(result.subTasks.length).toBe(2);
+      expect(result.subTasks.map((st) => st.id)).toEqual(['subtask1', 'subtask2']);
+      (window.confirm as jasmine.Spy).and.returnValue(true);
+    });
   });
 });

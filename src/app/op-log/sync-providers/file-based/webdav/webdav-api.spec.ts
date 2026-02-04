@@ -374,6 +374,26 @@ describe('WebdavApi', () => {
       expect(result.dataStr).toBe('file content');
     });
 
+    it('should throw InvalidDataSPError when response body is empty', async () => {
+      const mockResponse = {
+        status: 200,
+        headers: {
+          'last-modified': 'Wed, 15 Jan 2025 10:00:00 GMT',
+        },
+        data: '',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      await expectAsync(
+        api.download({
+          path: '/test.txt',
+        }),
+      ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
+
+      // validateResponseContent should NOT be called when empty body is detected
+      expect(mockXmlParser.validateResponseContent).not.toHaveBeenCalled();
+    });
+
     // Test removed: If-None-Match header functionality has been removed
     // Test removed: If-Modified-Since header functionality has been removed
     // Test removed: If-Modified-Since header functionality has been removed

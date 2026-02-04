@@ -10,9 +10,9 @@ import {
 import { ImportPage } from '../../pages/import.page';
 
 /**
- * SuperSync Stale Clock Regression E2E Tests
+ * SuperSync Superseded Clock Regression E2E Tests
  *
- * These tests verify the fix for the stale clock bug that caused data loss:
+ * These tests verify the fix for the superseded clock bug that caused data loss:
  *
  * BUG SCENARIO:
  * 1. Client A imports backup (creates SYNC_IMPORT)
@@ -20,22 +20,22 @@ import { ImportPage } from '../../pages/import.page';
  * 3. Client B syncs (receives SYNC_IMPORT)
  * 4. Client B reloads (triggers hydration)
  * 5. During hydration, loadAllData triggers reducers (e.g., TODAY_TAG repair)
- * 6. BUG: Operations created during loadAllData got stale vector clocks
- * 7. On next sync, server rejected ops as CONFLICT_STALE
- * 8. BUG 2: CONFLICT_STALE was treated as permanent rejection (not merged)
+ * 6. BUG: Operations created during loadAllData got superseded vector clocks
+ * 7. On next sync, server rejected ops as CONFLICT_SUPERSEDED
+ * 8. BUG 2: CONFLICT_SUPERSEDED was treated as permanent rejection (not merged)
  *
  * FIX:
  * - Bug 1: mergeRemoteOpClocks is now called BEFORE loadAllData dispatch
- * - Bug 2: CONFLICT_STALE is now handled like CONFLICT_CONCURRENT (merged)
+ * - Bug 2: CONFLICT_SUPERSEDED is now handled like CONFLICT_CONCURRENT (merged)
  *
  * Prerequisites:
  * - super-sync-server running on localhost:1901 with TEST_MODE=true
  * - Frontend running on localhost:4242
  *
- * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-stale-clock-regression.spec.ts
+ * Run with: npm run e2e:supersync:file e2e/tests/sync/supersync-superseded-clock-regression.spec.ts
  */
 
-test.describe('@supersync @regression Stale Clock Regression', () => {
+test.describe('@supersync @regression Superseded Clock Regression', () => {
   /**
    * Regression test: Operations created during SYNC_IMPORT hydration use correct clock
    *
@@ -75,7 +75,7 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       const syncConfig = getSuperSyncConfig(user);
 
       // ============ PHASE 1: Setup Both Clients ============
-      console.log('[Stale Clock] Phase 1: Setting up both clients');
+      console.log('[Superseded Clock] Phase 1: Setting up both clients');
 
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
@@ -86,10 +86,10 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       // Initial sync to establish vector clocks
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
-      console.log('[Stale Clock] Both clients synced initially');
+      console.log('[Superseded Clock] Both clients synced initially');
 
       // ============ PHASE 2: Create Task Scheduled for Today ============
-      console.log('[Stale Clock] Phase 2: Creating task scheduled for today');
+      console.log('[Superseded Clock] Phase 2: Creating task scheduled for today');
 
       // This task will affect TODAY_TAG, which may trigger repair during hydration
       const taskToday = `Today-Task-${uniqueId}`;
@@ -101,14 +101,14 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       // when there's any state inconsistency during loadAllData
 
       await clientA.sync.syncAndWait();
-      console.log(`[Stale Clock] Client A created and synced: ${taskToday}`);
+      console.log(`[Superseded Clock] Client A created and synced: ${taskToday}`);
 
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, taskToday);
-      console.log('[Stale Clock] Client B received the task');
+      console.log('[Superseded Clock] Client B received the task');
 
       // ============ PHASE 3: Client A Imports Backup ============
-      console.log('[Stale Clock] Phase 3: Client A importing backup');
+      console.log('[Superseded Clock] Phase 3: Client A importing backup');
 
       const importPage = new ImportPage(clientA.page);
       await importPage.navigateToImportPage();
@@ -116,7 +116,7 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
       // Import backup (contains different tasks - E2E Import Test tasks)
       const backupPath = ImportPage.getFixturePath('test-backup.json');
       await importPage.importBackupFile(backupPath);
-      console.log('[Stale Clock] Client A imported backup');
+      console.log('[Superseded Clock] Client A imported backup');
 
       // Reload page after import to ensure UI reflects the imported state
       // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
@@ -132,54 +132,54 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
 
       // Wait for imported task to be visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[Stale Clock] Client A has imported tasks');
+      console.log('[Superseded Clock] Client A has imported tasks');
 
       // ============ PHASE 4: Sync to Propagate SYNC_IMPORT ============
-      console.log('[Stale Clock] Phase 4: Syncing to propagate SYNC_IMPORT');
+      console.log('[Superseded Clock] Phase 4: Syncing to propagate SYNC_IMPORT');
 
       await clientA.sync.syncAndWait();
-      console.log('[Stale Clock] Client A synced (SYNC_IMPORT uploaded)');
+      console.log('[Superseded Clock] Client A synced (SYNC_IMPORT uploaded)');
 
       await clientB.sync.syncAndWait();
-      console.log('[Stale Clock] Client B synced (received SYNC_IMPORT)');
+      console.log('[Superseded Clock] Client B synced (received SYNC_IMPORT)');
 
       // ============ PHASE 5: Client B Reloads (Triggers Hydration) ============
-      console.log('[Stale Clock] Phase 5: Client B reloading (triggers hydration)');
+      console.log('[Superseded Clock] Phase 5: Client B reloading (triggers hydration)');
 
       // This is the CRITICAL step - reload triggers fresh hydration
-      // With the bug, operations created during loadAllData would get stale clocks
+      // With the bug, operations created during loadAllData would get superseded clocks
       // Use goto instead of reload - more reliable with service workers
       await clientB.page.goto(clientB.page.url(), {
         waitUntil: 'domcontentloaded',
         timeout: 30000,
       });
       await clientB.page.waitForLoadState('networkidle');
-      console.log('[Stale Clock] Client B reloaded, hydration complete');
+      console.log('[Superseded Clock] Client B reloaded, hydration complete');
 
       // Navigate to work view and wait for imported task to appear
       await clientB.page.goto('/#/work-view');
       await clientB.page.waitForLoadState('networkidle');
       await waitForTask(clientB.page, 'E2E Import Test - Active Task With Subtask');
-      console.log('[Stale Clock] Client B showing imported data after reload');
+      console.log('[Superseded Clock] Client B showing imported data after reload');
 
       // ============ PHASE 6: Client B Syncs After Reload ============
-      console.log('[Stale Clock] Phase 6: Client B syncing after reload');
+      console.log('[Superseded Clock] Phase 6: Client B syncing after reload');
 
       // This sync should succeed - any ops created during hydration should have correct clocks
-      // With the bug, ops would be rejected as CONFLICT_STALE and treated as permanent rejection
+      // With the bug, ops would be rejected as CONFLICT_SUPERSEDED and treated as permanent rejection
       await clientB.sync.syncAndWait();
-      console.log('[Stale Clock] Client B synced after reload');
+      console.log('[Superseded Clock] Client B synced after reload');
 
       // Client A syncs to receive any merged ops from B
       await clientA.sync.syncAndWait();
-      console.log('[Stale Clock] Client A synced to receive B updates');
+      console.log('[Superseded Clock] Client A synced to receive B updates');
 
       // Brief wait for state to settle
       await clientA.page.waitForTimeout(1000);
       await clientB.page.waitForTimeout(1000);
 
       // ============ PHASE 7: Verify Consistent State ============
-      console.log('[Stale Clock] Phase 7: Verifying consistent state');
+      console.log('[Superseded Clock] Phase 7: Verifying consistent state');
 
       // Navigate both to work view
       await clientA.page.goto('/#/work-view');
@@ -197,7 +197,7 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
 
       await expect(importedTaskOnA).toBeVisible({ timeout: 5000 });
       await expect(importedTaskOnB).toBeVisible({ timeout: 5000 });
-      console.log('[Stale Clock] Both clients have imported tasks');
+      console.log('[Superseded Clock] Both clients have imported tasks');
 
       // Original task should be gone (clean slate from import)
       const originalTaskOnA = clientA.page.locator(`task:has-text("${taskToday}")`);
@@ -205,15 +205,15 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
 
       await expect(originalTaskOnA).not.toBeVisible({ timeout: 5000 });
       await expect(originalTaskOnB).not.toBeVisible({ timeout: 5000 });
-      console.log('[Stale Clock] Original tasks are gone (clean slate)');
+      console.log('[Superseded Clock] Original tasks are gone (clean slate)');
 
       // Check for sync error indicators
       // The snack bar would show if there were rejected ops
       const errorSnack = clientB.page.locator('simple-snack-bar.error');
       await expect(errorSnack).not.toBeVisible({ timeout: 2000 });
-      console.log('[Stale Clock] No sync errors on Client B');
+      console.log('[Superseded Clock] No sync errors on Client B');
 
-      console.log('[Stale Clock] Stale clock regression test PASSED!');
+      console.log('[Superseded Clock] Superseded clock regression test PASSED!');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);
@@ -223,7 +223,7 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
   /**
    * Regression test: Multiple reloads after SYNC_IMPORT don't cause accumulating errors
    *
-   * With the original bug, each reload could create more stale ops that get rejected.
+   * With the original bug, each reload could create more superseded ops that get rejected.
    * This test verifies that multiple reload cycles don't cause accumulating issues.
    */
   test('Multiple reloads after SYNC_IMPORT remain stable (no accumulating errors)', async ({
@@ -298,7 +298,7 @@ test.describe('@supersync @regression Stale Clock Regression', () => {
         const isErrorVisible = await errorSnack.isVisible().catch(() => false);
         if (isErrorVisible) {
           throw new Error(
-            `Sync error appeared on reload cycle ${cycle} - stale clock bug may not be fixed`,
+            `Sync error appeared on reload cycle ${cycle} - superseded clock bug may not be fixed`,
           );
         }
 

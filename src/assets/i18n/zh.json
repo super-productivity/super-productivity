@@ -1929,7 +1929,7 @@
     },
     "LANG": {
       "AR": "عربى",
-      "CZ": "Czech",
+      "CS": "Czech",
       "DE": "Deutsch",
       "EN": "English",
       "ES": "Español",
@@ -1965,6 +1965,9 @@
       "TIME_LOCALE_RU_RU": "俄语：24小时制，日.月.年",
       "TIME_LOCALE_TR_TR": "土耳其语：24小时制，日.月.年",
       "TIME_LOCALE_ZH_CN": "简体中文：24小时制，年/月/日",
+      "TIME_LOCALE_CS_CZ": "捷克语：24小时制，日. 月. 年",
+      "TIME_LOCALE_SK_SK": "斯洛伐克语：24小时制，日. 月. 年",
+      "TIME_LOCALE_UK_UA": "乌克兰语：24小时制，日.月.年",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
@@ -2224,13 +2227,6 @@
     "TRIGGER_SYNC": "同步！",
     "UNPLAN_ALL_TASKS": "取消计划所有任务",
     "WORKLOG": "工作日志"
-  },
-  "MIGRATE": {
-    "C_DOWNLOAD_BACKUP": "您想要下载旧数据的备份（可用于旧版本的超级生产力）吗？",
-    "DETECTED_LEGACY": "检测到旧数据。我们将为您迁移它！",
-    "E_MIGRATION_FAILED": "迁移失败！错误：",
-    "E_RESTART_FAILED": "自动重启失败。请手动重启应用！",
-    "SUCCESS": "迁移全部完成！现在重启应用..."
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "从今日添加任务",

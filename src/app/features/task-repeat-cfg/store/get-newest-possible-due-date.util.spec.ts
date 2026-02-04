@@ -335,6 +335,42 @@ describe('getNewestPossibleDueDate()', () => {
     );
   });
 
+  describe('Biweekly with weekdays (#6298)', () => {
+    // Issue #6298: "Every 2 weeks Mon-Fri" starting Monday Feb 2, 2026
+    const START_DATE = new Date(2026, 1, 2); // Monday Feb 2, 2026
+
+    const biweeklyCfg = (lastCreationDay: string): TaskRepeatCfg =>
+      dummyRepeatable('BIWEEKLY', {
+        repeatCycle: 'WEEKLY',
+        repeatEvery: 2,
+        monday: true,
+        tuesday: true,
+        wednesday: true,
+        thursday: true,
+        friday: true,
+        lastTaskCreationDay: lastCreationDay,
+      });
+
+    it('should find Friday of week 0 when searching backward from that Friday', () => {
+      // Friday Feb 6 is in week 0 (active) — backward search should find it
+      const cfg = biweeklyCfg('1970-01-01');
+      testCase(cfg, new Date(2026, 1, 6), START_DATE, new Date(2026, 1, 6)); // Fri Feb 6
+    });
+
+    it('should NOT find Friday of week 1 (off-week)', () => {
+      // Friday Feb 13 is in week 1 (off) — backward search should find Thu Feb 5 at most
+      // but since last creation is already Feb 5, it returns null
+      const cfg = biweeklyCfg(getDbDateStr(new Date(2026, 1, 6)));
+      testCase(cfg, new Date(2026, 1, 13), START_DATE, null);
+    });
+
+    it('should find Monday of week 2 when today is that Monday', () => {
+      // Monday Feb 16 is in week 2 (active)
+      const cfg = biweeklyCfg(getDbDateStr(new Date(2026, 1, 6)));
+      testCase(cfg, new Date(2026, 1, 16), START_DATE, new Date(2026, 1, 16));
+    });
+  });
+
   describe('MONTHLY', () => {
     const testCases = [
       {

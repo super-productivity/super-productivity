@@ -182,10 +182,63 @@ sequenceDiagram
     Note over State: Either ALL changes applied<br/>or NONE (transaction semantics)
 ```
 
+## LWW Update Meta-Reducer: Entity Type Handling
+
+The `lwwUpdateMetaReducer` handles LWW Update actions (created when the local side wins a conflict). It distinguishes between three entity storage patterns:
+
+```mermaid
+flowchart TD
+    subgraph Input["LWW Update Action"]
+        Action["[TASK] LWW Update<br/>entityType + entityId + winningData"]
+    end
+
+    subgraph Lookup["Entity Registry Lookup"]
+        Registry["Look up entity storage pattern<br/>in entity registry"]
+    end
+
+    subgraph Patterns["Storage Pattern Handling"]
+        Adapter["ADAPTER ENTITIES<br/>━━━━━━━━━━━━━━━<br/>TASK, PROJECT, TAG, NOTE,<br/>TASK_REPEAT_CFG, ISSUE_PROVIDER,<br/>SIMPLE_COUNTER, BOARD, METRIC,<br/>REMINDER, PLUGIN_USER_DATA,<br/>PLUGIN_METADATA<br/>━━━━━━━━━━━━━━━<br/>adapter.updateOne() or addOne()<br/>+ relationship syncing"]
+
+        Singleton["SINGLETON ENTITIES<br/>━━━━━━━━━━━━━━━<br/>GLOBAL_CONFIG,<br/>TIME_TRACKING,<br/>MENU_TREE,<br/>WORK_CONTEXT<br/>━━━━━━━━━━━━━━━<br/>Entire feature state replaced<br/>with winning data"]
+
+        Unsupported["UNSUPPORTED<br/>━━━━━━━━━━━━━━━<br/>Map, array, virtual<br/>━━━━━━━━━━━━━━━<br/>Warning logged,<br/>no action taken"]
+    end
+
+    Input --> Lookup
+    Lookup --> Patterns
+
+    style Adapter fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style Singleton fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style Unsupported fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+```
+
+### Adapter Entity Details
+
+For adapter-backed entities, the meta-reducer handles two sub-cases:
+
+| Condition              | Behavior                                                  | Why                                                                                |
+| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Entity exists in store | `adapter.updateOne()` — replaces entity with winning data | Normal conflict resolution                                                         |
+| Entity NOT in store    | `adapter.addOne()` — recreates entity                     | Handles DELETE vs UPDATE race (entity was deleted locally but update won remotely) |
+
+### Relationship Syncing for Tasks
+
+After updating a task via LWW, the meta-reducer syncs related entity references:
+
+| Field Changed | Relationship Synced                                                |
+| ------------- | ------------------------------------------------------------------ |
+| `projectId`   | `project.taskIds` updated to reflect new/old project membership    |
+| `tagIds`      | `tag.taskIds` updated for each added/removed tag                   |
+| `dueDay`      | `TODAY_TAG.taskIds` updated (virtual tag, membership via `dueDay`) |
+| `parentId`    | `parent.subTaskIds` updated for new/old parent task                |
+
+**Key file:** `src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts`
+
 ## Key Files
 
-| File                                                                          | Purpose                           |
-| ----------------------------------------------------------------------------- | --------------------------------- |
-| `src/app/root-store/meta/task-shared-meta-reducers/`                          | Task-related multi-entity changes |
-| `src/app/root-store/meta/task-shared-meta-reducers/tag-shared.reducer.ts`     | Tag deletion with cleanup         |
-| `src/app/root-store/meta/task-shared-meta-reducers/project-shared.reducer.ts` | Project deletion with cleanup     |
+| File                                                                           | Purpose                                                   |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| `src/app/root-store/meta/task-shared-meta-reducers/`                           | Task-related multi-entity changes                         |
+| `src/app/root-store/meta/task-shared-meta-reducers/tag-shared.reducer.ts`      | Tag deletion with cleanup                                 |
+| `src/app/root-store/meta/task-shared-meta-reducers/project-shared.reducer.ts`  | Project deletion with cleanup                             |
+| `src/app/root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer.ts` | LWW Update handling (adapter/singleton/relationship sync) |

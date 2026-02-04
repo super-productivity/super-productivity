@@ -149,6 +149,38 @@ export class ArchiveStoreService {
   }
 
   /**
+   * Atomically saves both archiveYoung and archiveOld in a single transaction.
+   *
+   * This ensures that either both writes succeed or neither does, preventing
+   * data loss if a failure occurs between the two writes.
+   *
+   * @param archiveYoung The archiveYoung data to save.
+   * @param archiveOld The archiveOld data to save.
+   */
+  async saveArchivesAtomic(
+    archiveYoung: ArchiveModel,
+    archiveOld: ArchiveModel,
+  ): Promise<void> {
+    await this._ensureInit();
+    const tx = this.db.transaction(
+      [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
+      'readwrite',
+    );
+    const now = Date.now();
+    await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
+      id: SINGLETON_KEY,
+      data: archiveYoung,
+      lastModified: now,
+    });
+    await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
+      id: SINGLETON_KEY,
+      data: archiveOld,
+      lastModified: now,
+    });
+    await tx.done;
+  }
+
+  /**
    * Clears all archive data. Used for testing only.
    * @internal
    */

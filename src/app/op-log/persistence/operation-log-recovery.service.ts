@@ -122,7 +122,7 @@ export class OperationLogRecoveryService {
    * need to mark them as applied to prevent them appearing as orphaned.
    *
    * Operations pending for longer than PENDING_OPERATION_EXPIRY_MS are considered
-   * stale (likely due to data corruption or repeated failures) and are rejected
+   * superseded (likely due to data corruption or repeated failures) and are rejected
    * instead of replayed.
    */
   async recoverPendingRemoteOps(): Promise<void> {

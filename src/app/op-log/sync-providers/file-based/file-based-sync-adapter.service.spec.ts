@@ -398,6 +398,75 @@ describe('FileBasedSyncAdapterService', () => {
       expect(mockProvider.downloadFile).toHaveBeenCalledTimes(2);
     });
 
+    it('should force upload on retry when freshRev equals original revToMatch', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1 });
+      // Initial download returns rev-1
+      mockProvider.downloadFile.and.returnValue(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+      );
+
+      let uploadCalls = 0;
+      mockProvider.uploadFile.and.callFake(
+        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
+          uploadCalls++;
+          if (uploadCalls === 1) {
+            return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
+          }
+          return Promise.resolve({ rev: 'rev-2' });
+        },
+      );
+
+      // Download to populate cache with rev-1
+      await adapter.downloadOps(0);
+
+      // Re-download on retry also returns rev-1 (same rev = server timestamp inconsistency)
+      // mockProvider.downloadFile already returns rev-1
+
+      const op = createMockSyncOp();
+      const result = await adapter.uploadOps([op], 'client1');
+
+      expect(result.results[0].accepted).toBe(true);
+      expect(uploadCalls).toBe(2);
+
+      // Retry upload should be called with isForceOverwrite: true
+      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
+      expect(retryCall[3]).toBe(true); // isForceOverwrite
+    });
+
+    it('should use conditional upload on retry when freshRev differs', async () => {
+      const syncData = createMockSyncData({ syncVersion: 1 });
+      // Initial download returns rev-1
+      mockProvider.downloadFile.and.returnValues(
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-1' }),
+        // Re-download on retry returns rev-2 (different rev = real concurrent modification)
+        Promise.resolve({ dataStr: addPrefix(syncData), rev: 'rev-2' }),
+      );
+
+      let uploadCalls = 0;
+      mockProvider.uploadFile.and.callFake(
+        (_path: string, _dataStr: string, _rev: string | null, _force: boolean) => {
+          uploadCalls++;
+          if (uploadCalls === 1) {
+            return Promise.reject(new UploadRevToMatchMismatchAPIError('Rev mismatch'));
+          }
+          return Promise.resolve({ rev: 'rev-3' });
+        },
+      );
+
+      // Download to populate cache with rev-1
+      await adapter.downloadOps(0);
+
+      const op = createMockSyncOp();
+      const result = await adapter.uploadOps([op], 'client1');
+
+      expect(result.results[0].accepted).toBe(true);
+      expect(uploadCalls).toBe(2);
+
+      // Retry upload should be called with isForceOverwrite: false
+      const retryCall = mockProvider.uploadFile.calls.argsFor(1);
+      expect(retryCall[3]).toBe(false); // isForceOverwrite
+    });
+
     it('should clear cache after successful upload', async () => {
       const syncData = createMockSyncData({ syncVersion: 1 });
       mockProvider.downloadFile.and.returnValue(

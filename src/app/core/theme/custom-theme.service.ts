@@ -70,6 +70,12 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     url: 'assets/themes/catppuccin-mocha.css',
     requiredMode: 'dark',
   },
+  {
+    id: 'cybr',
+    name: 'Cybr (Cyberpunk)',
+    url: 'assets/themes/cybr.css',
+    requiredMode: 'dark',
+  },
 ];
 
 @Injectable({ providedIn: 'root' })

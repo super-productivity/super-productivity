@@ -418,7 +418,7 @@ When a SYNC_IMPORT or BACKUP_IMPORT operation is received, it represents an expl
 
 **Implementation Status:** Complete. See `SyncImportFilterService.filterOpsInvalidatedBySyncImport()`.
 
-### The Problem: Stale Operations After Import
+### The Problem: Superseded Operations After Import
 
 ```mermaid
 sequenceDiagram

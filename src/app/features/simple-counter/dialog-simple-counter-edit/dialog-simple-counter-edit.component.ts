@@ -68,7 +68,10 @@ export class DialogSimpleCounterEditComponent {
   private readonly _dateService = inject(DateService);
   private readonly _dateTimeFormatService = inject(DateTimeFormatService);
 
-  readonly dialogData = inject<{ simpleCounter: SimpleCounterCopy }>(MAT_DIALOG_DATA);
+  readonly dialogData = inject<{
+    simpleCounter: SimpleCounterCopy;
+    selectedDate?: string;
+  }>(MAT_DIALOG_DATA);
   readonly T = T;
   readonly SimpleCounterType = SimpleCounterType;
   readonly todayStr = this._dateService.todayStr();
@@ -79,7 +82,9 @@ export class DialogSimpleCounterEditComponent {
     'type',
     'isTrackStreaks',
     'streakMinValue',
+    'streakMode',
     'streakWeekDays',
+    'streakWeeklyFrequency',
     'countdownDuration',
   ];
 
@@ -92,7 +97,7 @@ export class DialogSimpleCounterEditComponent {
       : undefined,
   });
 
-  selectedDateStr = signal(this.todayStr);
+  selectedDateStr = signal(this.dialogData.selectedDate || this.todayStr);
 
   // Computed values
   readonly selectedValue = computed(() => {
@@ -154,7 +159,8 @@ export class DialogSimpleCounterEditComponent {
 
   readonly chartOptions: ChartConfiguration['options'] = {
     responsive: true,
-    maintainAspectRatio: false,
+    aspectRatio: 3,
+    maintainAspectRatio: true,
     scales: {
       y: {
         min: 0,

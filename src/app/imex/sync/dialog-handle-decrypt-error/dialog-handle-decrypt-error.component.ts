@@ -3,6 +3,7 @@ import {
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
+  MatDialogTitle,
 } from '@angular/material/dialog';
 import { T } from '../../../t.const';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -20,6 +21,7 @@ import { SyncConfigService } from '../sync-config.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MatDialogContent,
+    MatDialogTitle,
     MatFormField,
     MatLabel,
     MatInput,

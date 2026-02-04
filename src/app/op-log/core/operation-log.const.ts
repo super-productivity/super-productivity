@@ -8,7 +8,7 @@ import { InjectionToken } from '@angular/core';
  *
  * | Limit | Value | Constant | Notes |
  * |-------|-------|----------|-------|
- * | Vector clock clients | 8 | MAX_VECTOR_CLOCK_SIZE | Pruning keeps most active clients |
+ * | Vector clock clients | 10 | MAX_VECTOR_CLOCK_SIZE | Pruning keeps most active clients |
  * | Client ID length | ≥5 chars | (vector-clock.ts) | Throws error if shorter |
  * | Vector clock counter | MAX_SAFE_INTEGER-1000 | (vector-clock.ts) | Requires SYNC_IMPORT on overflow |
  * | Ops per upload batch | 25 | MAX_OPS_PER_UPLOAD_REQUEST | Reduced from 100 to avoid 413 errors |
@@ -205,14 +205,23 @@ export const DOWNLOAD_PAGE_SIZE = 500;
  * Maximum number of clients to track in a vector clock.
  * When exceeded, pruning keeps the most active clients (highest counter values).
  * The current client is always preserved regardless of activity level.
+ *
+ * Re-exported from @sp/shared-schema to ensure client and server use the same value.
  */
-export const MAX_VECTOR_CLOCK_SIZE = 8;
+export { MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
 
 /**
  * Minimum length for client IDs in vector clocks.
  * Short IDs are rejected to prevent accidental collisions.
  */
 export const MIN_CLIENT_ID_LENGTH = 5;
+
+/**
+ * Maximum retry attempts for re-uploading LWW (Last-Writer-Wins) local-win operations.
+ * After this many retries, the sync reports UNKNOWN_OR_CHANGED and retries on next sync.
+ * Default: 3
+ */
+export const MAX_LWW_REUPLOAD_RETRIES = 3;
 
 /**
  * Duration in milliseconds to suppress selector-based effects after sync completes.

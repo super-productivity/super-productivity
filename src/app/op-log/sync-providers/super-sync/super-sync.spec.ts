@@ -189,8 +189,11 @@ describe('SuperSyncProvider', () => {
     });
   });
 
-  describe('config caching', () => {
-    it('should cache config and only call privateCfg.load once for multiple operations', async () => {
+  describe('config loading', () => {
+    it('should call privateCfg.load for each operation (relies on SyncCredentialStore caching)', async () => {
+      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching. Each call to _cfgOrError now calls load(),
+      // but SyncCredentialStore returns cached value after first load.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       fetchSpy.and.returnValue(
         Promise.resolve({
@@ -204,11 +207,13 @@ describe('SuperSyncProvider', () => {
       await provider.downloadOps(1);
       await provider.downloadOps(2);
 
-      // privateCfg.load should only be called once due to caching
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
+      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
-    it('should cache server seq key and only call privateCfg.load once for multiple seq operations', async () => {
+    it('should call privateCfg.load for each server seq operation (relies on SyncCredentialStore caching)', async () => {
+      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       localStorageSpy.getItem.and.returnValue('10');
 
@@ -217,8 +222,8 @@ describe('SuperSyncProvider', () => {
       await provider.getLastServerSeq();
       await provider.getLastServerSeq();
 
-      // privateCfg.load should only be called once due to caching
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
+      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -605,8 +610,9 @@ describe('SuperSyncProvider', () => {
       );
     });
 
-    it('should clear cached config on auth failure', async () => {
-      // First call succeeds - config gets cached
+    it('should throw AuthFailSPError and allow next operation to proceed', async () => {
+      // Note: We removed the local caching in SuperSyncProvider since SyncCredentialStore
+      // already has its own in-memory caching. Each operation calls load() directly.
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       fetchSpy.and.returnValue(
         Promise.resolve({
@@ -634,7 +640,7 @@ describe('SuperSyncProvider', () => {
         expect(e).toBeInstanceOf(AuthFailSPError);
       }
 
-      // Third call should reload config from store (cache was cleared)
+      // Third call should succeed - config reloaded from SyncCredentialStore
       fetchSpy.and.returnValue(
         Promise.resolve({
           ok: true,
@@ -642,7 +648,8 @@ describe('SuperSyncProvider', () => {
         } as Response),
       );
       await provider.downloadOps(0);
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(2);
+      // Each operation calls load() directly (SyncCredentialStore handles caching)
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
     it('should throw AuthFailSPError for uploadOps on 401', async () => {
@@ -743,7 +750,7 @@ describe('SuperSyncProvider', () => {
       expect(result.newOps!.length).toBe(1);
     });
 
-    it('should return response with CONFLICT_STALE rejection', async () => {
+    it('should return response with CONFLICT_SUPERSEDED rejection', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       const mockResponse = {
@@ -751,8 +758,8 @@ describe('SuperSyncProvider', () => {
           {
             opId: 'op-123',
             accepted: false,
-            error: 'Stale operation: server has newer version of TASK:task-1',
-            errorCode: 'CONFLICT_STALE',
+            error: 'Superseded operation: server has newer version of TASK:task-1',
+            errorCode: 'CONFLICT_SUPERSEDED',
           },
         ],
         latestSeq: 5,
@@ -768,7 +775,7 @@ describe('SuperSyncProvider', () => {
       const result = await provider.uploadOps([createMockOperation()], 'client-1');
 
       expect(result.results[0].accepted).toBe(false);
-      expect(result.results[0].errorCode).toBe('CONFLICT_STALE');
+      expect(result.results[0].errorCode).toBe('CONFLICT_SUPERSEDED');
     });
 
     it('should return response with DUPLICATE_OPERATION rejection', async () => {

@@ -220,9 +220,12 @@ describe('Service Logic Integration', () => {
     conflictServiceSpy.autoResolveConflictsLWW.and.returnValue(
       Promise.resolve({ localWinOpsCreated: 0 }),
     );
-    // Intelligent mock that implements the actual conflict detection logic
+    // Simplified mock that implements core conflict detection logic.
+    // NOTE: Does not replicate the CONCURRENT + no-pending-ops entity-exists check
+    // from the real service (that check calls getCurrentEntityState to block ops for
+    // archived/deleted entities). This is acceptable for integration tests of the pipeline.
     conflictServiceSpy.checkOpForConflicts.and.callFake(
-      (
+      async (
         remoteOp: Operation,
         ctx: {
           localPendingOpsByEntity: Map<string, Operation[]>;
@@ -231,7 +234,10 @@ describe('Service Logic Integration', () => {
           snapshotEntityKeys: Set<string> | undefined;
           hasNoSnapshotClock: boolean;
         },
-      ): { isStaleOrDuplicate: boolean; conflict: EntityConflict | null } => {
+      ): Promise<{
+        isSupersededOrDuplicate: boolean;
+        conflict: EntityConflict | null;
+      }> => {
         const entityIdsToCheck =
           remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 
@@ -262,14 +268,14 @@ describe('Service Logic Integration', () => {
 
           const vcComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
 
-          // Skip stale operations (local already has newer state)
+          // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // No pending ops = no conflict possible
@@ -280,7 +286,7 @@ describe('Service Logic Integration', () => {
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
             return {
-              isStaleOrDuplicate: false,
+              isSupersededOrDuplicate: false,
               conflict: {
                 entityType: remoteOp.entityType,
                 entityId,
@@ -292,7 +298,7 @@ describe('Service Logic Integration', () => {
           }
         }
 
-        return { isStaleOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflict: null };
       },
     );
     applierSpy = jasmine.createSpyObj('OperationApplierService', ['applyOperations']);

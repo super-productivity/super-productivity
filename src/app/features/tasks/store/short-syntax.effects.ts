@@ -17,7 +17,7 @@ import {
 import { GlobalConfigService } from '../../config/global-config.service';
 import { unique } from '../../../util/unique';
 import { TaskService } from '../task.service';
-import { EMPTY, of } from 'rxjs';
+import { from, of } from 'rxjs';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { shortSyntax } from '../short-syntax';
@@ -103,120 +103,126 @@ export class ShortSyntaxEffects {
       ),
       mergeMap(([{ task, originalAction }, tags, projects, defaultProjectId]) => {
         const isReplaceTagIds = originalAction.type === TaskSharedActions.updateTask.type;
-        const r = shortSyntax(
-          task,
-          this._globalConfigService?.cfg()?.shortSyntax ||
-            DEFAULT_GLOBAL_CONFIG.shortSyntax,
-          tags,
-          projects,
-          undefined,
-          isReplaceTagIds ? 'replace' : 'combine',
-        );
-        if (environment.production) {
-          TaskLog.log('shortSyntax', r);
-        }
-        const isAddDefaultProjectIfNecessary: boolean =
-          !!defaultProjectId &&
-          !task.projectId &&
-          !task.parentId &&
-          task.projectId !== defaultProjectId &&
-          originalAction.type === TaskSharedActions.addTask.type;
-
-        if (!r) {
-          if (isAddDefaultProjectIfNecessary) {
-            return [
-              TaskSharedActions.moveToOtherProject({
-                task: { ...task, subTasks: [] },
-                targetProjectId: defaultProjectId as string,
-              }),
-            ];
-          }
-          return EMPTY;
-        }
-
-        const actions: Action[] = [];
-        const { taskChanges, attachments } = r;
-
-        // Build scheduling info from parsed short syntax
-        let schedulingInfo:
-          | {
-              day?: string;
-              isAddToTop?: boolean;
-              dueWithTime?: number;
-              remindAt?: number | null;
-              isMoveToBacklog?: boolean;
-            }
-          | undefined;
-
-        if (taskChanges.dueWithTime && !taskChanges.remindAt) {
-          const { dueWithTime } = taskChanges;
-          if (taskChanges.hasPlannedTime === false) {
-            // Plan for day only (no specific time)
-            const plannedDay = new Date(dueWithTime);
-            schedulingInfo = {
-              day: getDbDateStr(plannedDay),
-              isAddToTop: false,
-            };
-          } else {
-            // Schedule with specific time
-            schedulingInfo = {
-              dueWithTime,
-              remindAt: remindOptionToMilliseconds(
-                dueWithTime,
-                this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
-                  DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
-              ),
-              isMoveToBacklog: false,
-            };
-          }
-        }
-
-        // Determine target project
-        let targetProjectId: string | undefined;
-        if (r.projectId && r.projectId !== task.projectId && !task.parentId) {
-          if (task.repeatCfgId) {
-            this._snackService.open({
-              ico: 'warning',
-              msg: T.F.TASK.S.CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK,
-            });
-          } else {
-            targetProjectId = r.projectId;
-          }
-        } else if (isAddDefaultProjectIfNecessary) {
-          targetProjectId = defaultProjectId as string;
-        }
-
-        // Build task changes including tagIds update
-        const tagIds: string[] = [...(r.taskChanges.tagIds || task.tagIds)];
-        const isEqualTags = JSON.stringify(tagIds) === JSON.stringify(task.tagIds);
-        const finalTaskChanges = { ...taskChanges };
-        if (tagIds && tagIds.length && !isEqualTags) {
-          finalTaskChanges.tagIds = unique(tagIds);
-        }
-
-        // Add parsed URL attachments to task (merge with existing)
-        if (attachments.length > 0) {
-          finalTaskChanges.attachments = [...(task.attachments || []), ...attachments];
-        }
-
-        // Use compound action for atomic state update
-        actions.push(
-          TaskSharedActions.applyShortSyntax({
+        return from(
+          shortSyntax(
             task,
-            taskChanges: finalTaskChanges,
-            targetProjectId,
-            schedulingInfo,
+            this._globalConfigService?.cfg()?.shortSyntax ||
+              DEFAULT_GLOBAL_CONFIG.shortSyntax,
+            tags,
+            projects,
+            undefined,
+            isReplaceTagIds ? 'replace' : 'combine',
+          ).then((r) => {
+            if (environment.production) {
+              TaskLog.log('shortSyntax', r);
+            }
+            const isAddDefaultProjectIfNecessary: boolean =
+              !!defaultProjectId &&
+              !task.projectId &&
+              !task.parentId &&
+              task.projectId !== defaultProjectId &&
+              originalAction.type === TaskSharedActions.addTask.type;
+
+            if (!r) {
+              if (isAddDefaultProjectIfNecessary) {
+                return [
+                  TaskSharedActions.moveToOtherProject({
+                    task: { ...task, subTasks: [] },
+                    targetProjectId: defaultProjectId as string,
+                  }),
+                ];
+              }
+              return [] as Action[];
+            }
+
+            const actions: Action[] = [];
+            const { taskChanges, attachments } = r;
+
+            // Build scheduling info from parsed short syntax
+            let schedulingInfo:
+              | {
+                  day?: string;
+                  isAddToTop?: boolean;
+                  dueWithTime?: number;
+                  remindAt?: number | null;
+                  isMoveToBacklog?: boolean;
+                }
+              | undefined;
+
+            if (taskChanges.dueWithTime && !taskChanges.remindAt) {
+              const { dueWithTime } = taskChanges;
+              if (taskChanges.hasPlannedTime === false) {
+                // Plan for day only (no specific time)
+                const plannedDay = new Date(dueWithTime);
+                schedulingInfo = {
+                  day: getDbDateStr(plannedDay),
+                  isAddToTop: false,
+                };
+              } else {
+                // Schedule with specific time
+                schedulingInfo = {
+                  dueWithTime,
+                  remindAt: remindOptionToMilliseconds(
+                    dueWithTime,
+                    this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+                      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
+                  ),
+                  isMoveToBacklog: false,
+                };
+              }
+            }
+
+            // Determine target project
+            let targetProjectId: string | undefined;
+            if (r.projectId && r.projectId !== task.projectId && !task.parentId) {
+              if (task.repeatCfgId) {
+                this._snackService.open({
+                  ico: 'warning',
+                  msg: T.F.TASK.S.CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK,
+                });
+              } else {
+                targetProjectId = r.projectId;
+              }
+            } else if (isAddDefaultProjectIfNecessary) {
+              targetProjectId = defaultProjectId as string;
+            }
+
+            // Build task changes including tagIds update
+            const tagIds: string[] = [...(r.taskChanges.tagIds || task.tagIds)];
+            const isEqualTags = JSON.stringify(tagIds) === JSON.stringify(task.tagIds);
+            const finalTaskChanges = { ...taskChanges };
+            if (tagIds && tagIds.length && !isEqualTags) {
+              finalTaskChanges.tagIds = unique(tagIds);
+            }
+
+            // Add parsed URL attachments to task (merge with existing)
+            if (attachments.length > 0) {
+              finalTaskChanges.attachments = [
+                ...(task.attachments || []),
+                ...attachments,
+              ];
+            }
+
+            // Use compound action for atomic state update
+            actions.push(
+              TaskSharedActions.applyShortSyntax({
+                task,
+                taskChanges: finalTaskChanges,
+                targetProjectId,
+                schedulingInfo,
+              }),
+            );
+
+            // New tag creation requires user confirmation, so remains separate
+            if (r.newTagTitles.length) {
+              actions.push(
+                addNewTagsFromShortSyntax({ taskId: task.id, newTitles: r.newTagTitles }),
+              );
+            }
+
+            return actions;
           }),
-        );
-
-        // New tag creation requires user confirmation, so remains separate
-        if (r.newTagTitles.length) {
-          actions.push(
-            addNewTagsFromShortSyntax({ taskId: task.id, newTitles: r.newTagTitles }),
-          );
-        }
-
-        return actions;
+        ).pipe(mergeMap((actions) => actions));
       }),
     ),
   );

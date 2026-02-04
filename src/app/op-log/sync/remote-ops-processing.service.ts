@@ -72,7 +72,10 @@ export class RemoteOpsProcessingService {
    * @param remoteOps - Operations received from remote storage
    * @returns Object with processing results including filter metadata
    */
-  async processRemoteOps(remoteOps: Operation[]): Promise<{
+  async processRemoteOps(
+    remoteOps: Operation[],
+    options?: { skipConflictDetection?: boolean },
+  ): Promise<{
     localWinOpsCreated: number;
     allOpsFilteredBySyncImport: boolean;
     filteredOpCount: number;
@@ -249,7 +252,27 @@ export class RemoteOpsProcessingService {
     // Compare remote ops against local pending ops using vector clocks.
     // NOTE: A client with 0 pending ops can still have an entity frontier from
     // already-synced ops. The frontier tracks ALL applied ops, not just pending.
+    //
+    // SKIP when skipConflictDetection is true (e.g., forceDownloadRemoteState).
+    // The user has explicitly chosen to accept server state — conflict detection
+    // is semantically wrong because the NgRx store was just reset to empty state,
+    // causing all entities to appear missing and CONCURRENT ops to be discarded.
     // ─────────────────────────────────────────────────────────────────────────
+
+    if (options?.skipConflictDetection) {
+      OpLog.normal(
+        'RemoteOpsProcessingService: Skipping conflict detection (skipConflictDetection=true). ' +
+          `Applying ${validOps.length} ops directly.`,
+      );
+      await this.applyNonConflictingOps(validOps);
+      await this.validateAfterSync();
+      return {
+        localWinOpsCreated: 0,
+        allOpsFilteredBySyncImport: false,
+        filteredOpCount: 0,
+        isLocalUnsyncedImport: false,
+      };
+    }
 
     // CRITICAL: Acquire the same lock used by writeOperation effects.
     // This ensures:
@@ -515,7 +538,7 @@ export class RemoteOpsProcessingService {
    * | Result       | Meaning                        | Action                    |
    * |--------------|--------------------------------|---------------------------|
    * | LESS_THAN    | Remote is newer                | Apply (non-conflicting)   |
-   * | GREATER_THAN | Local is newer (remote stale)  | Skip remote op            |
+   * | GREATER_THAN | Local is newer (remote superseded) | Skip remote op       |
    * | EQUAL        | Same op (duplicate)            | Skip remote op            |
    * | CONCURRENT   | True conflict                  | Add to conflicts list     |
    *
@@ -550,7 +573,7 @@ export class RemoteOpsProcessingService {
     const CONFLICT_CHECK_BATCH_SIZE = 100;
     for (let i = 0; i < remoteOps.length; i++) {
       const remoteOp = remoteOps[i];
-      const result = this.conflictResolutionService.checkOpForConflicts(remoteOp, {
+      const result = await this.conflictResolutionService.checkOpForConflicts(remoteOp, {
         localPendingOpsByEntity,
         appliedFrontierByEntity,
         snapshotVectorClock,
@@ -560,7 +583,7 @@ export class RemoteOpsProcessingService {
 
       if (result.conflict) {
         conflicts.push(result.conflict);
-      } else if (!result.isStaleOrDuplicate) {
+      } else if (!result.isSupersededOrDuplicate) {
         nonConflicting.push(remoteOp);
       }
 

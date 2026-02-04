@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { openDB, IDBPDatabase } from 'idb';
-import { PFLog } from '../log';
+import { OpLog } from '../log';
 
 // Database constants - must match PFAPI's storage
 const DB_NAME = 'pf';
@@ -49,7 +49,7 @@ export class ClientIdService {
     const isNewFormat = /^[BEAI]_[a-zA-Z0-9]{4}$/.test(clientId);
 
     if (!isOldFormat && !isNewFormat) {
-      PFLog.critical('ClientIdService.loadClientId() Invalid clientId loaded:', {
+      OpLog.critical('ClientIdService.loadClientId() Invalid clientId loaded:', {
         clientId,
         length: clientId.length,
       });
@@ -57,7 +57,7 @@ export class ClientIdService {
     }
 
     this._cachedClientId = clientId;
-    PFLog.normal('ClientIdService.loadClientId() loaded:', { clientId });
+    OpLog.normal('ClientIdService.loadClientId() loaded:', { clientId });
     return clientId;
   }
 
@@ -76,7 +76,7 @@ export class ClientIdService {
     await db.put(DB_STORE_NAME, newClientId, CLIENT_ID_KEY);
 
     this._cachedClientId = newClientId;
-    PFLog.normal('ClientIdService.generateNewClientId() generated:', { newClientId });
+    OpLog.normal('ClientIdService.generateNewClientId() generated:', { newClientId });
     return newClientId;
   }
 

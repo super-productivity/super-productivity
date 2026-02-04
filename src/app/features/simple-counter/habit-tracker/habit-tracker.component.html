@@ -1,0 +1,154 @@
+<div class="habit-tracker-container">
+  <div class="navigation-bar">
+    <div class="nav-controls">
+      <button
+        mat-icon-button
+        (click)="prevWeek()"
+        [matTooltip]="T.F.SIMPLE_COUNTER.HABIT_TRACKER.PREV_WEEK | translate"
+      >
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+      <span class="range-label">{{ dateRangeLabel() }}</span>
+      <button
+        mat-icon-button
+        (click)="nextWeek()"
+        [matTooltip]="T.F.SIMPLE_COUNTER.HABIT_TRACKER.NEXT_WEEK | translate"
+        [disabled]="dayOffset() >= 0"
+      >
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+    <div class="nav-controls">
+      <button
+        mat-button
+        (click)="resetToToday()"
+        class="today-btn"
+        [disabled]="dayOffset() === 0"
+      >
+        {{ T.F.SIMPLE_COUNTER.HABIT_TRACKER.TODAY | translate }}
+      </button>
+      <button
+        mat-icon-button
+        (click)="openManageHabits()"
+        [matTooltip]="T.F.SIMPLE_COUNTER.HABIT_TRACKER.MANAGE_HABITS | translate"
+      >
+        <mat-icon>settings</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="habit-grid">
+    <div class="header-row">
+      <div
+        class="habit-label"
+        [class.compact]="isCompactView()"
+      >
+        <button
+          mat-icon-button
+          (click)="toggleCompactView()"
+          [matTooltip]="isCompactView() ? 'Hide Names' : 'Show Names'"
+          class="compact-toggle-btn"
+        >
+          <mat-icon>{{
+            isCompactView() ? 'keyboard_arrow_right' : 'keyboard_arrow_left'
+          }}</mat-icon>
+        </button>
+      </div>
+      @for (day of days(); track day) {
+        <div class="day-header">
+          <div class="day-name">{{ parseDateLocal(day) | date: 'EEE' }}</div>
+          <div class="day-date">{{ parseDateLocal(day) | date: 'dd' }}</div>
+        </div>
+      }
+    </div>
+
+    @for (counter of simpleCounters(); track counter.id) {
+      <div class="habit-row">
+        <div
+          class="habit-title"
+          [class.compact]="isCompactView()"
+          [matTooltip]="counter.title"
+          (click)="openEditSettings(counter)"
+          (contextmenu)="openEditSettings(counter); $event.preventDefault()"
+        >
+          @if (counter.icon && counter.icon.startsWith(':')) {
+            <mat-icon
+              [svgIcon]="counter.icon"
+              class="habit-icon"
+            ></mat-icon>
+          } @else if (counter.icon) {
+            <mat-icon class="habit-icon">{{ counter.icon }}</mat-icon>
+          } @else {
+            <div class="habit-initial">{{ counter.title.charAt(0).toUpperCase() }}</div>
+          }
+          <span
+            class="habit-name"
+            [class.visible]="isCompactView()"
+            >{{ counter.title }}</span
+          >
+        </div>
+        @for (day of days(); track day) {
+          <div
+            class="day-cell"
+            (click)="onCellClick(counter, day)"
+            (contextmenu)="onCellContextMenu($event, counter, day)"
+            (mousedown)="onPressStart(counter, day)"
+            (mouseup)="onPressEnd()"
+            (mouseleave)="onPressEnd()"
+            (touchstart)="onPressStart(counter, day)"
+            (touchend)="onPressEnd()"
+          >
+            <div
+              class="check-circle"
+              [class.is-done]="getVal(counter, day) >= (counter.streakMinValue || 1)"
+            >
+              @if (
+                getProgress(counter, day) > 0 &&
+                getProgress(counter, day) < 100 &&
+                !isSimpleCompletion(counter)
+              ) {
+                <svg
+                  class="progress-ring"
+                  viewBox="0 0 32 32"
+                >
+                  <circle
+                    class="progress-ring-circle"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    fill="transparent"
+                    r="14"
+                    cx="16"
+                    cy="16"
+                    [style.stroke-dasharray]="'88 88'"
+                    [style.stroke-dashoffset]="
+                      88 - (88 * getProgress(counter, day)) / 100
+                    "
+                  ></circle>
+                </svg>
+              }
+              @if (isSimpleCompletion(counter) && getVal(counter, day) > 0) {
+                <mat-icon>check</mat-icon>
+              } @else if (getDisplayValue(counter, day)) {
+                <span class="value-text">{{ getDisplayValue(counter, day) }}</span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="footer-actions">
+    <button
+      mat-stroked-button
+      tabindex="1"
+      (click)="addHabit()"
+      class="add-habit-btn"
+    >
+      <mat-icon>playlist_add</mat-icon>
+      <span class="mdc-button__label">{{
+        T.F.SIMPLE_COUNTER.HABIT_TRACKER.ADD_HABIT | translate
+      }}</span>
+    </button>
+  </div>
+</div>

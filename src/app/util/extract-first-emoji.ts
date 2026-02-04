@@ -1,11 +1,19 @@
 /**
- * Ultra-fast emoji extraction and validation using Unicode code points.
- * No regex overhead - uses optimized Unicode code point detection.
+ * Emoji extraction and validation using Intl.Segmenter for correct
+ * handling of compound emojis (ZWJ sequences, flags, keycaps).
  */
+
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/**
+ * Maximum UTF-16 code unit length for a single emoji grapheme.
+ * Longest real emoji (family with skin tones) is ~25 code units.
+ * Guards against abusive ZWJ chains.
+ */
+const MAX_EMOJI_LENGTH = 30;
 
 /**
  * Checks if a code point is within emoji ranges.
- * Shared logic between extractFirstEmoji and isSingleEmoji.
  */
 const isEmojiCodePoint = (codePoint: number): boolean => {
   return (
@@ -27,8 +35,34 @@ const isEmojiCodePoint = (codePoint: number): boolean => {
 };
 
 /**
- * Extracts the first emoji from a string using fast code point detection.
- * This approach is ~2x faster than regex and handles complex emojis correctly.
+ * Checks if a grapheme segment represents an emoji.
+ * Scans all code points for emoji code points, variation selectors (0xFE0F),
+ * or keycap marks (0x20E3). Keycap emojis start with ASCII (e.g. #️⃣),
+ * so we can't just check the first code point.
+ */
+const isEmojiGrapheme = (segment: string): boolean => {
+  if (segment.length > MAX_EMOJI_LENGTH) {
+    return false;
+  }
+
+  let i = 0;
+  while (i < segment.length) {
+    const codePoint = segment.codePointAt(i)!;
+    if (
+      isEmojiCodePoint(codePoint) ||
+      codePoint === 0xfe0f || // Variation selector
+      codePoint === 0x20e3 // Combining enclosing keycap
+    ) {
+      return true;
+    }
+    i += codePoint > 0xffff ? 2 : 1;
+  }
+  return false;
+};
+
+/**
+ * Extracts the first emoji from a string.
+ * Correctly handles compound emojis (ZWJ sequences, flags, keycaps).
  *
  * @param str - The string to extract emoji from
  * @returns The first emoji found, or empty string if none found
@@ -43,40 +77,10 @@ export const extractFirstEmoji = (str: string): string => {
     return '';
   }
 
-  // Find first emoji using code points
-  let i = 0;
-  while (i < trimmed.length) {
-    const codePoint = trimmed.codePointAt(i);
-    if (!codePoint) {
-      i++;
-      continue;
+  for (const { segment } of segmenter.segment(trimmed)) {
+    if (isEmojiGrapheme(segment)) {
+      return segment;
     }
-
-    if (isEmojiCodePoint(codePoint)) {
-      // Found emoji start - now determine full emoji length
-      let emojiLength = codePoint > 0xffff ? 2 : 1;
-
-      // Check for skin tone modifier
-      if (i + emojiLength < trimmed.length) {
-        const nextCodePoint = trimmed.codePointAt(i + emojiLength);
-        if (nextCodePoint && nextCodePoint >= 0x1f3fb && nextCodePoint <= 0x1f3ff) {
-          emojiLength += 2; // Skin tone modifier
-        }
-      }
-
-      // Check for variation selector (like ️ in ❤️)
-      if (i + emojiLength < trimmed.length) {
-        const nextCodePoint = trimmed.codePointAt(i + emojiLength);
-        if (nextCodePoint === 0xfe0f) {
-          emojiLength += 1; // Variation selector
-        }
-      }
-
-      return trimmed.substring(i, i + emojiLength);
-    }
-
-    // Move to next character (accounting for surrogate pairs)
-    i += codePoint > 0xffff ? 2 : 1;
   }
 
   return '';
@@ -84,7 +88,6 @@ export const extractFirstEmoji = (str: string): string => {
 
 /**
  * Checks if a string contains exactly one emoji (with possible modifiers).
- * Uses the same fast code point approach as extractFirstEmoji.
  *
  * @param str - The string to check
  * @returns true if the string is a single emoji, false otherwise
@@ -99,37 +102,12 @@ export const isSingleEmoji = (str: string): boolean => {
     return false;
   }
 
-  const codePoint = trimmed.codePointAt(0);
-  if (!codePoint || !isEmojiCodePoint(codePoint)) {
-    return false;
-  }
-
-  // Calculate expected emoji length with modifiers
-  let expectedLength = codePoint > 0xffff ? 2 : 1;
-
-  // Check for skin tone modifier
-  if (trimmed.length > expectedLength) {
-    const nextCodePoint = trimmed.codePointAt(expectedLength);
-    if (nextCodePoint && nextCodePoint >= 0x1f3fb && nextCodePoint <= 0x1f3ff) {
-      expectedLength += 2; // Skin tone modifier
-    }
-  }
-
-  // Check for variation selector (like ️ in ❤️)
-  if (trimmed.length > expectedLength) {
-    const nextCodePoint = trimmed.codePointAt(expectedLength);
-    if (nextCodePoint === 0xfe0f) {
-      expectedLength += 1; // Variation selector
-    }
-  }
-
-  // Must be exactly one emoji (with possible modifiers)
-  return trimmed.length === expectedLength;
+  const segments = Array.from(segmenter.segment(trimmed));
+  return segments.length === 1 && isEmojiGrapheme(segments[0].segment);
 };
 
 /**
  * Fast check if a string contains any emoji.
- * More efficient than regex for this common use case.
  *
  * @param str - The string to check
  * @returns true if the string contains at least one emoji, false otherwise
@@ -144,21 +122,10 @@ export const containsEmoji = (str: string): boolean => {
     return false;
   }
 
-  // Scan string for any emoji code points
-  let i = 0;
-  while (i < trimmed.length) {
-    const codePoint = trimmed.codePointAt(i);
-    if (!codePoint) {
-      i++;
-      continue;
-    }
-
-    if (isEmojiCodePoint(codePoint)) {
+  for (const { segment } of segmenter.segment(trimmed)) {
+    if (isEmojiGrapheme(segment)) {
       return true;
     }
-
-    // Move to next character (accounting for surrogate pairs)
-    i += codePoint > 0xffff ? 2 : 1;
   }
 
   return false;

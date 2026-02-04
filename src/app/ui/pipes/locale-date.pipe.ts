@@ -31,6 +31,10 @@ export class LocaleDatePipe implements PipeTransform {
       this._lastLocale = effectiveLocale;
     }
 
+    if (value == null || (typeof value === 'number' && !Number.isFinite(value))) {
+      return null;
+    }
+
     return this._datePipe.transform(value, format, timezone, effectiveLocale);
   }
 }

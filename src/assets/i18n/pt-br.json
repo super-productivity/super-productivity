@@ -1590,7 +1590,7 @@
     },
     "LANG": {
       "AR": "Árabe",
-      "CZ": "Checo",
+      "CS": "Checo",
       "DE": "Alemão",
       "EN": "Inglês",
       "ES": "Espanhol",
@@ -1626,6 +1626,9 @@
       "TIME_LOCALE_RU_RU": "Russo - 24 horas",
       "TIME_LOCALE_TR_TR": "Turco - 24 horas",
       "TIME_LOCALE_ZH_CN": "Chinês (Simplificado) - 24 horas",
+      "TIME_LOCALE_CS_CZ": "Checo - 24 horas",
+      "TIME_LOCALE_SK_SK": "Eslovaco - 24 horas",
+      "TIME_LOCALE_UK_UA": "Ucraniano - 24 horas",
       "TITLE": "Idioma",
       "TR": "Turco",
       "UK": "Ucraniano",

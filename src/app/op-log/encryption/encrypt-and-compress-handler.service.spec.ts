@@ -1,4 +1,4 @@
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { JsonParseError } from '../core/errors/sync-errors';
 import { EncryptAndCompressHandlerService } from './encrypt-and-compress-handler.service';
 import { getErrorTxt } from '../../util/get-error-text';
@@ -12,9 +12,9 @@ describe('EncryptAndCompressHandlerService', () => {
 
   beforeEach(() => {
     service = new EncryptAndCompressHandlerService();
-    spyOn(PFLog, 'err').and.stub();
-    spyOn(PFLog, 'normal').and.stub();
-    spyOn(PFLog, 'log').and.stub();
+    spyOn(OpLog, 'err').and.stub();
+    spyOn(OpLog, 'normal').and.stub();
+    spyOn(OpLog, 'log').and.stub();
   });
 
   describe('decompressAndDecrypt', () => {
@@ -112,7 +112,7 @@ describe('EncryptAndCompressHandlerService', () => {
 
 describe('JsonParseError', () => {
   beforeEach(() => {
-    spyOn(PFLog, 'err').and.stub();
+    spyOn(OpLog, 'err').and.stub();
   });
 
   it('should extract position from SyntaxError message', () => {

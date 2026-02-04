@@ -379,47 +379,49 @@ export class SyncPage extends BasePage {
    */
   async disableEncryptionForFileBased(): Promise<void> {
     // Open sync settings dialog using right-click
-    // (normal click triggers sync when sync is configured, right-click opens settings)
     await this.syncBtn.click({ button: 'right' });
     const dialog = this.page.locator('mat-dialog-container, .mat-mdc-dialog-container');
     await dialog.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Wait for dialog to settle
+    // Wait for dialog content to render
     await this.page.waitForTimeout(500);
 
-    // The Disable Encryption button is in the encryption status box (main view, not Advanced)
-    // Scroll to ensure visibility if needed
+    // Click the Disable Encryption button (in the encryption status box, main view)
     await this.disableEncryptionBtn.scrollIntoViewIfNeeded();
     await this.disableEncryptionBtn.waitFor({ state: 'visible', timeout: 5000 });
     await this.disableEncryptionBtn.click();
 
-    // Wait for confirmation dialog to appear (it opens on top of the settings dialog)
-    // The confirmation dialog has title "Disable Encryption?"
+    // Wait for confirmation dialog "Disable Encryption?" to appear
     const confirmDialog = this.page.locator('mat-dialog-container').filter({
       hasText: 'Disable Encryption?',
     });
     await confirmDialog.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Click the confirm button in the confirmation dialog (the mat-flat-button with warn color)
+    // Click the confirm button
     const confirmBtn = confirmDialog.locator('button[mat-flat-button]');
     await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
     await confirmBtn.click();
 
-    // Wait for operation to complete - look for success snackbar or dialog close
-    await this.page.waitForTimeout(2000);
+    // Wait for confirmation dialog to close — this is the reliable completion signal.
+    // The operation uploads an unencrypted snapshot to WebDAV (network I/O),
+    // updates IndexedDB, and clears caches before closing the dialog.
+    // Use generous timeout for slow CI/network.
+    await confirmDialog.waitFor({ state: 'hidden', timeout: 30000 });
 
-    // Close any remaining dialogs
-    const dialogs = this.page.locator('mat-dialog-container');
-    const dialogCount = await dialogs.count();
-    for (let i = 0; i < dialogCount; i++) {
-      await this.page.keyboard.press('Escape');
-      await this.page.waitForTimeout(300);
+    // Both dialogs auto-close (confirmation via dialogRef.close(), then
+    // settings via closeAllDialogs()). Wait for all dialogs to be gone.
+    await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
+      timeout: 10000,
+    });
+
+    // Dismiss success snackbar if visible (could block sync button)
+    const snackBar = this.page.locator('.mat-mdc-snack-bar-container');
+    if (await snackBar.isVisible({ timeout: 500 }).catch(() => false)) {
+      const dismissBtn = snackBar.locator('button');
+      if (await dismissBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await dismissBtn.click().catch(() => {});
+      }
+      await snackBar.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
     }
-
-    // Ensure all dialogs are closed
-    await dialogs
-      .first()
-      .waitFor({ state: 'hidden', timeout: 5000 })
-      .catch(() => {});
   }
 }

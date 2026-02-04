@@ -3,7 +3,7 @@ import {
   MenuTreeState,
   MenuTreeTreeNode,
 } from '../../features/menu-tree/store/menu-tree.model';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 
 /**
  * Repairs menuTree by removing orphaned project/tag references
@@ -17,7 +17,7 @@ export const repairMenuTree = (
   validProjectIds: Set<string>,
   validTagIds: Set<string>,
 ): MenuTreeState => {
-  PFLog.log('Repairing menuTree - removing orphaned references');
+  OpLog.log('Repairing menuTree - removing orphaned references');
 
   /**
    * Recursively filters tree nodes, removing orphaned project/tag references
@@ -41,18 +41,18 @@ export const repairMenuTree = (
         if (validProjectIds.has(node.id)) {
           filtered.push(node);
         } else {
-          PFLog.log(`Removing orphaned project reference ${node.id} from ${treeType}`);
+          OpLog.log(`Removing orphaned project reference ${node.id} from ${treeType}`);
         }
       } else if (treeType === 'tagTree' && node.k === MenuTreeKind.TAG) {
         // Keep tag only if it exists
         if (validTagIds.has(node.id)) {
           filtered.push(node);
         } else {
-          PFLog.log(`Removing orphaned tag reference ${node.id} from ${treeType}`);
+          OpLog.log(`Removing orphaned tag reference ${node.id} from ${treeType}`);
         }
       } else {
         // kind mismatch or unknown
-        PFLog.warn(`Removing invalid node from ${treeType}:`, node);
+        OpLog.warn(`Removing invalid node from ${treeType}:`, node);
       }
     }
 

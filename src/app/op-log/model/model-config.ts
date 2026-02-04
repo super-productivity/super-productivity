@@ -47,7 +47,7 @@ import { initialTimeTrackingState } from '../../features/time-tracking/store/tim
 import { appDataValidators, validateFull } from '../validation/validation-fn';
 import { fixEntityStateConsistency } from '../../util/check-fix-entity-state-consistency';
 import { IValidation } from 'typia';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { alertDialog } from '../../util/native-dialogs';
 import {
   initialPluginMetaDataState,
@@ -237,7 +237,7 @@ export const SYNC_CONFIG: BaseSyncConfig<AllModelConfig> = {
     const result = validateFull(data);
 
     if (!environment.production && !result.isValid) {
-      PFLog.log(result);
+      OpLog.log(result);
       alertDialog('VALIDATION ERROR');
     }
 
@@ -262,7 +262,7 @@ export const SYNC_CONFIG: BaseSyncConfig<AllModelConfig> = {
     return result.typiaResult;
   },
   onDbError: (err) => {
-    PFLog.err(err);
+    OpLog.err(err);
     alertDialog('DB ERROR: ' + err);
   },
   repair: (data: unknown, errors: IValidation.IError[]) => {

@@ -1,7 +1,7 @@
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import { SyncProviderId, PRIVATE_CFG_PREFIX } from './provider.const';
 import { PrivateCfgByProviderId } from '../core/types/sync.types';
-import { PFLog } from '../../core/log';
+import { SyncLog } from '../../core/log';
 
 /**
  * New database configuration for sync credentials.
@@ -78,7 +78,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
    * Automatically migrates from legacy database if needed.
    */
   async load(): Promise<PrivateCfgByProviderId<PID> | null> {
-    PFLog.verbose(
+    SyncLog.verbose(
       `${SyncCredentialStore.L}.${this.load.name}`,
       this._providerId,
       typeof this._privateCfgInMemory,
@@ -109,7 +109,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
 
       return loadedConfig ?? null;
     } catch (error) {
-      PFLog.critical(`Failed to load credentials: ${error}`);
+      SyncLog.critical(`Failed to load credentials: ${error}`);
       throw new Error(`Failed to load credentials: ${error}`);
     }
   }
@@ -149,7 +149,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
    * Clears the provider's credentials.
    */
   async clear(): Promise<void> {
-    PFLog.normal(`${SyncCredentialStore.L}.clear()`, this._providerId);
+    SyncLog.normal(`${SyncCredentialStore.L}.clear()`, this._providerId);
 
     this._privateCfgInMemory = undefined;
 
@@ -157,7 +157,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
       const db = await this._ensureDb();
       await db.delete(DB_STORE_NAME, this._dbKey);
     } catch (error) {
-      PFLog.critical(`Failed to clear credentials: ${error}`);
+      SyncLog.critical(`Failed to clear credentials: ${error}`);
       throw new Error(`Failed to clear credentials: ${error}`);
     }
   }
@@ -181,17 +181,17 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
           // Create the credentials store if it doesn't exist
           if (!database.objectStoreNames.contains(DB_STORE_NAME)) {
             database.createObjectStore(DB_STORE_NAME);
-            PFLog.normal(
+            SyncLog.normal(
               `[${SyncCredentialStore.L}] Created ${DB_STORE_NAME} object store`,
             );
           }
         },
       });
-      PFLog.verbose(
+      SyncLog.verbose(
         `[${SyncCredentialStore.L}] Database connection initialized for ${this._providerId}`,
       );
     } catch (e) {
-      PFLog.err(`[${SyncCredentialStore.L}] Failed to initialize database`, e);
+      SyncLog.err(`[${SyncCredentialStore.L}] Failed to initialize database`, e);
       this._initPromise = undefined; // Allow retry
       throw e;
     }
@@ -239,7 +239,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
       legacyDb.close();
 
       if (legacyConfig) {
-        PFLog.normal(
+        SyncLog.normal(
           `[${SyncCredentialStore.L}] Migrating credentials for ${this._providerId} from legacy database`,
         );
 
@@ -250,7 +250,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
 
       return null;
     } catch (error) {
-      PFLog.warn(
+      SyncLog.warn(
         `[${SyncCredentialStore.L}] Failed to migrate from legacy database (this is ok for new installs): ${error}`,
       );
       return null;
@@ -266,7 +266,7 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
     const encryptKeyInfo = cfgWithRedacted?.encryptKey
       ? `[length=${cfgWithRedacted.encryptKey.length}]`
       : '[not set]';
-    PFLog.normal(
+    SyncLog.normal(
       `${SyncCredentialStore.L}._save()`,
       this._providerId,
       `encryptKey=${encryptKeyInfo}`,
@@ -286,13 +286,13 @@ export class SyncCredentialStore<PID extends SyncProviderId> {
     try {
       const db = await this._ensureDb();
       await db.put(DB_STORE_NAME, privateCfg, this._dbKey);
-      PFLog.normal(
+      SyncLog.normal(
         `${SyncCredentialStore.L}._save() SUCCESS`,
         this._providerId,
         `wrote to ${DB_STORE_NAME}/${this._dbKey}`,
       );
     } catch (error) {
-      PFLog.critical(`Failed to save credentials: ${error}`);
+      SyncLog.critical(`Failed to save credentials: ${error}`);
       throw new Error(`Failed to save credentials: ${error}`);
     }
   }

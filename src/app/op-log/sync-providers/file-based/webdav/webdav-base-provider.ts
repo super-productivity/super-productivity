@@ -112,7 +112,7 @@ export abstract class WebdavBaseProvider<
       path: filePath,
     });
 
-    if (!result.dataStr && result.dataStr !== '') {
+    if (result.dataStr == null) {
       throw new InvalidDataSPError(targetPath);
     }
     if (typeof result.rev !== 'string') {

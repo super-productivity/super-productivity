@@ -1,0 +1,389 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 8px;
+}
+
+.habit-tracker-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.navigation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 8px;
+  margin-bottom: 16px;
+  padding: 0 4px;
+
+  @media (max-width: 600px) {
+    margin-bottom: 12px;
+  }
+
+  [mat-icon-button] {
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-label {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 120px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.today-btn {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.add-habit-btn {
+  font-size: 13px;
+  margin-left: 8px;
+
+  mat-icon {
+    margin-right: 4px;
+  }
+}
+
+.habit-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.header-row {
+  display: flex;
+  margin-bottom: 4px;
+  align-items: flex-end;
+}
+
+.habit-label {
+  flex: 0 0 40px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &.compact {
+    // Match the habit-title compact width (3 columns)
+    flex: 3 1 0px;
+    min-width: 90px;
+    max-width: 300px;
+    justify-content: flex-start;
+    padding: 0 8px;
+  }
+
+  @media (max-width: 600px) {
+    flex: 0 0 36px;
+    width: 36px;
+
+    &.compact {
+      flex: 3 1 0px;
+      min-width: 96px;
+      max-width: 300px;
+      padding: 0 6px;
+    }
+  }
+
+  .compact-toggle-btn {
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+    width: 32px;
+    height: 32px;
+
+    &:hover {
+      opacity: 1;
+    }
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+    }
+  }
+}
+
+.day-header {
+  flex: 1 1 0px;
+  min-width: 30px;
+  max-width: 100px;
+  text-align: center;
+  font-size: 11px;
+  opacity: 0.7;
+
+  @media (max-width: 600px) {
+    min-width: 32px;
+    font-size: 10px;
+  }
+
+  .day-name {
+    text-transform: uppercase;
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+
+  .day-date {
+    font-size: 10px;
+
+    @media (max-width: 600px) {
+      font-size: 9px;
+    }
+  }
+}
+
+.habit-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+
+  @include darkTheme() {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+  }
+
+  @include lightTheme() {
+    border-bottom-color: rgba(0, 0, 0, 0.15);
+  }
+}
+
+.habit-title {
+  flex: 0 0 40px;
+  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  gap: 8px;
+
+  &:hover {
+    opacity: 0.7;
+  }
+
+  &.compact {
+    // Take up the space of 3 day columns (since we're showing 4 instead of 7)
+    // Each day column is flex: 1 1 0px, so 3 columns = flex: 3 1 0px
+    flex: 3 1 0px;
+    min-width: 90px; // Minimum width for 3 columns
+    max-width: 300px; // Maximum width for 3 columns
+    justify-content: flex-start; // Icons left-aligned, text follows
+    padding: 0 8px;
+  }
+
+  @media (max-width: 600px) {
+    flex: 0 0 36px;
+    width: 36px;
+
+    &.compact {
+      flex: 3 1 0px;
+      min-width: 96px; // 3 * 32px minimum for mobile
+      max-width: 300px;
+      padding: 0 6px;
+      justify-content: flex-start; // Icons left-aligned, text follows
+    }
+  }
+
+  .habit-icon {
+    flex-shrink: 0;
+    opacity: 0.7;
+    font-size: 20px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    @media (max-width: 600px) {
+      font-size: 18px;
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  .habit-initial {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.8;
+    background-color: rgba(255, 255, 255, 0.1);
+
+    @include darkTheme() {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    @include lightTheme() {
+      background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 600px) {
+      width: 22px;
+      height: 22px;
+      font-size: 10px;
+    }
+  }
+
+  .habit-name {
+    display: none;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0; // Allow text to shrink and trigger ellipsis
+
+    &.visible {
+      display: block;
+    }
+
+    @media (max-width: 600px) {
+      font-size: 12px;
+    }
+  }
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+
+  .add-habit-btn {
+    opacity: 0.6;
+    transition: all 0.2s ease;
+    background-color: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    padding: 2px 16px;
+
+    &:hover {
+      opacity: 1;
+      background-color: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    }
+
+    mat-icon {
+      margin-right: 8px;
+    }
+
+    .mdc-button__label {
+      vertical-align: middle;
+      font-size: 13px;
+    }
+  }
+}
+
+.day-cell {
+  flex: 1 1 0px;
+  min-width: 30px;
+  max-width: 100px;
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+
+  @media (max-width: 600px) {
+    min-width: 32px;
+  }
+}
+
+.check-circle {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  max-width: 90%;
+  aspect-ratio: 1/1;
+
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+
+  @media (max-width: 600px) {
+    width: 30px;
+    height: 30px;
+    min-width: 28px;
+    border-width: 1.2px;
+  }
+
+  @include darkTheme() {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  @include lightTheme() {
+    border-color: rgba(0, 0, 0, 0.15);
+  }
+
+  &.is-done {
+    background-color: var(--c-accent);
+    border-color: var(--c-accent);
+    color: white;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+
+    @media (max-width: 600px) {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  .value-text {
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+
+    @media (max-width: 600px) {
+      font-size: 9px;
+    }
+  }
+
+  .progress-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    pointer-events: none;
+  }
+
+  .progress-ring-circle {
+    transition: stroke-dashoffset 0.3s;
+    color: var(--c-accent);
+  }
+}

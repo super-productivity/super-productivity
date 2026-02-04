@@ -26,6 +26,12 @@ import { filterOutId } from '../../../util/filter-out-id';
 // =============================================================================
 // ACTION HANDLERS
 // =============================================================================
+//
+// IMPORTANT: These handlers implement the dueDay/dueWithTime mutual exclusivity pattern.
+// When setting dueWithTime, dueDay is cleared (set to undefined).
+// See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
+//
+// =============================================================================
 
 const handleScheduleTaskWithTime = (
   state: RootState,
@@ -62,7 +68,10 @@ const handleScheduleTaskWithTime = (
         id: task.id,
         changes: {
           dueWithTime,
-          dueDay: undefined, // Mutual exclusivity: dueWithTime clears dueDay
+          // CRITICAL: Mutual exclusivity pattern - setting dueWithTime clears dueDay
+          // This prevents state inconsistency where both fields are set with conflicting dates
+          // See: docs/ai/dueDay-dueWithTime-mutual-exclusivity.md
+          dueDay: undefined,
           remindAt,
         },
       },

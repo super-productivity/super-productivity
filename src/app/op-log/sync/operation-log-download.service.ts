@@ -29,11 +29,10 @@ export type { DownloadResult } from '../core/types/sync-results.types';
 /**
  * Handles downloading remote operations from storage.
  *
- * CURRENT ARCHITECTURE (as of Dec 2025):
- * - Only SuperSync uses operation log sync (it implements OperationSyncCapable)
+ * CURRENT ARCHITECTURE:
  * - SuperSync uses API-based sync via `_downloadRemoteOpsViaApi()`
- * - Legacy providers (WebDAV, Dropbox, LocalFile) do NOT use operation log sync at all
- *   They use pfapi's model-level LWW sync instead (see sync.service.ts:104)
+ * - File-based providers (WebDAV, Dropbox, LocalFile) also use operation log sync
+ *   via `FileBasedSyncAdapterService` which creates `OperationSyncCapable` adapters
  *
  * This service only handles downloading and filtering - conflict detection
  * and application are handled by OperationLogSyncService.
@@ -115,7 +114,7 @@ export class OperationLogDownloadService implements OnDestroy {
       );
 
       if (forceFromSeq0) {
-        OpLog.warn(
+        OpLog.normal(
           'OperationLogDownloadService: Forced download from seq 0 to rebuild clock state',
         );
       }
@@ -168,7 +167,7 @@ export class OperationLogDownloadService implements OnDestroy {
 
         // Handle gap detection: server was reset or client has stale lastServerSeq
         if (response.gapDetected && !hasResetForGap) {
-          OpLog.warn(
+          OpLog.normal(
             `OperationLogDownloadService: Gap detected (sinceSeq=${sinceSeq}, latestSeq=${response.latestSeq}). ` +
               `Resetting to 0 and re-downloading.`,
           );
@@ -303,7 +302,7 @@ export class OperationLogDownloadService implements OnDestroy {
         !snapshotState
       ) {
         needsFullStateUpload = true;
-        OpLog.warn(
+        OpLog.normal(
           'OperationLogDownloadService: Server migration detected - gap on empty server. ' +
             'Full state upload will be required.',
         );

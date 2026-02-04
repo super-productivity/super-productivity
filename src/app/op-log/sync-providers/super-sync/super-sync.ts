@@ -1,4 +1,4 @@
-import { CapacitorHttp, Capacitor } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { SyncProviderId } from '../provider.const';
 import {
   SyncProviderServiceInterface,
@@ -26,6 +26,7 @@ import {
   compressWithGzipToString,
 } from '../../encryption/compression-handler';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { executeNativeRequestWithRetry } from '../native-http-retry';
 
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
 
@@ -57,10 +58,6 @@ export class SuperSyncProvider
 
   public privateCfg: SyncCredentialStore<SyncProviderId.SuperSync>;
 
-  // Caches to reduce repeated async loads during sync operations
-  private _cachedCfg?: SuperSyncPrivateCfg;
-  private _cachedServerSeqKey?: string;
-
   constructor(_basePath?: string) {
     // basePath is ignored - SuperSync uses operation-based sync only
     this.privateCfg = new SyncCredentialStore(SyncProviderId.SuperSync);
@@ -82,9 +79,6 @@ export class SuperSyncProvider
   }
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
-    // Invalidate caches when config changes
-    this._cachedCfg = undefined;
-    this._cachedServerSeqKey = undefined;
     await this.privateCfg.setComplete(cfg);
   }
 
@@ -359,14 +353,11 @@ export class SuperSyncProvider
   // === Private Helper Methods ===
 
   private async _cfgOrError(): Promise<SuperSyncPrivateCfg> {
-    if (this._cachedCfg) {
-      return this._cachedCfg;
-    }
+    // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
     if (!cfg) {
       throw new MissingCredentialsSPError();
     }
-    this._cachedCfg = cfg;
     return cfg;
   }
 
@@ -375,9 +366,7 @@ export class SuperSyncProvider
    * when switching between different accounts or servers.
    */
   private async _getServerSeqKey(): Promise<string> {
-    if (this._cachedServerSeqKey) {
-      return this._cachedServerSeqKey;
-    }
+    // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
     const baseUrl = cfg?.baseUrl ?? 'default';
     // Include accessToken in the hash so different users on the same server
@@ -389,20 +378,14 @@ export class SuperSyncProvider
       .split('')
       .reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0)
       .toString(16);
-    this._cachedServerSeqKey = `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
-    return this._cachedServerSeqKey;
+    return `${LAST_SERVER_SEQ_KEY_PREFIX}${hash}`;
   }
 
   /**
    * Check HTTP response status and throw AuthFailSPError for auth failures.
-   * Clears cached config so next operation will reload from store.
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      // Clear cached config so next operation will reload from store
-      // (allowing user to re-configure after auth failure)
-      this._cachedCfg = undefined;
-      this._cachedServerSeqKey = undefined;
       throw new AuthFailSPError(`Authentication failed (HTTP ${status})`, body);
     }
   }
@@ -558,8 +541,8 @@ export class SuperSyncProvider
   }
 
   /**
-   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp.
-   * This ensures consistent behavior across native platforms for non-compressed requests.
+   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp
+   * with retry logic for transient network errors.
    */
   private async _fetchApiNative<T>(
     cfg: SuperSyncPrivateCfg,
@@ -577,13 +560,16 @@ export class SuperSyncProvider
     headers['Content-Type'] = 'application/json';
 
     try {
-      const response = await CapacitorHttp.request({
-        url,
-        method,
-        headers,
-        connectTimeout: 10000, // 10s to establish connection
-        readTimeout: 75000, // 75s to match fetch timeout
-      });
+      const response = await executeNativeRequestWithRetry(
+        {
+          url,
+          method,
+          headers,
+          connectTimeout: 10000,
+          readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        },
+        this.logLabel,
+      );
 
       if (response.status < 200 || response.status >= 300) {
         const errorData =
@@ -692,7 +678,8 @@ export class SuperSyncProvider
   }
 
   /**
-   * Sends a gzip-compressed request body from native platforms (Android/iOS).
+   * Sends a gzip-compressed request body from native platforms (Android/iOS)
+   * with retry logic for transient network errors.
    * Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
    * may have similar issues in Capacitor context. We use CapacitorHttp with
    * base64-encoded gzip data instead.
@@ -723,15 +710,17 @@ export class SuperSyncProvider
     headers['Content-Transfer-Encoding'] = 'base64';
 
     try {
-      const response = await CapacitorHttp.request({
-        url,
-        method: 'POST',
-        headers,
-        data: base64Gzip,
-        // Add timeout support for native platforms
-        connectTimeout: 10000, // 10s to establish connection
-        readTimeout: 75000, // 75s to match fetch timeout
-      });
+      const response = await executeNativeRequestWithRetry(
+        {
+          url,
+          method: 'POST',
+          headers,
+          data: base64Gzip,
+          connectTimeout: 10000,
+          readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        },
+        this.logLabel,
+      );
 
       if (response.status < 200 || response.status >= 300) {
         const errorData =

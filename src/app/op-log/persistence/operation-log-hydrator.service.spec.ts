@@ -531,8 +531,8 @@ describe('OperationLogHydratorService', () => {
         expect(mockOpLogStore.mergeRemoteOpClocks).toHaveBeenCalledWith([syncImportOp]);
       });
 
-      it('should merge SYNC_IMPORT clock BEFORE dispatching loadAllData (regression test for stale clock bug)', async () => {
-        // REGRESSION TEST: Bug where operations created during loadAllData got stale clocks
+      it('should merge SYNC_IMPORT clock BEFORE dispatching loadAllData (regression test for superseded clock bug)', async () => {
+        // REGRESSION TEST: Bug where operations created during loadAllData got superseded clocks
         // because mergeRemoteOpClocks was called AFTER store.dispatch(loadAllData).
         //
         // Scenario:
@@ -592,7 +592,7 @@ describe('OperationLogHydratorService', () => {
         expect(mergeClockSequence).toBeLessThan(
           loadAllDataSyncImportSequence,
           `mergeRemoteOpClocks (seq ${mergeClockSequence}) should be called BEFORE ` +
-            `loadAllData (seq ${loadAllDataSyncImportSequence}) to prevent stale clock bug`,
+            `loadAllData (seq ${loadAllDataSyncImportSequence}) to prevent superseded clock bug`,
         );
       });
 
@@ -655,7 +655,7 @@ describe('OperationLogHydratorService', () => {
       it('should merge BACKUP_IMPORT clock BEFORE loadAllData (regression test)', async () => {
         // REGRESSION TEST: Same fix applies to BACKUP_IMPORT operations.
         // BACKUP_IMPORT is a full-state operation like SYNC_IMPORT and has the same
-        // stale clock bug if mergeRemoteOpClocks happens after loadAllData.
+        // superseded clock bug if mergeRemoteOpClocks happens after loadAllData.
         const snapshot = createMockSnapshot({
           lastAppliedOpSeq: 5,
           vectorClock: { clientA: 5 },
@@ -1485,7 +1485,7 @@ describe('OperationLogHydratorService', () => {
         expect(mockOpLogStore.mergeRemoteOpClocks).toHaveBeenCalledWith([syncImportOp]);
       });
 
-      it('should merge SYNC_IMPORT clock BEFORE loadAllData in full replay (no snapshot) - stale clock regression', async () => {
+      it('should merge SYNC_IMPORT clock BEFORE loadAllData in full replay (no snapshot) - superseded clock regression', async () => {
         // Same regression test as the snapshot branch, but for the no-snapshot path
         // This ensures the fix is applied to both code paths (lines 187-195 AND 277-278)
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));

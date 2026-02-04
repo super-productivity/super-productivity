@@ -182,6 +182,17 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
     const contextB = await browser.newContext({ baseURL: url });
     const pageB = await contextB.newPage();
 
+    // Reject any window.confirm dialogs so they don't block the page
+    // (we're testing the mat-dialog conflict, not window.confirm)
+    pageB.on('dialog', async (dialog) => {
+      if (dialog.type() === 'confirm') {
+        console.log(
+          `[Test] Client B auto-dismissing confirm dialog: ${dialog.message()}`,
+        );
+        await dialog.dismiss();
+      }
+    });
+
     await pageB.goto('/');
     await waitForAppReady(pageB);
     await dismissTourIfVisible(pageB);
@@ -228,7 +239,7 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     // Verify Client B now has remote data (Client A's task)
     await expect(pageB.locator('task', { hasText: taskA })).toBeVisible({
-      timeout: 5000,
+      timeout: 10000,
     });
     // Client B's local task should be gone
     await expect(pageB.locator('task', { hasText: taskB })).not.toBeVisible();

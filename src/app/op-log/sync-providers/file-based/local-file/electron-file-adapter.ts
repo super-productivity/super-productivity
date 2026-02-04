@@ -60,7 +60,7 @@ export class ElectronFileAdapter implements FileAdapter {
   //     }
   //     return result;
   //   } catch (e) {
-  //     PFLog.critical( `ElectronFileAdapter.checkDirExists() error`, e);
+  //     SyncLog.critical( `ElectronFileAdapter.checkDirExists() error`, e);
   //     return false;
   //   }
   // }
@@ -69,7 +69,7 @@ export class ElectronFileAdapter implements FileAdapter {
   //   try {
   //     return await this.ea.pickDirectory();
   //   } catch (e) {
-  //     PFLog.critical( `ElectronFileAdapter.pickDirectory() error`, e);
+  //     SyncLog.critical( `ElectronFileAdapter.pickDirectory() error`, e);
   //     throw e;
   //   }
   // }

@@ -28,6 +28,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>
@@ -54,6 +58,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>
@@ -90,6 +98,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>
@@ -116,6 +128,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>
@@ -145,6 +161,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>
@@ -182,6 +202,10 @@
                 <config-section
                   (save)="saveGlobalCfg($event)"
                   [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
                   [section]="section"
                 ></config-section>
               </section>

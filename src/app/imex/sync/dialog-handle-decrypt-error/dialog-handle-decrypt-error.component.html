@@ -1,8 +1,9 @@
+<h2 mat-dialog-title>{{ T.F.SYNC.D_DECRYPT_ERROR.TITLE | translate }}</h2>
+
 <mat-dialog-content>
   <div class="content">
     <p>{{ T.F.SYNC.D_DECRYPT_ERROR.P1 | translate }}</p>
 
-    <p>{{ T.F.SYNC.D_DECRYPT_ERROR.P2 | translate }}</p>
     <form
       #formEl="ngForm"
       (ngSubmit)="formEl.valid && updatePwAndResync()"
@@ -17,24 +18,34 @@
         />
       </mat-form-field>
 
-      <div style="text-align: center; margin-top: 16px">
+      <div class="option-section">
+        <p
+          class="option-label"
+          [innerHTML]="T.F.SYNC.D_DECRYPT_ERROR.P2_FORGOT_PW | translate"
+        ></p>
         <button
           class="btn btn-primary submit-button"
-          color="primary"
           mat-stroked-button
           (click)="formEl.valid && updatePwAndResync()"
           [disabled]="!formEl.valid"
+          type="button"
         >
-          <mat-icon>save</mat-icon>
+          <mat-icon>refresh</mat-icon>
           {{ T.F.SYNC.D_DECRYPT_ERROR.CHANGE_PW_AND_DECRYPT | translate }}
         </button>
       </div>
     </form>
 
-    <div style="text-align: center; margin-top: 16px">
+    <hr class="divider" />
+
+    <div class="option-section">
+      <p
+        class="option-label"
+        [innerHTML]="T.F.SYNC.D_DECRYPT_ERROR.P3_PW_CHANGED | translate"
+      ></p>
       <button
-        mat-stroked-button
-        color="warn"
+        mat-flat-button
+        color="primary"
         type="button"
         (click)="updatePWAndForceUpload()"
         [disabled]="!passwordVal"

@@ -297,7 +297,7 @@ export class OperationLogHydratorService {
               // FIX: Merge vector clock BEFORE dispatching loadAllData
               // This ensures any operations created synchronously during loadAllData
               // (e.g., TODAY_TAG repair) will have the correct merged clock.
-              // Without this, those operations get stale clocks and are rejected by the server.
+              // Without this, those operations get superseded clocks and are rejected by the server.
               await this.opLogStore.mergeRemoteOpClocks([lastOp]);
               // FIX: Protect ALL client IDs in the import's vector clock
               // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
@@ -403,7 +403,7 @@ export class OperationLogHydratorService {
                 ? validationResult.repairedState
                 : (appData as Record<string, unknown>);
             // FIX: Merge vector clock BEFORE dispatching loadAllData
-            // Same fix as the tail ops branch - prevents stale clock bug
+            // Same fix as the tail ops branch - prevents superseded clock bug
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
             // FIX: Protect ALL client IDs in the import's vector clock
             // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.

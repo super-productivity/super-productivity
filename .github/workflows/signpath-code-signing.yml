@@ -30,7 +30,7 @@ jobs:
 
       - name: Upload unsigned executables for SignPath
         id: upload-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: unsigned-windows-executables
           path: .tmp/app-builds/*.exe

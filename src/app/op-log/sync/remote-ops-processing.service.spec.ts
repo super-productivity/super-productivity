@@ -97,9 +97,12 @@ describe('RemoteOpsProcessingService', () => {
       'autoResolveConflictsLWW',
       'checkOpForConflicts',
     ]);
-    // Intelligent mock that implements the actual conflict detection logic
+    // Simplified mock that implements core conflict detection logic.
+    // NOTE: Does not replicate the CONCURRENT + no-pending-ops entity-exists check
+    // from the real service (that check calls getCurrentEntityState to block ops for
+    // archived/deleted entities). This is acceptable for RemoteOpsProcessingService tests.
     conflictResolutionServiceSpy.checkOpForConflicts.and.callFake(
-      (
+      async (
         remoteOp: Operation,
         ctx: {
           localPendingOpsByEntity: Map<string, Operation[]>;
@@ -108,7 +111,10 @@ describe('RemoteOpsProcessingService', () => {
           snapshotEntityKeys: Set<string> | undefined;
           hasNoSnapshotClock: boolean;
         },
-      ): { isStaleOrDuplicate: boolean; conflict: EntityConflict | null } => {
+      ): Promise<{
+        isSupersededOrDuplicate: boolean;
+        conflict: EntityConflict | null;
+      }> => {
         const entityIdsToCheck =
           remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
 
@@ -118,8 +124,9 @@ describe('RemoteOpsProcessingService', () => {
           const appliedFrontier = ctx.appliedFrontierByEntity.get(entityKey);
 
           // Build local frontier
-          const entityExistedAtSnapshot =
-            ctx.snapshotEntityKeys === undefined || ctx.snapshotEntityKeys.has(entityKey);
+          const entityExistedAtSnapshot = ctx.snapshotEntityKeys
+            ? ctx.snapshotEntityKeys.has(entityKey)
+            : appliedFrontier !== undefined;
           const fallbackClock = entityExistedAtSnapshot ? ctx.snapshotVectorClock : {};
           const baselineClock = appliedFrontier || fallbackClock || {};
           const allClocks = [
@@ -139,14 +146,14 @@ describe('RemoteOpsProcessingService', () => {
 
           const vcComparison = compareVectorClocks(localFrontier, remoteOp.vectorClock);
 
-          // Skip stale operations (local already has newer state)
+          // Skip superseded operations (local already has newer state)
           if (vcComparison === VectorClockComparison.GREATER_THAN) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // Skip duplicate operations (already applied)
           if (vcComparison === VectorClockComparison.EQUAL) {
-            return { isStaleOrDuplicate: true, conflict: null };
+            return { isSupersededOrDuplicate: true, conflict: null };
           }
 
           // No pending ops = no conflict possible
@@ -157,7 +164,7 @@ describe('RemoteOpsProcessingService', () => {
           // CONCURRENT = true conflict
           if (vcComparison === VectorClockComparison.CONCURRENT) {
             return {
-              isStaleOrDuplicate: false,
+              isSupersededOrDuplicate: false,
               conflict: {
                 entityType: remoteOp.entityType,
                 entityId,
@@ -169,7 +176,7 @@ describe('RemoteOpsProcessingService', () => {
           }
         }
 
-        return { isStaleOrDuplicate: false, conflict: null };
+        return { isSupersededOrDuplicate: false, conflict: null };
       },
     );
     validateStateServiceSpy = jasmine.createSpyObj('ValidateStateService', [
@@ -1057,7 +1064,7 @@ describe('RemoteOpsProcessingService', () => {
       expect(result.nonConflicting.length).toBe(0);
     });
 
-    it('should skip stale remote ops (local is newer)', async () => {
+    it('should skip superseded remote ops (local is newer)', async () => {
       // Setup: local has newer clock
       vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(
         Promise.resolve({ localClient: 5 }),
@@ -1080,7 +1087,7 @@ describe('RemoteOpsProcessingService', () => {
 
       const result = await service.detectConflicts(remoteOps, new Map());
 
-      // Should be skipped (stale)
+      // Should be skipped (superseded)
       expect(result.nonConflicting.length).toBe(0);
       expect(result.conflicts.length).toBe(0);
     });

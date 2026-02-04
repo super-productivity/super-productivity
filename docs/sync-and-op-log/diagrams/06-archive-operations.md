@@ -161,6 +161,61 @@ The server guarantees operations arrive in sequence order, and delete operations
 | `deleteTaskRepeatCfg`  | ArchiveOperationHandlerEffects → ArchiveOperationHandler               | ArchiveOperationHandler removes repeatCfgId from tasks       |
 | `deleteIssueProvider`  | ArchiveOperationHandlerEffects → ArchiveOperationHandler               | ArchiveOperationHandler unlinks issue data                   |
 
+## Archive Resurrection Prevention (Two-Level Defense)
+
+When multiple clients are syncing concurrently, a race condition can cause archived tasks to "resurrect" — reappearing in the active store after being archived. This happens when a field-level LWW Update (e.g., rename, time tracking) arrives for a task that was concurrently archived.
+
+The system uses a **two-level defense** to prevent this:
+
+### Level 1: ConflictResolutionService (Archive-Wins Rule)
+
+During LWW conflict resolution, if a `moveToArchive` operation conflicts with a field-level update, the **archive always wins** regardless of timestamps. This prevents the LWW update from overriding the archive intent.
+
+```mermaid
+flowchart TD
+    subgraph Level1["Level 1: Conflict Resolution"]
+        C1["Conflict: moveToArchive vs field update"]
+        C1 --> C2{"Archive-Wins<br/>Rule"}
+        C2 -->|"Archive wins"| C3["Create new archive op<br/>with merged vector clock"]
+        C2 -->|"No archive involved"| C4["Normal LWW<br/>timestamp comparison"]
+    end
+
+    style Level1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```
+
+**Key file:** `src/app/op-log/sync/conflict-resolution.service.ts`
+
+### Level 2: bulkOperationsMetaReducer (Pre-Scan Filtering)
+
+During bulk operation application (sync/hydration), the meta-reducer **pre-scans** the entire batch for `TASK_SHARED_MOVE_TO_ARCHIVE` operations. It collects all entity IDs being archived, then **skips** any `[TASK] LWW Update` operations targeting those entities.
+
+This handles the **3+ client scenario** where LWW Updates can appear before or after archive ops in the same batch, bypassing Level 1 conflict resolution.
+
+```mermaid
+flowchart TD
+    subgraph Level2["Level 2: Bulk Operations Meta-Reducer"]
+        B1["Receive batch of operations<br/>[LWW Update, moveToArchive, ...]"]
+        B1 --> B2["PRE-SCAN: Collect all<br/>entity IDs being archived"]
+        B2 --> B3["For each operation in batch:"]
+        B3 --> B4{"Is this an LWW Update<br/>for an archived entity?"}
+        B4 -->|"Yes"| B5["⛔ SKIP<br/>(prevents resurrection)"]
+        B4 -->|"No"| B6["✅ Apply normally"]
+    end
+
+    style Level2 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style B5 fill:#ffcdd2,stroke:#c62828,stroke-width:2px
+```
+
+**Key file:** `src/app/op-log/apply/bulk-hydration.meta-reducer.ts`
+
+### Why Two Levels?
+
+| Scenario                                                | Level 1 (Conflict Resolution)              | Level 2 (Bulk Pre-Scan) |
+| ------------------------------------------------------- | ------------------------------------------ | ----------------------- |
+| 2 clients: archive vs field update                      | ✅ Catches in LWW resolution               | N/A (not in same batch) |
+| 3+ clients: LWW Update arrives in same batch as archive | May not detect (already resolved upstream) | ✅ Catches via pre-scan |
+| Hydration replay with mixed ops                         | N/A (not conflict resolution)              | ✅ Catches via pre-scan |
+
 ## Key Files
 
 | File                                                        | Purpose                                                             |
@@ -168,5 +223,7 @@ The server guarantees operations arrive in sequence order, and delete operations
 | `src/app/op-log/apply/archive-operation-handler.service.ts` | **Unified** handler for all archive side effects (local AND remote) |
 | `src/app/op-log/apply/archive-operation-handler.effects.ts` | Routes local actions to ArchiveOperationHandler via LOCAL_ACTIONS   |
 | `src/app/op-log/apply/operation-applier.service.ts`         | Calls ArchiveOperationHandler after dispatching remote operations   |
+| `src/app/op-log/sync/conflict-resolution.service.ts`        | Archive-wins rule during LWW conflict resolution                    |
+| `src/app/op-log/apply/bulk-hydration.meta-reducer.ts`       | Pre-scan archive filtering during bulk application                  |
 | `src/app/features/archive/archive.service.ts`               | Local archive write logic (moveToArchive writes BEFORE dispatch)    |
 | `src/app/features/archive/task-archive.service.ts`          | Archive CRUD operations                                             |
