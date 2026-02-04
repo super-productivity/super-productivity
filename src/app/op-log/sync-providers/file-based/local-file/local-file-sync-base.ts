@@ -11,7 +11,7 @@ import {
   WebCryptoNotAvailableError,
 } from '../../../core/errors/sync-errors';
 import { md5HashPromise } from '../../../../util/md5-hash';
-import { PFLog } from '../../../../core/log';
+import { SyncLog } from '../../../../core/log';
 import { PrivateCfgByProviderId } from '../../../core/types/sync.types';
 
 export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<SyncProviderId.LocalFile> {
@@ -36,7 +36,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
   protected abstract getFilePath(targetPath: string): Promise<string>;
 
   async listFiles(dirPath: string): Promise<string[]> {
-    PFLog.normal(`${LocalFileSyncBase.LB}.${this.listFiles.name}()`, { dirPath });
+    SyncLog.normal(`${LocalFileSyncBase.LB}.${this.listFiles.name}()`, { dirPath });
     if (!this.fileAdapter.listFiles) {
       throw new Error('FileAdapter does not support listFiles');
     }
@@ -46,7 +46,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
   }
 
   async getFileRev(targetPath: string, localRev: string): Promise<{ rev: string }> {
-    PFLog.normal(`${LocalFileSyncBase.LB}.${this.getFileRev.name}`, {
+    SyncLog.normal(`${LocalFileSyncBase.LB}.${this.getFileRev.name}`, {
       targetPath,
       localRev,
     });
@@ -54,13 +54,13 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
       const r = await this.downloadFile(targetPath);
       return { rev: r.rev };
     } catch (e) {
-      PFLog.critical(`${LocalFileSyncBase.LB}.${this.getFileRev.name} error`, e);
+      SyncLog.critical(`${LocalFileSyncBase.LB}.${this.getFileRev.name} error`, e);
       throw e;
     }
   }
 
   async downloadFile(targetPath: string): Promise<{ rev: string; dataStr: string }> {
-    PFLog.normal(`${LocalFileSyncBase.LB}.${this.downloadFile.name}()`, {
+    SyncLog.normal(`${LocalFileSyncBase.LB}.${this.downloadFile.name}()`, {
       targetPath,
     });
 
@@ -90,7 +90,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
         throw new RemoteFileNotFoundAPIError(targetPath);
       }
 
-      PFLog.critical(`${LocalFileSyncBase.LB}.${this.downloadFile.name}() error`, e);
+      SyncLog.critical(`${LocalFileSyncBase.LB}.${this.downloadFile.name}() error`, e);
       throw e;
     }
   }
@@ -101,7 +101,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
     revToMatch: string | null,
     isForceOverwrite: boolean = false,
   ): Promise<{ rev: string }> {
-    PFLog.normal(`${LocalFileSyncBase.LB}.${this.uploadFile.name}()`, {
+    SyncLog.normal(`${LocalFileSyncBase.LB}.${this.uploadFile.name}()`, {
       targetPath,
       dataLength: dataStr?.length,
       revToMatch,
@@ -114,7 +114,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
         try {
           const existingFile = await this.downloadFile(targetPath);
           if (existingFile.rev !== revToMatch) {
-            PFLog.critical(
+            SyncLog.critical(
               `${LocalFileSyncBase.LB}.${this.uploadFile.name}() rev mismatch`,
               existingFile.rev,
               revToMatch,
@@ -135,13 +135,13 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
       const newRev = await this._getLocalRev(dataStr);
       return { rev: newRev };
     } catch (e) {
-      PFLog.critical(`${LocalFileSyncBase.LB}.${this.uploadFile.name}() error`, e);
+      SyncLog.critical(`${LocalFileSyncBase.LB}.${this.uploadFile.name}() error`, e);
       throw e;
     }
   }
 
   async removeFile(targetPath: string): Promise<void> {
-    PFLog.normal(`${LocalFileSyncBase.LB}.${this.removeFile.name}`, { targetPath });
+    SyncLog.normal(`${LocalFileSyncBase.LB}.${this.removeFile.name}`, { targetPath });
     try {
       const filePath = await this.getFilePath(targetPath);
       await this.fileAdapter.deleteFile(filePath);
@@ -152,7 +152,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
         e?.toString?.().includes('File does not exist') ||
         e?.toString?.().includes('ENOENT')
       ) {
-        PFLog.normal(
+        SyncLog.normal(
           `${LocalFileSyncBase.LB}.${this.removeFile.name} - file doesn't exist`,
           {
             targetPath,
@@ -161,7 +161,7 @@ export abstract class LocalFileSyncBase implements SyncProviderServiceInterface<
         return;
       }
 
-      PFLog.critical(`${LocalFileSyncBase.LB}.${this.removeFile.name} error`, e);
+      SyncLog.critical(`${LocalFileSyncBase.LB}.${this.removeFile.name} error`, e);
       throw e;
     }
   }

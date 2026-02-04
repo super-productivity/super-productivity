@@ -1,4 +1,4 @@
-import { PFLog } from '../log';
+import { OpLog } from '../log';
 import {
   VectorClock as SharedVectorClock,
   compareVectorClocks as sharedCompareVectorClocks,
@@ -114,7 +114,7 @@ export const sanitizeVectorClock = (clock: any): VectorClock => {
       }
     }
   } catch (e) {
-    PFLog.error('Error sanitizing vector clock', e);
+    OpLog.error('Error sanitizing vector clock', e);
     return {};
   }
 
@@ -170,7 +170,7 @@ export const incrementVectorClock = (
     typeof clientId !== 'string' ||
     clientId.length < MIN_CLIENT_ID_LENGTH
   ) {
-    PFLog.critical('incrementVectorClock: Invalid clientId', {
+    OpLog.critical('incrementVectorClock: Invalid clientId', {
       clientId,
       type: typeof clientId,
       length: clientId?.length,
@@ -183,7 +183,7 @@ export const incrementVectorClock = (
   const currentValue = newClock[clientId] || 0;
 
   // Log for debugging
-  PFLog.verbose('incrementVectorClock', {
+  OpLog.verbose('incrementVectorClock', {
     clientId,
     currentValue,
     allClients: Object.keys(newClock),
@@ -193,7 +193,7 @@ export const incrementVectorClock = (
   // Resetting to 1 would break causality (new ops appear older than previous ops)
   // User must do a SYNC_IMPORT to properly reset clocks across all clients
   if (currentValue >= Number.MAX_SAFE_INTEGER - 1000) {
-    PFLog.critical('Vector clock component overflow detected', {
+    OpLog.critical('Vector clock component overflow detected', {
       clientId,
       currentValue,
     });
@@ -294,7 +294,7 @@ export const hasVectorClockChanges = (
       } else {
         // Current clock is small enough that pruning couldn't have removed this key.
         hasMissingUnpruned = true;
-        PFLog.warn('Vector clock change detected: client missing from current', {
+        OpLog.warn('Vector clock change detected: client missing from current', {
           clientId,
           refValue: refVal,
           currentClock: vectorClockToString(current),
@@ -306,7 +306,7 @@ export const hasVectorClockChanges = (
   }
 
   if (missingPrunedKeys.length > 0) {
-    PFLog.verbose(
+    OpLog.verbose(
       `Vector clock: ${missingPrunedKeys.length} reference client(s) missing from current (likely pruned)`,
       { missingKeys: missingPrunedKeys },
     );
@@ -358,7 +358,7 @@ export const limitVectorClockSize = (
   // This means some "protected" IDs will be dropped, which could cause
   // incorrect CONCURRENT comparisons with full-state operations.
   if (allPreserveIds.length > MAX_VECTOR_CLOCK_SIZE) {
-    PFLog.warn(
+    OpLog.warn(
       'Vector clock pruning: preserveClientIds exceeds MAX_VECTOR_CLOCK_SIZE, some protected IDs will be dropped',
       {
         preserveCount: allPreserveIds.length,
@@ -368,7 +368,7 @@ export const limitVectorClockSize = (
     );
   }
 
-  PFLog.info('Vector clock pruning triggered', {
+  OpLog.info('Vector clock pruning triggered', {
     originalSize: entries.length,
     maxSize: MAX_VECTOR_CLOCK_SIZE,
     currentClientId,

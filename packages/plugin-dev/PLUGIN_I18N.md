@@ -283,7 +283,7 @@ Super Productivity supports these language codes:
 | `nb`    | Norwegian             |
 | `sv`    | Swedish               |
 | `fi`    | Finnish               |
-| `cz`    | Czech                 |
+| `cs`    | Czech                 |
 | `sk`    | Slovak                |
 | `hr`    | Croatian              |
 | `uk`    | Ukrainian             |

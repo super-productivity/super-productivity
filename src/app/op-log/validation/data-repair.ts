@@ -14,7 +14,7 @@ import { AppDataComplete } from '../model/model-config';
 import { INBOX_PROJECT } from '../../features/project/project.const';
 import { autoFixTypiaErrors } from './auto-fix-typia-errors';
 import { IValidation } from 'typia';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
 
@@ -141,7 +141,7 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (data: AppDataComplete): AppDataCom
         quickSettingsRequiringStartDate.includes(cfg.quickSetting) &&
         !cfg.startDate
       ) {
-        PFLog.log(
+        OpLog.log(
           `Fixing repeat config ${cfg.id}: ${cfg.quickSetting} with missing startDate -> CUSTOM`,
         );
         cfg.quickSetting = 'CUSTOM';
@@ -203,7 +203,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
       }
     });
     if (duplicateYoungIds.length > 0) {
-      PFLog.log(duplicateYoungIds.length + ' duplicates removed from archiveYoung.');
+      OpLog.log(duplicateYoungIds.length + ' duplicates removed from archiveYoung.');
     }
   }
 
@@ -219,7 +219,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
       }
     });
     if (duplicateOldIds.length > 0) {
-      PFLog.log(duplicateOldIds.length + ' duplicates removed from archiveOld.');
+      OpLog.log(duplicateOldIds.length + ' duplicates removed from archiveOld.');
     }
   }
 
@@ -237,7 +237,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
       }
     });
     if (duplicateBetweenArchives.length > 0) {
-      PFLog.log(
+      OpLog.log(
         duplicateBetweenArchives.length +
           ' duplicates removed from archiveYoung (kept in archiveOld).',
       );
@@ -280,7 +280,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         !taskArchiveOldState.ids.includes(t.parentId),
     );
 
-  PFLog.log('orphanArchivedYoungSubTasks', orphanArchivedYoungSubTasks);
+  OpLog.log('orphanArchivedYoungSubTasks', orphanArchivedYoungSubTasks);
   const promotedYoungSubTaskIds: string[] = [];
   orphanArchivedYoungSubTasks.forEach((t: TaskCopy) => {
     // delete archived if duplicate
@@ -312,7 +312,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     }
   });
   if (promotedYoungSubTaskIds.length > 0) {
-    PFLog.warn(
+    OpLog.warn(
       `[data-repair] ${promotedYoungSubTaskIds.length} archived subtask(s) promoted to standalone tasks due to missing parent:`,
       promotedYoungSubTaskIds,
     );
@@ -328,7 +328,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
         !taskArchiveYoungState.ids.includes(t.parentId),
     );
 
-  PFLog.log('orphanArchivedOldSubTasks', orphanArchivedOldSubTasks);
+  OpLog.log('orphanArchivedOldSubTasks', orphanArchivedOldSubTasks);
   const promotedOldSubTaskIds: string[] = [];
   orphanArchivedOldSubTasks.forEach((t: TaskCopy) => {
     // delete archived if duplicate
@@ -360,7 +360,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
     }
   });
   if (promotedOldSubTaskIds.length > 0) {
-    PFLog.warn(
+    OpLog.warn(
       `[data-repair] ${promotedOldSubTaskIds.length} old archived subtask(s) promoted to standalone tasks due to missing parent:`,
       promotedOldSubTaskIds,
     );
@@ -380,7 +380,7 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     .map((id: string) => taskState.entities[id] as TaskCopy)
     .filter((t: TaskCopy) => t.parentId && !taskState.ids.includes(t.parentId));
 
-  PFLog.log('orphanUnArchivedSubTasks', orphanUnArchivedSubTasks);
+  OpLog.log('orphanUnArchivedSubTasks', orphanUnArchivedSubTasks);
   const promotedUnArchivedSubTaskIds: string[] = [];
   orphanUnArchivedSubTasks.forEach((t: TaskCopy) => {
     // delete un-archived if duplicate in either archive
@@ -434,7 +434,7 @@ const _moveUnArchivedSubTasksToArchivedParents = (
     }
   });
   if (promotedUnArchivedSubTaskIds.length > 0) {
-    PFLog.warn(
+    OpLog.warn(
       `[data-repair] ${promotedUnArchivedSubTaskIds.length} unarchived subtask(s) promoted to standalone tasks due to missing parent:`,
       promotedUnArchivedSubTaskIds,
     );
@@ -498,7 +498,7 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
   );
 
   if (taskIdsToRestoreFromArchive.length > 0) {
-    PFLog.log(
+    OpLog.log(
       taskIdsToRestoreFromArchive.length + ' missing tasks restored from archive.',
     );
   }
@@ -561,7 +561,7 @@ const _addOrphanedTasksToProjectLists = (data: AppDataComplete): AppDataComplete
   });
 
   if (orphanedTaskIds.length > 0) {
-    PFLog.log(orphanedTaskIds.length + ' orphaned tasks found & restored.');
+    OpLog.log(orphanedTaskIds.length + ' orphaned tasks found & restored.');
   }
 
   return data;
@@ -584,7 +584,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (!t.projectId) {
-      PFLog.log('Set inbox project id for task  ' + t.id);
+      OpLog.log('Set inbox project id for task  ' + t.id);
 
       const inboxProject = data.project.entities[INBOX_PROJECT.id]!;
       data.project.entities[INBOX_PROJECT.id] = {
@@ -600,13 +600,13 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
     }
   });
 
-  PFLog.log(taskArchiveYoungIds);
-  PFLog.log(Object.keys(archiveYoung.task.entities));
+  OpLog.log(taskArchiveYoungIds);
+  OpLog.log(Object.keys(archiveYoung.task.entities));
 
   taskArchiveYoungIds.forEach((id) => {
     const t = archiveYoung.task.entities[id] as TaskCopy;
     if (!t.projectId) {
-      PFLog.log('Set inbox project for missing project id from archive task ' + t.id);
+      OpLog.log('Set inbox project for missing project id from archive task ' + t.id);
       t.projectId = INBOX_PROJECT.id;
     }
     // while we are at it, we also cleanup the today tag
@@ -615,13 +615,13 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
     }
   });
 
-  PFLog.log(taskArchiveOldIds);
-  PFLog.log(Object.keys(archiveOld.task.entities));
+  OpLog.log(taskArchiveOldIds);
+  OpLog.log(Object.keys(archiveOld.task.entities));
 
   taskArchiveOldIds.forEach((id) => {
     const t = archiveOld.task.entities[id] as TaskCopy;
     if (!t.projectId) {
-      PFLog.log('Set inbox project for missing project id from old archive task ' + t.id);
+      OpLog.log('Set inbox project for missing project id from old archive task ' + t.id);
       t.projectId = INBOX_PROJECT.id;
     }
     // while we are at it, we also cleanup the today tag
@@ -659,29 +659,29 @@ const _removeNonExistentProjectIdsFromTasks = (
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (t.projectId && !projectIds.includes(t.projectId)) {
-      PFLog.log('Delete missing project id from task ' + t.projectId);
+      OpLog.log('Delete missing project id from task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
     }
   });
 
-  PFLog.log(taskArchiveYoungIds);
-  PFLog.log(Object.keys(archiveYoung.task.entities));
+  OpLog.log(taskArchiveYoungIds);
+  OpLog.log(Object.keys(archiveYoung.task.entities));
 
   taskArchiveYoungIds.forEach((id) => {
     const t = archiveYoung.task.entities[id] as TaskCopy;
     if (t.projectId && !projectIds.includes(t.projectId)) {
-      PFLog.log('Delete missing project id from archive task ' + t.projectId);
+      OpLog.log('Delete missing project id from archive task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
     }
   });
 
-  PFLog.log(taskArchiveOldIds);
-  PFLog.log(Object.keys(archiveOld.task.entities));
+  OpLog.log(taskArchiveOldIds);
+  OpLog.log(Object.keys(archiveOld.task.entities));
 
   taskArchiveOldIds.forEach((id) => {
     const t = archiveOld.task.entities[id] as TaskCopy;
     if (t.projectId && !projectIds.includes(t.projectId)) {
-      PFLog.log('Delete missing project id from old archive task ' + t.projectId);
+      OpLog.log('Delete missing project id from old archive task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
     }
   });
@@ -719,7 +719,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
           (tagId) => !tagIds.includes(tagId) && tagId !== TODAY_TAG.id,
         );
         if (removedTags.length > 0) {
-          PFLog.log(
+          OpLog.log(
             `Removing non-existent tags from task ${t.id}: ${removedTags.join(', ')}`,
           );
           removedCount += removedTags.length;
@@ -739,7 +739,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
           (tagId) => !tagIds.includes(tagId) && tagId !== TODAY_TAG.id,
         );
         if (removedTags.length > 0) {
-          PFLog.log(
+          OpLog.log(
             `Removing non-existent tags from archive task ${t.id}: ${removedTags.join(', ')}`,
           );
           removedCount += removedTags.length;
@@ -759,7 +759,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
           (tagId) => !tagIds.includes(tagId) && tagId !== TODAY_TAG.id,
         );
         if (removedTags.length > 0) {
-          PFLog.log(
+          OpLog.log(
             `Removing non-existent tags from old archive task ${t.id}: ${removedTags.join(', ')}`,
           );
           removedCount += removedTags.length;
@@ -770,7 +770,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
   });
 
   if (removedCount > 0) {
-    PFLog.log(`Total non-existent tags removed from tasks: ${removedCount}`);
+    OpLog.log(`Total non-existent tags removed from tasks: ${removedCount}`);
   }
 
   return data;
@@ -785,7 +785,7 @@ const _removeNonExistentProjectIdsFromIssueProviders = (
   issueProviderIds.forEach((id) => {
     const t = issueProvider.entities[id] as IssueProvider;
     if (t.defaultProjectId && !projectIds.includes(t.defaultProjectId)) {
-      PFLog.log('Delete missing project id from issueProvider ' + t.defaultProjectId);
+      OpLog.log('Delete missing project id from issueProvider ' + t.defaultProjectId);
       t.defaultProjectId = null;
     }
   });
@@ -803,7 +803,7 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
     const repeatCfg = taskRepeatCfg.entities[id] as TaskRepeatCfgCopy;
     if (repeatCfg.projectId && !projectIds.includes(repeatCfg.projectId)) {
       if (repeatCfg.tagIds.length) {
-        PFLog.log(
+        OpLog.log(
           'Delete missing project id from task repeat cfg ' + repeatCfg.projectId,
         );
         repeatCfg.projectId = null;
@@ -812,7 +812,7 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
           (rid: string) => rid !== repeatCfg.id,
         );
         delete taskRepeatCfg.entities[repeatCfg.id];
-        PFLog.log('Delete task repeat cfg with missing project id' + repeatCfg.projectId);
+        OpLog.log('Delete task repeat cfg with missing project id' + repeatCfg.projectId);
       }
     }
   });
@@ -833,7 +833,7 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   taskIds.forEach((id) => {
     const t = task.entities[id] as TaskCopy;
     if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
-      PFLog.log(`Clearing non-existent repeatCfgId from task ${t.id}: ${t.repeatCfgId}`);
+      OpLog.log(`Clearing non-existent repeatCfgId from task ${t.id}: ${t.repeatCfgId}`);
       t.repeatCfgId = undefined;
       removedCount++;
     }
@@ -843,7 +843,7 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   taskArchiveYoungIds.forEach((id) => {
     const t = archiveYoung.task.entities[id] as TaskCopy;
     if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
-      PFLog.log(
+      OpLog.log(
         `Clearing non-existent repeatCfgId from archive task ${t.id}: ${t.repeatCfgId}`,
       );
       t.repeatCfgId = undefined;
@@ -855,7 +855,7 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   taskArchiveOldIds.forEach((id) => {
     const t = archiveOld.task.entities[id] as TaskCopy;
     if (t.repeatCfgId && !repeatCfgIds.includes(t.repeatCfgId)) {
-      PFLog.log(
+      OpLog.log(
         `Clearing non-existent repeatCfgId from old archive task ${t.id}: ${t.repeatCfgId}`,
       );
       t.repeatCfgId = undefined;
@@ -864,7 +864,7 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   });
 
   if (removedCount > 0) {
-    PFLog.log(`Total non-existent repeatCfgIds cleared from tasks: ${removedCount}`);
+    OpLog.log(`Total non-existent repeatCfgIds cleared from tasks: ${removedCount}`);
   }
 
   return data;
@@ -875,7 +875,7 @@ const _cleanupNonExistingTasksFromLists = (data: AppDataComplete): AppDataComple
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
     if (!projectItem) {
-      PFLog.log(data.project);
+      OpLog.log(data.project);
       throw new Error('No project');
     }
     (projectItem as ProjectCopy).taskIds = projectItem.taskIds.filter(
@@ -890,7 +890,7 @@ const _cleanupNonExistingTasksFromLists = (data: AppDataComplete): AppDataComple
     .map((id) => data.tag.entities[id])
     .forEach((tagItem) => {
       if (!tagItem) {
-        PFLog.log(data.tag);
+        OpLog.log(data.tag);
         throw new Error('No tag');
       }
       (tagItem as TagCopy).taskIds = tagItem.taskIds.filter(
@@ -905,7 +905,7 @@ const _cleanupNonExistingNotesFromLists = (data: AppDataComplete): AppDataComple
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
     if (!projectItem) {
-      PFLog.log(data.project);
+      OpLog.log(data.project);
       throw new Error('No project');
     }
     (projectItem as ProjectCopy).noteIds = (projectItem as ProjectCopy).noteIds
@@ -926,14 +926,14 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
   noteIds.forEach((nId) => {
     const note = data.note.entities[nId];
     if (!note) {
-      PFLog.log(data.note);
+      OpLog.log(data.note);
       throw new Error('No note');
     }
     // missing project case
     if (note.projectId) {
       if (data.project.entities[note.projectId]) {
         if (!data.project.entities[note.projectId]!.noteIds.includes(note.id)) {
-          PFLog.log(
+          OpLog.log(
             'Add orphaned note back to project list ' + note.projectId + ' ' + note.id,
           );
 
@@ -944,7 +944,7 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
           };
         }
       } else {
-        PFLog.log('Delete missing project id from note ' + note.id);
+        OpLog.log('Delete missing project id from note ' + note.id);
         note.projectId = null;
 
         if (!data.note.todayOrder.includes(note.id)) {
@@ -953,7 +953,7 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
       }
     } // orphaned note case
     else if (!data.note.todayOrder.includes(note.id)) {
-      PFLog.log('Add orphaned note to today list ' + note.id);
+      OpLog.log('Add orphaned note to today list ' + note.id);
 
       if (!data.note.todayOrder.includes(note.id)) {
         data.note.todayOrder = [...data.note.todayOrder, note.id];
@@ -970,7 +970,7 @@ const _fixInconsistentProjectId = (data: AppDataComplete): AppDataComplete => {
     .map((id) => data.project.entities[id])
     .forEach((projectItem) => {
       if (!projectItem) {
-        PFLog.log(data.project);
+        OpLog.log(data.project);
         throw new Error('No project');
       }
       projectItem.taskIds.forEach((tid) => {
@@ -1015,7 +1015,7 @@ const _fixInconsistentTagId = (data: AppDataComplete): AppDataComplete => {
     .map((id) => data.tag.entities[id])
     .forEach((tagItem) => {
       if (!tagItem) {
-        PFLog.log(data.tag);
+        OpLog.log(data.tag);
         throw new Error('No tag');
       }
       tagItem.taskIds.forEach((tid) => {
@@ -1037,7 +1037,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
     .map((id) => data.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.task);
+        OpLog.log(data.task);
         throw new Error('No task');
       }
       if (taskItem.subTaskIds) {
@@ -1059,7 +1059,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
     .map((id) => data.archiveYoung.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.archiveYoung.task);
+        OpLog.log(data.archiveYoung.task);
         throw new Error('No archive task');
       }
       if (taskItem.subTaskIds) {
@@ -1081,7 +1081,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
     .map((id) => data.archiveOld.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.archiveOld.task);
+        OpLog.log(data.archiveOld.task);
         throw new Error('No old archive task');
       }
       if (taskItem.subTaskIds) {
@@ -1108,7 +1108,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
     .map((id) => data.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.task);
+        OpLog.log(data.task);
         throw new Error('No task');
       }
 
@@ -1117,7 +1117,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.task.entities[sid]) {
-            PFLog.log('Delete orphaned sub task for ', taskItem);
+            OpLog.log('Delete orphaned sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
           }
           i -= 1;
@@ -1130,7 +1130,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
     .map((id) => data.archiveYoung.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.archiveYoung.task);
+        OpLog.log(data.archiveYoung.task);
         throw new Error('No archive task');
       }
 
@@ -1139,7 +1139,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.archiveYoung.task.entities[sid]) {
-            PFLog.log('Delete orphaned archive sub task for ', taskItem);
+            OpLog.log('Delete orphaned archive sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
           }
           i -= 1;
@@ -1152,7 +1152,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
     .map((id) => data.archiveOld.task.entities[id])
     .forEach((taskItem) => {
       if (!taskItem) {
-        PFLog.log(data.archiveOld.task);
+        OpLog.log(data.archiveOld.task);
         throw new Error('No old archive task');
       }
 
@@ -1161,7 +1161,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
           if (!data.archiveOld.task.entities[sid]) {
-            PFLog.log('Delete orphaned old archive sub task for ', taskItem);
+            OpLog.log('Delete orphaned old archive sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
           }
           i -= 1;

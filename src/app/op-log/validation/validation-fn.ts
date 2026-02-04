@@ -23,7 +23,7 @@ import { MetricState } from '../../features/metric/metric.model';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 import { AppDataComplete } from '../model/model-config';
 import { ValidationResult } from '../core/types/sync.types';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import {
   PluginMetaDataState,
   PluginUserDataState,
@@ -106,7 +106,7 @@ export const appDataValidators: {
 const validateArchiveModel = <R>(d: ArchiveModel | R): ValidationResult<ArchiveModel> => {
   const r = _validateArchive(d);
   if (!r.success) {
-    PFLog.log('Validation failed', (r as any)?.errors, r.data);
+    OpLog.log('Validation failed', (r as any)?.errors, r.data);
   }
   if (!isEntityStateConsistent((d as ArchiveModel).task)) {
     return {
@@ -131,7 +131,7 @@ const _wrapValidate = <R>(
   isEntityCheck = false,
 ): ValidationResult<R> => {
   if (!result.success) {
-    PFLog.log('Validation failed', (result as any)?.errors, result, d);
+    OpLog.log('Validation failed', (result as any)?.errors, result, d);
   }
   if (isEntityCheck && !isEntityStateConsistent(d as any)) {
     return {

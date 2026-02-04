@@ -447,6 +447,19 @@ export class OperationLogSyncService {
         false, // Don't create SYNC_IMPORT for file-based bootstrap
       );
 
+      // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
+      // File-based providers return ALL recentOps on every download, relying on
+      // getAppliedOpIds() (from IndexedDB) to filter already-applied ops.
+      // Without writing these ops, they bypass the filter on the next sync cycle
+      // and get applied again, duplicating entities.
+      if (result.newOps.length > 0) {
+        await this.opLogStore.appendBatch(result.newOps, 'remote');
+        OpLog.normal(
+          `OperationLogSyncService: Wrote ${result.newOps.length} snapshot ops to IndexedDB ` +
+            '(prevents duplication on next sync cycle).',
+        );
+      }
+
       // Persist lastServerSeq after hydration
       if (result.latestServerSeq !== undefined) {
         await syncProvider.setLastServerSeq(result.latestServerSeq);
@@ -733,6 +746,17 @@ export class OperationLogSyncService {
         result.snapshotVectorClock,
         false, // Don't create SYNC_IMPORT
       );
+
+      // CRITICAL FIX: Write recentOps to IndexedDB after snapshot hydration.
+      // Same rationale as downloadRemoteOps: file-based providers return ALL
+      // recentOps on every download and rely on getAppliedOpIds() to filter them.
+      if (result.newOps.length > 0) {
+        await this.opLogStore.appendBatch(result.newOps, 'remote');
+        OpLog.normal(
+          `OperationLogSyncService: Wrote ${result.newOps.length} snapshot ops to IndexedDB ` +
+            'after force-download hydration.',
+        );
+      }
 
       // Update lastServerSeq after hydration
       if (result.latestServerSeq !== undefined) {

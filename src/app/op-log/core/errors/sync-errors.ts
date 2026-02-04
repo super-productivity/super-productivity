@@ -1,5 +1,5 @@
 import { IValidation } from 'typia';
-import { PFLog } from '../../../core/log';
+import { OpLog } from '../../../core/log';
 
 /**
  * Extracts a meaningful error message from various error shapes.
@@ -76,13 +76,13 @@ class AdditionalLogErrorBase<T = unknown[]> extends Error {
     super(extractedMessage ?? 'Unknown error');
 
     if (additional.length > 0) {
-      PFLog.log(this.name, ...additional);
+      OpLog.log(this.name, ...additional);
       try {
         // Sanitize before logging to avoid exposing tokens in logs
         const sanitized = additional.map(sanitizeForLogging);
-        PFLog.log('additional error log: ' + JSON.stringify(sanitized));
+        OpLog.log('additional error log: ' + JSON.stringify(sanitized));
       } catch (e) {
-        PFLog.log('additional error log not stringified: ', additional, e);
+        OpLog.log('additional error log not stringified: ', additional, e);
       }
     }
     this.additionalLog = additional as T;
@@ -376,7 +376,7 @@ export class JsonParseError extends Error {
       this.dataSample = `...${dataStr.substring(start, end)}...`;
     }
 
-    PFLog.err('JsonParseError:', {
+    OpLog.err('JsonParseError:', {
       message: this.message,
       position: this.position,
       dataSample: this.dataSample,
@@ -441,24 +441,24 @@ export class ModelValidationError extends Error {
     e?: unknown;
   }) {
     super('ModelValidationError');
-    PFLog.log(`ModelValidationError for model ${params.id}:`, params);
+    OpLog.log(`ModelValidationError for model ${params.id}:`, params);
 
     if (params.validationResult) {
-      PFLog.log('validation result: ', params.validationResult);
+      OpLog.log('validation result: ', params.validationResult);
 
       try {
         if ('errors' in params.validationResult) {
           const str = JSON.stringify(params.validationResult.errors);
-          PFLog.log('validation errors: ' + str);
+          OpLog.log('validation errors: ' + str);
           this.additionalLog = `Model: ${params.id}, Errors: ${str.substring(0, 400)}`;
         }
       } catch (e) {
-        PFLog.err('Error stringifying validation errors:', e);
+        OpLog.err('Error stringifying validation errors:', e);
       }
     }
 
     if (params.e) {
-      PFLog.log('Additional error:', params.e);
+      OpLog.log('Additional error:', params.e);
     }
   }
 }
@@ -470,17 +470,17 @@ export class DataValidationFailedError extends Error {
   constructor(validationResult: IValidation<unknown>) {
     const errorSummary = DataValidationFailedError._buildErrorSummary(validationResult);
     super(errorSummary);
-    PFLog.log('validation result: ', validationResult);
+    OpLog.log('validation result: ', validationResult);
 
     try {
       if ('errors' in validationResult) {
         const str = JSON.stringify(validationResult.errors);
-        PFLog.log('validation errors_: ' + str);
+        OpLog.log('validation errors_: ' + str);
         this.additionalLog = str.substring(0, 400);
       }
-      PFLog.log('validation result_: ' + JSON.stringify(validationResult));
+      OpLog.log('validation result_: ' + JSON.stringify(validationResult));
     } catch (e) {
-      PFLog.err('Failed to stringify validation errors:', e);
+      OpLog.err('Failed to stringify validation errors:', e);
     }
   }
 

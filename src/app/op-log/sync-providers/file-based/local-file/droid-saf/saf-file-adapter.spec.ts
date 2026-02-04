@@ -111,7 +111,7 @@ describe('SafFileAdapter', () => {
       await adapter.deleteFile('missing.json');
 
       expect(console.error).toHaveBeenCalledWith(
-        '[pf]',
+        '[sync]',
         'File not found for deletion: missing.json',
       );
     });

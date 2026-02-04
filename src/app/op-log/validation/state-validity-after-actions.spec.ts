@@ -45,7 +45,7 @@ import {
   tagSharedMetaReducer,
   plannerSharedMetaReducer,
 } from '../../root-store/meta/task-shared-meta-reducers';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { TaskWithSubTasks } from '../../features/tasks/task.model';
 import {
@@ -82,13 +82,13 @@ import {
 } from '../../features/menu-tree/store/menu-tree.model';
 
 describe('State Validity After Actions', () => {
-  // Suppress PFLog output during tests
+  // Suppress OpLog output during tests
   beforeAll(() => {
-    spyOn(PFLog, 'log');
-    spyOn(PFLog, 'error');
-    spyOn(PFLog, 'warn');
-    spyOn(PFLog, 'err');
-    spyOn(PFLog, 'critical');
+    spyOn(OpLog, 'log');
+    spyOn(OpLog, 'error');
+    spyOn(OpLog, 'warn');
+    spyOn(OpLog, 'err');
+    spyOn(OpLog, 'critical');
   });
 
   /**

@@ -23,6 +23,15 @@ const SYNC_WINDOW_TIMEOUT_MS = 30000;
  * derived from Angular signals) and proceeds once the window closes.
  * A 30-second timeout ensures the pipeline never stalls permanently.
  *
+ * ## Concurrency Note
+ *
+ * This operator uses `switchMap` internally, so if a **new** value arrives
+ * while an earlier value is still waiting for the sync window to close, the
+ * earlier wait is cancelled and only the latest value proceeds. This is
+ * intentional for the current use case (day-change strings), where only the
+ * most recent date matters. Do **not** reuse this operator for sources where
+ * every emission must be preserved — use `concatMap` semantics instead.
+ *
  * ## When to Use
  *
  * Use this operator instead of `skipDuringSyncWindow()` for stream-based effects

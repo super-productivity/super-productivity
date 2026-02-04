@@ -4,6 +4,11 @@ import { alertDialog, confirmDialog } from './native-dialogs';
 
 let isShowAlert = true;
 
+/** @internal - for testing only */
+export const _resetDevErrorState = (): void => {
+  isShowAlert = true;
+};
+
 export const devError = (errStr: string | Error | unknown): void => {
   if (environment.production) {
     Log.err(errStr);

@@ -1,5 +1,5 @@
 import { registerPlugin } from '@capacitor/core';
-import { PFLog } from '../../../../core/log';
+import { SyncLog } from '../../../../core/log';
 import {
   AuthFailSPError,
   PotentialCorsError,
@@ -59,7 +59,7 @@ export class WebDavHttpAdapter {
         // On native platforms (Android + iOS), use the WebDavHttp plugin.
         // This bypasses CapacitorHttp which has issues with WebDAV responses
         // (empty bodies on Android/Koofr, broken JSON auto-parsing on iOS).
-        PFLog.log(
+        SyncLog.log(
           `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
         );
         const webdavResponse = await WebDavHttp.request({
@@ -105,7 +105,7 @@ export class WebDavHttpAdapter {
         throw e;
       }
 
-      PFLog.error(`${WebDavHttpAdapter.L}.request() error`, {
+      SyncLog.error(`${WebDavHttpAdapter.L}.request() error`, {
         url: options.url,
         method: options.method,
         error: e,
@@ -198,7 +198,7 @@ export class WebDavHttpAdapter {
       // However, without making a test request, we can't be certain
 
       // Log a warning about the ambiguity
-      PFLog.warn(
+      SyncLog.warn(
         `${WebDavHttpAdapter.L}._isCorsError() Ambiguous network error - might be CORS:`,
         error,
       );

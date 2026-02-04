@@ -13,7 +13,7 @@ import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { validateFull } from '../validation/validation-fn';
 import { dataRepair } from '../validation/data-repair';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import {
   AppDataComplete,
   CROSS_MODEL_VERSION,
@@ -96,7 +96,7 @@ export class BackupService {
 
       // 2. Migrate legacy backups (pre-v14) that have the old data shape
       if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
-        PFLog.normal(
+        OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
         );
         backupData = migrateLegacyBackup(
@@ -110,7 +110,7 @@ export class BackupService {
 
       if (!validationResult.isValid) {
         // Try to repair
-        PFLog.normal('BackupService: Validation failed, attempting repair...', {
+        OpLog.normal('BackupService: Validation failed, attempting repair...', {
           success: validationResult.typiaResult.success,
           errors:
             'errors' in validationResult.typiaResult
@@ -157,24 +157,24 @@ export class BackupService {
     importedData: AppDataComplete,
     isForceConflict: boolean,
   ): Promise<void> {
-    PFLog.normal('BackupService: Persisting import to operation log...');
+    OpLog.normal('BackupService: Persisting import to operation log...');
 
     // 1. Backup current state before clearing operations
     let backupSucceeded = true;
     try {
       const existingStateCache = await this._opLogStore.loadStateCache();
       if (existingStateCache?.state) {
-        PFLog.normal('BackupService: Backing up current state before import...');
+        OpLog.normal('BackupService: Backing up current state before import...');
         await this._opLogStore.saveImportBackup(existingStateCache.state);
       }
     } catch (e) {
-      PFLog.warn('BackupService: Failed to backup state before import:', e);
+      OpLog.warn('BackupService: Failed to backup state before import:', e);
       backupSucceeded = false;
     }
 
     // 2. Clear all old operations to prevent IndexedDB bloat
     if (backupSucceeded) {
-      PFLog.normal('BackupService: Clearing old operations before import...');
+      OpLog.normal('BackupService: Clearing old operations before import...');
       await this._opLogStore.clearAllOperations();
     }
 
@@ -219,7 +219,7 @@ export class BackupService {
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
 
-    PFLog.normal('BackupService: Import persisted to operation log.');
+    OpLog.normal('BackupService: Import persisted to operation log.');
   }
 
   /**

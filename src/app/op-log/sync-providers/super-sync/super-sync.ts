@@ -1,4 +1,4 @@
-import { CapacitorHttp, Capacitor } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { SyncProviderId } from '../provider.const';
 import {
   SyncProviderServiceInterface,
@@ -26,6 +26,7 @@ import {
   compressWithGzipToString,
 } from '../../encryption/compression-handler';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { executeNativeRequestWithRetry } from '../native-http-retry';
 
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
 
@@ -540,8 +541,8 @@ export class SuperSyncProvider
   }
 
   /**
-   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp.
-   * This ensures consistent behavior across native platforms for non-compressed requests.
+   * Handles API requests on native platforms (Android/iOS) using CapacitorHttp
+   * with retry logic for transient network errors.
    */
   private async _fetchApiNative<T>(
     cfg: SuperSyncPrivateCfg,
@@ -559,13 +560,16 @@ export class SuperSyncProvider
     headers['Content-Type'] = 'application/json';
 
     try {
-      const response = await CapacitorHttp.request({
-        url,
-        method,
-        headers,
-        connectTimeout: 10000, // 10s to establish connection
-        readTimeout: 75000, // 75s to match fetch timeout
-      });
+      const response = await executeNativeRequestWithRetry(
+        {
+          url,
+          method,
+          headers,
+          connectTimeout: 10000,
+          readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        },
+        this.logLabel,
+      );
 
       if (response.status < 200 || response.status >= 300) {
         const errorData =
@@ -674,7 +678,8 @@ export class SuperSyncProvider
   }
 
   /**
-   * Sends a gzip-compressed request body from native platforms (Android/iOS).
+   * Sends a gzip-compressed request body from native platforms (Android/iOS)
+   * with retry logic for transient network errors.
    * Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
    * may have similar issues in Capacitor context. We use CapacitorHttp with
    * base64-encoded gzip data instead.
@@ -705,15 +710,17 @@ export class SuperSyncProvider
     headers['Content-Transfer-Encoding'] = 'base64';
 
     try {
-      const response = await CapacitorHttp.request({
-        url,
-        method: 'POST',
-        headers,
-        data: base64Gzip,
-        // Add timeout support for native platforms
-        connectTimeout: 10000, // 10s to establish connection
-        readTimeout: 75000, // 75s to match fetch timeout
-      });
+      const response = await executeNativeRequestWithRetry(
+        {
+          url,
+          method: 'POST',
+          headers,
+          data: base64Gzip,
+          connectTimeout: 10000,
+          readTimeout: SUPERSYNC_REQUEST_TIMEOUT_MS,
+        },
+        this.logLabel,
+      );
 
       if (response.status < 200 || response.status >= 300) {
         const errorData =

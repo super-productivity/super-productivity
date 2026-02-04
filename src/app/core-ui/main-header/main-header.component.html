@@ -40,6 +40,15 @@
         @if (isFocusModeEnabled() && !isXxxs()) {
           <focus-button></focus-button>
         }
+        @for (
+          simpleCounter of enabledSimpleCounters();
+          track trackById($index, simpleCounter)
+        ) {
+          <simple-counter-button
+            [matTooltip]="simpleCounter.title"
+            [simpleCounter]="simpleCounter"
+          ></simple-counter-button>
+        }
       }
     </div>
 
@@ -108,32 +117,36 @@
       ></desktop-panel-buttons>
     }
 
-    <!-- Simple Counter Dropdown (Always collapsed into timer icon) -->
-    @if (enabledSimpleCounters().length) {
-      <div class="mobile-dropdown-wrapper">
-        <button
-          (click)="
-            isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
-          "
-          [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
-          mat-icon-button
-        >
-          <mat-icon>{{ isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer' }}</mat-icon>
-        </button>
-        <div
-          class="mobile-dropdown"
-          [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
-        >
-          @for (
-            simpleCounter of enabledSimpleCounters();
-            track trackById($index, simpleCounter)
-          ) {
-            <simple-counter-button
-              [simpleCounter]="simpleCounter"
-            ></simple-counter-button>
-          }
+    <!-- Simple Counter Dropdown (mobile only) -->
+    @if (isXs()) {
+      @if (enabledSimpleCounters().length) {
+        <div class="mobile-dropdown-wrapper">
+          <button
+            (click)="
+              isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
+            "
+            [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
+            mat-icon-button
+          >
+            <mat-icon>{{
+              isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer'
+            }}</mat-icon>
+          </button>
+          <div
+            class="mobile-dropdown"
+            [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
+          >
+            @for (
+              simpleCounter of enabledSimpleCounters();
+              track trackById($index, simpleCounter)
+            ) {
+              <simple-counter-button
+                [simpleCounter]="simpleCounter"
+              ></simple-counter-button>
+            }
+          </div>
         </div>
-      </div>
+      }
     }
   </nav>
 </div>

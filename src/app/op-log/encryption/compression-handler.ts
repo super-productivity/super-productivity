@@ -1,5 +1,5 @@
 import { CompressError, DecompressError } from '../core/errors/sync-errors';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 
 /**
  * Compresses a string using gzip and returns the raw bytes.
@@ -15,7 +15,7 @@ export async function compressWithGzip(input: string): Promise<Uint8Array> {
     const compressed = await new Response(stream.readable).arrayBuffer();
     return new Uint8Array(compressed);
   } catch (error) {
-    PFLog.err(error);
+    OpLog.err(error);
     throw new CompressError(error);
   }
 }
@@ -45,7 +45,7 @@ export async function compressWithGzipToString(input: string): Promise<string> {
       reader.readAsDataURL(new Blob([compressed]));
     });
   } catch (error) {
-    PFLog.err(error);
+    OpLog.err(error);
     throw new CompressError(error);
   }
 }
@@ -73,7 +73,7 @@ export async function decompressGzipFromString(
     const decoded = new TextDecoder().decode(decompressed);
     return decoded;
   } catch (error) {
-    PFLog.err(error);
+    OpLog.err(error);
     throw new DecompressError(error);
   }
 }

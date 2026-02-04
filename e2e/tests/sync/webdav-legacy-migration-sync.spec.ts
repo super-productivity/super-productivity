@@ -31,7 +31,7 @@ import legacyDataCollisionB from '../../fixtures/legacy-migration-collision-b.js
  * Run with: npm run e2e:file e2e/tests/sync/webdav-legacy-migration-sync.spec.ts -- --retries=0
  */
 test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
-  test.describe.configure({ mode: 'serial' });
+  // Tests use unique sync folders — run in parallel
 
   /**
    * Test: Both clients migrated from legacy - Keep local resolution
@@ -81,7 +81,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the project by clicking in sidebar (more reliable than URL navigation)
       const sidenavA = clientA.page.locator('magic-side-nav');
       await sidenavA.locator('nav-item', { hasText: 'Client A Project' }).click();
-      await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewA.waitForTaskList();
 
       // Verify Client A has its migrated data
@@ -112,7 +112,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the project by clicking in sidebar
       const sidenavB = clientB.page.locator('magic-side-nav');
       await sidenavB.locator('nav-item', { hasText: 'Client B Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B has its migrated data
@@ -162,7 +162,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Navigate to B's project and verify data
       await sidenavB.locator('nav-item', { hasText: 'Client B Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B still has its data
@@ -183,7 +183,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
         hasText: 'Conflicting Data',
       });
       try {
-        await conflictDialogA.waitFor({ state: 'visible', timeout: 5000 });
+        await conflictDialogA.waitFor({ state: 'visible', timeout: 2000 });
         console.log(
           '[Test] Client A also sees conflict dialog (expected with divergent timelines)',
         );
@@ -225,7 +225,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
         if (hasBProject) {
           await sidenavA.locator('nav-item', { hasText: 'Client B Project' }).click();
-          await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
           await workViewA.waitForTaskList();
           await expect(clientA.page.locator('task', { hasText: 'Task B' })).toBeVisible({
             timeout: 10000,
@@ -234,7 +234,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
         } else {
           // Client A kept its own data - this is also valid
           await sidenavA.locator('nav-item', { hasText: 'Client A Project' }).click();
-          await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
           await workViewA.waitForTaskList();
           await expect(clientA.page.locator('task', { hasText: 'Task A1' })).toBeVisible({
             timeout: 10000,
@@ -299,7 +299,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the project by clicking in sidebar
       const sidenavA = clientA.page.locator('magic-side-nav');
       await sidenavA.locator('nav-item', { hasText: 'Client A Project' }).click();
-      await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewA.waitForTaskList();
 
       // Verify Client A has its migrated data
@@ -328,7 +328,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the project by clicking in sidebar
       const sidenavB = clientB.page.locator('magic-side-nav');
       await sidenavB.locator('nav-item', { hasText: 'Client B Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B has its migrated data
@@ -374,7 +374,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Navigate to A's project (which should now exist on B after adopting remote data)
       await sidenavB.locator('nav-item', { hasText: 'Client A Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B now has A's data (remote data)
@@ -444,7 +444,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the shared project by clicking in sidebar
       const sidenavA = clientA.page.locator('magic-side-nav');
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
-      await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewA.waitForTaskList();
 
       // Verify Client A has Version A data
@@ -474,7 +474,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the shared project by clicking in sidebar
       const sidenavB = clientB.page.locator('magic-side-nav');
       await sidenavB.locator('nav-item', { hasText: 'Shared Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B has Version B data
@@ -520,7 +520,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Navigate back to project and verify
       await sidenavB.locator('nav-item', { hasText: 'Shared Project' }).click();
-      await clientB.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B still has the original shared task with Version B content
@@ -552,7 +552,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
         hasText: 'Conflicting Data',
       });
       try {
-        await conflictDialogA.waitFor({ state: 'visible', timeout: 5000 });
+        await conflictDialogA.waitFor({ state: 'visible', timeout: 2000 });
         console.log('[Test] Client A sees conflict dialog - choosing Keep remote');
         const useRemoteBtn = conflictDialogA.locator('button', {
           hasText: /Keep remote/i,
@@ -576,7 +576,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
-      await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewA.waitForTaskList();
 
       // With divergent MIGRATION_GENESIS_IMPORT operations, Client A may keep its
@@ -659,7 +659,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to the project by clicking in sidebar
       const sidenavA = clientA.page.locator('magic-side-nav');
       await sidenavA.locator('nav-item', { hasText: 'Client A Project' }).click();
-      await clientA.page.waitForLoadState('networkidle').catch(() => {});
+
       await workViewA.waitForTaskList();
 
       // Verify active tasks are visible
@@ -708,7 +708,7 @@ test.describe('@webdav @migration WebDAV Legacy Migration Sync', () => {
       // Navigate to A's project (which should now exist on B after sync)
       const sidenavB = pageB.locator('magic-side-nav');
       await sidenavB.locator('nav-item', { hasText: 'Client A Project' }).click();
-      await pageB.waitForLoadState('networkidle').catch(() => {});
+
       await workViewB.waitForTaskList();
 
       // Verify Client B has A's active tasks

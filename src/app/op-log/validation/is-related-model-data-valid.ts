@@ -1,7 +1,7 @@
 import { devError } from '../../util/dev-error';
 import { environment } from '../../../environments/environment';
 import { AppDataComplete } from '../model/model-config';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import {
   MenuTreeKind,
   MenuTreeTreeNode,
@@ -100,12 +100,12 @@ export const getLastValidityError = (): string | undefined => lastValidityError;
 
 const _validityError = (errTxt: string, additionalInfo?: any): void => {
   if (additionalInfo) {
-    PFLog.log('Validity Error Info: ', additionalInfo);
+    OpLog.log('Validity Error Info: ', additionalInfo);
     if (environment.production) {
       try {
-        PFLog.log('Validity Error Info string: ', JSON.stringify(additionalInfo));
+        OpLog.log('Validity Error Info string: ', JSON.stringify(additionalInfo));
       } catch (e) {
-        PFLog.warn('Failed to stringify validity error info:', e);
+        OpLog.warn('Failed to stringify validity error info:', e);
       }
     }
   }
@@ -113,9 +113,9 @@ const _validityError = (errTxt: string, additionalInfo?: any): void => {
     devError(errTxt);
   } else {
     if (errorCount === 4) {
-      PFLog.err('too many validity errors, only logging from now on');
+      OpLog.err('too many validity errors, only logging from now on');
     }
-    PFLog.err(errTxt);
+    OpLog.err(errTxt);
   }
   lastValidityError = errTxt;
   errorCount++;
@@ -288,7 +288,7 @@ const validateTasksToProjectsAndTags = (
     if (tagId === TODAY_TAG.id) {
       const orphanedIds = tag.taskIds.filter((tid) => !taskIds.has(tid));
       if (orphanedIds.length > 0) {
-        PFLog.info(
+        OpLog.info(
           `[ValidateState] TODAY_TAG has ${orphanedIds.length} orphaned task IDs (harmless)`,
           { orphanedIds },
         );

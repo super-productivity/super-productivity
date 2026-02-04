@@ -1,5 +1,5 @@
 import { WebdavPrivateCfg } from './webdav.model';
-import { Log, PFLog } from '../../../../core/log';
+import { Log, SyncLog } from '../../../../core/log';
 import { FileMeta, WebdavXmlParser } from './webdav-xml-parser';
 import { WebDavHttpAdapter, WebDavHttpResponse } from './webdav-http-adapter';
 import {
@@ -63,7 +63,7 @@ export class WebdavApi {
       });
       throw new HttpNotOkAPIError(errorResponse); // Other errors
     } catch (e) {
-      PFLog.error(`${WebdavApi.L}.listFiles() error for path: ${dirPath}`, e);
+      SyncLog.error(`${WebdavApi.L}.listFiles() error for path: ${dirPath}`, e);
       // Handle "Not Found" error specifically to return empty array
       if (
         e instanceof HttpNotOkAPIError &&
@@ -102,7 +102,7 @@ export class WebdavApi {
         const files = this.xmlParser.parseMultiplePropsFromXml(response.data, path);
         if (files && files.length > 0) {
           const meta = files[0];
-          PFLog.verbose(`${WebdavApi.L}.getFileMeta() PROPFIND success for ${path}`, {
+          SyncLog.verbose(`${WebdavApi.L}.getFileMeta() PROPFIND success for ${path}`, {
             lastmod: meta.lastmod,
           });
           return meta;
@@ -111,14 +111,14 @@ export class WebdavApi {
     } catch (e) {
       // If PROPFIND fails and fallback is enabled, try HEAD
       if (useGetFallback) {
-        PFLog.verbose(
+        SyncLog.verbose(
           `${WebdavApi.L}.getFileMeta() PROPFIND failed, trying HEAD fallback`,
           e,
         );
         try {
           return await this._getFileMetaViaHead(fullPath);
         } catch (headErr) {
-          PFLog.warn(
+          SyncLog.warn(
             `${WebdavApi.L}.getFileMeta() HEAD fallback failed for ${path}`,
             headErr,
           );
@@ -126,7 +126,7 @@ export class WebdavApi {
           // Usually the original PROPFIND error is more informative about connectivity
         }
       }
-      PFLog.error(`${WebdavApi.L}.getFileMeta() error`, { path, error: e });
+      SyncLog.error(`${WebdavApi.L}.getFileMeta() error`, { path, error: e });
       throw e;
     }
 
@@ -183,7 +183,7 @@ export class WebdavApi {
 
       // Fallback: Some servers may omit Last-Modified on GET, so request metadata separately
       if (isLastModifiedMissing) {
-        PFLog.verbose(
+        SyncLog.verbose(
           `${WebdavApi.L}.download() missing Last-Modified header, trying metadata fallback for ${path}`,
         );
         try {
@@ -199,20 +199,23 @@ export class WebdavApi {
             }
           }
         } catch (e) {
-          PFLog.warn(`${WebdavApi.L}.download() metadata fallback failed for ${path}`, e);
+          SyncLog.warn(
+            `${WebdavApi.L}.download() metadata fallback failed for ${path}`,
+            e,
+          );
         }
       }
 
       // Fallback to ETag if Last-Modified is still not available
       if (!rev && legacyRev) {
         rev = legacyRev;
-        PFLog.warn(
+        SyncLog.warn(
           `${WebdavApi.L}.download() no Last-Modified for ${path}, using ETag as revision.`,
         );
       }
 
       if (!rev) {
-        PFLog.err(
+        SyncLog.err(
           `${WebdavApi.L}.download() no revision markers (Last-Modified or ETag) found for ${path}. ` +
             `Check your WebDAV server or reverse proxy configuration.`,
         );
@@ -226,7 +229,7 @@ export class WebdavApi {
         lastModified,
       };
     } catch (e) {
-      PFLog.error(`${WebdavApi.L}.download() error`, { path, error: e });
+      SyncLog.error(`${WebdavApi.L}.download() error`, { path, error: e });
       throw e;
     }
   }
@@ -308,7 +311,7 @@ export class WebdavApi {
             // If we get a 409 Conflict, it might be because parent directory doesn't exist
             uploadError.response.status === WebDavHttpStatus.CONFLICT)
         ) {
-          PFLog.debug(
+          SyncLog.debug(
             `${WebdavApi.L}.upload() got 409 Conflict for ${fullPath}. ` +
               `This often indicates the sync folder path is misconfigured. ` +
               `Attempting to create parent directory...`,
@@ -332,7 +335,7 @@ export class WebdavApi {
               retryError.response &&
               retryError.response.status === WebDavHttpStatus.CONFLICT
             ) {
-              PFLog.err(
+              SyncLog.err(
                 `${WebdavApi.L}.upload() 409 Conflict persists for ${fullPath} after creating parent directory. ` +
                   `Verify your syncFolderPath is relative to the WebDAV server root, ` +
                   `not your server's internal directory path.`,
@@ -358,7 +361,7 @@ export class WebdavApi {
       if (!rev) {
         // Some WebDAV servers don't return Last-Modified on PUT
         // Try to get it from a HEAD request first (cheaper than PROPFIND)
-        PFLog.verbose(
+        SyncLog.verbose(
           `${WebdavApi.L}.upload() no Last-Modified in PUT response, fetching via HEAD`,
         );
         try {
@@ -378,7 +381,7 @@ export class WebdavApi {
             return { rev, legacyRev: headLegacyRev, lastModified: rev };
           }
         } catch (headError) {
-          PFLog.verbose(
+          SyncLog.verbose(
             `${WebdavApi.L}.upload() HEAD request failed, falling back to PROPFIND`,
             headError,
           );
@@ -398,7 +401,7 @@ export class WebdavApi {
 
       return { rev, legacyRev, lastModified };
     } catch (e) {
-      PFLog.error(`${WebdavApi.L}.upload() error`, { path, error: e });
+      SyncLog.error(`${WebdavApi.L}.upload() error`, { path, error: e });
       throw e;
     }
   }
@@ -427,9 +430,9 @@ export class WebdavApi {
         headers,
       });
 
-      PFLog.verbose(`${WebdavApi.L}.remove() success for ${path}`);
+      SyncLog.verbose(`${WebdavApi.L}.remove() success for ${path}`);
     } catch (e) {
-      PFLog.error(`${WebdavApi.L}.remove() error`, { path, error: e });
+      SyncLog.error(`${WebdavApi.L}.remove() error`, { path, error: e });
       throw e;
     }
   }
@@ -438,7 +441,7 @@ export class WebdavApi {
     cfg: WebdavPrivateCfg,
   ): Promise<{ success: boolean; error?: string; fullUrl: string }> {
     const fullPath = this._buildFullPath(cfg.baseUrl, cfg.syncFolderPath || '/');
-    PFLog.verbose(`${WebdavApi.L}.testConnection() testing ${fullPath}`);
+    SyncLog.verbose(`${WebdavApi.L}.testConnection() testing ${fullPath}`);
 
     try {
       // Build authorization header
@@ -461,7 +464,7 @@ export class WebdavApi {
         response.status === WebDavHttpStatus.MULTI_STATUS ||
         response.status === WebDavHttpStatus.OK
       ) {
-        PFLog.verbose(`${WebdavApi.L}.testConnection() success for ${fullPath}`);
+        SyncLog.verbose(`${WebdavApi.L}.testConnection() success for ${fullPath}`);
         return { success: true, fullUrl: fullPath };
       }
 
@@ -472,7 +475,7 @@ export class WebdavApi {
       };
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      PFLog.warn(`${WebdavApi.L}.testConnection() failed for ${fullPath}`, e);
+      SyncLog.warn(`${WebdavApi.L}.testConnection() failed for ${fullPath}`, e);
       return { success: false, error: errorMessage, fullUrl: fullPath };
     }
   }
@@ -492,7 +495,7 @@ export class WebdavApi {
    */
   async testConditionalHeaders(testPath: string): Promise<boolean> {
     const testContent = `test-${Date.now()}`;
-    PFLog.normal(
+    SyncLog.normal(
       `${WebdavApi.L}.testConditionalHeaders() testing with path: ${testPath}`,
     );
 
@@ -509,7 +512,7 @@ export class WebdavApi {
       const currentRev = meta.lastmod;
 
       if (!currentRev) {
-        PFLog.warn(
+        SyncLog.warn(
           `${WebdavApi.L}.testConditionalHeaders() Server did not return lastmod - cannot test conditional headers`,
         );
         return false;
@@ -524,13 +527,13 @@ export class WebdavApi {
           expectedRev: oldDate,
         });
         // Upload succeeded when it should have failed with 412
-        PFLog.warn(
+        SyncLog.warn(
           `${WebdavApi.L}.testConditionalHeaders() Server ignored If-Unmodified-Since header - conditional headers NOT supported`,
         );
         return false; // Headers NOT supported
       } catch (e) {
         if (e instanceof RemoteFileChangedUnexpectedly) {
-          PFLog.normal(
+          SyncLog.normal(
             `${WebdavApi.L}.testConditionalHeaders() Server properly returned 412 - conditional headers ARE supported`,
           );
           return true; // Headers ARE supported (got 412 as expected)
@@ -594,7 +597,7 @@ export class WebdavApi {
     // Check if we're already creating this directory
     const existingPromise = this.directoryCreationQueue.get(parentPath);
     if (existingPromise) {
-      PFLog.verbose(
+      SyncLog.verbose(
         `${WebdavApi.L}._ensureParentDirectory() waiting for existing creation of ${parentPath}`,
       );
       await existingPromise;
@@ -620,7 +623,7 @@ export class WebdavApi {
         url: path,
         method: WebDavHttpMethod.MKCOL,
       });
-      PFLog.verbose(`${WebdavApi.L}._createDirectory() created ${path}`);
+      SyncLog.verbose(`${WebdavApi.L}._createDirectory() created ${path}`);
     } catch (e) {
       // Check if error is due to directory already existing (405 Method Not Allowed or 409 Conflict)
       if (
@@ -631,12 +634,12 @@ export class WebdavApi {
           e.response.status === WebDavHttpStatus.MOVED_PERMANENTLY || // Moved permanently - directory exists
           e.response.status === WebDavHttpStatus.OK) // OK - directory exists
       ) {
-        PFLog.verbose(
+        SyncLog.verbose(
           `${WebdavApi.L}._createDirectory() directory likely exists: ${path} (status: ${e.response.status})`,
         );
       } else {
         // Log other errors but don't throw - we'll let the actual upload fail if needed
-        PFLog.warn(`${WebdavApi.L}._createDirectory() unexpected error for ${path}`, e);
+        SyncLog.warn(`${WebdavApi.L}._createDirectory() unexpected error for ${path}`, e);
       }
     }
   }
@@ -742,7 +745,7 @@ export class WebdavApi {
     let effectiveLastmod = lastModified;
     if (!lastModified && etag) {
       effectiveLastmod = this._cleanRev(etag);
-      PFLog.warn(
+      SyncLog.warn(
         `${WebdavApi.L}._getFileMetaViaHead() No Last-Modified header for ${fullPath}, using ETag as revision. ` +
           `This may indicate a reverse proxy or server configuration issue.`,
       );
@@ -767,7 +770,7 @@ export class WebdavApi {
         size = parsedSize;
       }
     } catch (e) {
-      PFLog.warn(
+      SyncLog.warn(
         `${WebdavApi.L}._getFileMetaViaHead() invalid content-length: ${contentLength}`,
       );
     }

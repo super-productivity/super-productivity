@@ -5,6 +5,8 @@ import * as fromActions from './task.actions';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { TimeTrackingActions } from '../../time-tracking/store/time-tracking.actions';
+import { _resetDevErrorState } from '../../../util/dev-error';
+import { PlannerActions } from '../../planner/store/planner.actions';
 
 describe('Task Reducer', () => {
   const createTask = (id: string, partial: Partial<Task> = {}): Task => ({
@@ -516,6 +518,76 @@ describe('Task Reducer', () => {
       // The removed tasks should be moved to the beginning while maintaining their relative order
       expect(state.ids).toEqual(['task2', 'task4', 'task1', 'task3']);
     });
+
+    it('should ignore all invalid IDs and leave state unchanged', () => {
+      if (jasmine.isSpy(window.confirm)) {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      } else {
+        spyOn(window, 'confirm').and.returnValue(false);
+      }
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+
+      const action = TaskSharedActions.removeTasksFromTodayTag({
+        taskIds: ['nonexistent1', 'nonexistent2'],
+      });
+      const state = taskReducer(stateWithTasks, action);
+
+      expect(state.ids).toEqual(stateWithTasks.ids);
+      expect(state.entities).toEqual(stateWithTasks.entities);
+    });
+
+    it('should filter out invalid IDs and only reorder valid ones', () => {
+      if (jasmine.isSpy(window.confirm)) {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      } else {
+        spyOn(window, 'confirm').and.returnValue(false);
+      }
+      if (!jasmine.isSpy(window.alert)) {
+        spyOn(window, 'alert');
+      }
+
+      const stateWithOrderedTasks: TaskState = {
+        ...initialTaskState,
+        ids: ['task1', 'task2', 'task3', 'task4'],
+        entities: {
+          task1: createTask('task1'),
+          task2: createTask('task2'),
+          task3: createTask('task3'),
+          task4: createTask('task4'),
+        },
+      };
+
+      const action = TaskSharedActions.removeTasksFromTodayTag({
+        taskIds: ['task2', 'nonexistent', 'task4'],
+      });
+      const state = taskReducer(stateWithOrderedTasks, action);
+
+      expect(state.ids).toEqual(['task2', 'task4', 'task1', 'task3']);
+      expect(state.entities['task2']).toBeDefined();
+      expect(state.entities['task4']).toBeDefined();
+      expect(state.entities['nonexistent' as any]).toBeUndefined();
+    });
+
+    it('should call devError when orphan IDs are detected', () => {
+      _resetDevErrorState();
+      if (jasmine.isSpy(window.confirm)) {
+        (window.confirm as jasmine.Spy).and.returnValue(false);
+      } else {
+        spyOn(window, 'confirm').and.returnValue(false);
+      }
+      const alertSpy = jasmine.isSpy(window.alert)
+        ? (window.alert as jasmine.Spy)
+        : spyOn(window, 'alert');
+
+      const action = TaskSharedActions.removeTasksFromTodayTag({
+        taskIds: ['nonexistent1'],
+      });
+      taskReducer(stateWithTasks, action);
+
+      expect(alertSpy).toHaveBeenCalled();
+    });
   });
 
   describe('TaskSharedActions.addTagToTask', () => {
@@ -759,6 +831,34 @@ describe('Task Reducer', () => {
 
       // Current task should be cleared since orphan subtask was removed
       expect(state.currentTaskId).toBeNull();
+    });
+  });
+
+  describe('PlannerActions.planTaskForDay', () => {
+    it('should clear remindAt when rescheduling a task', () => {
+      const taskWithReminder = createTask('task-remind', {
+        remindAt: Date.now() - 60000,
+        dueDay: '2024-01-01',
+      });
+      const stateWithReminder: TaskState = {
+        ...initialTaskState,
+        ids: ['task-remind'],
+        entities: {
+          'task-remind': taskWithReminder,
+        },
+        currentTaskId: null,
+      };
+
+      const action = PlannerActions.planTaskForDay({
+        task: taskWithReminder,
+        day: '2024-01-02',
+      });
+
+      const result = taskReducer(stateWithReminder, action);
+
+      expect(result.entities['task-remind']!.remindAt).toBeUndefined();
+      expect(result.entities['task-remind']!.dueDay).toBe('2024-01-02');
+      expect(result.entities['task-remind']!.dueWithTime).toBeUndefined();
     });
   });
 });

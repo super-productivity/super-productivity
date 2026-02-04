@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { App, URLOpenListenerEvent } from '@capacitor/app';
 import { PluginListenerHandle } from '@capacitor/core';
 import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
-import { PFLog } from '../../core/log';
+import { SyncLog } from '../../core/log';
 
 export interface OAuthCallbackData {
   code?: string;
@@ -36,21 +36,21 @@ export class OAuthCallbackHandlerService implements OnDestroy {
     this._urlListenerHandle = await App.addListener(
       'appUrlOpen',
       (event: URLOpenListenerEvent) => {
-        PFLog.log('OAuthCallbackHandler: Received URL', event.url);
+        SyncLog.log('OAuthCallbackHandler: Received URL', event.url);
 
         if (event.url.startsWith('com.super-productivity.app://oauth-callback')) {
           const callbackData = this._parseOAuthCallback(event.url);
 
           if (callbackData.code) {
-            PFLog.log('OAuthCallbackHandler: Extracted auth code');
+            SyncLog.log('OAuthCallbackHandler: Extracted auth code');
           } else if (callbackData.error) {
-            PFLog.warn(
+            SyncLog.warn(
               'OAuthCallbackHandler: OAuth error',
               callbackData.error,
               callbackData.error_description,
             );
           } else {
-            PFLog.warn('OAuthCallbackHandler: No auth code or error in URL', event.url);
+            SyncLog.warn('OAuthCallbackHandler: No auth code or error in URL', event.url);
           }
 
           this._authCodeReceived$.next(callbackData);
@@ -73,7 +73,7 @@ export class OAuthCallbackHandlerService implements OnDestroy {
         provider: 'dropbox',
       };
     } catch (e) {
-      PFLog.err('OAuthCallbackHandler: Failed to parse URL', url, e);
+      SyncLog.err('OAuthCallbackHandler: Failed to parse URL', url, e);
       return {
         error: 'parse_error',
         error_description: 'Failed to parse OAuth callback URL',

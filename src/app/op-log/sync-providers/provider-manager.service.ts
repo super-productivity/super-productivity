@@ -11,7 +11,7 @@ import {
 import { Store } from '@ngrx/store';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
-import { PFLog } from '../../core/log';
+import { SyncLog } from '../../core/log';
 import { SyncProviderId, toSyncProviderId } from './provider.const';
 import { SyncProviderServiceInterface } from './provider.interface';
 import {
@@ -177,11 +177,11 @@ export class SyncProviderManager {
           };
         }
       } catch (e) {
-        PFLog.err('SyncProviderManager: Failed to set sync provider:', e);
+        SyncLog.err('SyncProviderManager: Failed to set sync provider:', e);
       }
     });
 
-    PFLog.normal('SyncProviderManager: Initialized');
+    SyncLog.normal('SyncProviderManager: Initialized');
   }
 
   /**
@@ -296,9 +296,9 @@ export class SyncProviderManager {
         });
       });
 
-      PFLog.normal(`SyncProviderManager: Active provider set to ${providerId}`);
+      SyncLog.normal(`SyncProviderManager: Active provider set to ${providerId}`);
     } else {
-      PFLog.err(`SyncProviderManager: Provider not found: ${providerId}`);
+      SyncLog.err(`SyncProviderManager: Provider not found: ${providerId}`);
     }
   }
 }

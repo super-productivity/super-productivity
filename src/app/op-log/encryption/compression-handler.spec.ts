@@ -1,4 +1,4 @@
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { DecompressError } from '../core/errors/sync-errors';
 import {
   compressWithGzip,
@@ -8,7 +8,7 @@ import {
 
 describe('compression-handler', () => {
   beforeEach(() => {
-    spyOn(PFLog, 'err').and.stub();
+    spyOn(OpLog, 'err').and.stub();
     spyOn(console, 'log').and.stub();
   });
 

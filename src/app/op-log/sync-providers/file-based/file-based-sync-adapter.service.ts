@@ -802,14 +802,14 @@ export class FileBasedSyncAdapterService {
       `FileBasedSyncAdapter: Downloaded ${limitedOps.length} ops (new/total: ${filteredOps.length}/${latestSeq})`,
     );
 
-    // Mark downloaded ops as processed (unless it's a force-from-zero request,
-    // where the caller is expected to process and then call setLastServerSeq)
-    if (!isForceFromZero) {
-      for (const serverOp of limitedOps) {
-        this._markOpProcessed(providerKey, serverOp.op.id);
-      }
-      this._persistState();
+    // Mark downloaded ops as processed for piggyback tracking.
+    // This must happen for ALL downloads, including force-from-zero (fresh client).
+    // Without marking, the upload piggyback mechanism (_collectPiggybackedOps) will
+    // return these same ops during the next upload, causing entity duplication.
+    for (const serverOp of limitedOps) {
+      this._markOpProcessed(providerKey, serverOp.op.id);
     }
+    this._persistState();
 
     // NOTE: Archives are NOT written to IndexedDB here. They are included in the
     // snapshotState response and written to IndexedDB during hydrateFromRemoteSync()

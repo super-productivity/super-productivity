@@ -9,7 +9,7 @@ import {
   RemoteFileNotFoundAPIError,
   NoRevAPIError,
 } from '../../../core/errors/sync-errors';
-import { PFLog } from '../../../../core/log';
+import { SyncLog } from '../../../../core/log';
 import { DropboxApi } from './dropbox-api';
 import { generatePKCECodes } from './generate-pkce-codes';
 import { SyncCredentialStore } from '../../credential-store.service';
@@ -87,7 +87,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       };
     } catch (e) {
       if (this._isTokenError(e)) {
-        PFLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        SyncLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
         await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
         return this.getFileRev(targetPath, localRev);
       }
@@ -128,7 +128,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       }
 
       if (typeof r.data !== 'string') {
-        PFLog.critical(`${Dropbox.L}.${this.downloadFile.name}() data`, r.data);
+        SyncLog.critical(`${Dropbox.L}.${this.downloadFile.name}() data`, r.data);
         throw new InvalidDataSPError(r.data);
       }
 
@@ -138,7 +138,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       };
     } catch (e) {
       if (this._isTokenError(e)) {
-        PFLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        SyncLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
         await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
         return this.downloadFile(targetPath);
       }
@@ -168,7 +168,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       try {
         const current = await this.getFileRev(targetPath, '');
         effectiveRev = current.rev;
-        PFLog.normal(
+        SyncLog.normal(
           `${Dropbox.L}.${this.uploadFile.name}() got current rev for conditional upload: ${effectiveRev}`,
         );
       } catch (e) {
@@ -176,7 +176,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
           throw e;
         }
         // File doesn't exist - proceed without rev (will create new)
-        PFLog.normal(
+        SyncLog.normal(
           `${Dropbox.L}.${this.uploadFile.name}() file does not exist, will create new`,
         );
       }
@@ -199,7 +199,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       };
     } catch (e) {
       if (this._isTokenError(e)) {
-        PFLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        SyncLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
         await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
         return this.uploadFile(targetPath, dataStr, revToMatch, isForceOverwrite);
       }
@@ -218,7 +218,7 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
       await this._api.remove(this._getPath(targetPath));
     } catch (e) {
       if (this._isTokenError(e)) {
-        PFLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        SyncLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
         await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
         return this.removeFile(targetPath);
       }
@@ -236,13 +236,13 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
   }
 
   async listFiles(dirPath: string): Promise<string[]> {
-    PFLog.normal(`${Dropbox.L}.${this.listFiles.name}()`, { dirPath });
+    SyncLog.normal(`${Dropbox.L}.${this.listFiles.name}()`, { dirPath });
     try {
       // DropboxApi.listFiles now returns full paths, so no need to prepend _getPath
       return await this._api.listFiles(this._getPath(dirPath));
     } catch (e) {
       if (this._isTokenError(e)) {
-        PFLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
+        SyncLog.critical('EXPIRED or INVALID TOKEN, trying to refresh');
         await this._api.updateAccessTokenFromRefreshTokenIfAvailable();
         return this.listFiles(dirPath);
       }

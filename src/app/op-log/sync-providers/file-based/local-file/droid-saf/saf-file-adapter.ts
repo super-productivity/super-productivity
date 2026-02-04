@@ -1,6 +1,6 @@
 import { FileAdapter } from '../file-adapter.interface';
 import { SafService } from './saf.service';
-import { PFLog } from '../../../../../core/log';
+import { SyncLog } from '../../../../../core/log';
 
 export class SafFileAdapter implements FileAdapter {
   constructor(private getUri: () => Promise<string | undefined>) {}
@@ -38,7 +38,7 @@ export class SafFileAdapter implements FileAdapter {
     } catch (error) {
       // Ignore file not found errors
       if (error?.toString?.().includes('File not found')) {
-        PFLog.err(`File not found for deletion: ${filePath}`);
+        SyncLog.err(`File not found for deletion: ${filePath}`);
         return;
       }
       throw error;
@@ -53,7 +53,7 @@ export class SafFileAdapter implements FileAdapter {
 
   // TODO: implement for operation log sync
   async listFiles?(dirPath: string): Promise<string[]> {
-    PFLog.warn('SafFileAdapter: listFiles is not yet implemented for Android SAF.');
+    SyncLog.warn('SafFileAdapter: listFiles is not yet implemented for Android SAF.');
     throw new Error('SafFileAdapter: listFiles is not yet implemented.');
   }
 }

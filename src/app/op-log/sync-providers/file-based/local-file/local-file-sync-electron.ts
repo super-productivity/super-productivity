@@ -1,6 +1,6 @@
 import { LocalFileSyncBase } from './local-file-sync-base';
 import { IS_ELECTRON } from '../../../../app.constants';
-import { PFLog } from '../../../../core/log';
+import { SyncLog } from '../../../../core/log';
 import { ElectronFileAdapter } from './electron-file-adapter';
 import { LocalFileSyncPrivateCfg } from '../../../core/types/sync.types';
 
@@ -33,7 +33,7 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
   }
 
   private async _checkDirAndOpenPickerIfNotExists(): Promise<void> {
-    PFLog.normal(
+    SyncLog.normal(
       `${LocalFileSyncElectron.L}.${this._checkDirAndOpenPickerIfNotExists.name}`,
     );
 
@@ -42,11 +42,13 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
       const isDirExists = await this._checkDirExists(folderPath);
 
       if (!isDirExists) {
-        PFLog.critical(`${LocalFileSyncElectron.L} - No valid directory, opening picker`);
+        SyncLog.critical(
+          `${LocalFileSyncElectron.L} - No valid directory, opening picker`,
+        );
         await this.pickDirectory();
       }
     } catch (err) {
-      PFLog.error(
+      SyncLog.error(
         `${LocalFileSyncElectron.L}.${this._checkDirAndOpenPickerIfNotExists.name}() error`,
         err,
       );
@@ -73,7 +75,7 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
       }
       return r;
     } catch (e) {
-      PFLog.critical(
+      SyncLog.critical(
         `${LocalFileSyncElectron.L}.${this._checkDirExists.name}() error`,
         e,
       );
@@ -82,7 +84,7 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
   }
 
   async pickDirectory(): Promise<string | void> {
-    PFLog.normal(`${LocalFileSyncElectron.L}.pickDirectory()`);
+    SyncLog.normal(`${LocalFileSyncElectron.L}.pickDirectory()`);
 
     try {
       const dir = await (window as any).ea.pickDirectory();
@@ -91,7 +93,7 @@ export class LocalFileSyncElectron extends LocalFileSyncBase {
       }
       return dir;
     } catch (e) {
-      PFLog.critical(`${LocalFileSyncElectron.L}.pickDirectory() error`, e);
+      SyncLog.critical(`${LocalFileSyncElectron.L}.pickDirectory() error`, e);
       throw e;
     }
   }

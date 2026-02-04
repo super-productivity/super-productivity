@@ -8,10 +8,30 @@ const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const KEY_LENGTH = 32;
 
-export const ARGON2_PARAMS = {
+const DEFAULT_ARGON2_PARAMS = {
   parallelism: 1,
   iterations: 3,
   memorySize: 65536, // 64 MB - memorySize is in KiB
+};
+
+let _argon2Params = { ...DEFAULT_ARGON2_PARAMS };
+
+/**
+ * Returns the current Argon2 parameters.
+ * Tests can override these via `setArgon2ParamsForTesting()`.
+ */
+export const getArgon2Params = (): typeof DEFAULT_ARGON2_PARAMS => _argon2Params;
+
+/**
+ * Override Argon2 parameters for testing (use weak params to speed up tests).
+ * Pass `undefined` to restore defaults.
+ */
+export const setArgon2ParamsForTesting = (
+  params?: Partial<typeof DEFAULT_ARGON2_PARAMS>,
+): void => {
+  _argon2Params = params
+    ? { ...DEFAULT_ARGON2_PARAMS, ...params }
+    : { ...DEFAULT_ARGON2_PARAMS };
 };
 
 // ============================================================================
@@ -68,13 +88,14 @@ const deriveKeyBytesArgon = async (
   password: string,
   salt: Uint8Array,
 ): Promise<Uint8Array> => {
+  const params = getArgon2Params();
   return await argon2id({
     password,
     salt,
     hashLength: KEY_LENGTH,
-    parallelism: ARGON2_PARAMS.parallelism,
-    iterations: ARGON2_PARAMS.iterations,
-    memorySize: ARGON2_PARAMS.memorySize,
+    parallelism: params.parallelism,
+    iterations: params.iterations,
+    memorySize: params.memorySize,
     outputType: 'binary',
   });
 };

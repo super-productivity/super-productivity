@@ -11,6 +11,7 @@ import {
   waitForSyncComplete,
   generateSyncFolderName,
   dismissTourIfVisible,
+  closeContextsSafely,
 } from '../../utils/sync-helpers';
 
 /**
@@ -116,23 +117,23 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A moves Task3 to first position using keyboard (Alt+Up repeatedly)
     const task3OnA = taskPageA.getTaskByText(task3Name).first();
     await task3OnA.click();
-    await pageA.waitForTimeout(200);
+    await pageA.waitForTimeout(500);
     // Move up twice (from position 3 to position 1)
     await pageA.keyboard.press('Alt+ArrowUp');
-    await pageA.waitForTimeout(100);
-    await pageA.keyboard.press('Alt+ArrowUp');
     await pageA.waitForTimeout(300);
+    await pageA.keyboard.press('Alt+ArrowUp');
+    await pageA.waitForTimeout(500);
     console.log('[TODAY Reorder] Client A moved Task3 up');
 
     // Client B moves Task1 down using keyboard (Alt+Down repeatedly)
     const task1OnB = taskPageB.getTaskByText(task1Name).first();
     await task1OnB.click();
-    await pageB.waitForTimeout(200);
+    await pageB.waitForTimeout(500);
     // Move down twice (from position 1 to position 3)
     await pageB.keyboard.press('Alt+ArrowDown');
-    await pageB.waitForTimeout(100);
-    await pageB.keyboard.press('Alt+ArrowDown');
     await pageB.waitForTimeout(300);
+    await pageB.keyboard.press('Alt+ArrowDown');
+    await pageB.waitForTimeout(500);
     console.log('[TODAY Reorder] Client B moved Task1 down');
 
     // --- Both clients sync ---
@@ -159,6 +160,10 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     await expect(pageB.locator('task')).toHaveCount(3);
     console.log('[TODAY Reorder] All 3 tasks still visible on both clients');
 
+    // Ensure all state changes have flushed before comparing task orders
+    await waitForStatePersistence(pageA);
+    await waitForStatePersistence(pageB);
+
     // Both clients should have the same order (LWW convergence)
     const finalTitlesA = await pageA.locator('task .task-title').allInnerTexts();
     const finalTitlesB = await pageB.locator('task .task-title').allInnerTexts();
@@ -170,8 +175,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     console.log('[TODAY Reorder] ✓ Both clients converged to same order');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -251,9 +255,9 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client A reorders: move Task2 up
     const task2OnA = taskPageA.getTaskByText(task2Name).first();
     await task2OnA.click();
-    await pageA.waitForTimeout(200);
+    await pageA.waitForTimeout(500);
     await pageA.keyboard.press('Alt+ArrowUp');
-    await pageA.waitForTimeout(300);
+    await pageA.waitForTimeout(500);
     console.log('[TODAY Create] Client A reordered tasks');
 
     // Client B creates a new task in TODAY
@@ -300,8 +304,7 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     console.log('[TODAY Create] ✓ Concurrent create + reorder resolved correctly');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 
   /**
@@ -399,9 +402,9 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     // Client B tries to reorder Task2 (move up)
     const task2OnB = taskPageB.getTaskByText(task2Name).first();
     await task2OnB.click();
-    await pageB.waitForTimeout(200);
+    await pageB.waitForTimeout(500);
     await pageB.keyboard.press('Alt+ArrowUp');
-    await pageB.waitForTimeout(300);
+    await pageB.waitForTimeout(500);
     console.log('[TODAY Remove] Client B reordered Task2');
 
     // --- Both clients sync ---
@@ -457,7 +460,6 @@ test.describe('@webdav WebDAV TODAY Tag Sync', () => {
     console.log('[TODAY Remove] ✓ Remove from today handled correctly');
 
     // Cleanup
-    await contextA.close();
-    await contextB.close();
+    await closeContextsSafely(contextA, contextB);
   });
 });

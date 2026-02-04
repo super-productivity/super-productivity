@@ -23,11 +23,12 @@
   padding-top: calc(var(--mac-title-bar-padding) - 8px);
 }
 
-:host-context(.isObsidianStyleHeader.isElectron) {
+:host-context(.isNoMac.isObsidianStyleHeader.isElectron) {
   // Dynamic window controls width using Window Controls Overlay CSS env vars
   // env(titlebar-area-width) = available width (viewport - controls)
   // So: controls width = 100vw - titlebar-area-width
   // Fallback calc ensures 140px when env vars unavailable
+  // Only on non-Mac: macOS window controls are on the left, no right padding needed
   padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
 }
 

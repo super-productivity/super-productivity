@@ -42,7 +42,7 @@ import {
   initialPluginMetaDataState,
 } from '../../plugins/plugin-persistence.model';
 import { AppDataComplete } from '../model/model-config';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 
 const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
 
@@ -79,7 +79,7 @@ export const isLegacyBackupData = (data: Record<string, unknown>): boolean => {
 export const migrateLegacyBackup = (
   legacyData: Record<string, unknown>,
 ): AppDataComplete => {
-  PFLog.log('migrateLegacyBackup: Starting legacy backup migration');
+  OpLog.log('migrateLegacyBackup: Starting legacy backup migration');
 
   let data = { ...legacyData } as Record<string, any>;
 
@@ -113,7 +113,7 @@ export const migrateLegacyBackup = (
   // === Final: Strip legacy keys that are not in v17's schema ===
   data = _stripLegacyKeys(data);
 
-  PFLog.log('migrateLegacyBackup: Migration complete');
+  OpLog.log('migrateLegacyBackup: Migration complete');
   return data as unknown as AppDataComplete;
 };
 
@@ -132,7 +132,7 @@ function _migration2ArchiveSplitAndTimeTracking(
   if (data.archiveYoung && data.archiveOld && data.timeTracking && !data.taskArchive) {
     return data;
   }
-  PFLog.log('migrateLegacyBackup: Running migration 2 (archive split + time tracking)');
+  OpLog.log('migrateLegacyBackup: Running migration 2 (archive split + time tracking)');
 
   // Extract project time tracking data
   const projectTimeTracking: TTWorkContextSessionMap = {};
@@ -334,7 +334,7 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
 // ---------------------------------------------------------------------------
 
 function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, any> {
-  PFLog.log('migrateLegacyBackup: Running migration 3 (planner + inbox)');
+  OpLog.log('migrateLegacyBackup: Running migration 3 (planner + inbox)');
 
   // Migrate planner days → task.dueDay
   if (data.planner?.days) {
@@ -531,7 +531,7 @@ function _migrateTasksForMigration3(
 // ---------------------------------------------------------------------------
 
 function _migration4TaskDateTimeFields(data: Record<string, any>): Record<string, any> {
-  PFLog.log('migrateLegacyBackup: Running migration 4 (task datetime fields)');
+  OpLog.log('migrateLegacyBackup: Running migration 4 (task datetime fields)');
 
   if (data.improvement && !Array.isArray(data.improvement.hiddenImprovementBannerItems)) {
     data.improvement.hiddenImprovementBannerItems = [];
@@ -806,7 +806,7 @@ function _stripLegacyKeys(data: Record<string, any>): Record<string, any> {
     if (V17_VALID_KEYS.has(key)) {
       stripped[key] = data[key];
     } else {
-      PFLog.log(`migrateLegacyBackup: Stripping legacy key "${key}"`);
+      OpLog.log(`migrateLegacyBackup: Stripping legacy key "${key}"`);
     }
   }
   return stripped;

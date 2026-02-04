@@ -372,7 +372,12 @@ export class ConflictResolutionService {
         localWinsRemoteOps.push(...resolution.conflict.remoteOps);
         remoteOpsToReject.push(...resolution.conflict.remoteOps.map((op) => op.id));
 
-        // Store the new update op (will be uploaded on next sync)
+        // Store the new update op (will be uploaded on next sync).
+        // Note: localWinOp is undefined for archive-wins sibling conflicts
+        // (non-archive conflicts for an entity being archived). These resolve
+        // as local-wins to prevent remote ops from resurrecting the entity,
+        // but no new op is needed — the archive-win op from the sibling
+        // conflict already covers the entity.
         if (resolution.localWinOp) {
           newLocalWinOps.push(resolution.localWinOp);
           OpLog.warn(

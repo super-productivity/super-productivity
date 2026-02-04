@@ -414,13 +414,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await syncPageC.triggerSync();
     await waitForSyncComplete(pageC, syncPageC);
 
-    // TODO: Navigation is a workaround for Angular not re-rendering task list
-    // after remote sync ops are applied to NgRx. Investigate whether the root
-    // cause is in HydrationStateService cooldown or change detection.
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
-
     // C should have 2 tasks (from A and B)
     await expect(pageC.locator('task')).toHaveCount(2, { timeout: 30000 });
     console.log('[Three Client Test] C: Joined and received 2 tasks');
@@ -455,11 +448,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await syncPageC.triggerSync();
     await waitForSyncComplete(pageC, syncPageC);
 
-    // TODO: Navigation workaround — see comment above for pageC's first sync
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
-
     // CRITICAL: C should have B's task (this was the bug!)
     await expect(pageC.locator('task')).toHaveCount(4, { timeout: 30000 });
     await expect(pageC.locator('task', { hasText: taskB2 })).toBeVisible({
@@ -470,19 +458,6 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     // A syncs to verify full sync
     await syncPageA.triggerSync();
     await waitForSyncComplete(pageA, syncPageA);
-
-    // TODO: Navigation workaround — see comment above for pageC's first sync
-    await pageA.goto('/#/tag/TODAY/tasks');
-    await pageA.waitForLoadState('networkidle');
-    await workViewPageA.waitForTaskList();
-
-    await pageB.goto('/#/tag/TODAY/tasks');
-    await pageB.waitForLoadState('networkidle');
-    await workViewPageB.waitForTaskList();
-
-    await pageC.goto('/#/tag/TODAY/tasks');
-    await pageC.waitForLoadState('networkidle');
-    await workViewPageC.waitForTaskList();
 
     // All clients should have 4 tasks
     await expect(pageA.locator('task')).toHaveCount(4, { timeout: 30000 });
@@ -678,6 +653,146 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     await expect(pageB.locator('task', { hasText: taskB2 })).not.toBeVisible();
 
     console.log('[Multi Local Ops Test] PASSED: Local tasks replaced with remote');
+
+    await closeContextsSafely(contextA, contextB);
+  });
+
+  /**
+   * Test: Fresh client should not duplicate tasks on repeated syncs (b2b63da9)
+   *
+   * Validates the fix from commit b2b63da9 which prevents task duplication when a
+   * fresh client syncs with a file-based provider. Without the fix, two duplication
+   * paths existed:
+   *
+   * 1. Download path: On second sync cycle, recentOps bypass the appliedOpIds filter
+   *    (not yet in IndexedDB) and get re-applied → duplicates
+   * 2. Piggyback path: The adapter's isForceFromZero guard skipped marking ops as
+   *    processed, so they were returned as piggybacked during upload → duplicates
+   */
+  test('should not duplicate tasks when fresh client syncs multiple times', async ({
+    browser,
+    baseURL,
+    request,
+  }) => {
+    test.slow();
+    const url = baseURL || 'http://localhost:4242';
+    const uniqueId = Date.now();
+
+    const FOLDER_NAME = generateSyncFolderName('e2e-fresh-client-dup');
+    const config = {
+      ...WEBDAV_CONFIG_TEMPLATE,
+      syncFolderPath: `/${FOLDER_NAME}`,
+    };
+
+    await createSyncFolder(request, FOLDER_NAME);
+    console.log(`[Fresh Client Dup Test] Created sync folder: ${FOLDER_NAME}`);
+
+    // === STEP 1: Client A creates tasks and syncs ===
+    const { context: contextA, page: pageA } = await setupSyncClient(browser, url);
+    const syncPageA = new SyncPage(pageA);
+    const workViewPageA = new WorkViewPage(pageA);
+
+    pageA.on('console', (msg) => {
+      if (
+        msg.text().includes('OperationLogSyncService') ||
+        msg.text().includes('FileBasedSyncAdapter')
+      ) {
+        console.log(`[Client A] ${msg.type()}: ${msg.text()}`);
+      }
+    });
+
+    await workViewPageA.waitForTaskList();
+    await syncPageA.setupWebdavSync(config);
+
+    const task1 = `Task-${uniqueId}-1`;
+    const task2 = `Task-${uniqueId}-2`;
+    const task3 = `Task-${uniqueId}-3`;
+    await workViewPageA.addTask(task1);
+    await workViewPageA.addTask(task2);
+    await workViewPageA.addTask(task3);
+    await expect(pageA.locator('task')).toHaveCount(3);
+    console.log('[Fresh Client Dup Test] Client A: Created 3 tasks');
+
+    await waitForStatePersistence(pageA);
+    await syncPageA.triggerSync();
+    await waitForSyncComplete(pageA, syncPageA);
+    console.log('[Fresh Client Dup Test] Client A: Initial sync complete');
+
+    // === STEP 2: Client B (fresh) joins and syncs ===
+    const { context: contextB, page: pageB } = await setupSyncClient(browser, url);
+    const syncPageB = new SyncPage(pageB);
+    const workViewPageB = new WorkViewPage(pageB);
+
+    pageB.on('console', (msg) => {
+      if (
+        msg.text().includes('OperationLogSyncService') ||
+        msg.text().includes('FileBasedSyncAdapter')
+      ) {
+        console.log(`[Client B] ${msg.type()}: ${msg.text()}`);
+      }
+    });
+
+    await workViewPageB.waitForTaskList();
+    await syncPageB.setupWebdavSync(config);
+
+    // First sync: Client B receives snapshot + recentOps
+    await syncPageB.triggerSync();
+    await waitForSyncComplete(pageB, syncPageB);
+
+    // Assert Client B has exactly 3 tasks (no more, no less)
+    await expect(pageB.locator('task')).toHaveCount(3);
+    await expect(pageB.locator('task', { hasText: task1 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: task2 })).toBeVisible();
+    await expect(pageB.locator('task', { hasText: task3 })).toBeVisible();
+    console.log('[Fresh Client Dup Test] Client B: Received 3 tasks on first sync');
+
+    // === STEP 3: Client B syncs again (no new remote changes) ===
+    // Without the fix, recentOps would be re-applied → duplicates (download path)
+    await syncPageB.triggerSync();
+    await waitForSyncComplete(pageB, syncPageB);
+
+    await expect(pageB.locator('task')).toHaveCount(3);
+    console.log(
+      '[Fresh Client Dup Test] Client B: Still 3 tasks after second sync (download path OK)',
+    );
+
+    // === STEP 4: Client B creates a new task and syncs (upload) ===
+    // Without the fix, piggyback would return the 3 snapshot ops again → duplicates
+    const taskB = `Task-${uniqueId}-from-B`;
+    await workViewPageB.addTask(taskB);
+    await expect(pageB.locator('task')).toHaveCount(4);
+
+    await waitForStatePersistence(pageB);
+    await syncPageB.triggerSync();
+    await waitForSyncComplete(pageB, syncPageB);
+
+    // CRITICAL: Client B should have exactly 4 tasks, not 7 (piggyback path)
+    await expect(pageB.locator('task')).toHaveCount(4);
+    console.log(
+      '[Fresh Client Dup Test] Client B: 4 tasks after upload sync (piggyback path OK)',
+    );
+
+    // === STEP 5: Client A syncs to receive Client B's new task ===
+    await syncPageA.triggerSync();
+    await waitForSyncComplete(pageA, syncPageA);
+
+    // Client A should have exactly 4 tasks (no phantom duplicates propagated)
+    await expect(pageA.locator('task')).toHaveCount(4);
+    await expect(pageA.locator('task', { hasText: task1 })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: task2 })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: task3 })).toBeVisible();
+    await expect(pageA.locator('task', { hasText: taskB })).toBeVisible();
+    console.log(
+      '[Fresh Client Dup Test] Client A: 4 tasks (received B task, no duplicates)',
+    );
+
+    // Final consistency check
+    const countA = await pageA.locator('task').count();
+    const countB = await pageB.locator('task').count();
+    expect(countA).toBe(countB);
+    expect(countA).toBe(4);
+
+    console.log('[Fresh Client Dup Test] PASSED: No task duplication on repeated syncs');
 
     await closeContextsSafely(contextA, contextB);
   });

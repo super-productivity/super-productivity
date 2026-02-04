@@ -1,18 +1,18 @@
 import { AppDataComplete } from '../model/model-config';
-import { PFLog } from '../../core/log';
+import { OpLog } from '../../core/log';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 
 describe('isRelatedModelDataValid', () => {
   let isRelatedModelDataValid: any;
 
   beforeEach(() => {
-    // Suppress PFLog output during tests by spying on the methods
-    spyOn(PFLog, 'log');
-    spyOn(PFLog, 'info');
-    spyOn(PFLog, 'error');
-    spyOn(PFLog, 'warn');
-    spyOn(PFLog, 'err');
-    spyOn(PFLog, 'critical');
+    // Suppress OpLog output during tests by spying on the methods
+    spyOn(OpLog, 'log');
+    spyOn(OpLog, 'info');
+    spyOn(OpLog, 'error');
+    spyOn(OpLog, 'warn');
+    spyOn(OpLog, 'err');
+    spyOn(OpLog, 'critical');
     /* eslint-disable @typescript-eslint/no-require-imports */
     // Reset modules to allow re-importing with mocks
     // @ts-ignore
@@ -158,7 +158,7 @@ describe('isRelatedModelDataValid', () => {
       // Should pass because TODAY_TAG orphans are harmless (virtual tag)
       expect(result).toBe(true);
       // Verify warning was logged
-      expect(PFLog.info).toHaveBeenCalledWith(
+      expect(OpLog.info).toHaveBeenCalledWith(
         jasmine.stringContaining('TODAY_TAG has 2 orphaned task IDs (harmless)'),
         jasmine.any(Object),
       );
@@ -290,7 +290,7 @@ describe('isRelatedModelDataValid', () => {
 
       expect(result).toBe(true);
       // Should not log any self-healing warning
-      expect(PFLog.warn).not.toHaveBeenCalled();
+      expect(OpLog.warn).not.toHaveBeenCalled();
     });
   });
 });

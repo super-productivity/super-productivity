@@ -107,27 +107,40 @@ const createSimpleCounter = async (
 };
 
 /**
- * Helper to ensure the counter dropdown in the header is open.
- * Counters are inside a `.mobile-dropdown` that is hidden by default
- * (counter buttons have opacity: 0 and pointer-events: none).
- * Click the timer icon button to toggle the `isVisible` class.
+ * Helper to check if the page is in mobile layout.
+ * On mobile, counters are behind a `.mobile-dropdown-wrapper` toggle.
+ * On desktop (1920x1080), counters are rendered inline in `.counters-action-group`.
  */
-const ensureCounterDropdownOpen = async (client: SimulatedE2EClient): Promise<void> => {
-  // Wait for the dropdown wrapper to exist (counters must be configured first)
+const isMobileLayout = async (client: SimulatedE2EClient): Promise<boolean> => {
+  return (await client.page.locator('.mobile-dropdown-wrapper').count()) > 0;
+};
+
+/**
+ * Helper to ensure counters are accessible in the header.
+ * On mobile: opens the `.mobile-dropdown` toggle if needed.
+ * On desktop: counters are already inline — this is a no-op.
+ */
+const ensureCountersVisible = async (client: SimulatedE2EClient): Promise<void> => {
+  if (!(await isMobileLayout(client))) {
+    // Desktop: counters are inline, wait for at least one to appear
+    await client.page
+      .locator('.counters-action-group simple-counter-button')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+    return;
+  }
+
+  // Mobile: open the dropdown if not already open
   const wrapper = client.page.locator('.mobile-dropdown-wrapper');
   await wrapper.waitFor({ state: 'visible', timeout: 15000 });
 
   const visibleDropdown = client.page.locator('.mobile-dropdown.isVisible');
-  // Already open — nothing to do
   if ((await visibleDropdown.count()) > 0) {
     return;
   }
-  // Click the timer icon to open the dropdown
   const toggleBtn = wrapper.locator('> button');
   await toggleBtn.click();
-  // Wait for the isVisible class to be added
   await visibleDropdown.waitFor({ state: 'attached', timeout: 5000 });
-  // Wait for counter buttons inside to become visible after CSS transition (opacity + transform)
   await visibleDropdown
     .locator('simple-counter-button')
     .first()
@@ -135,18 +148,30 @@ const ensureCounterDropdownOpen = async (client: SimulatedE2EClient): Promise<vo
 };
 
 /**
+ * Helper to get the visible counter buttons locator.
+ * On desktop: counters are inline in `.counters-action-group`.
+ * On mobile: counters are inside `.mobile-dropdown.isVisible`.
+ */
+const getVisibleCounters = async (
+  client: SimulatedE2EClient,
+): Promise<ReturnType<typeof client.page.locator>> => {
+  if (await isMobileLayout(client)) {
+    return client.page.locator('.mobile-dropdown.isVisible simple-counter-button');
+  }
+  return client.page.locator('.counters-action-group simple-counter-button');
+};
+
+/**
  * Helper to get the counter value from the header.
- * Opens the counter dropdown first, then reads the `.label` text from the last counter button.
+ * Ensures counters are visible, then reads the `.label` text from the last counter button.
  */
 const getCounterValue = async (client: SimulatedE2EClient): Promise<string> => {
   await client.page.waitForTimeout(500);
-  await ensureCounterDropdownOpen(client);
+  await ensureCountersVisible(client);
 
-  const allCounters = client.page.locator(
-    '.mobile-dropdown.isVisible simple-counter-button',
-  );
+  const allCounters = await getVisibleCounters(client);
   const count = await allCounters.count();
-  console.log(`Found ${count} simple counter buttons in dropdown`);
+  console.log(`Found ${count} simple counter buttons`);
 
   if (count > 0) {
     const lastCounter = allCounters.last();
@@ -161,14 +186,12 @@ const getCounterValue = async (client: SimulatedE2EClient): Promise<string> => {
 
 /**
  * Helper to increment a click counter.
- * Opens the counter dropdown first, then clicks the `.main-btn` of the last counter.
+ * Ensures counters are visible, then clicks the `.main-btn` of the last counter.
  */
 const incrementClickCounter = async (client: SimulatedE2EClient): Promise<void> => {
-  await ensureCounterDropdownOpen(client);
+  await ensureCountersVisible(client);
 
-  const allCounters = client.page.locator(
-    '.mobile-dropdown.isVisible simple-counter-button',
-  );
+  const allCounters = await getVisibleCounters(client);
   const lastCounter = allCounters.last();
   await lastCounter.locator('.main-btn').click();
 };
