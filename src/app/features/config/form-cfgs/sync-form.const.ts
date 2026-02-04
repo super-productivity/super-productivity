@@ -129,11 +129,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: LegacySyncProvider.SuperSync },
           { label: LegacySyncProvider.Dropbox, value: LegacySyncProvider.Dropbox },
-          { label: LegacySyncProvider.WebDAV, value: LegacySyncProvider.WebDAV },
+          { label: 'WebDAV (experimental)', value: LegacySyncProvider.WebDAV },
           ...(IS_ELECTRON || IS_ANDROID_WEB_VIEW
             ? [
                 {
-                  label: LegacySyncProvider.LocalFile,
+                  label: 'LocalFile (experimental)',
                   value: LegacySyncProvider.LocalFile,
                 },
               ]
