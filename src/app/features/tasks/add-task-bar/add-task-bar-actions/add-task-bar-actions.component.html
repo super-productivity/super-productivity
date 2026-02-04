@@ -141,6 +141,7 @@
     >
       @if (isTagEmojiIcon(project)) {
         <span
+          matMenuItemIcon
           class="menu-icon-emoji"
           [style.color]="project.theme.primary"
         >
@@ -171,10 +172,11 @@
         }
         @if (isTagEmojiIcon(tag)) {
           <span
+            matMenuItemIcon
             [style.color]="tag.color || tag.theme.primary"
             class="tag-ico tag-ico-emoji"
-            >{{ tag.icon || 'label' }}
-          </span>
+            >{{ tag.icon || 'label' }}</span
+          >
         } @else {
           <mat-icon
             [style.color]="tag.color || tag.theme.primary"

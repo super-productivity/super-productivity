@@ -23,6 +23,7 @@
           }
           @if (tag.icon && tag.isEmojiIcon) {
             <span
+              matMenuItemIcon
               [style.color]="tag.color || tag.theme.primary"
               class="tag-ico tag-ico-emoji"
               >{{ tag.icon }}</span
