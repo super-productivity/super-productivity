@@ -17,12 +17,15 @@
   [formlyAttributes]="field"
   [id]="id"
 >
-  <mat-option [value]="''">{{
+  <!--   <mat-option [value]="''">{{
     field.props?.nullLabel || T.G.NONE | translate
-  }}</mat-option>
+  }}</mat-option> -->
 
   <mat-option [value]="0">{{ T.G.TODAY_TAG_TITLE | translate }}</mat-option>
-  <mat-option [value]="1">{{ T.G.INBOX_PROJECT_TITLE | translate }}</mat-option>
+  <!-- Skip Inbox as it is a Project-->
+  <mat-option [value]="2">{{ T.MH.PLANNER | translate }}</mat-option>
+  <mat-option [value]="3">{{ T.MH.SCHEDULE | translate }}</mat-option>
+  <mat-option [value]="4">{{ T.MH.BOARDS | translate }}</mat-option>
 
   <mat-divider></mat-divider>
 

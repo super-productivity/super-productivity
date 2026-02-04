@@ -33,7 +33,7 @@ export type MiscConfig = Readonly<{
   isOverlayIndicatorEnabled?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
-  defaultStartPage?: number;
+  defaultStartPage?: number | string;
   unsplashApiKey?: string | null;
 
   // @todo: remove deprecated items in future major releases, after giving users time to migrate
