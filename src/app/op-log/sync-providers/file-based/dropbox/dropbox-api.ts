@@ -19,10 +19,7 @@ import { SyncProviderServiceInterface } from '../../provider.interface';
 import { SyncProviderId } from '../../provider.const';
 import { tryCatchInlineAsync } from '../../../../util/try-catch-inline';
 import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
-import {
-  executeNativeRequestWithRetry,
-  isTransientNetworkError,
-} from '../../native-http-retry';
+import { executeNativeRequestWithRetry } from '../../native-http-retry';
 
 interface DropboxApiOptions {
   method: HttpMethod;
@@ -813,13 +810,6 @@ export class DropboxApi {
       },
       DropboxApi.L,
     );
-  }
-
-  /**
-   * Delegates to the shared isTransientNetworkError utility.
-   */
-  _isTransientNetworkError(e: unknown): boolean {
-    return isTransientNetworkError(e);
   }
 
   /**

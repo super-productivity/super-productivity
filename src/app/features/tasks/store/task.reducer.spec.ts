@@ -46,6 +46,14 @@ describe('Task Reducer', () => {
     currentTaskId: 'task1',
   };
 
+  const stubWindowConfirm = (returnValue: boolean): void => {
+    if (jasmine.isSpy(window.confirm)) {
+      (window.confirm as jasmine.Spy).and.returnValue(returnValue);
+    } else {
+      spyOn(window, 'confirm').and.returnValue(returnValue);
+    }
+  };
+
   describe('unknown action', () => {
     it('should return the default state', () => {
       const action = { type: 'UNKNOWN' };
@@ -520,11 +528,7 @@ describe('Task Reducer', () => {
     });
 
     it('should ignore all invalid IDs and leave state unchanged', () => {
-      if (jasmine.isSpy(window.confirm)) {
-        (window.confirm as jasmine.Spy).and.returnValue(false);
-      } else {
-        spyOn(window, 'confirm').and.returnValue(false);
-      }
+      stubWindowConfirm(false);
       if (!jasmine.isSpy(window.alert)) {
         spyOn(window, 'alert');
       }
@@ -539,11 +543,7 @@ describe('Task Reducer', () => {
     });
 
     it('should filter out invalid IDs and only reorder valid ones', () => {
-      if (jasmine.isSpy(window.confirm)) {
-        (window.confirm as jasmine.Spy).and.returnValue(false);
-      } else {
-        spyOn(window, 'confirm').and.returnValue(false);
-      }
+      stubWindowConfirm(false);
       if (!jasmine.isSpy(window.alert)) {
         spyOn(window, 'alert');
       }
@@ -572,11 +572,7 @@ describe('Task Reducer', () => {
 
     it('should call devError when orphan IDs are detected', () => {
       _resetDevErrorState();
-      if (jasmine.isSpy(window.confirm)) {
-        (window.confirm as jasmine.Spy).and.returnValue(false);
-      } else {
-        spyOn(window, 'confirm').and.returnValue(false);
-      }
+      stubWindowConfirm(false);
       const alertSpy = jasmine.isSpy(window.alert)
         ? (window.alert as jasmine.Spy)
         : spyOn(window, 'alert');
@@ -740,12 +736,7 @@ describe('Task Reducer', () => {
 
     beforeEach(() => {
       // Mock confirm to return false to prevent devError from throwing
-      // Note: confirm may already be spied, so we use callFake on the existing spy
-      if (jasmine.isSpy(window.confirm)) {
-        (window.confirm as jasmine.Spy).and.returnValue(false);
-      } else {
-        spyOn(window, 'confirm').and.returnValue(false);
-      }
+      stubWindowConfirm(false);
       if (!jasmine.isSpy(window.alert)) {
         spyOn(window, 'alert');
       }

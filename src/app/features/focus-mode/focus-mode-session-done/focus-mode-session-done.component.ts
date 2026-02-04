@@ -12,7 +12,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { ConfettiService } from '../../../core/confetti/confetti.service';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { FocusModeService } from '../focus-mode.service';
-import { FocusModeMode } from '../focus-mode.model';
+import { FocusModeMode, getBreakCycle } from '../focus-mode.model';
 import {
   selectCurrentTask,
   selectLastCurrentTask,
@@ -101,7 +101,7 @@ export class FocusModeSessionDoneComponent implements AfterViewInit {
     const strategy = this._strategyFactory.getStrategy(mode);
 
     // Decrease cycle by 1 because break comes after a focus session
-    const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
+    const breakInfo = strategy.getBreakDuration(getBreakCycle(cycle));
     if (breakInfo) {
       // Pause task tracking during break if enabled
       const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
