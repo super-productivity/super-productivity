@@ -133,7 +133,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.LocalFile ||
         IS_ANDROID_WEB_VIEW,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'localFileSync',
       fieldGroup: [
         {
@@ -163,7 +163,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.LocalFile ||
         !IS_ANDROID_WEB_VIEW,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'localFileSync',
       fieldGroup: [
         {
@@ -195,7 +195,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.WebDAV,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'webDav',
       fieldGroup: createWebdavFormFields({
         corsInfoText: T.F.SYNC.FORM.WEB_DAV.CORS_INFO,
