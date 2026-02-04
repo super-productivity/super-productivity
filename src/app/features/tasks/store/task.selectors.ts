@@ -102,10 +102,10 @@ export const selectIsTaskDataLoaded = createSelector(
   (state) => state.isDataLoaded,
 );
 export const selectCurrentTask = createSelector(selectTaskFeatureState, (s) =>
-  s.currentTaskId ? (s.entities[s.currentTaskId] as Task) : null,
+  s.currentTaskId ? (s.entities[s.currentTaskId] ?? null) : null,
 );
 export const selectLastCurrentTask = createSelector(selectTaskFeatureState, (s) =>
-  s.lastCurrentTaskId ? (s.entities[s.lastCurrentTaskId] as Task) : null,
+  s.lastCurrentTaskId ? (s.entities[s.lastCurrentTaskId] ?? null) : null,
 );
 
 export const selectCurrentTaskOrParentWithData = createSelector(
@@ -442,26 +442,31 @@ export const selectTaskByIdWithSubTaskData = createSelector(
     const task = state.entities[props.id];
     if (!task) {
       devError('Task data not found for ' + props.id);
+      return { subTasks: [] } as unknown as TaskWithSubTasks;
     }
-    return mapSubTasksToTask(task as Task, state) as TaskWithSubTasks;
+    return mapSubTasksToTask(task, state) as TaskWithSubTasks;
   },
 );
 
 export const selectMainTasksWithoutTag = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { tagId: string }): Task[] =>
-    tasks.filter((task) => !task.parentId && !task.tagIds.includes(props.tagId)),
+    tasks.filter(
+      (task) => !!task && !task.parentId && !task.tagIds.includes(props.tagId),
+    ),
 );
 
 export const selectAllCalendarTaskEventIds = createSelector(
   selectAllTasks,
   (tasks: Task[]): string[] =>
-    tasks.filter((task) => task.issueType === 'ICAL').map((t) => t.issueId as string),
+    tasks
+      .filter((task) => !!task && task.issueType === 'ICAL')
+      .map((t) => t.issueId as string),
 );
 
 export const selectAllCalendarIssueTasks = createSelector(
   selectAllTasks,
-  (tasks: Task[]): Task[] => tasks.filter((task) => task.issueType === 'ICAL'),
+  (tasks: Task[]): Task[] => tasks.filter((task) => !!task && task.issueType === 'ICAL'),
 );
 
 export const selectTasksWorkedOnOrDoneFlat = createSelector(
@@ -474,10 +479,11 @@ export const selectTasksWorkedOnOrDoneFlat = createSelector(
     const todayStr = props.day;
     return tasks.filter(
       (t: Task) =>
-        t.isDone ||
-        (t.timeSpentOnDay &&
-          t.timeSpentOnDay[todayStr] &&
-          t.timeSpentOnDay[todayStr] > 0),
+        !!t &&
+        (t.isDone ||
+          (t.timeSpentOnDay &&
+            t.timeSpentOnDay[todayStr] &&
+            t.timeSpentOnDay[todayStr] > 0)),
     );
   },
 );
@@ -485,7 +491,9 @@ export const selectTasksWorkedOnOrDoneFlat = createSelector(
 export const selectTasksDueForDay = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { day: string }): TaskWithDueDay[] => {
-    return tasks.filter((task) => task.dueDay === props.day) as TaskWithDueDay[];
+    return tasks.filter(
+      (task) => !!task && task.dueDay === props.day,
+    ) as TaskWithDueDay[];
   },
 );
 
@@ -496,7 +504,7 @@ export const selectTasksDueAndOverdueForDay = createSelector(
       // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
       // which is lexicographically sortable. This avoids timezone conversion issues that occur
       // when creating Date objects from date strings.
-      (task) => typeof task.dueDay === 'string' && task.dueDay <= props.day,
+      (task) => !!task && typeof task.dueDay === 'string' && task.dueDay <= props.day,
     ) as TaskWithDueDay[];
   },
 );
@@ -506,6 +514,7 @@ export const selectTasksWithDueTimeForRange = createSelector(
   (tasks: Task[], props: { start: number; end: number }): TaskWithDueTime[] => {
     return tasks.filter(
       (task) =>
+        !!task &&
         typeof task.dueWithTime === 'number' &&
         task.dueWithTime >= props.start &&
         task.dueWithTime <= props.end,
@@ -546,7 +555,8 @@ export const selectTasksWithDueTimeUntil = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { end: number }): TaskWithDueTime[] => {
     return tasks.filter(
-      (task) => typeof task.dueWithTime === 'number' && task.dueWithTime <= props.end,
+      (task) =>
+        !!task && typeof task.dueWithTime === 'number' && task.dueWithTime <= props.end,
     ) as TaskWithDueTime[];
   },
 );
@@ -556,7 +566,7 @@ export const selectTasksWithDueTimeUntil = createSelector(
 export const selectAllRepeatableTaskWithSubTasks = createSelector(
   selectAllTasksWithSubTasks,
   (tasks: TaskWithSubTasks[]) => {
-    return tasks.filter((task) => !!task.repeatCfgId);
+    return tasks.filter((task) => !!task && !!task.repeatCfgId);
   },
 );
 
@@ -573,14 +583,14 @@ export const selectTasksByRepeatConfigId = createSelector(
 export const selectTaskWithSubTasksByRepeatConfigId = createSelector(
   selectAllTasksWithSubTasks,
   (tasks: TaskWithSubTasks[], props: { repeatCfgId: string }) => {
-    return tasks.filter((task) => task.repeatCfgId === props.repeatCfgId);
+    return tasks.filter((task) => !!task && task.repeatCfgId === props.repeatCfgId);
   },
 );
 
 export const selectTasksByTag = createSelector(
   selectAllTasksWithSubTasks,
   (tasks: TaskWithSubTasks[], props: { tagId: string }) => {
-    return tasks.filter((task) => task.tagIds.indexOf(props.tagId) !== -1);
+    return tasks.filter((task) => !!task && task.tagIds.indexOf(props.tagId) !== -1);
   },
 );
 
@@ -588,7 +598,7 @@ export const selectTasksByTag = createSelector(
 export const selectAllTaskIssueIdsForIssueProvider = (issueProvider: IssueProvider) => {
   return createSelector(selectAllTasks, (tasks: Task[]): string[] => {
     return tasks
-      .filter((task) => task.issueProviderId === issueProvider.id)
+      .filter((task) => !!task && task.issueProviderId === issueProvider.id)
       .map((t) => t.issueId as string);
   });
 };
@@ -603,6 +613,7 @@ export const selectAllTasksWithoutHiddenProjects = createSelector(
     });
 
     return tasks.filter((task) => {
+      if (!task) return false;
       const projectId = task.projectId;
       if (!projectId) return true;
 

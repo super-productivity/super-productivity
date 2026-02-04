@@ -1118,26 +1118,27 @@ export class TaskService {
     const allTasks = await this._allTasks$.pipe(first()).toPromise();
     const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
     const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids.map((id) => archiveTaskState.entities[id]);
-    return [...allTasks, ...archiveTasks].filter(
-      (task) => (task as Task).projectId === projectId,
-    ) as Task[];
+    const archiveTasks = ids
+      .map((id) => archiveTaskState.entities[id])
+      .filter((task): task is Task => !!task);
+    return [...allTasks, ...archiveTasks].filter((task) => task.projectId === projectId);
   }
 
   async getArchiveTasksForRepeatCfgId(repeatCfgId: string): Promise<Task[]> {
     const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
     const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids.map((id) => archiveTaskState.entities[id]);
-    return archiveTasks.filter(
-      (task) => (task as Task).repeatCfgId === repeatCfgId,
-    ) as Task[];
+    const archiveTasks = ids
+      .map((id) => archiveTaskState.entities[id])
+      .filter((task): task is Task => !!task);
+    return archiveTasks.filter((task) => task.repeatCfgId === repeatCfgId);
   }
 
   async getArchivedTasks(): Promise<Task[]> {
     const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
     const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids.map((id) => archiveTaskState.entities[id]) as Task[];
-    return archiveTasks;
+    return ids
+      .map((id) => archiveTaskState.entities[id])
+      .filter((task): task is Task => !!task);
   }
 
   async getAllIssueIdsForProject(
@@ -1161,7 +1162,9 @@ export class TaskService {
     const allTasks = await this._allTasks$.pipe(first()).toPromise();
     const archiveTaskState: TaskArchive = await this._taskArchiveService.load();
     const ids = (archiveTaskState && (archiveTaskState.ids as string[])) || [];
-    const archiveTasks = ids.map((id) => archiveTaskState.entities[id]);
+    const archiveTasks = ids
+      .map((id) => archiveTaskState.entities[id])
+      .filter((task): task is Task => !!task);
     return [...allTasks, ...archiveTasks] as Task[];
   }
 
@@ -1206,9 +1209,9 @@ export class TaskService {
           ? {
               task: archiveTaskWithSameIssue as Task,
               subTasks: archiveTaskWithSameIssue.subTaskIds
-                ? (archiveTaskWithSameIssue.subTaskIds.map(
-                    (id) => archiveTaskState.entities[id],
-                  ) as Task[])
+                ? archiveTaskWithSameIssue.subTaskIds
+                    .map((id) => archiveTaskState.entities[id])
+                    .filter((task): task is Task => !!task)
                 : null,
               isFromArchive: true,
             }
