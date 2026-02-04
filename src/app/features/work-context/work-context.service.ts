@@ -284,8 +284,9 @@ export class WorkContextService {
       return tasks
         .filter(
           (task) =>
-            task.dueDay === todayStr ||
-            task.subTasks.some((subTask) => subTask.dueDay === todayStr),
+            !!task &&
+            (task.dueDay === todayStr ||
+              task.subTasks?.some((subTask) => subTask.dueDay === todayStr)),
         )
         .map((task) => ({
           ...task,
