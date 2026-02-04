@@ -39,3 +39,5 @@
 - [[4.18-Reflection]]
 - [[4.19-Metrics]]
 - [[4.20-Task-Archiving]]
+- [[4.22-Quick-History]]
+- [[4.21-Worklog]]
