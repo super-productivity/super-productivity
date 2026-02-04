@@ -97,17 +97,23 @@ export const taskReducer = createReducer<TaskState>(
 
   // META ACTIONS
   // ------------
-  on(loadAllData, (state, { appDataComplete }) =>
-    appDataComplete.task
-      ? {
-          ...appDataComplete.task,
-          currentTaskId: null,
-          selectedTaskId: null,
-          lastCurrentTaskId: appDataComplete.task.currentTaskId,
-          isDataLoaded: true,
-        }
-      : state,
-  ),
+  on(loadAllData, (state, { appDataComplete }) => {
+    if (!appDataComplete.task) return state;
+    const task = appDataComplete.task;
+    // Sanitize: ensure ids only contains IDs that have entities
+    const ids = task.ids as string[];
+    const hasOrphans = ids.some((id) => !task.entities[id]);
+    if (hasOrphans) {
+      devError('loadAllData: Found orphaned task IDs in loaded state — sanitizing');
+    }
+    return {
+      ...(hasOrphans ? { ...task, ids: ids.filter((id) => !!task.entities[id]) } : task),
+      currentTaskId: null,
+      selectedTaskId: null,
+      lastCurrentTaskId: task.currentTaskId,
+      isDataLoaded: true,
+    };
+  }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
     return taskAdapter.removeMany(allTaskIds, {

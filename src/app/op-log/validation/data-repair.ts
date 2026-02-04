@@ -539,7 +539,7 @@ const _addOrphanedTasksToProjectLists = (data: AppDataComplete): AppDataComplete
   const orphanedTaskIds: string[] = task.ids.filter((tid) => {
     const taskItem = task.entities[tid];
     if (!taskItem) {
-      throw new Error('Missing task');
+      return false; // Skip orphaned IDs (already handled by _fixEntityStates)
     }
     return (
       !taskItem.parentId && !allTaskIdsOnProjectLists.includes(tid) && taskItem.projectId
@@ -549,7 +549,7 @@ const _addOrphanedTasksToProjectLists = (data: AppDataComplete): AppDataComplete
   orphanedTaskIds.forEach((tid) => {
     const taskItem = task.entities[tid];
     if (!taskItem) {
-      throw new Error('Missing task');
+      return; // Skip orphaned IDs (already handled by _fixEntityStates)
     }
     const targetProject = project.entities[taskItem.projectId as string];
     if (targetProject) {
