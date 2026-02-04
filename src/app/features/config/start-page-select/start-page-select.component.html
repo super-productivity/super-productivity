@@ -27,8 +27,6 @@
   <mat-option [value]="3">{{ T.MH.SCHEDULE | translate }}</mat-option>
   <mat-option [value]="4">{{ T.MH.BOARDS | translate }}</mat-option>
 
-  <mat-divider></mat-divider>
-
   @for (opt of projectService.list$ | async; track trackById($index, opt)) {
     <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
   }
