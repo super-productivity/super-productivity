@@ -23,6 +23,7 @@ import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-s
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
+import { StartPageSelectComponent } from '../features/config/start-page-select/start-page-select.component';
 
 @NgModule({
   imports: [
@@ -73,6 +74,13 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
         {
           name: 'project-select',
           component: SelectProjectComponent,
+          // technically no input, but as the properties get us what we need...
+          extends: 'input',
+          wrappers: ['form-field'],
+        },
+        {
+          name: 'start-page-select',
+          component: StartPageSelectComponent,
           // technically no input, but as the properties get us what we need...
           extends: 'input',
           wrappers: ['form-field'],

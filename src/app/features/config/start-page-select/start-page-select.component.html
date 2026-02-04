@@ -1,0 +1,33 @@
+<!--<select-->
+<!--  [errorStateMatcher]="errorStateMatcher"-->
+<!--  [formControl]="formControl"-->
+<!--  [formlyAttributes]="field"-->
+<!--  [id]="id"-->
+<!--  [readonly]="to.readonly"-->
+<!--  matNativeControl-->
+<!--&gt;-->
+<!--  <option [ngValue]="false">{{ T.G.NONE | translate }}</option>-->
+<!--  @for (opt of projectService.list$ | async; track trackById($index, opt)) {-->
+<!--    <option [ngValue]="opt.id">{{ opt.title }}</option>-->
+<!--  }-->
+<!--</select>-->
+<mat-select
+  [errorStateMatcher]="errorStateMatcher"
+  [formControl]="formControl"
+  [formlyAttributes]="field"
+  [id]="id"
+>
+  <mat-option [value]="''">{{
+    field.props?.nullLabel || T.G.NONE | translate
+  }}</mat-option>
+
+  <mat-option [value]="0">{{ T.G.TODAY_TAG_TITLE | translate }}</mat-option>
+  <mat-option [value]="1">{{ T.G.INBOX_PROJECT_TITLE | translate }}</mat-option>
+
+  <mat-divider></mat-divider>
+
+  @for (opt of projectService.list$ | async; track trackById($index, opt)) {
+    <mat-option [value]="opt.id">{{ opt.title }}</mat-option>
+  }
+</mat-select>
+<!---->
