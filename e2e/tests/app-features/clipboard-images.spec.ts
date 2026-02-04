@@ -14,14 +14,20 @@ test.describe('Clipboard Images Settings', () => {
     await page.waitForLoadState('networkidle');
 
     // Find and click on clipboard images section
-    // Look for the section by searching for the heading
+    // Look for the collapsible section title (not an h2/h3, but a div.collapsible-title)
     const sectionHeading = page
-      .locator('h2, h3')
+      .locator('.collapsible-title')
       .filter({ hasText: /clipboard.*image/i });
     await sectionHeading.first().waitFor({ state: 'visible', timeout: 10000 });
 
     // Scroll into view if needed
     await sectionHeading.first().scrollIntoViewIfNeeded();
+
+    // Click to expand the section if it's collapsed
+    await sectionHeading.first().click();
+
+    // Wait a moment for expansion animation
+    await page.waitForTimeout(500);
 
     // In web version, verify IndexedDB manager button IS visible
     const managerBtn = page.locator('button', {
@@ -41,12 +47,18 @@ test.describe('Clipboard Images Settings', () => {
     await settingsPage.navigateToSettings();
     await page.waitForLoadState('networkidle');
 
-    // Find clipboard images section
+    // Find clipboard images section (collapsible title, not h2/h3)
     const sectionHeading = page
-      .locator('h2, h3')
+      .locator('.collapsible-title')
       .filter({ hasText: /clipboard.*image/i });
     await sectionHeading.first().waitFor({ state: 'visible', timeout: 10000 });
     await sectionHeading.first().scrollIntoViewIfNeeded();
+
+    // Click to expand the section if it's collapsed
+    await sectionHeading.first().click();
+
+    // Wait a moment for expansion animation
+    await page.waitForTimeout(500);
 
     // Click the manager button
     const managerBtn = page.locator('button', {
@@ -62,10 +74,8 @@ test.describe('Clipboard Images Settings', () => {
     const dialogTitle = dialog.locator('h1, h2').filter({ hasText: /clipboard.*image/i });
     await expect(dialogTitle).toBeVisible();
 
-    // Verify close button exists
-    const closeBtn = dialog.locator(
-      'button[mat-dialog-close], button[aria-label*="close"]',
-    );
+    // Verify close button exists (looking for button with "Close" text)
+    const closeBtn = dialog.locator('button').filter({ hasText: /close/i });
     await expect(closeBtn.first()).toBeVisible();
 
     // Close the dialog
