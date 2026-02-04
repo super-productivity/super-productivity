@@ -34,7 +34,6 @@ import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
 import { SyncWrapperService } from './sync-wrapper.service';
-import { SyncProviderId } from '../../op-log/sync-exports';
 
 const MAX_WAIT_FOR_INITIAL_SYNC = 25000;
 /** 15 minutes in milliseconds - throttle time for user activity sync checks */
@@ -142,15 +141,7 @@ export class SyncTriggerService {
       if (!isActive) {
         return of(true);
       }
-      // SuperSync has data locally - no need to wait for initial sync
-      return this._syncWrapperService.syncProviderId$.pipe(
-        take(1),
-        switchMap((providerId) =>
-          providerId === SyncProviderId.SuperSync
-            ? of(true)
-            : this._isInitialSyncDoneManual$.asObservable(),
-        ),
-      );
+      return this._isInitialSyncDoneManual$.asObservable();
     }),
   );
   private _afterInitialSyncDoneAndDataLoadedInitially$: Observable<boolean> =
