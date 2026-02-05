@@ -239,6 +239,32 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
               description: T.F.SIMPLE_COUNTER.FORM.L_LINKED_PROJECTS_DESCRIPTION,
             },
           },
+          {
+            key: 'excludedTagIds',
+            type: 'tag-selection',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch ||
+                !fCfg.model.enableAutoTrackFromTasks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_EXCLUDED_TAGS,
+              description: T.F.SIMPLE_COUNTER.FORM.L_EXCLUDED_TAGS_DESCRIPTION,
+            },
+          },
+          {
+            key: 'excludedProjectIds',
+            type: 'project-selection',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch ||
+                !fCfg.model.enableAutoTrackFromTasks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_EXCLUDED_PROJECTS,
+              description: T.F.SIMPLE_COUNTER.FORM.L_EXCLUDED_PROJECTS_DESCRIPTION,
+            },
+          },
         ],
       },
     },

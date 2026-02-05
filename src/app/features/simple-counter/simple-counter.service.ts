@@ -29,7 +29,7 @@ import {
   SimpleCounterType,
 } from './simple-counter.model';
 import { nanoid } from 'nanoid';
-import { distinctUntilChanged, withLatestFrom } from 'rxjs/operators';
+import { distinctUntilChanged, take, withLatestFrom } from 'rxjs/operators';
 import { isEqualSimpleCounterCfg } from './is-equal-simple-counter-cfg.util';
 import { DateService } from 'src/app/core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
@@ -207,6 +207,24 @@ export class SimpleCounterService implements OnDestroy {
 
   setCounterForDate(id: string, date: string, newVal: number): void {
     this._store$.dispatch(setSimpleCounterCounterForDate({ id, newVal, date }));
+  }
+
+  incrementCounterByDate(id: string, date: string, duration: number): void {
+    // Get current value and add the duration - use take(1) to auto-unsubscribe
+    this._store$
+      .pipe(
+        select(selectSimpleCounterById, { id }),
+        take(1),
+      )
+      .subscribe((counter) => {
+        if (counter) {
+          const currentValue = counter.countOnDay[date] || 0;
+          const newValue = currentValue + duration;
+          this._store$.dispatch(
+            setSimpleCounterCounterForDate({ id, newVal: newValue, date }),
+          );
+        }
+      });
   }
 
   /**

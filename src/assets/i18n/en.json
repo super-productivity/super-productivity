@@ -909,10 +909,20 @@
         "L_LINKED_TAGS_DESCRIPTION": "Time spent on tasks with these tags will count toward this habit",
         "L_LINKED_PROJECTS": "Linked projects",
         "L_LINKED_PROJECTS_DESCRIPTION": "Time spent on tasks in these projects will count toward this habit",
+        "L_EXCLUDED_TAGS": "Excluded tags",
+        "L_EXCLUDED_TAGS_DESCRIPTION": "Tasks with these tags will NOT count, even if they have linked tags",
+        "L_EXCLUDED_PROJECTS": "Excluded projects",
+        "L_EXCLUDED_PROJECTS_DESCRIPTION": "Tasks in these projects will NOT count, even if they have linked tags",
         "TITLE": "Simple Counters & Habit Tracking",
         "TYPE_CLICK_COUNTER": "Click counter",
         "TYPE_REPEATED_COUNTDOWN": "Repeated countdown",
         "TYPE_STOPWATCH": "Stopwatch"
+      },
+      "DIALOG_SELECT_TASK": {
+        "TITLE": "Select Task",
+        "DESCRIPTION": "Choose a task to track time for both the habit and the task:",
+        "CANCEL": "Cancel",
+        "START_TRACKING": "Start Tracking"
       },
       "HABIT_TRACKER": {
         "PREV_WEEK": "Previous week",

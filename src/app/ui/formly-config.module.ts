@@ -89,12 +89,12 @@ import { FormlyHabitProjectSelectionComponent } from './formly-habit-project-sel
         {
           name: 'tag-selection',
           component: FormlyHabitTagSelectionComponent,
-          wrappers: ['form-field'],
+          wrappers: [],
         },
         {
           name: 'project-selection',
           component: FormlyHabitProjectSelectionComponent,
-          wrappers: ['form-field'],
+          wrappers: [],
         },
         {
           name: 'repeat',

@@ -22,6 +22,8 @@ export const EMPTY_SIMPLE_COUNTER: SimpleCounter = {
   enableAutoTrackFromTasks: false,
   linkedTagIds: [],
   linkedProjectIds: [],
+  excludedTagIds: [],
+  excludedProjectIds: [],
 };
 
 export const DEFAULT_SIMPLE_COUNTERS: SimpleCounter[] = [

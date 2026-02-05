@@ -115,6 +115,10 @@ export class DialogSimpleCounterEditSettingsComponent {
       enableAutoTrackFromTasks: counter.enableAutoTrackFromTasks || false,
       linkedTagIds: counter.linkedTagIds ? [...counter.linkedTagIds] : [],
       linkedProjectIds: counter.linkedProjectIds ? [...counter.linkedProjectIds] : [],
+      excludedTagIds: counter.excludedTagIds ? [...counter.excludedTagIds] : [],
+      excludedProjectIds: counter.excludedProjectIds
+        ? [...counter.excludedProjectIds]
+        : [],
     };
   }
 
@@ -140,6 +144,10 @@ export class DialogSimpleCounterEditSettingsComponent {
       enableAutoTrackFromTasks: settings.enableAutoTrackFromTasks || false,
       linkedTagIds: settings.linkedTagIds ? [...settings.linkedTagIds] : [],
       linkedProjectIds: settings.linkedProjectIds ? [...settings.linkedProjectIds] : [],
+      excludedTagIds: settings.excludedTagIds ? [...settings.excludedTagIds] : [],
+      excludedProjectIds: settings.excludedProjectIds
+        ? [...settings.excludedProjectIds]
+        : [],
     };
 
     if (!normalized.isTrackStreaks) {
@@ -162,6 +170,8 @@ export class DialogSimpleCounterEditSettingsComponent {
     ) {
       normalized.linkedTagIds = [];
       normalized.linkedProjectIds = [];
+      normalized.excludedTagIds = [];
+      normalized.excludedProjectIds = [];
     }
 
     return normalized;
@@ -176,6 +186,10 @@ export class DialogSimpleCounterEditSettingsComponent {
         : settings.isTrackStreaks
           ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
           : undefined,
+      excludedTagIds: settings.excludedTagIds ? [...settings.excludedTagIds] : [],
+      excludedProjectIds: settings.excludedProjectIds
+        ? [...settings.excludedProjectIds]
+        : [],
       linkedTagIds: settings.linkedTagIds ? [...settings.linkedTagIds] : [],
       linkedProjectIds: settings.linkedProjectIds ? [...settings.linkedProjectIds] : [],
     };

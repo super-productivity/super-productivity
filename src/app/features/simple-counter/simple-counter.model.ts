@@ -26,6 +26,8 @@ export interface SimpleCounterCfgFields {
   enableAutoTrackFromTasks?: boolean;
   linkedTagIds?: string[];
   linkedProjectIds?: string[];
+  excludedTagIds?: string[];
+  excludedProjectIds?: string[];
 
   // adv cfg
   // repeated countdown reminder

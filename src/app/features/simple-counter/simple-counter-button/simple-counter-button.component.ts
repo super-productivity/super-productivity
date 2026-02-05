@@ -26,6 +26,10 @@ import { MatIcon } from '@angular/material/icon';
 import { AsyncPipe } from '@angular/common';
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { ProgressCircleComponent } from '../../../ui/progress-circle/progress-circle.component';
+import { TaskService } from '../../tasks/task.service';
+import { DialogSelectHabitTaskComponent } from '../dialog-select-habit-task/dialog-select-habit-task.component';
+import { Task } from '../../tasks/task.model';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'simple-counter-button',
@@ -51,6 +55,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _dateService = inject(DateService);
   private _bannerService = inject(BannerService);
+  private _taskService = inject(TaskService);
   private _todayStr$ = this._globalTrackingIntervalService.todayDateStr$;
 
   T: typeof T = T;
@@ -118,6 +123,21 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
         }),
       );
     }
+
+    // Watch for task stop events to stop linked habit
+    const counter = this.simpleCounter();
+    if (counter?.type === SimpleCounterType.StopWatch && counter.enableAutoTrackFromTasks) {
+      this._subs.add(
+        this._taskService.currentTaskId$.subscribe((currentTaskId) => {
+          // Get current state of the habit
+          const currentCounter = this.simpleCounter();
+          // If task stopped and habit is running, stop the habit
+          if (!currentTaskId && currentCounter?.isOn) {
+            this._simpleCounterService.toggleCounter(currentCounter.id);
+          }
+        }),
+      );
+    }
   }
 
   calcCountdownProgress(remaining: number, total?: number | null): number {
@@ -143,12 +163,40 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     this.isTimeUp.set(false);
   }
 
-  toggleStopwatch(): void {
+  async toggleStopwatch(): Promise<void> {
     const c = this.simpleCounter();
     if (!c) {
       throw new Error('No simple counter model');
     }
+
+    // If habit is being started and auto-track is enabled, show task selection dialog
+    if (!c.isOn && c.enableAutoTrackFromTasks) {
+      const dialogRef = this._matDialog.open(DialogSelectHabitTaskComponent, {
+        restoreFocus: true,
+        data: { simpleCounter: c },
+      });
+
+      const selectedTask = await firstValueFrom(dialogRef.afterClosed());
+      
+      if (!selectedTask) {
+        // User cancelled - don't start habit
+        return;
+      }
+
+      // Start tracking the selected task
+      this._taskService.setCurrentId(selectedTask.id);
+    }
+
+    // Toggle the habit counter
     this._simpleCounterService.toggleCounter(c.id);
+
+    // If stopping the habit, also stop the task timer
+    if (c.isOn) {
+      const currentTaskId = await firstValueFrom(this._taskService.currentTaskId$);
+      if (currentTaskId) {
+        this._taskService.setCurrentId(null);
+      }
+    }
   }
 
   toggleCounter(): void {
