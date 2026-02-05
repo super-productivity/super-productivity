@@ -20,7 +20,11 @@ import { TagService } from '../../features/tag/tag.service';
   template: `
     <mat-form-field class="full-width">
       <mat-label>{{ props.label }}</mat-label>
-      <mat-select [formControl]="formControl" [formlyAttributes]="field" multiple>
+      <mat-select
+        [formControl]="formControl"
+        [formlyAttributes]="field"
+        multiple
+      >
         @for (tag of tags(); track tag.id) {
           <mat-option [value]="tag.id">
             {{ tag.title }}

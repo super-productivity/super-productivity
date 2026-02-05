@@ -28,7 +28,6 @@ import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clo
 import { ProgressCircleComponent } from '../../../ui/progress-circle/progress-circle.component';
 import { TaskService } from '../../tasks/task.service';
 import { DialogSelectHabitTaskComponent } from '../dialog-select-habit-task/dialog-select-habit-task.component';
-import { Task } from '../../tasks/task.model';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -126,7 +125,10 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
     // Watch for task stop events to stop linked habit
     const counter = this.simpleCounter();
-    if (counter?.type === SimpleCounterType.StopWatch && counter.enableAutoTrackFromTasks) {
+    if (
+      counter?.type === SimpleCounterType.StopWatch &&
+      counter.enableAutoTrackFromTasks
+    ) {
       this._subs.add(
         this._taskService.currentTaskId$.subscribe((currentTaskId) => {
           // Get current state of the habit
@@ -177,7 +179,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
       });
 
       const selectedTask = await firstValueFrom(dialogRef.afterClosed());
-      
+
       if (!selectedTask) {
         // User cancelled - don't start habit
         return;

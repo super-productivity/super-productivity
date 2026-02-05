@@ -62,15 +62,24 @@ export interface DialogSelectHabitTaskData {
               </mat-option>
             }
             @if (displayedTasks().length === 0) {
-              <mat-option [value]="null" [disabled]="true">
+              <mat-option
+                [value]="null"
+                [disabled]="true"
+              >
                 {{ T.F.SIMPLE_COUNTER.DIALOG_SELECT_TASK.NO_MATCHING_TASKS | translate }}
               </mat-option>
             }
           </mat-autocomplete>
         </mat-form-field>
       </div>
-      <div mat-dialog-actions align="end">
-        <button mat-button (click)="cancel()">
+      <div
+        mat-dialog-actions
+        align="end"
+      >
+        <button
+          mat-button
+          (click)="cancel()"
+        >
           {{ T.F.SIMPLE_COUNTER.DIALOG_SELECT_TASK.CANCEL | translate }}
         </button>
         <button
@@ -174,10 +183,9 @@ export class DialogSelectHabitTaskComponent {
   });
 
   // Search input value
-  private _searchTerm = toSignal(
-    this.taskSelectCtrl.valueChanges.pipe(startWith('')),
-    { initialValue: '' },
-  );
+  private _searchTerm = toSignal(this.taskSelectCtrl.valueChanges.pipe(startWith('')), {
+    initialValue: '',
+  });
 
   // Displayed tasks based on search
   displayedTasks = computed(() => {

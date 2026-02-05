@@ -20,7 +20,11 @@ import { ProjectService } from '../../features/project/project.service';
   template: `
     <mat-form-field class="full-width">
       <mat-label>{{ props.label }}</mat-label>
-      <mat-select [formControl]="formControl" [formlyAttributes]="field" multiple>
+      <mat-select
+        [formControl]="formControl"
+        [formlyAttributes]="field"
+        multiple
+      >
         @for (project of projects(); track project.id) {
           <mat-option [value]="project.id">
             {{ project.title }}

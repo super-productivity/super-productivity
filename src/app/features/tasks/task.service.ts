@@ -803,13 +803,13 @@ export class TaskService {
     // Use cached counters to avoid repeated subscriptions
     const now = Date.now();
     const cacheExpired = now - this._linkedHabitsCacheTime > this._CACHE_TTL_MS;
-    
+
     if (cacheExpired || this._linkedHabitsCache.length === 0) {
       // Skip if cache is already being updated to prevent double processing
       if (this._isUpdatingHabitsCache) {
         return;
       }
-      
+
       // Cache expired or empty, refresh it synchronously
       this._isUpdatingHabitsCache = true;
       this._simpleCounterService.enabledSimpleCounters$
@@ -823,7 +823,7 @@ export class TaskService {
           );
           this._linkedHabitsCacheTime = now;
           this._isUpdatingHabitsCache = false;
-          
+
           // Process immediately after cache update
           this._processLinkedHabits(task, duration, date);
         });
