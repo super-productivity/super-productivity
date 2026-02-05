@@ -63,7 +63,7 @@ export interface DialogSelectHabitTaskData {
             }
             @if (displayedTasks().length === 0) {
               <mat-option [value]="null" [disabled]="true">
-                No matching tasks found
+                {{ T.F.SIMPLE_COUNTER.DIALOG_SELECT_TASK.NO_MATCHING_TASKS | translate }}
               </mat-option>
             }
           </mat-autocomplete>

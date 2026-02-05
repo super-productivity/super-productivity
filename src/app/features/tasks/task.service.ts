@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
+import { SimpleCounterType } from '../simple-counter/simple-counter.model';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
@@ -198,6 +199,7 @@ export class TaskService {
   // Cache for habit tracking to avoid repeated subscriptions
   private _linkedHabitsCache: SimpleCounter[] = [];
   private _linkedHabitsCacheTime = 0;
+  private _isUpdatingHabitsCache = false;
   private readonly _CACHE_TTL_MS = 5000; // Refresh cache every 5 seconds
 
   // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
@@ -803,17 +805,24 @@ export class TaskService {
     const cacheExpired = now - this._linkedHabitsCacheTime > this._CACHE_TTL_MS;
     
     if (cacheExpired || this._linkedHabitsCache.length === 0) {
+      // Skip if cache is already being updated to prevent double processing
+      if (this._isUpdatingHabitsCache) {
+        return;
+      }
+      
       // Cache expired or empty, refresh it synchronously
+      this._isUpdatingHabitsCache = true;
       this._simpleCounterService.enabledSimpleCounters$
         .pipe(take(1))
         .subscribe((counters) => {
           this._linkedHabitsCache = counters.filter(
             (counter) =>
-              counter.type === 'StopWatch' &&
+              counter.type === SimpleCounterType.StopWatch &&
               counter.enableAutoTrackFromTasks &&
               (counter.linkedTagIds?.length || counter.linkedProjectIds?.length),
           );
           this._linkedHabitsCacheTime = now;
+          this._isUpdatingHabitsCache = false;
           
           // Process immediately after cache update
           this._processLinkedHabits(task, duration, date);

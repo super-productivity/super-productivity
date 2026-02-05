@@ -922,7 +922,8 @@
         "TITLE": "Select Task",
         "DESCRIPTION": "Choose a task to track time for both the habit and the task:",
         "CANCEL": "Cancel",
-        "START_TRACKING": "Start Tracking"
+        "START_TRACKING": "Start Tracking",
+        "NO_MATCHING_TASKS": "No matching tasks found"
       },
       "HABIT_TRACKER": {
         "PREV_WEEK": "Previous week",
