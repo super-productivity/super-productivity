@@ -386,6 +386,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
         const subTaskInfo = {
           isDone: subTask.isDone,
           projectId: subTask.projectId,
+          timeEstimate: subTask.timeEstimate,
+          notes: subTask.notes,
         };
         const subTaskObj = this._taskService.createNewTaskWithDefaults({
           title: subTask.title,
