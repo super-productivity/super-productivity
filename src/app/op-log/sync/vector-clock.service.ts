@@ -174,7 +174,11 @@ export class VectorClockService {
       // Skip rejected ops - they shouldn't affect the frontier
       if (entry.rejectedAt) continue;
 
-      const ids = entry.op.entityIds || (entry.op.entityId ? [entry.op.entityId] : []);
+      const ids = entry.op.entityIds?.length
+        ? entry.op.entityIds
+        : entry.op.entityId
+          ? [entry.op.entityId]
+          : [];
 
       for (const id of ids) {
         if (entityType && entry.op.entityType !== entityType) continue;

@@ -5,6 +5,8 @@
  * Used by OperationLogStoreService and ArchiveStoreService.
  */
 
+import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+
 /** Database name */
 export const DB_NAME = 'SUP_OPS';
 
@@ -39,3 +41,12 @@ export const OPS_INDEXES = {
   BY_SYNCED_AT: 'bySyncedAt' as const,
   BY_SOURCE_AND_STATUS: 'bySourceAndStatus' as const,
 } as const;
+
+/**
+ * Entry stored in archive_young or archive_old object stores.
+ */
+export interface ArchiveStoreEntry {
+  id: typeof SINGLETON_KEY;
+  data: ArchiveModel;
+  lastModified: number;
+}

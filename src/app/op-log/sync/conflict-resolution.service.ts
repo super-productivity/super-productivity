@@ -424,7 +424,11 @@ export class ConflictResolutionService {
       for (const resolution of resolutions) {
         if (resolution.winner === 'remote') {
           for (const op of resolution.conflict.remoteOps) {
-            const ids = op.entityIds || (op.entityId ? [op.entityId] : []);
+            const ids = op.entityIds?.length
+              ? op.entityIds
+              : op.entityId
+                ? [op.entityId]
+                : [];
             for (const id of ids) {
               affectedEntityKeys.add(toEntityKey(op.entityType, id));
             }
@@ -1043,8 +1047,11 @@ export class ConflictResolutionService {
       hasNoSnapshotClock: boolean;
     },
   ): Promise<{ isSupersededOrDuplicate: boolean; conflict: EntityConflict | null }> {
-    const entityIdsToCheck =
-      remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
+    const entityIdsToCheck = remoteOp.entityIds?.length
+      ? remoteOp.entityIds
+      : remoteOp.entityId
+        ? [remoteOp.entityId]
+        : [];
 
     for (const entityId of entityIdsToCheck) {
       const entityKey = toEntityKey(remoteOp.entityType, entityId);

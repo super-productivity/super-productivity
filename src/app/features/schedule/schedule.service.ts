@@ -179,100 +179,45 @@ export class ScheduleService {
   }
 
   getEventDayStr(ev: ScheduleEvent): string | null {
-    const data = ev.data;
-
     // Calendar events
-    if (ev.type === SVEType.CalendarEvent && data && 'start' in data) {
-      const start = (data as { start: unknown }).start;
-      if (typeof start === 'number') {
-        return this._dateService.todayStr(start);
-      }
+    if (isCalendarEventData(ev)) {
+      return this._dateService.todayStr(ev.data.start);
     }
 
-    // Tasks planned for a day
-    if (
-      (ev.type === SVEType.TaskPlannedForDay ||
-        ev.type === SVEType.SplitTaskPlannedForDay) &&
-      data &&
-      'plannedForDay' in data
-    ) {
-      const plannedForDay = (data as { plannedForDay: unknown }).plannedForDay;
-      if (typeof plannedForDay === 'string') {
-        return plannedForDay;
-      }
+    // Tasks with plannedForDay (TaskPlannedForDay, SplitTaskPlannedForDay, SplitTask, Task)
+    if (isTaskWithPlannedForDay(ev)) {
+      return ev.data.plannedForDay;
     }
 
-    // ScheduledTask may have plannedForDay or be scheduled for today
-    if (ev.type === SVEType.ScheduledTask && data) {
-      if ('plannedForDay' in data) {
-        const plannedForDay = (data as { plannedForDay: unknown }).plannedForDay;
-        if (typeof plannedForDay === 'string') {
-          return plannedForDay;
-        }
-      }
-
-      // For scheduled tasks with time, they may have reminderData or be planned for today
-      if ('remindAt' in data) {
-        const remindAt = (data as { remindAt: unknown }).remindAt;
-        if (typeof remindAt === 'number') {
-          return this._dateService.todayStr(remindAt);
-        }
-      }
-
-      // Check dueWithTime for scheduled tasks
-      if ('dueWithTime' in data) {
-        const dueWithTime = (data as { dueWithTime: unknown }).dueWithTime;
-        if (typeof dueWithTime === 'number') {
-          return this._dateService.todayStr(dueWithTime);
-        }
-      }
+    // ScheduledTask with remindAt
+    if (isScheduledTaskWithRemindAt(ev)) {
+      return this._dateService.todayStr(ev.data.remindAt);
     }
 
-    // SplitTask may have plannedForDay
-    if (ev.type === SVEType.SplitTask && data && 'plannedForDay' in data) {
-      const plannedForDay = (data as { plannedForDay: unknown }).plannedForDay;
-      if (typeof plannedForDay === 'string') {
-        return plannedForDay;
-      }
+    // ScheduledTask with dueWithTime
+    if (isScheduledTaskWithDueWithTime(ev)) {
+      return this._dateService.todayStr(ev.data.dueWithTime);
     }
 
-    // Regular tasks may have plannedForDay or dueDay
-    if (ev.type === SVEType.Task && data) {
-      // Check plannedForDay first
-      if ('plannedForDay' in data) {
-        const plannedForDay = (data as { plannedForDay: unknown }).plannedForDay;
-        if (typeof plannedForDay === 'string') {
-          return plannedForDay;
-        }
-      }
-
-      // Check dueDay if plannedForDay not found
-      if ('dueDay' in data) {
-        const dueDay = (data as { dueDay: unknown }).dueDay;
-        if (typeof dueDay === 'string') {
-          return dueDay;
-        }
-      }
+    // Task with dueDay (fallback after plannedForDay check)
+    if (isTaskWithDueDay(ev)) {
+      return ev.data.dueDay;
     }
 
     // RepeatProjection types - check ev.plannedForDay first (set on view entry),
     // then fall back to data.plannedForDay for backwards compatibility
-    if (
-      ev.type === SVEType.RepeatProjection ||
-      ev.type === SVEType.ScheduledRepeatProjection
-    ) {
+    if (isRepeatProjection(ev)) {
       if (ev.plannedForDay) {
         return ev.plannedForDay;
       }
-      if (data && 'plannedForDay' in data) {
-        const plannedForDay = (data as { plannedForDay: unknown }).plannedForDay;
+      if (ev.data && 'plannedForDay' in ev.data) {
+        const plannedForDay = ev.data.plannedForDay;
         if (typeof plannedForDay === 'string') {
           return plannedForDay;
         }
       }
     }
 
-    // If no specific date found, return null
     return null;
   }
 
@@ -325,6 +270,55 @@ const createLunchBreakCfg = (timelineCfg: ScheduleConfig): ScheduleLunchBreakCfg
   startTime: timelineCfg.lunchBreakStart,
   endTime: timelineCfg.lunchBreakEnd,
 });
+
+// Type guards for ScheduleEvent data based on SVEType
+const isCalendarEventData = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { data: { start: number } } =>
+  ev.type === SVEType.CalendarEvent && ev.data != null && 'start' in ev.data;
+
+const isTaskWithPlannedForDay = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { data: { plannedForDay: string } } =>
+  (ev.type === SVEType.TaskPlannedForDay ||
+    ev.type === SVEType.SplitTaskPlannedForDay ||
+    ev.type === SVEType.SplitTask ||
+    ev.type === SVEType.ScheduledTask ||
+    ev.type === SVEType.Task) &&
+  ev.data != null &&
+  'plannedForDay' in ev.data &&
+  typeof ev.data.plannedForDay === 'string';
+
+const isScheduledTaskWithRemindAt = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { data: { remindAt: number } } =>
+  ev.type === SVEType.ScheduledTask &&
+  ev.data != null &&
+  'remindAt' in ev.data &&
+  typeof ev.data.remindAt === 'number';
+
+const isScheduledTaskWithDueWithTime = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { data: { dueWithTime: number } } =>
+  ev.type === SVEType.ScheduledTask &&
+  ev.data != null &&
+  'dueWithTime' in ev.data &&
+  typeof ev.data.dueWithTime === 'number';
+
+const isTaskWithDueDay = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & { data: { dueDay: string } } =>
+  ev.type === SVEType.Task &&
+  ev.data != null &&
+  'dueDay' in ev.data &&
+  typeof ev.data.dueDay === 'string';
+
+const isRepeatProjection = (
+  ev: ScheduleEvent,
+): ev is ScheduleEvent & {
+  type: SVEType.RepeatProjection | SVEType.ScheduledRepeatProjection;
+} =>
+  ev.type === SVEType.RepeatProjection || ev.type === SVEType.ScheduledRepeatProjection;
 
 type TimelineTasks = {
   planned: TaskWithDueTime[];

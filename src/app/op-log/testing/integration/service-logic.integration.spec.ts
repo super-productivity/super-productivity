@@ -238,8 +238,11 @@ describe('Service Logic Integration', () => {
         isSupersededOrDuplicate: boolean;
         conflict: EntityConflict | null;
       }> => {
-        const entityIdsToCheck =
-          remoteOp.entityIds || (remoteOp.entityId ? [remoteOp.entityId] : []);
+        const entityIdsToCheck = remoteOp.entityIds?.length
+          ? remoteOp.entityIds
+          : remoteOp.entityId
+            ? [remoteOp.entityId]
+            : [];
 
         for (const entityId of entityIdsToCheck) {
           const entityKey = toEntityKey(remoteOp.entityType, entityId);

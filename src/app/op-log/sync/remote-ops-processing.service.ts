@@ -55,6 +55,9 @@ export class RemoteOpsProcessingService {
   /** Flag to show newer version warning only once per session */
   private _hasWarnedNewerVersionThisSession = false;
 
+  /** Flag to show migration failure warning only once per session */
+  private _hasWarnedMigrationFailureThisSession = false;
+
   /**
    * Core pipeline for processing remote operations.
    *
@@ -91,6 +94,7 @@ export class RemoteOpsProcessingService {
     const currentVersion = this.schemaMigrationService.getCurrentVersion();
     const migratedOps: Operation[] = [];
     const droppedEntityIds = new Set<string>();
+    const failedMigrationOpIds: string[] = [];
     let updateRequired = false;
 
     for (const op of remoteOps) {
@@ -152,8 +156,24 @@ export class RemoteOpsProcessingService {
         }
       } catch (e) {
         OpLog.err(`RemoteOpsProcessingService: Migration failed for op ${op.id}`, e);
-        // We skip ops that fail migration, but if they are from a compatible version,
+        // Track failed migrations to notify user. If ops are from a compatible version,
         // this indicates a bug or data corruption.
+        failedMigrationOpIds.push(op.id);
+      }
+    }
+
+    // Notify user if any migrations failed (once per session to avoid spam)
+    if (failedMigrationOpIds.length > 0) {
+      OpLog.warn(
+        `RemoteOpsProcessingService: ${failedMigrationOpIds.length} op(s) failed migration`,
+        { failedOpIds: failedMigrationOpIds },
+      );
+      if (!this._hasWarnedMigrationFailureThisSession) {
+        this._hasWarnedMigrationFailureThisSession = true;
+        this.snackService.open({
+          type: 'ERROR',
+          msg: T.F.SYNC.S.MIGRATION_FAILED,
+        });
       }
     }
 

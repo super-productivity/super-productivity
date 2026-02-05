@@ -7,7 +7,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { of } from 'rxjs';
 import { ActionType, EntityConflict, OpType, Operation } from '../core/operation.types';
-import { VectorClock } from '../../core/util/vector-clock';
+import { VectorClock, VectorClockComparison } from '../../core/util/vector-clock';
 import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 
@@ -3222,6 +3222,206 @@ describe('ConflictResolutionService', () => {
 
       const result = (service as any)._extractEntityFromDeleteOperation(conflict);
       expect(result).toEqual(taskEntity);
+    });
+  });
+
+  describe('_adjustForClockCorruption', () => {
+    /**
+     * Tests for the clock corruption recovery mechanism.
+     *
+     * The method detects potential per-entity clock corruption when:
+     * - Entity has pending local ops (we made changes)
+     * - But has no snapshot clock AND empty local frontier
+     * - This suggests the clock data was lost/corrupted
+     *
+     * When corruption is suspected, LESS_THAN and GREATER_THAN are converted
+     * to CONCURRENT to force conflict resolution (safer than silently skipping).
+     */
+
+    const adjustForClockCorruption = (
+      comparison: VectorClockComparison,
+      entityKey: string,
+      ctx: {
+        localOpsForEntity: Operation[];
+        hasNoSnapshotClock: boolean;
+        localFrontierIsEmpty: boolean;
+      },
+    ): VectorClockComparison => {
+      return (service as any)._adjustForClockCorruption(comparison, entityKey, ctx);
+    };
+
+    describe('when NO corruption suspected (normal case)', () => {
+      it('should return LESS_THAN unchanged', () => {
+        const result = adjustForClockCorruption(
+          VectorClockComparison.LESS_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [], // No pending ops - no corruption possible
+            hasNoSnapshotClock: false,
+            localFrontierIsEmpty: false,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.LESS_THAN);
+      });
+
+      it('should return GREATER_THAN unchanged', () => {
+        const result = adjustForClockCorruption(
+          VectorClockComparison.GREATER_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [], // No pending ops
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.GREATER_THAN);
+      });
+
+      it('should return CONCURRENT unchanged', () => {
+        const result = adjustForClockCorruption(
+          VectorClockComparison.CONCURRENT,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [],
+            hasNoSnapshotClock: false,
+            localFrontierIsEmpty: false,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.CONCURRENT);
+      });
+
+      it('should return EQUAL unchanged', () => {
+        const result = adjustForClockCorruption(
+          VectorClockComparison.EQUAL,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.EQUAL);
+      });
+
+      it('should NOT adjust when entity has pending ops but HAS snapshot clock', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.LESS_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: false, // Has snapshot clock - no corruption
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.LESS_THAN);
+      });
+
+      it('should NOT adjust when entity has pending ops but HAS local frontier', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.GREATER_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: false, // Has frontier - no corruption
+          },
+        );
+        expect(result).toBe(VectorClockComparison.GREATER_THAN);
+      });
+    });
+
+    describe('when clock corruption IS suspected', () => {
+      /**
+       * Corruption is suspected when ALL three conditions are met:
+       * 1. Entity has pending local ops
+       * 2. No snapshot clock exists
+       * 3. Local frontier is empty
+       */
+
+      beforeEach(() => {
+        // Prevent devError from throwing (it calls alert + confirm → throws if confirm returns true)
+        if (!jasmine.isSpy(window.alert)) {
+          spyOn(window, 'alert');
+        }
+        if (!jasmine.isSpy(window.confirm)) {
+          spyOn(window, 'confirm').and.returnValue(false);
+        } else {
+          (window.confirm as jasmine.Spy).and.returnValue(false);
+        }
+      });
+
+      it('should convert LESS_THAN to CONCURRENT', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.LESS_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.CONCURRENT);
+      });
+
+      it('should convert GREATER_THAN to CONCURRENT', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.GREATER_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.CONCURRENT);
+      });
+
+      it('should NOT change CONCURRENT (already safest)', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.CONCURRENT,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.CONCURRENT);
+      });
+
+      it('should NOT change EQUAL (duplicates are safe to skip)', () => {
+        const localOp = createMockOp('op-1', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.EQUAL,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [localOp],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.EQUAL);
+      });
+
+      it('should handle multiple pending ops', () => {
+        const op1 = createMockOp('op-1', 'client-a');
+        const op2 = createMockOp('op-2', 'client-a');
+        const result = adjustForClockCorruption(
+          VectorClockComparison.LESS_THAN,
+          'TASK:task-1',
+          {
+            localOpsForEntity: [op1, op2],
+            hasNoSnapshotClock: true,
+            localFrontierIsEmpty: true,
+          },
+        );
+        expect(result).toBe(VectorClockComparison.CONCURRENT);
+      });
     });
   });
 });

@@ -53,8 +53,13 @@ export class OperationEncryptionService {
     if (typeof op.payload !== 'string') {
       throw new DecryptError('Encrypted payload must be a string');
     }
+    let decryptedStr: string;
     try {
-      const decryptedStr = await this._decrypt(op.payload, encryptKey);
+      decryptedStr = await this._decrypt(op.payload, encryptKey);
+    } catch (e) {
+      throw new DecryptError('Failed to decrypt operation payload', e);
+    }
+    try {
       const parsedPayload = JSON.parse(decryptedStr);
       return {
         ...op,
@@ -62,7 +67,7 @@ export class OperationEncryptionService {
         isPayloadEncrypted: false,
       };
     } catch (e) {
-      throw new DecryptError('Failed to decrypt operation payload', e);
+      throw new DecryptError('Failed to parse decrypted operation payload as JSON', e);
     }
   }
 
@@ -175,11 +180,16 @@ export class OperationEncryptionService {
     encryptedPayload: string,
     encryptKey: string,
   ): Promise<T> {
+    let decryptedStr: string;
     try {
-      const decryptedStr = await this._decrypt(encryptedPayload, encryptKey);
-      return JSON.parse(decryptedStr) as T;
+      decryptedStr = await this._decrypt(encryptedPayload, encryptKey);
     } catch (e) {
       throw new DecryptError('Failed to decrypt payload', e);
+    }
+    try {
+      return JSON.parse(decryptedStr) as T;
+    } catch (e) {
+      throw new DecryptError('Failed to parse decrypted payload as JSON', e);
     }
   }
 }

@@ -371,7 +371,11 @@ export class DropboxApi {
         data = (await response.json()) as TokenResponse;
       }
 
-      SyncLog.normal('Dropbox: Refresh access token Response', data);
+      SyncLog.normal('Dropbox: Refresh access token Response', {
+        hasAccessToken: !!data.access_token,
+        hasRefreshToken: !!data.refresh_token,
+        expiresIn: data.expires_in,
+      });
 
       await this._parent.privateCfg.updatePartial({
         accessToken: data.access_token,

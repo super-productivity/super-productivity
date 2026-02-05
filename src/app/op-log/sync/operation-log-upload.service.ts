@@ -23,7 +23,7 @@ import {
   UploadResult,
   UploadOptions,
 } from '../core/types/sync-results.types';
-import { handleStorageQuotaError } from './sync-error-utils';
+import { handleStorageQuotaError, isTransientNetworkError } from './sync-error-utils';
 import { DecryptNoPasswordError } from '../core/errors/sync-errors';
 
 // Re-export for consumers that import from this service
@@ -152,8 +152,7 @@ export class OperationLogUploadService {
 
           // Only permanently reject if the server explicitly rejected the operation
           // (e.g., validation error, conflict). Network errors should be retried.
-          const isNetworkError = this._isNetworkError(result.error);
-          if (isNetworkError) {
+          if (isTransientNetworkError(result.error)) {
             OpLog.normal(
               `OperationLogUploadService: Full-state op ${entry.op.id} failed due to network error, will retry: ${result.error}`,
             );
@@ -471,55 +470,5 @@ export class OperationLogUploadService {
       default:
         return 'recovery';
     }
-  }
-
-  /**
-   * Determines if an error message indicates a transient error
-   * that should be retried, vs a permanent server rejection.
-   *
-   * Transient errors include:
-   * - Network errors (failed to fetch, timeout, etc.)
-   * - Server internal errors (transaction timeout, server busy)
-   *
-   * Permanent rejections are typically validation errors (invalid payload,
-   * duplicate operation, conflict, etc.) that won't succeed on retry.
-   *
-   * Uses regex patterns with word boundaries for more precise matching,
-   * avoiding false positives like "not a network error".
-   */
-  private _isNetworkError(error: string | undefined): boolean {
-    if (!error) return false;
-
-    const lowerError = error.toLowerCase();
-
-    // Use regex patterns for more precise matching
-    const transientErrorPatterns: RegExp[] = [
-      // Network/fetch errors - use word boundaries to avoid false positives
-      /\bfailed to fetch\b/,
-      /\bnetwork\s*(error|request|failure)?\b/, // "network error", "network request", "network"
-      /\btimeout\b/,
-      /\beconnrefused\b/,
-      /\benotfound\b/,
-      /\bcors\b/,
-      /\bnet::/,
-      /\boffline\b/,
-      /\baborted\b/,
-      /\bconnection\s*(refused|reset|closed)\b/,
-      /\bsocket\s*(hang up|closed)\b/,
-      // Server transient errors
-      /\bserver\s*busy\b/,
-      /\bplease\s*retry\b/,
-      /\btransaction\s*rolled\s*back\b/,
-      /\binternal\s*server\s*error\b/,
-      // HTTP status codes - match as words to avoid matching in other contexts
-      /\b500\b/,
-      /\b502\b/,
-      /\b503\b/,
-      /\b504\b/,
-      /\bservice\s*unavailable\b/,
-      /\bgateway\s*timeout\b/,
-    ];
-
-    return transientErrorPatterns.some((pattern) => pattern.test(lowerError));
   }
 }

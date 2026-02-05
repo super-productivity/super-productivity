@@ -1357,7 +1357,7 @@ describe('SuperSyncProvider', () => {
       fetchSpy.and.returnValue(
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ops: [], latestSeq: 100 }),
+          json: () => Promise.resolve({ ops: [], hasMore: false, latestSeq: 100 }),
         } as Response),
       );
 
@@ -1389,7 +1389,7 @@ describe('SuperSyncProvider', () => {
       fetchSpy.and.returnValue(
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ops: [], latestSeq: 0 }),
+          json: () => Promise.resolve({ ops: [], hasMore: false, latestSeq: 0 }),
         } as Response),
       );
 
@@ -1429,7 +1429,7 @@ describe('SuperSyncProvider', () => {
       fetchSpy.and.returnValue(
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ ops: [], latestSeq: 100 }),
+          json: () => Promise.resolve({ ops: [], hasMore: false, latestSeq: 100 }),
         } as Response),
       );
 

@@ -1,18 +1,21 @@
 import { Injectable } from '@angular/core';
 import { IDBPDatabase, openDB } from 'idb';
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
-import { DB_NAME, DB_VERSION, STORE_NAMES, SINGLETON_KEY } from './db-keys.const';
+import {
+  DB_NAME,
+  DB_VERSION,
+  STORE_NAMES,
+  SINGLETON_KEY,
+  ArchiveStoreEntry,
+} from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
 import { ARCHIVE_STORE_NOT_INITIALIZED } from './op-log-errors.const';
-
-/**
- * Entry stored in archive_young or archive_old object stores.
- */
-interface ArchiveStoreEntry {
-  id: typeof SINGLETON_KEY;
-  data: ArchiveModel;
-  lastModified: number;
-}
+import { Log } from '../../core/log';
+import {
+  IDB_OPEN_RETRIES,
+  IDB_OPEN_RETRY_BASE_DELAY_MS,
+} from '../core/operation-log.const';
+import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
 
 /**
  * Minimal schema for archive-only database access.
@@ -49,7 +52,10 @@ export class ArchiveStoreService {
   private async _ensureInit(): Promise<void> {
     if (!this._db) {
       if (!this._initPromise) {
-        this._initPromise = this._init();
+        this._initPromise = this._init().catch((e) => {
+          this._initPromise = undefined;
+          throw e;
+        });
       }
       await this._initPromise;
     }
@@ -64,11 +70,35 @@ export class ArchiveStoreService {
    * all stores.
    */
   private async _init(): Promise<void> {
-    this._db = await openDB<ArchiveDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade: (db, oldVersion, _newVersion, transaction) => {
-        runDbUpgrade(db, oldVersion, transaction);
-      },
-    });
+    this._db = await this._openDbWithRetry();
+  }
+
+  private async _openDbWithRetry(): Promise<IDBPDatabase<ArchiveDBSchema>> {
+    const totalAttempts = 1 + IDB_OPEN_RETRIES;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+      try {
+        return await openDB<ArchiveDBSchema>(DB_NAME, DB_VERSION, {
+          upgrade: (db, oldVersion, _newVersion, transaction) => {
+            runDbUpgrade(db, oldVersion, transaction);
+          },
+        });
+      } catch (e) {
+        lastError = e;
+
+        if (attempt < totalAttempts) {
+          const delay = IDB_OPEN_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+          Log.warn(
+            `[ArchiveStore] IndexedDB open failed (attempt ${attempt}/${totalAttempts}), retrying in ${delay}ms...`,
+            e,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw new IndexedDBOpenError(lastError);
   }
 
   private get db(): IDBPDatabase<ArchiveDBSchema> {

@@ -11,7 +11,6 @@ import {
   SnapshotUploadResponse,
   RestoreCapable,
   RestorePoint,
-  RestorePointsResponse,
   RestoreSnapshotResponse,
 } from '../provider.interface';
 import { SyncCredentialStore } from '../credential-store.service';
@@ -27,6 +26,15 @@ import {
 } from '../../encryption/compression-handler';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { executeNativeRequestWithRetry } from '../native-http-retry';
+import { isTransientNetworkError } from '../../sync/sync-error-utils';
+import {
+  validateOpUploadResponse,
+  validateOpDownloadResponse,
+  validateSnapshotUploadResponse,
+  validateRestorePointsResponse,
+  validateRestoreSnapshotResponse,
+  validateDeleteAllDataResponse,
+} from './response-validators';
 
 const LAST_SERVER_SEQ_KEY_PREFIX = 'super_sync_last_server_seq_';
 
@@ -149,11 +157,12 @@ export class SuperSyncProvider
     // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
     // may have similar issues with binary request bodies in Capacitor context)
     if (this.isNativePlatform) {
-      return this._fetchApiCompressedNative<OpUploadResponse>(
+      const nativeResponse = await this._fetchApiCompressedNative<unknown>(
         cfg,
         '/api/sync/ops',
         jsonPayload,
       );
+      return validateOpUploadResponse(nativeResponse);
     }
 
     const compressedPayload = await compressWithGzip(jsonPayload);
@@ -164,13 +173,13 @@ export class SuperSyncProvider
       ratio: ((compressedPayload.length / jsonPayload.length) * 100).toFixed(1) + '%',
     });
 
-    const response = await this._fetchApiCompressed<OpUploadResponse>(
+    const response = await this._fetchApiCompressed<unknown>(
       cfg,
       '/api/sync/ops',
       compressedPayload,
     );
 
-    return response;
+    return validateOpUploadResponse(response);
   }
 
   async downloadOps(
@@ -189,13 +198,13 @@ export class SuperSyncProvider
       params.set('limit', String(limit));
     }
 
-    const response = await this._fetchApi<OpDownloadResponse>(
+    const response = await this._fetchApi<unknown>(
       cfg,
       `/api/sync/ops?${params.toString()}`,
       { method: 'GET' },
     );
 
-    return response;
+    return validateOpDownloadResponse(response);
   }
 
   async getLastServerSeq(): Promise<number> {
@@ -245,11 +254,18 @@ export class SuperSyncProvider
     // (Android WebView's fetch() corrupts binary Uint8Array bodies, and iOS WebKit
     // may have similar issues with binary request bodies in Capacitor context)
     if (this.isNativePlatform) {
-      return this._fetchApiCompressedNative<SnapshotUploadResponse>(
+      const nativeResponse = await this._fetchApiCompressedNative<unknown>(
         cfg,
         '/api/sync/snapshot',
         jsonPayload,
       );
+      const validated = validateSnapshotUploadResponse(nativeResponse);
+      SyncLog.normal(this.logLabel, 'uploadSnapshot: Complete', {
+        accepted: validated.accepted,
+        serverSeq: validated.serverSeq,
+        error: validated.error,
+      });
+      return validated;
     }
 
     const compressedPayload = await compressWithGzip(jsonPayload);
@@ -276,19 +292,20 @@ export class SuperSyncProvider
       });
     }
 
-    const response = await this._fetchApiCompressed<SnapshotUploadResponse>(
+    const response = await this._fetchApiCompressed<unknown>(
       cfg,
       '/api/sync/snapshot',
       compressedPayload,
     );
 
+    const validated = validateSnapshotUploadResponse(response);
     SyncLog.normal(this.logLabel, 'uploadSnapshot: Complete', {
-      accepted: response.accepted,
-      serverSeq: response.serverSeq,
-      error: response.error,
+      accepted: validated.accepted,
+      serverSeq: validated.serverSeq,
+      error: validated.error,
     });
 
-    return response;
+    return validated;
   }
 
   // === Restore Point Methods ===
@@ -297,26 +314,26 @@ export class SuperSyncProvider
     SyncLog.debug(this.logLabel, 'getRestorePoints', { limit });
     const cfg = await this._cfgOrError();
 
-    const response = await this._fetchApi<RestorePointsResponse>(
+    const response = await this._fetchApi<unknown>(
       cfg,
       `/api/sync/restore-points?limit=${limit}`,
       { method: 'GET' },
     );
 
-    return response.restorePoints;
+    return validateRestorePointsResponse(response).restorePoints;
   }
 
   async getStateAtSeq(serverSeq: number): Promise<RestoreSnapshotResponse> {
     SyncLog.debug(this.logLabel, 'getStateAtSeq', { serverSeq });
     const cfg = await this._cfgOrError();
 
-    const response = await this._fetchApi<RestoreSnapshotResponse>(
+    const response = await this._fetchApi<unknown>(
       cfg,
       `/api/sync/restore/${serverSeq}`,
       { method: 'GET' },
     );
 
-    return response;
+    return validateRestoreSnapshotResponse(response);
   }
 
   // === Data Management ===
@@ -326,18 +343,19 @@ export class SuperSyncProvider
     const cfg = await this._cfgOrError();
 
     SyncLog.normal(this.logLabel, 'deleteAllData: Calling DELETE /api/sync/data');
-    const response = await this._fetchApi<{ success: boolean }>(cfg, '/api/sync/data', {
+    const response = await this._fetchApi<unknown>(cfg, '/api/sync/data', {
       method: 'DELETE',
     });
 
-    SyncLog.normal(this.logLabel, 'deleteAllData: Server response:', response);
+    const validated = validateDeleteAllDataResponse(response);
+    SyncLog.normal(this.logLabel, 'deleteAllData: Server response:', validated);
 
     // Reset local lastServerSeq since all server data is deleted
     const key = await this._getServerSeqKey();
     localStorage.removeItem(key);
     SyncLog.normal(this.logLabel, 'deleteAllData: Cleared local lastServerSeq');
 
-    return response;
+    return validated;
   }
 
   async getEncryptKey(): Promise<string | undefined> {
@@ -400,26 +418,6 @@ export class SuperSyncProvider
   }
 
   /**
-   * Classifies an error to determine if it's a network error (transient)
-   * vs a server error (may require user action).
-   */
-  private _isNetworkError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const message = error.message.toLowerCase();
-    // Common network error patterns
-    return (
-      error.name === 'AbortError' ||
-      message.includes('failed to fetch') ||
-      message.includes('network') ||
-      message.includes('timeout') ||
-      message.includes('connection') ||
-      message.includes('econnrefused') ||
-      message.includes('enotfound') ||
-      message.includes('dns')
-    );
-  }
-
-  /**
    * Extracts a user-friendly error message from various error types.
    */
   private _getErrorMessage(error: unknown): string {
@@ -443,16 +441,18 @@ export class SuperSyncProvider
   ): never {
     const duration = Date.now() - startTime;
     const errorMessage = this._getErrorMessage(error);
-    const isNetworkError = this._isNetworkError(error);
+    const networkError = isTransientNetworkError(
+      error instanceof Error ? error : errorMessage,
+    );
 
     SyncLog.error(this.logLabel, `SuperSync request failed (native)`, {
       path,
       durationMs: duration,
       error: errorMessage,
-      isNetworkError,
+      isNetworkError: networkError,
     });
 
-    if (isNetworkError) {
+    if (networkError) {
       throw new Error(
         `Unable to connect to SuperSync server. Check your internet connection. (${errorMessage})`,
       );

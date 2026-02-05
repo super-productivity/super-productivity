@@ -5,6 +5,7 @@ import {
   OperationLogEntry,
   OpType,
   VectorClock,
+  isFullStateOpType,
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
@@ -14,7 +15,6 @@ import {
   isCompactOperation,
 } from '../../core/persistence/operation-log/compact/operation-codec.service';
 import { CompactOperation } from '../../core/persistence/operation-log/compact/compact-operation.types';
-import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
 import {
   DB_NAME,
   DB_VERSION,
@@ -22,6 +22,7 @@ import {
   SINGLETON_KEY,
   BACKUP_KEY,
   OPS_INDEXES,
+  ArchiveStoreEntry,
 } from './db-keys.const';
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
@@ -53,16 +54,6 @@ interface VectorClockEntry {
    * CONCURRENT with the import instead of GREATER_THAN.
    */
   protectedClientIds?: string[];
-}
-
-/**
- * Archive entry stored in archive_young or archive_old object stores.
- * Contains the archive data and last modification timestamp.
- */
-interface ArchiveStoreEntry {
-  id: 'current';
-  data: ArchiveModel;
-  lastModified: number;
 }
 
 /**
@@ -251,7 +242,10 @@ export class OperationLogStoreService {
   private async _ensureInit(): Promise<void> {
     if (!this._db) {
       if (!this._initPromise) {
-        this._initPromise = this.init();
+        this._initPromise = this.init().catch((e) => {
+          this._initPromise = undefined;
+          throw e;
+        });
       }
       await this._initPromise;
     }
@@ -278,6 +272,11 @@ export class OperationLogStoreService {
     try {
       return await this.db.add(STORE_NAMES.OPS, entry as StoredOperationLogEntry);
     } catch (e) {
+      if (e instanceof DOMException && e.name === 'ConstraintError') {
+        this._appliedOpIdsCache = null;
+        this._cacheLastSeq = 0;
+        throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
+      }
       if (e instanceof DOMException && e.name === 'QuotaExceededError') {
         throw new StorageQuotaExceededError();
       }
@@ -526,10 +525,7 @@ export class OperationLogStoreService {
 
     while (cursor) {
       const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp =
-        entry.op.opType === OpType.SyncImport ||
-        entry.op.opType === OpType.BackupImport ||
-        entry.op.opType === OpType.Repair;
+      const isFullStateOp = isFullStateOpType(entry.op.opType);
 
       if (isFullStateOp) {
         // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
@@ -574,10 +570,7 @@ export class OperationLogStoreService {
 
     while (cursor) {
       const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp =
-        entry.op.opType === OpType.SyncImport ||
-        entry.op.opType === OpType.BackupImport ||
-        entry.op.opType === OpType.Repair;
+      const isFullStateOp = isFullStateOpType(entry.op.opType);
 
       if (isFullStateOp) {
         // Track the latest by UUIDv7 (lexicographic comparison works for UUIDv7)
@@ -611,10 +604,7 @@ export class OperationLogStoreService {
 
     while (cursor) {
       const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp =
-        entry.op.opType === OpType.SyncImport ||
-        entry.op.opType === OpType.BackupImport ||
-        entry.op.opType === OpType.Repair;
+      const isFullStateOp = isFullStateOpType(entry.op.opType);
 
       if (isFullStateOp) {
         opsToDelete.push(entry.op.id);
@@ -667,10 +657,7 @@ export class OperationLogStoreService {
 
     while (cursor) {
       const entry = decodeStoredEntry(cursor.value);
-      const isFullStateOp =
-        entry.op.opType === OpType.SyncImport ||
-        entry.op.opType === OpType.BackupImport ||
-        entry.op.opType === OpType.Repair;
+      const isFullStateOp = isFullStateOpType(entry.op.opType);
 
       if (isFullStateOp && !excludeIdSet.has(entry.op.id)) {
         opsToDelete.push(entry.op.id);
@@ -742,7 +729,11 @@ export class OperationLogStoreService {
     const unsynced = await this.getUnsynced();
     const map = new Map<string, Operation[]>();
     for (const entry of unsynced) {
-      const ids = entry.op.entityIds || (entry.op.entityId ? [entry.op.entityId] : []);
+      const ids = entry.op.entityIds?.length
+        ? entry.op.entityIds
+        : entry.op.entityId
+          ? [entry.op.entityId]
+          : [];
       for (const id of ids) {
         const key = toEntityKey(entry.op.entityType, id);
         if (!map.has(key)) map.set(key, []);
@@ -806,7 +797,7 @@ export class OperationLogStoreService {
 
     const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
     const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index('byId');
+    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
 
     for (const opId of opIds) {
@@ -854,7 +845,7 @@ export class OperationLogStoreService {
     await this._ensureInit();
     const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
     const store = tx.objectStore(STORE_NAMES.OPS);
-    const index = store.index('byId');
+    const index = store.index(OPS_INDEXES.BY_ID);
     const now = Date.now();
 
     for (const opId of opIds) {
@@ -1133,13 +1124,16 @@ export class OperationLogStoreService {
    */
   async resetCompactionCounter(): Promise<void> {
     await this._ensureInit();
-    const cache = await this.db.get(STORE_NAMES.STATE_CACHE, SINGLETON_KEY);
+    const tx = this.db.transaction(STORE_NAMES.STATE_CACHE, 'readwrite');
+    const store = tx.objectStore(STORE_NAMES.STATE_CACHE);
+    const cache = await store.get(SINGLETON_KEY);
     if (cache) {
-      await this.db.put(STORE_NAMES.STATE_CACHE, {
+      await store.put({
         ...cache,
         compactionCounter: 0,
       });
     }
+    await tx.done;
   }
 
   /**
@@ -1436,41 +1430,57 @@ export class OperationLogStoreService {
   ): Promise<number> {
     await this._ensureInit();
 
-    const tx = this.db.transaction(
-      [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK],
-      'readwrite',
-    );
-    const opsStore = tx.objectStore(STORE_NAMES.OPS);
-    const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
-
-    // 1. Append operation to ops store (encoded to compact format)
-    const compactOp = encodeOperation(op);
-    const entry: Omit<StoredOperationLogEntry, 'seq'> = {
-      op: compactOp,
-      appliedAt: Date.now(),
-      source,
-      syncedAt: source === 'remote' ? Date.now() : undefined,
-      applicationStatus:
-        source === 'remote' ? (options?.pendingApply ? 'pending' : 'applied') : undefined,
-    };
-    const seq = await opsStore.add(entry as StoredOperationLogEntry);
-
-    // 2. Update vector clock to match the operation's clock (only for local ops)
-    // The op.vectorClock already contains the incremented value from the caller.
-    // We store it as the current clock so subsequent operations can build on it.
-    // IMPORTANT: Preserve protectedClientIds when updating the clock
-    if (source === 'local') {
-      const existingEntry = await vcStore.get(SINGLETON_KEY);
-      const protectedClientIds = existingEntry?.protectedClientIds ?? [];
-      await vcStore.put(
-        { clock: op.vectorClock, lastUpdate: Date.now(), protectedClientIds },
-        SINGLETON_KEY,
+    try {
+      const tx = this.db.transaction(
+        [STORE_NAMES.OPS, STORE_NAMES.VECTOR_CLOCK],
+        'readwrite',
       );
-      this._vectorClockCache = op.vectorClock;
-    }
+      const opsStore = tx.objectStore(STORE_NAMES.OPS);
+      const vcStore = tx.objectStore(STORE_NAMES.VECTOR_CLOCK);
 
-    await tx.done;
-    return seq as number;
+      // 1. Append operation to ops store (encoded to compact format)
+      const compactOp = encodeOperation(op);
+      const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+        op: compactOp,
+        appliedAt: Date.now(),
+        source,
+        syncedAt: source === 'remote' ? Date.now() : undefined,
+        applicationStatus:
+          source === 'remote'
+            ? options?.pendingApply
+              ? 'pending'
+              : 'applied'
+            : undefined,
+      };
+      const seq = await opsStore.add(entry as StoredOperationLogEntry);
+
+      // 2. Update vector clock to match the operation's clock (only for local ops)
+      // The op.vectorClock already contains the incremented value from the caller.
+      // We store it as the current clock so subsequent operations can build on it.
+      // IMPORTANT: Preserve protectedClientIds when updating the clock
+      if (source === 'local') {
+        const existingEntry = await vcStore.get(SINGLETON_KEY);
+        const protectedClientIds = existingEntry?.protectedClientIds ?? [];
+        await vcStore.put(
+          { clock: op.vectorClock, lastUpdate: Date.now(), protectedClientIds },
+          SINGLETON_KEY,
+        );
+        this._vectorClockCache = op.vectorClock;
+      }
+
+      await tx.done;
+      return seq as number;
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'ConstraintError') {
+        this._appliedOpIdsCache = null;
+        this._cacheLastSeq = 0;
+        throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
+      }
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        throw new StorageQuotaExceededError();
+      }
+      throw e;
+    }
   }
 }
 
