@@ -165,7 +165,7 @@
     "@angular-eslint/template-parser": "^21.1.0",
     "@angular/animations": "^21.0.8",
     "@angular/cdk": "^21.0.6",
-    "@angular/cli": "^21.0.5",
+    "@angular/cli": "^21.1.3",
     "@angular/common": "^21.0.8",
     "@angular/compiler": "^21.0.8",
     "@angular/compiler-cli": "^21.0.8",
