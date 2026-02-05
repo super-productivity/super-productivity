@@ -211,7 +211,8 @@ export class SimpleCounterService implements OnDestroy {
 
   incrementCounterByDate(id: string, date: string, duration: number): void {
     // Get current value and add the duration - use take(1) to auto-unsubscribe
-    this._store$.pipe(select(selectSimpleCounterById, { id }), take(1))
+    this._store$
+      .pipe(select(selectSimpleCounterById, { id }), take(1))
       .subscribe((counter) => {
         if (counter) {
           const currentValue = counter.countOnDay[date] || 0;
