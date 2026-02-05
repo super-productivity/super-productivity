@@ -211,7 +211,7 @@ export class DialogSelectHabitTaskComponent {
   onTaskSelected(event: MatAutocompleteSelectedEvent): void {
     const task = event.option.value as Task;
     if (task) {
-  onTaskSelected(event: MatAutocompleteSelectedEvent): void {
+      this.selectedTask.set(task);
     }
   }
 
