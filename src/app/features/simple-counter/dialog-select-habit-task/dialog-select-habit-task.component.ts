@@ -12,7 +12,11 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
 import { FormsModule, ReactiveFormsModule, UntypedFormControl } from '@angular/forms';
-import { MatAutocomplete, MatOption } from '@angular/material/autocomplete';
+import {
+  MatAutocomplete,
+  MatAutocompleteSelectedEvent,
+  MatOption,
+} from '@angular/material/autocomplete';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { startWith } from 'rxjs/operators';
 

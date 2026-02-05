@@ -200,6 +200,11 @@ export class TaskService {
   private _linkedHabitsCache: SimpleCounter[] = [];
   private _linkedHabitsCacheTime = 0;
   private _isUpdatingHabitsCache = false;
+  private _pendingHabitUpdates: Array<{
+    task: Task;
+    duration: number;
+    date: string;
+  }> = [];
   private readonly _CACHE_TTL_MS = 5000; // Refresh cache every 5 seconds
 
   // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
@@ -795,8 +800,11 @@ export class TaskService {
   }
 
   private _updateLinkedHabits(task: Task, duration: number, date: string): void {
-    // Only check if duration is significant (avoid sub-millisecond updates)
-    if (duration < 100) {
+    // Ignore very small durations to avoid noise from timing jitter and excessive habit updates.
+    // Habit counters are not intended for sub-100ms precision, so values below this threshold
+    // are treated as negligible for the purpose of auto-tracking from tasks.
+    const MIN_DURATION_MS_FOR_HABIT_UPDATE = 100;
+    if (duration < MIN_DURATION_MS_FOR_HABIT_UPDATE) {
       return;
     }
 
@@ -804,13 +812,17 @@ export class TaskService {
     const now = Date.now();
     const cacheExpired = now - this._linkedHabitsCacheTime > this._CACHE_TTL_MS;
 
-    if (cacheExpired || this._linkedHabitsCache.length === 0) {
-      // Skip if cache is already being updated to prevent double processing
+    if (cacheExpired) {
+      // Queue this update if cache is already being refreshed to prevent data loss
       if (this._isUpdatingHabitsCache) {
+        if (!this._pendingHabitUpdates) {
+          this._pendingHabitUpdates = [];
+        }
+        this._pendingHabitUpdates.push({ task, duration, date });
         return;
       }
 
-      // Cache expired or empty, refresh it synchronously
+      // Cache expired, refresh it
       this._isUpdatingHabitsCache = true;
       this._simpleCounterService.enabledSimpleCounters$
         .pipe(take(1))
@@ -824,8 +836,15 @@ export class TaskService {
           this._linkedHabitsCacheTime = now;
           this._isUpdatingHabitsCache = false;
 
-          // Process immediately after cache update
+          // Process the current update
           this._processLinkedHabits(task, duration, date);
+
+          // Process any queued updates to prevent data loss
+          if (this._pendingHabitUpdates?.length) {
+            const pending = [...this._pendingHabitUpdates];
+            this._pendingHabitUpdates = [];
+            pending.forEach((p) => this._processLinkedHabits(p.task, p.duration, p.date));
+          }
         });
     } else {
       // Use existing cache

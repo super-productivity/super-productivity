@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   inject,
   input,
   OnDestroy,
@@ -16,7 +17,7 @@ import { T } from 'src/app/t.const';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { merge, of, Subject, Subscription } from 'rxjs';
 import { DateService } from 'src/app/core/date/date.service';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { distinctUntilChanged, filter, map, scan, switchMap } from 'rxjs/operators';
 import { BannerService } from '../../../core/banner/banner.service';
 import { BannerId } from '../../../core/banner/banner.model';
@@ -28,7 +29,7 @@ import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clo
 import { ProgressCircleComponent } from '../../../ui/progress-circle/progress-circle.component';
 import { TaskService } from '../../tasks/task.service';
 import { DialogSelectHabitTaskComponent } from '../dialog-select-habit-task/dialog-select-habit-task.component';
-import { firstValueFrom } from 'rxjs';
+import { EMPTY, firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'simple-counter-button',
@@ -55,6 +56,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
   private _dateService = inject(DateService);
   private _bannerService = inject(BannerService);
   private _taskService = inject(TaskService);
+  private _destroyRef = inject(DestroyRef);
   private _todayStr$ = this._globalTrackingIntervalService.todayDateStr$;
 
   T: typeof T = T;
@@ -101,6 +103,31 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     ),
   );
 
+  // Watch for task stop events to stop linked habit
+  // Use toObservable + switchMap to reactively manage subscription when settings change
+  private _taskAutoTrackSub = toObservable(this.simpleCounter)
+    .pipe(
+      takeUntilDestroyed(this._destroyRef),
+      switchMap((counter) => {
+        // Only enable auto-tracking when configured for the current counter
+        if (
+          counter?.type === SimpleCounterType.StopWatch &&
+          counter.enableAutoTrackFromTasks
+        ) {
+          return this._taskService.currentTaskId$;
+        }
+        return EMPTY;
+      }),
+    )
+    .subscribe((currentTaskId) => {
+      // Get current state of the habit
+      const currentCounter = this.simpleCounter();
+      // If task stopped and habit is running, stop the habit
+      if (!currentTaskId && currentCounter?.isOn) {
+        this._simpleCounterService.toggleCounter(currentCounter.id);
+      }
+    });
+
   ngOnInit(): void {
     if (this.simpleCounter()?.type === SimpleCounterType.RepeatedCountdownReminder) {
       this._subs.add(
@@ -118,24 +145,6 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
                 },
               },
             });
-          }
-        }),
-      );
-    }
-
-    // Watch for task stop events to stop linked habit
-    const counter = this.simpleCounter();
-    if (
-      counter?.type === SimpleCounterType.StopWatch &&
-      counter.enableAutoTrackFromTasks
-    ) {
-      this._subs.add(
-        this._taskService.currentTaskId$.subscribe((currentTaskId) => {
-          // Get current state of the habit
-          const currentCounter = this.simpleCounter();
-          // If task stopped and habit is running, stop the habit
-          if (!currentTaskId && currentCounter?.isOn) {
-            this._simpleCounterService.toggleCounter(currentCounter.id);
           }
         }),
       );
@@ -171,6 +180,17 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
       throw new Error('No simple counter model');
     }
 
+    // If stopping the habit, stop the task first
+    if (c.isOn && c.enableAutoTrackFromTasks) {
+      const currentTaskId = await firstValueFrom(this._taskService.currentTaskId$);
+      if (currentTaskId) {
+        this._taskService.setCurrentId(null);
+      }
+      // Toggle the habit counter
+      this._simpleCounterService.toggleCounter(c.id);
+      return;
+    }
+
     // If habit is being started and auto-track is enabled, show task selection dialog
     if (!c.isOn && c.enableAutoTrackFromTasks) {
       const dialogRef = this._matDialog.open(DialogSelectHabitTaskComponent, {
@@ -191,14 +211,6 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
     // Toggle the habit counter
     this._simpleCounterService.toggleCounter(c.id);
-
-    // If stopping the habit, also stop the task timer
-    if (c.isOn) {
-      const currentTaskId = await firstValueFrom(this._taskService.currentTaskId$);
-      if (currentTaskId) {
-        this._taskService.setCurrentId(null);
-      }
-    }
   }
 
   toggleCounter(): void {

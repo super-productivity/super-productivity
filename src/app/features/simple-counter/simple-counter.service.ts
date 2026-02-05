@@ -110,7 +110,10 @@ export class SimpleCounterService implements OnDestroy {
           if (isImportInProgress) return;
 
           const stopwatchCounters = counters.filter(
-            (c) => c.type === SimpleCounterType.StopWatch,
+            (c) =>
+              c.type === SimpleCounterType.StopWatch &&
+              // Skip auto-tracking counters - they get time from tasks
+              !c.enableAutoTrackFromTasks,
           );
 
           for (const counter of stopwatchCounters) {
