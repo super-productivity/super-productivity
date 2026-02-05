@@ -1,5 +1,3 @@
-$ico-size: 13px;
-
 .tag-ico {
   margin-right: 4px !important;
 }
@@ -8,11 +6,13 @@ $ico-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   text-align: center;
   vertical-align: middle;
-  width: $ico-size;
-  height: $ico-size;
+  width: 24px;
+  height: 24px;
   margin-right: 4px !important;
+  overflow: hidden;
+  flex-shrink: 0;
 }

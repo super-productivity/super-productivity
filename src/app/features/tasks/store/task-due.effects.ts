@@ -40,9 +40,11 @@ export class TaskDueEffects {
   private _hydrationState = inject(HydrationStateService);
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
+  // Uses afterInitialSyncDoneStrict$ to ensure sync has completed before creating repeat tasks,
+  // preventing duplicate repeat task instances across clients (fixes repeat task duplication bug).
   createRepeatableTasksAndAddDueToday$ = createEffect(
     () => {
-      return this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$.pipe(
+      return this._syncTriggerService.afterInitialSyncDoneStrict$.pipe(
         first(),
         switchMap(() =>
           // Keep listening for date changes throughout the app lifecycle

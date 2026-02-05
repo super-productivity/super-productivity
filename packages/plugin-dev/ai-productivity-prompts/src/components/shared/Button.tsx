@@ -3,7 +3,6 @@ import { Component, JSX } from 'solid-js';
 interface ButtonProps {
   onClick?: () => void;
   variant?: 'primary' | 'secondary' | 'back';
-  size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   title?: string;
   class?: string;
@@ -12,18 +11,15 @@ interface ButtonProps {
 
 export const Button: Component<ButtonProps> = (props) => {
   const getButtonClass = () => {
-    const baseClass = 'button';
-    const variantClass = props.variant
-      ? `${baseClass}-${props.variant}`
-      : 'action-button primary';
-    const sizeClass = props.size ? `${baseClass}-${props.size}` : '';
     const customClass = props.class || '';
-
-    if (props.variant === 'back') {
-      return 'back-button';
+    switch (props.variant) {
+      case 'back':
+      case 'secondary':
+        return `btn-outline ${customClass}`.trim();
+      case 'primary':
+      default:
+        return `btn-primary ${customClass}`.trim();
     }
-
-    return `${variantClass} ${sizeClass} ${customClass}`.trim();
   };
 
   return (

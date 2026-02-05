@@ -34,7 +34,12 @@ import {
 } from '../../config/store/global-config.reducer';
 import { FocusModeConfig } from '../../config/global-config.model';
 import { updateGlobalConfigSection } from '../../config/store/global-config.actions';
-import { FocusModeMode, FocusScreen, TimerState } from '../focus-mode.model';
+import {
+  FocusModeMode,
+  FocusScreen,
+  getBreakCycle,
+  TimerState,
+} from '../focus-mode.model';
 import { BannerService } from '../../../core/banner/banner.service';
 import { Banner, BannerId } from '../../../core/banner/banner.model';
 import { T } from '../../../t.const';
@@ -379,7 +384,7 @@ export class FocusModeEffects {
         const strategy = this.strategyFactory.getStrategy(mode);
         // Cycle Adjustment needed, Cycle is 1 too high after incrementCycle
         // we want to get the last session's cycle
-        const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
+        const breakInfo = strategy.getBreakDuration(getBreakCycle(cycle));
         const shouldPauseTracking = config?.isPauseTrackingDuringBreak && currentTaskId;
         const actionsArr: Action[] = [];
 
@@ -937,7 +942,7 @@ export class FocusModeEffects {
           // Cycle Adjustment needed, Cycle is 1 too high after incrementCycle
           // we want to get the last session's cycle
           // This matches the auto-start break logic to ensure consistent break timing
-          const breakInfo = strategy.getBreakDuration(cycle - 1 || 1);
+          const breakInfo = strategy.getBreakDuration(getBreakCycle(cycle));
           if (breakInfo) {
             const currentTaskId = this.taskService.currentTaskId();
             const shouldPauseTracking =

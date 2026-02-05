@@ -1,0 +1,108 @@
+<h1 mat-dialog-title>{{ T.GCF.CLIPBOARD_IMAGES.MANAGER_TITLE | translate }}</h1>
+
+<mat-dialog-content>
+  @if (isLoading()) {
+    <div class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>{{ T.GCF.CLIPBOARD_IMAGES.LOADING | translate }}</p>
+    </div>
+  } @else {
+    @if (images().length === 0) {
+      <div class="empty-state">
+        <mat-icon>image_not_supported</mat-icon>
+        <p>{{ T.GCF.CLIPBOARD_IMAGES.NO_IMAGES | translate }}</p>
+      </div>
+    } @else {
+      <div class="summary">
+        <div class="summary-info">
+          <p>
+            {{ T.GCF.CLIPBOARD_IMAGES.TOTAL_IMAGES | translate }}:
+            <strong>{{ images().length }}</strong>
+          </p>
+          <p>
+            {{ T.GCF.CLIPBOARD_IMAGES.TOTAL_SIZE | translate }}:
+            <strong>{{ getTotalSize() }}</strong>
+          </p>
+        </div>
+        <mat-form-field
+          appearance="outline"
+          class="sort-field"
+        >
+          <mat-label>{{ T.GCF.CLIPBOARD_IMAGES.SORT_BY | translate }}</mat-label>
+          <mat-select
+            [value]="sortOrder()"
+            (selectionChange)="onSortChange($event.value)"
+          >
+            <mat-option value="newest">{{
+              T.GCF.CLIPBOARD_IMAGES.SORT_NEWEST | translate
+            }}</mat-option>
+            <mat-option value="oldest">{{
+              T.GCF.CLIPBOARD_IMAGES.SORT_OLDEST | translate
+            }}</mat-option>
+            <mat-option value="largest">{{
+              T.GCF.CLIPBOARD_IMAGES.SORT_LARGEST | translate
+            }}</mat-option>
+            <mat-option value="smallest">{{
+              T.GCF.CLIPBOARD_IMAGES.SORT_SMALLEST | translate
+            }}</mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <div class="images-list">
+        @for (image of sortedImages(); track image.id) {
+          <div class="image-item">
+            <div class="image-preview">
+              @if (imageUrls().get(image.id)) {
+                <img
+                  [src]="imageUrls().get(image.id)"
+                  [alt]="image.id"
+                />
+              } @else {
+                <mat-icon>image</mat-icon>
+              }
+            </div>
+            <div class="image-info">
+              <div class="image-id">{{ image.id }}</div>
+              <div class="image-details">
+                <span>{{ image.createdAt | date: 'medium' }}</span>
+                <span>•</span>
+                <span>{{ formatSize(image.size) }}</span>
+                <span>•</span>
+                <span>{{ image.mimeType }}</span>
+              </div>
+            </div>
+            <button
+              (click)="deleteImage(image)"
+              color="warn"
+              mat-icon-button
+              [matTooltip]="T.GCF.CLIPBOARD_IMAGES.DELETE | translate"
+            >
+              <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (!isLoading() && images().length > 0) {
+    <button
+      (click)="deleteAll()"
+      color="warn"
+      mat-button
+    >
+      <mat-icon>delete_sweep</mat-icon>
+      {{ T.GCF.CLIPBOARD_IMAGES.DELETE_ALL | translate }}
+    </button>
+  }
+  <button
+    (click)="close()"
+    color="primary"
+    mat-stroked-button
+  >
+    {{ T.G.CLOSE | translate }}
+  </button>
+</mat-dialog-actions>

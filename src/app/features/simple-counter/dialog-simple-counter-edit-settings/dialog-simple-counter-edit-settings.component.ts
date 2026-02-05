@@ -99,6 +99,7 @@ export class DialogSimpleCounterEditSettingsComponent {
       id: counter.id,
       title: counter.title,
       isEnabled: counter.isEnabled,
+      isHideButton: counter.isHideButton,
       icon: counter.icon,
       type: counter.type,
       isTrackStreaks: counter.isTrackStreaks,
@@ -120,6 +121,7 @@ export class DialogSimpleCounterEditSettingsComponent {
     const normalized: Partial<SimpleCounterCopy> = {
       title: settings.title,
       isEnabled: settings.isEnabled,
+      isHideButton: settings.isHideButton,
       icon: settings.icon,
       type: settings.type,
       isTrackStreaks: settings.isTrackStreaks,

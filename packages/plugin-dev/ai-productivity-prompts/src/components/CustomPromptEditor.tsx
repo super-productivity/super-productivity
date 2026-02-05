@@ -130,14 +130,14 @@ Give me a specific action plan with time estimates."
 
         <div class="editor-actions">
           <button
-            class="action-button secondary"
+            class="btn-outline"
             onClick={props.onCancel}
             disabled={isSaving()}
           >
             Cancel
           </button>
           <button
-            class="action-button primary"
+            class="btn-primary"
             onClick={handleSave}
             disabled={isSaving() || !promptTitle().trim() || !promptText().trim()}
           >

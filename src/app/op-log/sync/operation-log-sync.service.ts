@@ -453,10 +453,16 @@ export class OperationLogSyncService {
       // Without writing these ops, they bypass the filter on the next sync cycle
       // and get applied again, duplicating entities.
       if (result.newOps.length > 0) {
-        await this.opLogStore.appendBatch(result.newOps, 'remote');
+        const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
+          result.newOps,
+          'remote',
+        );
         OpLog.normal(
-          `OperationLogSyncService: Wrote ${result.newOps.length} snapshot ops to IndexedDB ` +
-            '(prevents duplication on next sync cycle).',
+          `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +
+            '(prevents duplication on next sync cycle).' +
+            (appendResult.skippedCount > 0
+              ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
+              : ''),
         );
       }
 
@@ -751,10 +757,16 @@ export class OperationLogSyncService {
       // Same rationale as downloadRemoteOps: file-based providers return ALL
       // recentOps on every download and rely on getAppliedOpIds() to filter them.
       if (result.newOps.length > 0) {
-        await this.opLogStore.appendBatch(result.newOps, 'remote');
+        const appendResult = await this.opLogStore.appendBatchSkipDuplicates(
+          result.newOps,
+          'remote',
+        );
         OpLog.normal(
-          `OperationLogSyncService: Wrote ${result.newOps.length} snapshot ops to IndexedDB ` +
-            'after force-download hydration.',
+          `OperationLogSyncService: Wrote ${appendResult.writtenOps.length} snapshot ops to IndexedDB ` +
+            'after force-download hydration.' +
+            (appendResult.skippedCount > 0
+              ? ` Skipped ${appendResult.skippedCount} duplicate(s).`
+              : ''),
         );
       }
 

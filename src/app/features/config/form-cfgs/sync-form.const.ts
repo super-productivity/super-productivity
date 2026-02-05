@@ -26,10 +26,22 @@ import { alertDialog } from '../../../util/native-dialogs';
  * @returns Array of Formly field configurations
  */
 const createWebdavFormFields = (options: {
+  infoText?: string;
   corsInfoText: string;
   baseUrlDescription: string;
 }): FormlyFieldConfig[] => {
   return [
+    ...(options.infoText
+      ? [
+          {
+            type: 'tpl',
+            templateOptions: {
+              tag: 'p',
+              text: options.infoText,
+            },
+          },
+        ]
+      : []),
     // Hide CORS info for Electron and native mobile apps (iOS/Android) since they handle CORS natively
     ...(!IS_ELECTRON && !IS_NATIVE_PLATFORM
       ? [
@@ -117,11 +129,11 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: LegacySyncProvider.SuperSync },
           { label: LegacySyncProvider.Dropbox, value: LegacySyncProvider.Dropbox },
-          { label: LegacySyncProvider.WebDAV, value: LegacySyncProvider.WebDAV },
+          { label: 'WebDAV (experimental)', value: LegacySyncProvider.WebDAV },
           ...(IS_ELECTRON || IS_ANDROID_WEB_VIEW
             ? [
                 {
-                  label: LegacySyncProvider.LocalFile,
+                  label: 'LocalFile (experimental)',
                   value: LegacySyncProvider.LocalFile,
                 },
               ]
@@ -133,7 +145,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.LocalFile ||
         IS_ANDROID_WEB_VIEW,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'localFileSync',
       fieldGroup: [
         {
@@ -163,7 +175,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.LocalFile ||
         !IS_ANDROID_WEB_VIEW,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'localFileSync',
       fieldGroup: [
         {
@@ -195,9 +207,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
     {
       hideExpression: (m, v, field) =>
         field?.parent?.model.syncProvider !== LegacySyncProvider.WebDAV,
-      resetOnHide: true,
+      resetOnHide: false,
       key: 'webDav',
       fieldGroup: createWebdavFormFields({
+        infoText: T.F.SYNC.FORM.WEB_DAV.INFO,
         corsInfoText: T.F.SYNC.FORM.WEB_DAV.CORS_INFO,
         baseUrlDescription:
           '* https://your-next-cloud/nextcloud/remote.php/dav/files/yourUserName/',

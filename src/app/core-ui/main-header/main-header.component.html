@@ -44,10 +44,12 @@
           simpleCounter of enabledSimpleCounters();
           track trackById($index, simpleCounter)
         ) {
-          <simple-counter-button
-            [matTooltip]="simpleCounter.title"
-            [simpleCounter]="simpleCounter"
-          ></simple-counter-button>
+          @if (!simpleCounter.isHideButton) {
+            <simple-counter-button
+              [matTooltip]="simpleCounter.title"
+              [simpleCounter]="simpleCounter"
+            ></simple-counter-button>
+          }
         }
       }
     </div>
@@ -140,9 +142,11 @@
               simpleCounter of enabledSimpleCounters();
               track trackById($index, simpleCounter)
             ) {
-              <simple-counter-button
-                [simpleCounter]="simpleCounter"
-              ></simple-counter-button>
+              @if (!simpleCounter.isHideButton) {
+                <simple-counter-button
+                  [simpleCounter]="simpleCounter"
+                ></simple-counter-button>
+              }
             }
           </div>
         </div>

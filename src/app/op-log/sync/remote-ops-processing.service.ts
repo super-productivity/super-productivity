@@ -18,7 +18,6 @@ import {
   SchemaMigrationService,
 } from '../persistence/schema-migration.service';
 import { SnackService } from '../../core/snack/snack.service';
-import { DUPLICATE_OPERATION_ERROR_PATTERN } from '../persistence/op-log-errors.const';
 import { T } from '../../t.const';
 import { LOCK_NAMES } from '../core/operation-log.const';
 import { LockService } from './lock.service';
@@ -350,25 +349,10 @@ export class RemoteOpsProcessingService {
     // Map op ID to seq for marking partial success
     const opIdToSeq = new Map<string, number>();
 
-    // Filter and append ops, with retry on duplicate detection (issue #6213)
-    // The race condition: filterNewOps may return ops as "new" using a stale cache,
-    // but another concurrent sync wrote them before appendBatch runs.
-    // When this happens, appendBatch throws "Duplicate operation detected" and
-    // invalidates the cache. We retry once with the now-fresh cache.
-    let opsToApply: Operation[];
-    try {
-      opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
-    } catch (e) {
-      if (e instanceof Error && e.message.includes(DUPLICATE_OPERATION_ERROR_PATTERN)) {
-        OpLog.warn(
-          'RemoteOpsProcessingService: Duplicate detected, retrying with fresh filter (issue #6213 recovery)',
-        );
-        // Cache was invalidated by appendBatch, retry with fresh filter
-        opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
-      } else {
-        throw e;
-      }
-    }
+    // Atomically filter and append ops in a single transaction (issue #6343).
+    // This eliminates the TOCTOU race between filterNewOps() and appendBatch()
+    // that caused persistent "Duplicate operation detected" errors.
+    const opsToApply = await this._filterAndAppendOps(ops, opIdToSeq);
 
     // Apply only NON-duplicate ops to NgRx store
     if (opsToApply.length > 0) {
@@ -481,29 +465,20 @@ export class RemoteOpsProcessingService {
   }
 
   /**
-   * Filters out already-applied ops and appends new ones to the store.
-   * Extracted as a helper to enable retry on duplicate detection (issue #6213).
+   * Atomically filters out already-applied ops and appends new ones to the store.
+   * Uses appendBatchSkipDuplicates() to check and insert within a single IndexedDB
+   * transaction, eliminating the TOCTOU race condition (issue #6343).
    *
    * @param ops - Operations to filter and potentially append
    * @param opIdToSeq - Map to populate with op ID -> sequence number mappings
    * @returns The operations that were actually appended (after filtering)
-   * @throws If appendBatch fails (including "Duplicate operation detected" error)
    */
   private async _filterAndAppendOps(
     ops: Operation[],
     opIdToSeq: Map<string, number>,
   ): Promise<Operation[]> {
-    // Filter out duplicates in a single batch (more efficient than N individual hasOp calls)
-    const opsToApply = await this.opLogStore.filterNewOps(ops);
-    const duplicateCount = ops.length - opsToApply.length;
-    if (duplicateCount > 0) {
-      OpLog.verbose(
-        `RemoteOpsProcessingService: Skipping ${duplicateCount} duplicate op(s)`,
-      );
-    }
-
     // DIAGNOSTIC: Check if any full-state ops will be applied
-    const fullStateOps = opsToApply.filter(
+    const fullStateOps = ops.filter(
       (op) =>
         op.opType === OpType.SyncImport ||
         op.opType === OpType.BackupImport ||
@@ -515,16 +490,20 @@ export class RemoteOpsProcessingService {
       );
     }
 
-    // Store operations with pending status before applying (single transaction for performance)
-    // If we crash after storing but before applying, these will be retried on startup
-    if (opsToApply.length > 0) {
-      const seqs = await this.opLogStore.appendBatch(opsToApply, 'remote', {
-        pendingApply: true,
-      });
-      opsToApply.forEach((op, i) => opIdToSeq.set(op.id, seqs[i]));
+    // Atomically check-and-insert within a single transaction (issue #6343).
+    // Duplicates are silently skipped rather than causing ConstraintError.
+    const result = await this.opLogStore.appendBatchSkipDuplicates(ops, 'remote', {
+      pendingApply: true,
+    });
+
+    if (result.skippedCount > 0) {
+      OpLog.verbose(
+        `RemoteOpsProcessingService: Skipping ${result.skippedCount} duplicate op(s)`,
+      );
     }
 
-    return opsToApply;
+    result.writtenOps.forEach((op, i) => opIdToSeq.set(op.id, result.seqs[i]));
+    return result.writtenOps;
   }
 
   /**

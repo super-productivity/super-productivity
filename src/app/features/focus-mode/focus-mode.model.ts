@@ -77,6 +77,13 @@ export const isBreakSession = (timer: TimerState): boolean => {
   return timer.purpose === 'break';
 };
 
+/**
+ * After incrementCycle, the current cycle is 1 too high for break calculation.
+ * This returns the last completed session's cycle, clamped to a minimum of 1.
+ */
+export const getBreakCycle = (currentCycle: number): number =>
+  Math.max(currentCycle - 1, 1);
+
 // Constants for better maintainability
 export const FOCUS_MODE_DEFAULTS = {
   SESSION_DURATION: 25 * 60 * 1000, // 25 minutes

@@ -334,6 +334,81 @@ export class OperationLogStoreService {
   }
 
   /**
+   * Appends operations to the store, silently skipping any that already exist.
+   *
+   * Unlike appendBatch(), this method does NOT throw on duplicate operations.
+   * It checks each op's ID against the IndexedDB `byId` unique index within
+   * the same readwrite transaction before inserting. This eliminates the
+   * TOCTOU race between filterNewOps() and appendBatch() that caused
+   * persistent "Duplicate operation detected" errors (issue #6343).
+   *
+   * @param ops Operations to append
+   * @param source Whether these are local or remote operations
+   * @param options Additional options (e.g., pendingApply for remote ops)
+   * @returns Object with seqs of written ops, the written ops, and skipped count
+   */
+  async appendBatchSkipDuplicates(
+    ops: Operation[],
+    source: 'local' | 'remote' = 'local',
+    options?: { pendingApply?: boolean },
+  ): Promise<{ seqs: number[]; writtenOps: Operation[]; skippedCount: number }> {
+    if (ops.length === 0) {
+      return { seqs: [], writtenOps: [], skippedCount: 0 };
+    }
+
+    await this._ensureInit();
+    const tx = this.db.transaction(STORE_NAMES.OPS, 'readwrite');
+    const store = tx.objectStore(STORE_NAMES.OPS);
+    const byIdIndex = store.index(OPS_INDEXES.BY_ID);
+    const seqs: number[] = [];
+    const writtenOps: Operation[] = [];
+    let skippedCount = 0;
+
+    try {
+      for (const op of ops) {
+        // Check if op already exists in the same transaction (atomic)
+        const existingKey = await byIdIndex.getKey(op.id);
+        if (existingKey !== undefined) {
+          skippedCount++;
+          continue;
+        }
+
+        const compactOp = encodeOperation(op);
+        const entry: Omit<StoredOperationLogEntry, 'seq'> = {
+          op: compactOp,
+          appliedAt: Date.now(),
+          source,
+          syncedAt: source === 'remote' ? Date.now() : undefined,
+          applicationStatus:
+            source === 'remote'
+              ? options?.pendingApply
+                ? 'pending'
+                : 'applied'
+              : undefined,
+        };
+        const seq = await store.add(entry as StoredOperationLogEntry);
+        seqs.push(seq as number);
+        writtenOps.push(op);
+      }
+
+      await tx.done;
+
+      if (skippedCount > 0) {
+        Log.warn(
+          `[OpLogStore] appendBatchSkipDuplicates: Skipped ${skippedCount} duplicate op(s) out of ${ops.length}`,
+        );
+      }
+
+      return { seqs, writtenOps, skippedCount };
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        throw new StorageQuotaExceededError();
+      }
+      throw e;
+    }
+  }
+
+  /**
    * Marks operations as successfully applied.
    * Called after remote operations have been dispatched to NgRx.
    * Also handles transitioning 'failed' ops to 'applied' when retrying succeeds.

@@ -100,7 +100,10 @@ xdescribe('TaskDueEffects', () => {
         },
         {
           provide: SyncTriggerService,
-          useValue: { afterInitialSyncDoneAndDataLoadedInitially$ },
+          useValue: {
+            afterInitialSyncDoneAndDataLoadedInitially$,
+            afterInitialSyncDoneStrict$: afterInitialSyncDoneAndDataLoadedInitially$,
+          },
         },
         {
           provide: HydrationStateService,
@@ -454,6 +457,7 @@ xdescribe('TaskDueEffects', () => {
             provide: SyncTriggerService,
             useValue: {
               afterInitialSyncDoneAndDataLoadedInitially$: delayedSyncTrigger$,
+              afterInitialSyncDoneStrict$: delayedSyncTrigger$,
             },
           },
           {

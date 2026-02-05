@@ -58,10 +58,12 @@ export function ActionDialog(props: ActionDialogProps) {
       title={props.initialAction ? 'Edit Action' : 'Add Action'}
       footer={
         <div class="grid">
-          <button class="outline secondary" onClick={props.onClose}>
+          <button class="btn-outline" onClick={props.onClose}>
             Cancel
           </button>
-          <button onClick={() => props.onSave(action())}>Save</button>
+          <button class="btn-primary" onClick={() => props.onSave(action())}>
+            Save
+          </button>
         </div>
       }
     >
@@ -88,9 +90,9 @@ export function ActionDialog(props: ActionDialogProps) {
       {action().type === 'webhook' && (
         <p
           style={{
-            color: 'var(--pico-del-color)',
-            'font-size': '0.875rem',
-            'margin-top': '0.5rem',
+            color: 'var(--color-warning)',
+            'font-size': '0.875em',
+            'margin-top': 'var(--s)',
           }}
         >
           ⚠️ Warning: Your full task data (including title, description, etc.) will be sent to this

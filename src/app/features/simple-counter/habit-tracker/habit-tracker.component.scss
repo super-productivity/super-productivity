@@ -342,9 +342,9 @@
   }
 
   &.is-done {
-    background-color: var(--c-accent);
-    border-color: var(--c-accent);
-    color: white;
+    background-color: var(--c-primary);
+    border-color: var(--c-primary);
+    color: var(--c-contrast);
   }
 
   mat-icon {
@@ -384,6 +384,6 @@
 
   .progress-ring-circle {
     transition: stroke-dashoffset 0.3s;
-    color: var(--c-accent);
+    color: var(--c-primary);
   }
 }

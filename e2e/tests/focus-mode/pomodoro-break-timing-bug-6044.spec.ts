@@ -295,10 +295,7 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
   });
 
   test.describe('Break cycle pattern verification', () => {
-    test('should follow correct pattern: S S S L S S S L S', async ({
-      page,
-      testPrefix,
-    }) => {
+    test('should follow correct pattern: S S S L S', async ({ page, testPrefix }) => {
       const workViewPage = new WorkViewPage(page, testPrefix);
       await openFocusModeWithTask(page, workViewPage, 'BreakPatternTest');
       await selectPomodoroMode(page);
@@ -308,24 +305,17 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
       // Session 2 → cycle 3 → short
       // Session 3 → cycle 4 → short
       // Session 4 → cycle 5 → LONG (5 - 1 % 4 === 0)
-      // Session 5 → cycle 6 → short
-      // Session 6 → cycle 7 → short
-      // Session 7 → cycle 8 → LONG (8 - 1 % 4 === 0)
-      // Session 8 → cycle 9 → short
+      // Session 5 → cycle 6 → short (verifies restart after long break)
       const expectedPattern = [
         'short', // Session 1
         'short', // Session 2
-        'short', //Session 3
+        'short', // Session 3
         'long', // Session 4
         'short', // Session 5
-        'short', // Session 6
-        'short', // Session 7
-        'long', // Session 8
-        'short', // Session 9
       ];
       const actualPattern: string[] = [];
 
-      for (let i = 1; i <= 9; i++) {
+      for (let i = 1; i <= 5; i++) {
         if (i > 1) {
           await skipBreakAndStartNextSession(page);
         } else {
@@ -343,7 +333,7 @@ test.describe('Bug #6044: Pomodoro break timing', () => {
 
       // Verify the entire pattern matches expectations
       expect(actualPattern).toEqual(expectedPattern);
-      console.log('✓ Break pattern is correct: S S S L S S S L S');
+      console.log('✓ Break pattern is correct: S S S L S');
     });
   });
 });

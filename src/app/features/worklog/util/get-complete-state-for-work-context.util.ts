@@ -56,18 +56,26 @@ const _filterIdsForProject = (
   workContextId: string,
 ): string[] =>
   (state.ids as string[]).filter((id) => {
-    const t = state.entities[id] as Task;
-    return !!t.parentId
-      ? (state.entities[t.parentId] as Task).projectId === workContextId
-      : t.projectId === workContextId;
+    const t = state.entities[id];
+    if (!t) return false;
+    if (t.parentId) {
+      const parent = state.entities[t.parentId];
+      return parent ? parent.projectId === workContextId : t.projectId === workContextId;
+    }
+    return t.projectId === workContextId;
   });
 
 const _filterIdsForTag = (state: EntityState<Task>, workContextId: string): string[] =>
   (state.ids as string[]).filter((id) => {
-    const t = state.entities[id] as Task;
-    return !!t.parentId
-      ? (state.entities[t.parentId] as Task).tagIds.includes(workContextId)
-      : t.tagIds.includes(workContextId);
+    const t = state.entities[id];
+    if (!t) return false;
+    if (t.parentId) {
+      const parent = state.entities[t.parentId];
+      return parent
+        ? parent.tagIds.includes(workContextId)
+        : t.tagIds.includes(workContextId);
+    }
+    return t.tagIds.includes(workContextId);
   });
 
 const _limitStateToIds = (

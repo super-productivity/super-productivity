@@ -1,0 +1,69 @@
+
+### Bug Fixes
+
+* address code review findings across sync, tasks, and UI (#6339)
+* **backup:** support importing pre-v17 backups (v10-v15 tested, v16 partial) (#6271)
+* **build:** update glob API and remove unused Angular imports
+* **build:** use Apple continuous-corner bezier curves for mac icon squircle
+* **config:** make clipboardImages optional for backwards compatibility
+* **e2e:** correct case-sensitive switch labels in app-features tests
+* **e2e:** reduce flakiness and speed up WebDAV sync tests
+* **e2e:** stabilize undo task delete sync test
+* **e2e:** use desktop selectors for simple counter sync tests
+* **e2e:** use specific heading locator in plugin loading test
+* **focus-mode:** stop time tracking when exiting break to planning
+* **habit-tracker:** remove unused MsToStringPipe import
+* **inline-markdown:** preserve unsaved content when adding checklist item
+* **inline-markdown:** update placeholder and modelCopy to use empty string instead of `undefined` string (#6281)
+* **main-header:** center sync icon glyph to eliminate spin wobble (d74ab29), closes #6318
+* **main-header:** remove unnecessary right padding on macOS Electron (a5c6337), closes #6337
+* **main-header:** restore inline simple counter buttons on desktop
+* **schedule-week:** adjust sizes (#6350)
+* **sync:** add explicit error handling for UTF-8 decoding in iOS WebDAV plugin
+* **sync:** add isWaitingForUserInput$ guard to strict initial sync timeout
+* **sync:** add native iOS WebDAV plugin to fix broken read on iPhone (fcedc4e), closes #6317
+* **sync:** add retry logic for transient iOS network errors in Dropbox sync (39eaef7), closes #6333
+* **sync:** address code review findings for archive-wins and entity frontier
+* **sync:** address code review findings for E2E tests and sync services
+* **sync:** archive-wins pre-scan and entity frontier for new clients
+* **sync:** clean up review findings from TOCTOU race fix
+* **sync:** eliminate TOCTOU race in duplicate operation detection (#6343)
+* **sync:** handle concurrent ops for archived/deleted entities
+* **sync:** handle MultiEntityPayload in LWW Delete vs Update conflict resolution
+* **sync:** improve conflict resolution fallback path and fix duplicate CSS var
+* **sync:** prevent Formly from clearing provider config on show (#6345)
+* **sync:** prevent lost piggybacked ops and worklog crashes during multi-client sync
+* **sync:** prevent recurring task duplication across clients
+* **sync:** prevent task duplication during file-based sync snapshot hydration
+* **sync:** remove dead code, add defensive checks, and clean up vector clock logic
+* **sync:** restore WebDAV provider compatibility warning text
+* **tasks:** clear remindAt when rescheduling task via planner (#6342)
+* **tasks:** correct biweekly recurring task week boundary calculation (#6298)
+* **tasks:** detect and sanitize orphaned task IDs to prevent startup crashes (#6359, #6360)
+* **tasks:** filter orphan IDs in removeTasksFromTodayTag reducer (#6327)
+* **tasks:** filter undefined entities in selectAllTasks to prevent crashes
+* **tasks:** filter undefined subtasks in mapSubTasksToTask (#6325)
+* **tasks:** fix huge space between emoji and text in tag/project menus (bfce556), closes #5977
+* **tasks:** guard against undefined entities in work-context selectors (#6357)
+* **tasks:** guard against undefined task entities in selectors and archive (#6359)
+* **tasks:** guard against undefined task in mainListTasksInProject$ (#6360)
+* **tasks:** handle compound emojis in icon input using Intl.Segmenter
+* **tasks:** prevent recurring tasks from failing to repeat (#6192)
+* **tasks:** reset devError state in orphan ID detection test
+* **test:** add missing skipConflictDetection arg in forceDownloadRemoteState test
+* **test:** add skipSpinnerCheck to USE_REMOTE waitForSyncToComplete calls
+* undefined redmine ticket (#6279)
+### Features
+
+* add Czech, Slovak, and Ukrainian calendar locale support and correct Czech language code from 'cz' to 'cs'. (#6329)
+* **simple-counter:** add isHideButton config to hide toolbar button
+* **sync:** add rolling JWT token refresh on sync requests
+* **sync:** mark WebDAV and LocalFile sync options as experimental
+* **theme:** add Cybr. New THEME (#6314)
+### Performance Improvements
+
+* **sync:** restore fast SuperSync startup while preventing repeat task duplication
+* **test:** speed up slow encryption and large batch sync tests
+### Reverts
+
+* Revert "feat(sync): add rolling JWT token refresh on sync requests"

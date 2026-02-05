@@ -20,12 +20,6 @@
 export const DUPLICATE_OPERATION_ERROR_MSG =
   '[OpLogStore] Duplicate operation detected (likely race condition). See #6213.';
 
-/**
- * Partial match for duplicate operation errors (for backward compatibility and testing).
- * Use this in catch blocks and tests that need to detect duplicate operation errors.
- */
-export const DUPLICATE_OPERATION_ERROR_PATTERN = 'Duplicate operation detected';
-
 // ============================================================================
 // Initialization Errors
 // ============================================================================

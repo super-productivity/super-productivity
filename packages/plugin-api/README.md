@@ -65,6 +65,7 @@ PluginAPI.registerShortcut({
   "hooks": ["taskComplete", "taskUpdate"],
   "permissions": ["showSnack", "getTasks", "addTask", "showIndexHtmlAsView"],
   "iFrame": true,
+  "uiKit": true,
   "icon": "icon.svg"
 }
 ```

@@ -163,7 +163,7 @@ const PromptView: Component<PromptViewProps> = (props) => {
       <div class="prompt-actions">
         <Button onClick={handleCopyToClipboard}>{copyButtonText()}</Button>
         <a
-          class="action-button chatgpt-button"
+          class="chatgpt-button"
           href={createChatGPTUrl(generatedPrompt())}
           target="_blank"
           rel="noopener noreferrer"

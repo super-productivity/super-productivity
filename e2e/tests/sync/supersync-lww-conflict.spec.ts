@@ -1324,11 +1324,11 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
 
       // 3. Client A deletes the task using reliable keyboard shortcut
       await deleteTask(clientA, taskName);
-      await clientA.page.waitForTimeout(300); // Flush operation to ensure DELETE is created (increased from 150ms)
+      await clientA.page.waitForTimeout(500); // Flush operation to ensure DELETE is created and persisted to IndexedDB
       console.log('[DeleteRace] Client A deleted task');
 
       // 4. Client B updates the task (with later timestamp)
-      await clientB.page.waitForTimeout(1500); // Ensure UPDATE has later timestamp than DELETE (increased from 1000ms)
+      await clientB.page.waitForTimeout(2000); // Ensure UPDATE has later timestamp than DELETE
 
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)
@@ -1434,11 +1434,11 @@ test.describe('@supersync SuperSync LWW Conflict Resolution', () => {
 
       // 3. Client A deletes the task using reliable keyboard shortcut
       await deleteTask(clientA, taskName);
-      await clientA.page.waitForTimeout(150); // Flush operation to ensure DELETE is created and persisted
+      await clientA.page.waitForTimeout(500); // Flush operation to ensure DELETE is created and persisted to IndexedDB
       console.log('[TodayDeleteRace] Client A deleted task');
 
       // 4. Client B updates the task (with later timestamp)
-      await clientB.page.waitForTimeout(1000); // Ensure later timestamp
+      await clientB.page.waitForTimeout(2000); // Ensure UPDATE has later timestamp than DELETE
 
       const taskLocatorB = clientB.page
         .locator(`task:not(.ng-animating):has-text("${taskName}")`)

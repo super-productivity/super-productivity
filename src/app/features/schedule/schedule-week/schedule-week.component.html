@@ -2,18 +2,16 @@
   class="week-header"
   [class.isInPanel]="isInPanel()"
 >
-  <div class="days">
-    <div class="filler"><!--for time --></div>
-    @for (day of daysToShow(); track $index) {
-      <div class="day">
-        @if (day === todayDateStr()) {
-          <mat-icon>wb_sunny</mat-icon>
-        }
-        <div class="day-num">{{ day | localeDate: 'd' }}</div>
-        <div class="day-day">{{ day | localeDate: 'EEE' }}</div>
-      </div>
-    }
-  </div>
+  <div class="filler"><!--for time --></div>
+  @for (day of daysToShow(); track $index) {
+    <div class="day">
+      @if (day === todayDateStr()) {
+        <mat-icon>wb_sunny</mat-icon>
+      }
+      <div class="day-num">{{ day | localeDate: 'd' }}</div>
+      <div class="day-day">{{ day | localeDate: 'EEE' }}</div>
+    </div>
+  }
 </header>
 
 <div

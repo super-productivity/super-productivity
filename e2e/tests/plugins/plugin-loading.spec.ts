@@ -147,8 +147,9 @@ test.describe.serial('Plugin Loading', () => {
 
       // Switch to iframe context and verify content
       const frame = page.frameLocator(PLUGIN_IFRAME);
-      await expect(frame.locator('h1')).toBeVisible({ timeout: 10000 });
-      await expect(frame.locator('h1')).toContainText('API Test Plugin');
+      await expect(frame.getByRole('heading', { name: 'API Test Plugin' })).toBeVisible({
+        timeout: 10000,
+      });
     } else {
       console.log('Skipping iframe test - plugin menu not available');
     }

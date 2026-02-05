@@ -804,6 +804,101 @@ describe('OperationLogStoreService', () => {
     });
   });
 
+  describe('appendBatchSkipDuplicates', () => {
+    it('should write new ops and return their seqs', async () => {
+      const ops = [
+        createTestOperation({ entityId: 'task1' }),
+        createTestOperation({ entityId: 'task2' }),
+      ];
+
+      const result = await service.appendBatchSkipDuplicates(ops, 'remote');
+
+      expect(result.seqs.length).toBe(2);
+      expect(result.writtenOps.length).toBe(2);
+      expect(result.skippedCount).toBe(0);
+
+      const storedOps = await service.getOpsAfterSeq(0);
+      expect(storedOps.length).toBe(2);
+    });
+
+    it('should skip existing ops silently instead of throwing', async () => {
+      const ops = [createTestOperation(), createTestOperation()];
+
+      // Insert first time
+      await service.appendBatch(ops, 'remote');
+
+      // Insert same ops again with appendBatchSkipDuplicates - should NOT throw
+      const result = await service.appendBatchSkipDuplicates(ops, 'remote');
+
+      expect(result.seqs.length).toBe(0);
+      expect(result.writtenOps.length).toBe(0);
+      expect(result.skippedCount).toBe(2);
+
+      // Original ops should still be in store (no duplicates)
+      const allOps = await service.getOpsAfterSeq(0);
+      expect(allOps.length).toBe(2);
+    });
+
+    it('should write new ops and skip duplicates in the same batch', async () => {
+      const existingOps = [createTestOperation(), createTestOperation()];
+      await service.appendBatch(existingOps, 'remote');
+
+      const newOp = createTestOperation();
+      const mixedOps = [existingOps[0], newOp, existingOps[1]];
+
+      const result = await service.appendBatchSkipDuplicates(mixedOps, 'remote');
+
+      expect(result.seqs.length).toBe(1);
+      expect(result.writtenOps.length).toBe(1);
+      expect(result.writtenOps[0].id).toBe(newOp.id);
+      expect(result.skippedCount).toBe(2);
+
+      const allOps = await service.getOpsAfterSeq(0);
+      expect(allOps.length).toBe(3); // 2 original + 1 new
+    });
+
+    it('should handle empty array', async () => {
+      const result = await service.appendBatchSkipDuplicates([]);
+
+      expect(result.seqs).toEqual([]);
+      expect(result.writtenOps).toEqual([]);
+      expect(result.skippedCount).toBe(0);
+    });
+
+    it('should set source and syncedAt for remote ops', async () => {
+      const ops = [createTestOperation()];
+
+      await service.appendBatchSkipDuplicates(ops, 'remote');
+
+      const storedOps = await service.getOpsAfterSeq(0);
+      expect(storedOps[0].source).toBe('remote');
+      expect(storedOps[0].syncedAt).toBeDefined();
+    });
+
+    it('should set applicationStatus to pending when pendingApply is true', async () => {
+      const ops = [createTestOperation()];
+
+      await service.appendBatchSkipDuplicates(ops, 'remote', { pendingApply: true });
+
+      const storedOps = await service.getOpsAfterSeq(0);
+      expect(storedOps[0].applicationStatus).toBe('pending');
+    });
+
+    it('should handle intra-batch duplicates (same op ID twice in one call)', async () => {
+      const op = createTestOperation();
+      const ops = [op, op]; // Same op twice
+
+      const result = await service.appendBatchSkipDuplicates(ops, 'remote');
+
+      expect(result.seqs.length).toBe(1);
+      expect(result.writtenOps.length).toBe(1);
+      expect(result.skippedCount).toBe(1);
+
+      const storedOps = await service.getOpsAfterSeq(0);
+      expect(storedOps.length).toBe(1);
+    });
+  });
+
   describe('getOpById', () => {
     it('should return operation entry by ID', async () => {
       const op = createTestOperation();

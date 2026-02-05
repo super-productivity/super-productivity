@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { TaskAttachment } from '../task-attachment.model';
 import { T } from '../../../../t.const';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { ClipboardImageService } from '../../../../core/clipboard-image/clipboard-image.service';
 
 describe('TaskAttachmentListComponent', () => {
   let component: TaskAttachmentListComponent;
@@ -20,6 +21,9 @@ describe('TaskAttachmentListComponent', () => {
       'deleteAttachment',
     ]);
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    const clipboardImageServiceSpy = jasmine.createSpyObj('ClipboardImageService', [
+      'resolveUrl',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [TaskAttachmentListComponent, NoopAnimationsModule],
@@ -27,6 +31,7 @@ describe('TaskAttachmentListComponent', () => {
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: TaskAttachmentService, useValue: attachmentServiceSpy },
         { provide: MatDialog, useValue: matDialogSpy },
+        { provide: ClipboardImageService, useValue: clipboardImageServiceSpy },
       ],
     }).compileComponents();
 

@@ -98,13 +98,18 @@ export class TaskArchiveService {
     const young = archiveYoung || DEFAULT_ARCHIVE;
     const old = archiveOld || DEFAULT_ARCHIVE;
 
-    return {
-      ids: [...young.task.ids, ...old.task.ids],
-      entities: {
-        ...young.task.entities,
-        ...old.task.entities,
-      },
-    };
+    // Young takes precedence over old for entities
+    const mergedEntities = { ...old.task.entities, ...young.task.entities };
+    // Deduplicate IDs and filter out orphaned IDs without entities
+    const idSet = new Set<string>();
+    const mergedIds: string[] = [];
+    for (const id of [...young.task.ids, ...old.task.ids]) {
+      if (!idSet.has(id as string) && mergedEntities[id as string]) {
+        idSet.add(id as string);
+        mergedIds.push(id as string);
+      }
+    }
+    return { ids: mergedIds, entities: mergedEntities };
   }
 
   async getById(id: string): Promise<Task> {
@@ -333,9 +338,9 @@ export class TaskArchiveService {
     const taskArchiveState: TaskArchive = await this.load();
     const archiveTaskIdsToDelete = !!taskArchiveState
       ? (taskArchiveState.ids as string[]).filter((id) => {
-          const t = taskArchiveState.entities[id] as Task;
+          const t = taskArchiveState.entities[id];
           if (!t) {
-            throw new Error('No task');
+            return false;
           }
           return t.projectId === projectIdToDelete;
         })
@@ -360,7 +365,8 @@ export class TaskArchiveService {
     let archiveSubTaskIdsToDelete: string[] = [];
     const archiveMainTaskIdsToDelete: string[] = [];
     (taskArchiveState.ids as string[]).forEach((id) => {
-      const t = taskArchiveState.entities[id] as Task;
+      const t = taskArchiveState.entities[id];
+      if (!t) return;
       if (isOrphanedParentTask(t)) {
         archiveMainTaskIdsToDelete.push(id);
         archiveSubTaskIdsToDelete = archiveSubTaskIdsToDelete.concat(t.subTaskIds);
@@ -383,8 +389,8 @@ export class TaskArchiveService {
     const ids = newState.ids as string[];
 
     const tasksWithRepeatCfgId = ids
-      .map((id) => newState.entities[id] as Task)
-      .filter((task) => task.repeatCfgId === repeatConfigId);
+      .map((id) => newState.entities[id])
+      .filter((task): task is Task => !!task && task.repeatCfgId === repeatConfigId);
 
     if (tasksWithRepeatCfgId && tasksWithRepeatCfgId.length) {
       const updates: Update<Task>[] = tasksWithRepeatCfgId.map((t) => {
@@ -410,8 +416,8 @@ export class TaskArchiveService {
     const taskArchive = await this.load();
 
     const tasksWithIssueProvider = (taskArchive.ids as string[])
-      .map((id) => taskArchive.entities[id] as Task)
-      .filter((task) => task.issueProviderId === issueProviderId);
+      .map((id) => taskArchive.entities[id])
+      .filter((task): task is Task => !!task && task.issueProviderId === issueProviderId);
 
     if (tasksWithIssueProvider.length > 0) {
       const updates: Update<Task>[] = tasksWithIssueProvider.map((t) => ({

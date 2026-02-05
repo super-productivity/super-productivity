@@ -37,22 +37,6 @@ function App() {
   onMount(async () => {
     await Promise.all([fetchRules(), fetchData()]);
     setIsLoading(false);
-
-    // Theme detection
-    const isDark =
-      getComputedStyle(document.documentElement).getPropertyValue('--is-dark-theme').trim() === '1';
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-
-    // Optional: Listen for changes if the host app updates the style tag dynamically
-    // This might require a MutationObserver on the style tag or body if variables change
-    const observer = new MutationObserver(() => {
-      const isDarkNow =
-        getComputedStyle(document.documentElement).getPropertyValue('--is-dark-theme').trim() ===
-        '1';
-      document.documentElement.setAttribute('data-theme', isDarkNow ? 'dark' : 'light');
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
-    // Also observe the injected style tag if possible, but documentElement style check is a good start
   });
 
   const handleEdit = (rule: AutomationRule) => {
@@ -151,9 +135,9 @@ function App() {
 
   return (
     <div class="app">
-      <main class="container">
+      <main>
         {isLoading() ? (
-          <article aria-busy="true"></article>
+          <p>Loading...</p>
         ) : (
           <>
             <RuleList

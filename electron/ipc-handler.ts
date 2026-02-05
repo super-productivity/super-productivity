@@ -8,6 +8,7 @@ import {
   initJiraIpc,
   initSystemIpc,
 } from './ipc-handlers';
+import { initClipboardImageHandlers } from './clipboard-image-handler';
 
 export const initIpcInterfaces = (): void => {
   // Initialize plugin node executor (registers IPC handlers)
@@ -24,4 +25,5 @@ export const initIpcInterfaces = (): void => {
   initJiraIpc();
   initGlobalShortcutsIpc();
   initExecIpc();
+  initClipboardImageHandlers();
 };

@@ -85,21 +85,22 @@ The `manifest.json` file is required for all plugins and defines the plugin's me
 
 ### Manifest Fields
 
-| Field             | Type     | Required | Description                                                        |
-| ----------------- | -------- | -------- | ------------------------------------------------------------------ |
-| `id`              | string   | ✓        | Unique identifier for your plugin (use kebab-case)                 |
-| `name`            | string   | ✓        | Display name shown to users                                        |
-| `version`         | string   | ✓        | Semantic version (e.g., "1.0.0")                                   |
-| `description`     | string   | ✓        | Brief description of what your plugin does                         |
-| `manifestVersion` | number   | ✓        | Currently must be `1`                                              |
-| `minSupVersion`   | string   | ✓        | Minimum Super Productivity version required                        |
-| `author`          | string   |          | Plugin author name                                                 |
-| `homepage`        | string   |          | Plugin website or repository URL                                   |
-| `icon`            | string   |          | Path to icon file (SVG recommended)                                |
-| `iFrame`          | boolean  |          | Whether plugin uses iframe UI (default: false)                     |
-| `sidePanel`       | boolean  |          | Show plugin in side panel (default: false), requires `iFrame:true` |
-| `permissions`     | string[] |          | The permissions the plugin needs (e.g., ["nodeExecution"])         |
-| `hooks`           | string[] |          | App events to listen to                                            |
+| Field             | Type     | Required | Description                                                                            |
+| ----------------- | -------- | -------- | -------------------------------------------------------------------------------------- |
+| `id`              | string   | ✓        | Unique identifier for your plugin (use kebab-case)                                     |
+| `name`            | string   | ✓        | Display name shown to users                                                            |
+| `version`         | string   | ✓        | Semantic version (e.g., "1.0.0")                                                       |
+| `description`     | string   | ✓        | Brief description of what your plugin does                                             |
+| `manifestVersion` | number   | ✓        | Currently must be `1`                                                                  |
+| `minSupVersion`   | string   | ✓        | Minimum Super Productivity version required                                            |
+| `author`          | string   |          | Plugin author name                                                                     |
+| `homepage`        | string   |          | Plugin website or repository URL                                                       |
+| `icon`            | string   |          | Path to icon file (SVG recommended)                                                    |
+| `iFrame`          | boolean  |          | Whether plugin uses iframe UI (default: false)                                         |
+| `sidePanel`       | boolean  |          | Show plugin in side panel (default: false), requires `iFrame:true`                     |
+| `permissions`     | string[] |          | The permissions the plugin needs (e.g., ["nodeExecution"])                             |
+| `hooks`           | string[] |          | App events to listen to                                                                |
+| `uiKit`           | boolean  |          | Enable UI Kit CSS reset for iframe plugins (default: true). Set to `false` to disable. |
 
 ### Complete Manifest Example
 
@@ -172,37 +173,22 @@ Plugins that render custom UI in a sandboxed iframe.
     <meta charset="UTF-8" />
     <title>My Plugin UI</title>
 
-    <!-- CSS must be inlined -->
+    <!-- CSS must be inlined. Theme variables and UI Kit are injected automatically. -->
     <style>
       body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-        background: #f5f5f5;
+        padding: var(--s3);
       }
 
       .task-list {
-        background: white;
-        border-radius: 8px;
-        padding: 16px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        background: var(--card-bg);
+        border-radius: var(--card-border-radius);
+        padding: var(--s2);
+        box-shadow: var(--whiteframe-shadow-2dp);
       }
 
       .task-item {
-        padding: 8px;
-        border-bottom: 1px solid #eee;
-      }
-
-      button {
-        background: #4caf50;
-        color: white;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: #45a049;
+        padding: var(--s);
+        border-bottom: 1px solid var(--divider-color);
       }
     </style>
   </head>
@@ -248,6 +234,46 @@ Plugins that render custom UI in a sandboxed iframe.
   </body>
 </html>
 ```
+
+### Theme Variables & UI Kit
+
+Iframe plugins automatically receive:
+
+1. **CSS variables** — All theme variables (colors, spacing, shadows, transitions) are injected as CSS custom properties on `:root`. Use `var(--c-primary)`, `var(--bg)`, `var(--text-color)`, etc.
+
+2. **UI Kit CSS reset** — By default, basic HTML elements (`button`, `input`, `select`, `textarea`, `table`, `a`, `h1`–`h6`, `p`, `code`, `pre`, `hr`, etc.) are styled to match the app's look. This is injected before your plugin's own styles, so your CSS always wins.
+
+   To disable the UI Kit, add `"uiKit": false` to your manifest.
+
+**Button variants:**
+
+- Default `<button>` — Neutral card-background button with border
+- `<button class="btn-primary">` — Filled primary-color button (white text)
+- `<button class="btn-outline">` — Transparent button with primary-color border and text, fills on hover
+
+**Card component:**
+
+- `<div class="card">` — Card with background, shadow, rounded corners, and border
+- `<div class="card card-clickable">` — Adds hover lift effect and primary border highlight
+
+**Utility classes:**
+
+- `.text-muted` — Muted text color (`var(--text-color-muted)`)
+- `.text-primary` — Primary theme color (`var(--c-primary)`)
+- `.page-fade` — Fade-in animation (0.3s ease)
+
+**Key CSS variables:**
+
+- `--bg`, `--bg-darker` — Background colors
+- `--text-color`, `--text-color-muted` — Text colors
+- `--c-primary`, `--c-accent`, `--c-warn` — Theme colors
+- `--card-bg`, `--card-shadow`, `--card-border-radius` — Card styling
+- `--divider-color` — Border/divider color
+- `--s`, `--s2`, `--s3`, `--s4`, `--s-half`, `--s-quarter` — Spacing scale
+- `--transition-standard` — Standard transition
+- `--font-primary-stack` — App font stack
+- `--whiteframe-shadow-1dp` through `--whiteframe-shadow-24dp` — Elevation shadows
+- `--is-dark-theme` — `1` if dark theme, `0` if light
 
 ## Available API Methods
 

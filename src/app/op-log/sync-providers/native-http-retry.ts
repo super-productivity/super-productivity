@@ -110,6 +110,8 @@ export const isTransientNetworkError = (e: unknown): boolean => {
   const message = (e instanceof Error ? e.message : String(e)).toLowerCase();
   return (
     message.includes('network connection was lost') ||
+    // Intentionally broad: matches "request timed out", "connection timed out", "operation timed out", etc.
+    // Narrowing to "request timed out" would miss legitimate transient network errors.
     message.includes('timed out') ||
     message.includes('not connected to the internet') ||
     message.includes('internet connection appears to be offline') ||

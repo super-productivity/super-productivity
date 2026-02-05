@@ -1,120 +1,25 @@
 /*
  * AI Productivity Prompts Plugin Styles
- * Simplified structure following KISS principles
+ * UI Kit provides base element styles (body, headings, buttons, inputs, etc.)
+ * Only plugin-specific layout and component rules here.
  */
-
-* {
-  box-sizing: border-box;
-}
-
-/* Theme support with Super Productivity variables */
-:root {
-  /* Light theme defaults */
-  --plugin-text-primary: var(--text-color, #333);
-  --plugin-text-muted: var(--text-color-muted, #666);
-  --plugin-bg-card: var(--card-bg, #fff);
-  --plugin-bg-input: var(--input-bg, #fff);
-  --plugin-border: var(--extra-border-color, #ddd);
-  --plugin-border-focus: var(--c-primary, #007bff);
-  --plugin-primary: var(--c-primary, #007bff);
-  --plugin-accent: var(--c-accent, #ff6b35);
-  --plugin-shadow: rgba(0, 0, 0, 0.1);
-  --plugin-shadow-hover: rgba(0, 0, 0, 0.15);
-}
-
-/* Dark theme support - using body class detection */
-body.isEnabledDarkTheme {
-  --plugin-text-primary: #e0e0e0;
-  --plugin-text-muted: #aaa;
-  --plugin-bg-card: #2d2d2d;
-  --plugin-bg-input: #3d3d3d;
-  --plugin-border: #555;
-  --plugin-border-focus: #4a9eff;
-  --plugin-shadow: rgba(0, 0, 0, 0.4);
-  --plugin-shadow-hover: rgba(0, 0, 0, 0.6);
-}
-
-/* Fallback dark theme via prefers-color-scheme */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --plugin-text-primary: var(--text-color, #e0e0e0);
-    --plugin-text-muted: var(--text-color-muted, #aaa);
-    --plugin-bg-card: var(--card-bg, #2d2d2d);
-    --plugin-bg-input: var(--input-bg, #3d3d3d);
-    --plugin-border: var(--extra-border-color, #555);
-    --plugin-shadow: rgba(0, 0, 0, 0.4);
-    --plugin-shadow-hover: rgba(0, 0, 0, 0.6);
-  }
-}
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
-  background: transparent;
-  color: var(--plugin-text-primary);
-}
 
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-}
-
-/* Common card styles */
-.card {
-  background: var(--plugin-bg-card);
-  border-radius: 8px;
-  box-shadow: 0 2px 4px var(--plugin-shadow);
-  padding: 1rem;
-  text-align: left;
-  border: 2px solid var(--plugin-border);
-}
-
-.card-clickable:hover {
-  transition: transform 0.2s;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px var(--plugin-shadow-hover);
-  border-color: var(--plugin-primary);
-  cursor: pointer;
-}
-
-/* Common text styles */
-.text-muted {
-  color: var(--plugin-text-muted);
-}
-
-.text-primary {
-  color: var(--plugin-primary);
+  padding: var(--s2);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: var(--s2);
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
-  color: var(--c-primary);
-}
-
-.back-button {
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: 1px solid var(--c-primary);
-  color: var(--c-primary);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.back-button:hover {
-  background: var(--c-primary);
-  color: var(--c-contrast);
 }
 
 .main {
@@ -125,44 +30,33 @@ body {
 
 .intro {
   text-align: center;
-  margin-bottom: 2rem;
-}
-
-.intro h2 {
-  font-size: 1.25rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--s3);
 }
 
 /* Category Grid */
 .category-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.category-card h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
+  gap: var(--s2);
+  margin-top: var(--s3);
 }
 
 .category-card p {
   margin: 0;
-  font-size: 0.9rem;
 }
 
 /* Custom prompts card styling */
 .custom-prompts-card {
-  border-left: 4px solid var(--plugin-accent);
+  border-left: 4px solid var(--c-accent);
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--plugin-accent) 10%, transparent),
-    color-mix(in srgb, var(--plugin-accent) 5%, transparent)
+    color-mix(in srgb, var(--c-accent) 10%, transparent),
+    color-mix(in srgb, var(--c-accent) 5%, transparent)
   );
 }
 
 .custom-prompts-card:hover {
-  border-color: var(--plugin-accent);
+  border-color: var(--c-accent);
   transform: translateY(-3px);
 }
 
@@ -173,10 +67,10 @@ body {
 }
 
 .selected-category {
-  padding: 1rem 0;
+  padding: var(--s2) 0;
   text-align: center;
-  border-bottom: 1px solid var(--plugin-border);
-  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--divider-color);
+  margin-bottom: var(--s3);
 }
 
 .selected-category h2 {
@@ -187,26 +81,23 @@ body {
 .prompt-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--s);
 }
 
 .prompt-item {
-  padding: 1rem;
+  padding: var(--s2);
   cursor: pointer;
-  transition: all 0.2s;
 }
 
 .prompt-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px var(--plugin-shadow-hover);
-  border-color: var(--plugin-primary);
+  box-shadow: var(--whiteframe-shadow-4dp);
+  border-color: var(--c-primary);
 }
 
 .prompt-title {
   margin: 0;
-  font-size: 1rem;
   font-weight: 600;
-  color: var(--plugin-text-primary);
 }
 
 /* Prompt View */
@@ -216,12 +107,12 @@ body {
 }
 
 .selected-prompt-header {
-  padding: 1rem 0;
+  padding: var(--s2) 0;
   text-align: center;
 }
 
 .selected-prompt-header h2 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 var(--s) 0;
 }
 
 .selected-prompt-header p {
@@ -229,15 +120,19 @@ body {
 }
 
 .generated-prompt {
-  padding: 1.5rem;
+  padding: var(--s3);
+}
+
+.generated-prompt h3 {
+  color: var(--c-primary);
 }
 
 .prompt-options {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: color-mix(in srgb, var(--plugin-text-primary) 5%, transparent);
-  border-radius: 4px;
-  border: 1px solid var(--plugin-border);
+  margin-bottom: var(--s3);
+  padding: var(--s2);
+  background: var(--bg-darker);
+  border-radius: var(--card-border-radius);
+  border: 1px solid var(--divider-color);
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
@@ -246,9 +141,8 @@ body {
 .dropdown-label {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.9rem;
-  color: var(--plugin-text-primary);
+  gap: var(--s);
+  font-size: 0.9em;
   flex-wrap: wrap;
   width: 100%;
 }
@@ -256,42 +150,28 @@ body {
 .task-dropdown {
   width: 100%;
   max-width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--plugin-border);
-  border-radius: 4px;
-  background: var(--plugin-bg-card);
-  color: var(--plugin-text-primary);
-  font-size: 0.9rem;
-  font-family: inherit;
-  cursor: pointer;
-  box-sizing: border-box;
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
 }
 
-.task-dropdown:focus {
-  outline: none;
-  border-color: var(--plugin-border-focus);
-}
-
 .task-preview {
-  margin-top: 0.75rem;
+  margin-top: var(--s);
 }
 
 .task-count-info {
-  font-size: 0.85rem;
-  color: var(--plugin-primary);
+  font-size: 0.85em;
+  color: var(--c-primary);
   font-weight: 500;
 }
 
 .task-count-info.tooltip {
   cursor: help;
-  border-bottom: 1px dotted var(--plugin-primary);
+  border-bottom: 1px dotted var(--c-primary);
 }
 
 .task-count-info.tooltip:hover {
-  color: var(--plugin-accent);
+  color: var(--c-accent);
 }
 
 .task-preview-content {
@@ -299,148 +179,97 @@ body {
 }
 
 .task-count-header {
-  font-size: 0.85rem;
-  color: var(--plugin-primary);
+  font-size: 0.85em;
+  color: var(--c-primary);
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--s);
 }
 
 .task-preview-list {
-  margin-left: 0.5rem;
+  margin-left: var(--s);
 }
 
 .task-preview-item {
-  font-size: 0.8rem;
-  color: var(--plugin-text-primary);
-  margin-bottom: 0.25rem;
+  font-size: 0.8em;
+  margin-bottom: var(--s-quarter);
   line-height: 1.3;
   word-break: break-word;
 }
 
 .task-preview-more {
-  font-size: 0.75rem;
-  color: var(--plugin-text-muted);
+  font-size: 0.75em;
+  color: var(--text-color-muted);
   font-style: italic;
-  margin-top: 0.25rem;
-}
-
-.generated-prompt h3 {
-  margin: 0 0 1rem 0;
-  color: var(--plugin-primary);
+  margin-top: var(--s-quarter);
 }
 
 .prompt-text {
   width: 100%;
   min-height: 300px;
-  padding: 1rem;
-  border: 1px solid var(--plugin-border);
-  border-radius: 4px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
-  font-size: 0.9rem;
+  font-size: 0.9em;
   line-height: 1.5;
-  background: var(--plugin-bg-input);
-  color: var(--plugin-text-primary);
   resize: vertical;
 }
 
 .prompt-actions {
-  margin-top: 1rem;
+  margin-top: var(--s2);
   display: flex;
-  gap: 0.75rem;
+  gap: var(--s);
   justify-content: center;
   flex-wrap: wrap;
 }
 
-.action-button {
-  padding: 0.75rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-family: inherit;
-  transition: all 0.2s;
-  font-weight: 600;
-  min-width: 80px;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
-}
-
-.action-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px var(--plugin-shadow-hover);
-}
-
-.action-button:disabled {
-  opacity: 0.7;
-  transform: none;
-  cursor: not-allowed;
-}
-
-/* Copy button */
-.copy-button {
-  background: var(--plugin-primary);
-  color: white;
-}
-
-/* ChatGPT button */
+/* ChatGPT button — distinct brand color */
 .chatgpt-button {
   background: #10a37f;
   color: white;
+  border-color: #10a37f;
 }
 
 .chatgpt-button:hover {
   background: #0d8c6b;
+  border-color: #0d8c6b;
 }
 
 /* Custom prompt specific styles */
 .empty-state {
   text-align: center;
-  padding: 2rem;
-  background: var(--plugin-bg-card);
-  border-radius: 8px;
-  border: 2px dashed var(--plugin-border);
+  padding: var(--s3);
+  background: var(--card-bg);
+  border-radius: var(--card-border-radius);
+  border: 2px dashed var(--divider-color);
 }
 
 .loading-container {
   text-align: center;
-  padding: 2rem;
+  padding: var(--s3);
 }
 
 .custom-prompts-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--s3);
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--s2);
 }
 
 .custom-prompts-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--s2);
 }
 
 .custom-prompt-card {
-  border-left: 4px solid var(--plugin-primary);
+  border-left: 4px solid var(--c-primary);
 }
 
 .custom-prompt-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1rem;
-}
-
-.prompt-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.prompt-preview {
-  margin-bottom: 1rem;
-  line-height: 1.5;
+  margin-bottom: var(--s2);
 }
 
 .prompt-card-actions {
@@ -448,39 +277,14 @@ body {
   justify-content: flex-end;
 }
 
-/* Action buttons */
-.action-button {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-  font-weight: 500;
-}
-
-.action-button.primary {
-  background: var(--plugin-primary);
-  color: white;
-}
-
-.action-button.primary:hover {
-  filter: brightness(1.1);
-}
-
-.action-button.secondary {
-  background: color-mix(in srgb, var(--plugin-text-primary) 10%, transparent);
-  color: var(--plugin-text-primary);
-  border: 1px solid var(--plugin-border);
-}
-
-.action-button.secondary:hover {
-  background: color-mix(in srgb, var(--plugin-text-primary) 15%, transparent);
+.prompt-preview {
+  margin-bottom: var(--s2);
+  line-height: 1.5;
 }
 
 /* Editor styles */
 .editor-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--s3);
 }
 
 .editor-container {
@@ -488,16 +292,15 @@ body {
 }
 
 .editor-instructions {
-  background: var(--plugin-bg-card);
-  padding: 1rem;
-  border-radius: 6px;
-  margin-bottom: 1.5rem;
-  border-left: 4px solid var(--plugin-primary);
+  background: var(--card-bg);
+  padding: var(--s2);
+  border-radius: var(--card-border-radius);
+  margin-bottom: var(--s3);
+  border-left: 4px solid var(--c-primary);
 }
 
 .editor-instructions p {
-  margin: 0 0 0.5rem 0;
-  color: var(--plugin-text-primary);
+  margin: 0 0 var(--s) 0;
 }
 
 .editor-instructions p:last-child {
@@ -505,81 +308,35 @@ body {
 }
 
 .editor-field {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--s3);
 }
 
 .field-label {
   display: block;
   font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: var(--plugin-text-primary);
+  margin-bottom: var(--s);
 }
 
 .prompt-title-input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 2px solid var(--plugin-border);
-  border-radius: 6px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
-  font-size: 1rem;
   font-weight: 500;
-  background: var(--plugin-bg-input);
-  color: var(--plugin-text-primary);
-}
-
-.prompt-title-input:focus {
-  outline: none;
-  border-color: var(--plugin-border-focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--plugin-border-focus) 20%, transparent);
-}
-
-.prompt-title-input::placeholder {
-  color: var(--plugin-text-muted);
-  font-weight: normal;
+  border-width: 2px;
 }
 
 .prompt-textarea {
   width: 100%;
   min-height: 300px;
-  padding: 1rem;
-  border: 2px solid var(--plugin-border);
-  border-radius: 6px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
-  font-size: 0.9rem;
+  font-size: 0.9em;
   line-height: 1.5;
-  background: var(--plugin-bg-input);
-  color: var(--plugin-text-primary);
   resize: vertical;
-}
-
-.prompt-textarea:focus {
-  outline: none;
-  border-color: var(--plugin-border-focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--plugin-border-focus) 20%, transparent);
-}
-
-.prompt-textarea::placeholder {
-  color: var(--plugin-text-muted);
+  border-width: 2px;
 }
 
 .editor-actions {
   display: flex;
-  gap: 1rem;
+  gap: var(--s2);
   justify-content: flex-end;
-  padding-top: 1rem;
-  border-top: 1px solid var(--plugin-border);
-}
-
-/* Simple page transition */
-.page-fade {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  padding-top: var(--s2);
+  border-top: 1px solid var(--divider-color);
 }

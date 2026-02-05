@@ -563,32 +563,6 @@ describe('DropboxApi', () => {
       ).toBeRejectedWithError('Dropbox: Invalid access token response');
     });
   });
-
-  describe('_isTransientNetworkError', () => {
-    it('should delegate to shared isTransientNetworkError utility', () => {
-      // Verify the DropboxApi method delegates correctly to the shared utility
-      expect(
-        dropboxApi._isTransientNetworkError(
-          new Error('The network connection was lost.'),
-        ),
-      ).toBe(true);
-      expect(dropboxApi._isTransientNetworkError(new Error('Unauthorized'))).toBe(false);
-    });
-
-    it('should support error.code-based detection for iOS', () => {
-      const error = Object.assign(new Error('German localized message'), {
-        code: 'NSURLErrorDomain',
-      });
-      expect(dropboxApi._isTransientNetworkError(error)).toBe(true);
-    });
-
-    it('should support error.code-based detection for Android', () => {
-      const error = Object.assign(new Error('timeout'), {
-        code: 'SocketTimeoutException',
-      });
-      expect(dropboxApi._isTransientNetworkError(error)).toBe(true);
-    });
-  });
 });
 
 // Note: We're skipping these tests because CapacitorHttp.request cannot be

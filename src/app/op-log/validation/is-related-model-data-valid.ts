@@ -168,7 +168,10 @@ const validateTasksToProjectsAndTags = (
   // Validate projects in tasks
   for (const tid of d.task.ids) {
     const task = d.task.entities[tid];
-    if (!task) continue;
+    if (!task) {
+      _validityError('Orphaned task ID in task.ids (no matching entity)', { tid, d });
+      return false;
+    }
 
     // Check project reference
     if (task.projectId && !projectIds.has(task.projectId)) {
@@ -207,7 +210,13 @@ const validateTasksToProjectsAndTags = (
   if (d.archiveYoung.task?.ids) {
     for (const tid of d.archiveYoung.task.ids) {
       const task = d.archiveYoung.task.entities[tid];
-      if (!task) continue;
+      if (!task) {
+        _validityError('Orphaned task ID in archiveYoung.task.ids (no matching entity)', {
+          tid,
+          d,
+        });
+        return false;
+      }
 
       if (task.projectId && !projectIds.has(task.projectId)) {
         _validityError(
@@ -245,7 +254,13 @@ const validateTasksToProjectsAndTags = (
   if (d.archiveOld.task?.ids) {
     for (const tid of d.archiveOld.task.ids) {
       const task = d.archiveOld.task.entities[tid];
-      if (!task) continue;
+      if (!task) {
+        _validityError('Orphaned task ID in archiveOld.task.ids (no matching entity)', {
+          tid,
+          d,
+        });
+        return false;
+      }
 
       if (task.projectId && !projectIds.has(task.projectId)) {
         _validityError(`projectId ${task.projectId} from archiveOld task not existing`, {

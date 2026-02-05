@@ -12,6 +12,7 @@ export interface SimpleCounterCfgFields {
   // basic cfg
   title: string;
   isEnabled: boolean;
+  isHideButton?: boolean;
   icon: string | null;
   type: SimpleCounterType;
   isTrackStreaks?: boolean;

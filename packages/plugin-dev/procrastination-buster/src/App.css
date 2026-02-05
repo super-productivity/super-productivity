@@ -1,51 +1,14 @@
 /*
  * Procrastination Buster Plugin Styles
- * Simplified structure following KISS principles
+ * UI Kit provides base element styles (body, headings, buttons, etc.)
+ * Only plugin-specific layout rules here.
  */
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Open Sans', sans-serif;
-  background: transparent;
-  color: var(--text-color);
-}
 
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 1rem;
-}
-
-/* Common card styles */
-.card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 1rem;
-  text-align: left;
-  border: 2px solid var(--extra-border-color);
-}
-
-.card-clickable:hover {
-  transition: transform 0.2s;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  border-color: var(--c-primary);
-  cursor: pointer;
-}
-
-/* Common text styles */
-.text-muted {
-  color: var(--text-color-muted);
-}
-
-.text-primary {
-  color: var(--c-primary);
+  padding: var(--s2);
 }
 
 .header {
@@ -56,24 +19,6 @@ body {
 
 .header h1 {
   margin: 0;
-  font-size: 1.5rem;
-  color: var(--c-primary);
-}
-
-.back-button {
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: 1px solid var(--c-primary);
-  color: var(--c-primary);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.back-button:hover {
-  background: var(--c-primary);
-  color: white;
 }
 
 .main {
@@ -84,34 +29,19 @@ body {
 
 .intro {
   text-align: center;
-  margin-bottom: 2rem;
-}
-
-.intro h2 {
-  font-size: 1.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.intro p {
-  /* Uses text-muted class */
+  margin-bottom: var(--s3);
 }
 
 /* Blocker Selector */
 .blocker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-.blocker-card h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
+  gap: var(--s);
+  margin-top: var(--s3);
 }
 
 .blocker-card p {
   margin: 0;
-  font-size: 0.9rem;
 }
 
 /* Strategy List */
@@ -121,12 +51,12 @@ body {
 }
 
 .selected-type {
-  padding: 1.5rem;
+  padding: var(--s3);
   text-align: center;
 }
 
 .selected-type h2 {
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 var(--s) 0;
 }
 
 .emotion {
@@ -137,18 +67,18 @@ body {
 .strategy-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--s);
 }
 
 .strategy-item {
-  padding: 1rem;
+  padding: var(--s2);
 }
 
 .strategy-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: var(--s2);
   flex-wrap: wrap;
 }
 
@@ -157,82 +87,19 @@ body {
   flex: 1;
 }
 
-/* Strategy Actions */
-.strategy-action-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--c-primary);
-  background: transparent;
-  color: var(--c-primary);
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  margin-left: auto;
-}
-
-.strategy-action-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-/* Simple page transition */
-.page-fade {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* Info button */
-.info-button {
-  margin-top: 1rem;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  border: 1px solid var(--extra-border-color);
-  color: var(--text-color-muted);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-.info-button:hover {
-  border-color: var(--c-primary);
-  color: var(--c-primary);
-}
-
 /* Info content */
 .info-content {
   max-width: 700px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: var(--s2);
 }
 
 .info-content section {
-  margin-bottom: 2rem;
+  margin-bottom: var(--s3);
 }
 
 .info-content h3 {
   color: var(--c-primary);
-  margin-bottom: 0.75rem;
-}
-
-.info-content p {
-  line-height: 1.6;
-  margin-bottom: 1rem;
-}
-
-.info-content ul {
-  line-height: 1.8;
-  padding-left: 1.5rem;
-  margin-bottom: 1rem;
 }
 
 /* Procrastination graph */
@@ -240,22 +107,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  margin: 1.5rem 0;
+  gap: var(--s);
+  margin: var(--s3) 0;
   flex-wrap: wrap;
 }
 
 .graph-item {
-  padding: 0.5rem 1rem;
+  padding: var(--s) var(--s2);
   background: var(--card-bg);
   border: 1px solid var(--extra-border-color);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   text-align: center;
-  font-size: 0.9rem;
+  font-size: 0.9em;
 }
 
 .sync-icon {
-  font-size: 1.2rem;
   color: var(--text-color-muted);
 }
 
@@ -263,22 +129,5 @@ body {
 .action-buttons {
   display: flex;
   justify-content: center;
-  margin-top: 2rem;
-}
-
-.primary-button {
-  padding: 0.75rem 2rem;
-  background: var(--c-primary);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-.primary-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  margin-top: var(--s3);
 }

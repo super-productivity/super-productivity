@@ -38,10 +38,12 @@ export function ConditionDialog(props: ConditionDialogProps) {
       title={props.initialCondition ? 'Edit Condition' : 'Add Condition'}
       footer={
         <div class="grid">
-          <button class="outline secondary" onClick={props.onClose}>
+          <button class="btn-outline" onClick={props.onClose}>
             Cancel
           </button>
-          <button onClick={() => props.onSave(condition())}>Save</button>
+          <button class="btn-primary" onClick={() => props.onSave(condition())}>
+            Save
+          </button>
         </div>
       }
     >

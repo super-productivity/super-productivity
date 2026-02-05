@@ -142,7 +142,7 @@ export class SyncTriggerService {
       if (!isActive) {
         return of(true);
       }
-      // SuperSync has data locally - no need to wait for initial sync
+      // SuperSync has data locally - no need to wait for initial sync for UI display
       return this._syncWrapperService.syncProviderId$.pipe(
         take(1),
         switchMap((providerId) =>
@@ -175,6 +175,37 @@ export class SyncTriggerService {
       mapTo(true),
     ),
   ).pipe(first(), shareReplay(1));
+
+  /**
+   * Similar to afterInitialSyncDoneAndDataLoadedInitially$, but ALWAYS waits for
+   * the actual initial sync to complete - even for SuperSync.
+   *
+   * Use this for operations that must have fully synchronized data before running,
+   * like repeatable task creation, to prevent duplicate tasks across clients.
+   */
+  afterInitialSyncDoneStrict$: Observable<boolean> = this._isInitialSyncEnabled$.pipe(
+    switchMap((isActive) => {
+      if (!isActive) {
+        return of(true);
+      }
+      return merge(
+        this._isInitialSyncDoneManual$.asObservable().pipe(filter((isDone) => isDone)),
+        timer(MAX_WAIT_FOR_INITIAL_SYNC).pipe(
+          // When timeout fires, wait for conflict dialog to close if it's open
+          switchMap(() =>
+            this._syncWrapperService.isWaitingForUserInput$.pipe(
+              filter((isWaiting) => !isWaiting),
+              first(),
+            ),
+          ),
+          mapTo(true),
+        ),
+      ).pipe(first());
+    }),
+    concatMap(() => this._dataInitStateService.isAllDataLoadedInitially$),
+    first(),
+    shareReplay(1),
+  );
 
   getSyncTrigger$(syncInterval: number = SYNC_DEFAULT_AUDIT_TIME): Observable<unknown> {
     const _immediateSyncTrigger$: Observable<string> = IS_ANDROID_WEB_VIEW

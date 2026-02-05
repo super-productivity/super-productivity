@@ -193,6 +193,13 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
               getInitialValue: () => 3,
             },
           },
+          {
+            type: 'checkbox',
+            key: 'isHideButton',
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_IS_HIDE_BUTTON,
+            },
+          },
         ],
       },
     },

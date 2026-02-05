@@ -28,8 +28,6 @@ import {
 } from '../../core/util/vector-clock';
 import { toEntityKey } from '../util/entity-key.util';
 import { T } from '../../t.const';
-import { DUPLICATE_OPERATION_ERROR_MSG } from '../persistence/op-log-errors.const';
-
 describe('RemoteOpsProcessingService', () => {
   let service: RemoteOpsProcessingService;
   let schemaMigrationServiceSpy: jasmine.SpyObj<SchemaMigrationService>;
@@ -53,14 +51,13 @@ describe('RemoteOpsProcessingService', () => {
       'getUnsynced',
       'hasOp',
       'append',
-      'appendBatch',
+      'appendBatchSkipDuplicates',
       'appendWithVectorClockUpdate',
       'markApplied',
       'markFailed',
       'mergeRemoteOpClocks',
       'getUnsyncedByEntity',
       'getOpsAfterSeq',
-      'filterNewOps',
       'getLatestFullStateOp',
       'getOpById',
       'markRejected',
@@ -68,11 +65,13 @@ describe('RemoteOpsProcessingService', () => {
       'clearFullStateOps',
       'clearFullStateOpsExcept',
     ]);
-    // By default, treat all ops as new (return them as-is)
-    opLogStoreSpy.filterNewOps.and.callFake((ops: any[]) => Promise.resolve(ops));
-    // By default, appendBatch returns sequential seq numbers starting from 1
-    opLogStoreSpy.appendBatch.and.callFake((ops: any[]) =>
-      Promise.resolve(ops.map((_: any, i: number) => i + 1)),
+    // By default, appendBatchSkipDuplicates writes all ops (no duplicates)
+    opLogStoreSpy.appendBatchSkipDuplicates.and.callFake((ops: any[]) =>
+      Promise.resolve({
+        seqs: ops.map((_: any, i: number) => i + 1),
+        writtenOps: ops,
+        skippedCount: 0,
+      }),
     );
     // By default, no full-state ops in store
     opLogStoreSpy.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
@@ -335,10 +334,14 @@ describe('RemoteOpsProcessingService', () => {
 
       await service.processRemoteOps(remoteOps);
 
-      // Only op1 should be applied (appendBatch called with single-element array)
-      expect(opLogStoreSpy.appendBatch).toHaveBeenCalledWith([remoteOps[0]], 'remote', {
-        pendingApply: true,
-      });
+      // Only op1 should be applied (appendBatchSkipDuplicates called with single-element array)
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+        [remoteOps[0]],
+        'remote',
+        {
+          pendingApply: true,
+        },
+      );
     });
 
     it('should skip ops that throw during migration but continue processing others', async () => {
@@ -362,8 +365,8 @@ describe('RemoteOpsProcessingService', () => {
 
       await service.processRemoteOps(remoteOps);
 
-      // op1 and op3 should be processed (appendBatch called with array of both)
-      expect(opLogStoreSpy.appendBatch).toHaveBeenCalledWith(
+      // op1 and op3 should be processed (appendBatchSkipDuplicates called with array of both)
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
         [remoteOps[0], remoteOps[2]],
         'remote',
         { pendingApply: true },
@@ -418,10 +421,14 @@ describe('RemoteOpsProcessingService', () => {
       // (used for potential dependency warnings in future enhancements)
       await service.processRemoteOps(remoteOps);
 
-      // Only op1 should be applied (appendBatch called with single-element array)
-      expect(opLogStoreSpy.appendBatch).toHaveBeenCalledWith([remoteOps[0]], 'remote', {
-        pendingApply: true,
-      });
+      // Only op1 should be applied (appendBatchSkipDuplicates called with single-element array)
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+        [remoteOps[0]],
+        'remote',
+        {
+          pendingApply: true,
+        },
+      );
     });
 
     it('should show error snackbar and abort if version is too new', async () => {
@@ -492,10 +499,14 @@ describe('RemoteOpsProcessingService', () => {
         }),
       );
 
-      // Should still process the ops (appendBatch called with both ops)
-      expect(opLogStoreSpy.appendBatch).toHaveBeenCalledWith(remoteOps, 'remote', {
-        pendingApply: true,
-      });
+      // Should still process the ops (appendBatchSkipDuplicates called with both ops)
+      expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledWith(
+        remoteOps,
+        'remote',
+        {
+          pendingApply: true,
+        },
+      );
     });
 
     it('should not show newer version warning again in same session', async () => {
@@ -1129,8 +1140,10 @@ describe('RemoteOpsProcessingService', () => {
         createFullOp({ id: 'remote-1', vectorClock: { remoteClient: 1 } }),
       ];
 
-      // All ops are duplicates
-      opLogStoreSpy.filterNewOps.and.returnValue(Promise.resolve([]));
+      // All ops are duplicates (appendBatchSkipDuplicates returns empty writtenOps)
+      opLogStoreSpy.appendBatchSkipDuplicates.and.returnValue(
+        Promise.resolve({ seqs: [], writtenOps: [], skippedCount: 1 }),
+      );
 
       await service.applyNonConflictingOps(remoteOps);
 
@@ -1166,89 +1179,70 @@ describe('RemoteOpsProcessingService', () => {
     });
 
     // =========================================================================
-    // Issue #6213: Duplicate operation error handling
+    // Issue #6343: Atomic duplicate skipping (replaces issue #6213 retry logic)
     // =========================================================================
-    // These tests verify the race condition where filterNewOps returns ops as "new"
-    // but appendBatch fails because another sync wrote them in between.
+    // appendBatchSkipDuplicates atomically checks and inserts within a single
+    // IndexedDB transaction, eliminating the TOCTOU race condition.
 
-    describe('duplicate operation error handling (issue #6213)', () => {
-      it('should retry once and still fail if both attempts throw duplicate error', async () => {
+    describe('atomic duplicate skipping (issue #6343)', () => {
+      it('should skip duplicates silently and only apply new ops', async () => {
         const remoteOps: Operation[] = [
           createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
           createFullOp({ id: 'op-2', vectorClock: { client1: 2 } }),
         ];
 
-        // Setup: filterNewOps always returns all ops (simulating persistent cache issue)
-        opLogStoreSpy.filterNewOps.and.returnValue(Promise.resolve(remoteOps));
-
-        // Setup: appendBatch always throws duplicate error (both attempts fail)
-        opLogStoreSpy.appendBatch.and.rejectWith(
-          new Error(DUPLICATE_OPERATION_ERROR_MSG),
+        // Simulate: op-1 already exists, op-2 is new
+        opLogStoreSpy.appendBatchSkipDuplicates.and.returnValue(
+          Promise.resolve({
+            seqs: [2],
+            writtenOps: [remoteOps[1]],
+            skippedCount: 1,
+          }),
+        );
+        operationApplierServiceSpy.applyOperations.and.returnValue(
+          Promise.resolve({ appliedOps: [remoteOps[1]] }),
         );
 
-        // After retry, error propagates up, sync fails
-        await expectAsync(
-          service.applyNonConflictingOps(remoteOps),
-        ).toBeRejectedWithError(/Duplicate operation detected/);
+        await service.applyNonConflictingOps(remoteOps);
 
-        // Should have retried once (2 calls total)
-        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(2);
-        expect(opLogStoreSpy.filterNewOps).toHaveBeenCalledTimes(2);
+        // Should call appendBatchSkipDuplicates exactly once (no retry needed)
+        expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledTimes(1);
+        // Should apply only the non-duplicate op
+        expect(operationApplierServiceSpy.applyOperations).toHaveBeenCalledWith([
+          remoteOps[1],
+        ]);
       });
 
-      it('should NOT retry for non-duplicate errors', async () => {
+      it('should propagate non-duplicate errors', async () => {
         const remoteOps: Operation[] = [
           createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
         ];
 
-        opLogStoreSpy.filterNewOps.and.returnValue(Promise.resolve(remoteOps));
-        opLogStoreSpy.appendBatch.and.rejectWith(new Error('Some other database error'));
+        opLogStoreSpy.appendBatchSkipDuplicates.and.rejectWith(
+          new Error('Some other database error'),
+        );
 
         await expectAsync(
           service.applyNonConflictingOps(remoteOps),
         ).toBeRejectedWithError(/Some other database error/);
 
-        // Should NOT have retried - only one call
-        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(1);
+        expect(opLogStoreSpy.appendBatchSkipDuplicates).toHaveBeenCalledTimes(1);
       });
 
-      // This test verifies the retry behavior for issue #6213.
-      // When appendBatch throws "Duplicate operation detected", the service should
-      // retry with a fresh filterNewOps call (cache was invalidated by appendBatch).
-      it('should retry once on duplicate error and succeed when cache is refreshed', async () => {
+      it('should handle all ops being duplicates gracefully', async () => {
         const remoteOps: Operation[] = [
           createFullOp({ id: 'op-1', vectorClock: { client1: 1 } }),
-          createFullOp({ id: 'op-2', vectorClock: { client1: 2 } }),
         ];
 
-        let appendCallCount = 0;
-        let filterCallCount = 0;
+        // All ops already exist
+        opLogStoreSpy.appendBatchSkipDuplicates.and.returnValue(
+          Promise.resolve({ seqs: [], writtenOps: [], skippedCount: 1 }),
+        );
 
-        // First filterNewOps: returns all ops (stale cache)
-        // Second filterNewOps: returns empty (cache now fresh, ops already exist)
-        opLogStoreSpy.filterNewOps.and.callFake(async () => {
-          filterCallCount++;
-          if (filterCallCount === 1) return remoteOps; // Stale cache
-          return []; // Fresh cache - ops already exist
-        });
-
-        // First appendBatch: throws duplicate error
-        // Second appendBatch: would succeed (but won't be called since filterNewOps returns [])
-        opLogStoreSpy.appendBatch.and.callFake(async (ops: any[]) => {
-          appendCallCount++;
-          if (appendCallCount === 1) {
-            throw new Error(DUPLICATE_OPERATION_ERROR_MSG);
-          }
-          return ops.map((_: any, i: number) => i + 1);
-        });
-
-        // After fix: should complete successfully with retry
         await service.applyNonConflictingOps(remoteOps);
 
-        // Should have retried - filterNewOps called twice
-        expect(opLogStoreSpy.filterNewOps).toHaveBeenCalledTimes(2);
-        // appendBatch only called once (retry's filterNewOps returned [])
-        expect(opLogStoreSpy.appendBatch).toHaveBeenCalledTimes(1);
+        // Should not try to apply any ops
+        expect(operationApplierServiceSpy.applyOperations).not.toHaveBeenCalled();
       });
     });
   });

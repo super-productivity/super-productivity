@@ -4,6 +4,7 @@ import {
   ActionType,
   EntityConflict,
   EntityType,
+  extractActionPayload,
   Operation,
   OpType,
   VectorClock,
@@ -18,7 +19,6 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
-import { DUPLICATE_OPERATION_ERROR_PATTERN } from '../persistence/op-log-errors.const';
 import {
   compareVectorClocks,
   incrementVectorClock,
@@ -817,16 +817,14 @@ export class ConflictResolutionService {
       return undefined;
     }
 
-    // Extract entity from payload based on entity type
-    // For TASK: payload.task
-    // For PROJECT: payload.project
-    // For TAG: payload.tag
-    // etc.
-    const payload = deleteOp.payload as Record<string, unknown>;
+    // Extract entity from payload based on entity type.
+    // Uses extractActionPayload to handle both MultiEntityPayload format
+    // (where actionPayload is nested) and legacy flat payloads.
+    const actionPayload = extractActionPayload(deleteOp.payload);
     const entityKey =
       getPayloadKey(conflict.entityType) || conflict.entityType.toLowerCase();
 
-    return payload[entityKey];
+    return actionPayload[entityKey];
   }
 
   /**
@@ -851,6 +849,14 @@ export class ConflictResolutionService {
       return conflict.remoteOps;
     }
 
+    // Extract full entity from local DELETE operation's payload.
+    // The DELETE op carries the complete entity state at time of deletion,
+    // which we need as the base for merging remote UPDATE changes.
+    const localDeleteOp = conflict.localOps.find((op) => op.opType === OpType.Delete);
+    const baseEntity = localDeleteOp
+      ? this._extractEntityFromPayload(localDeleteOp.payload, conflict.entityType)
+      : undefined;
+
     // Convert remote UPDATE operations to LWW Update format
     return conflict.remoteOps.map((remoteOp) => {
       if (remoteOp.opType === OpType.Update) {
@@ -858,14 +864,83 @@ export class ConflictResolutionService {
           `ConflictResolutionService: Converting remote UPDATE to LWW Update for ` +
             `${remoteOp.entityType}:${remoteOp.entityId} (local DELETE lost)`,
         );
+
+        if (baseEntity) {
+          // Merge remote UPDATE changes on top of base entity from DELETE.
+          // This produces a flat entity payload that lwwUpdateMetaReducer can use
+          // to recreate the entity with all fields intact (not just the delta).
+          const updateChanges = this._extractUpdateChanges(
+            remoteOp.payload,
+            conflict.entityType,
+          );
+          const mergedEntity = { ...baseEntity, ...updateChanges };
+          return {
+            ...remoteOp,
+            actionType: toLwwUpdateActionType(remoteOp.entityType),
+            payload: mergedEntity,
+          };
+        }
+
+        // Fallback: can't get base entity — the LWW Update keeps the original
+        // UPDATE payload which may lack a top-level `id`, causing lwwUpdateMetaReducer
+        // to skip the update. This is the pre-existing behavior; the merged-entity
+        // path above is the fix. Log with payload shape for diagnostics.
+        OpLog.error(
+          `ConflictResolutionService: Cannot extract base entity from local DELETE for ` +
+            `${remoteOp.entityType}:${remoteOp.entityId}. LWW Update may have incomplete data. ` +
+            `Local DELETE payload keys: ${localDeleteOp ? JSON.stringify(Object.keys(extractActionPayload(localDeleteOp.payload))) : 'N/A'}`,
+        );
         return {
           ...remoteOp,
-          // Convert to LWW Update action type so lwwUpdateMetaReducer can recreate the entity
           actionType: toLwwUpdateActionType(remoteOp.entityType),
         };
       }
       return remoteOp;
     });
+  }
+
+  /**
+   * Extracts entity state from an operation payload.
+   * Handles both MultiEntityPayload format and flat payloads.
+   */
+  private _extractEntityFromPayload(
+    payload: unknown,
+    entityType: EntityType,
+  ): Record<string, unknown> | undefined {
+    const actionPayload = extractActionPayload(payload);
+    const entityKey = getPayloadKey(entityType) || entityType.toLowerCase();
+    const entity = actionPayload[entityKey];
+    if (entity && typeof entity === 'object') {
+      return entity as Record<string, unknown>;
+    }
+    // Fallback: payload might be the entity itself (LWW Update format)
+    if (actionPayload && typeof actionPayload === 'object' && 'id' in actionPayload) {
+      return actionPayload as Record<string, unknown>;
+    }
+    return undefined;
+  }
+
+  /**
+   * Extracts the changed fields from an UPDATE operation payload.
+   * Handles NgRx entity adapter format: { task: { id, changes: {...} } }
+   * and flat format: { task: { id, field: value } }
+   */
+  private _extractUpdateChanges(
+    payload: unknown,
+    entityType: EntityType,
+  ): Record<string, unknown> {
+    const actionPayload = extractActionPayload(payload);
+    const entityKey = getPayloadKey(entityType) || entityType.toLowerCase();
+    const entityPayload = actionPayload[entityKey] as Record<string, unknown> | undefined;
+    if (!entityPayload) return {};
+    // NgRx adapter format: { id, changes: {...} }
+    if ('changes' in entityPayload && typeof entityPayload['changes'] === 'object') {
+      return entityPayload['changes'] as Record<string, unknown>;
+    }
+    // Flat format: entire object is the changes (exclude 'id')
+    const changes = { ...entityPayload };
+    delete changes['id'];
+    return changes;
   }
 
   /**
@@ -1227,44 +1302,21 @@ export class ConflictResolutionService {
   }
 
   /**
-   * Filters out already-applied ops and appends new ones to the store, with retry on duplicate detection.
-   * Handles the race condition where filterNewOps uses a stale cache (issue #6213).
+   * Atomically filters out already-applied ops and appends new ones to the store.
+   * Uses appendBatchSkipDuplicates() to check and insert within a single IndexedDB
+   * transaction, eliminating the TOCTOU race condition (issue #6343).
    *
    * @param ops - Operations to filter and potentially append
    * @param source - Source of operations ('local' or 'remote')
-   * @param options - Options for appendBatch (e.g., pendingApply)
-   * @returns Object containing the filtered ops and their sequence numbers (if applicable)
+   * @param options - Options for appendBatchSkipDuplicates (e.g., pendingApply)
+   * @returns Object containing the written ops and their sequence numbers
    */
   private async _filterAndAppendOpsWithRetry(
     ops: Operation[],
     source: 'local' | 'remote',
     options?: { pendingApply?: boolean },
   ): Promise<{ ops: Operation[]; seqs: number[] }> {
-    const attemptFilterAndAppend = async (): Promise<{
-      ops: Operation[];
-      seqs: number[];
-    }> => {
-      const filteredOps = await this.opLogStore.filterNewOps(ops);
-      if (filteredOps.length === 0) {
-        return { ops: [], seqs: [] };
-      }
-      // Only pass options if defined to maintain original call signature
-      const seqs = options
-        ? await this.opLogStore.appendBatch(filteredOps, source, options)
-        : await this.opLogStore.appendBatch(filteredOps, source);
-      return { ops: filteredOps, seqs };
-    };
-
-    try {
-      return await attemptFilterAndAppend();
-    } catch (e) {
-      if (e instanceof Error && e.message.includes(DUPLICATE_OPERATION_ERROR_PATTERN)) {
-        OpLog.warn(
-          'ConflictResolutionService: Duplicate detected, retrying with fresh filter (issue #6213 recovery)',
-        );
-        return await attemptFilterAndAppend();
-      }
-      throw e;
-    }
+    const result = await this.opLogStore.appendBatchSkipDuplicates(ops, source, options);
+    return { ops: result.writtenOps, seqs: result.seqs };
   }
 }

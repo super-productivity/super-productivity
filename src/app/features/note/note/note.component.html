@@ -17,7 +17,7 @@
         <div
           (click)="editFullscreen($event)"
           markdown
-          [data]="isLongNote ? shortenedNote : note.content"
+          [data]="isLongNote ? resolvedShortenedContent() : resolvedContent()"
           class="markdown-preview markdown"
         ></div>
       </div>

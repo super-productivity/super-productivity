@@ -1,5 +1,10 @@
 # Plan: Plugin UI Consistency via CSS Library + Reactive Theme
 
+## Status
+
+- **Part 2 (CSS Component Library)**: Implemented as a UI Kit element reset in `src/app/plugins/util/plugin-ui-kit.css.ts`. Uses plain element selectors injected at the start of `<head>` (inject-first), so plugin CSS always wins by source order. No class-based components — just styled HTML elements.
+- **Part 1 (Reactive Theme Updates / THEME_CHANGE hook)**: Not yet implemented.
+
 ## Goal
 
 Make iframe plugin UI more consistent with the main app by:

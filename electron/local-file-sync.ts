@@ -137,7 +137,7 @@ export const initLocalFileSyncAdapter = (): void => {
   );
 
   ipcMain.handle(IPC.PICK_DIRECTORY, async (): Promise<string | undefined> => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(getWin(), {
+    const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
       title: 'Select sync folder',
       buttonLabel: 'Select Folder',
       properties: [
@@ -146,13 +146,33 @@ export const initLocalFileSyncAdapter = (): void => {
         'promptToCreate',
         'dontAddToRecent',
       ],
-    });
+    })) as unknown as { canceled: boolean; filePaths: string[] };
     if (canceled) {
       return undefined;
     } else {
       return filePaths[0];
     }
   });
+
+  ipcMain.handle(
+    IPC.SHOW_OPEN_DIALOG,
+    async (
+      _,
+      options: { properties: string[]; title?: string; defaultPath?: string },
+    ): Promise<string[] | undefined> => {
+      const { canceled, filePaths } = (await dialog.showOpenDialog(getWin(), {
+        title: options.title || 'Select folder',
+        buttonLabel: 'Select',
+        properties: options.properties as any,
+        defaultPath: options.defaultPath,
+      })) as unknown as { canceled: boolean; filePaths: string[] };
+      if (canceled) {
+        return undefined;
+      } else {
+        return filePaths;
+      }
+    },
+  );
 };
 
 const getRev = (filePath: string): string => {

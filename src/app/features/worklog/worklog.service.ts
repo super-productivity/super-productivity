@@ -34,6 +34,7 @@ import { TimeTrackingService } from '../time-tracking/time-tracking.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { Log } from '../../core/log';
 
 @Injectable({ providedIn: 'root' })
 export class WorklogService {
@@ -77,7 +78,12 @@ export class WorklogService {
   }> = this._archiveUpdateTrigger$.pipe(
     switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
     switchMap((curCtx) =>
-      from(this._loadWorklogForWorkContext(curCtx)).pipe(startWith<any, any>(null)),
+      from(
+        this._loadWorklogForWorkContext(curCtx).catch((e) => {
+          Log.err('WorklogService: Failed to load worklog data', e);
+          return { worklog: {} as Worklog, totalTimeSpent: 0 };
+        }),
+      ).pipe(startWith<any, any>(null)),
     ),
     shareReplay({ bufferSize: 1, refCount: true }),
   );
@@ -113,7 +119,12 @@ export class WorklogService {
     this._archiveUpdateTrigger$.pipe(
       switchMap(() => this._workContextService.activeWorkContext$.pipe(take(1))),
       switchMap((curCtx) =>
-        from(this._loadQuickHistoryForWorkContext(curCtx)).pipe(startWith(null)),
+        from(
+          this._loadQuickHistoryForWorkContext(curCtx).catch((e) => {
+            Log.err('WorklogService: Failed to load quick history', e);
+            return null;
+          }),
+        ).pipe(startWith(null)),
       ),
     );
 

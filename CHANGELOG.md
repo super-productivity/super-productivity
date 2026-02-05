@@ -1,3 +1,77 @@
+# [17.1.0](https://github.com/super-productivity/super-productivity/compare/v17.0.12...v17.1.0) (2026-02-04)
+
+### Bug Fixes
+
+- address code review findings across sync, tasks, and UI ([#6339](https://github.com/super-productivity/super-productivity/issues/6339)) ([b66b680](https://github.com/super-productivity/super-productivity/commit/b66b680e30ebc74b6950d87e4bc401e72e70d574))
+- **backup:** support importing pre-v17 backups (v10-v15 tested, v16 partial) ([#6271](https://github.com/super-productivity/super-productivity/issues/6271)) ([78699d2](https://github.com/super-productivity/super-productivity/commit/78699d278ef8cf61ad601a97637ddaf96894e3b8))
+- **build:** update glob API and remove unused Angular imports ([6020300](https://github.com/super-productivity/super-productivity/commit/60203003f061d487a902b5ec281d265e1aab728d))
+- **build:** use Apple continuous-corner bezier curves for mac icon squircle ([4eb06b3](https://github.com/super-productivity/super-productivity/commit/4eb06b3db61a4899f9b019ffc2b652d15733a495))
+- **config:** make clipboardImages optional for backwards compatibility ([16fe478](https://github.com/super-productivity/super-productivity/commit/16fe4784805f19e804129402157e2274fe9d77cd))
+- **e2e:** correct case-sensitive switch labels in app-features tests ([d83f0b6](https://github.com/super-productivity/super-productivity/commit/d83f0b69c041b960db5da2fd7d73226cf8f17274))
+- **e2e:** reduce flakiness and speed up WebDAV sync tests ([350e07e](https://github.com/super-productivity/super-productivity/commit/350e07e696165c5ea668a02630be357ee167d22d))
+- **e2e:** stabilize undo task delete sync test ([6c0a6b9](https://github.com/super-productivity/super-productivity/commit/6c0a6b9348c632c3b1851626c2b8bcfa3553b319))
+- **e2e:** use desktop selectors for simple counter sync tests ([b8e448e](https://github.com/super-productivity/super-productivity/commit/b8e448e707e5935f4503e38d934e6b8b4f1f4537))
+- **e2e:** use specific heading locator in plugin loading test ([a54ade6](https://github.com/super-productivity/super-productivity/commit/a54ade6110a9fb4506d24a760349bad2a5a9bcfc))
+- **focus-mode:** stop time tracking when exiting break to planning ([68309b7](https://github.com/super-productivity/super-productivity/commit/68309b731dfff70aed74e262162f63c0eadebad7))
+- **habit-tracker:** remove unused MsToStringPipe import ([741d7b6](https://github.com/super-productivity/super-productivity/commit/741d7b61e765ded8fa4ba163ec33f9c164c28179))
+- **inline-markdown:** preserve unsaved content when adding checklist item ([e693039](https://github.com/super-productivity/super-productivity/commit/e6930390d01c328c3dd6be7ba229646ae33e2b98))
+- **inline-markdown:** update placeholder and modelCopy to use empty string instead of `undefined` string ([#6281](https://github.com/super-productivity/super-productivity/issues/6281)) ([4179a0f](https://github.com/super-productivity/super-productivity/commit/4179a0f6ef7b4625823339c9d2619e225fe27e08))
+- **main-header:** center sync icon glyph to eliminate spin wobble ([d74ab29](https://github.com/super-productivity/super-productivity/commit/d74ab299d9bad14198cf5df916d51e246284e58e)), closes [#6318](https://github.com/super-productivity/super-productivity/issues/6318)
+- **main-header:** remove unnecessary right padding on macOS Electron ([a5c6337](https://github.com/super-productivity/super-productivity/commit/a5c6337ff55c0f3be92cd485fca0f9e1f2f93aaf)), closes [#6337](https://github.com/super-productivity/super-productivity/issues/6337)
+- **main-header:** restore inline simple counter buttons on desktop ([2a49101](https://github.com/super-productivity/super-productivity/commit/2a491010af52f95b900fb7df42cd4e137cb31994))
+- **schedule-week:** adjust sizes ([#6350](https://github.com/super-productivity/super-productivity/issues/6350)) ([b350141](https://github.com/super-productivity/super-productivity/commit/b350141c5dd7b0424a354ef7b8f566a501cc817b))
+- **sync:** add explicit error handling for UTF-8 decoding in iOS WebDAV plugin ([740eec6](https://github.com/super-productivity/super-productivity/commit/740eec68f5e2cc4ef64c857252ba1fb08c3ec48e))
+- **sync:** add isWaitingForUserInput$ guard to strict initial sync timeout ([fe75a05](https://github.com/super-productivity/super-productivity/commit/fe75a051273c4097adc00d665b9786618dd1f4be))
+- **sync:** add native iOS WebDAV plugin to fix broken read on iPhone ([fcedc4e](https://github.com/super-productivity/super-productivity/commit/fcedc4ed05f0165d3fa39a80dd89cf64e126872f)), closes [#6317](https://github.com/super-productivity/super-productivity/issues/6317)
+- **sync:** add retry logic for transient iOS network errors in Dropbox sync ([39eaef7](https://github.com/super-productivity/super-productivity/commit/39eaef79dd112dd1b97c7a46042b5188ee5645d0)), closes [#6333](https://github.com/super-productivity/super-productivity/issues/6333)
+- **sync:** address code review findings for archive-wins and entity frontier ([0b14ba8](https://github.com/super-productivity/super-productivity/commit/0b14ba83ae3bec7f51b3b4900994b3b471eb0620))
+- **sync:** address code review findings for E2E tests and sync services ([9ff4d5e](https://github.com/super-productivity/super-productivity/commit/9ff4d5e7cba464f7bdd112654d5136a52dda41a5))
+- **sync:** archive-wins pre-scan and entity frontier for new clients ([0dd49c1](https://github.com/super-productivity/super-productivity/commit/0dd49c189411f9a32148c254fa1ae013efe647a9))
+- **sync:** clean up review findings from TOCTOU race fix ([61dc089](https://github.com/super-productivity/super-productivity/commit/61dc08984a66d180177c85abe331a68687ebee03))
+- **sync:** eliminate TOCTOU race in duplicate operation detection ([#6343](https://github.com/super-productivity/super-productivity/issues/6343)) ([da71917](https://github.com/super-productivity/super-productivity/commit/da719170196797c638201760ab328f6ffe192542))
+- **sync:** handle concurrent ops for archived/deleted entities ([6a2b7e3](https://github.com/super-productivity/super-productivity/commit/6a2b7e3b9bb77a58856569cb9a133a091c7fea59))
+- **sync:** handle MultiEntityPayload in LWW Delete vs Update conflict resolution ([108b72f](https://github.com/super-productivity/super-productivity/commit/108b72ff1ae7ac1796afc44a605b80a08b5fd3d2))
+- **sync:** improve conflict resolution fallback path and fix duplicate CSS var ([229a02e](https://github.com/super-productivity/super-productivity/commit/229a02e83d852fca78494014a3ba37aeab1ca17b))
+- **sync:** prevent Formly from clearing provider config on show ([#6345](https://github.com/super-productivity/super-productivity/issues/6345)) ([e56244c](https://github.com/super-productivity/super-productivity/commit/e56244cffb0a0b92a69595182396ea0766a962d3))
+- **sync:** prevent lost piggybacked ops and worklog crashes during multi-client sync ([33fd11f](https://github.com/super-productivity/super-productivity/commit/33fd11f14698238dcb93d4f765e369b95b01c314))
+- **sync:** prevent recurring task duplication across clients ([dafaa32](https://github.com/super-productivity/super-productivity/commit/dafaa323fad3911bdf6fb73d262c7a0293fb12a1))
+- **sync:** prevent task duplication during file-based sync snapshot hydration ([f6c9714](https://github.com/super-productivity/super-productivity/commit/f6c9714433c5a4e89bb7a5feabccda4241cd5f45))
+- **sync:** remove dead code, add defensive checks, and clean up vector clock logic ([2a6de0e](https://github.com/super-productivity/super-productivity/commit/2a6de0e41f18d6888e1584ecdab9d0e88e92929d))
+- **sync:** restore WebDAV provider compatibility warning text ([ca3542a](https://github.com/super-productivity/super-productivity/commit/ca3542ad9fd809bb9d287efc04412dd5cb991515))
+- **tasks:** clear remindAt when rescheduling task via planner ([#6342](https://github.com/super-productivity/super-productivity/issues/6342)) ([80007db](https://github.com/super-productivity/super-productivity/commit/80007dbc19ae474a414bb6ae3876132ee09c4030))
+- **tasks:** correct biweekly recurring task week boundary calculation ([#6298](https://github.com/super-productivity/super-productivity/issues/6298)) ([875341f](https://github.com/super-productivity/super-productivity/commit/875341f04a4d3bd7cfa94822c263cc2dba461bbd))
+- **tasks:** detect and sanitize orphaned task IDs to prevent startup crashes ([#6359](https://github.com/super-productivity/super-productivity/issues/6359), [#6360](https://github.com/super-productivity/super-productivity/issues/6360)) ([cfc483c](https://github.com/super-productivity/super-productivity/commit/cfc483c032830c8584f86c6272dae6abf0cfeb59))
+- **tasks:** filter orphan IDs in removeTasksFromTodayTag reducer ([#6327](https://github.com/super-productivity/super-productivity/issues/6327)) ([e69108b](https://github.com/super-productivity/super-productivity/commit/e69108b14eeadad6e71c3871dbc152fa1376a903))
+- **tasks:** filter undefined entities in selectAllTasks to prevent crashes ([5e04532](https://github.com/super-productivity/super-productivity/commit/5e0453203c19d036c00527a06c0d0bff06e5b52d))
+- **tasks:** filter undefined subtasks in mapSubTasksToTask ([#6325](https://github.com/super-productivity/super-productivity/issues/6325)) ([b6db912](https://github.com/super-productivity/super-productivity/commit/b6db912665cf9cae63d5e9278ac5201852366d15))
+- **tasks:** fix huge space between emoji and text in tag/project menus ([bfce556](https://github.com/super-productivity/super-productivity/commit/bfce556d07d9529ebddcb1b6ba641de6e70ff425)), closes [#5977](https://github.com/super-productivity/super-productivity/issues/5977)
+- **tasks:** guard against undefined entities in work-context selectors ([#6357](https://github.com/super-productivity/super-productivity/issues/6357)) ([8142f8a](https://github.com/super-productivity/super-productivity/commit/8142f8ac98f5e184f8b08b0b82f56279ee55caad))
+- **tasks:** guard against undefined task entities in selectors and archive ([#6359](https://github.com/super-productivity/super-productivity/issues/6359)) ([29eeb80](https://github.com/super-productivity/super-productivity/commit/29eeb80c32714dd2c6bd36e3cd4fce5c26c5f0ba))
+- **tasks:** guard against undefined task in mainListTasksInProject$ ([#6360](https://github.com/super-productivity/super-productivity/issues/6360)) ([5d29a26](https://github.com/super-productivity/super-productivity/commit/5d29a267e5dd20204ebcd4b9ebac7bf7b7a98379))
+- **tasks:** handle compound emojis in icon input using Intl.Segmenter ([3154dbb](https://github.com/super-productivity/super-productivity/commit/3154dbbb8c55615652c6918abfa3b56bd18543b2))
+- **tasks:** prevent recurring tasks from failing to repeat ([#6192](https://github.com/super-productivity/super-productivity/issues/6192)) ([9810c32](https://github.com/super-productivity/super-productivity/commit/9810c320b146c510c128854fea238cf1d080af0a))
+- **tasks:** reset devError state in orphan ID detection test ([0df5687](https://github.com/super-productivity/super-productivity/commit/0df56878e15ef4e6894b39a75b438b9288af0888))
+- **test:** add missing skipConflictDetection arg in forceDownloadRemoteState test ([c6701ba](https://github.com/super-productivity/super-productivity/commit/c6701ba2d858267c9269eeb28d0429d3b232a757))
+- **test:** add skipSpinnerCheck to USE_REMOTE waitForSyncToComplete calls ([e44450c](https://github.com/super-productivity/super-productivity/commit/e44450c5c45c3b42521490090f657d4e86955304))
+- undefined redmine ticket ([#6279](https://github.com/super-productivity/super-productivity/issues/6279)) ([e1f01de](https://github.com/super-productivity/super-productivity/commit/e1f01de5f3f412a2ebbbff3be4458062c0ffcad4))
+
+### Features
+
+- add Czech, Slovak, and Ukrainian calendar locale support and correct Czech language code from 'cz' to 'cs'. ([#6329](https://github.com/super-productivity/super-productivity/issues/6329)) ([b9fde5f](https://github.com/super-productivity/super-productivity/commit/b9fde5fb53b33c9069406fb8e37c6e3ef4898ea5))
+- **simple-counter:** add isHideButton config to hide toolbar button ([31f4ec9](https://github.com/super-productivity/super-productivity/commit/31f4ec93690493ab305cf01d6f734786c1e20be8))
+- **sync:** add rolling JWT token refresh on sync requests ([717e4ba](https://github.com/super-productivity/super-productivity/commit/717e4ba84dd2eff8df6cf172751490585d5a05bf))
+- **sync:** mark WebDAV and LocalFile sync options as experimental ([539ee45](https://github.com/super-productivity/super-productivity/commit/539ee452a85073f05389ddf8b9dea9c668172738))
+- **theme:** add Cybr. New THEME ([#6314](https://github.com/super-productivity/super-productivity/issues/6314)) ([ea61d6a](https://github.com/super-productivity/super-productivity/commit/ea61d6a89f0483ebe55f927adc6ea6956f0ca46b))
+
+### Performance Improvements
+
+- **sync:** restore fast SuperSync startup while preventing repeat task duplication ([959864a](https://github.com/super-productivity/super-productivity/commit/959864ab1cab32d191c87cd5757cc9f4bd2c03ed))
+- **test:** speed up slow encryption and large batch sync tests ([ef48081](https://github.com/super-productivity/super-productivity/commit/ef480810a920d2ab3aae100881700aa39a72b84b))
+
+### Reverts
+
+- Revert "feat(sync): add rolling JWT token refresh on sync requests" ([cd2ae61](https://github.com/super-productivity/super-productivity/commit/cd2ae61ae05fdbaa99011c8110279a5337254fd9))
+
 ## [17.0.12](https://github.com/super-productivity/super-productivity/compare/v17.0.11...v17.0.12) (2026-01-30)
 
 ### Bug Fixes
