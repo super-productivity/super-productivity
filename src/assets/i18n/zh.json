@@ -1338,7 +1338,7 @@
       },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "添加现有任务 \"{{taskTitle}}\"",
-        "CREATE_NEW_TAGS": "创建新任务",
+        "CREATE_NEW_TAGS": "创建新标签",
         "DUE_BUTTON": "到期",
         "ESTIMATE_BUTTON": "估计",
         "PLACEHOLDER_CREATE": "任务标题 #tag @16:00",
