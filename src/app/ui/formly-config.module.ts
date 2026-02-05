@@ -23,6 +23,8 @@ import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-s
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
+import { FormlyHabitTagSelectionComponent } from './formly-habit-tag-selection/formly-habit-tag-selection.component';
+import { FormlyHabitProjectSelectionComponent } from './formly-habit-project-selection/formly-habit-project-selection.component';
 
 @NgModule({
   imports: [
@@ -82,6 +84,16 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
           component: FormlyTagSelectionComponent,
           // technically no input, but as the properties get us what we need...
           extends: 'input',
+          wrappers: ['form-field'],
+        },
+        {
+          name: 'tag-selection',
+          component: FormlyHabitTagSelectionComponent,
+          wrappers: ['form-field'],
+        },
+        {
+          name: 'project-selection',
+          component: FormlyHabitProjectSelectionComponent,
           wrappers: ['form-field'],
         },
         {

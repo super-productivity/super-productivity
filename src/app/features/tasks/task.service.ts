@@ -98,6 +98,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
+import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
@@ -116,6 +117,7 @@ export class TaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _simpleCounterService = inject(SimpleCounterService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -777,6 +779,43 @@ export class TaskService {
     this._store.dispatch(
       TimeTrackingActions.addTimeSpent({ task, date, duration, isFromTrackingReminder }),
     );
+
+    // Also update linked habits if auto-tracking is enabled
+    this._updateLinkedHabits(task, duration, date);
+  }
+
+  private _updateLinkedHabits(task: Task, duration: number, date: string): void {
+    // Get all enabled simple counters (habits)
+    this._simpleCounterService.enabledSimpleCounters$
+      .pipe(take(1))
+      .subscribe((counters) => {
+        counters.forEach((counter) => {
+          // Check if this counter has auto-tracking enabled
+          if (!counter.enableAutoTrackFromTasks) {
+            return;
+          }
+
+          // Check if task's tags match any linked tags
+          const hasMatchingTag = counter.linkedTagIds?.some((tagId) =>
+            task.tagIds.includes(tagId),
+          );
+
+          // Check if task's project matches any linked projects
+          const hasMatchingProject = counter.linkedProjectIds?.some(
+            (projectId) => projectId === task.projectId,
+          );
+
+          // If there's a match, add the duration to the habit counter
+          if (hasMatchingTag || hasMatchingProject) {
+            const currentValue = counter.countOnDay[date] || 0;
+            this._simpleCounterService.setCounterForDate(
+              counter.id,
+              date,
+              currentValue + duration,
+            );
+          }
+        });
+      });
   }
 
   removeTimeSpent(

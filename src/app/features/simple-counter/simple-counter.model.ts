@@ -22,6 +22,11 @@ export interface SimpleCounterCfgFields {
   streakWeekDays?: { [key: number]: boolean };
   streakWeeklyFrequency?: number;
 
+  // auto-tracking from tasks
+  enableAutoTrackFromTasks?: boolean;
+  linkedTagIds?: string[];
+  linkedProjectIds?: string[];
+
   // adv cfg
   // repeated countdown reminder
   countdownDuration?: number;

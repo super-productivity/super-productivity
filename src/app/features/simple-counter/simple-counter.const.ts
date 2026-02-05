@@ -17,6 +17,11 @@ export const EMPTY_SIMPLE_COUNTER: SimpleCounter = {
   streakMode: 'specific-days',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   streakWeekDays: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: false, 0: false },
+
+  // auto-tracking from tasks
+  enableAutoTrackFromTasks: false,
+  linkedTagIds: [],
+  linkedProjectIds: [],
 };
 
 export const DEFAULT_SIMPLE_COUNTERS: SimpleCounter[] = [

@@ -200,6 +200,45 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
               label: T.F.SIMPLE_COUNTER.FORM.L_IS_HIDE_BUTTON,
             },
           },
+          {
+            type: 'checkbox',
+            key: 'enableAutoTrackFromTasks',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_ENABLE_AUTO_TRACK_FROM_TASKS,
+              description:
+                T.F.SIMPLE_COUNTER.FORM.L_ENABLE_AUTO_TRACK_FROM_TASKS_DESCRIPTION,
+            },
+          },
+          {
+            key: 'linkedTagIds',
+            type: 'tag-selection',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch ||
+                !fCfg.model.enableAutoTrackFromTasks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_LINKED_TAGS,
+              description: T.F.SIMPLE_COUNTER.FORM.L_LINKED_TAGS_DESCRIPTION,
+            },
+          },
+          {
+            key: 'linkedProjectIds',
+            type: 'project-selection',
+            expressions: {
+              hide: (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch ||
+                !fCfg.model.enableAutoTrackFromTasks,
+            },
+            templateOptions: {
+              label: T.F.SIMPLE_COUNTER.FORM.L_LINKED_PROJECTS,
+              description: T.F.SIMPLE_COUNTER.FORM.L_LINKED_PROJECTS_DESCRIPTION,
+            },
+          },
         ],
       },
     },
