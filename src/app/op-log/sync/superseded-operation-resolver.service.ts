@@ -76,7 +76,7 @@ export class SupersededOperationResolverService {
    * @returns Number of merged ops created
    */
   async resolveSupersededLocalOps(
-    supersededOps: Array<{ opId: string; op: Operation }>,
+    supersededOps: Array<{ opId: string; op: Operation; existingClock?: VectorClock }>,
     extraClocks?: VectorClock[],
     snapshotVectorClock?: VectorClock,
   ): Promise<number> {
@@ -130,7 +130,11 @@ export class SupersededOperationResolverService {
       // getCurrentEntityState() → undefined → discard, permanently losing the archive.
       // Instead, re-create the operation with a merged clock preserving the original payload.
       // NOTE: If a future action type also removes entities with OpType.Update, add it here.
-      const regularSupersededOps: Array<{ opId: string; op: Operation }> = [];
+      const regularSupersededOps: Array<{
+        opId: string;
+        op: Operation;
+        existingClock?: VectorClock;
+      }> = [];
       for (const item of supersededOps) {
         if (item.op.actionType === ActionType.TASK_SHARED_MOVE_TO_ARCHIVE) {
           // Re-create the archive operation with a merged vector clock.
@@ -140,11 +144,17 @@ export class SupersededOperationResolverService {
             [globalClock, item.op.vectorClock],
             clientId,
           );
-          const newClock = limitVectorClockSize(
-            mergedClock,
-            clientId,
-            protectedClientIds,
-          );
+          // Preserve server entity clock IDs to prevent sync loop: if the server's
+          // existingClock has client IDs not in our protectedClientIds, pruning drops them,
+          // causing the server to see CONCURRENT instead of GREATER_THAN → infinite rejection.
+          // Entity clock IDs come BEFORE protected IDs so they get priority in the Set.
+          const entityClockIds = item.existingClock
+            ? Object.keys(item.existingClock)
+            : [];
+          const newClock = limitVectorClockSize(mergedClock, clientId, [
+            ...entityClockIds,
+            ...protectedClientIds,
+          ]);
           const newOp = this._recreateOpWithMergedClock(
             item.op,
             newClock,
@@ -163,7 +173,10 @@ export class SupersededOperationResolverService {
       }
 
       // Group remaining ops by entity to handle multiple ops for the same entity
-      const opsByEntity = new Map<string, Array<{ opId: string; op: Operation }>>();
+      const opsByEntity = new Map<
+        string,
+        Array<{ opId: string; op: Operation; existingClock?: VectorClock }>
+      >();
       for (const item of regularSupersededOps) {
         // Skip ops without entityId (shouldn't happen for entity-level ops)
         if (!item.op.entityId) {
@@ -192,9 +205,14 @@ export class SupersededOperationResolverService {
           allClocks,
           clientId,
         );
-        // Prune to match what the regular capture pipeline produces, preventing
-        // infinite rejection loops when server compares pruned vs unpruned clocks
-        const newClock = limitVectorClockSize(mergedClock, clientId, protectedClientIds);
+        // Preserve server entity clock IDs to prevent sync loop (see moveToArchive comment above).
+        const entityClockIds = entityOps.flatMap((e) =>
+          e.existingClock ? Object.keys(e.existingClock) : [],
+        );
+        const newClock = limitVectorClockSize(mergedClock, clientId, [
+          ...entityClockIds,
+          ...protectedClientIds,
+        ]);
 
         // Check if all superseded ops for this entity are DELETE operations
         const allOpsAreDeletes = entityOps.every((e) => e.op.opType === OpType.Delete);

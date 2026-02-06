@@ -46,9 +46,10 @@ export const preprocessMarkdown = (markdown: string): string => {
 export const markedOptionsFactory = (): MarkedOptions => {
   const renderer = new MarkedRenderer();
 
-  // Note: We intentionally do NOT override renderer.checkbox here.
-  // The listitem renderer below handles checkbox rendering for task items.
-  // Overriding both causes duplicate checkboxes (see GitHub issue #6228).
+  // Override checkbox to return empty string — the listitem renderer below handles
+  // all checkbox rendering with Material Icons. Without this, marked's default checkbox
+  // renderer produces an <input type="checkbox"> that duplicates our custom checkbox.
+  renderer.checkbox = () => '';
 
   // In marked v17, list items can contain block-level tokens (e.g., paragraph) when the list
   // is "loose" (has blank lines between items). Use parse() instead of parseInline() to handle

@@ -1247,6 +1247,106 @@ describe('SupersededOperationResolverService', () => {
           MAX_VECTOR_CLOCK_SIZE,
         );
       });
+
+      it('should preserve existingClock client IDs even when protectedClientIds fill MAX slots', async () => {
+        // Simulate the sync loop scenario: 10 protected IDs from SYNC_IMPORT fill all slots,
+        // but the server's existingClock has client ID "serverEntityClient" that must be preserved
+        // to prevent the replacement op from being seen as CONCURRENT.
+        const protectedIds = Array.from(
+          { length: MAX_VECTOR_CLOCK_SIZE },
+          (_, i) => `protected-${i}`,
+        );
+        mockOpLogStore.getProtectedClientIds.and.returnValue(
+          Promise.resolve(protectedIds),
+        );
+
+        const globalClock: VectorClock = {};
+        for (const id of protectedIds) {
+          globalClock[id] = 5;
+        }
+        globalClock['serverEntityClient'] = 7; // Server entity clock entry
+
+        const supersededOp = createMockOperation(
+          'op-1',
+          'TASK',
+          'task-1',
+          { [TEST_CLIENT_ID]: 1 },
+          1000,
+        );
+
+        const existingClock: VectorClock = { serverEntityClient: 7, [TEST_CLIENT_ID]: 1 };
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(
+          Promise.resolve(globalClock),
+        );
+        mockConflictResolutionService.getCurrentEntityState.and.returnValue(
+          Promise.resolve({ id: 'task-1' }),
+        );
+
+        await service.resolveSupersededLocalOps([
+          { opId: 'op-1', op: supersededOp, existingClock },
+        ]);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        // serverEntityClient MUST be preserved — without it the server sees CONCURRENT → rejection loop
+        expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);
+        expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
+        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+          MAX_VECTOR_CLOCK_SIZE,
+        );
+      });
+
+      it('should preserve existingClock client IDs for moveToArchive ops', async () => {
+        const protectedIds = Array.from(
+          { length: MAX_VECTOR_CLOCK_SIZE },
+          (_, i) => `protected-${i}`,
+        );
+        mockOpLogStore.getProtectedClientIds.and.returnValue(
+          Promise.resolve(protectedIds),
+        );
+
+        const globalClock: VectorClock = {};
+        for (const id of protectedIds) {
+          globalClock[id] = 5;
+        }
+        globalClock['serverEntityClient'] = 7;
+
+        const archiveOp: Operation = {
+          id: 'op-archive',
+          actionType: ActionType.TASK_SHARED_MOVE_TO_ARCHIVE,
+          opType: OpType.Update,
+          entityType: 'TASK',
+          entityId: 'task-1',
+          entityIds: ['task-1'],
+          payload: {
+            actionPayload: { tasks: [{ id: 'task-1' }] },
+            entityChanges: [],
+          },
+          clientId: 'original-client',
+          vectorClock: { [TEST_CLIENT_ID]: 1 },
+          timestamp: 1000,
+          schemaVersion: 1,
+        };
+
+        const existingClock: VectorClock = { serverEntityClient: 7, [TEST_CLIENT_ID]: 1 };
+
+        mockVectorClockService.getCurrentVectorClock.and.returnValue(
+          Promise.resolve(globalClock),
+        );
+
+        await service.resolveSupersededLocalOps([
+          { opId: 'op-archive', op: archiveOp, existingClock },
+        ]);
+
+        const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
+          .args[0] as Operation;
+        expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);
+        expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
+        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+          MAX_VECTOR_CLOCK_SIZE,
+        );
+      });
     });
   });
 });

@@ -73,8 +73,8 @@
     />
     <!-- Enable all requests and inline styles for painless development.
 TODO configure more restrictive Content-Security-Policy
-@see http://content-security-policy.com/
-@see http://www.html5rocks.com/en/tutorials/security/content-security-policy/ -->
+@see https://content-security-policy.com/
+@see https://www.html5rocks.com/en/tutorials/security/content-security-policy/ -->
     <meta
       content="default-src * uploaded:;
           connect-src * data: blob: filesystem: uploaded:;
@@ -94,10 +94,10 @@ TODO configure more restrictive Content-Security-Policy
 
       body {
         height: 100%;
-        padding: 0;
         margin: 0;
+        padding: 0;
+        background: rgb(18, 18, 18);
         color: #fff;
-        background: rgba(18, 18, 18);
       }
 
       @media (prefers-color-scheme: light) {
@@ -139,24 +139,22 @@ TODO configure more restrictive Content-Security-Policy
       }
 
       .app-loading .spinner {
-        width: 140px;
-        height: 140px;
-
         position: relative;
         margin: 100px auto;
+        width: 140px;
+        height: 140px;
       }
 
       .app-loading .double-bounce1,
       .app-loading .double-bounce2 {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         border-radius: 50%;
         background-color: #6495ed;
         opacity: 0.6;
-        position: absolute;
-        top: 0;
-        left: 0;
-
         -webkit-animation: sk-bounce 2s infinite ease-in-out;
         animation: sk-bounce 2s infinite ease-in-out;
       }
@@ -169,11 +167,11 @@ TODO configure more restrictive Content-Security-Policy
       .productivity-tip {
         text-align: center;
         position: absolute;
+        left: 50%;
+        bottom: 70%;
         width: 400px;
         max-width: 80vw;
-        left: 50%;
         transform: translate(-50%);
-        bottom: 70%;
         padding-bottom: 10px;
       }
 
@@ -244,15 +242,27 @@ TODO configure more restrictive Content-Security-Policy
         </div>
       </div>
     </app-root>
-    <noscript>Please enable JavaScript to continue using this application.</noscript>
+    <noscript>Please enable JavaScript to use this application.</noscript>
     <script>
       var productivityTips = [
+        [
+          'Be kind',
+          'The simple act of paying positive attention to people has a great deal to do with productivity. ― Tom Peters',
+        ],
+        [
+          'Achieve something new',
+          'Productivity is being able to do things that you were never able to do before. ― Franz Kafka',
+        ],
+        [
+          'Focus on output not activity',
+          'Stressing output is the key to improving productivity, while looking to increase activity can result in just the opposite. ― Paul Gauguin',
+        ],
         [
           'There is only one solution to complex problems',
           'Try and correct, try and correct, try and correct, try and correct, try and correct...',
         ],
         [
-          '2 Step Super Productivity',
+          'Two step super productivity',
           '1. Physically get in your work position. 2. Do one small thing.',
         ],
         ['Prioritize', 'Do first things first.'],
@@ -261,93 +271,102 @@ TODO configure more restrictive Content-Security-Policy
           'Procrastination is an emotion regulation problem, not a time management problem.',
         ],
         [
-          'π',
-          'When in doubt use the magic programmers estimation factor to calculate time estimates. Programmers estimate times π.',
+          "When in doubt, use the magic programmer's estimation factor",
+          'Programmers estimate task duration as π times the original estimate.',
         ],
         ['Be realistic', 'Almost everything will take longer than you think.'],
         [
           'Good is good enough',
-          'Don`t aim for perfection. Focus on the important things.',
+          "Don't aim for perfection. Focus on the important things.",
         ],
         [
           'Distractions',
-          'If something is distracting you, get rid of it. If you can`t get it out of your head and you can deal with it later, write it down.',
+          "If something is distracting you, get rid of it. If you can't get it out of your head and you can deal with it later, write it down.",
         ],
-        ['Fun things first', 'The dopamine can get you through the rest.'],
+        ['Fun things first', 'The dopamine can get you through the rest!'],
         [
-          'Celebrate!',
-          'After completing a task, don`t rush to the next! Give yourself some time to feel good about yourself.',
+          'Celebrate',
+          "After completing a task, don't rush to the next. Give yourself some time to feel good about yourself!",
         ],
         [
-          'Establish Routines',
-          'Decisions cost time. So establishing routines can be very helpful.',
+          'Establish routines',
+          'Decisions take time. So establishing routines can be very helpful.',
         ],
         [
           'Take breaks',
-          'They help you clear your mind and make you almost always more productive in the long run. Go! Take a walk!',
+          'They help to clear your mind and make you more productive in the long run. Go! Take a walk!',
         ],
-        ['Mess creates stress', 'Clean up your desk!'],
+        ['Mess creates stress', 'Remove junk from your work area!'],
         ['Focus on a single task', 'Multi-tasking is the worst.'],
         [
           'Set your goals',
-          'Having a goal to aim for (or even some smaller ones) increases motivation and focus. Remind yourself why you are doing something.',
+          'Having a goal to aim for (or even several smaller ones) increases motivation and focus. Remind yourself why you are doing something!',
         ],
         [
           'Try to get it right the first time',
-          'This can help you to avoid dragging a task on forever.',
+          'This can help you avoid dragging a task on forever.',
         ],
         [
-          'We are what we repeatedly do.',
-          'Excellence, then, is not an act, but a habit. – Aristotle',
+          'We are what we repeatedly do',
+          'Excellence, then, is not an act, but a habit. ― Aristotle',
         ],
         [
-          'You don’t learn to walk by following rules.',
-          'You learn by doing, and by falling over. – Richard Branson',
+          "You don't learn to walk by following rules",
+          'You learn by doing, and by falling over. ― Richard Branson',
         ],
-        ['A problem well-put is half-solved', '― John Dewey'],
+        ['Define each task', 'A problem well-put is half-solved ― John Dewey'],
         [
-          "Either like what you do or know why you're doing it.",
+          "Either like what you do or know why you're doing it",
           'If not, consider doing something else.',
         ],
-        ['Wisdom is learning what to overlook', '― William James'],
-        ['Better to do it than live with the fear of it.', '― Logen Ninefingers'],
+        ['Focus on what matters', 'Wisdom is learning what to overlook ― William James'],
         [
-          'It is not that I’m so smart',
-          'But I stay with the questions much longer – Albert Einstein',
-        ],
-        ['No problem can withstand the assault of sustained thinking', '― Voltaire'],
-        [
-          "I have not failed. I've just found 10,000 ways that won't work.",
-          '― Thomas A. Edison',
+          'Action overcomes fear',
+          'Better to do it than live with the fear of it. ― Logen Ninefingers',
         ],
         [
-          'Review and Reflect',
+          "It is not that I'm so smart",
+          'But I stay with the questions much longer. ― Albert Einstein',
+        ],
+        [
+          'You can do it',
+          'No problem can withstand the assault of sustained thinking. ― Voltaire',
+        ],
+        [
+          'I have not failed',
+          "I've just found 10,000 ways that won't work. ― Thomas A. Edison",
+        ],
+        [
+          'Review and reflect',
           "At the end of the day or week, review your progress and reflect on what worked and what didn't. Adjust your strategies accordingly.",
         ],
         [
-          'Set Realistic Expectations',
+          'Set realistic expectations',
           "Don't overburden yourself with an unrealistic workload. Be honest about what you can accomplish in a given time frame.",
         ],
         [
-          'Prioritize Tasks',
+          'Prioritize tasks',
           "Use techniques like the Eisenhower Matrix (urgent vs. important) to prioritize your tasks. Focus on what's most important and time-sensitive.",
         ],
         [
           'Always be kind to yourself',
-          'Productivity is impossible without good self care (at the very least in the long run).',
+          'Productivity is impossible without good self care (at the very least, in the long run).',
         ],
         [
           'The path to progress is all about self evaluation',
-          'From time to time you should reflect if your goals and methods serve you well.',
+          'From time to time reflect if your goals and methods serve you well.',
         ],
         [
-          'Embrace Progress over Achievement',
-          'It’s not about massive strides every day but the accumulation of small, incremental progress that leads to significant achievements over time.',
+          'Embrace progress over achievement',
+          "It's not about massive strides every day, but the accumulation of small, incremental progress that leads to significant achievements over time.",
         ],
-        ["You don't need more time in your day. You need to decide.", '― Seth Godin'],
+        [
+          'Decide',
+          "You don't need more time in your day. You need to decide. ― Seth Godin",
+        ],
         [
           'Decide to decide what not to do',
-          'There is only is so much time in your day (and in your life), you need to decide what you really want to do.',
+          'There is only is so much time in your day (and your life). Decide what you really want to do.',
         ],
       ];
       var randomIndex = Math.floor(Math.random() * productivityTips.length);

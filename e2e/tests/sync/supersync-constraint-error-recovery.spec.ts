@@ -297,11 +297,22 @@ test.describe('@supersync @recovery ConstraintError Recovery', () => {
       for (let i = 1; i <= 10; i++) {
         await clientA.workView.addTask(`StressA${i}-${uniqueId}`);
       }
+      // Wait for IndexedDB persistence to complete
+      await clientA.page.waitForTimeout(1000);
 
       // Client B creates 10 tasks
       for (let i = 1; i <= 10; i++) {
         await clientB.workView.addTask(`StressB${i}-${uniqueId}`);
       }
+      // Wait for IndexedDB persistence to complete
+      await clientB.page.waitForTimeout(1000);
+
+      // Verify tasks are persisted before syncing
+      const preCountA = await getTaskCount(clientA);
+      const preCountB = await getTaskCount(clientB);
+      console.log(`[StressSync] Pre-sync task counts: A=${preCountA}, B=${preCountB}`);
+      expect(preCountA).toBe(10);
+      expect(preCountB).toBe(10);
 
       console.log('[StressSync] 20 tasks created total');
 

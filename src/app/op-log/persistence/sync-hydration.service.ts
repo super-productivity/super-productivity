@@ -10,7 +10,11 @@ import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
-import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  incrementVectorClock,
+  mergeVectorClocks,
+  selectProtectedClientIds,
+} from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
@@ -257,7 +261,7 @@ export class SyncHydrationService {
       // If any are pruned, new ops would appear CONCURRENT with the import instead of GREATER_THAN.
       // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
       if (createSyncImportOp) {
-        const protectedIds = Object.keys(newClock);
+        const protectedIds = selectProtectedClientIds(newClock);
         await this.opLogStore.setProtectedClientIds(protectedIds);
         OpLog.normal(
           `SyncHydrationService: Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,

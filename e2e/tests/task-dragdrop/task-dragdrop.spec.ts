@@ -49,6 +49,12 @@ test.describe('Drag Task to change project and labels', () => {
     await createProject(`${testPrefix}-TestProject 1`, project1NavItem);
     await createProject(`${testPrefix}-TestProject 2`, project2NavItem);
 
+    // Navigate back to Today view where the task lives
+    // (project creation now navigates to the new project)
+    const todayNavItem = page.getByRole('menuitem').filter({ hasText: 'Today' });
+    await todayNavItem.click();
+    await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
+
     // find drag handle of task
     const firstTask = page.locator('task').first();
     const dragHandle = firstTask.locator('.drag-handle');

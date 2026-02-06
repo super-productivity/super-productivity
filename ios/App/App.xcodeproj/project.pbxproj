@@ -17,6 +17,7 @@
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
 		B63E17A12C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17A02C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift */; };
 		B63E17A32C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = B63E17A22C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m */; };
+		B63E17A52C5F3D8A00A1B2C3 /* CustomViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
 		B63E17A02C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebDavHttpPlugin.swift; sourceTree = "<group>"; };
 		B63E17A22C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = WebDavHttpPlugin.m; sourceTree = "<group>"; };
+		B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomViewController.swift; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -79,6 +81,7 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				B63E17A42C5F3D8A00A1B2C3 /* CustomViewController.swift */,
 				B63E17A02C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift */,
 				B63E17A22C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -216,6 +219,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				B63E17A52C5F3D8A00A1B2C3 /* CustomViewController.swift in Sources */,
 				B63E17A12C5F3D8A00A1B2C3 /* WebDavHttpPlugin.swift in Sources */,
 				B63E17A32C5F3D8A00A1B2C3 /* WebDavHttpPlugin.m in Sources */,
 			);

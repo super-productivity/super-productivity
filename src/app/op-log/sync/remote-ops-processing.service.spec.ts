@@ -701,6 +701,45 @@ describe('RemoteOpsProcessingService', () => {
       expect(calledWith.length).toBe(3);
     });
 
+    it('should cap setProtectedClientIds to MAX_VECTOR_CLOCK_SIZE - 1 when SYNC_IMPORT has many clock entries', async () => {
+      // Simulate a SYNC_IMPORT with 15 entries in its vectorClock (from many device reinstalls)
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 15; i++) {
+        largeClock[`device_${i}`] = i + 1;
+      }
+
+      const syncImportOp: Operation = {
+        id: 'sync-import-large',
+        opType: OpType.SyncImport,
+        actionType: '[All] Load All Data' as ActionType,
+        entityType: 'ALL',
+        payload: {},
+        clientId: 'device_14',
+        vectorClock: largeClock,
+        timestamp: Date.now(),
+        schemaVersion: 1,
+      };
+
+      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
+      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
+      operationApplierServiceSpy.applyOperations.and.returnValue(
+        Promise.resolve({ appliedOps: [syncImportOp] }),
+      );
+
+      await service.processRemoteOps([syncImportOp]);
+
+      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      // Must be capped to MAX_VECTOR_CLOCK_SIZE - 1 (9)
+      expect(protectedIds.length).toBeLessThanOrEqual(9);
+      // Should keep highest-counter entries
+      expect(protectedIds).toContain('device_14'); // counter 15
+      expect(protectedIds).toContain('device_13'); // counter 14
+      // Lowest entries should be dropped
+      expect(protectedIds).not.toContain('device_0'); // counter 1
+    });
+
     it('should NOT call setProtectedClientIds when no full-state op is applied', async () => {
       const regularOp: Operation = {
         id: 'regular-op-1',

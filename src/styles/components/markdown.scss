@@ -81,10 +81,11 @@
     }
   }
 
-  //input[type='checkbox'] {
-  //  margin-left: -20px;
-  //  pointer-events: none;
-  //}
+  // Hide native checkbox from marked's default checkbox renderer.
+  // The custom .checkbox span (Material Icons) handles all checkbox rendering.
+  .checkbox-wrapper > input[type='checkbox'] {
+    display: none;
+  }
 
   .checkbox {
     display: inline-block;

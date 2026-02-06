@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import { ConfigFormSection } from '../global-config.model';
 import {
   SimpleCounterConfig,
@@ -102,31 +103,37 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
           {
             key: 'streakMinValue',
             type: 'input',
+            resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type === SimpleCounterType.StopWatch ||
                 !fCfg.model.isTrackStreaks,
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type !== SimpleCounterType.StopWatch &&
+                !!fCfg.model.isTrackStreaks,
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_GOAL,
               type: 'number',
               min: 1,
-              required: true,
               getInitialValue: () => 1,
             },
           },
           {
             key: 'streakMinValue',
             type: 'duration',
+            resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 fCfg.model.type !== SimpleCounterType.StopWatch ||
                 !fCfg.model.isTrackStreaks,
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                fCfg.model.type === SimpleCounterType.StopWatch &&
+                !!fCfg.model.isTrackStreaks,
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_DAILY_GOAL,
               min: 60 * 1000,
-              required: true,
               description: T.G.DURATION_DESCRIPTION,
               getInitialValue: () => 10 * 60 * 1000,
             },
@@ -134,12 +141,13 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
           {
             key: 'streakMode',
             type: 'select',
+            resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) => !fCfg.model.isTrackStreaks,
+              'props.required': (fCfg: FormlyFieldConfig) => !!fCfg.model.isTrackStreaks,
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_MODE,
-              required: true,
               options: [
                 {
                   label: T.F.SIMPLE_COUNTER.FORM.L_STREAK_MODE_SPECIFIC_DAYS,
@@ -156,14 +164,17 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
           {
             key: 'streakWeekDays',
             type: 'multicheckbox',
+            resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 !fCfg.model.isTrackStreaks ||
                 (fCfg.model.streakMode && fCfg.model.streakMode !== 'specific-days'),
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                !!fCfg.model.isTrackStreaks &&
+                (!fCfg.model.streakMode || fCfg.model.streakMode === 'specific-days'),
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_WEEKDAYS,
-              required: true,
               options: [
                 { label: T.F.TASK_REPEAT.F.MONDAY, value: 1 },
                 { label: T.F.TASK_REPEAT.F.TUESDAY, value: 2 },
@@ -178,18 +189,21 @@ export const SIMPLE_COUNTER_FORM: ConfigFormSection<SimpleCounterConfig> = {
           {
             key: 'streakWeeklyFrequency',
             type: 'input',
+            resetOnHide: false,
             expressions: {
               hide: (fCfg: FormlyFieldConfig) =>
                 !fCfg.model.isTrackStreaks ||
                 !fCfg.model.streakMode ||
                 fCfg.model.streakMode !== 'weekly-frequency',
+              'props.required': (fCfg: FormlyFieldConfig) =>
+                !!fCfg.model.isTrackStreaks &&
+                fCfg.model.streakMode === 'weekly-frequency',
             },
             templateOptions: {
               label: T.F.SIMPLE_COUNTER.FORM.L_WEEKLY_FREQUENCY,
               type: 'number',
               min: 1,
               max: 7,
-              required: true,
               getInitialValue: () => 3,
             },
           },

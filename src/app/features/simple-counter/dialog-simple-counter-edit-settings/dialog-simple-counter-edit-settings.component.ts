@@ -103,14 +103,14 @@ export class DialogSimpleCounterEditSettingsComponent {
       icon: counter.icon,
       type: counter.type,
       isTrackStreaks: counter.isTrackStreaks,
-      streakMinValue: counter.streakMinValue,
+      streakMinValue: counter.streakMinValue ?? EMPTY_SIMPLE_COUNTER.streakMinValue,
       streakMode: counter.streakMode || 'specific-days',
       streakWeekDays: counter.streakWeekDays
         ? { ...counter.streakWeekDays }
         : counter.isTrackStreaks
           ? { ...EMPTY_SIMPLE_COUNTER.streakWeekDays }
           : undefined,
-      streakWeeklyFrequency: counter.streakWeeklyFrequency,
+      streakWeeklyFrequency: counter.streakWeeklyFrequency ?? 3,
       countdownDuration: counter.countdownDuration,
     };
   }

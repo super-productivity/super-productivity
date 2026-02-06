@@ -272,6 +272,24 @@ describe('CleanSlateService', () => {
       expect(protectedIds).toContain('oldClient4');
     });
 
+    it('should cap protected client IDs to MAX_VECTOR_CLOCK_SIZE - 1 with large clock', async () => {
+      // Simulate: existing vector clock has 15 entries (many device reinstalls)
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 15; i++) {
+        largeClock[`device_${i}`] = i + 1;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(largeClock);
+
+      await service.createCleanSlateFromImport(importedState, 'FULL_IMPORT');
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      // newClock = incrementVectorClock(largeClock, newClientId) = 16 entries
+      // selectProtectedClientIds caps to 9
+      expect(protectedIds.length).toBeLessThanOrEqual(9);
+    });
+
     it('should set protected client IDs after setting vector clock', async () => {
       const callOrder: string[] = [];
       mockOpLogStore.setVectorClock.and.callFake(async () => {

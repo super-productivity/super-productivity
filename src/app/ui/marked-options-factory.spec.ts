@@ -3,6 +3,19 @@ import {
   parseImageDimensionsFromTitle,
   preprocessMarkdown,
 } from './marked-options-factory';
+import { marked } from 'marked';
+
+/**
+ * Parse markdown using our factory config, same as the app does at runtime.
+ * Resets marked defaults first to avoid cross-test pollution.
+ */
+const parseWithFactory = (markdown: string): string => {
+  marked.setOptions(marked.getDefaults());
+  const options = markedOptionsFactory();
+  const renderer = { ...(options.renderer as any) };
+  marked.use({ renderer });
+  return marked.parse(markdown) as string;
+};
 
 describe('markedOptionsFactory', () => {
   let options: ReturnType<typeof markedOptionsFactory>;
@@ -17,8 +30,55 @@ describe('markedOptionsFactory', () => {
     expect(options.gfm).toBe(true);
   });
 
-  // Note: No separate checkbox renderer test - checkboxes are rendered by the listitem renderer
-  // to avoid duplicate checkboxes (see GitHub issue #6228)
+  describe('checkbox renderer', () => {
+    it('should return empty string for unchecked items', () => {
+      const result = (options.renderer as any).checkbox({ checked: false });
+      expect(result).toBe('');
+    });
+
+    it('should return empty string for checked items', () => {
+      const result = (options.renderer as any).checkbox({ checked: true });
+      expect(result).toBe('');
+    });
+  });
+
+  // Integration tests: parse real markdown through the full marked pipeline (#6379)
+  describe('full pipeline checklist rendering (issue #6379)', () => {
+    it('should not produce native <input> checkbox for unchecked items', () => {
+      const html = parseWithFactory('- [ ] Item 1');
+      expect(html).not.toContain('<input');
+      expect(html).toContain('checkbox-wrapper');
+      expect(html).toContain('check_box_outline_blank');
+    });
+
+    it('should not produce native <input> checkbox for checked items', () => {
+      const html = parseWithFactory('- [x] Item 1');
+      expect(html).not.toContain('<input');
+      expect(html).toContain('checkbox-wrapper');
+      expect(html).toContain('check_box');
+    });
+
+    it('should not produce native <input> checkbox for multiple items', () => {
+      const html = parseWithFactory('- [ ] Item 1\n- [x] Item 2\n- [ ] Item 3');
+      expect(html).not.toContain('<input');
+      expect(html).toContain('check_box_outline_blank');
+      expect(html).toContain('check_box');
+    });
+
+    it('should not produce native <input> checkbox for gapped list items', () => {
+      const html = parseWithFactory('- [ ] Item 1\n\n- [ ] Item 2\n');
+      expect(html).not.toContain('<input');
+      expect(html).toContain('checkbox-wrapper');
+    });
+
+    it('should render exactly one checkbox span per item', () => {
+      const html = parseWithFactory('- [ ] A\n- [x] B');
+      const uncheckedCount = (html.match(/check_box_outline_blank/g) || []).length;
+      const checkedCount = (html.match(/>check_box</g) || []).length;
+      expect(uncheckedCount).toBe(1);
+      expect(checkedCount).toBe(1);
+    });
+  });
 
   describe('listitem renderer', () => {
     it('should render regular list item without checkbox', () => {

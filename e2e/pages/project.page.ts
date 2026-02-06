@@ -420,7 +420,7 @@ export class ProjectPage extends BasePage {
     await routerWrapper.waitFor({ state: 'visible', timeout: 6000 }); // Reduced from 10s to 6s
 
     // Wait for project view to be ready
-    const workView = this.page.locator('work-view');
+    const workView = this.page.locator('work-view').first();
     await workView.waitFor({ state: 'attached', timeout: 15000 });
 
     // First ensure notes section is visible by clicking toggle if needed

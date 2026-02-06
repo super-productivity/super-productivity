@@ -1,3 +1,30 @@
+## [17.1.3](https://github.com/super-productivity/super-productivity/compare/v17.1.2...v17.1.3) (2026-02-06)
+
+### Bug Fixes
+
+- **e2e:** fix flaky and failing E2E tests ([eec7538](https://github.com/super-productivity/super-productivity/commit/eec7538ed0c77a3f7fd578437b01b95ffa662e21))
+- **e2e:** increase flaky performance test threshold from 100ms to 500ms ([dec7b43](https://github.com/super-productivity/super-productivity/commit/dec7b43d3a552df0fb3085b8dd8cd3e955234fe4))
+- **ios:** register WebDavHttpPlugin with Capacitor bridge ([3ca70c3](https://github.com/super-productivity/super-productivity/commit/3ca70c31bf050287d82626b635e95ab4c1dc0689))
+- **op-log:** fix entityIds empty array fallback, add missing error handling, and improve consistency ([79988bd](https://github.com/super-productivity/super-productivity/commit/79988bd37429587bbac84f34d92ade5c95912291))
+- **redmine:** make time tracking dialog fields optional to prevent false validation errors ([da9f877](https://github.com/super-productivity/super-productivity/commit/da9f877e9ccfa92d1c016deae39c707b88f7892a)), closes [#6200](https://github.com/super-productivity/super-productivity/issues/6200)
+- **schedule,op-log:** restore ScheduledTask plannedForDay priority, optimize OpType validation, and improve type predicates ([b52e6f3](https://github.com/super-productivity/super-productivity/commit/b52e6f387e0ee1277ef1c197d9ca360274241ae6))
+- **simple-counter:** fix Save button permanently disabled in habit settings ([fabedd7](https://github.com/super-productivity/super-productivity/commit/fabedd79f7a583e1bc645293da8a4da6265e3209)), closes [#6374](https://github.com/super-productivity/super-productivity/issues/6374)
+- **sync:** add setProtectedClientIds to backup import and repair operations ([5cfe0eb](https://github.com/super-productivity/super-productivity/commit/5cfe0eb3340f0a10689485b0fa8317d29069281a))
+- **sync:** cap protected client IDs to prevent unbounded vector clock growth ([43bbd07](https://github.com/super-productivity/super-productivity/commit/43bbd0734d98e82074fa28951740ee4dc80359b1))
+- **sync:** preserve server entity clock IDs during LWW pruning to prevent sync loop ([405812e](https://github.com/super-productivity/super-productivity/commit/405812e7b39229c8128e45ef6c7ed3a9bbc48422))
+- **tasks:** ensure time estimate and notes are copied for subtasks ([#6380](https://github.com/super-productivity/super-productivity/issues/6380)) ([5c84ae5](https://github.com/super-productivity/super-productivity/commit/5c84ae57689feafde128de895212ab5a47429f7e)), closes [#6368](https://github.com/super-productivity/super-productivity/issues/6368)
+- **tasks:** explicitly release selector override to prevent test pollution ([df80701](https://github.com/super-productivity/super-productivity/commit/df807014033f8512235fe31008b9eec8e9c1bc04))
+- **tasks:** reset selector overrides to prevent test pollution ([b80e748](https://github.com/super-productivity/super-productivity/commit/b80e748b29828624c175894e204f92293456de4c))
+- **tests:** improve synchronization tests and increase timeout for IndexedDB operations ([985e839](https://github.com/super-productivity/super-productivity/commit/985e839747d8052c557893b17cbf58d29140c22b))
+
+### Features
+
+- Add Option to Display Heatmap for the Current Year ([#5536](https://github.com/super-productivity/super-productivity/issues/5536)) ([bf58264](https://github.com/super-productivity/super-productivity/commit/bf5826468fdb7584f54872d6da9e3a666d736ab0))
+- **build:** integrate SignPath code signing into Windows build workflow ([bf7badc](https://github.com/super-productivity/super-productivity/commit/bf7badcb44d75003a11075c9fd1c7f7d35c17f8e)), closes [action-#release](https://github.com/action-/issues/release)
+- **build:** publish unsigned Windows binaries before signing ([669f2d7](https://github.com/super-productivity/super-productivity/commit/669f2d78749b22b7eedba7ef4db7c16d1e9041b0))
+- **project:** navigate to project after creation ([878c239](https://github.com/super-productivity/super-productivity/commit/878c239fa0905b2dc1c896174da18ee868c7bc3a)), closes [#6393](https://github.com/super-productivity/super-productivity/issues/6393)
+- **sync:** trigger sync immediately after saving sync config dialog ([ef40a32](https://github.com/super-productivity/super-productivity/commit/ef40a32ca63bc4159d2552a83048a6f1e0cf0e3a))
+
 ## [17.1.2](https://github.com/super-productivity/super-productivity/compare/v17.1.1...v17.1.2) (2026-02-05)
 
 ### Bug Fixes

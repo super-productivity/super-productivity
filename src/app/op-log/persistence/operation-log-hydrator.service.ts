@@ -23,7 +23,11 @@ import { OperationApplierService } from '../apply/operation-applier.service';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { bulkApplyOperations } from '../apply/bulk-hydration.action';
 import { VectorClockService } from '../sync/vector-clock.service';
-import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
+import { selectProtectedClientIds } from '../../core/util/vector-clock';
+import {
+  MAX_CONFLICT_RETRY_ATTEMPTS,
+  MAX_VECTOR_CLOCK_SIZE,
+} from '../core/operation-log.const';
 
 /**
  * Handles the hydration (loading) of the application state from the operation log
@@ -76,7 +80,7 @@ export class OperationLogHydratorService {
       ) {
         // Protect ALL client IDs in the import's vector clock, not just the import's clientId.
         // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
-        const protectedIds = Object.keys(op.vectorClock);
+        const protectedIds = selectProtectedClientIds(op.vectorClock);
         await this.opLogStore.setProtectedClientIds(protectedIds);
         OpLog.normal(
           `OperationLogHydratorService: Set protected client IDs from ${op.opType}: [${protectedIds.join(', ')}]`,
@@ -112,8 +116,8 @@ export class OperationLogHydratorService {
       return;
     }
 
-    // Get all client IDs that SHOULD be protected (all keys in the import's vectorClock)
-    const requiredProtectedIds = Object.keys(latestFullStateOp.vectorClock);
+    // Get client IDs that SHOULD be protected (highest-counter keys, capped to leave room for currentClientId)
+    const requiredProtectedIds = selectProtectedClientIds(latestFullStateOp.vectorClock);
 
     // Check if protectedClientIds is already correctly set
     const existingProtectedIds = await this.opLogStore.getProtectedClientIds();
@@ -122,7 +126,12 @@ export class OperationLogHydratorService {
     // Check if all required IDs are already protected
     const allProtected = requiredProtectedIds.every((id) => existingSet.has(id));
 
-    if (allProtected && existingProtectedIds.length > 0) {
+    const maxProtected = MAX_VECTOR_CLOCK_SIZE - 1;
+    if (
+      allProtected &&
+      existingProtectedIds.length > 0 &&
+      existingProtectedIds.length <= maxProtected
+    ) {
       OpLog.normal(
         `OperationLogHydratorService: Protected client IDs already set: [${existingProtectedIds.join(', ')}]`,
       );
@@ -301,7 +310,7 @@ export class OperationLogHydratorService {
               await this.opLogStore.mergeRemoteOpClocks([lastOp]);
               // FIX: Protect ALL client IDs in the import's vector clock
               // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
-              const protectedIds = Object.keys(lastOp.vectorClock);
+              const protectedIds = selectProtectedClientIds(lastOp.vectorClock);
               await this.opLogStore.setProtectedClientIds(protectedIds);
               OpLog.normal(
                 `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds.join(', ')}]`,
@@ -313,7 +322,7 @@ export class OperationLogHydratorService {
               // FIX: Same fix for the else branch
               await this.opLogStore.mergeRemoteOpClocks([lastOp]);
               // FIX: Protect ALL client IDs in the import's vector clock
-              const protectedIdsElse = Object.keys(lastOp.vectorClock);
+              const protectedIdsElse = selectProtectedClientIds(lastOp.vectorClock);
               await this.opLogStore.setProtectedClientIds(protectedIdsElse);
               OpLog.normal(
                 `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIdsElse.join(', ')}]`,
@@ -407,7 +416,7 @@ export class OperationLogHydratorService {
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
             // FIX: Protect ALL client IDs in the import's vector clock
             // See RemoteOpsProcessingService.applyNonConflictingOps for detailed explanation.
-            const protectedIds2 = Object.keys(lastOp.vectorClock);
+            const protectedIds2 = selectProtectedClientIds(lastOp.vectorClock);
             await this.opLogStore.setProtectedClientIds(protectedIds2);
             OpLog.normal(
               `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2.join(', ')}]`,
@@ -417,7 +426,7 @@ export class OperationLogHydratorService {
             // FIX: Same fix for the else branch
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
             // FIX: Protect ALL client IDs in the import's vector clock
-            const protectedIds2Else = Object.keys(lastOp.vectorClock);
+            const protectedIds2Else = selectProtectedClientIds(lastOp.vectorClock);
             await this.opLogStore.setProtectedClientIds(protectedIds2Else);
             OpLog.normal(
               `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2Else.join(', ')}]`,

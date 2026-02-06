@@ -150,15 +150,16 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
       ...this.projectData,
     };
 
+    let newProjectId: string | undefined;
     if (projectDataToSave.id) {
       this._projectService.update(projectDataToSave.id, projectDataToSave);
     } else {
-      this._projectService.add(projectDataToSave);
+      newProjectId = this._projectService.add(projectDataToSave);
     }
     this._isSaveTmpProject = false;
     sessionStorage.removeItem(SS.PROJECT_TMP);
 
-    this._matDialogRef.close();
+    this._matDialogRef.close(newProjectId);
   }
 
   cancelEdit(): void {

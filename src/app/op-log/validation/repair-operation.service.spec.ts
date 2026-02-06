@@ -37,6 +37,7 @@ describe('RepairOperationService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'appendWithVectorClockUpdate',
       'saveStateCache',
+      'setProtectedClientIds',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
@@ -53,6 +54,7 @@ describe('RepairOperationService', () => {
     // appendWithVectorClockUpdate returns the sequence number
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(100));
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
+    mockOpLogStore.setProtectedClientIds.and.resolveTo();
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ clientA: 5 }),
     );
@@ -233,6 +235,61 @@ describe('RepairOperationService', () => {
       const secondId = secondCall.args[0].id;
 
       expect(firstId).not.toBe(secondId);
+    });
+
+    it('should call setProtectedClientIds with all vector clock keys', async () => {
+      mockVectorClockService.getCurrentVectorClock.and.returnValue(
+        Promise.resolve({ clientA: 10, clientB: 5 }),
+      );
+      const summary = createRepairSummary();
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(protectedIds).toContain('clientA');
+      expect(protectedIds).toContain('clientB');
+      expect(protectedIds).toContain('test-client');
+    });
+
+    it('should call setProtectedClientIds when skipLock is true', async () => {
+      mockVectorClockService.getCurrentVectorClock.and.returnValue(
+        Promise.resolve({ clientA: 10, clientB: 5 }),
+      );
+      const summary = createRepairSummary();
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client', {
+        skipLock: true,
+      });
+
+      expect(mockLockService.request).not.toHaveBeenCalled();
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(protectedIds).toContain('clientA');
+      expect(protectedIds).toContain('clientB');
+      expect(protectedIds).toContain('test-client');
+    });
+
+    it('should cap protected client IDs with large vector clock', async () => {
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 15; i++) {
+        largeClock[`device_${i}`] = i + 1;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.returnValue(
+        Promise.resolve(largeClock),
+      );
+      const summary = createRepairSummary();
+
+      await service.createRepairOperation(mockRepairedState, summary, 'test-client');
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      // newClock = incrementVectorClock(largeClock, clientId) = 16 entries
+      // selectProtectedClientIds caps to 9
+      expect(protectedIds.length).toBeLessThanOrEqual(9);
     });
 
     it('should include timestamp in operation', async () => {
