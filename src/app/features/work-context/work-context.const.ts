@@ -160,14 +160,17 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
       },
       {
         key: 'backgroundOverlayOpacity',
-        type: 'input',
-        templateOptions: {
+        type: 'slider',
+        props: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_OVERLAY_OPACITY,
           description:
             'The default opacity of the background overlay (0 = transparent, 10 = opaque). Default is 0. Adjust this value to make the background more or less transparent.',
           type: 'number',
           min: 0,
           max: 10,
+          step: 1,
+          required: false,
+          showTickMarks: true,
         },
       },
     ],
