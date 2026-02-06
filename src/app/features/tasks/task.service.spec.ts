@@ -10,6 +10,7 @@ import { TaskArchiveService } from '../archive/task-archive.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskFocusService } from './task-focus.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
+import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from './task.model';
 import { WorkContextType } from '../work-context/work-context.model';
 import { of, Subject } from 'rxjs';
@@ -122,6 +123,14 @@ describe('TaskService', () => {
       isDataImportInProgress$: of(false),
     });
 
+    const simpleCounterServiceSpy = jasmine.createSpyObj(
+      'SimpleCounterService',
+      ['incrementCounterByDate'],
+      {
+        enabledSimpleCounters$: of([]),
+      },
+    );
+
     TestBed.configureTestingModule({
       providers: [
         TaskService,
@@ -153,6 +162,7 @@ describe('TaskService', () => {
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: TaskFocusService, useValue: taskFocusServiceSpy },
         { provide: ImexViewService, useValue: imexViewServiceSpy },
+        { provide: SimpleCounterService, useValue: simpleCounterServiceSpy },
       ],
     });
 
