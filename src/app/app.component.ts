@@ -170,12 +170,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     ),
   );
 
-  protected bgOpacity = computed(() => {
-    const baseOpacity =
-      this._globalConfigService.misc()?.defaultBackgroundOverlayOpacity ?? 0;
-    return baseOpacity * 0.1;
-  });
-
   private _isOverlayShownFromStore = toSignal(this._store.select(selectIsOverlayShown), {
     initialValue: false,
   });
@@ -189,6 +183,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   private readonly _activeWorkContextId = toSignal(
     this.workContextService.activeWorkContextId$,
+    { initialValue: null },
+  );
+
+  private readonly _activeWorkContext = toSignal(
+    this.workContextService.activeWorkContext$,
     { initialValue: null },
   );
 
@@ -349,6 +348,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
     this.layoutService.setPendingFocusTaskId(taskId);
   }
+
+  readonly bgOverlayOpacity = computed((): number => {
+    const context = this._activeWorkContext();
+    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 0;
+
+    return baseOpacity * 0.1;
+  });
 
   changeBackgroundFromUnsplash(): void {
     const dialogRef = this._matDialog.open(DialogUnsplashPickerComponent, {

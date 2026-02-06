@@ -36,7 +36,6 @@ export type MiscConfig = Readonly<{
   customTheme?: string;
   defaultStartPage?: number;
   unsplashApiKey?: string | null;
-  defaultBackgroundOverlayOpacity?: number;
 
   // @todo: remove deprecated items in future major releases, after giving users time to migrate
   isConfirmBeforeTaskDelete?: boolean; // Deprecated

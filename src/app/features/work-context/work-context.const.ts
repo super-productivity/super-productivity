@@ -29,6 +29,7 @@ export const WORK_CONTEXT_DEFAULT_THEME: WorkContextThemeCfg = {
   hueWarn: '500',
   backgroundImageDark: null,
   backgroundImageLight: null,
+  backgroundOverlayOpacity: 0,
 };
 
 export const WORK_CONTEXT_DEFAULT_COMMON: WorkContextCommon = {
@@ -155,6 +156,18 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
         templateOptions: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_IMAGE_LIGHT,
           description: '* https://some/cool.jpg, file:///home/user/bg.png',
+        },
+      },
+      {
+        key: 'backgroundOverlayOpacity',
+        type: 'input',
+        templateOptions: {
+          label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_OVERLAY_OPACITY,
+          description:
+            'The default opacity of the background overlay (0 = transparent, 10 = opaque). Default is 0. Adjust this value to make the background more or less transparent.',
+          type: 'number',
+          min: 0,
+          max: 10,
         },
       },
     ],

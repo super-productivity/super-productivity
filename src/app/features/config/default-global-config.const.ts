@@ -56,7 +56,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isOverlayIndicatorEnabled: false,
     customTheme: 'default',
     defaultStartPage: 0,
-    defaultBackgroundOverlayOpacity: 0,
   },
   shortSyntax: {
     isEnableProject: true,

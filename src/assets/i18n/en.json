@@ -759,6 +759,7 @@
       },
       "FORM_THEME": {
         "HELP": "Theme settings for your project.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Background Overlay Opacity",
         "L_BACKGROUND_IMAGE_DARK": "Background Image URL (Dark Theme)",
         "L_BACKGROUND_IMAGE_LIGHT": "Background Image URL (Light Theme)",
         "L_COLOR_ACCENT": "Accent Color",
@@ -2020,9 +2021,7 @@
       "THEME": "Theme",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
       "THEME_SELECT_LABEL": "Select Theme",
-      "TITLE": "Misc Settings",
-      "DEFAULT_BACKGROUND_OVERLAY_OPACITY": "Default background overlay opacity",
-      "DEFAULT_BACKGROUND_OVERLAY_OPACITY_HINT": "The default opacity of the background overlay (0 = transparent, 10 = opaque). Default is 0. Adjust this value to make the background more or less transparent."
+      "TITLE": "Misc Settings"
     },
     "TASKS": {
       "DEFAULT_PROJECT": "Default project to use for tasks if none is specified",
