@@ -103,30 +103,39 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     ),
   );
 
+  private _isManualStop = false;
+
   // Watch for task stop events to stop linked habit
   // Use toObservable + switchMap to reactively manage subscription when settings change
-  private _taskAutoTrackSub = toObservable(this.simpleCounter)
-    .pipe(
-      takeUntilDestroyed(this._destroyRef),
-      switchMap((counter) => {
-        // Only enable auto-tracking when configured for the current counter
-        if (
-          counter?.type === SimpleCounterType.StopWatch &&
-          counter.enableAutoTrackFromTasks
-        ) {
-          return this._taskService.currentTaskId$;
+  constructor() {
+    toObservable(this.simpleCounter)
+      .pipe(
+        takeUntilDestroyed(this._destroyRef),
+        switchMap((counter) => {
+          // Only enable auto-tracking when configured for the current counter
+          if (
+            counter?.type === SimpleCounterType.StopWatch &&
+            counter.enableAutoTrackFromTasks
+          ) {
+            return this._taskService.currentTaskId$;
+          }
+          return EMPTY;
+        }),
+      )
+      .subscribe((currentTaskId) => {
+        // If manual stop is in progress, skip this auto-toggle to avoid double-toggling
+        if (this._isManualStop) {
+          return;
         }
-        return EMPTY;
-      }),
-    )
-    .subscribe((currentTaskId) => {
-      // Get current state of the habit
-      const currentCounter = this.simpleCounter();
-      // If task stopped and habit is running, stop the habit
-      if (!currentTaskId && currentCounter?.isOn) {
-        this._simpleCounterService.toggleCounter(currentCounter.id);
-      }
-    });
+
+        // Get current state of the habit
+        const currentCounter = this.simpleCounter();
+        // If task stopped and habit is running, stop the habit
+        if (!currentTaskId && currentCounter?.isOn) {
+          this._simpleCounterService.toggleCounter(currentCounter.id);
+        }
+      });
+  }
 
   ngOnInit(): void {
     if (this.simpleCounter()?.type === SimpleCounterType.RepeatedCountdownReminder) {
@@ -182,10 +191,12 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
     // If stopping the habit, stop the task first
     if (c.isOn && c.enableAutoTrackFromTasks) {
+      this._isManualStop = true;
       const currentTaskId = await firstValueFrom(this._taskService.currentTaskId$);
       if (currentTaskId) {
         this._taskService.setCurrentId(null);
       }
+      this._isManualStop = false;
       // Toggle the habit counter
       this._simpleCounterService.toggleCounter(c.id);
       return;

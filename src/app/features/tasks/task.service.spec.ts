@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick, flush } from '@angular/core/testing';
 import { TaskService } from './task.service';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -11,9 +11,10 @@ import { GlobalConfigService } from '../config/global-config.service';
 import { TaskFocusService } from './task-focus.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { SimpleCounterService } from '../simple-counter/simple-counter.service';
+import { SimpleCounter, SimpleCounterType } from '../simple-counter/simple-counter.model';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from './task.model';
 import { WorkContextType } from '../work-context/work-context.model';
-import { of, Subject } from 'rxjs';
+import { of, Subject, BehaviorSubject } from 'rxjs';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import {
   setCurrentTask,
@@ -33,6 +34,7 @@ describe('TaskService', () => {
   let store: MockStore;
   let archiveService: jasmine.SpyObj<ArchiveService>;
   let tickSubject: Subject<{ duration: number; date: string }>;
+  let enabledSimpleCountersSubject: BehaviorSubject<SimpleCounter[]>;
 
   const createMockTask = (id: string, overrides: Partial<Task> = {}): Task =>
     ({
@@ -54,6 +56,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     tickSubject = new Subject();
+    enabledSimpleCountersSubject = new BehaviorSubject<SimpleCounter[]>([]);
 
     const workContextServiceSpy = jasmine.createSpyObj('WorkContextService', [''], {
       activeWorkContextType: WorkContextType.PROJECT,
@@ -127,7 +130,7 @@ describe('TaskService', () => {
       'SimpleCounterService',
       ['incrementCounterByDate'],
       {
-        enabledSimpleCounters$: of([]),
+        enabledSimpleCounters$: enabledSimpleCountersSubject.asObservable(),
       },
     );
 
@@ -701,6 +704,138 @@ describe('TaskService', () => {
           date: '2026-01-01',
         }),
       );
+    });
+
+    describe('linked habits auto-tracking', () => {
+      const createMockCounter = (
+        id: string,
+        overrides: Partial<SimpleCounter> = {},
+      ): SimpleCounter =>
+        ({
+          id,
+          type: SimpleCounterType.StopWatch, // Must be StopWatch
+          enableAutoTrackFromTasks: true, // Must be enabled
+          title: 'Habit ' + id,
+          isOn: false,
+          countOnDay: {},
+          ...overrides,
+        }) as SimpleCounter;
+
+      let simpleCounterServiceSpy: jasmine.SpyObj<SimpleCounterService>;
+
+      beforeEach(() => {
+        simpleCounterServiceSpy = TestBed.inject(
+          SimpleCounterService,
+        ) as jasmine.SpyObj<SimpleCounterService>;
+      });
+
+      it('should update linked habits when tags match', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', { linkedTagIds: ['tag-1'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          1000,
+        );
+      }));
+
+      it('should update linked habits when projects match', fakeAsync(() => {
+        const task = createMockTask('task-1', { projectId: 'proj-1' });
+        const counter = createMockCounter('c1', { linkedProjectIds: ['proj-1'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          1000,
+        );
+      }));
+
+      it('should respect tag exclusions', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1', 'excluded-tag'] });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          excludedTagIds: ['excluded-tag'],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should respect project exclusions', fakeAsync(() => {
+        const taskMatching = createMockTask('task-1', {
+          tagIds: ['tag-1'],
+          projectId: 'excluded-proj',
+        });
+        const counterWithExclusion = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          excludedProjectIds: ['excluded-proj'],
+        });
+
+        enabledSimpleCountersSubject.next([counterWithExclusion]);
+
+        service.addTimeSpent(taskMatching, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should ignore short durations (< 100ms)', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', { linkedTagIds: ['tag-1'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 99, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should ignore counters that are not StopWatch type', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          type: SimpleCounterType.ClickCounter,
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should ignore counters with enableAutoTrackFromTasks=false', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          enableAutoTrackFromTasks: false,
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
     });
   });
 
