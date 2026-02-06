@@ -17,8 +17,17 @@ describe('markedOptionsFactory', () => {
     expect(options.gfm).toBe(true);
   });
 
-  // Note: No separate checkbox renderer test - checkboxes are rendered by the listitem renderer
-  // to avoid duplicate checkboxes (see GitHub issue #6228)
+  describe('checkbox renderer', () => {
+    it('should return empty string for unchecked items', () => {
+      const result = (options.renderer as any).checkbox({ checked: false });
+      expect(result).toBe('');
+    });
+
+    it('should return empty string for checked items', () => {
+      const result = (options.renderer as any).checkbox({ checked: true });
+      expect(result).toBe('');
+    });
+  });
 
   describe('listitem renderer', () => {
     it('should render regular list item without checkbox', () => {
