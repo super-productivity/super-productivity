@@ -292,7 +292,7 @@ export class ActivityHeatmapComponent {
           Object.keys(monthData.ent).forEach((dayKey) => {
             const day = +dayKey;
             const dayData = monthData.ent[day];
-            if (day) {
+            if (dayData) {
               const dateStr = dayData.dateStr;
               const existing = dayMap.get(dateStr);
               if (existing) {
