@@ -2703,6 +2703,39 @@ describe('ConflictResolutionService', () => {
       // Should NOT have called store.select — pending ops exist, so normal conflict path
       expect(mockStore.select).not.toHaveBeenCalled();
     });
+
+    it('should use entityId fallback when entityIds is an empty array', async () => {
+      // Regression test: entityIds: [] is truthy in JS, so the old || fallback
+      // would use the empty array instead of falling back to entityId.
+      const remoteOp: Operation = {
+        ...createMockOp('remote-1', 'clientB'),
+        entityId: 'task-1',
+        entityIds: [],
+        vectorClock: { clientB: 1 },
+      };
+
+      const localOp: Operation = {
+        ...createMockOp('local-1', 'clientA'),
+        entityId: 'task-1',
+        vectorClock: { clientA: 1 },
+      };
+
+      const localPendingOpsByEntity = new Map<string, Operation[]>();
+      localPendingOpsByEntity.set('TASK:task-1', [localOp]);
+
+      const appliedFrontierByEntity = new Map<string, VectorClock>();
+      appliedFrontierByEntity.set('TASK:task-1', { clientA: 1 });
+
+      const result = await service.checkOpForConflicts(
+        remoteOp,
+        buildCtx({ localPendingOpsByEntity, appliedFrontierByEntity }),
+      );
+
+      // With the fix, entityId 'task-1' is resolved and a conflict is detected.
+      // Without the fix, entityIds: [] would be used as-is, skipping the entity entirely.
+      expect(result.conflict).not.toBeNull();
+      expect(result.conflict!.entityId).toBe('task-1');
+    });
   });
 
   describe('_convertToLWWUpdatesIfNeeded', () => {
