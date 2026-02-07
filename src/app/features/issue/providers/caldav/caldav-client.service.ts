@@ -447,7 +447,7 @@ export class CaldavClientService {
     // As 'sequence' starts at 0 and completing probably counts as a major change, then it should be at least 1 in the end,
     // if no other changes have been written.
     const sequence = todo.getFirstPropertyValue('sequence');
-    const sequenceInt = sequence ? parseInt(sequence as string) + 1 : 1;
+    const sequenceInt = sequence ? parseInt(sequence as string, 10) + 1 : 1;
     todo.updatePropertyWithValue('sequence', sequenceInt);
 
     task.data = ICAL.stringify(jCal);

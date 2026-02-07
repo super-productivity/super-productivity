@@ -201,7 +201,7 @@ export class NoteComponent implements OnChanges {
   private _updateNoteTxt(): void {
     const LIMIT = 320;
     this.isLongNote = this.note.content.length > LIMIT;
-    this.shortenedNote = this.note.content.substr(0, 160) + '\n\n (...)';
+    this.shortenedNote = this.note.content.slice(0, 160) + '\n\n (...)';
     this._updateResolvedContent();
   }
 
