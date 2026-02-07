@@ -53,6 +53,7 @@ export type WorkContextThemeCfg = Readonly<{
   hueWarn?: HueValue;
   backgroundImageDark?: string | null;
   backgroundImageLight?: string | null;
+  backgroundOverlayOpacity?: number;
 }>;
 
 export enum WorkContextType {

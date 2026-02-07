@@ -86,6 +86,7 @@
   --z-right-panel-edge-handle: 66;
   --z-tour: 1001;
   --z-dragged-nav-item: 1002;
+  --z-bg-overlay: 1;
 
   // ===============================
   // COLORS - Theme Independent
@@ -134,6 +135,7 @@
   --c-light-33: rgba(255, 255, 255, 0.33);
   --c-light-40: rgba(255, 255, 255, 0.4);
   --c-light-50: rgba(255, 255, 255, 0.5);
+  --c-light-60: rgba(255, 255, 255, 0.6);
   --c-light-70: rgba(255, 255, 255, 0.7);
   --c-light-90: rgba(255, 255, 255, 0.9);
 
@@ -278,7 +280,7 @@ body {
   --divider-color: rgba(0, 0, 0, 0.12);
 
   // Backdrop
-  --c-backdrop: var(--c-dark-60);
+  --c-backdrop: var(--c-light-60);
 
   // Note colors
   --standard-note-bg: #ffffff;
@@ -370,6 +372,9 @@ body {
   --transition-duration-s: 180ms;
   --transition-duration-l: 400ms;
   --transition-duration--leave: 195ms;
+
+  // Background overlay
+  --c-bg-overlay: var(--c-light-60);
 }
 
 // -----------------------------
@@ -491,6 +496,9 @@ body.isDarkTheme {
 
   // Material Design sidenav backdrop override
   --mat-sidenav-scrim-color: var(--c-dark-80);
+
+  // Background overlay
+  --c-bg-overlay: var(--c-dark-60);
 }
 
 /* stylelint-disable */
