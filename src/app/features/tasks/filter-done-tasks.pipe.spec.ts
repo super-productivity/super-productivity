@@ -20,7 +20,7 @@ describe('filterDoneTasks()', () => {
       true,
       false,
     );
-    expect(r).toEqual([{ isDone: false }]);
+    expect(r).toEqual([jasmine.objectContaining({ isDone: false })]);
   });
 
   it('should filter all but current', () => {
@@ -30,7 +30,7 @@ describe('filterDoneTasks()', () => {
       false,
       true,
     );
-    expect(r).toEqual([{ id: 'CURRENT' }]);
+    expect(r).toEqual([jasmine.objectContaining({ id: 'CURRENT' })]);
   });
 
   it('should not filter', () => {
@@ -40,6 +40,10 @@ describe('filterDoneTasks()', () => {
       false,
       false,
     );
-    expect(r).toEqual([{ isDone: true }, { isDone: false }, { isDone: true }]);
+    expect(r).toEqual([
+      jasmine.objectContaining({ isDone: true }),
+      jasmine.objectContaining({ isDone: false }),
+      jasmine.objectContaining({ isDone: true }),
+    ]);
   });
 });

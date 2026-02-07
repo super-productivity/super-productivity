@@ -1,5 +1,5 @@
 import { MarkedOptions, MarkedRenderer } from 'ngx-markdown';
-import { Hooks } from 'marked';
+import { Hooks, Token } from 'marked';
 
 /**
  * Parses image sizing syntax from title attribute.
@@ -64,7 +64,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
     text: string;
     task: boolean;
     checked?: boolean;
-    tokens: any[];
+    tokens: Token[];
   }) {
     // In marked v17, task list items need to manually prepend the checkbox
     // Use parse() to handle both block tokens (paragraph in loose lists) and inline tokens
@@ -94,7 +94,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
   }: {
     href: string;
     title?: string | null;
-    tokens: any[];
+    tokens: Token[];
   }) {
     const text = tokens ? this.parser.parseInline(tokens) : '';
     return `<a target="_blank" href="${href}" title="${title || ''}">${text}</a>`;
@@ -127,7 +127,7 @@ export const markedOptionsFactory = (): MarkedOptions => {
   };
 
   // In marked v17, paragraph renderer receives tokens that need to be parsed
-  renderer.paragraph = function ({ tokens }: { tokens: any[] }) {
+  renderer.paragraph = function ({ tokens }: { tokens: Token[] }) {
     const text = tokens ? this.parser.parseInline(tokens) : '';
     const split = text.split('\n');
     return split.reduce((acc, p, i) => {
