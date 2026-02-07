@@ -104,12 +104,23 @@ export class DefaultStartPageGuard {
       concatMap(() => this._globalConfigService.misc$),
       take(1),
       map((miscCfg) => {
-        const TODAY = 0;
-        const INBOX = 1;
-        if ((miscCfg?.defaultStartPage ?? TODAY) === INBOX) {
-          return this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`);
-        } else {
-          return this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
+        if (typeof miscCfg?.defaultStartPage === 'string') {
+          //Then we are a project
+          return this._router.parseUrl(`/project/${miscCfg?.defaultStartPage}/tasks`);
+        }
+
+        switch (miscCfg?.defaultStartPage ?? 0) {
+          case 1: //INBOX
+            //keep for old configs
+            return this._router.parseUrl(`/project/${INBOX_PROJECT.id}/tasks`);
+          case 2: //PLANNER
+            return this._router.parseUrl('/planner');
+          case 3: //SCHEDULE
+            return this._router.parseUrl('/schedule');
+          case 4: //BOARDS
+            return this._router.parseUrl('/boards');
+          default:
+            return this._router.parseUrl(`/tag/${TODAY_TAG.id}/tasks`);
         }
       }),
     );
