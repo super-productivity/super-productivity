@@ -217,7 +217,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
       return this._issueService.getById$(issueType, issueId, issueProviderId).pipe(
         takeUntilDestroyed(this._destroyRef),
-        catchError(() => of(null)),
+        catchError((err) => {
+          Log.warn(`Failed to load issue data for ${issueType}#${issueId}`, err);
+          return of(null);
+        }),
       );
     }),
     shareReplay(1),
