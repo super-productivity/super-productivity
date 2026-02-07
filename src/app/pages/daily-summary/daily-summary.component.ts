@@ -21,7 +21,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 
 import { combineLatest, from, merge, Observable, Subject } from 'rxjs';
 import {
-  delay,
   filter,
   first,
   map,
@@ -594,8 +593,11 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     const archiveTasks: Observable<TaskWithSubTasks[]> = merge(
       from(this._taskArchiveService.load()),
       this._worklogService.archiveUpdateManualTrigger$.pipe(
-        // hacky wait for save
-        delay(70),
+        // Yield to the event loop so the archive persistence write (triggered
+        // by moveToArchive) completes before we re-read.  A single macrotask
+        // tick is sufficient because the write is already in-flight; we just
+        // need to let it finish.
+        switchMap(() => new Promise<void>((resolve) => setTimeout(resolve, 0))),
         switchMap(() => this._taskArchiveService.load()),
       ),
     ).pipe(

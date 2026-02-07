@@ -166,7 +166,10 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             });
 
             // move entries
-            // NOTE: needed because view entries might not be ordered at this point of time for some reason
+            // NOTE: Use time-based movement (not index-based) because earlier
+            // splice() operations can scatter split-continued entries
+            // non-contiguously in the array.  Time-based movement correctly
+            // shifts all affected entries regardless of their array position.
             const blockedBlockDuration = blockedBlock.end - blockedBlock.start;
             moveAllEntriesAfterTime(
               viewEntries,
@@ -258,7 +261,10 @@ export const insertBlockedBlocksViewEntriesForSchedule = (
             });
 
             // move entries
-            // NOTE: needed because view entries might not be ordered at this point of time for some reason
+            // NOTE: Use time-based movement (not index-based) because earlier
+            // splice() operations can scatter split-continued entries
+            // non-contiguously in the array.  Time-based movement correctly
+            // shifts all affected entries regardless of their array position.
             const blockedBlockDuration = blockedBlock.end - blockedBlock.start;
             moveAllEntriesAfterTime(
               viewEntries,

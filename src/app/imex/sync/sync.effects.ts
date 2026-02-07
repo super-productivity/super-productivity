@@ -64,13 +64,17 @@ export class SyncEffects {
               isEnabled ? this._execBeforeCloseService.onBeforeClose$ : EMPTY,
             ),
             filter((ids) => ids.includes(SYNC_BEFORE_CLOSE_ID)),
-            tap(() => {
+            switchMap(() => {
               this._taskService.setCurrentId(null);
               this._simpleCounterService.flushAccumulatedTime();
               this._simpleCounterService.turnOffAll();
+              // Yield to the event loop so NgRx effects triggered by the above
+              // dispatches (e.g. persistence writes to IndexedDB) get a chance to
+              // run before we start the sync.  A single macrotask tick is enough
+              // because the op-log persistence effects schedule their writes in
+              // the same tick; we just need to let them execute.
+              return new Promise<void>((resolve) => setTimeout(resolve, 0));
             }),
-            // minimally hacky delay to wait for inMemoryDatabase update...
-            delay(100),
             switchMap(() =>
               this._syncWrapperService
                 .sync()

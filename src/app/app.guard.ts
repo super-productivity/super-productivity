@@ -8,6 +8,7 @@ import {
 import { WorkContextService } from './features/work-context/work-context.service';
 import { Observable, of } from 'rxjs';
 import { catchError, concatMap, map, switchMap, take } from 'rxjs/operators';
+import { Log } from './core/log';
 import { WorkContextType } from './features/work-context/work-context.model';
 import { TagService } from './features/tag/tag.service';
 import { ProjectService } from './features/project/project.service';
@@ -53,7 +54,10 @@ export class ValidTagIdGuard {
     const { id } = next.params;
     return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() => this._tagService.getTagById$(id)),
-      catchError(() => of(false)),
+      catchError((err) => {
+        Log.warn(`ValidTagIdGuard: failed to look up tag '${id}'`, err);
+        return of(false);
+      }),
       take(1),
       map((tag) => !!tag),
     );
@@ -84,7 +88,10 @@ export class ValidProjectIdGuard {
     const { id } = next.params;
     return this._dataInitStateService.isAllDataLoadedInitially$.pipe(
       concatMap(() => this._projectService.getByIdOnce$(id)),
-      catchError(() => of(false)),
+      catchError((err) => {
+        Log.warn(`ValidProjectIdGuard: failed to look up project '${id}'`, err);
+        return of(false);
+      }),
       map((project) => !!project),
     );
   }
