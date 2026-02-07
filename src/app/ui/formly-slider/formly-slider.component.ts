@@ -30,6 +30,7 @@ interface SliderProps extends FormlyFieldProps {
         [displayWith]="props.displayWith ?? defaultDisplayWith"
       >
         <input
+          style="height: 100%"
           matSliderThumb
           matInput
           [formControl]="formControl"
