@@ -5,6 +5,30 @@ import { loadIcalModule } from './ical-lazy-loader';
 // NOTE: this sucks and is slow, but writing a new ical parser would be very hard... :(
 
 /**
+ * Sanitizes iCal data to fix common formatting errors before parsing.
+ * Specifically handles "orphan" lines (like address continuations) that are missing
+ * the required whitespace indentation, which causes ical.js to crash.
+ */
+const sanitizeIcalData = (icalData: string): string => {
+  return icalData
+    .split(/\r?\n/)
+    .map((line) => {
+      // If line is content (not empty) but has no delimiter and no indentation
+      // it is likely a broken continuation line.
+      if (
+        line.trim().length > 0 &&
+        !line.includes(':') &&
+        !line.includes(';') &&
+        !/^\s/.test(line)
+      ) {
+        return ' ' + line; // Fold it into previous line by prepending space
+      }
+      return line;
+    })
+    .join('\r\n');
+};
+
+/**
  * Safely extracts a date value from an iCal property and converts it to timestamp.
  * Returns null if the property is missing or invalid.
  */
@@ -94,9 +118,13 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
 ): Promise<CalendarIntegrationEvent[]> => {
   const ICAL = await loadIcalModule();
   let calendarIntegrationEvents: CalendarIntegrationEvent[] = [];
+
+  // Sanitize input data to prevent parser crashes on malformed lines
+  const cleanIcalData = sanitizeIcalData(icalData);
+
   const allPossibleFutureEvents = getAllPossibleEventsAfterStartFromIcal(
     ICAL,
-    icalData,
+    cleanIcalData,
     new Date(startTimestamp),
   );
 
