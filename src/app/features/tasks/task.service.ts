@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
+import { SimpleCounterType } from '../simple-counter/simple-counter.model';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
@@ -98,6 +100,7 @@ import { getDbDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
+import { SimpleCounterService } from '../simple-counter/simple-counter.service';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
@@ -116,6 +119,7 @@ export class TaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _simpleCounterService = inject(SimpleCounterService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -777,6 +781,71 @@ export class TaskService {
     this._store.dispatch(
       TimeTrackingActions.addTimeSpent({ task, date, duration, isFromTrackingReminder }),
     );
+
+    // Also update linked habits if auto-tracking is enabled
+    if (duration > 0) {
+      this._updateLinkedHabits(task, duration, date);
+    }
+  }
+
+  private _updateLinkedHabits(task: Task, duration: number, date: string): void {
+    // Ignore very small durations to avoid noise from timing jitter and excessive habit updates.
+    // Habit counters are not intended for sub-100ms precision, so values below this threshold
+    // are treated as negligible for the purpose of auto-tracking from tasks.
+    const MIN_DURATION_MS_FOR_HABIT_UPDATE = 100;
+    if (duration < MIN_DURATION_MS_FOR_HABIT_UPDATE) {
+      return;
+    }
+
+    // Get linked habits directly from service (async to avoid subscription leaks)
+    firstValueFrom(this._simpleCounterService.enabledSimpleCounters$)
+      .then((counters) => {
+        const linkedHabits = counters.filter(
+          (counter) =>
+            counter.type === SimpleCounterType.StopWatch &&
+            counter.enableAutoTrackFromTasks &&
+            (counter.linkedTagIds?.length || counter.linkedProjectIds?.length),
+        );
+
+        // Early exit if no relevant counters
+        if (linkedHabits.length === 0) {
+          return;
+        }
+
+        // Process each linked habit
+        linkedHabits.forEach((counter) => {
+          // Check exclusions first (faster to exit early)
+          if (counter.excludedTagIds?.length) {
+            if (counter.excludedTagIds.some((tagId) => task.tagIds.includes(tagId))) {
+              return;
+            }
+          }
+
+          if (counter.excludedProjectIds?.length && task.projectId) {
+            if (counter.excludedProjectIds.includes(task.projectId)) {
+              return;
+            }
+          }
+
+          // Check matches
+          const hasMatchingTag =
+            counter.linkedTagIds?.length &&
+            counter.linkedTagIds.some((tagId) => task.tagIds.includes(tagId));
+
+          const hasMatchingProject =
+            counter.linkedProjectIds?.length &&
+            task.projectId &&
+            counter.linkedProjectIds.includes(task.projectId);
+
+          // If there's a match, update the counter
+          if (hasMatchingTag || hasMatchingProject) {
+            this._simpleCounterService.incrementCounterByDate(counter.id, date, duration);
+          }
+        });
+      })
+      .catch((err) => {
+        console.error('Error updating linked habits:', err);
+      });
   }
 
   removeTimeSpent(
