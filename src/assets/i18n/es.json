@@ -988,7 +988,7 @@
           "INFO": "Las implementaciones de WebDAV difieren mucho desafortunadamente. Se sabe que Super Productivity funciona bien con Nextcloud, <strong>pero podría no funcionar con tu proveedor</strong>.",
           "L_BASE_URL": "Url Base",
           "L_PASSWORD": "Contraseña",
-          "L_SYNC_FOLDER_PATH": "Ruta de la Carpeta de Sincronización",
+          "L_SYNC_FOLDER_PATH": "Ruta de la carpeta de sincronización",
           "L_TEST_CONNECTION": "Probar conexión",
           "L_USER_NAME": "Nombre de usuario",
           "S_FILL_ALL_FIELDS": "Por favor, complete primero todos los campos de WebDAV",
