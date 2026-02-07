@@ -5,7 +5,7 @@ import { sha256 as hashWasmSha256 } from 'hash-wasm';
 const hexStringToArrayBuffer = (hex: string): ArrayBuffer => {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
   }
   return bytes.buffer;
 };
@@ -20,7 +20,7 @@ const generateRandomString = (length: number): string => {
   }
 
   window.crypto.getRandomValues(array);
-  return Array.from(array, (dec) => ('0' + dec.toString(16)).substr(-2)).join('');
+  return Array.from(array, (dec) => ('0' + dec.toString(16)).slice(-2)).join('');
 };
 
 // Calculate the SHA256 hash of the input text.

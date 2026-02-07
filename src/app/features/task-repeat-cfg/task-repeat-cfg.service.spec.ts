@@ -917,7 +917,7 @@ describe('TaskRepeatCfgService', () => {
         id:
           args.title === 'Test Repeat Task'
             ? 'parent-task-id'
-            : 'new-subtask-' + Math.random().toString(36).substr(2, 9),
+            : 'new-subtask-' + Math.random().toString(36).slice(2, 11),
         title: args.title || 'Default Title',
         notes: args.additional?.notes || '',
         timeEstimate: args.additional?.timeEstimate || 0,

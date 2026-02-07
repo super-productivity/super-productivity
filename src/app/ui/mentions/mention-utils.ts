@@ -134,7 +134,7 @@ export const getContentEditableCaretCoords = (ctx: {
 }): { left: number; top: number } => {
   const markerTextChar = '\ufeff';
   const markerId =
-    'sel_' + new Date().getTime() + '_' + Math.random().toString().substr(2);
+    'sel_' + new Date().getTime() + '_' + Math.random().toString().slice(2);
   const doc = getDocument(ctx ? ctx.iframe : null);
   const sel = getWindowSelection(ctx ? ctx.iframe : null);
   if (!sel || sel.rangeCount === 0) {

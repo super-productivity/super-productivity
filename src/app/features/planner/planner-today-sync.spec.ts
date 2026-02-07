@@ -18,7 +18,7 @@ describe('Planner Today Sync Integration', () => {
 
   const createMockTask = (overrides: Partial<Task> = {}): Task => ({
     ...DEFAULT_TASK,
-    id: 'test-task-' + Math.random().toString(36).substr(2, 9),
+    id: 'test-task-' + Math.random().toString(36).slice(2, 11),
     title: 'Test Task',
     projectId: 'testProject',
     ...overrides,
