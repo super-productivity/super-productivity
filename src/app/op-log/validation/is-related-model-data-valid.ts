@@ -98,7 +98,7 @@ export const isRelatedModelDataValid = (d: AppDataComplete): boolean => {
 
 export const getLastValidityError = (): string | undefined => lastValidityError;
 
-const _validityError = (errTxt: string, additionalInfo?: any): void => {
+const _validityError = (errTxt: string, additionalInfo?: unknown): void => {
   if (additionalInfo) {
     OpLog.log('Validity Error Info: ', additionalInfo);
     if (environment.production) {

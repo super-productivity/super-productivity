@@ -12,7 +12,10 @@ import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { KeyboardConfig } from '../keyboard-config.model';
 import { updateGlobalConfigSection } from './global-config.actions';
-import { selectLocalizationConfig } from './global-config.reducer';
+import {
+  selectConfigFeatureState,
+  selectLocalizationConfig,
+} from './global-config.reducer';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 
@@ -22,7 +25,7 @@ export class GlobalConfigEffects {
   private _languageService = inject(LanguageService);
   private _dateService = inject(DateService);
   private _snackService = inject(SnackService);
-  private _store = inject<Store<any>>(Store);
+  private _store = inject(Store);
   private _userProfileService = inject(UserProfileService);
 
   snackUpdate$ = createEffect(
@@ -96,7 +99,7 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 
-  setStartOfNextDayDiffOnChange: any = createEffect(
+  setStartOfNextDayDiffOnChange = createEffect(
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
@@ -106,13 +109,15 @@ export class GlobalConfigEffects {
             sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
         ),
         tap(({ sectionKey, sectionCfg }) => {
-          this._dateService.setStartOfNextDayDiff((sectionCfg as any)['startOfNextDay']);
+          this._dateService.setStartOfNextDayDiff(
+            (sectionCfg as MiscConfig).startOfNextDay,
+          );
         }),
       ),
     { dispatch: false },
   );
 
-  setStartOfNextDayDiffOnLoad: any = createEffect(
+  setStartOfNextDayDiffOnLoad = createEffect(
     () =>
       this._actions$.pipe(
         ofType(loadAllData),
@@ -125,13 +130,13 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 
-  notifyElectronAboutCfgChange: any =
+  notifyElectronAboutCfgChange =
     IS_ELECTRON &&
     createEffect(
       () =>
         this._actions$.pipe(
           ofType(updateGlobalConfigSection),
-          withLatestFrom(this._store.select('globalConfig')),
+          withLatestFrom(this._store.select(selectConfigFeatureState)),
           tap(([action, globalConfig]) => {
             // Send the entire settings object to electron for overlay initialization
             window.ea.sendSettingsUpdate(globalConfig);
@@ -140,7 +145,7 @@ export class GlobalConfigEffects {
       { dispatch: false },
     );
 
-  notifyElectronAboutCfgChangeInitially: any =
+  notifyElectronAboutCfgChangeInitially =
     IS_ELECTRON &&
     createEffect(
       () =>
@@ -156,7 +161,7 @@ export class GlobalConfigEffects {
     );
 
   // Handle user profiles being enabled/disabled
-  handleUserProfilesToggle: any = createEffect(
+  handleUserProfilesToggle = createEffect(
     () =>
       this._actions$.pipe(
         ofType(updateGlobalConfigSection),
