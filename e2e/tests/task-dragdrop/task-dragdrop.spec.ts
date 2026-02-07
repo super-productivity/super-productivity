@@ -15,6 +15,7 @@ test.describe('Drag Task to change project and labels', () => {
   test('should be able to move task to project by dragging to project link in magic-side-nav', async ({
     page,
     testPrefix,
+    projectPage,
   }) => {
     // Create task
     await workViewPage.addTask('TestTask');
@@ -27,33 +28,28 @@ test.describe('Drag Task to change project and labels', () => {
       .getByRole('menuitem')
       .filter({ hasText: `${testPrefix}-TestProject 2` });
 
-    // Helper to create projects reliably by clicking the dialog's Submit button
-    const createProject = async (
-      name: string,
-      expectedNavItem: Locator,
-    ): Promise<void> => {
-      const dialog = page.locator('dialog-create-project');
-      const projectNameInput = dialog.locator('input').first();
-      const saveBtn = dialog.locator('button[type="submit"]');
-
-      await page.keyboard.press('Shift+P');
-      await dialog.waitFor({ state: 'visible', timeout: 10000 });
-      await projectNameInput.waitFor({ state: 'visible', timeout: 10000 });
-      await projectNameInput.fill(name);
-      await expect(saveBtn).toBeEnabled({ timeout: 5000 });
-      await saveBtn.click();
-      await dialog.waitFor({ state: 'hidden', timeout: 10000 });
-      await expectedNavItem.waitFor({ state: 'visible', timeout: 10000 });
-    };
-
-    await createProject(`${testPrefix}-TestProject 1`, project1NavItem);
-    await createProject(`${testPrefix}-TestProject 2`, project2NavItem);
+    // Create projects using the page object (button-based, not keyboard shortcut)
+    await projectPage.createProject('TestProject 1');
+    await projectPage.createProject('TestProject 2');
 
     // Navigate back to Today view where the task lives
-    // (project creation now navigates to the new project)
+    // (project creation navigates to the new project)
     const todayNavItem = page.getByRole('menuitem').filter({ hasText: 'Today' });
     await todayNavItem.click();
     await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
+
+    // Expand the Projects section so project nav items are visible for drag targets
+    const projectsGroup = page
+      .locator('nav-list-tree')
+      .filter({ hasText: 'Projects' })
+      .locator('nav-item button')
+      .first();
+    const isExpanded = await projectsGroup.getAttribute('aria-expanded');
+    if (isExpanded !== 'true') {
+      await projectsGroup.click();
+    }
+    await project1NavItem.waitFor({ state: 'visible', timeout: 10000 });
+    await project2NavItem.waitFor({ state: 'visible', timeout: 10000 });
 
     // find drag handle of task
     const firstTask = page.locator('task').first();
