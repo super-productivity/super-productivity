@@ -581,8 +581,8 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
   private _handlePointerUp(event: MouseEvent | TouchEvent): void {
     const draggedTask = this._externalDragService.activeTask();
 
-    // exclude subtasks and recurring tasks
-    if (!draggedTask || draggedTask.parentId || draggedTask.repeatCfgId) {
+    // exclude recurring tasks
+    if (!draggedTask || draggedTask.repeatCfgId) {
       return;
     }
 
@@ -600,6 +600,12 @@ export class MagicSideNavComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (navItemElement.hasAttribute('data-project-id')) {
       // Task is dropped on a project
+
+      // Exclude subtasks dragged on projects
+      if (draggedTask.parentId) {
+        return;
+      }
+
       const projectId = navItemElement.getAttribute('data-project-id');
       Log.debug('Task dropped on Project', { draggedTask, projectId });
 
