@@ -225,6 +225,46 @@ describe('WebdavXmlParser', () => {
       expect(results[0].etag).toBe('Wed, 15 Jan 2025 10:00:00 GMT');
     });
 
+    it('should default size to 0 for malformed content-length', () => {
+      const xml = `<?xml version="1.0"?>
+        <d:multistatus xmlns:d="DAV:">
+          <d:response>
+            <d:href>/test.txt</d:href>
+            <d:propstat>
+              <d:status>HTTP/1.1 200 OK</d:status>
+              <d:prop>
+                <d:getlastmodified>Wed, 15 Jan 2025 10:00:00 GMT</d:getlastmodified>
+                <d:getcontentlength>not-a-number</d:getcontentlength>
+              </d:prop>
+            </d:propstat>
+          </d:response>
+        </d:multistatus>`;
+
+      const results = parser.parseMultiplePropsFromXml(xml, '/test.txt');
+      expect(results.length).toBe(1);
+      expect(results[0].size).toBe(0);
+    });
+
+    it('should default size to 0 for negative content-length', () => {
+      const xml = `<?xml version="1.0"?>
+        <d:multistatus xmlns:d="DAV:">
+          <d:response>
+            <d:href>/test.txt</d:href>
+            <d:propstat>
+              <d:status>HTTP/1.1 200 OK</d:status>
+              <d:prop>
+                <d:getlastmodified>Wed, 15 Jan 2025 10:00:00 GMT</d:getlastmodified>
+                <d:getcontentlength>-5</d:getcontentlength>
+              </d:prop>
+            </d:propstat>
+          </d:response>
+        </d:multistatus>`;
+
+      const results = parser.parseMultiplePropsFromXml(xml, '/test.txt');
+      expect(results.length).toBe(1);
+      expect(results[0].size).toBe(0);
+    });
+
     it('should handle missing properties gracefully', () => {
       const xml = `<?xml version="1.0"?>
         <d:multistatus xmlns:d="DAV:">
