@@ -271,6 +271,26 @@ export class SyncProviderManager {
   }
 
   /**
+   * Clears authentication credentials for a provider while preserving non-auth config.
+   * Updates readiness state and config observable after clearing.
+   */
+  async clearAuthCredentials(providerId: SyncProviderId): Promise<void> {
+    const provider = this.getProviderById(providerId);
+    if (!provider?.clearAuthCredentials) {
+      return;
+    }
+    await provider.clearAuthCredentials();
+
+    if (this._activeProvider?.id === providerId) {
+      const ready = await provider.isReady();
+      this._isProviderReady$.next(ready);
+
+      const privateCfg = await provider.privateCfg.load();
+      this._currentProviderPrivateCfg$.next({ providerId, privateCfg });
+    }
+  }
+
+  /**
    * Sets the active sync provider
    */
   private _setActiveProvider(providerId: SyncProviderId | null): void {

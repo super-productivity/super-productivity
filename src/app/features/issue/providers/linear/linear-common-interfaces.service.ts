@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import { concatMap, first, map, switchMap } from 'rxjs/operators';
+import { Log } from '../../../../core/log';
 import { TaskAttachment } from 'src/app/features/tasks/task-attachment/task-attachment.model';
 import { getTimestamp } from '../../../../util/get-timestamp';
 import { truncate } from '../../../../util/truncate';
@@ -39,7 +40,10 @@ export class LinearCommonInterfacesService implements IssueServiceInterface {
       )
       .toPromise()
       .then((result) => result ?? false)
-      .catch(() => false);
+      .catch((err) => {
+        Log.warn('Linear connection test failed', err);
+        return false;
+      });
   }
 
   issueLink(issueId: string, issueProviderId: string): Promise<string> {

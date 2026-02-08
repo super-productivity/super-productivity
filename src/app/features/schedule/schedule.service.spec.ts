@@ -522,6 +522,36 @@ describe('ScheduleService', () => {
       const result = service.getEventDayStr(event);
       expect(result).toBe('2026-04-10');
     });
+
+    it('should return plannedForDay for RepeatProjectionSplit events', () => {
+      const event = createMockEvent(SVEType.RepeatProjectionSplit, '2026-02-15');
+      const result = service.getEventDayStr(event);
+      expect(result).toBe('2026-02-15');
+    });
+
+    it('should return plannedForDay for RepeatProjectionSplitContinued events', () => {
+      const event = createMockEvent(SVEType.RepeatProjectionSplitContinued, '2026-02-16');
+      const result = service.getEventDayStr(event);
+      expect(result).toBe('2026-02-16');
+    });
+
+    it('should return plannedForDay for RepeatProjectionSplitContinuedLast events', () => {
+      const event = createMockEvent(
+        SVEType.RepeatProjectionSplitContinuedLast,
+        '2026-02-17',
+      );
+      const result = service.getEventDayStr(event);
+      expect(result).toBe('2026-02-17');
+    });
+
+    it('should prioritize plannedForDay over remindAt for ScheduledTask', () => {
+      const event = createMockEvent(SVEType.ScheduledTask, undefined, {
+        plannedForDay: '2026-03-01',
+        remindAt: new Date(2026, 2, 5).getTime(),
+      } as unknown as ScheduleEvent['data']);
+      const result = service.getEventDayStr(event);
+      expect(result).toBe('2026-03-01');
+    });
   });
 
   describe('getEventsForDay', () => {

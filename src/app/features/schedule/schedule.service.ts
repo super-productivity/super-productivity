@@ -316,9 +316,18 @@ const isTaskWithDueDay = (
 const isRepeatProjection = (
   ev: ScheduleEvent,
 ): ev is ScheduleEvent & {
-  type: SVEType.RepeatProjection | SVEType.ScheduledRepeatProjection;
+  type:
+    | SVEType.RepeatProjection
+    | SVEType.ScheduledRepeatProjection
+    | SVEType.RepeatProjectionSplit
+    | SVEType.RepeatProjectionSplitContinued
+    | SVEType.RepeatProjectionSplitContinuedLast;
 } =>
-  ev.type === SVEType.RepeatProjection || ev.type === SVEType.ScheduledRepeatProjection;
+  ev.type === SVEType.RepeatProjection ||
+  ev.type === SVEType.ScheduledRepeatProjection ||
+  ev.type === SVEType.RepeatProjectionSplit ||
+  ev.type === SVEType.RepeatProjectionSplitContinued ||
+  ev.type === SVEType.RepeatProjectionSplitContinuedLast;
 
 type TimelineTasks = {
   planned: TaskWithDueTime[];

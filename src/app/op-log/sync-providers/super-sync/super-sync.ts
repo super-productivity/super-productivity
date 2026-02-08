@@ -90,6 +90,18 @@ export class SuperSyncProvider
     await this.privateCfg.setComplete(cfg);
   }
 
+  async clearAuthCredentials(): Promise<void> {
+    const cfg = await this.privateCfg.load();
+    if (cfg?.accessToken) {
+      await this.privateCfg.setComplete({
+        ...cfg,
+        accessToken: '',
+        refreshToken: undefined,
+        expiresAt: undefined,
+      });
+    }
+  }
+
   // === File Operations (Not supported - use operation sync instead) ===
 
   async getFileRev(

@@ -71,6 +71,13 @@ export class Dropbox implements SyncProviderServiceInterface<SyncProviderId.Drop
     await this.privateCfg.setComplete(privateCfg);
   }
 
+  async clearAuthCredentials(): Promise<void> {
+    const cfg = await this.privateCfg.load();
+    if (cfg?.accessToken || cfg?.refreshToken) {
+      await this.privateCfg.setComplete({ ...cfg, accessToken: '', refreshToken: '' });
+    }
+  }
+
   /**
    * Gets the revision information for a file from Dropbox
    * @param targetPath Path to the target file

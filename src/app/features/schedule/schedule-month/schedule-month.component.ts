@@ -77,10 +77,6 @@ export class ScheduleMonthComponent {
     return dayIndex % 7;
   }
 
-  hasEventsForDay(day: string): boolean {
-    return this._scheduleService.hasEventsForDay(day, this.events() || []);
-  }
-
   getEventsForDay(day: string): ScheduleEvent[] {
     return this._scheduleService.getEventsForDay(day, this.events() || []);
   }

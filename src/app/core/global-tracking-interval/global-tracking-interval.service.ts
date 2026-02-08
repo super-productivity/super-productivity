@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { IS_ELECTRON, TRACKING_INTERVAL } from '../../app.constants';
 import { EMPTY, fromEvent, interval, merge, Observable } from 'rxjs';
+import { ipcResume$ } from '../ipc-events';
 import {
   debounceTime,
   distinctUntilChanged,
@@ -87,19 +88,9 @@ export class GlobalTrackingIntervalService {
           )
         : EMPTY;
 
-    const systemResumeBased$ =
-      IS_ELECTRON && typeof window !== 'undefined' && (window as any).electron?.on
-        ? new Observable<string>((subscriber) => {
-            const handler = (): void => {
-              subscriber.next(this._dateService.todayStr());
-            };
-            (window as any).electron.on('system-resume', handler);
-
-            return (): void => {
-              (window as any).electron?.off?.('system-resume', handler);
-            };
-          })
-        : EMPTY;
+    const systemResumeBased$ = IS_ELECTRON
+      ? ipcResume$.pipe(map(() => this._dateService.todayStr()))
+      : EMPTY;
 
     // NOTE:
     // Chromium/Electron aggressively throttles `setInterval` for hidden tabs and fully pauses it while a

@@ -19,6 +19,7 @@ import { SyncProviderServiceInterface } from '../../provider.interface';
 import { SyncProviderId } from '../../provider.const';
 import { tryCatchInlineAsync } from '../../../../util/try-catch-inline';
 import { IS_ANDROID_WEB_VIEW } from '../../../../util/is-android-web-view';
+import { IS_IOS_NATIVE } from '../../../../util/is-native-platform';
 import { executeNativeRequestWithRetry } from '../../native-http-retry';
 
 interface DropboxApiOptions {
@@ -90,13 +91,23 @@ export class DropboxApi {
     private _parent: SyncProviderServiceInterface<SyncProviderId.Dropbox>,
   ) {}
 
-  /**
-   * Check if running on a native platform (iOS/Android).
-   * On native platforms, we use CapacitorHttp instead of fetch() to avoid
-   * issues with iOS WebKit and Android WebView handling of HTTP requests.
-   */
   protected get isNativePlatform(): boolean {
     return Capacitor.isNativePlatform() || IS_ANDROID_WEB_VIEW;
+  }
+
+  /**
+   * Fetch that bypasses Capacitor's native HTTP interceptor on iOS.
+   *
+   * When CapacitorHttp is enabled, Capacitor patches window.fetch to route
+   * through URLSession.shared, which causes -1005 errors on iOS.
+   * CapacitorWebFetch is the original unpatched fetch stored by Capacitor's
+   * native-bridge.js — it goes through WKWebView's networking stack instead.
+   * Falls back to regular fetch on web/Electron where CapacitorWebFetch doesn't exist.
+   */
+  private _fetch(url: string, init?: RequestInit): Promise<Response> {
+    const fetchFn = (globalThis as Record<string, unknown>)
+      .CapacitorWebFetch as typeof fetch;
+    return (fetchFn || fetch)(url, init);
   }
 
   // ==============================
@@ -315,8 +326,8 @@ export class DropboxApi {
     try {
       let data: TokenResponse;
 
-      if (this.isNativePlatform) {
-        // Use CapacitorHttp on native platforms, with retry for transient errors
+      if (this.isNativePlatform && !IS_IOS_NATIVE) {
+        // Use CapacitorHttp on native platforms (except iOS), with retry for transient errors
         const response = await executeNativeRequestWithRetry(
           {
             url: 'https://api.dropbox.com/oauth2/token',
@@ -347,8 +358,8 @@ export class DropboxApi {
 
         data = response.data as TokenResponse;
       } else {
-        // Use fetch on web/Electron
-        const response = await fetch('https://api.dropbox.com/oauth2/token', {
+        // Use fetch on web/Electron/iOS
+        const response = await this._fetch('https://api.dropbox.com/oauth2/token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -427,7 +438,7 @@ export class DropboxApi {
 
       let data: TokenResponse;
 
-      if (this.isNativePlatform) {
+      if (this.isNativePlatform && !IS_IOS_NATIVE) {
         // No retry wrapper here: this is a one-time user-initiated auth code exchange.
         // If it fails, the user retries the OAuth flow manually.
         const response = await CapacitorHttp.request({
@@ -450,8 +461,8 @@ export class DropboxApi {
 
         data = response.data as TokenResponse;
       } else {
-        // Use fetch on web/Electron
-        const response = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        // Use fetch on web/Electron/iOS
+        const response = await this._fetch('https://api.dropboxapi.com/oauth2/token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -495,7 +506,7 @@ export class DropboxApi {
 
   /**
    * Make an authenticated request to the Dropbox API using CapacitorHttp.
-   * Used on native platforms (iOS/Android) to avoid issues with fetch().
+   * Used on Android only (iOS uses fetch via CapacitorWebFetch instead).
    */
   private async _requestNative(options: DropboxApiOptions): Promise<Response> {
     const {
@@ -623,8 +634,11 @@ export class DropboxApi {
    * Make an authenticated request to the Dropbox API
    */
   async _request(options: DropboxApiOptions): Promise<Response> {
-    // On native platforms, use CapacitorHttp for consistent behavior
-    if (this.isNativePlatform) {
+    // On native platforms (except iOS), use CapacitorHttp.
+    // iOS uses fetch (via CapacitorWebFetch) to bypass Capacitor's URLSession.shared,
+    // which causes persistent -1005 "The network connection was lost" errors.
+    // See: docs/long-term-plans/ios-dropbox-sync-reliability.md
+    if (this.isNativePlatform && !IS_IOS_NATIVE) {
       return this._requestNative(options);
     }
     const {
@@ -677,7 +691,7 @@ export class DropboxApi {
     }
 
     try {
-      const response = await fetch(requestUrl, requestOptions);
+      const response = await this._fetch(requestUrl, requestOptions);
 
       // Handle token refresh
       if (response.status === 401 && !isSkipTokenRefresh) {

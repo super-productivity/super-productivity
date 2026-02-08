@@ -85,7 +85,10 @@ export class AddTaskBarIssueSearchService {
                       }) as AddTaskSuggestion,
                   ),
                 ),
-                catchError(() => of([])),
+                catchError((err) => {
+                  TaskLog.warn('Issue provider search failed', err);
+                  return of([]);
+                }),
               );
 
             return combineLatest([archivedTasksSearch$, issueSearch$]).pipe(

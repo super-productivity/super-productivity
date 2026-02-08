@@ -56,6 +56,17 @@ export abstract class WebdavBaseProvider<
     await this.privateCfg.setComplete(privateCfg as PrivateCfgByProviderId<T>);
   }
 
+  async clearAuthCredentials(): Promise<void> {
+    const cfg = await this.privateCfg.load();
+    if (cfg?.userName || cfg?.password) {
+      await this.privateCfg.setComplete({
+        ...cfg,
+        userName: '',
+        password: '',
+      } as PrivateCfgByProviderId<T>);
+    }
+  }
+
   async getFileRev(
     targetPath: string,
     localRev: string | null,

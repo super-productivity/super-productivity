@@ -13,12 +13,10 @@ describe('ScheduleMonthComponent', () => {
   beforeEach(async () => {
     mockScheduleService = jasmine.createSpyObj('ScheduleService', [
       'getDayClass',
-      'hasEventsForDay',
       'getEventsForDay',
       'getEventDayStr',
     ]);
     mockScheduleService.getDayClass.and.returnValue('');
-    mockScheduleService.hasEventsForDay.and.returnValue(false);
     mockScheduleService.getEventsForDay.and.returnValue([]);
     mockScheduleService.getEventDayStr.and.returnValue(null);
 
@@ -302,25 +300,6 @@ describe('ScheduleMonthComponent', () => {
   });
 
   describe('Service method delegation', () => {
-    it('should delegate hasEventsForDay to service', () => {
-      // Arrange
-      mockScheduleService.hasEventsForDay.and.returnValue(true);
-      const testDay = '2026-01-15';
-      const testEvents = [] as any;
-      fixture.componentRef.setInput('events', testEvents);
-      fixture.detectChanges();
-
-      // Act
-      const result = component.hasEventsForDay(testDay);
-
-      // Assert
-      expect(mockScheduleService.hasEventsForDay).toHaveBeenCalledWith(
-        testDay,
-        testEvents,
-      );
-      expect(result).toBe(true);
-    });
-
     it('should delegate getEventsForDay to service', () => {
       // Arrange
       const testEvents = [{ id: 'event1' }] as any;

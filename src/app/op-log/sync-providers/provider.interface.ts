@@ -106,6 +106,12 @@ export interface SyncProviderServiceInterface<PID extends SyncProviderId> {
    * @param privateCfg New configuration to store
    */
   setPrivateCfg(privateCfg: PrivateCfgByProviderId<PID>): Promise<void>;
+
+  /**
+   * Clears authentication credentials while preserving non-auth config (e.g., encryptKey).
+   * Called when auth errors occur to ensure re-auth flow can proceed.
+   */
+  clearAuthCredentials?(): Promise<void>;
 }
 
 /**
