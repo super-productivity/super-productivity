@@ -33,7 +33,8 @@ interface SliderProps extends FormlyFieldProps {
           style="height: 100%"
           matSliderThumb
           matInput
-          [formControl]="formControl"
+          [value]="formControl.value"
+          (change)="onChange($event)"
         />
       </mat-slider>
       @if (props.description) {
@@ -63,4 +64,9 @@ export class FormlySliderComponent extends FieldType<FieldTypeConfig<SliderProps
       floatLabel: 'always' as const,
     },
   };
+
+  onChange(event: Event): void {
+    const value: number = Number((event.target as HTMLInputElement).value);
+    this.formControl.setValue(value);
+  }
 }
