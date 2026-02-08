@@ -30,6 +30,13 @@
   // Fallback calc ensures 140px when env vars unavailable
   // Only on non-Mac: macOS window controls are on the left, no right padding needed
   padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
+
+  // Prevent header content from overflowing into the window controls area
+  // when the window is resized to a narrow width (fixes #6365).
+  // Uses clip instead of hidden to avoid affecting vertical overflow (dropdowns).
+  .wrapper {
+    overflow-x: clip;
+  }
 }
 
 :host-context(.isMac.isElectron),
@@ -131,6 +138,7 @@ button.isActive2 {
   display: flex;
   align-items: center;
   gap: var(--header-nav-button-gap);
+  min-width: 0;
 
   :host-context([dir='rtl']) & {
     margin-left: 0;

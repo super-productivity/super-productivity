@@ -852,6 +852,81 @@ describe('OperationLogHydratorService', () => {
         );
       });
 
+      it('should cap protected IDs when replayed SYNC_IMPORT has large vectorClock', async () => {
+        const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
+        // SYNC_IMPORT with 15 entries in vectorClock (many device reinstalls)
+        const largeClock: Record<string, number> = {};
+        for (let i = 0; i < 15; i++) {
+          largeClock[`device_${i}`] = i + 1;
+        }
+        const syncImportOp = createMockOperation('sync-large', OpType.SyncImport, {
+          payload: { appDataComplete: { task: {} } },
+          entityType: 'ALL',
+          clientId: 'device_14',
+          vectorClock: largeClock,
+        });
+        const regularOp = createMockOperation('op-after', OpType.Update);
+
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        // Last op is regular → goes through replay path → _setProtectedClientIdFromOps
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(
+          Promise.resolve([
+            createMockEntry(6, syncImportOp),
+            createMockEntry(7, regularOp),
+          ]),
+        );
+
+        await service.hydrateStore();
+
+        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+          .args[0] as string[];
+        // selectProtectedClientIds caps to MAX_VECTOR_CLOCK_SIZE - 1 (9)
+        expect(protectedIds.length).toBeLessThanOrEqual(9);
+        // Highest counter entries should be kept
+        expect(protectedIds).toContain('device_14'); // counter 15
+        expect(protectedIds).toContain('device_13'); // counter 14
+        // Lowest should be dropped
+        expect(protectedIds).not.toContain('device_0'); // counter 1
+      });
+
+      it('should cap protected IDs in no-snapshot full-state path with large vectorClock', async () => {
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
+        // SYNC_IMPORT with 20 entries
+        const largeClock: Record<string, number> = {};
+        for (let i = 0; i < 20; i++) {
+          largeClock[`device_${i}`] = i + 1;
+        }
+        const syncImportOp = createMockOperation(
+          'sync-large-no-snap',
+          OpType.SyncImport,
+          {
+            payload: { appDataComplete: { task: {}, project: {} } },
+            entityType: 'ALL',
+            clientId: 'device_19',
+            vectorClock: largeClock,
+          },
+        );
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(
+          Promise.resolve([createMockEntry(1, syncImportOp)]),
+        );
+        // Migration also fires, so set it up
+        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
+        mockOpLogStore.getLatestFullStateOp.and.returnValue(
+          Promise.resolve(syncImportOp),
+        );
+
+        await service.hydrateStore();
+
+        // Every setProtectedClientIds call should have at most 9 entries
+        const allCalls = mockOpLogStore.setProtectedClientIds.calls.allArgs();
+        expect(allCalls.length).toBeGreaterThan(0);
+        for (const callArgs of allCalls) {
+          const ids = callArgs[0] as string[];
+          expect(ids.length).toBeLessThanOrEqual(9);
+        }
+      });
+
       it('should NOT call setProtectedClientIds when no full-state ops in tail ops', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const regularOp1 = createMockOperation('op-1', OpType.Update, {
@@ -1068,6 +1143,72 @@ describe('OperationLogHydratorService', () => {
         expect(mockOpLogStore.getProtectedClientIds).not.toHaveBeenCalled();
         // No setProtectedClientIds call should be made from migration
         expect(mockOpLogStore.setProtectedClientIds).not.toHaveBeenCalled();
+      });
+
+      it('should trim oversized existing protected IDs during migration', async () => {
+        const snapshot = createMockSnapshot();
+        // SYNC_IMPORT with 15 entries in vectorClock
+        const largeClock: Record<string, number> = {};
+        for (let i = 0; i < 15; i++) {
+          largeClock[`device_${i}`] = i + 1;
+        }
+        const syncImportOp = createMockOperation('large-import', OpType.SyncImport, {
+          clientId: 'device_14',
+          entityType: 'ALL',
+          payload: { appDataComplete: { task: {}, project: {} } },
+          vectorClock: largeClock,
+        });
+
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
+        // Simulate: existing protected IDs is oversized (12 entries from old code)
+        const oversizedProtected = Array.from({ length: 12 }, (_, i) => `device_${i}`);
+        mockOpLogStore.getProtectedClientIds.and.returnValue(
+          Promise.resolve(oversizedProtected),
+        );
+        mockOpLogStore.getLatestFullStateOp.and.returnValue(
+          Promise.resolve(syncImportOp),
+        );
+
+        await service.hydrateStore();
+
+        // Migration should trim to MAX_VECTOR_CLOCK_SIZE - 1 (9)
+        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+          .args[0] as string[];
+        expect(protectedIds.length).toBeLessThanOrEqual(9);
+      });
+
+      it('should cap protected IDs when SYNC_IMPORT vectorClock has many entries', async () => {
+        const largeClock: Record<string, number> = {};
+        for (let i = 0; i < 15; i++) {
+          largeClock[`device_${i}`] = i + 1;
+        }
+        const syncImportOp = createMockOperation('large-import-2', OpType.SyncImport, {
+          clientId: 'device_14',
+          entityType: 'ALL',
+          payload: { appDataComplete: { task: {}, project: {} } },
+          vectorClock: largeClock,
+        });
+
+        const snapshot = createMockSnapshot();
+        mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
+        mockOpLogStore.getOpsAfterSeq.and.returnValue(
+          Promise.resolve([createMockEntry(11, syncImportOp)]),
+        );
+        mockOpLogStore.getLatestFullStateOp.and.returnValue(
+          Promise.resolve(syncImportOp),
+        );
+        mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
+
+        await service.hydrateStore();
+
+        // Both the migration AND the tail-ops path should cap protected IDs
+        const allCalls = mockOpLogStore.setProtectedClientIds.calls.allArgs();
+        for (const callArgs of allCalls) {
+          const ids = callArgs[0] as string[];
+          expect(ids.length).toBeLessThanOrEqual(9);
+        }
       });
 
       it('should run migration in no-snapshot path too', async () => {

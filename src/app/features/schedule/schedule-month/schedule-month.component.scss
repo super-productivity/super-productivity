@@ -137,7 +137,6 @@
 
   &.other-month {
     opacity: 0.4;
-    //background: var(--bg-lighter);
   }
 
   &.today {
@@ -286,21 +285,6 @@
       font-size: 10px;
       padding: 1px 2px;
     }
-
-    //&.Task {
-    //  background: mat-css-vars.mat-css-color-primary($opacity: 0.2);
-    //  border-left: 3px solid mat-css-vars.mat-css-color-primary();
-    //}
-
-    //&.SplitTask {
-    //  background: mat-css-vars.mat-css-color-accent($opacity: 0.2);
-    //  border-left: 3px solid mat-css-vars.mat-css-color-accent();
-    //}
-
-    //&.TaskPlannedForDay {
-    //  background: mat-css-vars.mat-css-color-warn($opacity: 0.2);
-    //  border-left: 3px solid mat-css-vars.mat-css-color-warn();
-    //}
 
     // Hover effect
     &:hover {

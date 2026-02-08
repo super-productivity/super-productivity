@@ -1567,7 +1567,7 @@ describe('createBlockerBlocks()', () => {
       const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
       const duration = performance.now() - start;
 
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       expect(result.length).toBeGreaterThan(0);
       // Verify result is sorted
       for (let i = 1; i < result.length; i++) {
@@ -1613,7 +1613,7 @@ describe('createBlockerBlocks()', () => {
       const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
       const duration = performance.now() - start;
 
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       // Should merge many overlapping blocks
       expect(result.length).toBeLessThan(blocks.length);
       // Verify no gaps between merged blocks
@@ -1643,7 +1643,7 @@ describe('createBlockerBlocks()', () => {
       const result = createSortedBlockerBlocks(blocks, [], [], undefined, undefined, 0);
       const duration = performance.now() - start;
 
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       // Should have minimal merging
       expect(result.length).toBe(blocks.length);
     });

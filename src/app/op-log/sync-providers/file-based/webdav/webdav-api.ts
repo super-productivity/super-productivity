@@ -57,9 +57,12 @@ export class WebdavApi {
         return []; // Directory not found, return empty list
       }
       // Create a fake Response object for the error
+      // Ensure status is valid (200-599) for Response constructor
+      const safeStatus =
+        response.status >= 200 && response.status <= 599 ? response.status : 500;
       const errorResponse = new Response(response.data, {
-        status: response.status,
-        statusText: `HTTP ${response.status}`,
+        status: safeStatus,
+        statusText: `HTTP ${safeStatus}`,
       });
       throw new HttpNotOkAPIError(errorResponse); // Other errors
     } catch (e) {
@@ -638,8 +641,10 @@ export class WebdavApi {
           `${WebdavApi.L}._createDirectory() directory likely exists: ${path} (status: ${e.response.status})`,
         );
       } else {
-        // Log other errors but don't throw - we'll let the actual upload fail if needed
+        // Re-throw unexpected errors (e.g. 403 Permission Denied) so the caller
+        // sees the real cause instead of a confusing follow-up error.
         SyncLog.warn(`${WebdavApi.L}._createDirectory() unexpected error for ${path}`, e);
+        throw e;
       }
     }
   }

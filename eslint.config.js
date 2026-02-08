@@ -3,6 +3,7 @@ const tseslint = require('typescript-eslint');
 const angular = require('angular-eslint');
 const prettierRecommended = require('eslint-plugin-prettier/recommended');
 const preferArrow = require('eslint-plugin-prefer-arrow');
+const localRules = require('eslint-plugin-local-rules');
 
 module.exports = tseslint.config(
   // Global ignores
@@ -113,6 +114,17 @@ module.exports = tseslint.config(
       // @typescript-eslint/ban-types replaced by specific rules in v8
       '@typescript-eslint/no-unsafe-function-type': 'error',
       '@typescript-eslint/no-wrapper-object-types': 'error',
+    },
+  },
+  // NgRx effects files - require hydration guards on selector-based effects
+  {
+    files: ['**/*.effects.ts'],
+    plugins: {
+      'local-rules': localRules,
+    },
+    rules: {
+      'local-rules/require-hydration-guard': 'error',
+      'local-rules/require-entity-registry': 'warn',
     },
   },
   // HTML files

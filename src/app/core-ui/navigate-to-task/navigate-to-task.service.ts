@@ -7,6 +7,8 @@ import { ProjectService } from '../../features/project/project.service';
 import { Router } from '@angular/router';
 import { Task } from '../../features/tasks/task.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { isToday } from '../../util/is-today.util';
+import { TODAY_TAG } from '../../features/tag/tag.const';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { Log } from '../../core/log';
@@ -28,14 +30,18 @@ export class NavigateToTaskService {
       }
       const location = await this._getLocation(task, isArchiveTask);
 
+      if (this._router.url.startsWith(location)) {
+        this._focusTaskElement(taskId);
+        return;
+      }
+
       const queryParams: SearchQueryParams = { focusItem: taskId };
       if (isArchiveTask) {
         queryParams.dateStr = await this._getArchivedDate(task);
-        await this._router.navigate([location], { queryParams });
       } else {
         queryParams.isInBacklog = await this._isInBacklog(task);
-        await this._router.navigate([location], { queryParams });
       }
+      await this._router.navigate([location], { queryParams });
     } catch (err) {
       Log.err(err);
       this._snackService.open({
@@ -59,6 +65,10 @@ export class NavigateToTaskService {
       }
     }
 
+    if (!isArchiveTask && this._isDueToday(taskToCheck)) {
+      return `/tag/${TODAY_TAG.id}/${tasksOrWorklog}`;
+    }
+
     if (taskToCheck.projectId) {
       return `/project/${taskToCheck.projectId}/${tasksOrWorklog}`;
     } else if (taskToCheck.tagIds?.length > 0 && taskToCheck.tagIds[0]) {
@@ -66,6 +76,20 @@ export class NavigateToTaskService {
     } else {
       devError("Couldn't find task location");
       return '';
+    }
+  }
+
+  private _isDueToday(task: Task): boolean {
+    if (task.dueWithTime) {
+      return isToday(task.dueWithTime);
+    }
+    return task.dueDay === getDbDateStr();
+  }
+
+  private _focusTaskElement(taskId: string): void {
+    const el = document.getElementById(`t-${taskId}`);
+    if (el) {
+      el.focus();
     }
   }
 

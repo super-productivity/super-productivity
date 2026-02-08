@@ -431,6 +431,46 @@ describe('SyncHydrationService', () => {
           'localClient',
         ]);
       });
+
+      it('should cap protected client IDs to MAX_VECTOR_CLOCK_SIZE - 1 when merged clock is large', async () => {
+        // Simulate: remote clock has many entries from multiple devices
+        const remoteVectorClock: Record<string, number> = {};
+        for (let i = 0; i < 14; i++) {
+          remoteVectorClock[`remote_device_${i}`] = i + 1;
+        }
+
+        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock);
+
+        expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+          .args[0] as string[];
+        // newClock merges local ({localClient: 5}) + remote (14 entries) + increment
+        // = 15 entries, selectProtectedClientIds caps to 9
+        expect(protectedIds.length).toBeLessThanOrEqual(9);
+        // The localClient should be included since it has the highest counter after increment
+        expect(protectedIds).toContain('localClient');
+      });
+
+      it('should keep highest-counter entries when capping with large remote clock', async () => {
+        // 12 remote devices with ascending counters
+        const remoteVectorClock: Record<string, number> = {};
+        for (let i = 0; i < 12; i++) {
+          remoteVectorClock[`device_${i}`] = (i + 1) * 100;
+        }
+
+        await service.hydrateFromRemoteSync({ task: {} }, remoteVectorClock);
+
+        const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+          .args[0] as string[];
+        expect(protectedIds.length).toBeLessThanOrEqual(9);
+        // Highest counters should be kept: device_11 (1200), device_10 (1100), etc.
+        expect(protectedIds).toContain('device_11');
+        expect(protectedIds).toContain('device_10');
+        // Lowest counters should be dropped: device_0 (100), device_1 (200), etc.
+        expect(protectedIds).not.toContain('device_0');
+        expect(protectedIds).not.toContain('device_1');
+        expect(protectedIds).not.toContain('device_2');
+      });
     });
 
     describe('createSyncImportOp parameter', () => {

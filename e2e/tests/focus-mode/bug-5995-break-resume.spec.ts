@@ -11,6 +11,7 @@
 
 import { test, expect } from '../../fixtures/test.fixture';
 import { Page } from '@playwright/test';
+import { waitForAppReady } from '../../utils/waits';
 
 test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
   let consoleLogs: string[] = [];
@@ -49,7 +50,7 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
 
     // Navigate back to work view
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await waitForAppReady(page);
 
     // Step 2: Create and track a task using page objects
     await workViewPage.waitForTaskList();
@@ -60,9 +61,11 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     await expect(task).toBeVisible();
     await task.hover();
     const playBtn = page.locator('.play-btn.tour-playBtn').first();
-    await expect(playBtn).toBeVisible({ timeout: 2000 });
+    await expect(playBtn).toBeVisible({ timeout: 5000 });
     await playBtn.click();
-    await page.waitForTimeout(500);
+
+    // Wait for navigation triggered by task tracking to complete
+    await page.waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 });
 
     // Step 3: Start Pomodoro session
     const focusButton = page
@@ -104,17 +107,17 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     console.log('\n=== STEP: About to pause break ===');
 
     // Step 6: Pause the break
-    const pauseLink = banner.getByText('Pause', { exact: true });
-    await expect(pauseLink).toBeVisible({ timeout: 2000 });
-    await pauseLink.click();
+    const pauseBtn = banner.getByRole('button', { name: 'Pause' });
+    await expect(pauseBtn).toBeVisible({ timeout: 2000 });
+    await pauseBtn.click();
     await page.waitForTimeout(1000);
 
     console.log('\n=== STEP: Break paused, about to resume ===');
 
     // Step 7: Resume the break - THIS IS WHERE THE BUG HAPPENS
-    const resumeLink = banner.getByText('Resume', { exact: true });
-    await expect(resumeLink).toBeVisible({ timeout: 2000 });
-    await resumeLink.click();
+    const resumeBtn = banner.getByRole('button', { name: 'Resume' });
+    await expect(resumeBtn).toBeVisible({ timeout: 2000 });
+    await resumeBtn.click();
 
     // Wait for state to settle
     await page.waitForTimeout(2000);
@@ -140,7 +143,7 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     expect(hasSessionText).toBe(false);
 
     // Additional verification: Open overlay and check we're on break screen
-    await banner.getByText('To Focus Overlay').click();
+    await banner.getByRole('button', { name: /focus overlay/i }).click();
     await page.waitForTimeout(500);
 
     const breakScreen = page.locator('focus-mode-break');
@@ -155,8 +158,8 @@ const enableSyncSetting = async (page: Page): Promise<void> => {
   console.log('\n=== STEP: Enabling sync setting ===');
 
   await page.goto('/#/config');
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(500);
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForURL(/\/#\/config/, { timeout: 10000 });
 
   // Navigate to Productivity tab
   const tabs = page.locator('[role="tab"]');

@@ -7,7 +7,10 @@ import { VectorClockService } from '../sync/vector-clock.service';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
-import { incrementVectorClock } from '../../core/util/vector-clock';
+import {
+  incrementVectorClock,
+  selectProtectedClientIds,
+} from '../../core/util/vector-clock';
 import { uuidv7 } from '../../util/uuid-v7';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { validateFull } from '../validation/validation-fn';
@@ -210,6 +213,13 @@ export class BackupService {
 
     await this._opLogStore.append(op, 'local');
     const lastSeq = await this._opLogStore.getLastSeq();
+
+    // Update vector clock store (append() doesn't do this, unlike appendWithVectorClockUpdate)
+    await this._opLogStore.setVectorClock(newClock);
+
+    // Protect all vector clock keys from pruning
+    const protectedIds = selectProtectedClientIds(newClock);
+    await this._opLogStore.setProtectedClientIds(protectedIds);
 
     await this._opLogStore.saveStateCache({
       state: importedData,

@@ -117,25 +117,12 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     await expect(playButton).toBeVisible({ timeout: 2000 });
     await playButton.click();
 
-    // Wait for the 5-4-3-2-1 countdown animation to complete
-    const countdownComponent = page.locator('focus-mode-countdown');
+    // Wait for session to be in progress (complete session button becomes visible)
+    // This covers the entire startup: countdown animation (~6s) + session start
     const completeSessionButton = page.locator(
       'focus-mode-main button.complete-session-btn',
     );
-
-    // Wait for countdown to appear and then disappear
-    try {
-      await expect(countdownComponent).toBeVisible({ timeout: 2000 });
-      console.log('Countdown animation started...');
-      // Wait for countdown to complete (5 seconds + animation buffer)
-      await expect(countdownComponent).not.toBeVisible({ timeout: 15000 });
-      console.log('Countdown animation completed');
-    } catch {
-      console.log('Countdown animation not visible (may be skipped in settings)');
-    }
-
-    // Wait for session to be in progress (complete session button becomes visible)
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 25000 });
 
     // Wait for clock-time to show a non-zero value (indicating timer has started ticking)
     await expect(async () => {
@@ -240,23 +227,12 @@ test.describe('Bug #5117: Flowtime timer stops at Countdown duration', () => {
     await expect(playButton).toBeVisible({ timeout: 2000 });
     await playButton.click();
 
-    // Wait for countdown animation to complete
-    const countdownComponent = page.locator('focus-mode-countdown');
+    // Wait for session to be in progress (complete session button becomes visible)
+    // This covers the entire startup: countdown animation (~6s) + session start
     const completeSessionButton = page.locator(
       'focus-mode-main button.complete-session-btn',
     );
-
-    try {
-      await expect(countdownComponent).toBeVisible({ timeout: 2000 });
-      console.log('Countdown animation started...');
-      await expect(countdownComponent).not.toBeVisible({ timeout: 15000 });
-      console.log('Countdown animation completed');
-    } catch {
-      console.log('Countdown animation not visible (may be skipped)');
-    }
-
-    // Wait for session to be in progress (complete session button becomes visible)
-    await expect(completeSessionButton).toBeVisible({ timeout: 10000 });
+    await expect(completeSessionButton).toBeVisible({ timeout: 25000 });
 
     // Wait for clock-time to show a non-zero value
     await expect(async () => {

@@ -7,6 +7,7 @@ import { ShortSyntaxConfig } from '../config/global-config.model';
 import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { nanoid } from 'nanoid';
+import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
@@ -36,10 +37,10 @@ const CH_TAG = '#';
 const CH_DUE = '@';
 const ALL_SPECIAL = `(\\${CH_PRO}|\\${CH_TAG}|\\${CH_DUE})`;
 
-let customDateParserPromise: Promise<any> | null = null;
-let customDateParserCache: any = null;
+let customDateParserPromise: Promise<Chrono> | null = null;
+let customDateParserCache: Chrono | null = null;
 
-const loadCustomDateParser = (): Promise<any> => {
+const loadCustomDateParser = (): Promise<Chrono> => {
   if (customDateParserCache) {
     return Promise.resolve(customDateParserCache);
   }
@@ -47,7 +48,7 @@ const loadCustomDateParser = (): Promise<any> => {
     customDateParserPromise = import('chrono-node').then(({ casual }) => {
       const parser = casual.clone();
       parser.refiners.push({
-        refine: (context: unknown, results: any[]) => {
+        refine: (context: ParsingContext, results: ParsingResult[]) => {
           results.forEach((result) => {
             const { refDate, text, start } = result;
             const regex = / [5-9][0-9]$/;
@@ -125,7 +126,7 @@ export const shortSyntax = async (
   if (!task.title) {
     return;
   }
-  if (typeof (task.title as any) !== 'string') {
+  if (typeof task.title !== 'string') {
     throw new Error('No str');
   }
 

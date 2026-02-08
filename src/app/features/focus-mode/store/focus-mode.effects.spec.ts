@@ -2681,7 +2681,7 @@ describe('FocusModeEffects', () => {
 
       expect(buttonActions.action).toBeDefined();
       expect(buttonActions.action.label).toBe('F.FOCUS_MODE.B.PAUSE');
-      expect(buttonActions.action.icon).toBeUndefined(); // Text buttons have no icon
+      expect(buttonActions.action.icon).toBe('pause');
     });
 
     it('should have resume button when session is paused', () => {

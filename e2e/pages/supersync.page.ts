@@ -1185,7 +1185,17 @@ export class SuperSyncPage extends BasePage {
     }
 
     // Wait for password change operation to complete (server wipe + re-upload)
-    await this.page.waitForTimeout(2000);
+    const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+    if (!checkAlreadyVisible) {
+      const spinnerVisible = await this.syncSpinner
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(() => true)
+        .catch(() => false);
+      if (spinnerVisible) {
+        await this.syncSpinner.waitFor({ state: 'hidden', timeout: 30000 });
+      }
+      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 10000 });
+    }
   }
 
   /**

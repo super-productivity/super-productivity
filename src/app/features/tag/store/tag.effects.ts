@@ -32,12 +32,13 @@ import { selectAllTasksDueToday } from '../../planner/store/planner.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { alertDialog, confirmDialog } from '../../../util/native-dialogs';
 
 @Injectable()
 export class TagEffects {
   private _actions$ = inject(LOCAL_ACTIONS);
-  private _store$ = inject<Store<any>>(Store);
+  private _store$ = inject(Store);
   private _snackService = inject(SnackService);
   private _tagService = inject(TagService);
   private _workContextService = inject(WorkContextService);
@@ -45,7 +46,7 @@ export class TagEffects {
   private _translateService = inject(TranslateService);
   private _plannerService = inject(PlannerService);
 
-  snackUpdateBaseSettings$: any = createEffect(
+  snackUpdateBaseSettings$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(updateTag),
@@ -61,7 +62,7 @@ export class TagEffects {
     { dispatch: false },
   );
 
-  snackPlanForToday$: any = createEffect(
+  snackPlanForToday$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.planTasksForToday),
@@ -98,7 +99,7 @@ export class TagEffects {
     () =>
       this._actions$.pipe(
         ofType(deleteTag, deleteTags),
-        map((a: any) => (a.ids ? a.ids : [a.id])),
+        map((a) => ('ids' in a ? a.ids : [a.id])),
         tap(async (tagIdsToRemove: string[]) => {
           if (
             tagIdsToRemove.includes(
@@ -112,9 +113,15 @@ export class TagEffects {
     { dispatch: false },
   );
 
+  /**
+   * SAFETY: Guarded with skipWhileApplyingRemoteOps() because this effect
+   * dispatches via tagService.updateTag() inside tap(), bypassing dispatch:false.
+   * Without the guard, intermediate sync states could trigger false null-task detection.
+   */
   cleanupNullTasksForTaskList$: Observable<unknown> = createEffect(
     () =>
       this._workContextService.activeWorkContextTypeAndId$.pipe(
+        skipWhileApplyingRemoteOps(),
         filter(({ activeType }) => activeType === WorkContextType.TAG),
         switchMap(({ activeType, activeId }) =>
           this._workContextService.mainListTasks$.pipe(
@@ -161,7 +168,7 @@ export class TagEffects {
    * - The current guards provide sufficient protection
    * - This is a "cleanup" effect that corrects inconsistencies, not a primary data flow
    */
-  preventParentAndSubTaskInTodayList$: any = createEffect(() =>
+  preventParentAndSubTaskInTodayList$ = createEffect(() =>
     this._store$.select(selectTodayTaskIds).pipe(
       filter((v) => v.length > 0),
       skipDuringSyncWindow(),

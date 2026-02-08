@@ -2,7 +2,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatIcon } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import {
+  MatSlideToggleChange,
+  MatSlideToggleModule,
+} from '@angular/material/slide-toggle';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { FieldType } from '@ngx-formly/material';
 
@@ -46,8 +49,7 @@ import { FieldType } from '@ngx-formly/material';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FormlySlideToggleComponent extends FieldType<FormlyFieldConfig> {
-  // complete this
-  onChange(event: HTMLInputElement): void {
+  onChange(event: MatSlideToggleChange): void {
     const { checked } = event;
     this.formControl.setValue(checked);
   }

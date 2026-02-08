@@ -156,7 +156,14 @@ export class ShortcutService {
       ev.preventDefault();
     } else if (checkKeyCombo(ev, keys.addNewProject)) {
       if (this._matDialog.openDialogs.length === 0) {
-        this._matDialog.open(DialogCreateProjectComponent, { restoreFocus: true });
+        this._matDialog
+          .open(DialogCreateProjectComponent, { restoreFocus: true })
+          .afterClosed()
+          .subscribe((newProjectId: string | undefined) => {
+            if (newProjectId) {
+              this._router.navigate([`project/${newProjectId}/tasks`]);
+            }
+          });
         ev.preventDefault();
       }
     } else if (checkKeyCombo(ev, keys.addNewNote)) {

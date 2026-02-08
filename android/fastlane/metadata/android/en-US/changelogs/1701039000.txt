@@ -1,0 +1,24 @@
+
+### Bug Fixes
+
+* **e2e:** fix flaky and failing E2E tests
+* **e2e:** increase flaky performance test threshold from 100ms to 500ms
+* **ios:** register WebDavHttpPlugin with Capacitor bridge
+* **op-log:** fix entityIds empty array fallback, add missing error handling, and improve consistency
+* **redmine:** make time tracking dialog fields optional to prevent false validation errors (da9f877), closes #6200
+* **schedule,op-log:** restore ScheduledTask plannedForDay priority, optimize OpType validation, and improve type predicates
+* **simple-counter:** fix Save button permanently disabled in habit settings (fabedd7), closes #6374
+* **sync:** add setProtectedClientIds to backup import and repair operations
+* **sync:** cap protected client IDs to prevent unbounded vector clock growth
+* **sync:** preserve server entity clock IDs during LWW pruning to prevent sync loop
+* **tasks:** ensure time estimate and notes are copied for subtasks (#6380) (5c84ae5), closes #6368
+* **tasks:** explicitly release selector override to prevent test pollution
+* **tasks:** reset selector overrides to prevent test pollution
+* **tests:** improve synchronization tests and increase timeout for IndexedDB operations
+### Features
+
+* Add Option to Display Heatmap for the Current Year (#5536)
+* **build:** integrate SignPath code signing into Windows build workflow (bf7badc), closes action-#release
+* **build:** publish unsigned Windows binaries before signing
+* **project:** navigate to project after creation (878c239), closes #6393
+* **sync:** trigger sync immediately after saving sync config dialog

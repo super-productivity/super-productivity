@@ -109,7 +109,7 @@ import { FormlySlideToggleComponent } from './formly-slide-toggle/formly-slide-t
         },
       },
     }),
-    FormlyMatToggleModule, // TODOM: REMOVE THIS ONCE DONE WITH SLIDE-TOGGLE AND REPLACED WITH toggle type
+    FormlyMatToggleModule,
     FormlyMaterialModule,
     FormlyMatDatepickerModule,
     // my modules

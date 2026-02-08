@@ -2217,6 +2217,7 @@
     "TOGGLE_SHOW_ISSUE_PANEL": "Show/hide issue provider panel",
     "TOGGLE_SHOW_NOTES": "Show/hide project notes",
     "TOGGLE_TRACK_TIME": "Start/stop tracking time",
+    "SHOW_TRACKED_TASK": "Show tracked task",
     "TRIGGER_SYNC": "Sync!",
     "UNPLAN_ALL_TASKS": "Unplan all tasks",
     "WORKLOG": "Worklog"

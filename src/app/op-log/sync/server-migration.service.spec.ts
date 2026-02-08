@@ -621,6 +621,37 @@ describe('ServerMigrationService', () => {
       expect(protectedIds).toContain('client-C');
     });
 
+    it('should cap protected client IDs to MAX_VECTOR_CLOCK_SIZE - 1 with large merged clock', async () => {
+      // Simulate: local ops produce a clock with many entries after merging
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 14; i++) {
+        largeClock[`device_${i}`] = i + 1;
+      }
+
+      const localOps = [
+        {
+          seq: 1,
+          op: { id: 'op-1', vectorClock: largeClock },
+          appliedAt: Date.now(),
+          source: 'local' as const,
+        },
+      ];
+
+      opLogStoreSpy.getOpsAfterSeq.and.returnValue(Promise.resolve(localOps as any));
+      vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
+        Promise.resolve({ 'test-client': 5 }),
+      );
+
+      await service.handleServerMigration(defaultProvider);
+
+      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      // merged clock has 15 entries (14 from large + test-client)
+      // selectProtectedClientIds caps to 9
+      expect(protectedIds.length).toBeLessThanOrEqual(9);
+    });
+
     // Note: Test for non-operation-sync-capable providers removed.
     // The check for operation-sync capability is now done at a higher level
     // (sync.service.ts), so handleServerMigration expects OperationSyncCapable.

@@ -17,6 +17,7 @@ import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
 import {
   AuthFailSPError,
+  MissingCredentialsSPError,
   PotentialCorsError,
   SyncProviderId,
   SyncStatus,
@@ -24,6 +25,7 @@ import {
 import {
   SyncAlreadyInProgressError,
   LocalDataConflictError,
+  MissingRefreshTokenAPIError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
 import { LegacySyncProvider } from './legacy-sync-provider.model';
@@ -66,13 +68,20 @@ describe('SyncWrapperService', () => {
 
     mockProviderManager = jasmine.createSpyObj(
       'SyncProviderManager',
-      ['getActiveProvider', 'setSyncStatus', 'setProviderConfig', 'getProviderById'],
+      [
+        'getActiveProvider',
+        'setSyncStatus',
+        'setProviderConfig',
+        'getProviderById',
+        'clearAuthCredentials',
+      ],
       {
         syncStatus$: of('SYNCED'),
         isProviderReady$: of(true),
         isSyncInProgress: false,
       },
     );
+    mockProviderManager.clearAuthCredentials.and.returnValue(Promise.resolve());
     mockProviderManager.getActiveProvider.and.returnValue({
       id: SyncProviderId.SuperSync,
     } as any);
@@ -529,6 +538,93 @@ describe('SyncWrapperService', () => {
     });
 
     it('should handle AuthFailSPError with config dialog action', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+
+    it('should handle MissingCredentialsSPError with config dialog action', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new MissingCredentialsSPError('Dropbox no token')),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+
+    it('should handle MissingRefreshTokenAPIError with config dialog action', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new MissingRefreshTokenAPIError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          actionFn: jasmine.any(Function),
+        }),
+      );
+    });
+
+    it('should call clearAuthCredentials on AuthFailSPError', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new AuthFailSPError()),
+      );
+
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+    });
+
+    it('should call clearAuthCredentials on MissingCredentialsSPError', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new MissingCredentialsSPError('no token')),
+      );
+
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+    });
+
+    it('should call clearAuthCredentials on MissingRefreshTokenAPIError', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new MissingRefreshTokenAPIError()),
+      );
+
+      await service.sync();
+
+      expect(mockProviderManager.clearAuthCredentials).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+      );
+    });
+
+    it('should still show snack when clearAuthCredentials throws', async () => {
+      mockProviderManager.clearAuthCredentials.and.returnValue(
+        Promise.reject(new Error('IndexedDB error')),
+      );
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.reject(new AuthFailSPError()),
       );

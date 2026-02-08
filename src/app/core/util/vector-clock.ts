@@ -323,6 +323,25 @@ export const hasVectorClockChanges = (
 };
 
 /**
+ * Selects the most important client IDs from a vector clock for protection during pruning.
+ * Caps at MAX_VECTOR_CLOCK_SIZE - 1 to leave room for currentClientId.
+ * Picks highest-counter entries (most recently active clients).
+ * Secondary sort by client ID string for determinism on equal counters.
+ */
+export const selectProtectedClientIds = (
+  clock: VectorClock,
+  maxCount: number = MAX_VECTOR_CLOCK_SIZE - 1,
+): string[] => {
+  const entries = Object.entries(clock);
+  if (entries.length <= maxCount) {
+    return entries.map(([id]) => id);
+  }
+  // Sort by counter descending, then by client ID ascending for determinism
+  entries.sort(([idA, a], [idB, b]) => b - a || idA.localeCompare(idB));
+  return entries.slice(0, maxCount).map(([id]) => id);
+};
+
+/**
  * Metrics for vector clock operations
  */
 export interface VectorClockMetrics {

@@ -23,6 +23,7 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
+import { selectProtectedClientIds } from '../../core/util/vector-clock';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -412,7 +413,7 @@ export class RemoteOpsProcessingService {
           // Example: Import has {A_EemJ:1, B_HSxu:10342}. If we only protect B_HSxu,
           // then A_EemJ gets pruned. New ops have {A_ypDK:6, B_HSxu:10714} (missing A_EemJ).
           // Comparison: Import wins on A_EemJ (1>0), op wins on A_ypDK (6>0) → CONCURRENT!
-          const protectedIds = Object.keys(appliedFullStateOp.vectorClock);
+          const protectedIds = selectProtectedClientIds(appliedFullStateOp.vectorClock);
           await this.opLogStore.setProtectedClientIds(protectedIds);
           OpLog.normal(
             `RemoteOpsProcessingService: Updated protected client IDs from ${appliedFullStateOp.opType}: [${protectedIds.join(', ')}]`,

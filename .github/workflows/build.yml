@@ -203,6 +203,10 @@ jobs:
   windows-bin:
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+      actions: read # Required by SignPath action
+      id-token: write # Required for SignPath origin verification
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -270,5 +274,141 @@ jobs:
         with:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
-      # SignPath code signing now lives in .github/workflows/signpath-code-signing.yml
+          release: false # Don't publish unsigned; we sign first, then publish
+
+      # Publish unsigned Windows binaries first so the release is never missing Windows assets
+      - name: Publish unsigned Windows binaries to GitHub Release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            .tmp/app-builds/*.exe
+            .tmp/app-builds/*.blockmap
+            .tmp/app-builds/latest*.yml
+          draft: true
+          prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+
+      # --- Code signing (best-effort: signing failure won't block the release) ---
+
+      - name: Upload unsigned executables for SignPath
+        id: upload-unsigned
+        continue-on-error: true
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: unsigned-windows-executables
+          path: .tmp/app-builds/*.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Windows executables with SignPath
+        id: signpath
+        if: steps.upload-unsigned.outcome == 'success'
+        continue-on-error: true
+        uses: signpath/github-action-submit-signing-request@3f9250c56651ff692d6729a2fbb0603a42d7d322 # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: super-productivity
+          signing-policy-slug: 'test-signing'
+          artifact-configuration-slug: 'github-zip-pe'
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          output-artifact-directory: '.tmp/app-builds-signed/'
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 600
+
+      - name: Move signed executables back to build directory
+        if: steps.signpath.outcome == 'success'
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem -Path .tmp/app-builds-signed -Filter *.exe -Recurse
+          if ($signed.Count -eq 0) {
+            Write-Error "No signed executables found in SignPath output directory"
+            exit 1
+          }
+          $signed | ForEach-Object {
+            Move-Item -Force $_.FullName .tmp/app-builds/
+          }
+          Write-Host "Signed executables:"
+          Get-ChildItem -Path .tmp/app-builds -Filter *.exe | Format-Table -AutoSize
+
+      - name: Verify code signatures
+        if: steps.signpath.outcome == 'success'
+        shell: pwsh
+        run: |
+          $exeFiles = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
+          foreach ($exe in $exeFiles) {
+            $sig = Get-AuthenticodeSignature $exe.FullName
+            Write-Host "$($exe.Name): $($sig.Status)"
+            if ($sig.Status -ne 'Valid') {
+              Write-Error "Signature verification failed for $($exe.Name): $($sig.Status)"
+              exit 1
+            }
+          }
+
+      - name: Regenerate blockmaps and update latest.yml for signed executables
+        if: steps.signpath.outcome == 'success'
+        shell: pwsh
+        run: |
+          $buildDir = ".tmp/app-builds"
+          $exeFiles = Get-ChildItem -Path $buildDir -Filter "*.exe"
+
+          foreach ($exe in $exeFiles) {
+            $blockmapPath = "$($exe.FullName).blockmap"
+            Write-Host "Regenerating blockmap for $($exe.Name)..."
+            $output = npx --yes app-builder-bin blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
+            Write-Host "  blockmap output: $output"
+          }
+
+          # Update latest.yml with new sha512 hashes and sizes from signed executables
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const yaml = require('js-yaml');
+            const crypto = require('crypto');
+
+            const buildDir = '.tmp/app-builds';
+            const ymlFiles = fs.readdirSync(buildDir).filter(f => f.startsWith('latest') && f.endsWith('.yml'));
+
+            for (const ymlFile of ymlFiles) {
+              const ymlPath = path.join(buildDir, ymlFile);
+              const ymlData = yaml.load(fs.readFileSync(ymlPath, 'utf8'));
+
+              if (ymlData.files) {
+                for (const fileEntry of ymlData.files) {
+                  const filePath = path.join(buildDir, fileEntry.url);
+                  if (fs.existsSync(filePath)) {
+                    const fileBuffer = fs.readFileSync(filePath);
+                    const sha512 = crypto.createHash('sha512').update(fileBuffer).digest('base64');
+                    const size = fileBuffer.length;
+                    console.log(ymlFile + ': Updated ' + fileEntry.url + ' sha512=' + sha512.substring(0, 20) + '... size=' + size);
+                    fileEntry.sha512 = sha512;
+                    fileEntry.size = size;
+                  }
+                }
+              }
+
+              // Update top-level sha512 to match primary file
+              if (ymlData.path) {
+                const primary = ymlData.files && ymlData.files.find(f => f.url === ymlData.path);
+                if (primary) {
+                  ymlData.sha512 = primary.sha512;
+                }
+              }
+
+              fs.writeFileSync(ymlPath, yaml.dump(ymlData, { lineWidth: -1 }));
+              console.log(ymlFile + ' updated successfully');
+            }
+          "
+
+      # Overwrite unsigned release assets with signed versions
+      - name: Publish signed Windows binaries to GitHub Release
+        if: steps.signpath.outcome == 'success'
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            .tmp/app-builds/*.exe
+            .tmp/app-builds/*.blockmap
+            .tmp/app-builds/latest*.yml
+          draft: true
+          prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}

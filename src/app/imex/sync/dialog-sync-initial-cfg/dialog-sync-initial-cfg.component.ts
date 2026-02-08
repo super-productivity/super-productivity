@@ -30,6 +30,7 @@ import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
+import { isOnline } from '../../../util/is-online';
 
 @Component({
   selector: 'dialog-sync-initial-cfg',
@@ -214,6 +215,10 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     }
 
     this._matDialogRef.close();
+
+    if (isOnline()) {
+      this.syncWrapperService.sync();
+    }
   }
 
   updateTmpCfg(cfg: SyncConfig): void {

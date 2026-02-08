@@ -289,10 +289,6 @@ test.describe('@supersync SuperSync E2E', () => {
       // Client B syncs to receive the deletion
       await clientB.sync.syncAndWait();
 
-      // Wait for DOM to settle after sync
-      await clientB.page.waitForLoadState('domcontentloaded');
-      await clientB.page.waitForTimeout(300);
-
       // Verify task is removed from both clients
       await expectTaskNotVisible(clientA, taskName);
       await expectTaskNotVisible(clientB, taskName);

@@ -108,6 +108,8 @@ describe('BackupService', () => {
       'append',
       'getLastSeq',
       'saveStateCache',
+      'setVectorClock',
+      'setProtectedClientIds',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -127,6 +129,8 @@ describe('BackupService', () => {
     mockOpLogStore.append.and.returnValue(Promise.resolve(1));
     mockOpLogStore.getLastSeq.and.returnValue(Promise.resolve(1));
     mockOpLogStore.saveStateCache.and.returnValue(Promise.resolve());
+    mockOpLogStore.setVectorClock.and.resolveTo();
+    mockOpLogStore.setProtectedClientIds.and.resolveTo();
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockClientIdService.loadClientId.and.returnValue(Promise.resolve('test-client-id'));
     mockArchiveDbAdapter.saveArchiveYoung.and.returnValue(Promise.resolve());
@@ -273,6 +277,95 @@ describe('BackupService', () => {
       expect(mockArchiveDbAdapter.saveArchiveYoung).toHaveBeenCalled();
       const calledWith = mockArchiveDbAdapter.saveArchiveYoung.calls.mostRecent().args[0];
       expect(calledWith.task.ids).toContain('wrapped-task');
+    });
+
+    it('should call setVectorClock with the new clock', async () => {
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({
+        clientA: 5,
+        clientB: 3,
+      });
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true);
+
+      expect(mockOpLogStore.setVectorClock).toHaveBeenCalled();
+      const calledClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(calledClock['clientA']).toBe(5);
+      expect(calledClock['clientB']).toBe(3);
+      expect(calledClock['test-client-id']).toBe(1);
+    });
+
+    it('should call setProtectedClientIds with all vector clock keys after import', async () => {
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo({
+        clientA: 5,
+        clientB: 3,
+      });
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true);
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(protectedIds).toContain('clientA');
+      expect(protectedIds).toContain('clientB');
+      expect(protectedIds).toContain('test-client-id');
+    });
+
+    it('should call setVectorClock with fresh clock when isForceConflict is true', async () => {
+      mockClientIdService.generateNewClientId.and.resolveTo('newForceClient');
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true, true);
+
+      expect(mockOpLogStore.setVectorClock).toHaveBeenCalled();
+      const calledClock = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(calledClock).toEqual({ newForceClient: 2 });
+    });
+
+    it('should call setProtectedClientIds with single-entry clock when isForceConflict is true', async () => {
+      mockClientIdService.generateNewClientId.and.resolveTo('newForceClient');
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true, true);
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      expect(protectedIds).toEqual(['newForceClient']);
+    });
+
+    it('should call setProtectedClientIds after setVectorClock', async () => {
+      const callOrder: string[] = [];
+      mockOpLogStore.setVectorClock.and.callFake(async () => {
+        callOrder.push('setVectorClock');
+      });
+      mockOpLogStore.setProtectedClientIds.and.callFake(async () => {
+        callOrder.push('setProtectedClientIds');
+      });
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true);
+
+      expect(callOrder).toEqual(['setVectorClock', 'setProtectedClientIds']);
+    });
+
+    it('should cap protected client IDs with large vector clock', async () => {
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 15; i++) {
+        largeClock[`device_${i}`] = i + 1;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(largeClock);
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true);
+
+      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalled();
+      const protectedIds = mockOpLogStore.setProtectedClientIds.calls.mostRecent()
+        .args[0] as string[];
+      // newClock = incrementVectorClock(largeClock, clientId) = 16 entries
+      // selectProtectedClientIds caps to 9
+      expect(protectedIds.length).toBeLessThanOrEqual(9);
     });
 
     /**

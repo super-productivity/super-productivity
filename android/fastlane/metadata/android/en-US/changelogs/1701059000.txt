@@ -1,0 +1,4 @@
+
+### Bug Fixes
+
+* **build:** keep GitHub release as draft so all platform jobs can upload

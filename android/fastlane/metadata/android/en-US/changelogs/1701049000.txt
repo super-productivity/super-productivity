@@ -1,0 +1,29 @@
+
+### Bug Fixes
+
+* address root causes instead of treating symptoms (#6407)
+* **e2e:** fix failing and flaky supersync tests
+* **e2e:** use page object for project creation in drag-drop test
+* **focus-mode:** always show icon buttons in focus session banner #6000
+* **focus-mode:** prevent tracking reminder from overriding focus mode after Flowtime completion (#6403)
+* prevent window controls overlap in header #6365 (#6422)
+* replace deprecated substr(), add radix to parseInt(), fix silent catch (#6408)
+* **schedule:** handle RepeatProjectionSplit* types in getEventDayStr and clean up dead code (#6399)
+* **sync:** clear stale auth credentials on auth errors to enable re-auth (2e2dad8), closes #6397
+* **sync:** handle MissingCredentialsSPError with re-auth prompt
+* **sync:** improve WebDAV error handling and data validation (#6411)
+* **sync:** use CapacitorWebFetch for Dropbox on iOS to bypass URLSession.shared (8ded174), closes #6333
+* **tasks:** prevent duplicate task IDs in project/tag taskIds arrays #6410
+* **tracking:** navigate to task's actual context and prefer today list
+* **tracking:** navigate to today page and focus task on title click (9b4240b), closes #6416
+* **tracking:** replace dead systemResumeBased$ with working ipcResume$
+### Features
+
+* **tasks:** allow to drag subtasks on tags in magic-side-nav component (#6389)
+* **tracking:** click task title in header to navigate to task's list (e7a606a), closes #6416
+* **tracking:** click task title in header to open detail panel (39b50f2), closes #6416
+
+
+### Reverts
+
+* Revert "feat(tracking): click task title in header to open detail panel"

@@ -100,7 +100,10 @@ export const addTaskToList = (
   taskIds: string[],
   taskId: string,
   isAddToBottom: boolean,
-): string[] => (isAddToBottom ? [...taskIds, taskId] : [taskId, ...taskIds]);
+): string[] => {
+  if (taskIds.includes(taskId)) return taskIds;
+  return isAddToBottom ? [...taskIds, taskId] : [taskId, ...taskIds];
+};
 
 export const removeTasksFromList = (taskIds: string[], toRemove: string[]): string[] => {
   // Use Set for O(1) lookup instead of O(n) Array.includes

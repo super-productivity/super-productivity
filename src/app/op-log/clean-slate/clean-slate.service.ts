@@ -12,7 +12,10 @@ import { OpLog } from '../../core/log';
 import { Operation, OpType } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
-import { incrementVectorClock } from '../../core/util/vector-clock';
+import {
+  incrementVectorClock,
+  selectProtectedClientIds,
+} from '../../core/util/vector-clock';
 
 /**
  * Service for performing "clean slate" operations on the sync state.
@@ -211,7 +214,7 @@ export class CleanSlateService {
     // Without this, when new ops are created, limitVectorClockSize() would prune low-counter
     // entries, causing those ops to appear CONCURRENT with the import instead of GREATER_THAN.
     // See ServerMigrationService.handleServerMigration for detailed explanation.
-    const protectedIds = Object.keys(newClock);
+    const protectedIds = selectProtectedClientIds(newClock);
     await this.opLogStore.setProtectedClientIds(protectedIds);
     OpLog.normal(
       `[CleanSlate] Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,

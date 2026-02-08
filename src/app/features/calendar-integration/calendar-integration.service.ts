@@ -169,7 +169,9 @@ export class CalendarIntegrationService {
           localStorage.getItem(LS.CALENDER_EVENTS_SKIPPED_TODAY) as string,
         );
         this.skippedEventIds$.next(skippedEvIds || []);
-      } catch (e) {}
+      } catch (e) {
+        Log.warn('Failed to parse skipped calendar event IDs from localStorage', e);
+      }
     }
   }
 

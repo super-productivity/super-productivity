@@ -7,6 +7,7 @@ import {
   waitForTask,
   type SimulatedE2EClient,
 } from '../../utils/supersync-helpers';
+import { expectTaskNotVisible } from '../../utils/supersync-assertions';
 
 /**
  * SuperSync Encryption Enable/Disable E2E Tests
@@ -535,10 +536,7 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
 
       // CRITICAL: Client B's concurrent task should be GONE
       // (it was never synced, and the fresh client doesn't have it)
-      const concurrentTaskLocator = clientB.page.locator(
-        `task:has-text("${concurrentTask}")`,
-      );
-      await expect(concurrentTaskLocator).not.toBeVisible({ timeout: 5000 });
+      await expectTaskNotVisible(clientB, concurrentTask);
 
       console.log(
         '[Concurrent] ✓ Concurrent (unsynced) changes correctly lost after encryption state change!',

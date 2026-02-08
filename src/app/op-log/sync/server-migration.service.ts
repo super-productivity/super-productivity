@@ -3,7 +3,11 @@ import { Store } from '@ngrx/store';
 import { OperationSyncCapable } from '../sync-providers/provider.interface';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
-import { incrementVectorClock, mergeVectorClocks } from '../../core/util/vector-clock';
+import {
+  incrementVectorClock,
+  mergeVectorClocks,
+  selectProtectedClientIds,
+} from '../../core/util/vector-clock';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -245,7 +249,7 @@ export class ServerMigrationService {
     // would have incomplete clocks (missing the pruned entries), causing them to appear
     // CONCURRENT with this SYNC_IMPORT instead of GREATER_THAN. This leads to the bug where
     // other clients filter out legitimate ops as "invalidated by SYNC_IMPORT".
-    const protectedIds = Object.keys(newClock);
+    const protectedIds = selectProtectedClientIds(newClock);
     await this.opLogStore.setProtectedClientIds(protectedIds);
     OpLog.normal(
       `ServerMigrationService: Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,

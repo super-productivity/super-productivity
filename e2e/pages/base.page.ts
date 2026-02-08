@@ -112,6 +112,9 @@ export abstract class BasePage {
     // Add test prefix to task name for isolation
     const prefixedTaskName = this.applyPrefix(taskName);
 
+    // Dismiss any blocking dialogs/overlays before interacting
+    await this.ensureOverlaysClosed();
+
     const inputEl = this.page.locator('add-task-bar.global input');
 
     // Check if input is visible - if not, try clicking the add button
