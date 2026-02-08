@@ -100,7 +100,7 @@
     "CALDAV": {
       "DIALOG_INITIAL": {},
       "FORM": {
-        "CALDAV_CATEGORY_FILTER": "篩選問題的類別（留空表示無）",
+        "CALDAV_CATEGORY_FILTER": "篩選議題的類別（留空表示無）",
         "CALDAV_PASSWORD": "您的 CalDav 密碼",
         "CALDAV_RESOURCE": "CalDav 資源的名稱（行事曆）",
         "CALDAV_URL": "CalDav 網址（基礎網址）",
@@ -145,7 +145,7 @@
     },
     "VOICE_REMINDER": {
       "FORM": {
-        "HELP": "在記錄工作時間時，每隔 X 時間重複配置的短語。",
+        "HELP": "在記錄工作時間時，每隔 X 時間重複設定好的短語。",
         "L_INTERVAL": "重複短語的間隔時間",
         "L_TEXT": "短語內容",
         "L_TEXT_DESCRIPTION": "例如：\"處理 ${currentTaskTitle}！\"",
@@ -158,7 +158,7 @@
       "S": {
         "OFFLINE": "Dropbox：已離線，無法同步",
         "SYNC_ERROR": "Dropbox：同步時發生錯誤",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox：無法產生 PKCE 挑戰。"
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox 同步需要安全連線（HTTPS）。請確保您透過 HTTPS 使用應用程式，或嘗試使用穩定版本。"
       }
     },
     "FINISH_DAY_BEFORE_EXIT": {
@@ -167,6 +167,7 @@
       }
     },
     "FOCUS_MODE": {
+      "ADD_TIME_MINUTE": "增加 1 分鐘",
       "B": {
         "SESSION_RUNNING": "專注時段進行中",
         "POMODORO_SESSION_RUNNING": "番茄鐘時段 #{{cycleNr}} 進行中",
@@ -183,7 +184,7 @@
       "GET_READY": "準備好進入專注時段！",
       "GOGOGO": "加油，加油，加油！！！",
       "ON": "於",
-      "OPEN_ISSUE_IN_BROWSER": "在瀏覽器中開啟問題",
+      "OPEN_ISSUE_IN_BROWSER": "在瀏覽器中開啟議題",
       "POMODORO": "番茄鐘",
       "POMODORO_HINT": "結構化衝刺，包含計劃性休息",
       "PREP_GET_MENTALLY_READY": "做好心理準備，保持專注和高效",
@@ -209,20 +210,20 @@
     "GITEA": {
       "DIALOG_INITIAL": {},
       "FORM": {
-        "HOST": "Host (e.g.: https://try.gitea.io)",
-        "REPO_FULL_NAME": "Username or Organization name/project",
-        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me",
-        "TOKEN": "Access Token"
+        "HOST": "主機（例如：https://try.gitea.io）",
+        "REPO_FULL_NAME": "使用者名稱或組織名稱/專案",
+        "REPO_FULL_NAME_DESCRIPTION": "可在瀏覽器中檢視專案時，於網址的一部分找到。",
+        "SCOPE": "範圍",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "指派給我",
+        "SCOPE_CREATED": "由我建立",
+        "TOKEN": "存取權杖"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Gitea 問題。它們將作為建議列出，並提供問題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放問題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
+        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 Gitea 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動新增和匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。"
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "受託人",
+        "ASSIGNEE": "指派人",
         "DESCRIPTION": "描述",
         "LABELS": "標籤",
         "MARK_AS_CHECKED": "標記更新為已檢查",
@@ -238,15 +239,15 @@
       "FORM": {
         "FILTER_USER": "使用者名稱（例如用於篩選自己的變更）",
         "INVALID_TOKEN_MESSAGE": "不是有效的 GitHub 權杖。它必須以 \"ghp_\" 開頭。",
-        "IS_ASSIGNEE_FILTER": "僅匯入指派給我的問題到待辦事項",
+        "IS_ASSIGNEE_FILTER": "僅匯入指派給我的議題到待辦事項",
         "REPO": "使用者名稱/程式碼庫名稱",
         "TOKEN": "存取權杖"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 GitHub 問題。它們將作為建議列出，並提供問題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放問題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。<a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>更多關於範圍的資訊可以在這裡找到</a>。"
+        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 GitHub 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。<a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>更多關於範圍的資訊可以在這裡找到</a>。"
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "受讓人",
+        "ASSIGNEE": "指派人",
         "AT": "在",
         "DESCRIPTION": "描述",
         "LABELS": "標籤",
@@ -259,19 +260,19 @@
         "WRITE_A_COMMENT": "寫評論"
       },
       "S": {
-        "CONFIG_ERROR": "GitHub: Error while mapping data. Is your repository name correct?",
-        "ERR_UNKNOWN": "GitHub: Unknown error {{statusCode}} {{errorMsg}}. Api Rate limit exceeded?"
+        "CONFIG_ERROR": "GitHub：對應資料時發生錯誤。您的程式碼庫名稱是否正確？",
+        "ERR_UNKNOWN": "GitHub：未知錯誤 {{statusCode}} {{errorMsg}}。是否超過 API 使用限制？"
       }
     },
     "GITLAB": {
       "DIALOG_INITIAL": {},
       "DIALOG_SUBMIT_WORKLOG": {
-        "PAST_DAY_INFO": "The prefilled duration contains untracked data from past days.",
+        "PAST_DAY_INFO": "預填的時長包含過去幾天的未追蹤資料。",
         "T_ALREADY_TRACKED": "已追蹤",
         "T_TITLE": "標題",
         "T_TO_BE_SUBMITTED": "待提交",
-        "TITLE": "Submit Time Spent on Issues to GitLab",
-        "TOTAL_MSG": "You will submit <em>{{totalTimeToSubmit}}</em> work time for today in total to <em>{{nrOfTasksToSubmit}}</em> different issues."
+        "TITLE": "提交議題花費時間到 GitLab",
+        "TOTAL_MSG": "您將總共提交 <em>{{totalTimeToSubmit}}</em> 今日工作時間到 <em>{{nrOfTasksToSubmit}}</em> 個不同的議題。"
       },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "全部新增到今天",
@@ -286,15 +287,15 @@
       },
       "FORM": {
         "FILTER": "自訂過濾器",
-        "FILTER_DESCRIPTION": "See https://docs.gitlab.com/ee/api/issues.html#list-issues. Multiple can be combined by &",
-        "FILTER_USER": "Filter username",
+        "FILTER_DESCRIPTION": "參見 https://docs.gitlab.com/ee/api/issues.html#list-issues。多個條件可用 & 組合",
+        "FILTER_USER": "篩選使用者名稱",
         "GITLAB_BASE_URL": "自訂 GitLab 基礎網址（選填）",
-        "PROJECT": "user name/project",
-        "PROJECT_HINT": "e.g. super-productivity/super-productivity",
+        "PROJECT": "使用者名稱/專案",
+        "PROJECT_HINT": "例如：super-productivity/super-productivity",
         "SCOPE": "範圍",
         "SCOPE_ALL": "全部",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me",
+        "SCOPE_ASSIGNED": "指派給我",
+        "SCOPE_CREATED": "由我建立",
         "SOURCE": "來源",
         "SOURCE_GLOBAL": "全部",
         "SOURCE_GROUP": "組",
@@ -304,11 +305,11 @@
         "TOKEN": "存取權杖"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 GitLab（線上版本或自架實例）問題。它們將作為建議列出，並提供問題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放問題。</p>"
+        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 GitLab（線上版本或自架實例）議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放議題。</p>"
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "代理人",
-        "AT": "代理人",
+        "ASSIGNEE": "指派人",
+        "AT": "在",
         "DESCRIPTION": "描述",
         "LABELS": "標籤",
         "MARK_AS_CHECKED": "標記更新為已檢查",
@@ -324,60 +325,60 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "此整合可能無法在您的瀏覽器中運作。請下載 Super Productivity 的桌面版或 Android 版！",
       "DEFAULT": {
-        "ISSUE_STR": "問題",
-        "ISSUES_STR": "問題"
+        "ISSUE_STR": "議題",
+        "ISSUES_STR": "議題"
       },
-      "DEFAULT_PROJECT_DESCRIPTION": "從問題建立的工作所指派的專案。",
+      "DEFAULT_PROJECT_DESCRIPTION": "從議題建立的工作所指派的專案。",
       "DEFAULT_PROJECT_LABEL": "預設 Super Productivity 專案",
       "HOW_TO_GET_A_TOKEN": "如何取得權杖？",
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "ATTACHMENTS": "Attachments",
-        "AUTHOR": "Author",
-        "CATEGORY": "Category",
-        "COMPONENTS": "Components",
-        "DESCRIPTION": "Description",
-        "DUE_DATE": "Due Date",
-        "LABELS": "Labels",
-        "LAST_COMMENT": "Last comment",
-        "LOAD_ALL_COMMENTS": "Load all {{nr}} comments",
-        "LOCATION": "Location",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PRIORITY": "Priority",
-        "RELATED": "Related",
+        "ASSIGNEE": "指派人",
+        "AT": "在",
+        "ATTACHMENTS": "附件",
+        "AUTHOR": "作者",
+        "CATEGORY": "類別",
+        "COMPONENTS": "組件",
+        "DESCRIPTION": "描述",
+        "DUE_DATE": "截止日期",
+        "LABELS": "標籤",
+        "LAST_COMMENT": "最後評論",
+        "LOAD_ALL_COMMENTS": "載入所有 {{nr}} 則評論",
+        "LOCATION": "位置",
+        "MARK_AS_CHECKED": "標記更新為已檢查",
+        "PRIORITY": "優先順序",
+        "RELATED": "相關",
         "START": "開始",
-        "STATUS": "Status",
-        "STORY_POINTS": "Story Points",
-        "SUB_TASKS": "Subtasks",
-        "SUMMARY": "Summary",
-        "TIME_SPENT": "Time Spent",
-        "TYPE": "Type",
-        "VERSION": "Version",
-        "WORKLOG": "Worklog"
+        "STATUS": "狀態",
+        "STORY_POINTS": "故事點數",
+        "SUB_TASKS": "子工作",
+        "SUMMARY": "摘要",
+        "TIME_SPENT": "花費時間",
+        "TYPE": "類型",
+        "VERSION": "版本",
+        "WORKLOG": "工作記錄"
       },
       "S": {
-        "ERR_GENERIC": "{{issueProviderName}} Error: {{errTxt}}",
-        "ERR_NETWORK": "{{issueProviderName}}: Request failed because of a client side network error",
-        "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Not properly configured",
-        "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Imported {{nr}} new {{issuesStr}}",
-        "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Imported {{issueStr}} \"{{issueTitle}}\"",
+        "ERR_GENERIC": "{{issueProviderName}} 錯誤： {{errTxt}}",
+        "ERR_NETWORK": "{{issueProviderName}}：由於客戶端網路錯誤，請求失敗",
+        "ERR_NOT_CONFIGURED": "{{issueProviderName}}：未正確設定",
+        "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}：已匯入 {{nr}} 個新{{issuesStr}}",
+        "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}：已匯入{{issueStr}}「{{issueTitle}}」",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}：無需更新",
-        "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Updated data for {{nr}} {{issuesStr}}",
-        "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
-        "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}"
+        "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}：已更新 {{nr}} 個{{issuesStr}}的資料",
+        "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}：已更新「{{issueTitle}}」的資料",
+        "POLLING_BACKLOG": "{{issueProviderName}}：輪詢新的{{issuesStr}}",
+        "POLLING_CHANGES": "{{issueProviderName}}：輪詢{{issuesStr}}的變更"
       }
     },
     "JIRA": {
       "BANNER": {
-        "BLOCK_ACCESS_MSG": "Jira: To prevent shut out from api, access has been blocked by Super Productivity. You probably should check your jira settings!",
+        "BLOCK_ACCESS_MSG": "Jira：為防止被 API 封鎖，Super Productivity 已阻止存取。您可能需要檢查您的 Jira 設定！",
         "BLOCK_ACCESS_UNBLOCK": "解除封鎖"
       },
       "CFG_CMP": {
-        "ALWAYS_ASK": "Always open dialog",
-        "DO_NOT": "Don't transition",
-        "DONE": "Status for completing task",
+        "ALWAYS_ASK": "總是開啟對話方塊",
+        "DO_NOT": "不要轉換",
+        "DONE": "完成工作的狀態",
         "ENABLE": "啟用 Jira 整合",
         "ENABLE_TRANSITIONS": "啟用轉換處理",
         "IN_PROGRESS": "啟動工作的狀態",
@@ -385,7 +386,7 @@
         "MAP_CUSTOM_FIELDS": "載入故事點數",
         "MAP_CUSTOM_FIELDS_INFO": "很遺憾，Jira 的部分資料儲存在自訂欄位中，每個安裝都不同。如果您想包含此資料，需要為其選擇適當的自訂欄位。目前只有故事點數欄位需要對應。",
         "OPEN": "暫停工作的狀態",
-        "SELECT_ISSUE_FOR_TRANSITIONS": "選擇問題以載入可用轉換",
+        "SELECT_ISSUE_FOR_TRANSITIONS": "選擇議題以載入可用轉換",
         "STORY_POINTS": "故事點數欄位名稱",
         "TRANSITION": "轉換處理"
       },
@@ -417,9 +418,9 @@
         "TITLE": "Jira：提交工作記錄"
       },
       "FORM_ADV": {
-        "AUTO_ADD_BACKLOG_JQL_QUERY": "用於自動匯入問題到 Super Productivity 的 JQL",
+        "AUTO_ADD_BACKLOG_JQL_QUERY": "用於自動匯入議題到 Super Productivity 的 JQL",
         "IS_ADD_WORKLOG_ON_SUB_TASK_DONE": "子工作完成時開啟對話方塊以提交工作記錄到 Jira",
-        "IS_CHECK_TO_RE_ASSIGN_TICKET_ON_TASK_START": "檢查目前工作的問題是否指派給目前使用者",
+        "IS_CHECK_TO_RE_ASSIGN_TICKET_ON_TASK_START": "檢查目前工作的議題是否指派給目前使用者",
         "IS_WORKLOG_ENABLED": "工作完成時開啟對話方塊以提交工作記錄到 Jira",
         "SEARCH_JQL_QUERY": "用於限制搜尋工作的 JQL 查詢",
         "WORKLOG_DEFAULT_ALL_TIME": "填入工作上花費的所有時間",
@@ -436,39 +437,39 @@
         "USER_NAME": "電子郵件 / 使用者名稱"
       },
       "FORM_SECTION": {
-        "ADV_CFG": "Advanced Config",
+        "ADV_CFG": "進階設定",
         "HELP_ARR": {
-          "H1": "Basic configuration",
-          "H2": "Worklog settings",
-          "H3": "Default transitions",
-          "P1_1": "Please provide a login name (can be found on your profile page) and an <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API token</a> or password if you can't generate one for some reason. Please not that newer versions of Jira sometimes only work with the token. ",
-          "P1_2": "You also need to specify a JQL query which is used for the suggestions to add tasks from Jira. If you need help check out this link <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>.",
-          "P1_3": "You can also configure, if you want to automatically (e.g. every time you visit the planning view), to import all new issues specified by a custom JQL query.",
-          "P1_4": "Another option is \"Check if current ticket is assigned to current user\". If enabled and you're starting, a check will be made if you're currently assigned to that ticket on Jira, if not an Dialog appears in which you can chose to assign the ticket to yourself.",
-          "P2_1": "There are several options to determine when and how you want to submit a worklog. Enabling <em>'Open worklog dialog for adding a worklog to Jira when task is done'</em> opens a dialog to add an worklog every time you mark a Jira Task as done. So keep in mind that worklogs will be added on top of everything tracked so far. So if you mark a task as done for a second time, you might not want to submit the complete worked time for the task again.",
-          "P2_2": "<em>'Open worklog dialog when sub task is done and not for tasks with sub tasks themselves'</em> opens a worklog dialog every time when you mark a sub task of a Jira issue as done. Because you already track your time via the sub tasks, no dialog is opened once you mark the Jira task itself as done.",
-          "P2_3": "<em>'Send updates to worklog automatically without dialog'</em> does what it says. Because marking a task as done several times leads to the whole worked time being tracked twice, this is not recommended.",
-          "P3_1": "Here you can reconfigure your default transitions. Jira enables a wide configuration of transitions usually coming into action as different columns on your Jira agile board we can't make assumptions about where and when to transition your tasks and you need to set it manually."
+          "H1": "基本設定",
+          "H2": "工作記錄設定",
+          "H3": "預設轉換",
+          "P1_1": "請提供登入名稱（可在您的個人資料頁面找到）和 <a target=\"_blank\" href=\"https://confluence.atlassian.com/cloud/api-tokens-938839638.html\" target=\"_blank\">API 權杖</a>，或者如果您因某些原因無法產生權杖，可以使用密碼。請注意，較新版本的 Jira 有時只能使用權杖。",
+          "P1_2": "您還需要指定一個 JQL 查詢，用於從 Jira 新增工作的建議。如果需要協助，請查看此連結 <a target=\"_blank\" href=\"https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html\" target=\"_blank\">https://confluence.atlassian.com/jirasoftwarecloud/advanced-searching-764478330.html</a>。",
+          "P1_3": "您也可以設定是否要自動（例如每次造訪規劃檢視時）匯入由自訂 JQL 查詢指定的所有新議題。",
+          "P1_4": "另一個選項是「檢查目前工作是否指派給目前使用者」。如果啟用此選項且您正在開始工作，系統會檢查該工作在 Jira 上是否指派給您，如果沒有，會出現一個對話方塊，您可以選擇將工作指派給自己。",
+          "P2_1": "有多個選項可決定何時以及如何提交工作記錄。啟用 <em>「工作完成時開啟對話方塊以向 Jira 新增工作記錄」</em> 會在您每次將 Jira 工作標記為完成時開啟一個對話方塊來新增工作記錄。因此請記住，工作記錄會加到目前為止已追蹤的所有內容上。所以如果您第二次將工作標記為完成，您可能不想再次提交工作的完整工作時間。",
+          "P2_2": "<em>「子工作完成時開啟工作記錄對話方塊，而非工作本身」</em> 會在您每次將 Jira 議題的子工作標記為完成時開啟工作記錄對話方塊。因為您已經透過子工作追蹤時間，所以當您將 Jira 工作本身標記為完成時，不會開啟對話方塊。",
+          "P2_3": "<em>「自動傳送工作記錄更新而不顯示對話方塊」</em> 會如其字面意思運作。因為多次將工作標記為完成會導致整個工作時間被追蹤兩次，所以不建議使用此選項。",
+          "P3_1": "在此您可以重新設定預設轉換。Jira 提供廣泛的轉換設定，通常在您的 Jira 敏捷看板上以不同欄位的形式出現，我們無法假設在何處以及何時轉換您的工作，您需要手動設定。"
         }
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "ATTACHMENTS": "Attachments",
-        "CHANGED": "changed",
-        "COMMENTS": "Comments",
-        "COMPONENTS": "Components",
-        "DESCRIPTION": "Description",
-        "LIST_OF_CHANGES": "List of changes",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "ON": "on",
-        "RELATED": "Related",
-        "STATUS": "Status",
-        "STORY_POINTS": "Story Points",
-        "SUB_TASKS": "Subtasks",
-        "SUMMARY": "Summary",
-        "WORKLOG": "Worklog",
-        "WRITE_A_COMMENT": "Write a comment"
+        "ASSIGNEE": "指派人",
+        "AT": "在",
+        "ATTACHMENTS": "附件",
+        "CHANGED": "已變更",
+        "COMMENTS": "評論",
+        "COMPONENTS": "組件",
+        "DESCRIPTION": "描述",
+        "LIST_OF_CHANGES": "變更清單",
+        "MARK_AS_CHECKED": "標記更新為已檢查",
+        "ON": "於",
+        "RELATED": "相關",
+        "STATUS": "狀態",
+        "STORY_POINTS": "故事點數",
+        "SUB_TASKS": "子工作",
+        "SUMMARY": "摘要",
+        "WORKLOG": "工作記錄",
+        "WRITE_A_COMMENT": "撰寫評論"
       },
       "S": {
         "ADDED_WORKLOG_FOR": "Jira：已為 {{issueKey}} 新增工作記錄",
@@ -478,9 +479,9 @@
         "NO_AUTO_IMPORT_JQL": "Jira：未定義自動匯入的搜尋查詢",
         "NO_VALID_TRANSITION": "Jira：未設定有效的轉換",
         "TIMED_OUT": "Jira：請求逾時",
-        "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
-        "TRANSITION_SUCCESS": "Jira: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
+        "TRANSITION": "Jira：將議題「{{issueKey}}」設定為「{{name}}」",
+        "TRANSITION_SUCCESS": "Jira：已將議題 {{issueKey}} 設定為 <strong>{{chosenTransition}}</strong>",
+        "TRANSITIONS_LOADED": "Jira：已載入轉換。使用下方的選單來指派它們"
       }
     },
     "MARKDOWN_PASTE": {
@@ -489,7 +490,7 @@
       "CONFIRM_PARENT_TASKS_WITH_SUBS": "從貼上的 Markdown 清單建立<strong> {{tasksCount}} 個新工作和 {{subTasksCount}} 個子工作</strong>？",
       "CONFIRM_SUB_TASKS": "從貼上的 Markdown 清單建立 {{tasksCount}} 個新子工作？",
       "CONFIRM_SUB_TASKS_WITH_PARENT": "從貼上的 Markdown 清單在「{{parentTaskTitle}}」下建立<strong> {{tasksCount}} 個新子工作</strong>？",
-      "DIALOG_TITLE": "Pasted Markdown List detected!"
+      "DIALOG_TITLE": "偵測到貼上的 Markdown 清單！"
     },
     "METRIC": {
       "BANNER": {},
@@ -501,7 +502,7 @@
         "AVG_TIME_SPENT_PER_TASK": "平均工作花費時間",
         "COUNTING_SUBTASKS": "（計算子工作）",
         "DAYS_WORKED": "持續天數",
-        "GLOBAL_METRICS": "Global Metrics",
+        "GLOBAL_METRICS": "全域指標",
         "IMPROVEMENT_SELECTION_COUNT": "選擇積極因數的次數",
         "NO_ADDITIONAL_DATA_YET": "尚未收集其他資料，完成每日工作後通過新增\"評估\"來執行此操作。",
         "OBSTRUCTION_SELECTION_COUNT": "選擇消極因數的次數",
@@ -539,16 +540,16 @@
     },
     "OPEN_PROJECT": {
       "CFG_CMP": {
-        "ALWAYS_ASK": "Always open dialog",
-        "DO_NOT": "Don't transition",
-        "DONE": "Status for completing task",
+        "ALWAYS_ASK": "總是開啟對話方塊",
+        "DO_NOT": "不要轉換",
+        "DONE": "完成工作時的狀態",
         "ENABLE": "啟用 OpenProject 整合",
         "ENABLE_TRANSITIONS": "啟用轉換處理",
-        "IN_PROGRESS": "Status for starting task",
-        "OPEN": "Status for pausing task",
-        "PROGRESS_ON_SAVE": "Default progress on save",
-        "SELECT_ISSUE_FOR_TRANSITIONS": "Select issue to load available transitions",
-        "TRANSITION": "Transition Handling"
+        "IN_PROGRESS": "開始工作時的狀態",
+        "OPEN": "暫停工作時的狀態",
+        "PROGRESS_ON_SAVE": "儲存時的預設進度",
+        "SELECT_ISSUE_FOR_TRANSITIONS": "選擇議題以載入可用的轉換",
+        "TRANSITION": "轉換處理"
       },
       "DIALOG_INITIAL": {},
       "DIALOG_TRACK_TIME": {
@@ -562,18 +563,18 @@
         "TITLE": "OpenProject：提交工作記錄"
       },
       "FORM": {
-        "FILTER_USER": "Username (e.g. to filter out changes by yourself)",
-        "HOST": "Host (e.g.: https://www.openproject.org/)",
-        "IS_SHOW_TIME_TRACKING_DIALOG": "Show time tracking dialog to report to OpenProject",
-        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Show time tracking dialog when sub tasks are completed",
-        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requires time tracking module to be enabled for OpenProject project",
-        "PROJECT_ID": "Project ID",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
+        "FILTER_USER": "使用者名稱（例如：用於篩選自己的變更）",
+        "HOST": "主機位址（例如：https://www.openproject.org/）",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "顯示時間追蹤對話方塊以回報至 OpenProject",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "子工作完成時顯示時間追蹤對話方塊",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "需要為 OpenProject 專案啟用時間追蹤模組",
+        "PROJECT_ID": "專案 ID",
+        "PROJECT_ID_DESCRIPTION": "可在瀏覽器中檢視專案時，從網址中找到。",
         "TOKEN": "存取權杖",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me"
+        "SCOPE": "範圍",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "指派給我的",
+        "SCOPE_CREATED": "我建立的"
       },
       "FORM_SECTION": {
         "HELP": "<p>在此您可以設定 SuperProductivity 列出開放的 OpenProject 工作套件。請注意，要在瀏覽器中運作，您可能需要為 OpenProject 伺服器設定 CORS，以允許從 app.super-productivity.com 存取</p>"
@@ -596,15 +597,15 @@
         "ERR_NO_FILE": "未選擇檔案",
         "ERR_UNKNOWN": "OpenProject：未知錯誤 {{statusCode}} {{errorMsg}}。伺服器是否正確設定了 CORS？",
         "POST_TIME_SUCCESS": "OpenProject：成功為 {{issueTitle}} 建立時間條目",
-        "TRANSITION": "OpenProject：將問題「{{issueKey}}」設定為「{{name}}」",
-        "TRANSITION_SUCCESS": "OpenProject：將問題 {{issueKey}} 設定為 <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Transitions loaded. Use the selects below to assign them"
+        "TRANSITION": "OpenProject：將議題「{{issueKey}}」設定為「{{name}}」",
+        "TRANSITION_SUCCESS": "OpenProject：將議題 {{issueKey}} 設定為 <strong>{{chosenTransition}}</strong>",
+        "TRANSITIONS_LOADED": "已載入轉換。請使用下方的選項進行指派"
       }
     },
     "PLANNER": {
       "D": {
         "ADD_PLANNED": {
-          "RE_PLAN_ALL": "Reschedule all"
+          "RE_PLAN_ALL": "重新排程所有工作"
         }
       },
       "EDIT_REPEATED_TASK": "編輯循環工作 '{{taskName}}'",
@@ -627,11 +628,11 @@
         "EDIT": "編輯項目"
       },
       "D_DELETE": {
-        "MSG": "Are you sure you want to delete the project \"{{title}}\"?"
+        "MSG": "您確定要刪除專案「{{title}}」嗎？"
       },
       "FORM_BASIC": {
         "L_ENABLE_BACKLOG": "啟用專案待辦事項",
-        "L_IS_HIDDEN_FROM_MENU": "Hide project from menu",
+        "L_IS_HIDDEN_FROM_MENU": "從選單中隱藏專案",
         "L_TITLE": "項目名稱",
         "TITLE": "基本設置"
       },
@@ -660,13 +661,13 @@
     },
     "PROJECT_FOLDER": {
       "DIALOG": {
-        "CREATE_TITLE": "Create folder",
-        "EDIT_TITLE": "Edit folder",
-        "NAME_LABEL": "Folder name",
-        "NAME_PLACEHOLDER": "Enter folder name",
-        "NAME_REQUIRED": "Folder name is required",
-        "PARENT_LABEL": "Parent folder",
-        "NO_PARENT": "No parent (root level)"
+        "CREATE_TITLE": "建立資料夾",
+        "EDIT_TITLE": "編輯資料夾",
+        "NAME_LABEL": "資料夾名稱",
+        "NAME_PLACEHOLDER": "輸入資料夾名稱",
+        "NAME_REQUIRED": "資料夾名稱為必填",
+        "PARENT_LABEL": "上層資料夾",
+        "NO_PARENT": "無上層（根層級）"
       },
       "SELECT": {
         "LABEL": "資料夾",
@@ -679,21 +680,21 @@
     },
     "TAG_FOLDER": {
       "DIALOG": {
-        "CREATE_TITLE": "Create folder",
-        "EDIT_TITLE": "Edit folder",
-        "NAME_LABEL": "Folder name",
-        "NAME_PLACEHOLDER": "Enter folder name",
-        "NAME_REQUIRED": "Folder name is required",
-        "PARENT_LABEL": "Parent folder",
-        "NO_PARENT": "No parent (root level)"
+        "CREATE_TITLE": "建立資料夾",
+        "EDIT_TITLE": "編輯資料夾",
+        "NAME_LABEL": "資料夾名稱",
+        "NAME_PLACEHOLDER": "輸入資料夾名稱",
+        "NAME_REQUIRED": "資料夾名稱為必填",
+        "PARENT_LABEL": "上層資料夾",
+        "NO_PARENT": "無上層（根層級）"
       },
       "SELECT": {
-        "LABEL": "Folder",
-        "PLACEHOLDER": "Select folder",
-        "NO_PARENT": "No folder (root level)"
+        "LABEL": "資料夾",
+        "PLACEHOLDER": "選擇資料夾",
+        "NO_PARENT": "無資料夾（根層級）"
       },
-      "CONFIRM_DELETE": "Are you sure you want to delete the folder \"{{title}}\"? All tags in this folder will be moved to the root level.",
-      "TOOLTIP_CREATE": "Create tag folder"
+      "CONFIRM_DELETE": "您確定要刪除資料夾「{{title}}」嗎？此資料夾中的所有標籤將移至根層級。",
+      "TOOLTIP_CREATE": "建立標籤資料夾"
     },
     "QUICK_HISTORY": {
       "NO_DATA": "本年度無資料",
@@ -703,25 +704,25 @@
     "REDMINE": {
       "DIALOG_INITIAL": {},
       "FORM": {
-        "API_KEY": "API access key",
-        "HOST": "Host (e.g.: https://redmine.org)",
-        "PROJECT_ID": "Project Identifier",
-        "PROJECT_ID_DESCRIPTION": "Can be found as part of the url, when viewing the project in the Browser.",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me"
+        "API_KEY": "API 存取金鑰",
+        "HOST": "主機位址（例如：https://redmine.org）",
+        "PROJECT_ID": "專案識別碼",
+        "PROJECT_ID_DESCRIPTION": "可在瀏覽器中檢視專案時，從網址中找到。",
+        "SCOPE": "範圍",
+        "SCOPE_ALL": "全部",
+        "SCOPE_ASSIGNED": "指派給我的",
+        "SCOPE_CREATED": "我建立的"
       },
       "FORM_SECTION": {
-        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 Redmine（線上版本或自架實例）問題。它們將作為建議列出，並提供問題的連結以及更多相關資訊。</p><p>此外，您可以自動匯入所有開放問題。</p>",
+        "HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定專案的開放 Redmine（線上版本或自架實例）議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p><p>此外，您可以自動匯入所有開放議題。</p>",
         "TITLE": "Redmine"
       },
       "ISSUE_CONTENT": {
         "AUTHOR": "作者",
-        "DESCRIPTION": "Description",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PRIORITY": "Priority",
-        "STATUS": "Status"
+        "DESCRIPTION": "說明",
+        "MARK_AS_CHECKED": "將更新標示為已檢查",
+        "PRIORITY": "優先級",
+        "STATUS": "狀態"
       },
       "S": {}
     },
@@ -731,25 +732,25 @@
         "TXT": "<strong>{{title}}</strong> 將於 <strong>{{start}}</strong> 開始！",
         "TXT_MULTIPLE": "<strong>{{title}}</strong> 將於 <strong>{{start}}</strong> 開始！<br> （以及另外 {{nrOfOtherBanners}} 個工作到期）"
       },
-      "S_ACTIVE_TASK_DUE": "The task you are currently working on is now due!<br/> ({{title}})",
+      "S_ACTIVE_TASK_DUE": "您目前正在處理的工作現在到期了！<br/> ({{title}})",
       "S_REMINDER_ERR": "提醒介面發生錯誤"
     },
     "SCHEDULE": {
       "D_INITIAL": {
-        "TEXT": "<p>The Schedule should provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended) regular tasks will never show up outside of these boundaries.</p>",
+        "TEXT": "<p>時間軸應該能讓您更好地了解已規劃的工作如何隨時間展開。它會從您的工作中自動產生，只需要<strong>在工作上提供時間估計</strong>即可使用。</p><p>我們區分兩種工作：<strong>已排程工作</strong>，會在其計劃時間顯示；以及<strong>一般工作</strong>，會在這些固定事件周圍流動。</p><p>如果您提供工作開始和結束時間（建議），一般工作將不會在這些邊界之外顯示。</p>",
         "TITLE": "時間軸"
       },
-      "END": "Work End",
-      "INSERT_BEFORE": "Before",
-      "PLAN_END_DAY": "End of {{date}}",
-      "PLAN_START_DAY": "Start of {{date}}",
-      "SHIFT_KEY_INFO": "Hold Shift to toggle day planning mode",
-      "START": "Work Start"
+      "END": "工作結束",
+      "INSERT_BEFORE": "之前",
+      "PLAN_END_DAY": "{{date}} 結束",
+      "PLAN_START_DAY": "{{date}} 開始",
+      "SHIFT_KEY_INFO": "按住 Shift 鍵切換日期規劃模式",
+      "START": "工作開始"
     },
     "SEARCH_BAR": {
-      "INFO": "Start typing to search for tasks",
-      "NO_RESULTS": "No tasks found matching your search",
-      "PLACEHOLDER": "Search for task or task description"
+      "INFO": "開始輸入以搜尋工作",
+      "NO_RESULTS": "找不到符合搜尋條件的工作",
+      "PLACEHOLDER": "搜尋工作或工作說明"
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
@@ -757,159 +758,159 @@
         "OK": "做吧！"
       },
       "D_EDIT": {
-        "CURRENT_STREAK": "Current Streak",
-        "DAILY_GOAL": "Daily Goal",
-        "DAYS": "Days",
+        "CURRENT_STREAK": "目前連續次數",
+        "DAILY_GOAL": "每日目標",
+        "DAYS": "天數",
         "L_COUNTER": "計數"
       },
       "FORM": {
         "ADD_NEW": "新增簡單的計數器",
         "HELP": "您可以在此處配置簡單的按鈕，這些按鈕將顯示在右上方。通過單擊它們，它們可以是計時器，也可以是簡單的計數器。",
-        "L_COUNTDOWN_DURATION": "Countdown duration",
-        "L_DAILY_GOAL": "Daily goal for successful streak",
+        "L_COUNTDOWN_DURATION": "倒數計時時長",
+        "L_DAILY_GOAL": "成功連續的每日目標",
         "L_ICON": "圖標",
         "L_IS_ENABLED": "啟用",
         "L_TITLE": "標題",
-        "L_TRACK_STREAKS": "Track Streaks",
+        "L_TRACK_STREAKS": "追蹤連續次數",
         "L_TYPE": "類型",
-        "L_WEEKDAYS": "Weekdays to check for streak",
+        "L_WEEKDAYS": "計算連續次數的星期",
         "TITLE": "簡單計數器",
         "TYPE_CLICK_COUNTER": "點擊計數器",
-        "TYPE_REPEATED_COUNTDOWN": "Repeated Countdown",
+        "TYPE_REPEATED_COUNTDOWN": "重複倒數計時",
         "TYPE_STOPWATCH": "跑表"
       },
       "S": {
-        "GOAL_REACHED_1": "You reached your goal for today!",
-        "GOAL_REACHED_2": "Current streak duration: "
+        "GOAL_REACHED_1": "您已達成今日目標！",
+        "GOAL_REACHED_2": "目前連續次數："
       }
     },
     "SYNC": {
       "A": {
-        "REMOTE_MODEL_VERSION_NEWER": "The remote model version is newer than the local one. Please update your local app to the newest version!"
+        "REMOTE_MODEL_VERSION_NEWER": "遠端資料模型版本比本地版本更新。請將您的應用程式更新到最新版本！"
       },
-      "BTN_SYNC_NOW": "Sync Now",
+      "BTN_SYNC_NOW": "立即同步",
       "C": {
         "FORCE_UPLOAD": "仍要上傳本地資料嗎？"
       },
       "D_AUTH_CODE": {
-        "FOLLOW_LINK": "Please open the following link and copy the auth code provided there into the input field below.",
+        "FOLLOW_LINK": "請開啟以下連結，並將其中提供的驗證碼複製到下方的輸入欄中。",
         "GET_AUTH_CODE": "取得驗證碼",
         "L_AUTH_CODE": "輸入驗證碼",
-        "TITLE": "Login: {{provider}}"
+        "TITLE": "登入：{{provider}}"
       },
       "D_CONFLICT": {
-        "COMPARISON_RESULT": "Comparison Result",
+        "COMPARISON_RESULT": "比較結果",
         "LAST_SYNC": "上次同步：",
-        "LAST_SYNCED": "Last Synced",
-        "LAST_WRITE": "Last Write",
+        "LAST_SYNCED": "上次同步時間",
+        "LAST_WRITE": "上次寫入時間",
         "LOCAL": "本地",
         "LOCAL_REMOTE": "本地->遠端",
-        "NEVER": "Never",
+        "NEVER": "從未",
         "REMOTE": "遠端",
         "TEXT": "<p>已從遠端存取更新。本地和遠端資料似乎都被修改。</p>",
-        "TIMESTAMP": "Timestamp",
+        "TIMESTAMP": "時間戳",
         "TITLE": "Sync：衝突資料",
         "USE_LOCAL": "使用本地",
         "USE_REMOTE": "使用遠端",
-        "ADDITIONAL_INFO": "Additional Info",
-        "VECTOR_COMPARISON_CONCURRENT": "Concurrent (True Conflict)",
-        "VECTOR_COMPARISON_EQUAL": "Equal",
-        "VECTOR_COMPARISON_LOCAL_GREATER": "Local > Remote",
-        "VECTOR_COMPARISON_LOCAL_LESS": "Local < Remote",
-        "DATE": "Date",
-        "TIME": "Time",
-        "VECTOR_CLOCK": "Vector Clock",
-        "RESULT": "Result",
-        "CHANGES": "Changes",
-        "CHANGES_SINCE_LAST_SYNC": "Changes since last sync",
-        "VECTOR_CLOCK_HEADING": "Vector Clock",
-        "OVERWRITE_WARNING": "WARNING: The {{targetName}} data contains approximately {{targetChanges}} changes while the {{sourceName}} data only has {{sourceChanges}} changes. Are you sure you want to overwrite the {{targetName}} data with the {{sourceName}} version? This action cannot be undone."
+        "ADDITIONAL_INFO": "額外資訊",
+        "VECTOR_COMPARISON_CONCURRENT": "並發（真實衝突）",
+        "VECTOR_COMPARISON_EQUAL": "相同",
+        "VECTOR_COMPARISON_LOCAL_GREATER": "本地 > 遠端",
+        "VECTOR_COMPARISON_LOCAL_LESS": "本地 < 遠端",
+        "DATE": "日期",
+        "TIME": "時間",
+        "VECTOR_CLOCK": "向量時鐘",
+        "RESULT": "結果",
+        "CHANGES": "變更",
+        "CHANGES_SINCE_LAST_SYNC": "自上次同步以來的變更",
+        "VECTOR_CLOCK_HEADING": "向量時鐘",
+        "OVERWRITE_WARNING": "警告：{{targetName}} 資料約含 {{targetChanges}} 個變更，而 {{sourceName}} 資料僅有 {{sourceChanges}} 個變更。您確定要用 {{sourceName}} 版本覆寫 {{targetName}} 資料嗎？這個操作無法復原。"
       },
       "D_DECRYPT_ERROR": {
-        "BTN_OVER_WRITE_REMOTE": "Change & Overwrite Remote",
-        "CHANGE_PW_AND_DECRYPT": "Change & Attempt Decrypt",
-        "P1": "Your remote data is encrypted and decryption failed. Please enter the correct password!",
-        "P2": "Or you can also change your password, which will overwrite all remote data.",
-        "PASSWORD": "Password"
+        "BTN_OVER_WRITE_REMOTE": "更改並覆寫遠端",
+        "CHANGE_PW_AND_DECRYPT": "更改並嘗試解密",
+        "P1": "您的遠端資料已加密但解密失敗。請輸入正確的密碼！",
+        "P2": "或者您也可以更改密碼，這會覆寫所有遠端資料。",
+        "PASSWORD": "密碼"
       },
       "D_INCOMPLETE_SYNC": {
-        "BTN_CLOSE_APP": "Close App",
-        "BTN_DOWNLOAD_BACKUP": "Download Local Backup",
-        "BTN_FORCE_UPLOAD": "Force Upload Local",
-        "P1": "The remote sync data is incoherent!",
-        "P2": "Affected model:",
-        "T1": "Last sync was incomplete!",
-        "T2": "Your archive data was not properly uploaded during last sync:",
-        "T3": "You have 2 Options:",
-        "T4": "1. Go to your other device and complete the sync there.",
-        "T5": "2. Or you can overwrite the remote data with your local one. All remote changes will\n    be lost!",
-        "T6": "Creating a backup of the data you overwrite is recommended!!!"
+        "BTN_CLOSE_APP": "關閉應用程式",
+        "BTN_DOWNLOAD_BACKUP": "下載本地備份",
+        "BTN_FORCE_UPLOAD": "強制上傳本地",
+        "P1": "遠端同步資料不一致！",
+        "P2": "受影響的模型：",
+        "T1": "上次同步未完成！",
+        "T2": "您的封存資料在上次同步中沒有正確上傳：",
+        "T3": "您有 2 個選項：",
+        "T4": "1. 到您的其他裝置上完成同步。",
+        "T5": "2. 或者您可以用本地資料覆寫遠端資料。所有遠端變更將會遺失！",
+        "T6": "建議為您覆寫的資料建立備份！！！"
       },
       "D_INITIAL_CFG": {
-        "SAVE_AND_ENABLE": "Save & Enable Sync",
-        "TITLE": "Configure Sync"
+        "SAVE_AND_ENABLE": "儲存並啟用同步",
+        "TITLE": "配置同步"
       },
       "FORM": {
         "DROPBOX": {},
         "GOOGLE": {},
-        "L_ENABLE_COMPRESSION": "Enable Compression (faster data transfer)",
-        "L_ENABLE_ENCRYPTION": "Enable end-to-end encryption (experimental) – Make your data inaccessible for your sync provider",
+        "L_ENABLE_COMPRESSION": "啟用壓縮（更快的資料傳輸）",
+        "L_ENABLE_ENCRYPTION": "啟用端對端加密（實驗性） – 使您的同步提供者無法存取您的資料",
         "L_ENABLE_SYNCING": "啟用同步",
-        "L_ENCRYPTION_NOTES": "IMPORTANT NOTES: You will need to set the same password on your other devices <strong>BEFORE</strong> the next sync for everything to work. Please select a password that is secure. Please also note that <strong>you will NOT be able to access your data, if you forget this password. There is NO recovery possible</strong>, since only you have the key. The encryption will probably be good enough to thwart of most attackers, but <strong>there is no guarantee.</strong>",
-        "L_ENCRYPTION_PASSWORD": "Encryption Password (DO NOT FORGET)",
+        "L_ENCRYPTION_NOTES": "重要註記：您需要在下次同步<strong>之前</strong>在其他裝置上設定相同的密碼，才能正常運作。請選擇一個安全的密碼。另請注意，<strong>如果您忘記此密碼，將無法存取您的資料。無法進行任何復原</strong>，因為只有您擁有密鑰。加密可能足以阻止大多數攻擊者，但<strong>不能保證。</strong>",
+        "L_ENCRYPTION_PASSWORD": "加密密碼（請勿忘記）",
         "L_SYNC_INTERVAL": "同步間隔",
         "L_SYNC_PROVIDER": "同步提供者",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "Sync folder path"
+          "L_SYNC_FOLDER_PATH": "同步資料夾路徑"
         },
         "TITLE": "同步",
         "WEB_DAV": {
           "CORS_INFO": "<p><strong>實驗！！</strong>為了<strong>完成這項工作，您需要為Nextcloud實例停用或限制CORS</strong>，這可能會對安全性造成負面影響！請<a href='https://github.com/nextcloud/server/issues/3131'>參考該Issue</a>以獲取更多資訊。使此功能在移動設備上起作用的一種方法是通過nextcloud應用程序<a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a> 將 \"https://app.super-roductivity.com\"列入白名單使用風險自負！",
-          "INFO": "WebDAV implementations differ wildly unfortunately. Super Productivity is known to work well with Nextcloud, <strong>but it might not work with your provider</strong>.",
+          "INFO": "不幸的是，WebDAV 的實作方式差異很大。Super Productivity 已知可與 Nextcloud 良好配合，<strong>但可能無法與您的提供者一起使用</strong>。",
           "L_BASE_URL": "基本網址",
           "L_PASSWORD": "密碼",
-          "L_SYNC_FOLDER_PATH": "Sync Folder Path",
+          "L_SYNC_FOLDER_PATH": "同步資料夾路徑",
           "L_USER_NAME": "使用者名稱"
         }
       },
       "S": {
-        "ALREADY_IN_SYNC": "Already in sync",
-        "BTN_CONFIGURE": "Configure",
-        "BTN_FORCE_OVERWRITE": "Force Overwrite",
-        "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis might be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
-        "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
-        "INCOMPLETE_CFG": "Authentication for sync failed. Please check your Config!",
-        "SUCCESS_DOWNLOAD": "Synced data from remote",
-        "SUCCESS_VIA_BUTTON": "Data successfully synced",
+        "ALREADY_IN_SYNC": "已在同步中",
+        "BTN_CONFIGURE": "配置",
+        "BTN_FORCE_OVERWRITE": "強制覆寫",
+        "ERROR_CORS": "WebDAV 同步錯誤：網路請求失敗。\n\n這可能是 CORS 問題。請確保：\n• 您的 WebDAV 伺服器允許跨來源請求\n• 伺服器網址正確且可以存取\n• 您有可用的網際網路連線",
+        "ERROR_DATA_IS_CURRENTLY_WRITTEN": "遠端資料正在寫入中",
+        "INCOMPLETE_CFG": "同步驗證失敗。請檢查您的配置！",
+        "SUCCESS_DOWNLOAD": "已從遠端同步資料",
+        "SUCCESS_VIA_BUTTON": "資料同步成功",
         "UNKNOWN_ERROR": "同步時發生未知錯誤：{{err}}"
       },
       "SAFETY_BACKUP": {
-        "DESCRIPTION": "Automatic backups are created before downloading data from remote during sync operations. Backups are organized in 4 smart slots: 2 most recent, 1 first from today, and 1 first from a day before today.",
-        "BTN_CREATE_MANUAL": "Create Manual Backup",
-        "BTN_REFRESH": "Refresh",
-        "BTN_CLEAR_ALL": "Clear All",
-        "BTN_RESTORE": "Restore",
-        "BTN_DELETE": "Delete",
-        "LOADING": "Loading...",
-        "NO_BACKUPS": "No safety backups available yet. Backups are created automatically before sync operations.",
-        "TOOLTIP_CREATE_MANUAL": "Create a manual backup of all your data",
-        "TOOLTIP_REFRESH": "Refresh the backup list",
-        "TOOLTIP_CLEAR_ALL": "Delete all safety backups",
-        "TOOLTIP_RESTORE": "Restore this backup (will replace all current data)",
-        "TOOLTIP_DELETE": "Delete this backup",
-        "SLOT_RECENT": "Recent backup",
-        "SLOT_TODAY": "First backup of today",
-        "SLOT_BEFORE_TODAY": "First backup before today",
-        "REASON_MANUAL": "Manual backup",
-        "REASON_BEFORE_UPDATE": "Automatic backup before sync",
-        "LAST_CHANGE_PREFIX": "Last change:",
-        "CREATED_SUCCESS": "Manual backup created successfully",
-        "RESTORED_SUCCESS": "Backup restored successfully",
-        "DELETED_SUCCESS": "Backup deleted successfully",
-        "CLEARED_SUCCESS": "All backups cleared successfully",
-        "CREATE_FAILED": "Failed to create backup",
-        "DELETE_FAILED": "Failed to delete backup",
-        "CLEAR_FAILED": "Failed to clear backups"
+        "DESCRIPTION": "在同步操作中從遠端下載資料之前，會自動建立備份。備份組織在 4 個智慧槽位中：2 個最近的、今天的第一個和今天之前一天的第一個。",
+        "BTN_CREATE_MANUAL": "建立手動備份",
+        "BTN_REFRESH": "重新整理",
+        "BTN_CLEAR_ALL": "清除全部",
+        "BTN_RESTORE": "還原",
+        "BTN_DELETE": "刪除",
+        "LOADING": "載入中...",
+        "NO_BACKUPS": "尚無可用的安全備份。備份會在同步操作之前自動建立。",
+        "TOOLTIP_CREATE_MANUAL": "建立所有資料的手動備份",
+        "TOOLTIP_REFRESH": "重新整理備份清單",
+        "TOOLTIP_CLEAR_ALL": "刪除所有安全備份",
+        "TOOLTIP_RESTORE": "還原此備份（將替換所有當前資料）",
+        "TOOLTIP_DELETE": "刪除此備份",
+        "SLOT_RECENT": "最近備份",
+        "SLOT_TODAY": "今天的第一個備份",
+        "SLOT_BEFORE_TODAY": "今天之前的第一個備份",
+        "REASON_MANUAL": "手動備份",
+        "REASON_BEFORE_UPDATE": "同步前的自動備份",
+        "LAST_CHANGE_PREFIX": "上次變更：",
+        "CREATED_SUCCESS": "手動備份建立成功",
+        "RESTORED_SUCCESS": "備份還原成功",
+        "DELETED_SUCCESS": "備份刪除成功",
+        "CLEARED_SUCCESS": "所有備份已清除成功",
+        "CREATE_FAILED": "建立備份失敗",
+        "DELETE_FAILED": "刪除備份失敗",
+        "CLEAR_FAILED": "清除備份失敗"
       }
     },
     "TAG": {
@@ -934,37 +935,37 @@
         "UPDATED": "標籤設置已更新"
       },
       "TTL": {
-        "ADD_NEW_TAG": "Add new Tag"
+        "ADD_NEW_TAG": "新增標籤"
       }
     },
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "新增現有工作\"{{taskTitle}}\"",
-        "PLACEHOLDER_SEARCH": "Add existing task or issues...",
-        "PLACEHOLDER_CREATE": "A task title #tag @16:00",
-        "TOOLTIP_ADD_TASK": "Add task",
-        "TOOLTIP_ADD_TO_TOP": "Add to top (Ctrl+1)",
-        "TOOLTIP_ADD_TO_BOTTOM": "Add to bottom (Ctrl+1)",
-        "TOOLTIP_ADD_TO_TODAY": "Add to today",
-        "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
-        "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)",
-        "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
-        "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
-        "DUE_BUTTON": "Due",
-        "TAGS_BUTTON": "Tags",
-        "ESTIMATE_BUTTON": "Estimate",
-        "TOOLTIP_CLEAR_DATE": "Clear date",
-        "TOOLTIP_CLEAR_TAGS": "Clear tags",
-        "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
-        "TODAY": "Today",
-        "TOMORROW": "Tomorrow",
-        "CREATE_NEW_TAGS": "Create new tags"
+        "PLACEHOLDER_SEARCH": "新增現有工作或問題...",
+        "PLACEHOLDER_CREATE": "工作標題 #標籤 @16:00",
+        "TOOLTIP_ADD_TASK": "新增工作",
+        "TOOLTIP_ADD_TO_TOP": "新增至頂部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_BOTTOM": "新增至底部 (Ctrl+1)",
+        "TOOLTIP_ADD_TO_TODAY": "新增至今天",
+        "TOOLTIP_ADD_TO_BACKLOG": "新增至待辦清單",
+        "TOOLTIP_ENABLE_SEARCH": "啟用問題搜尋 (Ctrl+2)",
+        "TOOLTIP_DISABLE_SEARCH": "停用問題搜尋 (Ctrl+2)",
+        "SEARCH_INFO_TEXT": "搜尋並新增封存和其他專案中的問題和工作",
+        "DUE_BUTTON": "截止",
+        "TAGS_BUTTON": "標籤",
+        "ESTIMATE_BUTTON": "估計",
+        "TOOLTIP_CLEAR_DATE": "清除日期",
+        "TOOLTIP_CLEAR_TAGS": "清除標籤",
+        "TOOLTIP_CLEAR_ESTIMATE": "清除估計",
+        "TODAY": "今天",
+        "TOMORROW": "明天",
+        "CREATE_NEW_TAGS": "建立新標籤"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "新增附件",
         "ADD_SUB_TASK": "新增子工作",
         "ATTACHMENTS": "附件 {{nr}}",
-        "DUE": "计划时间",
+        "DUE": "到期時間",
         "LOCAL_ATTACHMENTS": "本地附件",
         "NOTES": "筆記",
         "PARENT": "親",
@@ -984,16 +985,16 @@
         "ADD_TO_PROJECT": "新增到項目",
         "CONVERT_TO_PARENT_TASK": "轉換為父工作",
         "DELETE": "刪除工作",
-        "DELETE_REPEAT_INSTANCE": "Delete repeated Task Instance",
+        "DELETE_REPEAT_INSTANCE": "刪除重複工作實例",
         "DROP_ATTACHMENT": "放在此處以附加到\"{{title}}\"",
-        "DUPLICATE": "Duplicate",
+        "DUPLICATE": "複製",
         "EDIT_SCHEDULED": "編輯提醒",
-        "FOCUS_SESSION": "Start Focus Session",
+        "FOCUS_SESSION": "開始專注階段",
         "MARK_DONE": "標記為已完成",
         "MOVE_TO_BACKLOG": "轉到待辦事項",
         "MOVE_TO_OTHER_PROJECT": "轉到其他項目",
         "MOVE_TO_REGULAR": "轉到今天的列表",
-        "MOVE_TO_TOP": "Move to Top",
+        "MOVE_TO_TOP": "移至頂部",
         "OPEN_ATTACH": "附加檔案或連結",
         "OPEN_ISSUE": "在新的瀏覽器選項卡中打開 Issue ",
         "OPEN_TIME": "估計時間/增加花費的已用時間",
@@ -1396,7 +1397,7 @@
       "FOCUS_MODE": "專注模式",
       "HABITS": "習慣",
       "HELP": "啟用或停用整個使用者介面的特定應用程式功能。",
-      "ISSUES_PANEL": "問題面板",
+      "ISSUES_PANEL": "議題面板",
       "PLANNER": "規劃工具",
       "PROJECT_NOTES": "專案筆記",
       "SCHEDULE": "時間軸",
@@ -1522,7 +1523,7 @@
       "TASK_TOGGLE_DONE": "切換完成狀態",
       "TITLE": "鍵盤快捷鍵",
       "TOGGLE_BACKLOG": "顯示/隱藏待辦事項",
-      "TOGGLE_ISSUE_PANEL": "顯示/隱藏問題提供者面板",
+      "TOGGLE_ISSUE_PANEL": "顯示/隱藏議題提供者面板",
       "TOGGLE_PLAY": "開始/停止工作",
       "TOGGLE_SIDE_NAV": "聚焦側邊選單",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "切換篩選/分組/排序面板",
@@ -1744,8 +1745,8 @@
     "DBX_GEN_TOKEN": "Dropbox：產生權杖中...",
     "DBX_META": "Dropbox：取得檔案中繼資料中...",
     "DBX_UPLOAD": "Dropbox：上傳檔案中...",
-    "GITHUB_LOAD_ISSUE": "GitHub：載入問題資料中...",
-    "JIRA_LOAD_ISSUE": "Jira：載入問題資料中...",
+    "GITHUB_LOAD_ISSUE": "GitHub：載入議題資料中...",
+    "JIRA_LOAD_ISSUE": "Jira：載入議題資料中...",
     "SYNC": "同步資料中...",
     "UNKNOWN": "載入遠端資料中",
     "WEB_DAV_DOWNLOAD": "WebDAV：下載資料中...",
@@ -1797,7 +1798,7 @@
     "TASKS": "工作",
     "TASK_LIST": "工作清單",
     "TOGGLE_SHOW_BOOKMARKS": "顯示/隱藏書籤",
-    "TOGGLE_SHOW_ISSUE_PANEL": "顯示/隱藏問題提供者面板",
+    "TOGGLE_SHOW_ISSUE_PANEL": "顯示/隱藏議題提供者面板",
     "TOGGLE_SHOW_NOTES": "顯示/隱藏專案筆記",
     "TOGGLE_TRACK_TIME": "開始/停止追蹤時間",
     "TRIGGER_SYNC": "同步！",
