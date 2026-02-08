@@ -32,6 +32,7 @@ import { selectAllTasksDueToday } from '../../planner/store/planner.selectors';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
 import { skipDuringSyncWindow } from '../../../util/skip-during-sync-window.operator';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { alertDialog, confirmDialog } from '../../../util/native-dialogs';
 
 @Injectable()
@@ -112,9 +113,15 @@ export class TagEffects {
     { dispatch: false },
   );
 
+  /**
+   * SAFETY: Guarded with skipWhileApplyingRemoteOps() because this effect
+   * dispatches via tagService.updateTag() inside tap(), bypassing dispatch:false.
+   * Without the guard, intermediate sync states could trigger false null-task detection.
+   */
   cleanupNullTasksForTaskList$: Observable<unknown> = createEffect(
     () =>
       this._workContextService.activeWorkContextTypeAndId$.pipe(
+        skipWhileApplyingRemoteOps(),
         filter(({ activeType }) => activeType === WorkContextType.TAG),
         switchMap(({ activeType, activeId }) =>
           this._workContextService.mainListTasks$.pipe(

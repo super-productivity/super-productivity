@@ -33,6 +33,7 @@ import { EMPTY } from 'rxjs';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { Router } from '@angular/router';
 import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 
 @Injectable()
 export class TaskUiEffects {
@@ -121,6 +122,7 @@ export class TaskUiEffects {
   timeEstimateExceeded$ = createEffect(
     () =>
       this._store$.pipe(select(selectConfigFeatureState)).pipe(
+        skipWhileApplyingRemoteOps(),
         switchMap((globalCfg) =>
           globalCfg && globalCfg.timeTracking.isNotifyWhenTimeEstimateExceeded
             ? // reset whenever the current taskId changes (but no the task data, which is polled afterwards)
@@ -153,6 +155,7 @@ export class TaskUiEffects {
   timeEstimateExceededDismissBanner$ = createEffect(
     () =>
       this._store$.pipe(select(selectConfigFeatureState)).pipe(
+        skipWhileApplyingRemoteOps(),
         switchMap((globalCfg) =>
           globalCfg && globalCfg.timeTracking.isNotifyWhenTimeEstimateExceeded
             ? this._bannerService.activeBanner$.pipe(
