@@ -7,7 +7,6 @@ import {
   MatSlideToggleModule,
 } from '@angular/material/slide-toggle';
 import { FormlyFieldConfig } from '@ngx-formly/core';
-  imports: [MatSlideToggleModule, MatFormFieldModule, MatInputModule, ReactiveFormsModule, MatIcon],
 
 @Component({
   selector: 'formly-field-mat-slide-toggle',
