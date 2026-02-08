@@ -6,7 +6,7 @@ import {
   MatSlideToggleChange,
   MatSlideToggleModule,
 } from '@angular/material/slide-toggle';
-import { FormlyFieldConfig } from '@ngx-formly/core';
+import { FieldType, FormlyFieldConfig } from '@ngx-formly/core';
 
 @Component({
   selector: 'formly-field-mat-slide-toggle',
