@@ -51,6 +51,9 @@ interface SliderProps extends FormlyFieldProps {
       mat-slider {
         width: 100%;
       }
+      mat-form-field {
+        width: 100%;
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

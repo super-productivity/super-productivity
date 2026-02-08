@@ -353,7 +353,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     const context = this._activeWorkContext();
     const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 0;
 
-    return baseOpacity * 0.1;
+    return baseOpacity * 0.01;
   });
 
   changeBackgroundFromUnsplash(): void {

@@ -164,13 +164,22 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
         props: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_OVERLAY_OPACITY,
           description:
-            'The default opacity of the background overlay (0 = transparent, 10 = opaque). Default is 0. Adjust this value to make the background more or less transparent.',
+            'Adjust this value to make the background more or less transparent. The default is 0%.',
           type: 'number',
           min: 0,
-          max: 10,
-          step: 1,
+          max: 100,
           required: false,
-          showTickMarks: true,
+          displayWith: (value: number): string => `${value}%`,
+        },
+        expressions: {
+          hide: (field: FormlyFieldConfig): boolean => {
+            const isDarkTheme = document.body.classList.contains('isDarkTheme');
+            // hide the setting if the active theme has no background image.
+            // avoids unnecessary rendering when changing opacity would have no effect.
+            return isDarkTheme
+              ? !field.model.backgroundImageDark
+              : !field.model.backgroundImageLight;
+          },
         },
       },
     ],
