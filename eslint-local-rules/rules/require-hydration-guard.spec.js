@@ -5,7 +5,7 @@ const { RuleTester } = require('eslint');
 const rule = require('./require-hydration-guard');
 
 const ruleTester = new RuleTester({
-  parserOptions: {
+  languageOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
   },
