@@ -14,7 +14,7 @@ import {
   RestoreSnapshotResponse,
 } from '../provider.interface';
 import { SyncCredentialStore } from '../credential-store.service';
-import { SuperSyncPrivateCfg } from './super-sync.model';
+import { SuperSyncPrivateCfg, SUPER_SYNC_DEFAULT_BASE_URL } from './super-sync.model';
 import {
   MissingCredentialsSPError,
   AuthFailSPError,
@@ -83,7 +83,7 @@ export class SuperSyncProvider
 
   async isReady(): Promise<boolean> {
     const cfg = await this.privateCfg.load();
-    return !!(cfg && cfg.baseUrl && cfg.accessToken);
+    return !!(cfg && cfg.accessToken);
   }
 
   async setPrivateCfg(cfg: SuperSyncPrivateCfg): Promise<void> {
@@ -391,6 +391,10 @@ export class SuperSyncProvider
     return cfg;
   }
 
+  private _resolveBaseUrl(cfg: SuperSyncPrivateCfg): string {
+    return (cfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL).replace(/\/$/, '');
+  }
+
   /**
    * Generates a storage key unique to this server URL to avoid conflicts
    * when switching between different accounts or servers.
@@ -398,7 +402,7 @@ export class SuperSyncProvider
   private async _getServerSeqKey(): Promise<string> {
     // Note: SyncCredentialStore.load() has its own in-memory caching
     const cfg = await this.privateCfg.load();
-    const baseUrl = cfg?.baseUrl ?? 'default';
+    const baseUrl = cfg?.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
     // Include accessToken in the hash so different users on the same server
     // get separate lastServerSeq tracking. This ensures server migration detection
     // works correctly when switching between accounts on the same server.
@@ -478,7 +482,7 @@ export class SuperSyncProvider
     options: RequestInit,
   ): Promise<T> {
     const startTime = Date.now();
-    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
@@ -562,7 +566,7 @@ export class SuperSyncProvider
     method: string,
     startTime: number,
   ): Promise<T> {
-    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
@@ -619,7 +623,7 @@ export class SuperSyncProvider
     compressedBody: Uint8Array,
   ): Promise<T> {
     const startTime = Date.now();
-    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 
@@ -703,7 +707,7 @@ export class SuperSyncProvider
   ): Promise<T> {
     const startTime = Date.now();
     const base64Gzip = await compressWithGzipToString(jsonPayload);
-    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const baseUrl = this._resolveBaseUrl(cfg);
     const url = `${baseUrl}${path}`;
     const sanitizedToken = this._sanitizeToken(cfg.accessToken);
 

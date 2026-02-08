@@ -1,5 +1,5 @@
 import { SuperSyncProvider } from './super-sync';
-import { SuperSyncPrivateCfg } from './super-sync.model';
+import { SuperSyncPrivateCfg, SUPER_SYNC_DEFAULT_BASE_URL } from './super-sync.model';
 import { SyncCredentialStore } from '../credential-store.service';
 import { SyncProviderId } from '../provider.const';
 import {
@@ -115,7 +115,7 @@ describe('SuperSyncProvider', () => {
   });
 
   describe('isReady', () => {
-    it('should return true when baseUrl and accessToken are configured', async () => {
+    it('should return true when accessToken is configured', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
 
       const result = await provider.isReady();
@@ -131,14 +131,14 @@ describe('SuperSyncProvider', () => {
       expect(result).toBe(false);
     });
 
-    it('should return false when baseUrl is missing', async () => {
+    it('should return true when baseUrl is missing but accessToken is set', async () => {
       mockPrivateCfgStore.load.and.returnValue(
         Promise.resolve({ accessToken: 'token' } as SuperSyncPrivateCfg),
       );
 
       const result = await provider.isReady();
 
-      expect(result).toBe(false);
+      expect(result).toBe(true);
     });
 
     it('should return false when accessToken is missing', async () => {
@@ -1227,7 +1227,7 @@ describe('SuperSyncProvider', () => {
         const { compressWithGzipToString } =
           await import('../../encryption/compression-handler');
         const base64Gzip = await compressWithGzipToString(jsonPayload);
-        const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+        const baseUrl = (cfg.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL).replace(/\/$/, '');
         const url = `${baseUrl}${path}`;
         const sanitizedToken = cfg.accessToken.replace(/[^\x20-\x7E]/g, '');
 
