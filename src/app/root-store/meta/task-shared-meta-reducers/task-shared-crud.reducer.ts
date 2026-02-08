@@ -253,7 +253,7 @@ const handleConvertToMainTask = (
   if (task.projectId && state[PROJECT_FEATURE_NAME].entities[task.projectId]) {
     const project = getProject(state, task.projectId);
     updatedState = updateProject(updatedState, task.projectId, {
-      taskIds: [task.id, ...project.taskIds],
+      taskIds: unique([task.id, ...project.taskIds]),
     });
   }
 
@@ -316,7 +316,7 @@ const handleConvertToMainTask = (
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: [task.id, ...getTag(updatedState, tagId).taskIds],
+        taskIds: unique([task.id, ...getTag(updatedState, tagId).taskIds]),
       },
     }),
   );

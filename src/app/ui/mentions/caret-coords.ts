@@ -102,13 +102,13 @@ export const getCaretCoordinates = (
     if (isInput && prop === 'lineHeight') {
       // Special case for <input>s because text is rendered centered and line height may be != height
       if (computed.boxSizing === 'border-box') {
-        const height = parseInt(computed.height);
+        const height = parseInt(computed.height, 10);
         const outerHeight =
-          parseInt(computed.paddingTop) +
-          parseInt(computed.paddingBottom) +
-          parseInt(computed.borderTopWidth) +
-          parseInt(computed.borderBottomWidth);
-        const targetHeight = outerHeight + parseInt(computed.lineHeight);
+          parseInt(computed.paddingTop, 10) +
+          parseInt(computed.paddingBottom, 10) +
+          parseInt(computed.borderTopWidth, 10) +
+          parseInt(computed.borderBottomWidth, 10);
+        const targetHeight = outerHeight + parseInt(computed.lineHeight, 10);
         if (height > targetHeight) {
           style.lineHeight = height - outerHeight + 'px';
         } else if (height === targetHeight) {
@@ -126,7 +126,7 @@ export const getCaretCoordinates = (
 
   if (isFirefox) {
     // Firefox lies about the overflow property for textareas: https://bugzilla.mozilla.org/show_bug.cgi?id=984275
-    if (element.scrollHeight > parseInt(computed.height)) style.overflowY = 'scroll';
+    if (element.scrollHeight > parseInt(computed.height, 10)) style.overflowY = 'scroll';
   } else {
     style.overflow = 'hidden'; // for Chrome to not render a scrollbar; IE keeps overflowY = 'scroll'
   }
@@ -148,9 +148,9 @@ export const getCaretCoordinates = (
   div.appendChild(span);
 
   const coordinates = {
-    top: span.offsetTop + parseInt(computed['borderTopWidth']),
-    left: span.offsetLeft + parseInt(computed['borderLeftWidth']),
-    height: parseInt(computed['lineHeight']),
+    top: span.offsetTop + parseInt(computed['borderTopWidth'], 10),
+    left: span.offsetLeft + parseInt(computed['borderLeftWidth'], 10),
+    height: parseInt(computed['lineHeight'], 10),
   };
 
   if (debug) {

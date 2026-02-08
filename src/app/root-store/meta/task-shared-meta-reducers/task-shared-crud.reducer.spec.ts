@@ -324,6 +324,22 @@ describe('taskSharedCrudMetaReducer', () => {
         baseState,
       );
     });
+
+    it('should not duplicate task ID in project or tag taskIds when task already exists', () => {
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      const action = createAddTaskAction();
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['task1'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
   });
 
   describe('convertToMainTask action', () => {
@@ -432,6 +448,45 @@ describe('taskSharedCrudMetaReducer', () => {
         {
           ...expectProjectUpdate('project1', { taskIds: ['task1', 'existing-task'] }),
           ...expectTagUpdate('tag1', { taskIds: ['task1', 'existing-task'] }),
+        },
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should not duplicate task ID in project or tag taskIds when task already exists', () => {
+      const { action, testState: baseTestState } = createConvertAction();
+
+      const testState = {
+        ...baseTestState,
+        [PROJECT_FEATURE_NAME]: {
+          ...baseTestState[PROJECT_FEATURE_NAME],
+          entities: {
+            ...baseTestState[PROJECT_FEATURE_NAME].entities,
+            project1: {
+              ...baseTestState[PROJECT_FEATURE_NAME].entities.project1,
+              taskIds: ['task1'],
+            } as Project,
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ...baseTestState[TAG_FEATURE_NAME],
+          entities: {
+            ...baseTestState[TAG_FEATURE_NAME].entities,
+            tag1: {
+              ...baseTestState[TAG_FEATURE_NAME].entities.tag1,
+              taskIds: ['task1'],
+            } as Tag,
+          },
+        },
+      };
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        {
+          ...expectProjectUpdate('project1', { taskIds: ['task1'] }),
+          ...expectTagUpdate('tag1', { taskIds: ['task1'] }),
         },
         action,
         mockReducer,

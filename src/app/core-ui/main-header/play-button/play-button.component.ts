@@ -24,6 +24,7 @@ import { WorkContext } from '../../../features/work-context/work-context.model';
 import { TaskService } from '../../../features/tasks/task.service';
 import { animationFrameScheduler, Subscription } from 'rxjs';
 import { distinctUntilChanged, observeOn } from 'rxjs/operators';
+import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.service';
 
 @Component({
   selector: 'play-button',
@@ -35,6 +36,9 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         <div
           @fade
           class="current-task-title"
+          (click)="navigateToCurrentTask()"
+          matTooltip="{{ T.MH.SHOW_TRACKED_TASK | translate }}"
+          matTooltipPosition="below"
         >
           <div class="title">{{ task.title }}</div>
           @if (currentTaskContext(); as taskContext) {
@@ -178,6 +182,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
         background: var(--bg-lighter);
         font-size: 13px;
         z-index: 5;
+        cursor: pointer;
 
         @media (max-width: 1080px) {
           display: none;
@@ -212,6 +217,7 @@ import { distinctUntilChanged, observeOn } from 'rxjs/operators';
 export class PlayButtonComponent implements OnInit, OnDestroy {
   private _renderer = inject(Renderer2);
   private _cd = inject(ChangeDetectorRef);
+  private _navigateToTaskService = inject(NavigateToTaskService);
 
   readonly T = T;
   readonly taskService = inject(TaskService);
@@ -264,6 +270,13 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
           }
         }),
     );
+  }
+
+  navigateToCurrentTask(): void {
+    const taskId = this.currentTaskId();
+    if (taskId) {
+      this._navigateToTaskService.navigate(taskId);
+    }
   }
 
   ngOnDestroy(): void {

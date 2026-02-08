@@ -285,7 +285,7 @@ jobs:
             .tmp/app-builds/*.exe
             .tmp/app-builds/*.blockmap
             .tmp/app-builds/latest*.yml
-          draft: false
+          draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
 
       # --- Code signing (best-effort: signing failure won't block the release) ---
@@ -410,5 +410,5 @@ jobs:
             .tmp/app-builds/*.exe
             .tmp/app-builds/*.blockmap
             .tmp/app-builds/latest*.yml
-          draft: false
+          draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}

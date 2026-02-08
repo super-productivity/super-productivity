@@ -28,6 +28,7 @@ import { Router } from '@angular/router';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 
 const UPDATE_PERCENTAGE_INTERVAL = 250;
 // since the reminder modal doesn't show instantly we adjust a little for that
@@ -44,10 +45,15 @@ export class ReminderCountdownEffects {
   private _projectService = inject(ProjectService);
   private _router = inject(Router);
 
+  /**
+   * SAFETY: Guarded with skipWhileApplyingRemoteOps() to prevent banner
+   * flashing during sync when selectAllTasksWithReminder changes.
+   */
   reminderCountdownBanner$ = createEffect(
     () =>
       this._dataInitStateService.isAllDataLoadedInitially$.pipe(
         concatMap(() => this._store.select(selectReminderConfig)),
+        skipWhileApplyingRemoteOps(),
         switchMap((reminderCfg) =>
           reminderCfg.isCountdownBannerEnabled
             ? combineLatest([

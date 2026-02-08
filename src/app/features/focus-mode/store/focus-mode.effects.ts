@@ -798,8 +798,6 @@ export class FocusModeEffects {
               return;
             }
 
-            // Show banner when paused so user can resume from banner
-            const useIconButtons = focusModeConfig?.isStartInBackground;
             const shouldShowBanner =
               isSessionRunning || isOnBreak || isSessionCompleted || isSessionPaused;
 
@@ -873,15 +871,13 @@ export class FocusModeEffects {
                 translateParams,
                 timer$,
                 progress$,
-                // Hide dismiss button in icon button mode (banner-only mode)
-                isHideDismissBtn: !!useIconButtons,
+                isHideDismissBtn: true,
                 ...this._getBannerActions(
                   timer,
                   isOnBreak,
                   isSessionCompleted,
                   isBreakTimeUp,
                   focusModeConfig,
-                  !!useIconButtons,
                 ),
               });
             } else {
@@ -1021,17 +1017,12 @@ export class FocusModeEffects {
     this.store.dispatch(showFocusOverlay());
   }
 
-  /**
-   * Gets banner button actions for both text and icon modes.
-   * Extracted business logic into helper methods for better testability and maintainability.
-   */
   private _getBannerActions(
     timer: TimerState,
     isOnBreak: boolean,
     isSessionCompleted: boolean,
     isBreakTimeUp: boolean,
     focusModeConfig: FocusModeConfig | undefined,
-    useIcons: boolean,
   ): Pick<Banner, 'action' | 'action2' | 'action3'> {
     const isPaused = !timer.isRunning && timer.purpose !== null;
 
@@ -1042,7 +1033,7 @@ export class FocusModeEffects {
     const playPauseAction = shouldShowStartButton
       ? {
           label: T.F.FOCUS_MODE.B.START,
-          ...(useIcons && { icon: 'play_arrow' }),
+          icon: 'play_arrow',
           fn: () => {
             // When starting from break completion, first properly complete/skip the break
             // to resume task tracking and clean up state
@@ -1056,7 +1047,7 @@ export class FocusModeEffects {
         }
       : {
           label: isPaused ? T.F.FOCUS_MODE.B.RESUME : T.F.FOCUS_MODE.B.PAUSE,
-          ...(useIcons && { icon: isPaused ? 'play_arrow' : 'pause' }),
+          icon: isPaused ? 'play_arrow' : 'pause',
           fn: () => this._handlePlayPauseToggle(isPaused),
         };
 
@@ -1066,7 +1057,7 @@ export class FocusModeEffects {
       isSessionCompleted && !isBreakTimeUp
         ? {
             label: T.F.FOCUS_MODE.B.END_FOCUS_SESSION,
-            ...(useIcons && { icon: 'done_all' }),
+            icon: 'done_all',
             fn: () => {
               this.store.dispatch(actions.cancelFocusSession());
             },
@@ -1076,19 +1067,19 @@ export class FocusModeEffects {
           : isOnBreak
             ? {
                 label: T.F.FOCUS_MODE.SKIP_BREAK,
-                ...(useIcons && { icon: 'skip_next' }),
+                icon: 'skip_next',
                 fn: () => this._handleSkipBreak(),
               }
             : {
                 label: T.F.FOCUS_MODE.B.END_SESSION,
-                ...(useIcons && { icon: 'done_all' }),
+                icon: 'done_all',
                 fn: () => this._handleEndSession(),
               };
 
     // Open overlay button
     const overlayAction = {
       label: T.F.FOCUS_MODE.B.TO_FOCUS_OVERLAY,
-      ...(useIcons && { icon: 'fullscreen' }),
+      icon: 'fullscreen',
       fn: () => this._handleOpenOverlay(),
     };
 

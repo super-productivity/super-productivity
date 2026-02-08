@@ -384,9 +384,6 @@ test.describe('@supersync @encryption Password Preservation', () => {
       await clientA.sync.changeEncryptionPassword(password2);
       console.log('[PasswordChange] Password changed');
 
-      // Wait for password change operation to complete
-      await clientA.page.waitForTimeout(2000);
-
       // ============ PHASE 3: Create task with new password ============
       console.log('[PasswordChange] Phase 3: Creating task with new password');
 

@@ -107,17 +107,17 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     console.log('\n=== STEP: About to pause break ===');
 
     // Step 6: Pause the break
-    const pauseLink = banner.getByText('Pause', { exact: true });
-    await expect(pauseLink).toBeVisible({ timeout: 2000 });
-    await pauseLink.click();
+    const pauseBtn = banner.getByRole('button', { name: 'Pause' });
+    await expect(pauseBtn).toBeVisible({ timeout: 2000 });
+    await pauseBtn.click();
     await page.waitForTimeout(1000);
 
     console.log('\n=== STEP: Break paused, about to resume ===');
 
     // Step 7: Resume the break - THIS IS WHERE THE BUG HAPPENS
-    const resumeLink = banner.getByText('Resume', { exact: true });
-    await expect(resumeLink).toBeVisible({ timeout: 2000 });
-    await resumeLink.click();
+    const resumeBtn = banner.getByRole('button', { name: 'Resume' });
+    await expect(resumeBtn).toBeVisible({ timeout: 2000 });
+    await resumeBtn.click();
 
     // Wait for state to settle
     await page.waitForTimeout(2000);
@@ -143,7 +143,7 @@ test.describe('Bug #5995: Resume paused break (CRITICAL BUG TEST)', () => {
     expect(hasSessionText).toBe(false);
 
     // Additional verification: Open overlay and check we're on break screen
-    await banner.getByText('To Focus Overlay').click();
+    await banner.getByRole('button', { name: /focus overlay/i }).click();
     await page.waitForTimeout(500);
 
     const breakScreen = page.locator('focus-mode-break');

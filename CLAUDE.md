@@ -138,7 +138,7 @@ Use Angular commit message format: `type(scope): description`
   - `fix(sync): handle network timeout gracefully`
   - `refactor(projects): simplify project selector logic`
 
-**Note**: Use `test:` for test changes, not `fix(test):`.
+**IMPORTANT**: Never use `fix(test):` or `fix(e2e):` for test-related changes. The `fix` type is reserved for actual code/bug fixes. Always use `test:` for test changes, e.g., `test(e2e): fix flaky sync tests` or `test: update unit test assertions`.
 
 ## 🚫 Anti-Patterns → Do This Instead
 

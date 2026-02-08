@@ -1,3 +1,40 @@
+## [17.1.5](https://github.com/super-productivity/super-productivity/compare/v17.1.4...v17.1.5) (2026-02-08)
+
+### Bug Fixes
+
+- **build:** keep GitHub release as draft so all platform jobs can upload ([814d314](https://github.com/super-productivity/super-productivity/commit/814d314c231549f2e2c57119bc8d29c9618b71a6))
+
+## [17.1.4](https://github.com/super-productivity/super-productivity/compare/v17.1.3...v17.1.4) (2026-02-08)
+
+### Bug Fixes
+
+- address root causes instead of treating symptoms ([#6407](https://github.com/super-productivity/super-productivity/issues/6407)) ([b2f57c8](https://github.com/super-productivity/super-productivity/commit/b2f57c80a530ad71af7d5c659e7126eae3f80386))
+- **e2e:** fix failing and flaky supersync tests ([d290673](https://github.com/super-productivity/super-productivity/commit/d290673034a74e2fbc1ed47ac333685791c43ee7))
+- **e2e:** use page object for project creation in drag-drop test ([19b0a43](https://github.com/super-productivity/super-productivity/commit/19b0a43cc2f12d60a0fcb9072800d758cbcde1db))
+- **focus-mode:** always show icon buttons in focus session banner [#6000](https://github.com/super-productivity/super-productivity/issues/6000) ([a8ba714](https://github.com/super-productivity/super-productivity/commit/a8ba7141ae7c694608bbdabe4032293ff3e7f905))
+- **focus-mode:** prevent tracking reminder from overriding focus mode after Flowtime completion ([#6403](https://github.com/super-productivity/super-productivity/issues/6403)) ([ce7de48](https://github.com/super-productivity/super-productivity/commit/ce7de487a5a0633ac4348d5c7d3f356b2950e1ff))
+- prevent window controls overlap in header [#6365](https://github.com/super-productivity/super-productivity/issues/6365) ([#6422](https://github.com/super-productivity/super-productivity/issues/6422)) ([13dc2bc](https://github.com/super-productivity/super-productivity/commit/13dc2bccff8f3c67ba1aef0d3c888c848f335855))
+- replace deprecated substr(), add radix to parseInt(), fix silent catch ([#6408](https://github.com/super-productivity/super-productivity/issues/6408)) ([f46836f](https://github.com/super-productivity/super-productivity/commit/f46836fb2be8a192c297f78fbca8c22b3b806d76))
+- **schedule:** handle RepeatProjectionSplit\* types in getEventDayStr and clean up dead code ([#6399](https://github.com/super-productivity/super-productivity/issues/6399)) ([7583b19](https://github.com/super-productivity/super-productivity/commit/7583b197658f5558c64bba485b54326b180d0632))
+- **sync:** clear stale auth credentials on auth errors to enable re-auth ([2e2dad8](https://github.com/super-productivity/super-productivity/commit/2e2dad8eb855bb3855e01ed013d90afc35f58e7f)), closes [#6397](https://github.com/super-productivity/super-productivity/issues/6397)
+- **sync:** handle MissingCredentialsSPError with re-auth prompt ([3c0aa03](https://github.com/super-productivity/super-productivity/commit/3c0aa038228827a6ef45ad1a822a352e13f3c3af))
+- **sync:** improve WebDAV error handling and data validation ([#6411](https://github.com/super-productivity/super-productivity/issues/6411)) ([14e2993](https://github.com/super-productivity/super-productivity/commit/14e29930c81c251362a316fe1466dd630ffc846a))
+- **sync:** use CapacitorWebFetch for Dropbox on iOS to bypass URLSession.shared ([8ded174](https://github.com/super-productivity/super-productivity/commit/8ded174cb0427b7f7b6caac136b294552784991b)), closes [#6333](https://github.com/super-productivity/super-productivity/issues/6333)
+- **tasks:** prevent duplicate task IDs in project/tag taskIds arrays [#6410](https://github.com/super-productivity/super-productivity/issues/6410) ([aeb16ec](https://github.com/super-productivity/super-productivity/commit/aeb16ecaa75f4db32cef9567bd838572f15c2c1f))
+- **tracking:** navigate to task's actual context and prefer today list ([c484486](https://github.com/super-productivity/super-productivity/commit/c484486bd33ad782bcc1f8f833871573fe2f0f04))
+- **tracking:** navigate to today page and focus task on title click ([9b4240b](https://github.com/super-productivity/super-productivity/commit/9b4240b732b0a3d9602ff796fb312d839ed40f1d)), closes [#6416](https://github.com/super-productivity/super-productivity/issues/6416)
+- **tracking:** replace dead systemResumeBased$ with working ipcResume$ ([2cea4af](https://github.com/super-productivity/super-productivity/commit/2cea4af6016ef6b6bd1d24d3ffa43f750624ccaa))
+
+### Features
+
+- **tasks:** allow to drag subtasks on tags in magic-side-nav component ([#6389](https://github.com/super-productivity/super-productivity/issues/6389)) ([4a71663](https://github.com/super-productivity/super-productivity/commit/4a71663cf4e4def8a884bc8797ac4fc85bde4eda))
+- **tracking:** click task title in header to navigate to task's list ([e7a606a](https://github.com/super-productivity/super-productivity/commit/e7a606a63b1c8123ec6682d1638d44646eebea36)), closes [#6416](https://github.com/super-productivity/super-productivity/issues/6416)
+- **tracking:** click task title in header to open detail panel ([39b50f2](https://github.com/super-productivity/super-productivity/commit/39b50f230fc106b434529c176cc5fb09bab4aeae)), closes [#6416](https://github.com/super-productivity/super-productivity/issues/6416)
+
+### Reverts
+
+- Revert "feat(tracking): click task title in header to open detail panel" ([dfb894b](https://github.com/super-productivity/super-productivity/commit/dfb894b56a245e807a240492a1f7c18f16d84146))
+
 ## [17.1.3](https://github.com/super-productivity/super-productivity/compare/v17.1.2...v17.1.3) (2026-02-06)
 
 ### Bug Fixes

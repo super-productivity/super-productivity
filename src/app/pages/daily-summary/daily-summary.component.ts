@@ -398,7 +398,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   updateBreakNr(value: string): void {
-    const nr = parseInt(value);
+    const nr = parseInt(value, 10);
     if (!isNaN(nr)) {
       this.workContextService.updateBreakNrForActiveContext(this.dayStr, nr);
 

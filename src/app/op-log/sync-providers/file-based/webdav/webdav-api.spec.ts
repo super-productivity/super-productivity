@@ -1200,6 +1200,121 @@ describe('WebdavApi', () => {
     });
   });
 
+  describe('listFiles', () => {
+    it('should handle invalid status codes safely when creating error Response', async () => {
+      // Simulate a response with an invalid status (e.g., 0 from a network failure)
+      const mockResponse = {
+        status: 0,
+        headers: {},
+        data: 'error body',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+
+      await expectAsync(api.listFiles('/folder/')).toBeRejectedWith(
+        jasmine.any(HttpNotOkAPIError),
+      );
+    });
+
+    it('should return files from successful PROPFIND response', async () => {
+      const mockResponse = {
+        status: 207,
+        headers: {},
+        data: '<?xml version="1.0"?><multistatus/>',
+      };
+      mockHttpAdapter.request.and.returnValue(Promise.resolve(mockResponse));
+      mockXmlParser.parseMultiplePropsFromXml.and.returnValue([
+        {
+          filename: 'file1.txt',
+          basename: 'file1.txt',
+          lastmod: '',
+          size: 0,
+          type: 'file',
+          etag: '',
+          data: {},
+          path: '/folder/file1.txt',
+        },
+        {
+          filename: 'subfolder',
+          basename: 'subfolder',
+          lastmod: '',
+          size: 0,
+          type: 'directory',
+          etag: '',
+          data: {},
+          path: '/folder/subfolder',
+        },
+      ]);
+
+      const result = await api.listFiles('/folder/');
+      // Should only return files, not directories
+      expect(result).toEqual(['/folder/file1.txt']);
+    });
+  });
+
+  describe('_createDirectory', () => {
+    it('should re-throw unexpected errors instead of swallowing them', async () => {
+      // Simulate a 403 Forbidden error on MKCOL
+      const errorResponse = new Response(null, { status: 403 });
+      const error = new HttpNotOkAPIError(errorResponse);
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake((params) => {
+        callCount++;
+        if (params.method === 'PUT' && callCount === 1) {
+          // First upload fails with 409 Conflict
+          const conflictResponse = new Response(null, { status: 409 });
+          return Promise.reject(new HttpNotOkAPIError(conflictResponse));
+        }
+        if (params.method === 'MKCOL') {
+          // Directory creation fails with 403 Permission Denied
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ status: 200, headers: {}, data: '' });
+      });
+
+      await expectAsync(
+        api.upload({
+          path: '/restricted/test.txt',
+          data: 'content',
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(jasmine.any(HttpNotOkAPIError));
+    });
+
+    it('should not throw for known "directory exists" status codes', async () => {
+      const errorResponse405 = new Response(null, { status: 405 });
+      const error405 = new HttpNotOkAPIError(errorResponse405);
+
+      let callCount = 0;
+      mockHttpAdapter.request.and.callFake((params) => {
+        callCount++;
+        if (params.method === 'PUT' && callCount === 1) {
+          const conflictResponse = new Response(null, { status: 409 });
+          return Promise.reject(new HttpNotOkAPIError(conflictResponse));
+        }
+        if (params.method === 'MKCOL') {
+          // 405 means directory already exists — should not throw
+          return Promise.reject(error405);
+        }
+        if (params.method === 'PUT') {
+          return Promise.resolve({
+            status: 201,
+            headers: { 'last-modified': 'Wed, 15 Jan 2025 11:00:00 GMT' },
+            data: '',
+          });
+        }
+        return Promise.resolve({ status: 200, headers: {}, data: '' });
+      });
+
+      const result = await api.upload({
+        path: '/folder/test.txt',
+        data: 'content',
+        expectedRev: null,
+      });
+      expect(result.rev).toBe('Wed, 15 Jan 2025 11:00:00 GMT');
+    });
+  });
+
   describe('error handling', () => {
     it('should call getCfgOrError for each operation', async () => {
       const mockResponse = {

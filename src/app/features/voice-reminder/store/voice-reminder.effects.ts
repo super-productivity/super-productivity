@@ -7,6 +7,7 @@ import { Store } from '@ngrx/store';
 import { selectIsDominaModeConfig } from '../../config/store/global-config.reducer';
 import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { speak } from '../../../util/speak';
+import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 
 @Injectable()
 export class VoiceReminderEffects {
@@ -16,6 +17,7 @@ export class VoiceReminderEffects {
   dominaMode$: Observable<unknown> = createEffect(
     () =>
       this._store$.select(selectIsDominaModeConfig).pipe(
+        skipWhileApplyingRemoteOps(),
         distinctUntilChanged(),
         switchMap((cfg) =>
           cfg.isEnabled && cfg.voice

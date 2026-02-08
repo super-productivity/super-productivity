@@ -186,11 +186,14 @@ export class WebdavXmlParser {
     const isCollection =
       resourceType !== null && resourceType.querySelector('collection') !== null;
 
+    const parsedSize = parseInt(contentLength, 10);
+    const size = !isNaN(parsedSize) && parsedSize >= 0 ? parsedSize : 0;
+
     return {
       filename: displayname || decodedHref.split('/').pop() || '',
       basename: displayname || decodedHref.split('/').pop() || '',
       lastmod: lastModified,
-      size: parseInt(contentLength, 10),
+      size,
       type: isCollection ? 'directory' : 'file',
       etag: lastModified, // Use lastmod as etag for consistency
       data: {
