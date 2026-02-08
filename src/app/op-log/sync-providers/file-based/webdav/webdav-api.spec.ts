@@ -1258,7 +1258,7 @@ describe('WebdavApi', () => {
       const error = new HttpNotOkAPIError(errorResponse);
 
       let callCount = 0;
-      mockHttpAdapter.request.and.callFake((params: any) => {
+      mockHttpAdapter.request.and.callFake((params) => {
         callCount++;
         if (params.method === 'PUT' && callCount === 1) {
           // First upload fails with 409 Conflict
@@ -1286,7 +1286,7 @@ describe('WebdavApi', () => {
       const error405 = new HttpNotOkAPIError(errorResponse405);
 
       let callCount = 0;
-      mockHttpAdapter.request.and.callFake((params: any) => {
+      mockHttpAdapter.request.and.callFake((params) => {
         callCount++;
         if (params.method === 'PUT' && callCount === 1) {
           const conflictResponse = new Response(null, { status: 409 });
