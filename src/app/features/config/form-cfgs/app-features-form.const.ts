@@ -7,65 +7,99 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
   items: [
     {
       key: 'isTimeTrackingEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.TIME_TRACKING },
+      type: 'slide-toggle',
+      props: {
+        label: T.GCF.APP_FEATURES.TIME_TRACKING,
+        icon: 'play_arrow',
+      },
     },
     {
       key: 'isFocusModeEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.FOCUS_MODE },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.FOCUS_MODE,
+        icon: 'center_focus_strong',
+      },
     },
     {
       key: 'isSchedulerEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.SCHEDULE },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.SCHEDULE,
+        icon: 'schedule',
+      },
     },
     {
       key: 'isPlannerEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.PLANNER },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.PLANNER,
+        icon: 'edit_calendar',
+      },
     },
     {
       key: 'isBoardsEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.BOARDS },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.BOARDS,
+        icon: 'grid_view',
+      },
     },
     {
       key: 'isScheduleDayPanelEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.SCHEDULE_DAY_PANEL },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.SCHEDULE_DAY_PANEL,
+        icon: 'schedule',
+      },
     },
     {
       key: 'isIssuesPanelEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.ISSUES_PANEL },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.ISSUES_PANEL,
+        icon: 'dashboard_customize',
+      },
     },
     {
       key: 'isProjectNotesEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.PROJECT_NOTES },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.PROJECT_NOTES,
+        icon: 'comment',
+      },
     },
     {
       key: 'isSyncIconEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.SYNC_BUTTON },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.SYNC_BUTTON,
+        icon: 'sync',
+      },
     },
     {
       key: 'isDonatePageEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.DONATE_PAGE },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.DONATE_PAGE,
+        icon: 'favorite',
+      },
     },
     {
       key: 'isHabitsEnabled',
-      type: 'checkbox',
-      templateOptions: { label: T.GCF.APP_FEATURES.HABITS },
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.HABITS,
+        svgIcon: 'habit',
+      },
     },
     {
       key: 'isEnableUserProfiles',
-      type: 'checkbox',
+      type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.USER_PROFILES,
         description: T.GCF.APP_FEATURES.USER_PROFILES_HINT,
+        icon: 'account_circle',
       },
     },
   ],
