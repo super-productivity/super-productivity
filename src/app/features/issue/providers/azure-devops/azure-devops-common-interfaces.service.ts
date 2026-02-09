@@ -44,7 +44,13 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
           this._azureDevOpsApiService.getIssueById$(issueId.toString(), cfg),
         ),
       )
-      .toPromise(); // TODO: Add type assertion if needed
+      .toPromise()
+      .then((res) => {
+        if (!res) {
+          throw new Error('Azure DevOps Issue not found');
+        }
+        return res;
+      });
   }
 
   searchIssues(searchTerm: string, issueProviderId: string): Promise<SearchResultItem[]> {
@@ -58,7 +64,7 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
       )
       .toPromise()
       .then((issues) =>
-        issues.map((issue) => ({
+        (issues ?? []).map((issue) => ({
           title: `#${issue.id} ${issue.summary}`,
           issueType: 'AZURE_DEVOPS',
           issueData: issue,
@@ -74,10 +80,23 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
     if (!task.issueProviderId || !task.issueId) {
       throw new Error('No issueProviderId or issueId');
     }
-    const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
+    const cfg = await this._getCfgOnce$(task.issueProviderId)
+      .toPromise()
+      .then((res) => {
+        if (!res) {
+          throw new Error('Azure DevOps Config not found');
+        }
+        return res;
+      });
     const issue = await this._azureDevOpsApiService
       .getIssueById$(task.issueId, cfg)
-      .toPromise();
+      .toPromise()
+      .then((res) => {
+        if (!res) {
+          throw new Error('Azure DevOps Issue not found');
+        }
+        return res;
+      });
 
     const wasUpdated = new Date(issue.updated).getTime() > (task.issueLastUpdated || 0);
 
@@ -125,13 +144,19 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
     issueProviderId: string,
     allExistingIssueIds: number[] | string[],
   ): Promise<AzureDevOpsIssueReduced[]> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
+    const cfg = await this._getCfgOnce$(issueProviderId)
+      .toPromise()
+      .then((res) => {
+        if (!res) {
+          throw new Error('Azure DevOps Config not found');
+        }
+        return res;
+      });
     return this._azureDevOpsApiService
       .getNewIssuesToAddToBacklog$(cfg)
       .toPromise()
       .then((issues) => {
-        // Cast allExistingIssueIds to any or string[] to avoid TS error with union type includes
-        return issues.filter(
+        return (issues ?? []).filter(
           (issue) => !(allExistingIssueIds as (string | number)[]).includes(issue.id),
         );
       });
