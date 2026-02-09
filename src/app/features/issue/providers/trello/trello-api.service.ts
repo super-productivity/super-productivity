@@ -3,7 +3,7 @@ import {
   HttpClient,
   HttpErrorResponse,
   HttpParams,
-  HttpHeaders,
+  // HttpHeaders,
 } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
@@ -168,6 +168,7 @@ export class TrelloApiService {
     );
   }
 
+  // todo: investigate this
   private _request$<T>(
     path: string,
     cfg: TrelloCfg,
@@ -175,11 +176,11 @@ export class TrelloApiService {
   ): Observable<T> {
     this._checkSettings(cfg);
     const httpParams = this._createParams(cfg, params);
-    const headers = new HttpHeaders().set('Authorization', `Bearer ${cfg.token}`);
+    // const headers = new HttpHeaders().set('Authorization', `Bearer ${cfg.token}`);
     return this._http
       .get<T>(`${BASE_URL}${path}`, {
         params: httpParams,
-        headers,
+        // headers,
       })
       .pipe(catchError((err) => this._handleError$(err)));
   }
