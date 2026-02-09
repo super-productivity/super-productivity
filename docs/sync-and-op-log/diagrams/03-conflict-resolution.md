@@ -324,9 +324,11 @@ flowchart LR
 
 ## Key Files
 
-| File                                                    | Purpose                           |
-| ------------------------------------------------------- | --------------------------------- |
-| `src/app/op-log/sync/conflict-resolution.service.ts`    | LWW conflict auto-resolution      |
-| `src/app/op-log/sync/sync-import-filter.service.ts`     | SYNC_IMPORT filtering logic       |
-| `src/app/op-log/sync/operation-log-download.service.ts` | Download and apply remote ops     |
-| `src/app/op-log/sync/vector-clock.service.ts`           | Vector clock comparison utilities |
+| File                                                           | Purpose                                                    |
+| -------------------------------------------------------------- | ---------------------------------------------------------- |
+| `src/app/op-log/sync/conflict-resolution.service.ts`           | LWW conflict auto-resolution                               |
+| `src/app/op-log/sync/rejected-ops-handler.service.ts`          | Handles server rejections, retry limit for stuck conflicts |
+| `src/app/op-log/sync/superseded-operation-resolver.service.ts` | Creates merged ops with combined vector clocks             |
+| `src/app/op-log/sync/sync-import-filter.service.ts`            | SYNC_IMPORT filtering logic                                |
+| `src/app/op-log/sync/operation-log-download.service.ts`        | Download and apply remote ops                              |
+| `src/app/op-log/sync/vector-clock.service.ts`                  | Vector clock comparison utilities                          |
