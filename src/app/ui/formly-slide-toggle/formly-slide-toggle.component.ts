@@ -11,6 +11,7 @@ import { FieldType } from '@ngx-formly/material';
 
 @Component({
   selector: 'formly-field-mat-slide-toggle',
+  standalone: true,
   imports: [MatSlideToggleModule, MatInputModule, ReactiveFormsModule, MatIcon],
   template: `
     <mat-form-field>
