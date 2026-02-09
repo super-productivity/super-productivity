@@ -13,12 +13,9 @@ import { select, Store } from '@ngrx/store';
 import { debounceTime, map, startWith } from 'rxjs/operators';
 import { TaskService } from '../../tasks/task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
-import { MatDialog } from '@angular/material/dialog';
 import { MatIconButton, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
-import { LS } from '../../../core/persistence/storage-keys.const';
-import { DialogTimelineSetupComponent } from '../dialog-timeline-setup/dialog-timeline-setup.component';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
@@ -57,7 +54,6 @@ export class ScheduleComponent {
   taskService = inject(TaskService);
   layoutService = inject(LayoutService);
   scheduleService = inject(ScheduleService);
-  private _matDialog = inject(MatDialog);
   private _store = inject(Store);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
   private _dateAdapter = inject(DateAdapter);
@@ -264,12 +260,6 @@ export class ScheduleComponent {
 
   constructor() {
     this.layoutService.selectedTimeView.set('week');
-
-    if (!localStorage.getItem(LS.WAS_SCHEDULE_INITIAL_DIALOG_SHOWN)) {
-      this._matDialog.open(DialogTimelineSetupComponent, {
-        data: { isInfoShownInitially: true },
-      });
-    }
 
     effect(() => {
       if (this.isMonthView() === false) {
