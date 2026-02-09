@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { ActionType, Operation, OpType, VectorClock } from '../core/operation.types';
-import { mergeVectorClocks, limitVectorClockSize } from '../../core/util/vector-clock';
+import { mergeVectorClocks } from '../../core/util/vector-clock';
 import { OpLog } from '../../core/log';
 import { ConflictResolutionService } from './conflict-resolution.service';
 import { VectorClockService } from './vector-clock.service';
@@ -117,9 +117,6 @@ export class SupersededOperationResolverService {
         }
       }
 
-      // Load protected client IDs (e.g., from latest SYNC_IMPORT) to preserve during pruning
-      const protectedClientIds = await this.opLogStore.getProtectedClientIds();
-
       const opsToReject: string[] = [];
       const newOpsCreated: Operation[] = [];
 
@@ -144,20 +141,13 @@ export class SupersededOperationResolverService {
             [globalClock, item.op.vectorClock],
             clientId,
           );
-          // Preserve server entity clock IDs to prevent sync loop: if the server's
-          // existingClock has client IDs not in our protectedClientIds, pruning drops them,
-          // causing the server to see CONCURRENT instead of GREATER_THAN → infinite rejection.
-          // Entity clock IDs come BEFORE protected IDs so they get priority in the Set.
-          const entityClockIds = item.existingClock
-            ? Object.keys(item.existingClock)
-            : [];
-          const newClock = limitVectorClockSize(mergedClock, clientId, [
-            ...entityClockIds,
-            ...protectedClientIds,
-          ]);
+          // Don't prune here — the server prunes AFTER conflict detection (before storage).
+          // Client-side pruning would drop entity clock IDs when the merged clock exceeds
+          // MAX_VECTOR_CLOCK_SIZE, causing the server's pruning-aware comparison to return
+          // CONCURRENT instead of GREATER_THAN → infinite rejection loop.
           const newOp = this._recreateOpWithMergedClock(
             item.op,
-            newClock,
+            mergedClock,
             clientId,
             item.op.timestamp,
           );
@@ -205,14 +195,9 @@ export class SupersededOperationResolverService {
           allClocks,
           clientId,
         );
-        // Preserve server entity clock IDs to prevent sync loop (see moveToArchive comment above).
-        const entityClockIds = entityOps.flatMap((e) =>
-          e.existingClock ? Object.keys(e.existingClock) : [],
-        );
-        const newClock = limitVectorClockSize(mergedClock, clientId, [
-          ...entityClockIds,
-          ...protectedClientIds,
-        ]);
+        // Don't prune here — the server prunes AFTER conflict detection (before storage).
+        // See moveToArchive comment above for full explanation.
+        const newClock = mergedClock;
 
         // Check if all superseded ops for this entity are DELETE operations
         const allOpsAreDeletes = entityOps.every((e) => e.op.opType === OpType.Delete);
