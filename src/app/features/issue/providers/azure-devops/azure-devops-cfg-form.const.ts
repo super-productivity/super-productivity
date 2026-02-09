@@ -1,8 +1,8 @@
 import { ConfigFormSection } from '../../../config/global-config.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
-// Actually it is ConfigFormSection<AzureDevOpsCfg>
+import { AzureDevOpsCfg } from './azure-devops.model';
 
-export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<any> = {
+export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg> = {
   title: 'Azure DevOps',
   key: 'AZURE_DEVOPS',
   items: [
