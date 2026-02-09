@@ -1,6 +1,6 @@
 # Conflict Resolution & SYNC_IMPORT Filtering
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 **Status:** Implemented
 
 This document covers LWW (Last-Write-Wins) conflict auto-resolution and SYNC_IMPORT filtering with clean slate semantics.
