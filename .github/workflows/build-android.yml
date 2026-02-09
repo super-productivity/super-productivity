@@ -123,15 +123,5 @@ jobs:
           packageName: com.superproductivity.superproductivity
           releaseFiles: android/app/build/outputs/apk/play/release/*.apk
           track: internal
-          status: completed
+          status: draft
           inAppUpdatePriority: 2
-
-      - name: Promote Internal Release to Production
-        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')
-        uses: kevin-david/promote-play-release@d1ed59ca4fd7456b9d8cae062a3684e93b412425 # v1.2.0
-        with:
-          service-account-json-raw: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          package-name: com.superproductivity.superproductivity
-          from-track: internal
-          to-track: production
-          inapp-update-priority: 3
