@@ -197,7 +197,6 @@ export class SupersededOperationResolverService {
         );
         // Don't prune here — the server prunes AFTER conflict detection (before storage).
         // See moveToArchive comment above for full explanation.
-        const newClock = mergedClock;
 
         // Check if all superseded ops for this entity are DELETE operations
         const allOpsAreDeletes = entityOps.every((e) => e.op.opType === OpType.Delete);
@@ -209,7 +208,7 @@ export class SupersededOperationResolverService {
           const preservedTimestamp = Math.max(...entityOps.map((e) => e.op.timestamp));
           const newDeleteOp = this._recreateOpWithMergedClock(
             entityOps[0].op,
-            newClock,
+            mergedClock,
             clientId,
             preservedTimestamp,
           );
@@ -219,7 +218,7 @@ export class SupersededOperationResolverService {
 
           OpLog.normal(
             `SupersededOperationResolverService: Created replacement DELETE op for ${entityKey}, ` +
-              `replacing ${entityOps.length} superseded DELETE op(s). New clock: ${JSON.stringify(newClock)}`,
+              `replacing ${entityOps.length} superseded DELETE op(s). New clock: ${JSON.stringify(mergedClock)}`,
           );
           continue;
         }
@@ -251,7 +250,7 @@ export class SupersededOperationResolverService {
           entityId,
           entityState,
           clientId,
-          newClock,
+          mergedClock,
           preservedTimestamp,
         );
 
@@ -260,7 +259,7 @@ export class SupersededOperationResolverService {
 
         OpLog.normal(
           `SupersededOperationResolverService: Created LWW update op for ${entityKey}, ` +
-            `replacing ${entityOps.length} superseded op(s). New clock: ${JSON.stringify(newClock)}`,
+            `replacing ${entityOps.length} superseded op(s). New clock: ${JSON.stringify(mergedClock)}`,
         );
       }
 

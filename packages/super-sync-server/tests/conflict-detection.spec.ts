@@ -764,6 +764,62 @@ describe('Conflict Detection', () => {
       expect(storedClock[clientA]).toBe(2);
     });
 
+    it('should accept MAX+1 entry clock as GREATER_THAN when it dominates a MAX entry entity clock (regression: infinite loop fix)', async () => {
+      // This is the core regression test for the infinite sync loop bug.
+      // Scenario: entity has MAX_VECTOR_CLOCK_SIZE (10) entries in its stored clock.
+      // A client resolves the conflict by merging all entity clock IDs + its own ID,
+      // producing MAX+1 (11) entries. The server must compare BEFORE pruning,
+      // so the 11-entry clock is seen as GREATER_THAN the 10-entry stored clock.
+      // If the server pruned before comparison, the 11-entry clock would lose one
+      // entity key, and pruning-aware comparison would return CONCURRENT → infinite loop.
+      const service = getSyncService();
+      const entityId = 'task-regression';
+
+      // Step 1: Create an entity with a clock that has exactly MAX entries
+      const entityClock: VectorClock = {};
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+        entityClock[`entity-client-${i}`] = i + 1;
+      }
+      const initialOp = createOp({
+        entityId,
+        clientId: 'entity-client-0',
+        vectorClock: entityClock,
+        opType: 'CRT',
+      });
+      const initialResult = await service.uploadOps(userId, 'entity-client-0', [
+        initialOp,
+      ]);
+      expect(initialResult[0].accepted).toBe(true);
+
+      // Step 2: clientA resolves conflict by merging entity clock + its own ID → MAX+1 entries.
+      // clientA is NOT one of the entity-client-* IDs.
+      const resolvedClock: VectorClock = {};
+      for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+        // Same keys as entity clock, but with incremented values → dominates entity clock
+        resolvedClock[`entity-client-${i}`] = i + 2;
+      }
+      resolvedClock[clientA] = 1; // clientA's own entry → MAX+1 total entries
+
+      const resolvedOp = createOp({
+        entityId,
+        clientId: clientA,
+        vectorClock: resolvedClock,
+      });
+      const resolvedResult = await service.uploadOps(userId, clientA, [resolvedOp]);
+
+      // The server must accept this as GREATER_THAN (not reject as CONCURRENT)
+      expect(resolvedResult[0].accepted).toBe(true);
+
+      // Verify the stored clock was pruned to MAX after acceptance
+      const ops = await service.getOpsSince(userId, 0);
+      const latestOp = ops.find((o: any) => o.op.id === resolvedOp.id);
+      expect(latestOp).toBeDefined();
+      const storedClock = latestOp!.op.vectorClock;
+      expect(Object.keys(storedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      // clientA should be preserved (it's the uploading client)
+      expect(storedClock[clientA]).toBe(1);
+    });
+
     it('should handle first operation on entity (no existing op to conflict with)', async () => {
       const service = getSyncService();
 
