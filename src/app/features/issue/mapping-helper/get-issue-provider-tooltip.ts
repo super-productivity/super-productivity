@@ -20,7 +20,9 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'OPEN_PROJECT':
         return issueProvider.projectId;
       case 'TRELLO':
-        return issueProvider.boardName || issueProvider.boardId;
+        return (issueProvider as any).boardName || (issueProvider as any).boardId;
+      case 'AZURE_DEVOPS':
+        return (issueProvider as any).project || 'Project missing';
       default:
         return undefined;
     }
@@ -87,9 +89,11 @@ export const getIssueProviderInitials = (
     case 'GITEA':
       return getRepoInitials(issueProvider.repoFullname);
     case 'TRELLO':
-      return (issueProvider.boardName || issueProvider.boardId)
+      return ((issueProvider as any).boardName || (issueProvider as any).boardId)
         ?.substring(0, 2)
         ?.toUpperCase();
+    case 'AZURE_DEVOPS':
+      return (issueProvider as any).project?.substring(0, 2)?.toUpperCase() || 'AD';
   }
   return undefined;
 };

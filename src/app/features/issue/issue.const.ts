@@ -41,6 +41,8 @@ import {
   DEFAULT_CLICKUP_CFG,
   CLICKUP_CONFIG_FORM_SECTION,
 } from './providers/clickup/clickup.const';
+import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.const';
+import { AZURE_DEVOPS_CONFIG_FORM_SECTION } from './providers/azure-devops/azure-devops-cfg-form.const';
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
@@ -55,6 +57,7 @@ export const ICAL_TYPE: IssueProviderKey = 'ICAL';
 export const TRELLO_TYPE: IssueProviderKey = 'TRELLO';
 export const LINEAR_TYPE: IssueProviderKey = 'LINEAR';
 export const CLICKUP_TYPE: IssueProviderKey = 'CLICKUP';
+export const AZURE_DEVOPS_TYPE: IssueProviderKey = 'AZURE_DEVOPS';
 
 export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
   GITLAB_TYPE,
@@ -68,6 +71,7 @@ export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
   REDMINE_TYPE,
   LINEAR_TYPE,
   CLICKUP_TYPE,
+  AZURE_DEVOPS_TYPE,
 ] as const;
 
 export const ISSUE_PROVIDER_ICON_MAP = {
@@ -82,6 +86,7 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [REDMINE_TYPE]: 'redmine',
   [LINEAR_TYPE]: 'linear',
   [CLICKUP_TYPE]: 'clickup',
+  [AZURE_DEVOPS_TYPE]: 'azure_devops',
 } as const;
 
 export const ISSUE_PROVIDER_HUMANIZED = {
@@ -96,6 +101,7 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [REDMINE_TYPE]: 'Redmine',
   [LINEAR_TYPE]: 'Linear',
   [CLICKUP_TYPE]: 'ClickUp',
+  [AZURE_DEVOPS_TYPE]: 'Azure DevOps',
 } as const;
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
@@ -110,6 +116,7 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [LINEAR_TYPE]: DEFAULT_LINEAR_CFG,
   [CLICKUP_TYPE]: DEFAULT_CLICKUP_CFG,
+  [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_INITIAL_CFG,
 } as const;
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
@@ -124,6 +131,7 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [LINEAR_TYPE]: LINEAR_CONFIG_FORM_SECTION,
   [CLICKUP_TYPE]: CLICKUP_CONFIG_FORM_SECTION,
+  [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
 } as const;
 
 const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
@@ -150,6 +158,7 @@ export const ISSUE_STR_MAP: { [key: string]: { ISSUE_STR: string; ISSUES_STR: st
     [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
     [LINEAR_TYPE]: DEFAULT_ISSUE_STRS,
     [CLICKUP_TYPE]: DEFAULT_ISSUE_STRS,
+    [AZURE_DEVOPS_TYPE]: DEFAULT_ISSUE_STRS,
   } as const;
 
 export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<
