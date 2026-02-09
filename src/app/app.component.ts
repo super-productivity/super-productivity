@@ -186,6 +186,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     { initialValue: null },
   );
 
+  private readonly _activeWorkContext = toSignal(
+    this.workContextService.activeWorkContext$,
+    { initialValue: null },
+  );
+
   private _subs: Subscription = new Subscription();
   private _intervalTimer?: NodeJS.Timeout;
 
@@ -343,6 +348,13 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   onTaskAdded({ taskId }: { taskId: string; isAddToBottom: boolean }): void {
     this.layoutService.setPendingFocusTaskId(taskId);
   }
+
+  readonly bgOverlayOpacity = computed((): number => {
+    const context = this._activeWorkContext();
+    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 0;
+
+    return baseOpacity * 0.01;
+  });
 
   changeBackgroundFromUnsplash(): void {
     const dialogRef = this._matDialog.open(DialogUnsplashPickerComponent, {

@@ -1,0 +1,14 @@
+.bg-overlay {
+  display: block;
+  height: 100%;
+  width: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  position: fixed;
+  z-index: var(--z-bg-overlay);
+  background-color: var(--c-bg-overlay);
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+}

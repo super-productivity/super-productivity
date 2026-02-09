@@ -12,7 +12,6 @@ import {
   SyncErrorCode,
   sanitizeVectorClock,
   validatePayload,
-  limitVectorClockSize,
 } from '../sync.types';
 import { ENTITY_TYPES } from '@sp/shared-schema';
 import { Logger } from '../../logger';
@@ -146,23 +145,13 @@ export class ValidationService {
     }
     op.vectorClock = clockValidation.clock;
 
-    // Enforce MAX_VECTOR_CLOCK_SIZE on server side.
-    // A buggy or adversarial client may send oversized clocks.
-    // Preserve the uploading client's ID during pruning.
-    //
-    // Tradeoff: If the stored entity has fewer than MAX entries (not triggering
-    // pruning-aware comparison), a key pruned here is treated as "genuinely zero"
-    // rather than "pruned away." This may produce false CONCURRENT instead of
-    // GREATER_THAN for early-stage entities. This is the safe direction — it
-    // triggers LWW conflict resolution rather than silent data loss. Only affects
-    // buggy or adversarial clients sending oversized clocks.
-    const originalClockSize = Object.keys(op.vectorClock).length;
-    op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
-    if (Object.keys(op.vectorClock).length < originalClockSize) {
-      Logger.warn(
-        `[client:${op.clientId}] Oversized vector clock pruned from ${originalClockSize} to ${Object.keys(op.vectorClock).length} entries`,
-      );
-    }
+    // NOTE: Vector clock pruning (limitVectorClockSize) is intentionally NOT done here.
+    // It is performed in processOperation() AFTER conflict detection but BEFORE storage.
+    // Pruning before comparison drops entity clock IDs when the merged clock exceeds
+    // MAX_VECTOR_CLOCK_SIZE (e.g., during conflict resolution where the client includes
+    // all entity clock IDs + its own ID). The pruning-aware comparison then sees non-shared
+    // keys and returns CONCURRENT instead of GREATER_THAN → infinite rejection loop.
+    // DoS protection: sanitizeVectorClock() above caps at 3x MAX_VECTOR_CLOCK_SIZE (30).
 
     // Validate payload complexity to prevent DoS attacks via deeply nested objects.
     // Full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) get higher thresholds

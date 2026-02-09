@@ -30,6 +30,7 @@ import {
 import { DateAdapter } from '@angular/material/core';
 import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { LanguageService } from 'src/app/core/language/language.service';
 
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
@@ -38,6 +39,7 @@ export class TaskViewCustomizerService {
   private _dateAdapter = inject(DateAdapter);
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
+  private _languageService = inject(LanguageService);
 
   public selectedSort = signal<SortOption>(
     lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort) ??
@@ -270,7 +272,12 @@ export class TaskViewCustomizerService {
     const factor = order === SORT_ORDER.DESC ? -1 : 1;
 
     const sortByTitle = (a: string, b: string, multiplier = 1): number => {
-      return a.localeCompare(b) * multiplier;
+      const collator = new Intl.Collator(this._languageService.detect(), {
+        sensitivity: 'base',
+        numeric: true,
+      });
+
+      return collator.compare(a, b) * multiplier;
     };
 
     const sortByTagTitle = (a: TaskWithSubTasks, b: TaskWithSubTasks): number => {

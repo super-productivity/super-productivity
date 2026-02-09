@@ -90,8 +90,15 @@ export const sanitizeVectorClock = (
 
   const entries = Object.entries(clock as Record<string, unknown>);
 
-  if (entries.length > 100) {
-    return { valid: false, error: 'Vector clock has too many entries (max 100)' };
+  // Reject absurdly large clocks (DoS protection).
+  // Legitimate clocks are at most MAX_VECTOR_CLOCK_SIZE + a few entries during
+  // conflict resolution (entity clock IDs + client ID + extra merged clocks).
+  // 3x MAX gives ample room while catching adversarial inputs.
+  if (entries.length > MAX_VECTOR_CLOCK_SIZE * 3) {
+    return {
+      valid: false,
+      error: `Vector clock has too many entries (${entries.length}, max ${MAX_VECTOR_CLOCK_SIZE * 3})`,
+    };
   }
 
   const sanitized: VectorClock = {};

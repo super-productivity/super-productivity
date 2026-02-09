@@ -9,6 +9,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { Operation, OpType, ActionType } from '../core/operation.types';
 import { T } from '../../t.const';
+import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
 
 describe('RejectedOpsHandlerService', () => {
   let service: RejectedOpsHandlerService;
@@ -550,6 +551,101 @@ describe('RejectedOpsHandlerService', () => {
             msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
           }),
         );
+      });
+
+      it('should mark ops as permanently rejected after exceeding MAX_CONCURRENT_RESOLUTION_ATTEMPTS (infinite loop prevention)', async () => {
+        // REGRESSION TEST: When vector clock pruning makes it impossible to create
+        // a dominating clock, the cycle "upload → reject → merge → upload → reject"
+        // repeats forever. After MAX_CONCURRENT_RESOLUTION_ATTEMPTS, the ops should
+        // be permanently rejected to break the loop.
+        opLogStoreSpy.markRejected.and.resolveTo();
+
+        // Simulate MAX_CONCURRENT_RESOLUTION_ATTEMPTS + 1 calls for the same entity
+        for (let i = 0; i <= MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          const opId = `op-attempt-${i}`;
+          const op = createOp({ id: opId, entityType: 'TASK', entityId: 'stuck-entity' });
+          opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+          downloadCallback.and.callFake(async (options) => {
+            if (options?.forceFromSeq0) {
+              return {
+                newOpsCount: 0,
+                allOpClocks: [{ remoteClient: 2 }],
+              } as DownloadResultForRejection;
+            }
+            return { newOpsCount: 0 } as DownloadResultForRejection;
+          });
+          supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+          await service.handleRejectedOps(
+            [{ opId, error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          );
+        }
+
+        // After exceeding the limit, the last op should have been marked as rejected
+        // without triggering the download callback
+        const lastCallOpId = `op-attempt-${MAX_CONCURRENT_RESOLUTION_ATTEMPTS}`;
+        expect(opLogStoreSpy.markRejected).toHaveBeenCalledWith([lastCallOpId]);
+        expect(snackServiceSpy.open).toHaveBeenCalledWith(
+          jasmine.objectContaining({
+            type: 'ERROR',
+            msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
+          }),
+        );
+      });
+
+      it('should reset resolution attempt counters when sync succeeds (no rejections)', async () => {
+        opLogStoreSpy.markRejected.and.resolveTo();
+
+        // Simulate MAX_CONCURRENT_RESOLUTION_ATTEMPTS calls for same entity
+        for (let i = 0; i < MAX_CONCURRENT_RESOLUTION_ATTEMPTS; i++) {
+          const opId = `op-${i}`;
+          const op = createOp({ id: opId, entityType: 'TASK', entityId: 'entity-reset' });
+          opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+          downloadCallback.and.callFake(async (options) => {
+            if (options?.forceFromSeq0) {
+              return {
+                newOpsCount: 0,
+                allOpClocks: [{ remoteClient: 2 }],
+              } as DownloadResultForRejection;
+            }
+            return { newOpsCount: 0 } as DownloadResultForRejection;
+          });
+          supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+          await service.handleRejectedOps(
+            [{ opId, error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+            downloadCallback,
+          );
+        }
+
+        // Reset counters by calling with empty rejections (successful sync)
+        await service.handleRejectedOps([]);
+
+        // Now another attempt for the same entity should work (counter was reset)
+        const opId = 'op-after-reset';
+        const op = createOp({ id: opId, entityType: 'TASK', entityId: 'entity-reset' });
+        opLogStoreSpy.getOpById.and.returnValue(Promise.resolve(mockEntry(op)));
+        downloadCallback.and.callFake(async (options) => {
+          if (options?.forceFromSeq0) {
+            return {
+              newOpsCount: 0,
+              allOpClocks: [{ remoteClient: 2 }],
+            } as DownloadResultForRejection;
+          }
+          return { newOpsCount: 0 } as DownloadResultForRejection;
+        });
+        supersededOperationResolverSpy.resolveSupersededLocalOps.and.resolveTo(1);
+
+        await service.handleRejectedOps(
+          [{ opId, error: 'concurrent', errorCode: 'CONFLICT_CONCURRENT' }],
+          downloadCallback,
+        );
+
+        // Should have called the resolver (not rejected due to exceeded limit)
+        expect(
+          supersededOperationResolverSpy.resolveSupersededLocalOps,
+        ).toHaveBeenCalled();
       });
     });
   });

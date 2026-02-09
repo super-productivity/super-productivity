@@ -78,8 +78,7 @@ export const JIRA_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderJira> = {
       templateOptions: {
         type: 'url',
 
-        pattern:
-          /^(http(s)?:\/\/)?(localhost|[\w.\-]+(?:\.[\w\.\-]+)+)(:\d+)?(\/[^\s]*)?$/i,
+        pattern: /^(http(s)?:\/\/)?(localhost|[\w\-]+(?:\.[\w\-]+)*)(:\d+)?(\/[^\s]*)?$/i,
         required: true,
         label: T.F.JIRA.FORM_CRED.HOST,
       },

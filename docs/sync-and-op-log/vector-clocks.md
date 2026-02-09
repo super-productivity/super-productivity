@@ -1,6 +1,6 @@
 # Vector Clocks in Super Productivity Sync
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
 
 ## Overview
 
@@ -276,6 +276,59 @@ opLog(2, 'Vector clock comparison', {
 4. **Use backwards-compat** helpers during migration period
 5. **Log vector states** when debugging sync issues
 
+## Pruning and the Pruning-Aware Comparison
+
+### How Pruning Works
+
+Vector clocks are bounded to `MAX_VECTOR_CLOCK_SIZE` (10) entries to prevent unbounded growth. When a clock exceeds this limit, `limitVectorClockSize()` keeps:
+
+1. Preserved client IDs (current client, protected IDs from SYNC_IMPORT)
+2. Remaining slots filled by highest-counter entries
+
+### Pruning-Aware Comparison
+
+When **both** clocks being compared have >= `MAX_VECTOR_CLOCK_SIZE` entries, `compareVectorClocks()` switches to "pruning-aware mode" to avoid false `CONCURRENT` results from cross-client pruning asymmetry:
+
+- Only **shared keys** (present in both clocks) are compared
+- If the winning side's opponent has **non-shared keys** (keys only in the other clock), the result is conservatively `CONCURRENT` instead of `GREATER_THAN`/`LESS_THAN`
+
+This prevents silent data loss when a pruned-away key genuinely represents causal history the other clock doesn't have.
+
+### Critical Invariant: Server Prunes AFTER Comparison, Not Before
+
+**Problem discovered (Feb 2026):** When the server pruned incoming clocks _before_ conflict comparison (in `ValidationService`), conflict resolution could enter an infinite loop:
+
+1. Entity clock on server: `{A:5, B:3, C:7, D:2, E:4, F:1, G:6, H:8, I:3, J:2}` (10 entries = MAX)
+2. Client K (not in entity clock) merges all clocks + its own ID → 11 entries
+3. Server-side pruning drops one entity key (e.g., F) to fit MAX → 10 entries
+4. Comparison: both at MAX → pruning-aware mode → F is a "B-only" key → `CONCURRENT`
+5. Server rejects → client re-merges → server prunes → rejects again → **infinite loop**
+
+It is **mathematically impossible** to build a dominating clock with MAX entries when the entity clock already has MAX entries and the client's ID isn't among them (requires MAX+1 entries).
+
+**Fix:** The server now prunes _after_ conflict detection but _before_ storage:
+
+```
+ValidationService.validateOp()    → sanitize clock (DoS cap at 3x MAX = 30), NO pruning
+SyncService.detectConflict()      → compare using FULL unpruned clock (11 entries vs 10)
+                                    → bOnlyCount = 0 → GREATER_THAN ✓
+SyncService.processOperation()    → limitVectorClockSize() → prune to MAX before storage
+```
+
+The client (`SupersededOperationResolverService`) also does NOT prune merged clocks during conflict resolution — it sends the full clock and lets the server prune after comparison.
+
+**Safety net:** `RejectedOpsHandlerService` tracks resolution attempts per entity. After `MAX_CONCURRENT_RESOLUTION_ATTEMPTS` (3) failures for the same entity, ops are permanently rejected to break any remaining loop scenarios.
+
+### Key Files
+
+| File                                                                 | Role                                              |
+| -------------------------------------------------------------------- | ------------------------------------------------- |
+| `packages/shared-schema/src/vector-clock.ts`                         | Shared comparison + pruning (client & server)     |
+| `packages/super-sync-server/src/sync/sync.service.ts`                | Server: prunes after conflict detection           |
+| `packages/super-sync-server/src/sync/services/validation.service.ts` | Server: sanitizes but does NOT prune              |
+| `src/app/op-log/sync/superseded-operation-resolver.service.ts`       | Client: does NOT prune conflict resolution clocks |
+| `src/app/op-log/sync/rejected-ops-handler.service.ts`                | Client: retry limit safety net                    |
+
 ## Current Implementation Status
 
 | Feature                                     | Status         | Notes                                  |
@@ -284,8 +337,10 @@ opLog(2, 'Vector clock comparison', {
 | Entity-level conflict detection             | ✅ Implemented | Operation Log tracks per-entity clocks |
 | User conflict resolution UI                 | ✅ Implemented | `DialogConflictResolutionComponent`    |
 | Client pruning (MAX_VECTOR_CLOCK_SIZE = 10) | ✅ Implemented | `limitVectorClockSize()`               |
+| Server prunes after comparison              | ✅ Implemented | Prevents infinite rejection loop       |
 | Overflow protection                         | ✅ Implemented | Clocks throw error at MAX_SAFE_INTEGER |
 | Protected client IDs                        | ✅ Implemented | Preserves all keys from full-state ops |
+| Concurrent resolution retry limit           | ✅ Implemented | MAX_CONCURRENT_RESOLUTION_ATTEMPTS = 3 |
 
 ## Protected Client IDs
 

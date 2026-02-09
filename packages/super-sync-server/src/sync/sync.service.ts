@@ -6,6 +6,7 @@ import {
   SyncConfig,
   DEFAULT_SYNC_CONFIG,
   compareVectorClocks,
+  limitVectorClockSize,
   VectorClock,
   SYNC_ERROR_CODES,
 } from './sync.types';
@@ -448,6 +449,21 @@ export class SyncService {
           error: 'Duplicate operation ID',
           errorCode: SYNC_ERROR_CODES.DUPLICATE_OPERATION,
         };
+      }
+
+      // Prune vector clock AFTER conflict detection but BEFORE storage.
+      // Moved from ValidationService to here so that the full (unpruned) clock is used
+      // for conflict comparison. This prevents false CONCURRENT results when the client
+      // builds a merged clock with MAX+1 entries during conflict resolution (all entity
+      // clock IDs + its own client ID). Pruning before comparison would drop an entity
+      // clock ID, causing the pruning-aware comparison to see a non-shared key and return
+      // CONCURRENT instead of GREATER_THAN, leading to an infinite rejection loop.
+      const clockBeforePrune = op.vectorClock;
+      op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
+      if (Object.keys(op.vectorClock).length < Object.keys(clockBeforePrune).length) {
+        Logger.info(
+          `[client:${op.clientId}] Vector clock pruned from ${Object.keys(clockBeforePrune).length} to ${Object.keys(op.vectorClock).length} before storage`,
+        );
       }
 
       await tx.operation.create({

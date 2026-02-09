@@ -123,5 +123,5 @@ jobs:
           packageName: com.superproductivity.superproductivity
           releaseFiles: android/app/build/outputs/apk/play/release/*.apk
           track: internal
-          status: draft
+          status: completed
           inAppUpdatePriority: 2

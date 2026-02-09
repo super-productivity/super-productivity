@@ -7,6 +7,7 @@ import { IS_ELECTRON } from '../../../app.constants';
 import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
+import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
 import {
   closeAllDialogs,
   openDisableEncryptionDialog,
@@ -16,7 +17,6 @@ import {
   openEncryptionPasswordChangeDialog,
   openEncryptionPasswordChangeDialogForFileBased,
 } from '../../../imex/sync/encryption-password-dialog-opener.service';
-import { alertDialog } from '../../../util/native-dialogs';
 
 /**
  * Creates form fields for WebDAV-based sync providers.
@@ -366,12 +366,8 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             btnType: 'primary',
             centerBtn: true,
             onClick: (field: any) => {
-              const baseUrl = field.model.baseUrl;
-              if (baseUrl) {
-                window.open(baseUrl, '_blank');
-              } else {
-                alertDialog('Please enter a Server URL first');
-              }
+              const baseUrl = field.model.baseUrl || SUPER_SYNC_DEFAULT_BASE_URL;
+              window.open(baseUrl, '_blank');
             },
           },
         },
@@ -427,11 +423,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               templateOptions: {
                 label: T.F.SYNC.FORM.SUPER_SYNC.L_SERVER_URL,
                 description: T.F.SYNC.FORM.SUPER_SYNC.SERVER_URL_DESCRIPTION,
-              },
-              expressions: {
-                'props.required': (field: FormlyFieldConfig) =>
-                  field?.parent?.parent?.parent?.model?.syncProvider ===
-                  LegacySyncProvider.SuperSync,
+                placeholder: SUPER_SYNC_DEFAULT_BASE_URL,
               },
             },
           ],

@@ -3,6 +3,7 @@ import { FieldType, FieldTypeConfig } from '@ngx-formly/core';
 import { MatSliderModule } from '@angular/material/slider';
 import { ReactiveFormsModule } from '@angular/forms';
 import { FormlyFieldProps } from '@ngx-formly/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 
 interface SliderProps extends FormlyFieldProps {
   displayWith?: (value: number) => string;
@@ -14,21 +15,32 @@ interface SliderProps extends FormlyFieldProps {
 @Component({
   selector: 'formly-field-mat-slider',
   standalone: true,
-  imports: [MatSliderModule, ReactiveFormsModule],
+  imports: [MatSliderModule, ReactiveFormsModule, MatInputModule],
   template: `
-    <mat-slider
-      [min]="props.min ?? 0"
-      [max]="props.max ?? 100"
-      [step]="props.step ?? 1"
-      [discrete]="props.discrete ?? props.thumbLabel ?? true"
-      [showTickMarks]="props.showTickMarks ?? false"
-      [displayWith]="props.displayWith ?? defaultDisplayWith"
-    >
-      <input
-        matSliderThumb
-        [formControl]="formControl"
-      />
-    </mat-slider>
+    <mat-form-field>
+      @if (props.label) {
+        <mat-label>{{ props.label }}</mat-label>
+      }
+      <mat-slider
+        [min]="props.min ?? 0"
+        [max]="props.max ?? 100"
+        [step]="props.step ?? 1"
+        [discrete]="props.discrete ?? props.thumbLabel ?? true"
+        [showTickMarks]="props.showTickMarks ?? false"
+        [displayWith]="props.displayWith ?? defaultDisplayWith"
+      >
+        <input
+          style="height: 100%"
+          matSliderThumb
+          matInput
+          [value]="formControl.value"
+          (change)="onChange($event)"
+        />
+      </mat-slider>
+      @if (props.description) {
+        <mat-hint>{{ props.description }}</mat-hint>
+      }
+    </mat-form-field>
   `,
   styles: [
     `
@@ -37,6 +49,9 @@ interface SliderProps extends FormlyFieldProps {
         width: 100%;
       }
       mat-slider {
+        width: 100%;
+      }
+      mat-form-field {
         width: 100%;
       }
     `,
@@ -52,4 +67,9 @@ export class FormlySliderComponent extends FieldType<FieldTypeConfig<SliderProps
       floatLabel: 'always' as const,
     },
   };
+
+  onChange(event: Event): void {
+    const value: number = Number((event.target as HTMLInputElement).value);
+    this.formControl.setValue(value);
+  }
 }
