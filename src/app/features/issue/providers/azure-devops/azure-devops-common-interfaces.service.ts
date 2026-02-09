@@ -60,7 +60,7 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
       .then((issues) =>
         issues.map((issue) => ({
           title: `#${issue.id} ${issue.summary}`,
-          issueType: 'AZURE_DEVOPS' as any,
+          issueType: 'AZURE_DEVOPS',
           issueData: issue,
         })),
       );
@@ -147,7 +147,7 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
   }
 
   issueLink(issueId: string | number, issueProviderId: string): Promise<string> {
-    return this.getById(issueId, issueProviderId).then((i) => i.url);
+    return this.getById(issueId, issueProviderId).then((i) => i.url || '');
   }
 
   private _getCfgOnce$(issueProviderId: string): Observable<AzureDevOpsCfg> {

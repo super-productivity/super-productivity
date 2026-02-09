@@ -1,14 +1,14 @@
 export interface AzureDevOpsIssueReduced {
   id: string;
   summary: string;
-  description: string | null;
+  description?: string | null;
   status: string;
-  priority: string | null;
+  priority?: number | null;
   created: string;
   updated: string;
-  assignee: string | null;
-  url: string;
-  due: string | null;
+  assignee?: string | null;
+  url?: string;
+  due?: string | null;
 }
 
 // Type alias for full issue - can be extended with additional fields if needed
