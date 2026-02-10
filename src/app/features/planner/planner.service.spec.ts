@@ -11,7 +11,7 @@ import { selectTodayTaskIds } from '../work-context/store/work-context.selectors
 import { PlannerDay } from './planner.model';
 import { first, map, shareReplay } from 'rxjs/operators';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { LayoutService } from '../../core-ui/layout/layout.service';
 
 describe('PlannerService', () => {
@@ -19,6 +19,7 @@ describe('PlannerService', () => {
   let dateService: DateService;
   let todayDateStrSubject: BehaviorSubject<string>;
   let mockDaysSubject: ReplaySubject<PlannerDay[]>;
+  let isXsSignal: WritableSignal<boolean>;
 
   const createMockPlannerDay = (dayDate: string): PlannerDay => ({
     dayDate,
@@ -34,6 +35,7 @@ describe('PlannerService', () => {
   beforeEach(() => {
     todayDateStrSubject = new BehaviorSubject<string>('2026-01-14');
     mockDaysSubject = new ReplaySubject<PlannerDay[]>(1);
+    isXsSignal = signal(false);
 
     TestBed.configureTestingModule({
       providers: [
@@ -55,7 +57,7 @@ describe('PlannerService', () => {
         },
         {
           provide: LayoutService,
-          useValue: { isXs: signal(false).asReadonly() },
+          useValue: { isXs: isXsSignal },
         },
         {
           provide: PlannerService,
@@ -481,6 +483,116 @@ describe('PlannerService', () => {
           done();
         });
       });
+    });
+  });
+
+  describe('resetScrollState', () => {
+    it('should reset daysToShow to initial count after loadMoreDays', (done) => {
+      service.daysToShow$.pipe(first()).subscribe((initialDays) => {
+        expect(initialDays.length).toBe(15);
+
+        service.loadMoreDays();
+
+        setTimeout(() => {
+          service.daysToShow$.pipe(first()).subscribe((moreDays) => {
+            expect(moreDays.length).toBe(22);
+
+            service.resetScrollState();
+
+            service.daysToShow$.pipe(first()).subscribe((resetDays) => {
+              expect(resetDays.length).toBe(15);
+              done();
+            });
+          });
+        }, 10);
+      });
+    });
+
+    it('should set isLoadingMore$ to false after reset', () => {
+      service.loadMoreDays();
+      expect(service.isLoadingMore$.value).toBe(true);
+
+      service.resetScrollState();
+      expect(service.isLoadingMore$.value).toBe(false);
+    });
+
+    it('should cancel pending loadMoreDays timeout so count is not inflated', (done) => {
+      service.loadMoreDays();
+
+      // Reset immediately before the timeout fires
+      service.resetScrollState();
+
+      setTimeout(() => {
+        service.daysToShow$.pipe(first()).subscribe((days) => {
+          expect(days.length).toBe(15);
+          expect(service.isLoadingMore$.value).toBe(false);
+          done();
+        });
+      }, 10);
+    });
+
+    it('should reset to mobile initial count when isXs is true', (done) => {
+      isXsSignal.set(true);
+
+      service.loadMoreDays();
+
+      setTimeout(() => {
+        service.resetScrollState();
+
+        service.daysToShow$.pipe(first()).subscribe((days) => {
+          expect(days.length).toBe(5);
+          done();
+        });
+      }, 10);
+    });
+
+    it('should reset to initial count after multiple loadMoreDays calls', (done) => {
+      service.loadMoreDays();
+
+      setTimeout(() => {
+        service.loadMoreDays();
+
+        setTimeout(() => {
+          service.daysToShow$.pipe(first()).subscribe((days) => {
+            expect(days.length).toBe(29); // 15 + 7 + 7
+
+            service.resetScrollState();
+
+            service.daysToShow$.pipe(first()).subscribe((resetDays) => {
+              expect(resetDays.length).toBe(15);
+              done();
+            });
+          });
+        }, 10);
+      }, 10);
+    });
+
+    it('should re-enable breakpoint-based count reset after resetScrollState', (done) => {
+      // Load more days (sets _userHasScrolled = true)
+      service.loadMoreDays();
+
+      setTimeout(() => {
+        service.daysToShow$.pipe(first()).subscribe((days) => {
+          expect(days.length).toBe(22);
+
+          // Reset scroll state (sets _userHasScrolled = false)
+          service.resetScrollState();
+
+          service.daysToShow$.pipe(first()).subscribe((resetDays) => {
+            expect(resetDays.length).toBe(15);
+
+            // Now change breakpoint to mobile — should reset to 5
+            // because _userHasScrolled is false after reset
+            isXsSignal.set(true);
+            TestBed.flushEffects();
+
+            service.daysToShow$.pipe(first()).subscribe((mobileDays) => {
+              expect(mobileDays.length).toBe(5);
+              done();
+            });
+          });
+        });
+      }, 10);
     });
   });
 

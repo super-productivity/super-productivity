@@ -2,22 +2,62 @@ import { CalendarIntegrationEvent } from '../../calendar-integration/calendar-in
 import { Log } from '../../../core/log';
 import { loadIcalModule } from './ical-lazy-loader';
 
+type ICalModule = any;
+
+interface ICalVEvent {
+  getFirstPropertyValue(name: string): unknown;
+  getAllProperties(name: string): ICalProperty[];
+  getFirstSubcomponent(name: string): ICalVEvent | null;
+  getAllSubcomponents(name: string): ICalVEvent[];
+}
+
+interface ICalProperty {
+  getValues(): unknown[];
+}
+
 // NOTE: this sucks and is slow, but writing a new ical parser would be very hard... :(
+
+/**
+ * Sanitizes iCal data to fix common formatting errors before parsing.
+ * Specifically handles "orphan" lines (like address continuations) that are missing
+ * the required whitespace indentation, which causes ical.js to crash.
+ */
+const sanitizeIcalData = (icalData: string): string => {
+  return icalData
+    .split(/\r?\n/)
+    .map((line) => {
+      // If line is content (not empty) but has no delimiter and no indentation
+      // it is likely a broken continuation line.
+      if (
+        line.trim().length > 0 &&
+        !line.includes(':') &&
+        !line.includes(';') &&
+        !/^\s/.test(line)
+      ) {
+        return ' ' + line; // Fold it into previous line by prepending space
+      }
+      return line;
+    })
+    .join('\r\n');
+};
 
 /**
  * Safely extracts a date value from an iCal property and converts it to timestamp.
  * Returns null if the property is missing or invalid.
  */
-const safeGetDateTimestamp = (vevent: any, propertyName: string): number | null => {
+const safeGetDateTimestamp = (
+  vevent: ICalVEvent,
+  propertyName: string,
+): number | null => {
   try {
     const prop = vevent.getFirstPropertyValue(propertyName);
     if (!prop) {
       return null;
     }
-    if (typeof prop.toJSDate !== 'function') {
+    if (typeof (prop as { toJSDate?: () => Date }).toJSDate !== 'function') {
       return null;
     }
-    return prop.toJSDate().getTime();
+    return (prop as { toJSDate: () => Date }).toJSDate().getTime();
   } catch (error) {
     return null;
   }
@@ -27,10 +67,10 @@ const safeGetDateTimestamp = (vevent: any, propertyName: string): number | null 
  * Checks if the event's DTSTART is a DATE value (all-day event) vs DATE-TIME.
  * In ical.js, ICAL.Time has an `isDate` property that is true for VALUE=DATE.
  */
-const isAllDayEvent = (vevent: any): boolean => {
+const isAllDayEvent = (vevent: ICalVEvent): boolean => {
   try {
     const dtstart = vevent.getFirstPropertyValue('dtstart');
-    return dtstart?.isDate === true;
+    return (dtstart as { isDate?: boolean })?.isDate === true;
   } catch {
     return false;
   }
@@ -40,7 +80,7 @@ const isAllDayEvent = (vevent: any): boolean => {
  * Exception event data for RECURRENCE-ID handling
  */
 interface ExceptionEvent {
-  vevent: any;
+  vevent: ICalVEvent;
   recurrenceId: number;
   isCancelled: boolean;
 }
@@ -54,7 +94,7 @@ type ExceptionMap = Map<string, ExceptionEvent[]>;
  * Builds a map of exception events (modified/cancelled instances) grouped by UID.
  * Exception events are identified by having a RECURRENCE-ID property.
  */
-const buildExceptionMap = (vevents: any[]): ExceptionMap => {
+const buildExceptionMap = (vevents: ICalVEvent[]): ExceptionMap => {
   const exceptionMap: ExceptionMap = new Map();
 
   for (const ve of vevents) {
@@ -65,13 +105,16 @@ const buildExceptionMap = (vevents: any[]): ExceptionMap => {
         if (!uid) continue;
 
         const status = ve.getFirstPropertyValue('status');
-        const isCancelled = status?.toUpperCase() === 'CANCELLED';
+        const isCancelled =
+          (status as { toUpperCase?: () => string })?.toUpperCase?.() === 'CANCELLED' ||
+          (typeof status === 'string' && status.toUpperCase() === 'CANCELLED');
 
-        if (!exceptionMap.has(uid)) {
-          exceptionMap.set(uid, []);
+        const uidStr = String(uid);
+        if (!exceptionMap.has(uidStr)) {
+          exceptionMap.set(uidStr, []);
         }
 
-        exceptionMap.get(uid)!.push({
+        exceptionMap.get(uidStr)!.push({
           vevent: ve,
           recurrenceId,
           isCancelled,
@@ -94,9 +137,13 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
 ): Promise<CalendarIntegrationEvent[]> => {
   const ICAL = await loadIcalModule();
   let calendarIntegrationEvents: CalendarIntegrationEvent[] = [];
+
+  // Sanitize input data to prevent parser crashes on malformed lines
+  const cleanIcalData = sanitizeIcalData(icalData);
+
   const allPossibleFutureEvents = getAllPossibleEventsAfterStartFromIcal(
     ICAL,
-    icalData,
+    cleanIcalData,
     new Date(startTimestamp),
   );
 
@@ -116,9 +163,10 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
 
       if (ve.getFirstPropertyValue('rrule')) {
         const uid = ve.getFirstPropertyValue('uid');
-        const exceptions = exceptionMap.get(uid) || [];
+        const uidStr = uid ? String(uid) : '';
+        const exceptions = exceptionMap.get(uidStr) || [];
         if (uid) {
-          processedRecurringUids.add(uid);
+          processedRecurringUids.add(uidStr);
         }
 
         calendarIntegrationEvents = calendarIntegrationEvents.concat(
@@ -160,7 +208,7 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
         exceptionStart >= startTimestamp &&
         exceptionStart < endTimestamp
       ) {
-        const baseId = uid || exception.vevent.getFirstPropertyValue('uid');
+        const baseId = uid || String(exception.vevent.getFirstPropertyValue('uid') || '');
         const legacyIds = baseId ? [baseId] : undefined;
         calendarIntegrationEvents.push(
           convertVEventToCalendarIntegrationEvent(exception.vevent, calProviderId, {
@@ -177,25 +225,25 @@ export const getRelevantEventsForCalendarIntegrationFromIcal = async (
   return calendarIntegrationEvents;
 };
 
-const calculateEventDuration = (vevent: any, startTimeStamp: number): number => {
+const calculateEventDuration = (vevent: ICalVEvent, startTimeStamp: number): number => {
   // NOTE: Per RFC 2445, events can have either DTEND or DURATION, but not both
   // If neither is present, the event ends at DTSTART (zero duration)
   const dtend = vevent.getFirstPropertyValue('dtend');
   if (dtend) {
-    return dtend.toJSDate().getTime() - startTimeStamp;
+    return (dtend as { toJSDate: () => Date }).toJSDate().getTime() - startTimeStamp;
   }
 
   const durationProp = vevent.getFirstPropertyValue('duration');
   if (durationProp) {
     // ICAL.Duration provides toSeconds() method
-    return durationProp.toSeconds() * 1000;
+    return (durationProp as { toSeconds: () => number }).toSeconds() * 1000;
   }
 
   // Default to zero duration if neither DTEND nor DURATION is present
   return 0;
 };
 
-const getExDateTimestamps = (vevent: any): number[] => {
+const getExDateTimestamps = (vevent: ICalVEvent): number[] => {
   const exDates: number[] = [];
   const exDateProps = vevent.getAllProperties('exdate');
 
@@ -204,8 +252,8 @@ const getExDateTimestamps = (vevent: any): number[] => {
     // or an array with a single ICAL.Time for single-value properties
     const values = prop.getValues();
     for (const val of values) {
-      if (val && typeof val.toJSDate === 'function') {
-        exDates.push(val.toJSDate().getTime());
+      if (val && typeof (val as { toJSDate?: () => Date }).toJSDate === 'function') {
+        exDates.push((val as { toJSDate: () => Date }).toJSDate().getTime());
       }
     }
   }
@@ -213,19 +261,19 @@ const getExDateTimestamps = (vevent: any): number[] => {
 };
 
 const getForRecurring = (
-  vevent: any,
+  vevent: ICalVEvent,
   calProviderId: string,
   startTimestamp: number,
   endTimeStamp: number,
   exceptions: ExceptionEvent[] = [],
 ): CalendarIntegrationEvent[] => {
   try {
-    const title: string = vevent.getFirstPropertyValue('summary');
+    const title: string = vevent.getFirstPropertyValue('summary') as string;
     const description = vevent.getFirstPropertyValue('description');
     const start = vevent.getFirstPropertyValue('dtstart');
 
     // Handle missing or invalid dtstart for recurring events
-    if (!start || typeof start.toJSDate !== 'function') {
+    if (!start || typeof (start as { toJSDate?: () => Date }).toJSDate !== 'function') {
       Log.warn(
         'Recurring event missing valid dtstart:',
         vevent.getFirstPropertyValue('uid'),
@@ -234,7 +282,7 @@ const getForRecurring = (
       return [];
     }
 
-    const startDate = start.toJSDate();
+    const startDate = (start as { toJSDate: () => Date }).toJSDate();
     const startTimeStamp = startDate.getTime();
     const baseId = vevent.getFirstPropertyValue('uid');
 
@@ -244,7 +292,9 @@ const getForRecurring = (
 
     const recur = vevent.getFirstPropertyValue('rrule');
 
-    const iter = recur.iterator(start);
+    const iter = (
+      recur as { iterator: (s: unknown) => { next: () => unknown } }
+    ).iterator(start);
     const isAllDay = isAllDayEvent(vevent);
 
     // Build set of exception timestamps for fast lookup
@@ -255,7 +305,11 @@ const getForRecurring = (
     exDateTimestamps.forEach((ts) => exceptionTimestamps.add(ts));
 
     const evs: CalendarIntegrationEvent[] = [];
-    for (let next = iter.next(); next; next = iter.next()) {
+    for (
+      let next = iter.next() as { toJSDate: () => Date } | null;
+      next;
+      next = iter.next() as { toJSDate: () => Date } | null
+    ) {
       const nextTimestamp = next.toJSDate().getTime();
 
       // Skip this occurrence if there's an exception for it
@@ -270,7 +324,7 @@ const getForRecurring = (
           duration,
           id: baseId + '_' + next,
           calProviderId,
-          description: description || undefined,
+          description: (description as string) || undefined,
           ...(isAllDay && { isAllDay }),
         });
       } else if (nextTimestamp > endTimeStamp) {
@@ -291,7 +345,7 @@ const getForRecurring = (
         exceptionStart >= startTimestamp &&
         exceptionStart < endTimeStamp
       ) {
-        const legacyIds = baseId ? [baseId] : undefined;
+        const legacyIds = baseId ? [String(baseId)] : undefined;
         const overrideId =
           baseId !== undefined
             ? `${baseId}_${exception.recurrenceId}`
@@ -323,13 +377,15 @@ interface ConvertOptions {
 }
 
 const convertVEventToCalendarIntegrationEvent = (
-  vevent: any,
+  vevent: ICalVEvent,
   calProviderId: string,
   options?: ConvertOptions,
 ): CalendarIntegrationEvent => {
   // options.overrideId allows detached instances to re-use conversion while staying unique per occurrence
   // options.legacyIds preserves backward compatibility with previous ID schemes
-  const start = vevent.getFirstPropertyValue('dtstart').toJSDate().getTime();
+  const start = (vevent.getFirstPropertyValue('dtstart') as { toJSDate: () => Date })
+    .toJSDate()
+    .getTime();
   // NOTE: if dtend is missing, it defaults to dtstart; @see #1814 and RFC 2455
   // detailed comment in #1814:
   // https://github.com/super-productivity/super-productivity/issues/1814#issuecomment-1008132824
@@ -337,9 +393,9 @@ const convertVEventToCalendarIntegrationEvent = (
   const isAllDay = isAllDayEvent(vevent);
 
   return {
-    id: options?.overrideId || vevent.getFirstPropertyValue('uid'),
-    title: vevent.getFirstPropertyValue('summary') || '',
-    description: vevent.getFirstPropertyValue('description') || undefined,
+    id: options?.overrideId || String(vevent.getFirstPropertyValue('uid')),
+    title: (vevent.getFirstPropertyValue('summary') as string) || '',
+    description: (vevent.getFirstPropertyValue('description') as string) || undefined,
     start,
     duration,
     calProviderId,
@@ -349,10 +405,10 @@ const convertVEventToCalendarIntegrationEvent = (
 };
 
 const getAllPossibleEventsAfterStartFromIcal = (
-  ICAL: any,
+  ICAL: ICalModule,
   icalData: string,
   start: Date,
-): any[] => {
+): ICalVEvent[] => {
   const c = ICAL.parse(icalData);
   const comp = new ICAL.Component(c);
   const tzAdded: string[] = [];
@@ -372,26 +428,31 @@ const getAllPossibleEventsAfterStartFromIcal = (
   // Wrap updateTimezones in try-catch to handle edge cases in some Office 365 calendars
   // that can cause "Cannot read properties of null (reading 'parent')" errors.
   // See: https://github.com/super-productivity/super-productivity/issues/5722
-  let vevents: any[];
+  let vevents: ICalVEvent[];
   try {
-    vevents = ICAL.helpers.updateTimezones(comp).getAllSubcomponents('vevent');
+    vevents = ICAL.helpers
+      .updateTimezones(comp)
+      .getAllSubcomponents('vevent') as unknown as ICalVEvent[];
   } catch (error) {
     Log.warn(
       'Failed to update timezones for calendar, falling back to raw component:',
       error,
     );
-    vevents = comp.getAllSubcomponents('vevent');
+    vevents = comp.getAllSubcomponents('vevent') as unknown as ICalVEvent[];
   }
 
-  const allPossibleFutureEvents = vevents.filter((ve: any) => {
+  const allPossibleFutureEvents = vevents.filter((ve: ICalVEvent) => {
     try {
       const dtstart = ve.getFirstPropertyValue('dtstart');
       // Skip events without valid dtstart
-      if (!dtstart || typeof dtstart.toJSDate !== 'function') {
+      if (
+        !dtstart ||
+        typeof (dtstart as { toJSDate?: () => Date }).toJSDate !== 'function'
+      ) {
         return false;
       }
 
-      const dtstartDate = dtstart.toJSDate();
+      const dtstartDate = (dtstart as { toJSDate: () => Date }).toJSDate();
       if (dtstartDate >= start) {
         return true;
       }
@@ -399,13 +460,13 @@ const getAllPossibleEventsAfterStartFromIcal = (
       // Check if it's a recurring event that might have future occurrences
       const rrule = ve.getFirstPropertyValue('rrule');
       if (rrule) {
-        const until = rrule?.until;
+        const until = (rrule as { until?: unknown }).until;
         if (!until) {
           // No end date means infinite recurrence
           return true;
         }
-        if (typeof until.toJSDate === 'function') {
-          return until.toJSDate() > start;
+        if (typeof (until as { toJSDate?: () => Date }).toJSDate === 'function') {
+          return (until as { toJSDate: () => Date }).toJSDate() > start;
         }
         // If until exists but doesn't have toJSDate, include it to be safe
         return true;

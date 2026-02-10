@@ -26,7 +26,7 @@
 .has-mobile-bottom-nav {
   @include mq(xs, max) {
     .main-content {
-      padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+      padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2);
     }
   }
 }
@@ -39,7 +39,7 @@
   }
 
   magic-side-nav {
-    ::ng-deep .nav-sidebar {
+    ::ng-deep .nav-sidenav {
       position: relative !important;
       top: auto !important;
       left: auto !important;

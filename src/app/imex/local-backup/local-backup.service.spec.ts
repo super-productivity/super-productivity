@@ -135,4 +135,19 @@ describe('LocalBackupService', () => {
       expect(backupData.archiveOld.task.entities['oldArchivedTask1']).toBeDefined();
     });
   });
+
+  describe('import backup', () => {
+    it('should import with force conflict to reset vector clock', async () => {
+      backupServiceSpy.importCompleteBackup.and.resolveTo();
+
+      await (service as any)._importBackup(JSON.stringify({ task: { ids: [] } }));
+
+      expect(backupServiceSpy.importCompleteBackup).toHaveBeenCalledWith(
+        jasmine.any(Object),
+        false,
+        true,
+        true,
+      );
+    });
+  });
 });

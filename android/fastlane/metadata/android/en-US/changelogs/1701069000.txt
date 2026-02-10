@@ -1,0 +1,22 @@
+
+### Bug Fixes
+
+* **6289:** alphabet sorting (#6430)
+* address 4 code review findings
+* address 9 code review findings
+* allow bare hostnames in Jira host URL validation #4731 (#6436)
+* **context-menu:** disable long-press context menu on touch to prevent conflict with drag (#6439)
+* **ical:** sanitize input to prevent crash on malformed lines (cc @johannesjo) (#6443)
+* **magic-side-nav:** restore vertical scrolling by removing drag region (#6435) (9d6927a), closes #6330
+* **migration:** handle missing entity states during v16→v17 data repair (#6428)
+* **sync:** detect server-side pruning artifacts in SYNC_IMPORT filter to prevent silent op loss
+* **sync:** prevent infinite loop when concurrent modification resolution keeps failing (#6434)
+* **sync:** remove client-side vector clock pruning and fix pruning-aware comparison (8937163), closes #13
+* **sync:** remove client-side vector clock pruning from ConflictResolutionService and fix rejection counting
+* **sync:** save WebDAV settings after successful Test Connection (#6345)
+* **tasks:** reschedule task when repeat config settings are updated
+* **tasks:** skip planTaskForDay for timed repeat tasks with future first occurrence
+* **tasks:** use planTaskForDay for future repeat occurrences (#6433)
+### Features
+
+* **backgroundOverlayOpacity:** add background overlay opacity  (#6294)

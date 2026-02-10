@@ -1,12 +1,9 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { cssSelectors } from '../../constants/selectors';
 import {
   getCITimeoutMultiplier,
   waitForPluginAssets,
   waitForPluginManagementInit,
 } from '../../helpers/plugin-test.helpers';
-
-const { SETTINGS_BTN } = cssSelectors;
 
 test.describe('Enable Plugin Test', () => {
   test('navigate to plugin settings and enable API Test Plugin', async ({
@@ -14,9 +11,7 @@ test.describe('Enable Plugin Test', () => {
     workViewPage,
   }) => {
     const timeoutMultiplier = getCITimeoutMultiplier();
-    test.setTimeout(30000 * timeoutMultiplier); // Reduced from 60s to 30s base
-
-    // console.log('[Plugin Test] Starting enable plugin test...');
+    test.setTimeout(30000 * timeoutMultiplier);
 
     // First, ensure plugin assets are available
     const assetsAvailable = await waitForPluginAssets(page);
@@ -30,77 +25,19 @@ test.describe('Enable Plugin Test', () => {
 
     await workViewPage.waitForTaskList();
 
+    // Navigate to settings and initialize plugin management
+    // This navigates to settings, selects plugin tab, and expands plugin section
     await waitForPluginManagementInit(page);
 
-    // Navigate to plugin settings
-    await page.click(SETTINGS_BTN);
-    await page
-      .locator('.page-settings')
-      .first()
-      .waitFor({ state: 'visible', timeout: 10000 });
-
-    await page.evaluate(() => {
-      const configPage = document.querySelector('.page-settings');
-      if (!configPage) {
-        console.error('Not on config page');
-        return;
-      }
-
-      const pluginSection = document.querySelector('.plugin-section');
-      if (pluginSection) {
-        pluginSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else {
-        console.error('Plugin section not found');
-        return;
-      }
-
-      const collapsible = document.querySelector('.plugin-section collapsible');
-      if (collapsible) {
-        const isExpanded = collapsible.classList.contains('isExpanded');
-        if (!isExpanded) {
-          const header = collapsible.querySelector('.collapsible-header');
-          if (header) {
-            (header as HTMLElement).click();
-            // console.log('Clicked to expand plugin collapsible');
-          } else {
-            console.error('Could not find collapsible header');
-          }
-        } else {
-          // console.log('Plugin collapsible already expanded');
-        }
-      } else {
-        console.error('Plugin collapsible not found');
-      }
-    });
-
     await expect(page.locator('plugin-management')).toBeVisible({ timeout: 10000 });
+
     // Wait for plugin cards to be loaded
     await page
       .locator('plugin-management mat-card')
       .first()
       .waitFor({ state: 'attached', timeout: 10000 });
 
-    // Check if plugin-management has any content
-    await page.evaluate(() => {
-      const pluginMgmt = document.querySelector('plugin-management');
-      const matCards = pluginMgmt ? pluginMgmt.querySelectorAll('mat-card') : [];
-
-      // Filter out warning card
-      const pluginCards = Array.from(matCards).filter((card) => {
-        return card.querySelector('mat-slide-toggle') !== null;
-      });
-
-      return {
-        pluginMgmtExists: !!pluginMgmt,
-        totalCardCount: matCards.length,
-        pluginCardCount: pluginCards.length,
-        pluginCardTexts: pluginCards.map(
-          (card) => card.querySelector('mat-card-title')?.textContent?.trim() || '',
-        ),
-      };
-    });
-
-    // Try to find and enable the API Test Plugin (which exists by default)
+    // Try to find and enable the API Test Plugin
     const enableResult = await page.evaluate(() => {
       const pluginCards = document.querySelectorAll('plugin-management mat-card');
       let foundApiTestPlugin = false;
@@ -128,7 +65,6 @@ test.describe('Enable Plugin Test', () => {
       };
     });
 
-    // console.log('Plugin enablement result:', enableResult);
     expect(enableResult.foundApiTestPlugin).toBe(true);
 
     // Wait for toggle state to change to enabled
@@ -150,16 +86,5 @@ test.describe('Enable Plugin Test', () => {
         { timeout: 10000 },
       );
     }
-
-    // Now check if plugin menu has buttons
-    await page.evaluate(() => {
-      const sideNav = document.querySelector('magic-side-nav');
-      const buttons = sideNav ? sideNav.querySelectorAll('nav-item button') : [];
-      return {
-        sideNavExists: !!sideNav,
-        buttonCount: buttons.length,
-        buttonTexts: Array.from(buttons).map((btn) => btn.textContent?.trim() || ''),
-      };
-    });
   });
 });

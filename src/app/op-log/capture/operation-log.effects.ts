@@ -10,7 +10,7 @@ import {
 } from '../core/persistent-action.interface';
 import { uuidv7 } from '../../util/uuid-v7';
 import { devError } from '../../util/dev-error';
-import { incrementVectorClock, limitVectorClockSize } from '../../core/util/vector-clock';
+import { incrementVectorClock } from '../../core/util/vector-clock';
 import { MultiEntityPayload, Operation, ActionType } from '../core/operation.types';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { OpLog } from '../../core/log';
@@ -173,15 +173,11 @@ export class OperationLogEffects {
           entityChanges,
         };
         const currentClock = await this.vectorClockService.getCurrentVectorClock();
-        const incrementedClock = incrementVectorClock(currentClock, clientId);
-        // Load protected client IDs (e.g., from latest SYNC_IMPORT) to preserve during pruning
-        const protectedClientIds = await this.opLogStore.getProtectedClientIds();
-        // Limit vector clock size to prevent unbounded growth with many clients
-        const newClock = limitVectorClockSize(
-          incrementedClock,
-          clientId,
-          protectedClientIds,
-        );
+        // Client ops carry full vector clocks (no pruning). The server prunes
+        // AFTER comparison but BEFORE storage (see CLAUDE.md #13). Client-side
+        // pruning is harmful: it drops client IDs that the server may still
+        // track, causing false CONCURRENT results in compareVectorClocks.
+        const newClock = incrementVectorClock(currentClock, clientId);
 
         // For bulk operations, entityIds is provided but entityId may not be.
         // The server requires entityId for non-full-state operations.

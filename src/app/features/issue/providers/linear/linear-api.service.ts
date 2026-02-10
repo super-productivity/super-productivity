@@ -1,5 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpRequest } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpEventType,
+  HttpHeaders,
+  HttpRequest,
+  HttpResponse,
+} from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { catchError, filter, map } from 'rxjs/operators';
 import { LinearCfg } from './linear.model';
@@ -10,6 +16,45 @@ import { LINEAR_TYPE } from '../../issue.const';
 import { IssueLog } from '../../../../core/log';
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql';
+
+interface LinearGraphQLResponse<T = unknown> {
+  data?: T;
+  errors?: Array<{ message: string }>;
+}
+
+interface LinearRawIssueReduced {
+  id: string;
+  identifier: string;
+  number: number;
+  title: string;
+  updatedAt: string;
+  url: string;
+  state: { name: string; type: string };
+}
+
+interface LinearRawIssue extends LinearRawIssueReduced {
+  description?: string;
+  priority: number;
+  createdAt: string;
+  completedAt?: string;
+  canceledAt?: string;
+  dueDate?: string;
+  assignee?: { id: string; name: string; email: string; avatarUrl: string };
+  creator: { id: string; name: string };
+  team: { id: string; name: string; key: string };
+  labels?: {
+    nodes: Array<{ id: string; name: string; color: string }>;
+  };
+  comments?: {
+    nodes: Array<{
+      id: string;
+      body: string;
+      createdAt: string;
+      user?: { id: string; name: string; avatarUrl: string };
+    }>;
+  };
+  attachments?: { nodes: LinearAttachment[] };
+}
 
 @Injectable({
   providedIn: 'root',
@@ -85,10 +130,10 @@ export class LinearApiService {
       }
     `;
 
-    return this._sendRequest$({
+    return this._sendRequest$<LinearIssue>({
       query: this._normalizeQuery(query),
       variables: { id: issueId },
-      transform: (res: any) => {
+      transform: (res: LinearGraphQLResponse<{ issue: LinearRawIssue }>) => {
         if (res?.data?.issue) {
           return this._mapLinearIssueToIssue(res.data.issue);
         }
@@ -139,7 +184,7 @@ export class LinearApiService {
     `;
 
     // Build filter objects for variables, only include if provided
-    const variables: any = { first: 50 };
+    const variables: Record<string, unknown> = { first: 50 };
     if (opts?.teamId) {
       variables.team = { id: { eq: opts.teamId } };
     }
@@ -147,22 +192,26 @@ export class LinearApiService {
       variables.project = { id: { eq: opts.projectId } };
     }
 
-    return this._sendRequest$({
+    return this._sendRequest$<LinearIssueReduced[]>({
       query: this._normalizeQuery(query),
       variables,
-      transform: (res: any) => {
+      transform: (
+        res: LinearGraphQLResponse<{
+          viewer: { assignedIssues: { nodes: LinearRawIssueReduced[] } };
+        }>,
+      ) => {
         let issues = res?.data?.viewer?.assignedIssues?.nodes || [];
 
         if (searchTerm.trim()) {
           const lowerSearchTerm = searchTerm.toLowerCase();
           issues = issues.filter(
-            (issue: any) =>
+            (issue) =>
               issue.title.toLowerCase().includes(lowerSearchTerm) ||
               issue.identifier.toLowerCase().includes(lowerSearchTerm),
           );
         }
 
-        return issues.map((issue: any) => this._mapLinearIssueToIssueReduced(issue));
+        return issues.map((issue) => this._mapLinearIssueToIssueReduced(issue));
       },
       cfg,
     });
@@ -178,7 +227,7 @@ export class LinearApiService {
       }
     `;
 
-    return this._sendRequest$({
+    return this._sendRequest$<boolean>({
       query: this._normalizeQuery(query),
       variables: {},
       transform: () => true,
@@ -191,17 +240,17 @@ export class LinearApiService {
     );
   }
 
-  private _sendRequest$({
+  private _sendRequest$<T>({
     query,
     variables,
     transform,
     cfg,
   }: {
     query: string;
-    variables: Record<string, any>;
-    transform?: (response: any) => any;
+    variables: Record<string, unknown>;
+    transform?: (response: any) => T;
     cfg: LinearCfg;
-  }): Observable<any> {
+  }): Observable<T> {
     const headers = new HttpHeaders({
       // eslint-disable-next-line @typescript-eslint/naming-convention
       'Content-Type': 'application/json',
@@ -213,22 +262,19 @@ export class LinearApiService {
       variables,
     };
 
-    const allArgs = [
-      body,
-      {
-        headers,
-        reportProgress: false,
-        observe: 'response',
-      },
-    ];
-
-    const req = new HttpRequest('POST' as any, LINEAR_API_URL, ...(allArgs as any));
+    const req = new HttpRequest('POST', LINEAR_API_URL, body, {
+      headers,
+      reportProgress: false,
+    });
 
     return this._http.request(req).pipe(
       // Filter out HttpEventType.Sent (type: 0) events to only process actual responses
-      filter((res: any) => !(res === Object(res) && res.type === 0)),
-      map((res: any) => (res && res.body ? res.body : res)),
-      map((res: any) => {
+      filter(
+        (res): res is HttpResponse<LinearGraphQLResponse> =>
+          res.type === HttpEventType.Response,
+      ),
+      map((res) => (res.body ? res.body : ({} as LinearGraphQLResponse))),
+      map((res) => {
         // Check for GraphQL errors in response
         if (res?.errors?.length) {
           IssueLog.err('LINEAR_GRAPHQL_ERROR', res.errors);
@@ -236,20 +282,22 @@ export class LinearApiService {
         }
         return res;
       }),
-      map((res: any) => {
-        return transform ? transform(res) : res;
+      map((res) => {
+        return transform ? transform(res) : (res as unknown as T);
       }),
       catchError((err) =>
         handleIssueProviderHttpError$(LINEAR_TYPE, this._snackService, err),
       ),
-    );
+    ) as Observable<T>;
   }
 
   private _normalizeQuery(query: string): string {
     return query.replace(/\s+/g, ' ').trim();
   }
 
-  private _mapLinearIssueToIssueReduced(issue: any): LinearIssueReduced {
+  private _mapLinearIssueToIssueReduced(
+    issue: LinearRawIssueReduced,
+  ): LinearIssueReduced {
     return {
       id: issue.id,
       identifier: issue.identifier,
@@ -264,7 +312,7 @@ export class LinearApiService {
     };
   }
 
-  private _mapLinearIssueToIssue(issue: any): LinearIssue {
+  private _mapLinearIssueToIssue(issue: LinearRawIssue): LinearIssue {
     return {
       id: issue.id,
       identifier: issue.identifier,
@@ -299,23 +347,23 @@ export class LinearApiService {
         name: issue.team.name,
         key: issue.team.key,
       },
-      labels: (issue.labels?.nodes || []).map((label: any) => ({
+      labels: (issue.labels?.nodes || []).map((label) => ({
         id: label.id,
         name: label.name,
         color: label.color,
       })),
-      comments: (issue.comments?.nodes || []).map((comment: any) => ({
-        id: comment.id,
-        body: comment.body,
-        createdAt: comment.createdAt,
-        user: comment.user
-          ? {
-              id: comment.user.id,
-              name: comment.user.name,
-              avatarUrl: comment.user.avatarUrl,
-            }
-          : undefined,
-      })),
+      comments: (issue.comments?.nodes || [])
+        .filter((comment) => !!comment.user)
+        .map((comment) => ({
+          id: comment.id,
+          body: comment.body,
+          createdAt: comment.createdAt,
+          user: {
+            id: comment.user!.id,
+            name: comment.user!.name,
+            avatarUrl: comment.user!.avatarUrl,
+          },
+        })),
       attachments: (issue.attachments?.nodes || []) as LinearAttachment[],
     };
   }

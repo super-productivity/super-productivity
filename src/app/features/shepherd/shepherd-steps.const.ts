@@ -18,6 +18,8 @@ import { fromEvent, merge, Observable, of, timer } from 'rxjs';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Action } from '@ngrx/store';
 
+type PopperPlacement = Step.StepOptionsAttachTo['on'];
+
 const PRIMARY_CLASSES =
   'mdc-button mdc-button--unelevated mat-mdc-unelevated-button mat-primary mat-mdc-button-base';
 const SECONDARY_CLASSES =
@@ -175,7 +177,7 @@ export const SHEPHERD_STEPS = (
       text: "Let's start tracking time to it!",
       attachTo: {
         element: 'task',
-        on: 'bottom' as any,
+        on: 'bottom' as PopperPlacement,
       },
       when: twoWayObs(
         { obs: timer(4000) },
@@ -236,7 +238,7 @@ export const SHEPHERD_STEPS = (
             text: 'There is more you can do with a task. Hover over the task you created with your mouse again.',
             attachTo: {
               element: 'task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: twoWayObs(
               {
@@ -256,7 +258,7 @@ export const SHEPHERD_STEPS = (
             title: 'Open Task Details',
             attachTo: {
               element: '.show-additional-info-btn',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             text: 'You can open a panel with additional controls by <em>clicking</em> on the button.',
             when: twoWayObs(
@@ -293,7 +295,7 @@ export const SHEPHERD_STEPS = (
             text: 'There is more you can do with tasks. Tap on the task.',
             attachTo: {
               element: 'task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: twoWayObs(
               {
@@ -316,7 +318,7 @@ export const SHEPHERD_STEPS = (
       title: 'The Task Details',
       attachTo: {
         element: 'task-detail-panel',
-        on: IS_MOUSE_PRIMARY ? 'left' : 'top',
+        on: (IS_MOUSE_PRIMARY ? 'left' : 'top') as PopperPlacement,
       },
       text: `<p>This is the task detail panel. Here you can:</p><ul>
 <li>adjust estimates</li>
@@ -349,7 +351,7 @@ export const SHEPHERD_STEPS = (
             text: '<p>You can edit the task title by <em>clicking</em> on it. Do this now and change the task title to something else.</p>',
             attachTo: {
               element: '.task-title',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             beforeShowPromise: () => promiseTimeout(500),
             when: nextOnObs(
@@ -361,7 +363,7 @@ export const SHEPHERD_STEPS = (
             title: 'Well done!  🎉',
             attachTo: {
               element: 'task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: HIDE_QUICK(shepherdService),
           },
@@ -376,7 +378,7 @@ export const SHEPHERD_STEPS = (
             text: '<p>You can mark tasks as done by <em>hovering</em> over it and then <em>clicking</em> the <span class="material-icons">check</span> icon. Do this now!</p>',
             attachTo: {
               element: '.tour-undoneList task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: nextOnObs(
               actions$.pipe(
@@ -393,7 +395,7 @@ export const SHEPHERD_STEPS = (
             text: '<p>You can mark tasks as done by swiping them to the right</p><p>Swiping to the left will open up the schedule Dialog.</p><p><em>Swipe right</em> now to mark the task as done!</p>',
             attachTo: {
               element: '.tour-undoneList task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: nextOnObs(
               actions$.pipe(
@@ -408,7 +410,7 @@ export const SHEPHERD_STEPS = (
             text: '<p>You can mark tasks as undone again by swiping it to the right</p>',
             attachTo: {
               element: '.tour-doneList task',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             beforeShowPromise: () => promiseTimeout(500),
             when: nextOnObs(
@@ -475,7 +477,7 @@ export const SHEPHERD_STEPS = (
             text: 'You can import tasks from a variety of third party tools. To do so click on this icon <span class="material-icons">dashboard_customize</span> in the top right corner.',
             attachTo: {
               element: '.tour-issuePanelTrigger',
-              on: 'bottom' as any,
+              on: 'bottom' as PopperPlacement,
             },
             when: nextOnObs(
               layoutService.isShowIssuePanel$.pipe(filter((v) => !!v)),
@@ -554,7 +556,7 @@ export const SHEPHERD_STEPS = (
                   shepherdService.show(TourId.KeyboardNav);
                   localStorage.setItem(LS.IS_SKIP_TOUR, 'true');
                 },
-              } as any,
+              },
             ]
           : []),
         {
@@ -564,7 +566,7 @@ export const SHEPHERD_STEPS = (
             shepherdService.complete();
             localStorage.setItem(LS.IS_SKIP_TOUR, 'true');
           },
-        } as any,
+        },
       ],
     },
 
@@ -588,7 +590,7 @@ export const SHEPHERD_STEPS = (
             localStorage.setItem(LS.IS_SKIP_TOUR, 'true');
             shepherdService.complete();
           },
-        } as any,
+        },
         {
           text: 'Again next time',
           classes: PRIMARY_CLASSES,
@@ -596,7 +598,7 @@ export const SHEPHERD_STEPS = (
             localStorage.removeItem(LS.IS_SKIP_TOUR);
             shepherdService.complete();
           },
-        } as any,
+        },
       ],
     },
 
@@ -758,7 +760,7 @@ export const SHEPHERD_STEPS = (
           action: () => {
             shepherdService.complete();
           },
-        } as any,
+        },
       ],
     },
   ];

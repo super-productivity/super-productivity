@@ -66,12 +66,14 @@ export const compareVectorClocks = (
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
 
-  // When both clocks are at MAX_VECTOR_CLOCK_SIZE, they may have been pruned
-  // by different clients (each preserving its own clientId). Missing keys could
-  // mean "pruned away" rather than "genuinely zero". Comparing only shared keys
-  // avoids false CONCURRENT from cross-client pruning asymmetry.
+  // When both clocks have EXACTLY MAX_VECTOR_CLOCK_SIZE entries, they may have
+  // been pruned by limitVectorClockSize (which caps at exactly MAX). Missing
+  // keys could mean "pruned away" rather than "genuinely zero". Comparing only
+  // shared keys avoids false CONCURRENT from cross-client pruning asymmetry.
+  // Use === (not >=): a clock with MORE than MAX entries was never pruned and
+  // should use normal comparison mode to correctly detect dominance.
   const bothPossiblyPruned =
-    aKeys.length >= MAX_VECTOR_CLOCK_SIZE && bKeys.length >= MAX_VECTOR_CLOCK_SIZE;
+    aKeys.length === MAX_VECTOR_CLOCK_SIZE && bKeys.length === MAX_VECTOR_CLOCK_SIZE;
 
   let keysToCompare: Set<string>;
   let aOnlyCount = 0;
@@ -132,7 +134,7 @@ export const mergeVectorClocks = (a: VectorClock, b: VectorClock): VectorClock =
 
 /**
  * Limits vector clock size by keeping only the most active clients.
- * Used by both client (when creating ops) and server (when storing ops).
+ * Used by the server (when storing ops after comparison).
  *
  * @param clock The vector clock to limit
  * @param preserveClientIds Client IDs to always keep (e.g., current client, protected IDs)

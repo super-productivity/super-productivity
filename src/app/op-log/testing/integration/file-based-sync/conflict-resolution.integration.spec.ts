@@ -6,11 +6,14 @@ describe('File-Based Sync Integration - Conflict Resolution', () => {
   let harness: FileBasedSyncTestHarness;
 
   beforeEach(() => {
+    // Eliminate real retry delays to prevent slow tests and timer accumulation
+    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 0;
     harness = FileBasedSyncTestHarness.create({});
   });
 
   afterEach(() => {
     harness.reset();
+    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 500;
   });
 
   describe('syncVersion Mismatch', () => {

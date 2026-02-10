@@ -87,50 +87,63 @@ export class SuperSyncPage extends BasePage {
    * @private
    */
   private async selectSuperSyncProviderWithRetry(): Promise<void> {
-    // Wait for Angular Material to fully initialize the select component
-    // and for any animations to complete
-    await this.page.waitForTimeout(300);
-
-    // Ensure the provider select is visible and scrolled into view
-    await this.providerSelect.scrollIntoViewIfNeeded();
-    await this.providerSelect.waitFor({ state: 'visible', timeout: 5000 });
-
     const superSyncOption = this.page.locator('mat-option:has-text("SuperSync")');
-    let dropdownOpened = false;
 
-    for (let attempt = 0; attempt < 3 && !dropdownOpened; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
-        console.log(`[SuperSyncPage] Retrying dropdown click (attempt ${attempt + 1})`);
-        // Wait between retries to let Angular settle
+        console.log(
+          `[SuperSyncPage] Retrying dropdown selection (attempt ${attempt + 1})`,
+        );
+        // Close any open dropdown/overlay before retrying
+        await this.page.keyboard.press('Escape').catch(() => {});
         await this.page.waitForTimeout(500);
       }
 
-      // Ensure no animations are in progress before clicking
-      await this.page
-        .waitForFunction(
-          () =>
-            document.getAnimations().filter((a) => a.playState === 'running').length ===
-            0,
-          { timeout: 2000 },
-        )
-        .catch(() => {
-          // Ignore timeout - proceed anyway if animations can't be detected
-        });
+      try {
+        // Wait for any pending navigation to settle (Angular routing from / to /#/tag/...)
+        await this.page.waitForLoadState('domcontentloaded').catch(() => {});
 
-      await this.providerSelect.click();
-      // Wait for dropdown options to appear (Angular Material animation)
-      // Increased timeout from 2s to 3s for slow environments
-      dropdownOpened = await superSyncOption
-        .waitFor({ state: 'visible', timeout: 3000 })
-        .then(() => true)
-        .catch(() => false);
+        // Wait for Angular Material to fully initialize the select component
+        await this.page.waitForTimeout(300);
+
+        // Ensure the provider select is visible and scrolled into view
+        await this.providerSelect.scrollIntoViewIfNeeded({ timeout: 5000 });
+        await this.providerSelect.waitFor({ state: 'visible', timeout: 5000 });
+
+        // Ensure no animations are in progress before clicking
+        await this.page
+          .waitForFunction(
+            () =>
+              document.getAnimations().filter((a) => a.playState === 'running').length ===
+              0,
+            { timeout: 2000 },
+          )
+          .catch(() => {
+            // Ignore timeout - proceed anyway if animations can't be detected
+          });
+
+        await this.providerSelect.click();
+
+        // Wait for dropdown options to appear (Angular Material animation)
+        const dropdownOpened = await superSyncOption
+          .waitFor({ state: 'visible', timeout: 3000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (!dropdownOpened) {
+          continue;
+        }
+
+        await superSyncOption.click();
+        return; // Success!
+      } catch (error) {
+        console.log(
+          `[SuperSyncPage] Attempt ${attempt + 1} failed: ${(error as Error).message}`,
+        );
+      }
     }
 
-    if (!dropdownOpened) {
-      throw new Error('Failed to open provider dropdown after 3 attempts');
-    }
-
-    await superSyncOption.click();
+    throw new Error('Failed to select SuperSync provider after 3 attempts');
   }
 
   /**
@@ -166,6 +179,15 @@ export class SuperSyncPage extends BasePage {
     // CRITICAL: Ensure any leftover overlays from previous operations are closed
     // This prevents "backdrop intercepts pointer events" errors when clicking buttons
     await this.ensureOverlaysClosed();
+
+    // Wait for any pending navigation to complete before opening the dialog.
+    // Angular routing (e.g., from / to /#/tag/TODAY/tasks) can be in-flight,
+    // which causes Playwright to block element interactions with
+    // "waiting for navigation to finish" errors.
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
+    await this.page
+      .waitForURL(/#\/(tag|project)\/.+\/tasks/, { timeout: 10000 })
+      .catch(() => {});
 
     // Open sync settings via right-click (context menu)
     // This allows configuring sync even when already set up
@@ -339,8 +361,8 @@ export class SuperSyncPage extends BasePage {
           }
         }
       } else if (outcome === 'sync_error') {
-        // Sync error - this typically means encrypted data was received but no password configured
-        // Wait for password dialog to appear
+        // Sync error - could mean encrypted data without password, or a non-encryption error
+        // (e.g., SYNC_IMPORT conflict after backup import)
         console.log('[SuperSyncPage] Sync error detected - waiting for password dialog');
         const passwordDialogAfterError = await passwordDialog
           .waitFor({ state: 'visible', timeout: 10000 })
@@ -357,9 +379,13 @@ export class SuperSyncPage extends BasePage {
           await saveAndSyncBtn.click();
           await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
         } else {
-          throw new Error(
-            'Sync error occurred but no password dialog appeared - check sync configuration',
+          // No password dialog - the sync error is not about encryption
+          // (e.g., SYNC_IMPORT conflict). Treat as Client A and enable encryption.
+          console.log(
+            '[SuperSyncPage] No password dialog after sync error - enabling encryption as Client A',
           );
+          await this.ensureOverlaysClosed();
+          await this.enableEncryption(config.password!);
         }
       } else {
         // Timeout or error - check current state and decide
@@ -399,9 +425,13 @@ export class SuperSyncPage extends BasePage {
             await saveAndSyncBtn.click();
             await passwordDialog.waitFor({ state: 'hidden', timeout: 30000 });
           } else {
-            throw new Error(
-              'Sync error occurred but no password dialog appeared - check sync configuration',
+            // No password dialog - the sync error is not about encryption
+            // (e.g., SYNC_IMPORT conflict). Treat as Client A and enable encryption.
+            console.log(
+              '[SuperSyncPage] No password dialog after sync error - enabling encryption as Client A',
             );
+            await this.ensureOverlaysClosed();
+            await this.enableEncryption(config.password!);
           }
         } else if (isSpinnerVisible) {
           // Sync still in progress - wait for it to complete or for password dialog

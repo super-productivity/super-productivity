@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'fs';
 import { IPC } from './shared-with-frontend/ipc-events.const';
@@ -71,6 +72,7 @@ function backupData(ev: IpcMainEvent, data: AppDataCompleteLegacy): void {
   try {
     const backup = JSON.stringify(data);
     writeFileSync(filePath, backup);
+    cleanupOldBackups();
   } catch (e) {
     log('Error while backing up');
     error(e);
@@ -79,12 +81,72 @@ function backupData(ev: IpcMainEvent, data: AppDataCompleteLegacy): void {
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 function getDateStr(): string {
-  const today = new Date();
-  const dd = today.getDate();
-  const mm = today.getMonth() + 1; // January is 0!
-  const yyyy = today.getFullYear();
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const MM = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const HH = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${MM}-${dd}_${HH}${mm}${ss}`;
+}
 
-  const dds = dd < 10 ? '0' + dd : dd.toString();
-  const mms = mm < 10 ? '0' + mm : mm.toString();
-  return `${yyyy}-${mms}-${dds}`;
+const KEEP_RECENT = 14;
+const KEEP_DAILY_DAYS = 7;
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function cleanupOldBackups(): void {
+  if (!existsSync(BACKUP_DIR)) {
+    return;
+  }
+
+  try {
+    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
+    if (files.length <= KEEP_RECENT) {
+      return;
+    }
+
+    const filesWithMtime = files.map((fileName) => {
+      const filePath = path.join(BACKUP_DIR, fileName);
+      return { fileName, filePath, mtime: statSync(filePath).mtime.getTime() };
+    });
+
+    // Sort newest first
+    filesWithMtime.sort((a, b) => b.mtime - a.mtime);
+
+    // Always keep the most recent backups
+    const keep = new Set<string>();
+    for (let i = 0; i < Math.min(KEEP_RECENT, filesWithMtime.length); i++) {
+      keep.add(filesWithMtime[i].fileName);
+    }
+
+    // Keep the last backup of each day for the past N days
+    const now = new Date();
+    for (let d = 0; d < KEEP_DAILY_DAYS; d++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - d);
+      const datePrefix = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+      // Find the latest backup for this day (already sorted newest first)
+      const dayBackup = filesWithMtime.find((f) => f.fileName.startsWith(datePrefix));
+      if (dayBackup) {
+        keep.add(dayBackup.fileName);
+      }
+    }
+
+    // Delete everything not in the keep set
+    for (const file of filesWithMtime) {
+      if (!keep.has(file.fileName)) {
+        try {
+          unlinkSync(file.filePath);
+        } catch (e) {
+          log(`Error deleting backup file ${file.fileName}`);
+          error(e);
+        }
+      }
+    }
+  } catch (e) {
+    log('Error during backup cleanup');
+    error(e);
+  }
 }

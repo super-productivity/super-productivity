@@ -5,6 +5,7 @@ import { OperationLogStoreService } from '../persistence/operation-log-store.ser
 import { VectorClockService } from './vector-clock.service';
 import {
   incrementVectorClock,
+  limitVectorClockSize,
   mergeVectorClocks,
   selectProtectedClientIds,
 } from '../../core/util/vector-clock';
@@ -218,7 +219,11 @@ export class ServerMigrationService {
     for (const entry of allLocalOps) {
       mergedClock = mergeVectorClocks(mergedClock, entry.op.vectorClock);
     }
-    const newClock = incrementVectorClock(mergedClock, clientId);
+    const newClock = limitVectorClockSize(
+      incrementVectorClock(mergedClock, clientId),
+      clientId,
+      [],
+    );
 
     OpLog.normal(
       `ServerMigrationService: Merged ${allLocalOps.length} local op clocks into SYNC_IMPORT vector clock.`,

@@ -80,7 +80,7 @@
   z-index: 1002;
   overflow-y: auto;
   overflow-x: hidden;
-  -webkit-app-region: drag;
+  -webkit-app-region: no-drag;
 
   // Slight elevation and clear background for overlay/mobile mode is defined in the mobile block below
 

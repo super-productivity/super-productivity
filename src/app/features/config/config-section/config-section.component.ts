@@ -27,6 +27,12 @@ import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.compon
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { ConfigFormComponent } from '../config-form/config-form.component';
 
+interface CustomFormInstance {
+  cfg?: Record<string, unknown>;
+  section?: ConfigFormSection<Record<string, unknown>>;
+  save?: { subscribe: (fn: (v: Record<string, unknown>) => void) => void };
+}
+
 @Component({
   selector: 'config-section',
   templateUrl: './config-section.component.html',
@@ -48,29 +54,29 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
-  @Input() section?: ConfigFormSection<{ [key: string]: any }>;
+  @Input() section?: ConfigFormSection<Record<string, unknown>>;
   @Input() isExpanded: boolean = false;
   readonly save = output<{
     sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
-    config: any;
+    config: Record<string, unknown>;
   }>();
   readonly customFormRef = viewChild('customForm', { read: ViewContainerRef });
   private _subs: Subscription = new Subscription();
-  private _instance?: Component;
+  private _instance?: CustomFormInstance;
   private _viewDestroyTimeout?: number;
 
-  private _cfg: any;
+  private _cfg: Record<string, unknown> | undefined;
 
-  get cfg(): any | undefined {
+  get cfg(): Record<string, unknown> | undefined {
     return this._cfg;
   }
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
-  @Input() set cfg(v: any) {
+  @Input() set cfg(v: Record<string, unknown> | undefined) {
     this._cfg = v;
     if (v && this._instance) {
-      (this._instance as any).cfg = { ...v };
+      this._instance.cfg = { ...v };
     }
   }
 
@@ -101,7 +107,9 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
           customFormRef.clear();
           // dirty trick to make sure data is actually there
           this._viewDestroyTimeout = window.setTimeout(() => {
-            this._loadCustomSection((this.section as any).customSection);
+            this._loadCustomSection(
+              (this.section as ConfigFormSection<Record<string, unknown>>).customSection!,
+            );
             this._cd.detectChanges();
           });
         }
@@ -118,12 +126,12 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
 
   onSave($event: {
     sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
-    config: any;
+    config: Record<string, unknown>;
   }): void {
     this.save.emit($event);
   }
 
-  trackByIndex(i: number, p: any): number {
+  trackByIndex(i: number, p: unknown): number {
     return i;
   }
 
@@ -131,23 +139,32 @@ export class ConfigSectionComponent implements OnInit, OnDestroy {
     const componentToRender = customConfigFormSectionComponent(customSection);
 
     if (componentToRender) {
-      const ref = exists<any>(this.customFormRef()).createComponent(componentToRender);
+      const ref = exists<ViewContainerRef>(this.customFormRef()).createComponent(
+        componentToRender,
+      );
+
+      const instance = ref.instance as CustomFormInstance;
 
       // NOTE: important that this is set only if we actually have a value
       // otherwise the default fallback will be overwritten
       if (this.cfg) {
-        ref.instance.cfg = this.cfg;
+        instance.cfg = this.cfg;
       }
 
-      ref.instance.section = this.section;
+      instance.section = this.section;
 
-      if (ref.instance.save) {
-        ref.instance.save.subscribe((v: any) => {
-          this.onSave(v);
+      if (instance.save) {
+        instance.save.subscribe((v: Record<string, unknown>) => {
+          this.onSave(
+            v as {
+              sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey | TagCfgFormKey;
+              config: Record<string, unknown>;
+            },
+          );
           this._cd.detectChanges();
         });
       }
-      this._instance = ref.instance;
+      this._instance = instance;
     }
   }
 }

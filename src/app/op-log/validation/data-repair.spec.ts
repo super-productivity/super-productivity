@@ -2007,6 +2007,71 @@ describe('dataRepair()', () => {
     expect(result.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
   });
 
+  describe('should handle missing or undefined entity states (issue #6428)', () => {
+    it('should not crash when issueProvider is undefined', () => {
+      const result = dataRepair({
+        ...mock,
+        issueProvider: undefined,
+      } as any);
+      expect(result.issueProvider).toBeDefined();
+      expect(result.issueProvider.ids).toEqual([]);
+      expect(result.issueProvider.entities).toEqual({});
+    });
+
+    it('should not crash when issueProvider is null', () => {
+      const result = dataRepair({
+        ...mock,
+        issueProvider: null,
+      } as any);
+      expect(result.issueProvider).toBeDefined();
+      expect(result.issueProvider.ids).toEqual([]);
+      expect(result.issueProvider.entities).toEqual({});
+    });
+
+    it('should not crash when taskRepeatCfg is undefined', () => {
+      const result = dataRepair({
+        ...mock,
+        taskRepeatCfg: undefined,
+      } as any);
+      expect(result.taskRepeatCfg).toBeDefined();
+      expect(result.taskRepeatCfg.ids).toEqual([]);
+      expect(result.taskRepeatCfg.entities).toEqual({});
+    });
+
+    it('should not crash when multiple entity states are undefined', () => {
+      const result = dataRepair({
+        ...mock,
+        issueProvider: undefined,
+        taskRepeatCfg: undefined,
+        note: undefined,
+        metric: undefined,
+        simpleCounter: undefined,
+      } as any);
+      expect(result.issueProvider.ids).toEqual([]);
+      expect(result.issueProvider.entities).toEqual({});
+      expect(result.taskRepeatCfg.ids).toEqual([]);
+      expect(result.taskRepeatCfg.entities).toEqual({});
+      expect(result.note.ids).toEqual([]);
+      expect(result.note.entities).toEqual({});
+      expect(result.metric.ids).toEqual([]);
+      expect(result.metric.entities).toEqual({});
+      expect(result.simpleCounter.ids).toEqual([]);
+      expect(result.simpleCounter.entities).toEqual({});
+    });
+
+    it('should not crash when entity state is an empty object without entities', () => {
+      const result = dataRepair({
+        ...mock,
+        issueProvider: {},
+        taskRepeatCfg: {},
+      } as any);
+      expect(result.issueProvider.ids).toEqual([]);
+      expect(result.issueProvider.entities).toEqual({});
+      expect(result.taskRepeatCfg.ids).toEqual([]);
+      expect(result.taskRepeatCfg.entities).toEqual({});
+    });
+  });
+
   describe('should fix repeat configs with invalid quickSetting (issue #5802)', () => {
     it('should change quickSetting to CUSTOM when WEEKLY_CURRENT_WEEKDAY has no startDate', () => {
       const taskRepeatCfgState = {

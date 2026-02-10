@@ -56,6 +56,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _currentPastePlaceholder: string | null = null;
+  private _resolveGeneration = 0;
 
   readonly isLock = input<boolean>(false);
   readonly isShowControls = input<boolean>(false);
@@ -115,6 +116,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     this.modelCopy.set(v || '');
 
     // Start resolving but don't update the rendered model yet
+    this._resolveGeneration++;
     if (v) {
       this._updateResolvedModel(v);
     } else {
@@ -426,8 +428,11 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Capture generation to detect if model changed during async resolution
+    const gen = this._resolveGeneration;
     // First resolve all URLs in the markdown
     const resolved = await this._clipboardImageService.resolveMarkdownImages(content);
+    if (gen !== this._resolveGeneration) return;
     this.resolvedModel.set(resolved);
   }
 }

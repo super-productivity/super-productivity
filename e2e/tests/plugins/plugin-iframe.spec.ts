@@ -3,29 +3,23 @@ import { cssSelectors } from '../../constants/selectors';
 import {
   enablePluginWithVerification,
   getCITimeoutMultiplier,
-  logPluginState,
   waitForPluginAssets,
   waitForPluginInMenu,
   waitForPluginManagementInit,
 } from '../../helpers/plugin-test.helpers';
 
-const { SIDENAV, SETTINGS_BTN } = cssSelectors;
+const { SIDENAV } = cssSelectors;
 
 // Plugin-related selectors
 const PLUGIN_NAV_ITEMS = `${SIDENAV} nav-item button`;
 const PLUGIN_IFRAME = 'plugin-index iframe';
-const PLUGIN_MANAGEMENT = 'plugin-management';
-const PLUGIN_SECTION = '.plugin-section';
-const SETTINGS_PAGE = '.page-settings';
-const COLLAPSIBLE_EXPANDED = '.plugin-section collapsible.isExpanded';
 
 test.describe.serial('Plugin Iframe', () => {
   test.beforeEach(async ({ page, workViewPage }) => {
-    // Increase timeout for CI environment
     const timeoutMultiplier = getCITimeoutMultiplier();
-    test.setTimeout(30000 * timeoutMultiplier); // Reduced from 60s to 30s base
+    test.setTimeout(30000 * timeoutMultiplier);
 
-    // First, ensure plugin assets are available
+    // Ensure plugin assets are available
     const assetsAvailable = await waitForPluginAssets(page);
     if (!assetsAvailable) {
       if (process.env.CI) {
@@ -37,6 +31,7 @@ test.describe.serial('Plugin Iframe', () => {
 
     await workViewPage.waitForTaskList();
 
+    // Navigate to settings and initialize plugin management
     const initSuccess = await waitForPluginManagementInit(page);
     if (!initSuccess) {
       throw new Error(
@@ -44,46 +39,11 @@ test.describe.serial('Plugin Iframe', () => {
       );
     }
 
-    // Navigate to settings
-    const settingsBtn = page.locator(SETTINGS_BTN);
-    await settingsBtn.waitFor({ state: 'visible' });
-    await settingsBtn.click();
-
-    // Wait for settings page to be visible
-    await page.waitForSelector(SETTINGS_PAGE, { state: 'visible' });
-
-    // Scroll to plugin section
-    const pluginSection = page.locator(PLUGIN_SECTION);
-    await pluginSection.scrollIntoViewIfNeeded();
-
-    // Expand collapsible if needed
-    const collapsible = page.locator('.plugin-section collapsible');
-    const collapsibleHeader = collapsible.locator('.collapsible-header');
-
-    // Check if already expanded, if not click to expand
-    const expandedCollapsible = page.locator(COLLAPSIBLE_EXPANDED);
-    if ((await expandedCollapsible.count()) === 0) {
-      await collapsibleHeader.click();
-      // Wait for the expanded class to appear
-      await page.waitForSelector(COLLAPSIBLE_EXPANDED, { state: 'visible' });
-    }
-
-    // Wait for plugin management to be visible
-    await page.waitForSelector(PLUGIN_MANAGEMENT, {
-      state: 'visible',
-      timeout: 10000 * timeoutMultiplier,
-    });
-
-    // Log current plugin state for debugging
-    if (process.env.CI) {
-      await logPluginState(page);
-    }
-
-    // Enable API Test Plugin with verification
+    // Enable API Test Plugin
     const pluginEnabled = await enablePluginWithVerification(
       page,
       'API Test Plugin',
-      10000 * timeoutMultiplier, // Reduced from 15s to 10s
+      10000 * timeoutMultiplier,
     );
 
     if (!pluginEnabled) {
@@ -94,12 +54,10 @@ test.describe.serial('Plugin Iframe', () => {
     const pluginInMenu = await waitForPluginInMenu(
       page,
       'API Test Plugin',
-      15000 * timeoutMultiplier, // Reduced from 20s to 15s
+      15000 * timeoutMultiplier,
     );
 
     if (!pluginInMenu) {
-      // Log state for debugging
-      await logPluginState(page);
       throw new Error('API Test Plugin not found in menu after enabling');
     }
 
@@ -111,7 +69,6 @@ test.describe.serial('Plugin Iframe', () => {
       );
       if (await cancelBtn.isVisible().catch(() => false)) {
         await cancelBtn.click();
-        // Wait for dialog to disappear
         await tourDialog.waitFor({ state: 'hidden' });
       }
     }
@@ -149,13 +106,10 @@ test.describe.serial('Plugin Iframe', () => {
     await expect(iframe).toBeVisible();
 
     // Try to verify iframe content if possible
-    // Note: Cross-origin iframes may not allow content access
     const frameLocator = page.frameLocator(PLUGIN_IFRAME);
     try {
-      // Wait for iframe body to be loaded
       await frameLocator.locator('body').waitFor({ state: 'visible' });
 
-      // Check for expected content if accessible
       const h1 = frameLocator.locator('h1');
       const hasH1 = (await h1.count()) > 0;
       if (hasH1) {
@@ -164,7 +118,6 @@ test.describe.serial('Plugin Iframe', () => {
     } catch (error) {
       // If iframe content is not accessible due to cross-origin restrictions,
       // at least verify the iframe element itself is present
-      // console.log('Note: Iframe content verification skipped (possibly cross-origin)');
       await expect(iframe).toBeVisible();
     }
   });

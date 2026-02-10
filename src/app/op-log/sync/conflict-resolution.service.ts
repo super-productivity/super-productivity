@@ -22,7 +22,6 @@ import { MAX_CONFLICT_RETRY_ATTEMPTS } from '../core/operation-log.const';
 import {
   compareVectorClocks,
   incrementVectorClock,
-  limitVectorClockSize,
   mergeVectorClocks,
   VectorClockComparison,
 } from '../../core/util/vector-clock';
@@ -738,11 +737,10 @@ export class ConflictResolutionService {
       ...conflict.localOps.map((op) => op.vectorClock),
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
-    const mergedClock = this.mergeAndIncrementClocks(allClocks, clientId);
-    // Prune to match what the regular capture pipeline produces, preventing
-    // infinite rejection loops when server compares pruned vs unpruned clocks
-    const protectedClientIds = await this.opLogStore.getProtectedClientIds();
-    const newClock = limitVectorClockSize(mergedClock, clientId, protectedClientIds);
+    // No client-side pruning — server prunes AFTER conflict detection, BEFORE storage.
+    // Client-side pruning can drop entity clock IDs, causing the server's pruning-aware
+    // comparison to return CONCURRENT instead of GREATER_THAN (infinite rejection loop).
+    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
 
     // Preserve the maximum timestamp from local ops.
     // This is critical for LWW semantics: we're creating a new op to carry the
@@ -782,11 +780,8 @@ export class ConflictResolutionService {
       ...conflict.localOps.map((op) => op.vectorClock),
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
-    const mergedClock = this.mergeAndIncrementClocks(allClocks, clientId);
-    // Prune to match what the regular capture pipeline produces, preventing
-    // infinite rejection loops when server compares pruned vs unpruned clocks
-    const protectedClientIds = await this.opLogStore.getProtectedClientIds();
-    const newClock = limitVectorClockSize(mergedClock, clientId, protectedClientIds);
+    // No client-side pruning — server prunes AFTER conflict detection, BEFORE storage.
+    const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
 
     return {
       id: uuidv7(),

@@ -7,6 +7,8 @@ import { T } from '../../t.const';
 import { SupersededOperationResolverService } from './superseded-operation-resolver.service';
 import { DownloadCallback, RejectedOpInfo } from '../core/types/sync-results.types';
 import { handleStorageQuotaError } from './sync-error-utils';
+import { MAX_CONCURRENT_RESOLUTION_ATTEMPTS } from '../core/operation-log.const';
+import { toEntityKey } from '../util/entity-key.util';
 
 // Re-export for consumers that import from this service
 export type {
@@ -46,6 +48,15 @@ export class RejectedOpsHandlerService {
   private supersededOperationResolver = inject(SupersededOperationResolverService);
 
   /**
+   * Tracks resolution attempts per entity key (entityType:entityId) to prevent infinite loops.
+   * When the same entity keeps getting rejected after concurrent modification resolution
+   * (e.g., due to vector clock pruning making domination impossible), this counter detects
+   * the loop and marks ops as permanently rejected after MAX_CONCURRENT_RESOLUTION_ATTEMPTS.
+   * Cleared when a sync cycle has no rejections (healthy state).
+   */
+  private _resolutionAttemptsByEntity = new Map<string, number>();
+
+  /**
    * Handles operations that were rejected by the server.
    *
    * This is called AFTER processing piggybacked ops to ensure that:
@@ -71,6 +82,8 @@ export class RejectedOpsHandlerService {
     downloadCallback?: DownloadCallback,
   ): Promise<RejectionHandlingResult> {
     if (rejectedOps.length === 0) {
+      // No rejections = sync is healthy, reset resolution attempt counters
+      this._resolutionAttemptsByEntity.clear();
       return { mergedOpsCreated: 0, permanentRejectionCount: 0 };
     }
 
@@ -165,28 +178,27 @@ export class RejectedOpsHandlerService {
       OpLog.normal(
         `RejectedOpsHandlerService: Marked ${permanentlyRejectedOps.length} server-rejected ops as rejected`,
       );
-
-      // Notify user when any ops are permanently rejected
-      if (permanentlyRejectedOps.length > 0) {
-        this.snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.UPLOAD_OPS_REJECTED,
-          translateParams: { count: permanentlyRejectedOps.length },
-        });
-      }
+      this.snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.UPLOAD_OPS_REJECTED,
+        translateParams: { count: permanentlyRejectedOps.length },
+      });
     }
 
     // For concurrent modifications: try download first, then resolve locally if needed
+    let retryExceededCount = 0;
     if (concurrentModificationOps.length > 0 && downloadCallback) {
-      mergedOpsCreated = await this._resolveConcurrentModifications(
+      const result = await this._resolveConcurrentModifications(
         concurrentModificationOps,
         downloadCallback,
       );
+      mergedOpsCreated = result.mergedOpsCreated;
+      retryExceededCount = result.retryExceededCount;
     }
 
     return {
       mergedOpsCreated,
-      permanentRejectionCount: permanentlyRejectedOps.length,
+      permanentRejectionCount: permanentlyRejectedOps.length + retryExceededCount,
     };
   }
 
@@ -200,11 +212,71 @@ export class RejectedOpsHandlerService {
       existingClock?: VectorClock;
     }>,
     downloadCallback: DownloadCallback,
-  ): Promise<number> {
+  ): Promise<{ mergedOpsCreated: number; retryExceededCount: number }> {
     let mergedOpsCreated = 0;
 
+    // Check resolution attempt counts per entity to prevent infinite loops.
+    // When vector clock pruning makes it impossible to create a dominating clock,
+    // the cycle "upload → reject → merge → upload → reject" repeats forever.
+    // After MAX_CONCURRENT_RESOLUTION_ATTEMPTS, we give up and reject permanently.
+    const opsToResolve: Array<{
+      opId: string;
+      op: Operation;
+      existingClock?: VectorClock;
+    }> = [];
+    const opsExceededRetries: Array<{
+      opId: string;
+      op: Operation;
+      existingClock?: VectorClock;
+    }> = [];
+
+    // Increment once per unique entity in this batch, not once per op.
+    // Without dedup, 4 ops for the same entity would burn 4 attempts in one cycle.
+    const entityKeysInBatch = new Set<string>();
+    for (const item of concurrentModificationOps) {
+      const entityKey = this._getEntityKey(item.op);
+      if (!entityKeysInBatch.has(entityKey)) {
+        entityKeysInBatch.add(entityKey);
+        const attempts = (this._resolutionAttemptsByEntity.get(entityKey) ?? 0) + 1;
+        this._resolutionAttemptsByEntity.set(entityKey, attempts);
+      }
+    }
+
+    // Classify each op based on its entity's attempt count
+    for (const item of concurrentModificationOps) {
+      const entityKey = this._getEntityKey(item.op);
+      const attempts = this._resolutionAttemptsByEntity.get(entityKey) ?? 0;
+      if (attempts > MAX_CONCURRENT_RESOLUTION_ATTEMPTS) {
+        opsExceededRetries.push(item);
+      } else {
+        opsToResolve.push(item);
+      }
+    }
+
+    // Mark exceeded-limit ops as permanently rejected to break the infinite loop
+    if (opsExceededRetries.length > 0) {
+      OpLog.err(
+        `RejectedOpsHandlerService: ${opsExceededRetries.length} ops exceeded max concurrent resolution attempts ` +
+          `(${MAX_CONCURRENT_RESOLUTION_ATTEMPTS}). Marking as permanently rejected to break sync loop.`,
+      );
+      const exceededOpIds = opsExceededRetries.map(({ opId }) => opId);
+      await this.opLogStore.markRejected(exceededOpIds);
+      this.snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.CONFLICT_RESOLUTION_FAILED,
+      });
+      // Clean up tracking for rejected entities
+      for (const item of opsExceededRetries) {
+        this._resolutionAttemptsByEntity.delete(this._getEntityKey(item.op));
+      }
+    }
+
+    if (opsToResolve.length === 0) {
+      return { mergedOpsCreated: 0, retryExceededCount: opsExceededRetries.length };
+    }
+
     OpLog.normal(
-      `RejectedOpsHandlerService: ${concurrentModificationOps.length} ops had concurrent modifications. ` +
+      `RejectedOpsHandlerService: ${opsToResolve.length} ops had concurrent modifications. ` +
         `Triggering download to check for new remote ops...`,
     );
 
@@ -221,7 +293,7 @@ export class RejectedOpsHandlerService {
           op: Operation;
           existingClock?: VectorClock;
         }> = [];
-        for (const { opId, op, existingClock } of concurrentModificationOps) {
+        for (const { opId, op, existingClock } of opsToResolve) {
           const entry = await this.opLogStore.getOpById(opId);
           if (entry && !entry.syncedAt && !entry.rejectedAt) {
             pending.push({ opId, op, existingClock });
@@ -336,7 +408,7 @@ export class RejectedOpsHandlerService {
       );
       // Mark ops as failed so they can be retried on next sync, and re-throw
       // so caller knows resolution failed
-      for (const { opId } of concurrentModificationOps) {
+      for (const { opId } of opsToResolve) {
         const entry = await this.opLogStore.getOpById(opId);
         // Only reject if still pending (not synced or already rejected)
         if (entry && !entry.syncedAt && !entry.rejectedAt) {
@@ -346,6 +418,19 @@ export class RejectedOpsHandlerService {
       throw e;
     }
 
-    return mergedOpsCreated;
+    return { mergedOpsCreated, retryExceededCount: opsExceededRetries.length };
+  }
+
+  private _getEntityKey(op: Operation): string {
+    const entityId = op.entityId || op.entityIds?.[0];
+    if (!entityId) {
+      OpLog.warn(
+        '[RejectedOpsHandler] Operation has no entityId/entityIds, using wildcard key',
+        op.actionType,
+        op.entityType,
+      );
+      return toEntityKey(op.entityType, '*');
+    }
+    return toEntityKey(op.entityType, entityId);
   }
 }

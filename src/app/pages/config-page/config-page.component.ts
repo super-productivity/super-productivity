@@ -22,6 +22,7 @@ import {
   GlobalConfigSectionKey,
   GlobalConfigState,
   GlobalSectionConfig,
+  SyncConfig,
 } from '../../features/config/global-config.model';
 import { combineLatest, firstValueFrom, Observable, Subscription } from 'rxjs';
 import { ProjectCfgFormKey } from '../../features/project/project.model';
@@ -39,6 +40,7 @@ import { SyncProviderManager } from '../../op-log/sync-providers/provider-manage
 import { map } from 'rxjs/operators';
 import { SyncConfigService } from '../../imex/sync/sync-config.service';
 import { WebdavApi } from '../../op-log/sync-providers/file-based/webdav/webdav-api';
+import { WebdavPrivateCfg } from '../../op-log/sync-providers/file-based/webdav/webdav.model';
 import { AsyncPipe } from '@angular/common';
 import { PluginManagementComponent } from '../../plugins/ui/plugin-management/plugin-management.component';
 import { PluginBridgeService } from '../../plugins/plugin-bridge.service';
@@ -112,20 +114,20 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   globalCfg?: GlobalConfigState;
 
   appVersion: string = getAppVersionStr();
-  versions?: any = versions;
+  versions?: typeof versions = versions;
 
   // TODO needs to contain all sync providers....
   // TODO maybe handling this in an effect would be better????
-  syncFormCfg$: Observable<any> = combineLatest([
+  syncFormCfg$: Observable<Record<string, unknown>> = combineLatest([
     this._providerManager.currentProviderPrivateCfg$,
     this.configService.sync$,
   ]).pipe(
     map(([currentProviderCfg, syncCfg]) => {
       if (!currentProviderCfg) {
-        return syncCfg;
+        return syncCfg as unknown as Record<string, unknown>;
       }
       return {
-        ...syncCfg,
+        ...(syncCfg as unknown as Record<string, unknown>),
         [currentProviderCfg.providerId]: currentProviderCfg.privateCfg,
       };
     }),
@@ -266,8 +268,8 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
               templateOptions: {
                 text: T.F.SYNC.FORM.WEB_DAV.L_TEST_CONNECTION,
                 required: false,
-                onClick: async (_field: any, _form: any, model: any) => {
-                  const webDavCfg = model;
+                onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+                  const webDavCfg = model as WebdavPrivateCfg;
                   if (
                     !webDavCfg?.baseUrl ||
                     !webDavCfg?.userName ||
@@ -292,6 +294,18 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                         msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_SUCCESS,
                         translateParams: { url: result.fullUrl },
                       });
+
+                      // Save settings after successful connection test.
+                      // Formly hierarchy: _field (button) -> parent (group wrapper) -> parent (root form) -> model
+                      const fullSyncModel = (
+                        _field as { parent?: { parent?: { model?: SyncConfig } } }
+                      )?.parent?.parent?.model;
+                      if (fullSyncModel) {
+                        await this.syncSettingsService.updateSettingsFromForm(
+                          fullSyncModel,
+                          true,
+                        );
+                      }
 
                       // Test conditional header support
                       const testPath = `${webDavCfg.syncFolderPath || '/'}/.sp-header-test-${Date.now()}`;
@@ -347,7 +361,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                       msg: T.F.SYNC.FORM.WEB_DAV.S_TEST_FAIL,
                       translateParams: {
                         error: e instanceof Error ? e.message : 'Unexpected error',
-                        url: webDavCfg.baseUrl || 'N/A',
+                        url: (webDavCfg.baseUrl as string) || 'N/A',
                       },
                     });
                   }
@@ -365,8 +379,8 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       items: [
         ...items,
         {
-          hideExpression: (m: any, _v: any, field: any) =>
-            !m.isEnabled || !field?.form?.valid,
+          hideExpression: (m: Record<string, unknown>, _v: unknown, field: unknown) =>
+            !m.isEnabled || !(field as { form?: { valid?: boolean } })?.form?.valid,
           type: 'btn',
           className: 'mt3 block',
           templateOptions: {
@@ -378,8 +392,8 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
           },
         },
         {
-          hideExpression: (m: any, _v: any, field: any) =>
-            !m.isEnabled || !field?.form?.valid,
+          hideExpression: (m: Record<string, unknown>, _v: unknown, field: unknown) =>
+            !m.isEnabled || !(field as { form?: { valid?: boolean } })?.form?.valid,
           type: 'btn',
           className: 'mt2 block',
           templateOptions: {
@@ -392,7 +406,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
           },
         },
         {
-          hideExpression: (m: any) =>
+          hideExpression: (m: Record<string, unknown>) =>
             !m.isEnabled || m.syncProvider !== LegacySyncProvider.SuperSync,
           type: 'btn',
           className: 'mt2 block',
@@ -411,7 +425,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
 
   async saveGlobalCfg($event: {
     sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey;
-    config: any;
+    config: Record<string, unknown>;
   }): Promise<void> {
     const config = $event.config;
     const sectionKey = $event.sectionKey as GlobalConfigSectionKey;
@@ -469,7 +483,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   getGlobalCfgSection(
     sectionKey: GlobalConfigSectionKey | ProjectCfgFormKey,
   ): GlobalSectionConfig {
-    return (this.globalCfg as any)[sectionKey];
+    return (this.globalCfg as unknown as Record<string, GlobalSectionConfig>)[sectionKey];
   }
 
   async downloadLogs(): Promise<void> {

@@ -55,7 +55,7 @@ const LEGACY_INBOX_PROJECT_ID = 'INBOX' as const;
  * `improvement` or `obstruction` keys (removed in v17) as a secondary signal.
  *
  * Note: Modern backups that simply lack `archiveYoung` are handled by
- * `dataRepair()` which creates empty archives — no migration needed for those.
+ * `dataRepair()` which creates empty archives -- no migration needed for those.
  */
 export const isLegacyBackupData = (data: Record<string, unknown>): boolean => {
   // Primary marker: flat taskArchive (pre-v14 format)
@@ -73,7 +73,7 @@ export const isLegacyBackupData = (data: Record<string, unknown>): boolean => {
  * Migrates a legacy backup to v17's AppDataComplete shape.
  *
  * Consolidates cross-model migrations 2, 3, 4, 4.1, 4.2, 4.3, 4.4, 4.5 from
- * v16 into a single pass. Each step is idempotent — if the data already has the
+ * v16 into a single pass. Each step is idempotent -- if the data already has the
  * new shape for a given step, that step is a no-op.
  */
 export const migrateLegacyBackup = (
@@ -138,39 +138,50 @@ function _migration2ArchiveSplitAndTimeTracking(
   const projectTimeTracking: TTWorkContextSessionMap = {};
   if (data.project?.entities) {
     for (const projectId of Object.keys(data.project.entities)) {
-      const project = data.project.entities[projectId] as any;
+      const project = data.project.entities[projectId] as unknown as Record<
+        string,
+        unknown
+      >;
       if (!project) continue;
       projectTimeTracking[projectId] = {};
 
-      for (const date of Object.keys(project.workStart || {})) {
+      for (const date of Object.keys(
+        (project.workStart as Record<string, number>) || {},
+      )) {
         projectTimeTracking[projectId][date] = {
           ...projectTimeTracking[projectId][date],
-          s: project.workStart![date],
+          s: (project.workStart as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(project.workEnd || {})) {
+      for (const date of Object.keys((project.workEnd as Record<string, number>) || {})) {
         projectTimeTracking[projectId][date] = {
           ...projectTimeTracking[projectId][date],
-          e: project.workEnd![date],
+          e: (project.workEnd as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(project.breakNr || {})) {
+      for (const date of Object.keys((project.breakNr as Record<string, number>) || {})) {
         projectTimeTracking[projectId][date] = {
           ...projectTimeTracking[projectId][date],
-          b: project.breakNr![date],
+          b: (project.breakNr as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(project.breakTime || {})) {
+      for (const date of Object.keys(
+        (project.breakTime as Record<string, number>) || {},
+      )) {
         projectTimeTracking[projectId][date] = {
           ...projectTimeTracking[projectId][date],
-          bt: project.breakTime![date],
+          bt: (project.breakTime as Record<string, number>)![date],
         };
       }
 
-      delete (data.project.entities[projectId] as any).workStart;
-      delete (data.project.entities[projectId] as any).workEnd;
-      delete (data.project.entities[projectId] as any).breakTime;
-      delete (data.project.entities[projectId] as any).breakNr;
+      delete (data.project.entities[projectId] as unknown as Record<string, unknown>)
+        .workStart;
+      delete (data.project.entities[projectId] as unknown as Record<string, unknown>)
+        .workEnd;
+      delete (data.project.entities[projectId] as unknown as Record<string, unknown>)
+        .breakTime;
+      delete (data.project.entities[projectId] as unknown as Record<string, unknown>)
+        .breakNr;
     }
   }
 
@@ -178,39 +189,39 @@ function _migration2ArchiveSplitAndTimeTracking(
   const tagTimeTracking: TTWorkContextSessionMap = {};
   if (data.tag?.entities) {
     for (const tagId of Object.keys(data.tag.entities)) {
-      const tag = data.tag.entities[tagId] as any;
+      const tag = data.tag.entities[tagId] as unknown as Record<string, unknown>;
       if (!tag) continue;
       tagTimeTracking[tagId] = {};
 
-      for (const date of Object.keys(tag.workStart || {})) {
+      for (const date of Object.keys((tag.workStart as Record<string, number>) || {})) {
         tagTimeTracking[tagId][date] = {
           ...tagTimeTracking[tagId][date],
-          s: tag.workStart![date],
+          s: (tag.workStart as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(tag.workEnd || {})) {
+      for (const date of Object.keys((tag.workEnd as Record<string, number>) || {})) {
         tagTimeTracking[tagId][date] = {
           ...tagTimeTracking[tagId][date],
-          e: tag.workEnd![date],
+          e: (tag.workEnd as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(tag.breakNr || {})) {
+      for (const date of Object.keys((tag.breakNr as Record<string, number>) || {})) {
         tagTimeTracking[tagId][date] = {
           ...tagTimeTracking[tagId][date],
-          b: tag.breakNr![date],
+          b: (tag.breakNr as Record<string, number>)![date],
         };
       }
-      for (const date of Object.keys(tag.breakTime || {})) {
+      for (const date of Object.keys((tag.breakTime as Record<string, number>) || {})) {
         tagTimeTracking[tagId][date] = {
           ...tagTimeTracking[tagId][date],
-          bt: tag.breakTime![date],
+          bt: (tag.breakTime as Record<string, number>)![date],
         };
       }
 
-      delete (data.tag.entities[tagId] as any).workStart;
-      delete (data.tag.entities[tagId] as any).workEnd;
-      delete (data.tag.entities[tagId] as any).breakTime;
-      delete (data.tag.entities[tagId] as any).breakNr;
+      delete (data.tag.entities[tagId] as unknown as Record<string, unknown>).workStart;
+      delete (data.tag.entities[tagId] as unknown as Record<string, unknown>).workEnd;
+      delete (data.tag.entities[tagId] as unknown as Record<string, unknown>).breakTime;
+      delete (data.tag.entities[tagId] as unknown as Record<string, unknown>).breakNr;
     }
   }
 
@@ -293,15 +304,21 @@ function _migrateTaskDictionary(taskDict: Dictionary<TaskCopy>): void {
 
     // Convert _showSubTasksMode → _hideSubTasksMode
     if (!taskDict[taskId]!._hideSubTasksMode) {
-      const oldValue = (taskDict[taskId] as any)?._showSubTasksMode as number | undefined;
+      const oldValue = (taskDict[taskId] as unknown as Record<string, unknown>)?.[
+        '_showSubTasksMode'
+      ] as number | undefined;
       let newValue: HideSubTasksMode | undefined;
       if (oldValue === 1) {
         newValue = 1;
       } else if (oldValue === 0) {
         newValue = 2;
       }
-      if ('_showSubTasksMode' in (taskDict[taskId] as any)) {
-        delete (taskDict[taskId] as any)._showSubTasksMode;
+      if (
+        '_showSubTasksMode' in (taskDict[taskId] as unknown as Record<string, unknown>)
+      ) {
+        delete (taskDict[taskId] as unknown as Record<string, unknown>)[
+          '_showSubTasksMode'
+        ];
       }
       if (newValue) {
         taskDict[taskId] = {
@@ -398,7 +415,10 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
 
     // Migrate notes
     if (data.note?.entities) {
-      for (const note of Object.values(data.note.entities) as any[]) {
+      for (const note of Object.values(data.note.entities) as unknown as Record<
+        string,
+        unknown
+      >[]) {
         if (note?.projectId === LEGACY_INBOX_PROJECT_ID) {
           note.projectId = INBOX_PROJECT.id;
           const inboxProject = data.project.entities[INBOX_PROJECT.id];
@@ -512,7 +532,7 @@ function _migrateTasksForMigration3(
     task.issueId = task.issueId || undefined;
     task.issueProviderId = task.issueProviderId || undefined;
     task.issueType =
-      (task.issueType as any) === 'CALENDAR' ? 'ICAL' : task.issueType || undefined;
+      (task.issueType as string) === 'CALENDAR' ? 'ICAL' : task.issueType || undefined;
     task.issueWasUpdated = task.issueWasUpdated || undefined;
     task.issueLastUpdated = task.issueLastUpdated || undefined;
     task.issueAttachmentNr = task.issueAttachmentNr ?? undefined;

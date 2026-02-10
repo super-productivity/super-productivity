@@ -3,9 +3,13 @@
  * The ical.js library is ~76KB and only needed for calendar integration.
  */
 
-let icalModule: any = null;
+// ical.js types don't correctly expose the runtime ICAL namespace API
+// (parse, Component, Time, Timezone, TimezoneService, helpers, stringify, etc.)
+type ICalModule = any;
 
-let loadingPromise: Promise<any> | null = null;
+let icalModule: ICalModule | null = null;
+
+let loadingPromise: Promise<ICalModule> | null = null;
 
 /**
  * Lazily loads the ical.js module on first use.
@@ -13,16 +17,15 @@ let loadingPromise: Promise<any> | null = null;
  * Concurrent calls share the same loading promise to prevent race conditions.
  */
 
-export const loadIcalModule = async (): Promise<any> => {
+export const loadIcalModule = async (): Promise<ICalModule> => {
   if (icalModule) {
     return icalModule;
   }
   if (!loadingPromise) {
     loadingPromise = import('ical.js').then((mod) => {
-      // @ts-ignore - ical.js exports default
       // Handle both ESM default export and CommonJS module.exports
-      icalModule = mod.default || mod;
-      return icalModule;
+      icalModule = ((mod as Record<string, unknown>).default || mod) as ICalModule;
+      return icalModule!;
     });
   }
   return loadingPromise;

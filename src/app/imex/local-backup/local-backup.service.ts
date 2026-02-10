@@ -181,6 +181,7 @@ export class LocalBackupService {
         JSON.parse(backupData) as AppDataComplete,
         false,
         true,
+        true,
       );
     } catch (e) {
       this._snackService.open({

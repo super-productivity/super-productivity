@@ -81,41 +81,29 @@ export const waitForPluginAssets = async (
  */
 export const waitForPluginManagementInit = async (
   page: Page,
-  timeout: number = 15000, // Reduced from 20s to 15s // Reduced from 30s to 20s
+  // 30s timeout needed: plugin management init includes navigation to settings,
+  // tab loading, and plugin card rendering which is slow in CI environments
+  timeout: number = 30000,
 ): Promise<boolean> => {
   try {
-    // First ensure we're on the settings page and plugin section is expanded
+    // Navigate to settings page if not already there
     const currentUrl = page.url();
     if (!currentUrl.includes('#/config')) {
-      await page.click('text=Settings');
-      await page.waitForURL(/.*#\/config.*/, { timeout: 8000 }); // Reduced from 10s to 8s
+      await page.goto('/#/config');
     }
 
     // Wait for settings page to load
-    await page.waitForSelector('.page-settings', { state: 'visible', timeout: 8000 }); // Reduced from 10s to 8s
+    await page.waitForSelector('.page-settings', { state: 'visible', timeout: 10000 });
 
-    // Wait a bit for the page to stabilize
-    await page.waitForTimeout(500);
+    // Navigate to the Plugins tab
+    const pluginsTab = page.locator(
+      'mat-tab-header .mat-mdc-tab:has(mat-icon:has-text("extension"))',
+    );
+    await pluginsTab.waitFor({ state: 'visible', timeout: 10000 });
+    await pluginsTab.click();
 
-    // Navigate to the Plugins tab (4th tab, index 3)
-    // The plugin section is now inside the Plugins tab, not directly on the page
-    await page.evaluate(() => {
-      const pluginsTab = Array.from(
-        document.querySelectorAll('mat-tab-header .mat-mdc-tab'),
-      ).find((tab) => {
-        const icon = tab.querySelector('mat-icon');
-        return icon?.textContent?.trim() === 'extension';
-      });
-
-      if (pluginsTab) {
-        (pluginsTab as HTMLElement).click();
-      }
-    });
-
-    // Wait for tab content to load
-    await page.waitForTimeout(500);
-
-    // Now expand plugin section if collapsed and scroll it into view
+    // Expand plugin section if collapsed and scroll it into view
+    await page.waitForSelector('.plugin-section', { state: 'visible', timeout: 5000 });
     await page.evaluate(() => {
       const pluginSection = document.querySelector('.plugin-section');
       if (pluginSection) {
@@ -131,34 +119,27 @@ export const waitForPluginManagementInit = async (
       }
     });
 
-    // Wait for expansion animation and scroll to complete
-    await page.waitForTimeout(300);
+    // Wait for plugin management component with plugin cards
+    await page.waitForSelector('plugin-management', {
+      state: 'attached',
+      timeout: 10000,
+    });
 
-    // Scroll plugin-management into view explicitly
+    const result = await page.waitForFunction(
+      () => {
+        const cards = document.querySelectorAll('plugin-management mat-card');
+        return cards.length > 0;
+      },
+      { timeout: 10000 },
+    );
+
+    // Scroll plugin-management into view
     await page.evaluate(() => {
       const pluginMgmt = document.querySelector('plugin-management');
       if (pluginMgmt) {
         pluginMgmt.scrollIntoView({ behavior: 'instant', block: 'center' });
       }
     });
-
-    // Wait for plugin management component to be attached (not necessarily visible)
-    await page.waitForSelector('plugin-management', {
-      state: 'attached',
-      timeout: Math.max(5000, timeout - 20000),
-    });
-
-    // Additional check for plugin cards to be loaded
-    const result = await page.waitForFunction(
-      () => {
-        const pluginMgmt = document.querySelector('plugin-management');
-        if (!pluginMgmt) return false;
-
-        const cards = document.querySelectorAll('plugin-management mat-card');
-        return cards.length > 0;
-      },
-      { timeout: Math.max(5000, timeout - 25000) },
-    );
 
     return !!result;
   } catch (error) {

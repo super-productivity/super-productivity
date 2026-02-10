@@ -58,6 +58,7 @@ export class PlannerPlanViewComponent {
     // Cleanup observer on component destroy
     this._destroyRef.onDestroy(() => {
       this._intersectionObserver?.disconnect();
+      this._plannerService.resetScrollState();
     });
   }
 

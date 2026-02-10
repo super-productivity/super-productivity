@@ -28,6 +28,7 @@ import {
   MAX_CONFLICT_RETRY_ATTEMPTS,
   MAX_VECTOR_CLOCK_SIZE,
 } from '../core/operation-log.const';
+import { AppDataComplete } from '../model/model-config';
 
 /**
  * Handles the hydration (loading) of the application state from the operation log
@@ -277,8 +278,12 @@ export class OperationLogHydratorService {
         await this._migrateProtectedClientIdsIfNeeded();
 
         // 3. Hydrate NgRx with (possibly repaired) snapshot
-        // Cast to any - stateToLoad is AppStateSnapshot which is runtime-compatible but TypeScript can't verify
-        this.store.dispatch(loadAllData({ appDataComplete: stateToLoad as any }));
+        // stateToLoad is AppStateSnapshot which is runtime-compatible but TypeScript can't verify
+        this.store.dispatch(
+          loadAllData({
+            appDataComplete: stateToLoad as unknown as AppDataComplete,
+          }),
+        );
 
         // 4. Replay tail operations (A.7.13: with operation migration)
         const tailOps = await this.opLogStore.getOpsAfterSeq(snapshot.lastAppliedOpSeq);
@@ -316,7 +321,9 @@ export class OperationLogHydratorService {
                 `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds.join(', ')}]`,
               );
               this.store.dispatch(
-                loadAllData({ appDataComplete: tailStateToLoad as any }),
+                loadAllData({
+                  appDataComplete: tailStateToLoad as unknown as AppDataComplete,
+                }),
               );
             } else {
               // FIX: Same fix for the else branch
@@ -327,7 +334,11 @@ export class OperationLogHydratorService {
               OpLog.normal(
                 `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIdsElse.join(', ')}]`,
               );
-              this.store.dispatch(loadAllData({ appDataComplete: appData as any }));
+              this.store.dispatch(
+                loadAllData({
+                  appDataComplete: appData as unknown as AppDataComplete,
+                }),
+              );
             }
             // No snapshot save needed - full state ops already contain complete state
             // Snapshot will be saved after next batch of regular operations
@@ -421,7 +432,11 @@ export class OperationLogHydratorService {
             OpLog.normal(
               `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2.join(', ')}]`,
             );
-            this.store.dispatch(loadAllData({ appDataComplete: stateToLoad as any }));
+            this.store.dispatch(
+              loadAllData({
+                appDataComplete: stateToLoad as unknown as AppDataComplete,
+              }),
+            );
           } else {
             // FIX: Same fix for the else branch
             await this.opLogStore.mergeRemoteOpClocks([lastOp]);
@@ -431,7 +446,11 @@ export class OperationLogHydratorService {
             OpLog.normal(
               `OperationLogHydratorService: Set protected client IDs from ${lastOp.opType}: [${protectedIds2Else.join(', ')}]`,
             );
-            this.store.dispatch(loadAllData({ appDataComplete: appData as any }));
+            this.store.dispatch(
+              loadAllData({
+                appDataComplete: appData as unknown as AppDataComplete,
+              }),
+            );
           }
           // No snapshot save needed - full state ops already contain complete state
         } else {
@@ -674,7 +693,11 @@ export class OperationLogHydratorService {
 
     if (result.wasRepaired && result.repairedState) {
       // Dispatch the repaired state to NgRx
-      this.store.dispatch(loadAllData({ appDataComplete: result.repairedState as any }));
+      this.store.dispatch(
+        loadAllData({
+          appDataComplete: result.repairedState as unknown as AppDataComplete,
+        }),
+      );
     }
   }
 

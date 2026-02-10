@@ -25,18 +25,17 @@ export class PlannerPage extends BasePage {
     // Try to click the planner nav item first, fallback to direct navigation
     try {
       await this.page.locator('magic-side-nav a[href="#/planner"]').click();
-      await this.page.waitForLoadState('networkidle');
     } catch (error) {
       // Fallback to direct navigation
       await this.page.goto('/#/tag/TODAY/planner');
-      await this.page.waitForLoadState('networkidle');
     }
+    await this.page.waitForURL(/\/(planner|tasks)/);
     await this.routerWrapper.waitFor({ state: 'visible' });
   }
 
   async navigateToPlannerForProject(projectId: string): Promise<void> {
     await this.page.goto(`/#/project/${projectId}/planner`);
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForURL(/\/(planner|tasks)/);
     await this.routerWrapper.waitFor({ state: 'visible' });
   }
 

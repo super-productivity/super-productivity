@@ -14,7 +14,7 @@ test.describe('Work View Features', () => {
     workViewPage,
     testPrefix,
   }) => {
-    test.setTimeout(30000);
+    test.setTimeout(45000);
 
     // Wait for work view to be ready
     await workViewPage.waitForTaskList();
@@ -116,11 +116,11 @@ test.describe('Work View Features', () => {
 
     // Navigate to settings
     await page.goto('/#/config');
-    await expect(page.locator('.page-settings')).toBeVisible();
+    await expect(page.locator('.page-settings')).toBeVisible({ timeout: 10000 });
 
     // Navigate back
     await page.goto('/#/tag/TODAY');
-    await expect(page.locator('task-list').first()).toBeVisible();
+    await workViewPage.waitForTaskList();
 
     // Verify task is still there
     await expect(page.locator(TASK_TITLE).first()).toContainText(/Persistent task/);

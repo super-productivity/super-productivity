@@ -176,7 +176,7 @@ describe('compareVectorClocks', () => {
     });
 
     it('should return CONCURRENT when both clocks exceed MAX and both have non-shared keys', () => {
-      // This tests the >= condition — clocks larger than MAX (e.g., from merge before pruning)
+      // Both exceed MAX → neither was pruned → normal comparison mode
       const a: Record<string, number> = {};
       const b: Record<string, number> = {};
       for (let i = 0; i < 3; i++) {
@@ -226,8 +226,8 @@ describe('compareVectorClocks', () => {
 
       expect(Object.keys(a).length).toBeGreaterThan(MAX_VECTOR_CLOCK_SIZE);
       expect(Object.keys(b).length).toBe(MAX_VECTOR_CLOCK_SIZE);
-      // Both >= MAX → pruning-aware mode. Shared keys: a dominates.
-      // Only a has non-shared keys (bOnlyCount=0), so no escalation to CONCURRENT.
+      // a exceeds MAX → never pruned → normal comparison mode.
+      // a has all of b's keys at higher values PLUS extra keys → GREATER_THAN.
       expect(compareVectorClocks(a, b)).toBe('GREATER_THAN');
     });
 
@@ -247,27 +247,27 @@ describe('compareVectorClocks', () => {
 
       expect(Object.keys(a).length).toBe(MAX_VECTOR_CLOCK_SIZE);
       expect(Object.keys(b).length).toBeGreaterThan(MAX_VECTOR_CLOCK_SIZE);
-      // Both >= MAX → pruning-aware mode. Shared keys: b dominates.
-      // Only b has non-shared keys (aOnlyCount=0), so no escalation to CONCURRENT.
+      // b exceeds MAX → never pruned → normal comparison mode.
+      // b has all of a's keys at higher values PLUS extra keys → LESS_THAN.
       expect(compareVectorClocks(a, b)).toBe('LESS_THAN');
     });
 
-    it('should return CONCURRENT when only one side has non-shared keys and shared keys are equal', () => {
+    it('should return GREATER_THAN when one side exceeds MAX (never pruned) with extra keys', () => {
       const a: Record<string, number> = {};
       const b: Record<string, number> = {};
       for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
         a[`shared_${i}`] = 10;
         b[`shared_${i}`] = 10;
       }
-      // Only a has extra keys
+      // Only a has extra keys → a has MORE than MAX entries, so was never pruned
       for (let i = 0; i < 3; i++) {
         a[`a_only_${i}`] = 100;
       }
 
-      // Both >= MAX → pruning-aware. Shared keys equal.
-      // One side has non-shared keys → CONCURRENT (safe direction).
-      // Non-shared keys may represent real causal knowledge the other side lacks.
-      expect(compareVectorClocks(a, b)).toBe('CONCURRENT');
+      // a > MAX entries → not possibly pruned → normal comparison mode.
+      // a has all of b's keys with equal values PLUS extra keys with values > 0.
+      // Result: GREATER_THAN (a dominates b).
+      expect(compareVectorClocks(a, b)).toBe('GREATER_THAN');
     });
 
     it('asymmetric pruning: one clock pruned, other naturally at MAX size (known limitation)', () => {
@@ -398,6 +398,153 @@ describe('limitVectorClockSize', () => {
       }
     }
     expect(preservedCount).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+  });
+});
+
+describe('pruning pipeline integration', () => {
+  // Helper: build a clock with exactly MAX entries using named clients
+  const buildMaxEntityClock = (): Record<string, number> => {
+    const clock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      clock[`client_${i}`] = 10 + i;
+    }
+    return clock;
+  };
+
+  it('Test A: new client after MAX-entry entity clock — server accepts with >MAX entries', () => {
+    // Scenario: Entity clock has exactly MAX entries (10 clients).
+    // New client K merges all + own = 11 entries.
+    const entityClock = buildMaxEntityClock();
+    expect(Object.keys(entityClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // Client K merges entity clock + increments own counter
+    const kClock: Record<string, number> = { ...entityClock, clientK: 1 };
+    expect(Object.keys(kClock).length).toBe(MAX_VECTOR_CLOCK_SIZE + 1);
+
+    // Server compares: kClock (11 entries) vs entityClock (10 entries).
+    // kClock exceeds MAX → not possibly pruned → normal comparison.
+    // kClock has all of entity's keys at same values PLUS clientK → GREATER_THAN.
+    expect(compareVectorClocks(kClock, entityClock)).toBe('GREATER_THAN');
+
+    // Server then prunes kClock before storage
+    const pruned = limitVectorClockSize(kClock, ['clientK']);
+    expect(Object.keys(pruned).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    // clientK is preserved despite having lowest counter (1)
+    expect(pruned['clientK']).toBe(1);
+  });
+
+  it('Test B: two clients who both pruned differently — symmetric pruning yields CONCURRENT', () => {
+    // Both clocks at MAX with overlapping but different pruning outcomes
+    const a: Record<string, number> = {};
+    const b: Record<string, number> = {};
+
+    // 8 shared keys where A dominates
+    for (let i = 0; i < 8; i++) {
+      a[`shared_${i}`] = 10;
+      b[`shared_${i}`] = 5;
+    }
+    // Each has 2 unique keys (filling to MAX)
+    a['a_only_0'] = 100;
+    a['a_only_1'] = 200;
+    b['b_only_0'] = 100;
+    b['b_only_1'] = 200;
+
+    expect(Object.keys(a).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    expect(Object.keys(b).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // Both at MAX → pruning-aware mode.
+    // Shared keys show A dominates, but B has non-shared keys → CONCURRENT.
+    // This is the expected "safe" false CONCURRENT — LWW handles it.
+    expect(compareVectorClocks(a, b)).toBe('CONCURRENT');
+  });
+
+  it('Test C: unpruned clock (>MAX) vs pruned clock (MAX) — asymmetric dominance', () => {
+    // A has 12 entries (never pruned). B has MAX entries (pruned).
+    // A clearly dominates B on all shared keys.
+    const a: Record<string, number> = {};
+    const b: Record<string, number> = {};
+
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      a[`shared_${i}`] = 20;
+      b[`shared_${i}`] = 10;
+    }
+    // A has extra keys beyond MAX
+    a['extra_0'] = 50;
+    a['extra_1'] = 60;
+
+    expect(Object.keys(a).length).toBe(MAX_VECTOR_CLOCK_SIZE + 2);
+    expect(Object.keys(b).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // A exceeds MAX → never pruned → normal comparison.
+    // A has all of B's keys at higher values PLUS extras → GREATER_THAN.
+    expect(compareVectorClocks(a, b)).toBe('GREATER_THAN');
+  });
+
+  it('Test D: limitVectorClockSize then compareVectorClocks preserves GREATER_THAN', () => {
+    // Start with a 15-entry clock that dominates a MAX-entry import clock.
+    // After pruning to MAX, verify comparison result is preserved.
+    const importClock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      importClock[`client_${i}`] = 5;
+    }
+
+    // Original clock: has all import keys at higher values + 5 extra clients
+    const originalClock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      originalClock[`client_${i}`] = 10; // dominates import on all shared keys
+    }
+    for (let i = 0; i < 5; i++) {
+      originalClock[`new_client_${i}`] = 1; // low-counter extras
+    }
+    expect(Object.keys(originalClock).length).toBe(15);
+
+    // Before pruning: GREATER_THAN (original exceeds MAX → normal mode, all keys used)
+    expect(compareVectorClocks(originalClock, importClock)).toBe('GREATER_THAN');
+
+    // Prune to MAX, preserving client_0 as the "current" client
+    const pruned = limitVectorClockSize(originalClock, ['client_0']);
+    expect(Object.keys(pruned).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // After pruning: Both at MAX → pruning-aware mode, shared keys only.
+    // Pruning dropped 5 low-counter new_client_* entries (counter=1).
+    // All remaining entries are shared client_0..9 with pruned dominating (10 > 5).
+    // No non-shared keys → GREATER_THAN is preserved.
+    expect(compareVectorClocks(pruned, importClock)).toBe('GREATER_THAN');
+  });
+
+  it('Test E: limitVectorClockSize drops a shared import key — comparison degrades to CONCURRENT', () => {
+    // This tests the known fragility: when pruning removes a key that the import
+    // clock has, the comparison can degrade from GREATER_THAN to CONCURRENT.
+    const importClock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      importClock[`client_${i}`] = 5;
+    }
+
+    // Client K creates a clock: inherits all import keys + own ID = MAX+1
+    const kClock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE; i++) {
+      kClock[`client_${i}`] = 5; // same as import (inherited)
+    }
+    kClock['clientK'] = 1; // K's own counter
+    expect(Object.keys(kClock).length).toBe(MAX_VECTOR_CLOCK_SIZE + 1);
+
+    // Before pruning: GREATER_THAN (kClock exceeds MAX → normal mode)
+    expect(compareVectorClocks(kClock, importClock)).toBe('GREATER_THAN');
+
+    // Server prunes, preserving K's own ID. Drops the lowest-counter entry.
+    // client_0 through client_4 have counter=5, clientK has counter=1.
+    // limitVectorClockSize keeps preserved IDs first, then highest counters.
+    // clientK (1) is preserved. The 5 lowest non-preserved entries are dropped.
+    const pruned = limitVectorClockSize(kClock, ['clientK']);
+    expect(Object.keys(pruned).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    expect(pruned['clientK']).toBe(1);
+
+    // After pruning: Both at MAX → pruning-aware mode.
+    // Pruned clock has clientK (not in import) as a non-shared key.
+    // Import has dropped entries (not in pruned) as non-shared keys.
+    // Both sides have non-shared keys → CONCURRENT (pruning artifact).
+    const comparison = compareVectorClocks(pruned, importClock);
+    expect(comparison).toBe('CONCURRENT');
   });
 });
 

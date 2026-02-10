@@ -346,14 +346,14 @@ mat-tooltip-component {
   }
   body.hasMobileBottomNav mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + env(safe-area-inset-bottom) + 24px
+      var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2 + 24px
     ) !important;
     pointer-events: auto;
     transition: 150ms margin;
   }
   body.hasMobileBottomNav.isAddTaskBarOpen mat-snack-bar-container {
     margin-bottom: calc(
-      var(--bottom-nav-height) + env(safe-area-inset-bottom) + 48px
+      var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2 + 48px
     ) !important;
     pointer-events: auto;
   }

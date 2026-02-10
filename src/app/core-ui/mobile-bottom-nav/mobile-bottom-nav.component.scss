@@ -9,7 +9,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) / 2);
   box-sizing: border-box;
   background: var(--bottom-nav-bg);
   border-top: 1px solid var(--separator-color);
@@ -17,7 +17,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 8px;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(env(safe-area-inset-bottom) / 2);
   z-index: var(--z-mobile-bottom-nav);
   display: flex;
 
@@ -104,10 +104,10 @@
   }
 }
 
-// iOS-specific: remove double safe-area padding
-// Body already handles safe area, so nav doesn't need its own
+// iOS: nav extends its background into the home indicator area,
+// padding keeps buttons above it
 :host-context(.isIOS) .mobile-bottom-nav {
-  padding-bottom: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom) / 2);
 }
 
 // Material Design touch target improvements

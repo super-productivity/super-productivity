@@ -1,10 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { OpenProjectCfg } from './open-project.model';
 import { SnackService } from '../../../../core/snack/snack.service';
-import { HttpClient, HttpHeaders, HttpParams, HttpRequest } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpHeaders,
+  HttpParams,
+  HttpRequest,
+  HttpResponse,
+} from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   OpenProjectOriginalStatus,
+  OpenProjectOriginalWorkPackageFull,
   OpenProjectOriginalWorkPackageReduced,
   OpenProjectWorkPackageSearchResult,
 } from './open-project-api-responses';
@@ -27,6 +34,15 @@ import { devError } from '../../../../util/dev-error';
 import { handleIssueProviderHttpError$ } from '../../handle-issue-provider-http-error';
 import { OpenProjectFilterItem } from './open-project-filter.model';
 
+interface OpenProjectRequestParams {
+  url: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  data?: unknown;
+  params?: Record<string, string | number>;
+  headers?: Record<string, string>;
+  responseType?: 'arraybuffer' | 'blob' | 'json' | 'text';
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -43,7 +59,11 @@ export class OpenProjectApiService {
         url: `${cfg.host}/api/v3/work_packages/${workPackageId}`,
       },
       cfg,
-    ).pipe(map((workPackage) => mapOpenProjectIssueFull(workPackage, cfg)));
+    ).pipe(
+      map((workPackage) =>
+        mapOpenProjectIssueFull(workPackage as OpenProjectOriginalWorkPackageFull, cfg),
+      ),
+    );
   }
 
   searchIssueForRepo$(
@@ -51,7 +71,7 @@ export class OpenProjectApiService {
     cfg: OpenProjectCfg,
   ): Observable<SearchResultItem[]> {
     // OpenProject does not allow empty filter for subjectOrId, only send when searchText is present
-    const filters: [OpenProjectFilterItem] = [{ status: { operator: 'o', values: [] } }];
+    const filters: OpenProjectFilterItem[] = [{ status: { operator: 'o', values: [] } }];
     if (searchText?.trim()) {
       filters.push({ subjectOrId: { operator: '**', values: [searchText] } });
     }
@@ -69,9 +89,10 @@ export class OpenProjectApiService {
       },
       cfg,
     ).pipe(
-      map((res: OpenProjectWorkPackageSearchResult) => {
-        return res && res._embedded.elements
-          ? res._embedded.elements
+      map((res) => {
+        const r = res as OpenProjectWorkPackageSearchResult;
+        return r && r._embedded.elements
+          ? r._embedded.elements
               .map((workPackage: OpenProjectOriginalWorkPackageReduced) =>
                 mapOpenProjectIssueReduced(workPackage, cfg),
               )
@@ -97,7 +118,18 @@ export class OpenProjectApiService {
       },
       cfg,
     ).pipe(
-      map((res: any) => res._embedded.schema.status._embedded.allowedValues),
+      map(
+        (res) =>
+          (
+            res as {
+              _embedded: {
+                schema: {
+                  status: { _embedded: { allowedValues: OpenProjectOriginalStatus[] } };
+                };
+              };
+            }
+          )._embedded.schema.status._embedded.allowedValues,
+      ),
       catchError((e) => {
         devError(e);
         return [];
@@ -109,7 +141,7 @@ export class OpenProjectApiService {
     workPackage: OpenProjectWorkPackage,
     trans: OpenProjectOriginalStatus,
     cfg: OpenProjectCfg,
-  ): Observable<any> {
+  ): Observable<unknown> {
     return this._sendRequest$(
       {
         url: `${cfg.host}/api/v3/work_packages/${workPackage.id}`,
@@ -153,7 +185,27 @@ export class OpenProjectApiService {
       },
       cfg,
     ).pipe(
-      map((res: any) => res._embedded.schema.activity._embedded.allowedValues),
+      map(
+        (res) =>
+          (
+            res as {
+              _embedded: {
+                schema: {
+                  activity: {
+                    _embedded: {
+                      allowedValues: {
+                        default: boolean;
+                        id: number;
+                        name: string;
+                        position: number;
+                      }[];
+                    };
+                  };
+                };
+              };
+            }
+          )._embedded.schema.activity._embedded.allowedValues,
+      ),
       catchError((e) => {
         devError(e);
         return [];
@@ -175,7 +227,7 @@ export class OpenProjectApiService {
     workPackage: OpenProjectWorkPackage | OpenProjectWorkPackageReduced;
     hours: string; // ISO8601
     cfg: OpenProjectCfg;
-  }): Observable<any> {
+  }): Observable<unknown> {
     return this._sendRequest$(
       {
         method: 'POST',
@@ -211,18 +263,19 @@ export class OpenProjectApiService {
           pageSize: 100,
           // see: https://www.openproject.org/docs/api/filters/
           filters: JSON.stringify(
-            [{ status: { operator: 'o', values: [] } }].concat(
-              this._getScopeParamFilter(cfg),
-            ),
+            (
+              [{ status: { operator: 'o', values: [] } }] as OpenProjectFilterItem[]
+            ).concat(this._getScopeParamFilter(cfg)),
           ),
           sortBy: '[["updatedAt","desc"]]',
         },
       },
       cfg,
     ).pipe(
-      map((res: OpenProjectWorkPackageSearchResult) => {
-        return res && res._embedded.elements
-          ? res._embedded.elements.map(
+      map((res) => {
+        const r = res as OpenProjectWorkPackageSearchResult;
+        return r && r._embedded.elements
+          ? r._embedded.elements.map(
               (workPackage: OpenProjectOriginalWorkPackageReduced) =>
                 mapOpenProjectIssueReduced(workPackage, cfg),
             )
@@ -256,15 +309,15 @@ export class OpenProjectApiService {
     ).pipe(map((res) => res as OpenProjectAttachment));
   }
 
-  private _getScopeParamFilter(cfg: OpenProjectCfg): any[] {
+  private _getScopeParamFilter(cfg: OpenProjectCfg): OpenProjectFilterItem[] {
     if (!cfg.scope) {
       return [];
     }
 
     if (cfg.scope === 'created-by-me') {
-      return [{ author: { operator: '=', values: 'me' } }];
+      return [{ author: { operator: '=', values: ['me'] } }];
     } else if (cfg.scope === 'assigned-to-me') {
-      return [{ assignee: { operator: '=', values: 'me' } }];
+      return [{ assignee: { operator: '=', values: ['me'] } }];
     } else {
       return [];
     }
@@ -294,12 +347,12 @@ export class OpenProjectApiService {
   }
 
   private _sendRequest$(
-    params: HttpRequest<string> | any,
+    params: OpenProjectRequestParams,
     cfg: OpenProjectCfg,
-  ): Observable<any> {
+  ): Observable<unknown> {
     this._checkSettings(cfg);
 
-    const p: HttpRequest<any> | any = {
+    const p = {
       ...params,
       method: params.method || 'GET',
       headers: {
@@ -308,23 +361,22 @@ export class OpenProjectApiService {
       },
     };
 
-    const bodyArg = params.data ? [params.data] : [];
-
-    const allArgs = [
-      ...bodyArg,
-      {
-        headers: new HttpHeaders(p.headers),
-        params: new HttpParams({ fromObject: p.params }),
-        reportProgress: false,
-        observe: 'response',
-        responseType: params.responseType,
-      },
-    ];
-    const req = new HttpRequest(p.method, p.url, ...allArgs);
+    const init = {
+      headers: new HttpHeaders(p.headers),
+      params: new HttpParams({ fromObject: p.params }),
+      reportProgress: false,
+      observe: 'response' as const,
+      responseType: params.responseType,
+    };
+    const req = params.data
+      ? new HttpRequest(p.method as string, p.url, params.data, init)
+      : new HttpRequest(p.method as string, p.url, init);
     return this._http.request(req).pipe(
       // Filter out HttpEventType.Sent (type: 0) events to only process actual responses
       filter((res) => !(res === Object(res) && res.type === 0)),
-      map((res: any) => (res && res.body ? res.body : res)),
+      map((res) =>
+        (res as HttpResponse<unknown>).body ? (res as HttpResponse<unknown>).body : res,
+      ),
       catchError((err) =>
         handleIssueProviderHttpError$(OPEN_PROJECT_TYPE, this._snackService, err),
       ),

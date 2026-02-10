@@ -4,18 +4,25 @@ import {
   JiraChangelogEntry,
   JiraComment,
   JiraIssue,
+  JiraIssueReduced,
   JiraRelatedIssue,
   JiraSubtask,
 } from './jira-issue.model';
 import {
+  JiraApiEnvelope,
   JiraIssueOriginal,
   JiraIssueOriginalSubtask,
+  JiraIssuesEnvelope,
+  JiraIssueEnvelope,
   JiraOriginalAttachment,
   JiraOriginalAuthor,
   JiraOriginalChangelog,
   JiraOriginalComment,
   JiraOriginalIssueLink,
   JiraOriginalLinkedIssue,
+  JiraPickerSearchEnvelope,
+  JiraJQLSearchEnvelope,
+  JiraTransitionsEnvelope,
 } from './jira-api-responses';
 import { JiraCfg } from './jira.model';
 import {
@@ -28,32 +35,36 @@ import { dedupeByKey } from '../../../../util/de-dupe-by-key';
 import { JIRA_TYPE } from '../../issue.const';
 import { IssueLog } from '../../../../core/log';
 
-export const mapToSearchResults = (res: any): SearchResultItem[] => {
+export const mapToSearchResults = (res: JiraPickerSearchEnvelope): SearchResultItem[] => {
   IssueLog.log(res);
 
   const issues = dedupeByKey(
-    res.response.sections.map((sec: any) => sec.issues).flat(),
+    res.response.sections.map((sec) => sec.issues).flat(),
     'key',
-  ).map((issue: any) => {
+  ).map((issue) => {
     return {
       title: issue.key + ' ' + issue.summaryText,
       titleHighlighted: issue.key + ' ' + issue.summary,
       issueType: JIRA_TYPE as IssueProviderKey,
+      // NOTE: JiraPickerIssue is intentionally partial vs JiraIssueReduced;
+      // full issue data is fetched when the user selects a search result
       issueData: {
         ...issue,
         summary: issue.summaryText,
         // NOTE: we always use the key, because it allows us to create the right link
         id: issue.key,
-      },
+      } as unknown as JiraIssueReduced,
     };
   });
   return issues;
 };
 
-export const mapToSearchResultsForJQL = (res: any): SearchResultItem[] => {
+export const mapToSearchResultsForJQL = (
+  res: JiraJQLSearchEnvelope,
+): SearchResultItem[] => {
   IssueLog.log(res);
 
-  const issues = dedupeByKey(res.response.issues, 'key').map((issue: any) => {
+  const issues = dedupeByKey(res.response.issues, 'key').map((issue) => {
     return {
       title: issue.key + ' ' + issue.summaryText,
       titleHighlighted: issue.key + ' ' + issue.summary,
@@ -63,21 +74,21 @@ export const mapToSearchResultsForJQL = (res: any): SearchResultItem[] => {
         summary: issue.summaryText,
         // NOTE: we always use the key, because it allows us to create the right link
         id: issue.key,
-      },
+      } as unknown as JiraIssueReduced,
     };
   });
   return issues;
 };
 
-export const mapIssuesResponse = (res: any, cfg: JiraCfg): JiraIssue[] => {
-  return res.response.issues.map((issue: JiraIssueOriginal) => {
+export const mapIssuesResponse = (res: JiraIssuesEnvelope, cfg: JiraCfg): JiraIssue[] => {
+  return res.response.issues.map((issue) => {
     return mapIssue(issue, cfg);
   });
 };
 
-export const mapResponse = (res: any): unknown => res.response;
+export const mapResponse = (res: JiraApiEnvelope): unknown => res.response;
 
-export const mapIssueResponse = (res: any, cfg: JiraCfg): JiraIssue =>
+export const mapIssueResponse = (res: JiraIssueEnvelope, cfg: JiraCfg): JiraIssue =>
   mapIssue(res.response, cfg);
 
 export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
@@ -97,8 +108,9 @@ export const mapIssue = (issue: JiraIssueOriginal, cfg: JiraCfg): JiraIssue => {
     updated: fields.updated,
     status: fields.status,
     storyPoints:
-      !!cfg.storyPointFieldId && !!(fields as any)[cfg.storyPointFieldId]
-        ? ((fields as any)[cfg.storyPointFieldId] as number)
+      !!cfg.storyPointFieldId &&
+      !!(fields as Record<string, unknown>)[cfg.storyPointFieldId]
+        ? ((fields as Record<string, unknown>)[cfg.storyPointFieldId] as number)
         : undefined,
     attachments: fields.attachment && fields.attachment.map(mapAttachment),
     comments:
@@ -197,7 +209,8 @@ export const mapChangelog = (changelog: JiraOriginalChangelog): JiraChangelogEnt
   return newChangelog;
 };
 
-export const mapTransitionResponse = (res: any): unknown => res.response.transitions;
+export const mapTransitionResponse = (res: JiraTransitionsEnvelope): unknown =>
+  res.response.transitions;
 
 const mapAttachmentType = (mimeType: string): DropPasteInputType => {
   switch (mimeType) {

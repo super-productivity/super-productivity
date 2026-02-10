@@ -15,9 +15,8 @@ test.describe('Planner Time Estimates', () => {
   }) => {
     // Add task with time estimate using short syntax
     await workViewPage.addTask('Important task /2h/');
-    await page.waitForLoadState('networkidle');
 
-    // Verify task was created
+    // Verify task was created (auto-retries until count matches)
     await expect(page.locator('task')).toHaveCount(1);
 
     // Task should contain the time estimate in title
@@ -32,9 +31,8 @@ test.describe('Planner Time Estimates', () => {
     await workViewPage.addTask('First task /1h/');
     await workViewPage.addTask('Second task /30m/');
     await workViewPage.addTask('Third task /2h/');
-    await page.waitForLoadState('networkidle');
 
-    // Verify all tasks created
+    // Verify all tasks created (auto-retries until count matches)
     await expect(page.locator('task')).toHaveCount(3);
 
     // Navigate to planner
@@ -51,7 +49,6 @@ test.describe('Planner Time Estimates', () => {
   }) => {
     // Add task with time estimate syntax
     await workViewPage.addTask('Development work /4h/');
-    await page.waitForLoadState('networkidle');
 
     // Navigate to planner
     await plannerPage.navigateToPlanner();
@@ -69,7 +66,6 @@ test.describe('Planner Time Estimates', () => {
     // Add tasks with various time formats
     await workViewPage.addTask('Quick fix /15m/');
     await workViewPage.addTask('Feature development /3h30m/');
-    await page.waitForLoadState('networkidle');
 
     // Navigate to planner
     await plannerPage.navigateToPlanner();

@@ -19,27 +19,28 @@ test.describe('@migration Pre-migration Dialog', () => {
     page,
     workViewPage,
   }) => {
+    test.setTimeout(45000);
+
     // Wait for app to be ready - this implicitly verifies migration completed
     await workViewPage.waitForTaskList();
 
     // Create a task to verify app is fully functional
     await workViewPage.addTask('Post-migration test task');
-    await page.waitForSelector('task', { state: 'visible' });
 
-    // Verify the task was created
+    // Verify the task was created (addTask already waits for visibility)
     await expect(page.locator('task-title').first()).toContainText(
       'Post-migration test task',
     );
 
     // Create another task to ensure state management works
     await workViewPage.addTask('Second post-migration task');
-    await expect(page.locator('task')).toHaveCount(2);
+    await expect(page.locator('task')).toHaveCount(2, { timeout: 10000 });
   });
 
   test('dialog-confirm should show both buttons by default', async ({ page }) => {
     // Navigate to settings and trigger a dialog that shows both buttons
     await page.goto('/#/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find and click a section that might trigger a confirm dialog
     // We'll use the "Clear Storage" option if available

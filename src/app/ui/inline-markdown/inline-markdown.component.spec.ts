@@ -4,6 +4,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { InlineMarkdownComponent } from './inline-markdown.component';
 import { GlobalConfigService } from '../../features/config/global-config.service';
+import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
 import { of } from 'rxjs';
@@ -14,12 +15,19 @@ describe('InlineMarkdownComponent', () => {
   let fixture: ComponentFixture<InlineMarkdownComponent>;
   let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
+  let mockClipboardImageService: jasmine.SpyObj<ClipboardImageService>;
 
   beforeEach(async () => {
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       tasks: jasmine.createSpy().and.returnValue({ isTurnOffMarkdown: false }),
     });
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockClipboardImageService = jasmine.createSpyObj('ClipboardImageService', [
+      'resolveMarkdownImages',
+    ]);
+    mockClipboardImageService.resolveMarkdownImages.and.callFake((content: string) =>
+      Promise.resolve(content),
+    );
 
     await TestBed.configureTestingModule({
       imports: [
@@ -31,6 +39,7 @@ describe('InlineMarkdownComponent', () => {
       providers: [
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: MatDialog, useValue: mockMatDialog },
+        { provide: ClipboardImageService, useValue: mockClipboardImageService },
         provideMockStore(),
         provideMockActions(() => of()),
       ],
@@ -550,6 +559,29 @@ describe('InlineMarkdownComponent', () => {
 
       // Assert
       expect(component.modelCopy()).toBe('- [ ] ');
+    });
+  });
+
+  describe('model setter race condition', () => {
+    it('should not show stale notes when switching from a task with notes to one without', async () => {
+      // Arrange: make resolveMarkdownImages return a delayed promise
+      let resolveDelayed!: (value: string) => void;
+      mockClipboardImageService.resolveMarkdownImages.and.returnValue(
+        new Promise<string>((resolve) => {
+          resolveDelayed = resolve;
+        }),
+      );
+
+      // Act: set model to a task with notes, then immediately clear it
+      component.model = 'Task A notes';
+      component.model = '';
+
+      // Now the delayed promise resolves with the old content
+      resolveDelayed('Task A notes');
+      await Promise.resolve();
+
+      // Assert: resolvedModel should remain undefined (not stale Task A content)
+      expect(component.resolvedModel()).toBeUndefined();
     });
   });
 

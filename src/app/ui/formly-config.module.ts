@@ -23,6 +23,7 @@ import { FormlyTagSelectionComponent } from './formly-tag-selection/formly-tag-s
 import { FormlyBtnComponent } from './formly-button/formly-btn.component';
 import { FormlyImageInputComponent } from './formly-image-input/formly-image-input.component';
 import { ColorInputComponent } from '../features/config/color-input/color-input.component';
+import { FormlySlideToggleComponent } from './formly-slide-toggle/formly-slide-toggle.component';
 
 @NgModule({
   imports: [
@@ -42,6 +43,7 @@ import { ColorInputComponent } from '../features/config/color-input/color-input.
       types: [
         { name: 'slider', component: FormlySliderComponent },
         { name: 'link', component: FormlyLinkWidgetComponent },
+        { name: 'slide-toggle', component: FormlySlideToggleComponent },
         {
           name: 'duration',
           component: InputDurationFormlyComponent,

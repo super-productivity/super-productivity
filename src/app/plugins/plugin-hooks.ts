@@ -4,12 +4,13 @@ import { PluginLog } from '../core/log';
 
 /**
  * Simplified plugin hooks service following KISS principles.
- * No timeouts, no complex error handling - just call the hooks.
+ * Each handler has a 5s timeout to prevent hung handlers from blocking others.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class PluginHooksService {
+  private static readonly HOOK_TIMEOUT_MS = 5000;
   private _handlers = new Map<Hooks, Map<string, PluginHookHandler<any>>>();
 
   /**
@@ -36,13 +37,20 @@ export class PluginHooksService {
       return;
     }
 
-    // Call all handlers - simple and direct
     for (const [pluginId, handler] of handlers) {
+      let timeoutId: ReturnType<typeof setTimeout>;
       try {
-        await handler(payload);
+        await Promise.race([
+          handler(payload),
+          new Promise<void>((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error('Hook handler timed out')),
+              PluginHooksService.HOOK_TIMEOUT_MS,
+            );
+          }),
+        ]).finally(() => clearTimeout(timeoutId));
       } catch (error) {
         PluginLog.err(`Plugin ${pluginId} ${hook} handler error:`, error);
-        // Continue with other handlers
       }
     }
   }

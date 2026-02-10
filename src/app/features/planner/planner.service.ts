@@ -38,6 +38,7 @@ export class PlannerService {
       : PlannerService.INITIAL_DAYS_DESKTOP,
   );
   public isLoadingMore$ = new BehaviorSubject<boolean>(false);
+  private _loadMoreTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   includedWeekDays$ = of([0, 1, 2, 3, 4, 5, 6]);
 
@@ -172,10 +173,25 @@ export class PlannerService {
     this._userHasScrolled.set(true);
 
     // Yield to event loop to ensure loading state is visible
-    setTimeout(() => {
+    this._loadMoreTimeoutId = setTimeout(() => {
+      this._loadMoreTimeoutId = null;
       const currentCount = this._daysToShowCount$.value;
       this._daysToShowCount$.next(currentCount + PlannerService.AUTO_LOAD_INCREMENT);
       this.isLoadingMore$.next(false);
     }, 0);
+  }
+
+  resetScrollState(): void {
+    if (this._loadMoreTimeoutId !== null) {
+      clearTimeout(this._loadMoreTimeoutId);
+      this._loadMoreTimeoutId = null;
+    }
+    this.isLoadingMore$.next(false);
+    this._userHasScrolled.set(false);
+    this._daysToShowCount$.next(
+      this._layoutService.isXs()
+        ? PlannerService.INITIAL_DAYS_MOBILE
+        : PlannerService.INITIAL_DAYS_DESKTOP,
+    );
   }
 }

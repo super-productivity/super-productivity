@@ -39,7 +39,7 @@ import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 @Injectable()
 export class JiraIssueEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
-  private readonly _store$ = inject<Store<any>>(Store);
+  private readonly _store$ = inject(Store);
   private readonly _snackService = inject(SnackService);
   private readonly _taskService = inject(TaskService);
   private readonly _issueProviderService = inject(IssueProviderService);
@@ -108,7 +108,7 @@ export class JiraIssueEffects {
   // this is already complicated enough as is...
   // I am sorry future me O:)
 
-  checkForReassignment: any = createEffect(
+  checkForReassignment = createEffect(
     () =>
       this._actions$.pipe(
         ofType(setCurrentTask),
@@ -197,7 +197,7 @@ export class JiraIssueEffects {
 
   // POLLING & UPDATES
 
-  checkForStartTransition$: Observable<any> = createEffect(
+  checkForStartTransition$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(setCurrentTask),
@@ -237,13 +237,13 @@ export class JiraIssueEffects {
     { dispatch: false },
   );
 
-  checkForDoneTransition$: Observable<any> = createEffect(
+  checkForDoneTransition$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
         filter(({ task }): boolean => !!task.changes.isDone),
         // Guard against missing id and load full entity
-        filter(({ task }) => task.id != null && task.id !== (undefined as any)),
+        filter(({ task }) => task.id != null && task.id !== undefined),
         concatMap(({ task }) => this._taskService.getByIdOnce$(String(task.id))),
         filter((task: Task) => task && task.issueType === JIRA_TYPE),
         concatMap((task: Task) => {
@@ -274,7 +274,7 @@ export class JiraIssueEffects {
     localState: IssueLocalState,
     jiraCfg: IssueProviderJira,
     task: Task,
-  ): Observable<any> {
+  ): Observable<unknown> {
     const chosenTransition: JiraTransitionOption | undefined =
       jiraCfg.transitionConfig[localState];
 
@@ -365,7 +365,7 @@ export class JiraIssueEffects {
     issue: JiraIssueReduced,
     localState: IssueLocalState,
     task: Task,
-  ): Observable<any> {
+  ): Observable<unknown> {
     return this._matDialog
       .open(DialogJiraTransitionComponent, {
         restoreFocus: true,

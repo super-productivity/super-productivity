@@ -8,6 +8,7 @@ import { PreMigrationBackupService } from './pre-migration-backup.service';
 import { Operation, OpType } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
+import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 
 describe('CleanSlateService', () => {
   let service: CleanSlateService;
@@ -315,6 +316,37 @@ describe('CleanSlateService', () => {
       ).toBeResolved();
 
       expect(mockOpLogStore.append).toHaveBeenCalled();
+    });
+
+    it('should prune vector clock to MAX_VECTOR_CLOCK_SIZE when currentClock has 12 entries', async () => {
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 12; i++) {
+        largeClock[`client${String(i).padStart(2, '0')}`] = (i + 1) * 100;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(largeClock);
+
+      await service.createCleanSlateFromImport(importedState, 'FULL_IMPORT');
+
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      const clockSize = Object.keys(appendedOp.vectorClock).length;
+      expect(clockSize).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+      // The new client ID should always be preserved
+      expect(appendedOp.vectorClock['eNewC']).toBeDefined();
+    });
+
+    it('should prune vector clock to exactly MAX when currentClock has 10 entries (11 after increment)', async () => {
+      const clock: Record<string, number> = {};
+      for (let i = 0; i < 10; i++) {
+        clock[`client${String(i).padStart(2, '0')}`] = (i + 1) * 100;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(clock);
+
+      await service.createCleanSlateFromImport(importedState, 'FULL_IMPORT');
+
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      const clockSize = Object.keys(appendedOp.vectorClock).length;
+      expect(clockSize).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(appendedOp.vectorClock['eNewC']).toBeDefined();
     });
   });
 

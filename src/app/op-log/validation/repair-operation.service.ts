@@ -10,6 +10,7 @@ import {
 import { uuidv7 } from '../../util/uuid-v7';
 import {
   incrementVectorClock,
+  limitVectorClockSize,
   selectProtectedClientIds,
 } from '../../core/util/vector-clock';
 import { LockService } from '../sync/lock.service';
@@ -66,7 +67,11 @@ export class RepairOperationService {
 
     const doCreateOperation = async (): Promise<void> => {
       const currentClock = await this.vectorClockService.getCurrentVectorClock();
-      const newClock = incrementVectorClock(currentClock, clientId);
+      const newClock = limitVectorClockSize(
+        incrementVectorClock(currentClock, clientId),
+        clientId,
+        [],
+      );
 
       const op: Operation = {
         id: uuidv7(),

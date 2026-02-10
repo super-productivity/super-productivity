@@ -1,20 +1,16 @@
 import { expect, test } from '../../fixtures/test.fixture';
-import { cssSelectors } from '../../constants/selectors';
 import {
   enablePluginWithVerification,
   getCITimeoutMultiplier,
-  logPluginState,
   waitForPluginAssets,
   waitForPluginInMenu,
   waitForPluginManagementInit,
 } from '../../helpers/plugin-test.helpers';
 
-const { SETTINGS_BTN } = cssSelectors;
-
 test.describe.serial('Plugin Enable Verify', () => {
   test('enable API Test Plugin and verify menu entry', async ({ page, workViewPage }) => {
     const timeoutMultiplier = getCITimeoutMultiplier();
-    test.setTimeout(30000 * timeoutMultiplier); // Reduced from 60s to 30s base
+    test.setTimeout(30000 * timeoutMultiplier);
 
     // First, ensure plugin assets are available
     const assetsAvailable = await waitForPluginAssets(page);
@@ -28,6 +24,7 @@ test.describe.serial('Plugin Enable Verify', () => {
 
     await workViewPage.waitForTaskList();
 
+    // Navigate to settings and initialize plugin management
     const initSuccess = await waitForPluginManagementInit(page);
     if (!initSuccess) {
       throw new Error(
@@ -35,45 +32,11 @@ test.describe.serial('Plugin Enable Verify', () => {
       );
     }
 
-    // Navigate to plugin settings
-    await page.click(SETTINGS_BTN);
-    await page.waitForSelector('.page-settings', {
-      state: 'visible',
-      timeout: 10000 * timeoutMultiplier,
-    });
-
-    // Expand plugin section
-    await page.evaluate(() => {
-      const pluginSection = document.querySelector('.plugin-section');
-      if (pluginSection) {
-        pluginSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-
-      const collapsible = document.querySelector('.plugin-section collapsible');
-      if (collapsible && !collapsible.classList.contains('isExpanded')) {
-        const header = collapsible.querySelector('.collapsible-header');
-        if (header) {
-          (header as HTMLElement).click();
-        }
-      }
-    });
-
-    // Wait for plugin management to be visible
-    await page.waitForSelector('plugin-management', {
-      state: 'visible',
-      timeout: 10000 * timeoutMultiplier,
-    });
-
-    // Log current plugin state for debugging
-    if (process.env.CI) {
-      await logPluginState(page);
-    }
-
-    // Enable API Test Plugin with verification
+    // Plugin management is now visible - enable API Test Plugin
     const pluginEnabled = await enablePluginWithVerification(
       page,
       'API Test Plugin',
-      10000 * timeoutMultiplier, // Reduced from 15s to 10s
+      10000 * timeoutMultiplier,
     );
 
     expect(pluginEnabled).toBe(true);
@@ -82,14 +45,13 @@ test.describe.serial('Plugin Enable Verify', () => {
     const pluginInMenu = await waitForPluginInMenu(
       page,
       'API Test Plugin',
-      15000 * timeoutMultiplier, // Reduced from 20s to 15s
+      15000 * timeoutMultiplier,
     );
 
     expect(pluginInMenu).toBe(true);
 
     // Additional verification - check menu structure in magic-side-nav
     const menuResult = await page.evaluate(() => {
-      // Look for plugin items in magic-side-nav structure
       const sideNav = document.querySelector('magic-side-nav');
       const navButtons = sideNav
         ? Array.from(sideNav.querySelectorAll('nav-item button'))
@@ -104,7 +66,6 @@ test.describe.serial('Plugin Enable Verify', () => {
 
     expect(menuResult.hasSideNav).toBe(true);
     expect(menuResult.buttonCount).toBeGreaterThan(0);
-    // Check if any button text contains "API Test Plugin" (handle whitespace)
     const hasApiTestPlugin = menuResult.buttonTexts.some((text: string) =>
       text.includes('API Test Plugin'),
     );

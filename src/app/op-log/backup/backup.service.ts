@@ -9,6 +9,7 @@ import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import {
   incrementVectorClock,
+  limitVectorClockSize,
   selectProtectedClientIds,
 } from '../../core/util/vector-clock';
 import { uuidv7 } from '../../util/uuid-v7';
@@ -190,9 +191,12 @@ export class BackupService {
     }
 
     const currentClock = await this._vectorClockService.getCurrentVectorClock();
+    // Prune to MAX_VECTOR_CLOCK_SIZE to match server-side pruning.
+    // Without this, the local BACKUP_IMPORT retains an oversized clock while the server
+    // stores a pruned version, causing remote clients' ops to appear CONCURRENT.
     const newClock = isForceConflict
       ? { [clientId]: 2 }
-      : incrementVectorClock(currentClock, clientId);
+      : limitVectorClockSize(incrementVectorClock(currentClock, clientId), clientId, []);
 
     const opId = uuidv7();
     // IMPORTANT: Uses OpType.BackupImport which maps to reason='recovery' on the server.

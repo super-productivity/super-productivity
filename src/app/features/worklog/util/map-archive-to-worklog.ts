@@ -1,4 +1,4 @@
-import { EntityState } from '@ngrx/entity';
+import { Dictionary, EntityState } from '@ngrx/entity';
 import { Task } from '../../tasks/task.model';
 import { getWeeksInMonth } from '../../../util/get-weeks-in-month';
 import { getWeekNumber } from '../../../util/get-week-number';
@@ -16,17 +16,22 @@ import { formatDayStr } from '../../../util/format-day-str';
 import { sortWorklogEntriesAlphabetically } from './sort-worklog-entries';
 
 // Provides defaults to display tasks without time spent on them
-const _getTimeSpentOnDay = (entities: any, task: Task): { [key: string]: number } => {
+const _getTimeSpentOnDay = (
+  entities: Dictionary<Task>,
+  task: Task,
+): { [key: string]: number } => {
   const isTimeSpentTracked =
     task.timeSpentOnDay && !!Object.keys(task.timeSpentOnDay).length;
   if (isTimeSpentTracked) {
     return task.timeSpentOnDay;
   } else if (task.parentId) {
-    const parentSpentOnDay = task.parentId && entities[task.parentId].timeSpentOnDay;
+    const parentSpentOnDay = task.parentId && entities[task.parentId]!.timeSpentOnDay;
     const parentLogEntryDate =
       parentSpentOnDay &&
       (Object.keys(parentSpentOnDay)[0] ||
-        getDbDateStr(entities[task.parentId].doneOn || entities[task.parentId].created));
+        getDbDateStr(
+          entities[task.parentId]!.doneOn || entities[task.parentId]!.created,
+        ));
     return { [parentLogEntryDate]: 1 };
   } else {
     return { [getDbDateStr(task.doneOn || task.created)]: 1 };
@@ -125,24 +130,24 @@ export const mapArchiveToWorklog = (
 
   // Sort log entries alphabetically with parent/subtask grouping
   Object.keys(worklog).forEach((yearIN: string) => {
-    const year: WorklogYear = worklog[yearIN as any];
+    const year: WorklogYear = worklog[+yearIN];
     Object.keys(year.ent).forEach((monthIN: string) => {
-      const month: WorklogMonth = year.ent[monthIN as any];
+      const month: WorklogMonth = year.ent[+monthIN];
       Object.keys(month.ent).forEach((dayIN: string) => {
-        month.ent[dayIN as any].logEntries = sortWorklogEntriesAlphabetically(
-          month.ent[dayIN as any].logEntries,
+        month.ent[+dayIN].logEntries = sortWorklogEntriesAlphabetically(
+          month.ent[+dayIN].logEntries,
         );
       });
     });
   });
 
   Object.keys(worklog).forEach((yearIN: string) => {
-    const year: WorklogYear = worklog[yearIN as any];
+    const year: WorklogYear = worklog[+yearIN];
     const monthKeys = Object.keys(year.ent);
     year.monthWorked = monthKeys.length;
 
     monthKeys.forEach((monthIN: string) => {
-      const month: WorklogMonth = worklog[yearIN as any].ent[monthIN as any];
+      const month: WorklogMonth = worklog[+yearIN].ent[+monthIN];
       const days = Object.keys(month.ent);
       month.daysWorked = days.length;
       year.daysWorked += days.length;
@@ -163,11 +168,11 @@ export const mapArchiveToWorklog = (
           };
 
           days.forEach((dayIN: string) => {
-            const day: WorklogDay = month.ent[dayIN as any];
+            const day: WorklogDay = month.ent[+dayIN];
             if (+dayIN >= week.start && +dayIN <= week.end) {
-              weekForMonth.timeSpent += month.ent[dayIN as any].timeSpent;
+              weekForMonth.timeSpent += month.ent[+dayIN].timeSpent;
               weekForMonth.daysWorked += 1;
-              weekForMonth.ent[dayIN as any] = day;
+              weekForMonth.ent[+dayIN] = day;
             }
           });
 

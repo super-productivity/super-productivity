@@ -14,6 +14,7 @@ import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import {
   incrementVectorClock,
+  limitVectorClockSize,
   selectProtectedClientIds,
 } from '../../core/util/vector-clock';
 
@@ -184,7 +185,14 @@ export class CleanSlateService {
 
     // 3. Get current vector clock and increment (we're adding a new operation)
     const currentClock = await this.vectorClockService.getCurrentVectorClock();
-    const newClock = incrementVectorClock(currentClock, newClientId);
+    // Prune to MAX_VECTOR_CLOCK_SIZE to match server-side pruning.
+    // Without this, the local SYNC_IMPORT retains an oversized clock while the server
+    // stores a pruned version, causing remote clients' ops to appear CONCURRENT.
+    const newClock = limitVectorClockSize(
+      incrementVectorClock(currentClock, newClientId),
+      newClientId,
+      [],
+    );
 
     // 4. Create SYNC_IMPORT operation with imported state
     const syncImportOp: Operation = {

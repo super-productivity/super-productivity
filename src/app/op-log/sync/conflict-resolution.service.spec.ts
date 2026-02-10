@@ -54,10 +54,8 @@ describe('ConflictResolutionService', () => {
       'markFailed',
       'getUnsyncedByEntity',
       'mergeRemoteOpClocks',
-      'getProtectedClientIds',
     ]);
     mockOpLogStore.mergeRemoteOpClocks.and.resolveTo(undefined);
-    mockOpLogStore.getProtectedClientIds.and.resolveTo([]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockValidateStateService = jasmine.createSpyObj('ValidateStateService', [
       'validateAndRepairCurrentState',
@@ -2256,7 +2254,7 @@ describe('ConflictResolutionService', () => {
     });
   });
 
-  describe('vector clock pruning in conflict resolution', () => {
+  describe('no client-side vector clock pruning in conflict resolution', () => {
     const createOpWithLargeClock = (
       id: string,
       clientId: string,
@@ -2298,7 +2296,7 @@ describe('ConflictResolutionService', () => {
       mockOpLogStore.markRejected.and.resolveTo(undefined);
     });
 
-    it('should prune local-win update op clock to MAX_VECTOR_CLOCK_SIZE', async () => {
+    it('should NOT prune local-win update op clock (server handles pruning)', async () => {
       const now = Date.now();
       const localClock = createLargeClock('local', 6, 1);
       const remoteClock = createLargeClock('remote', 6, 10);
@@ -2315,7 +2313,6 @@ describe('ConflictResolutionService', () => {
         },
       ];
 
-      // Mock store to return entity state for getCurrentEntityState
       mockStore.select.and.returnValue(of({ id: 'task-1', title: 'Test Task' }));
 
       await service.autoResolveConflictsLWW(conflicts);
@@ -2323,13 +2320,14 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
       const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
         .args[0] as Operation;
-      expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+      // All keys preserved — no client-side pruning (server handles it)
+      expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
         MAX_VECTOR_CLOCK_SIZE,
       );
       expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
     });
 
-    it('should prune archive-win op clock to MAX_VECTOR_CLOCK_SIZE', async () => {
+    it('should NOT prune archive-win op clock (server handles pruning)', async () => {
       const now = Date.now();
       const archiveClock = createLargeClock('archive', 6, 1);
       const remoteClock = createLargeClock('remote', 6, 10);
@@ -2368,18 +2366,17 @@ describe('ConflictResolutionService', () => {
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalled();
       const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
         .args[0] as Operation;
-      expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+      // All keys preserved — no client-side pruning (server handles it)
+      expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
         MAX_VECTOR_CLOCK_SIZE,
       );
       expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
     });
 
-    it('should preserve protected client IDs during pruning of local-win ops', async () => {
+    it('should preserve all client IDs in unpruned local-win op clock', async () => {
       const protectedId = 'protected-sync-import-client';
-      mockOpLogStore.getProtectedClientIds.and.resolveTo([protectedId]);
 
       const now = Date.now();
-      // Protected client has the lowest counter, should still be preserved
       const localClock: VectorClock = { [protectedId]: 1 };
       for (let i = 1; i <= 5; i++) {
         localClock[`high-local-${i}`] = i * 100;
@@ -2404,11 +2401,9 @@ describe('ConflictResolutionService', () => {
 
       const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
         .args[0] as Operation;
+      // No client-side pruning — all keys preserved including protected client
       expect(appendedOp.vectorClock[protectedId]).toBeDefined();
       expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
-      expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
-        MAX_VECTOR_CLOCK_SIZE,
-      );
     });
   });
 

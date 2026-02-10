@@ -76,7 +76,7 @@ export type OpType = (typeof OP_TYPES)[number];
  * Returns a sanitized clock with validated entries, or an error.
  *
  * Validation rules:
- * - Maximum 100 entries (prevents DoS via huge clocks)
+ * - Maximum MAX_VECTOR_CLOCK_SIZE * 5 (50) entries (prevents DoS via huge clocks)
  * - Keys must be non-empty strings, max 255 characters
  * - Values must be non-negative integers, max 10 million
  * - Invalid entries are removed (not rejected)
@@ -90,8 +90,18 @@ export const sanitizeVectorClock = (
 
   const entries = Object.entries(clock as Record<string, unknown>);
 
-  if (entries.length > 100) {
-    return { valid: false, error: 'Vector clock has too many entries (max 100)' };
+  // Reject absurdly large clocks (DoS protection).
+  // Legitimate clocks can temporarily exceed MAX_VECTOR_CLOCK_SIZE during conflict
+  // resolution: entity clock IDs + client ID + merged clocks from multiple concurrent
+  // clients. 5x MAX gives ample room for multi-client merge scenarios while catching
+  // adversarial inputs. Server-side pruning (limitVectorClockSize) will trim to MAX
+  // before storage.
+  const MAX_SANITIZE_VECTOR_CLOCK_SIZE = MAX_VECTOR_CLOCK_SIZE * 5;
+  if (entries.length > MAX_SANITIZE_VECTOR_CLOCK_SIZE) {
+    return {
+      valid: false,
+      error: `Vector clock has too many entries (${entries.length}, max ${MAX_SANITIZE_VECTOR_CLOCK_SIZE})`,
+    };
   }
 
   const sanitized: VectorClock = {};

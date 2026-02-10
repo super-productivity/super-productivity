@@ -166,6 +166,9 @@ const _resetEntityStateForKey = (
     );
     // Use Object.assign to mutate in place, avoiding dynamic key assignment issues
     Object.assign(currentState, resetState);
+  } else {
+    // Entity state is missing, null, or lacks proper shape — initialize with defaults
+    (data as Record<string, unknown>)[key] = { ids: [], entities: {} };
   }
 };
 
@@ -780,6 +783,7 @@ const _removeNonExistentProjectIdsFromIssueProviders = (
   data: AppDataComplete,
 ): AppDataComplete => {
   const { issueProvider, project } = data;
+  if (!issueProvider?.ids || !project?.ids) return data;
   const projectIds: string[] = project.ids as string[];
   const issueProviderIds: string[] = issueProvider.ids;
   issueProviderIds.forEach((id) => {
@@ -797,6 +801,7 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
   data: AppDataComplete,
 ): AppDataComplete => {
   const { project, taskRepeatCfg } = data;
+  if (!taskRepeatCfg?.ids || !project?.ids) return data;
   const projectIds: string[] = project.ids as string[];
   const taskRepeatCfgIds: string[] = taskRepeatCfg.ids as string[];
   taskRepeatCfgIds.forEach((id) => {
@@ -823,6 +828,7 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
   data: AppDataComplete,
 ): AppDataComplete => {
   const { task, taskRepeatCfg, archiveYoung, archiveOld } = data;
+  if (!taskRepeatCfg?.ids) return data;
   const repeatCfgIds: string[] = taskRepeatCfg.ids as string[];
   const taskIds: string[] = task.ids;
   const taskArchiveYoungIds: string[] = archiveYoung.task.ids as string[];

@@ -225,6 +225,7 @@ export class FileImexComponent implements OnInit {
         data as AppDataComplete,
         false,
         true,
+        true,
       );
 
       // Handle encryption state change if needed (e.g., import has different encryption settings)

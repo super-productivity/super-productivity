@@ -12,6 +12,7 @@ import { Operation, OpType, ActionType } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import {
   incrementVectorClock,
+  limitVectorClockSize,
   mergeVectorClocks,
   selectProtectedClientIds,
 } from '../../core/util/vector-clock';
@@ -147,7 +148,11 @@ export class SyncHydrationService {
         });
       }
 
-      const newClock = incrementVectorClock(mergedClock, clientId);
+      const newClock = limitVectorClockSize(
+        incrementVectorClock(mergedClock, clientId),
+        clientId,
+        [],
+      );
 
       let lastSeq: number;
 

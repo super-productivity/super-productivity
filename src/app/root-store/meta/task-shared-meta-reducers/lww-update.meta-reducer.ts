@@ -440,7 +440,11 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     const entityId = entityData['id'] as string;
-    const existingEntity = (featureState as any).entities?.[entityId];
+    const existingEntity = (
+      featureState as unknown as {
+        entities?: Record<string, Record<string, unknown>>;
+      }
+    ).entities?.[entityId];
 
     let updatedFeatureState;
 

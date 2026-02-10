@@ -130,22 +130,12 @@ async function generateMacIcon() {
   for (const { osType, size } of ICNS_TYPES) {
     const svg = continuousRoundedRectSvg(size);
 
-    // Step 1: Resize and apply squircle mask
-    // NOTE: Must output to PNG buffer before flatten. When chained directly,
-    // Sharp's internal pipeline doesn't properly preserve alpha channel data
-    // between dest-in composite and flatten, causing edge pixels to retain
-    // the original icon color instead of blending with the background.
+    // Resize and apply squircle mask (preserving alpha for transparent edges)
+    // macOS .icns natively supports PNG with alpha — no flatten needed.
     // See: https://github.com/super-productivity/super-productivity/issues/6323
-    const maskedPng = await sharp(SOURCE_PNG)
+    const pngBuffer = await sharp(SOURCE_PNG)
       .resize(size, size, { fit: 'cover', position: 'center' })
       .composite([{ input: Buffer.from(svg), blend: 'dest-in' }])
-      .png()
-      .toBuffer();
-
-    // Step 2: Flatten with white background (properly blends alpha at edges)
-    // Note: flatten() already removes alpha, so removeAlpha() is not needed
-    const pngBuffer = await sharp(maskedPng)
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
       .png()
       .toBuffer();
 
@@ -161,12 +151,12 @@ async function generateMacIcon() {
   const stats = fs.statSync(OUTPUT_ICNS);
   console.log(`Generated: ${OUTPUT_ICNS} (${stats.size} bytes)`);
 
-  // Verify the largest entry has no alpha
+  // Verify the largest entry retains alpha (transparent edges)
   const metadata = await sharp(entries[0].data).metadata();
   console.log(`\nVerification (1024px entry):`);
   console.log(`  Dimensions: ${metadata.width}x${metadata.height}`);
   console.log(`  Channels: ${metadata.channels} (${metadata.hasAlpha ? 'RGBA' : 'RGB'})`);
-  console.log(`  Has alpha: ${metadata.hasAlpha ? 'YES (unexpected)' : 'NO (correct)'}`);
+  console.log(`  Has alpha: ${metadata.hasAlpha ? 'YES (correct)' : 'NO (unexpected)'}`);
 
   console.log('\nDone! macOS squircle icon generated at build/icon.icns');
 }

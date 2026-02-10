@@ -45,7 +45,6 @@ describe('SupersededOperationResolverService', () => {
     mockOpLogStore = jasmine.createSpyObj('OperationLogStoreService', [
       'markRejected',
       'appendWithVectorClockUpdate',
-      'getProtectedClientIds',
     ]);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -67,7 +66,6 @@ describe('SupersededOperationResolverService', () => {
     mockVectorClockService.getCurrentVectorClock.and.returnValue(Promise.resolve({}));
     mockOpLogStore.markRejected.and.returnValue(Promise.resolve());
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
-    mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
     // Mock lock service to execute the callback immediately
     mockLockService.request.and.callFake(
       (_lockName: string, callback: () => Promise<any>) => callback(),
@@ -1085,7 +1083,7 @@ describe('SupersededOperationResolverService', () => {
       });
     });
 
-    describe('vector clock pruning', () => {
+    describe('vector clock merging (no client-side pruning)', () => {
       const createLargeClock = (
         prefix: string,
         count: number,
@@ -1098,7 +1096,7 @@ describe('SupersededOperationResolverService', () => {
         return clock;
       };
 
-      it('should prune merged clock to MAX_VECTOR_CLOCK_SIZE for entity resolution ops', async () => {
+      it('should NOT prune merged clock on the client (server handles pruning)', async () => {
         const globalClock = createLargeClock('global', 6, 1);
         const opClock = createLargeClock('op', 6, 10);
         const supersededOp = createMockOperation('op-1', 'TASK', 'task-1', opClock, 1000);
@@ -1114,12 +1112,13 @@ describe('SupersededOperationResolverService', () => {
 
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+        // Client sends unpruned merged clock; server prunes after conflict detection
+        expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
           MAX_VECTOR_CLOCK_SIZE,
         );
       });
 
-      it('should prune merged clock to MAX_VECTOR_CLOCK_SIZE for moveToArchive ops', async () => {
+      it('should NOT prune merged clock for moveToArchive ops (server handles pruning)', async () => {
         const globalClock = createLargeClock('global', 6, 1);
         const opClock = createLargeClock('op', 6, 10);
 
@@ -1148,12 +1147,13 @@ describe('SupersededOperationResolverService', () => {
 
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+        // Client sends unpruned merged clock; server prunes after conflict detection
+        expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
           MAX_VECTOR_CLOCK_SIZE,
         );
       });
 
-      it('should prune merged clock to MAX_VECTOR_CLOCK_SIZE for DELETE ops', async () => {
+      it('should NOT prune merged clock for DELETE ops (server handles pruning)', async () => {
         const globalClock = createLargeClock('global', 6, 1);
         const opClock = createLargeClock('op', 6, 10);
 
@@ -1178,12 +1178,13 @@ describe('SupersededOperationResolverService', () => {
 
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
+        // Client sends unpruned merged clock; server prunes after conflict detection
+        expect(Object.keys(appendedOp.vectorClock).length).toBeGreaterThan(
           MAX_VECTOR_CLOCK_SIZE,
         );
       });
 
-      it('should always preserve current client ID during pruning', async () => {
+      it('should always include current client ID in merged clock', async () => {
         // Global clock has 10 high-value clients; TEST_CLIENT_ID will have the lowest counter
         const globalClock = createLargeClock('high', 10, 100);
         const supersededOp = createMockOperation(
@@ -1206,18 +1207,13 @@ describe('SupersededOperationResolverService', () => {
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
-          MAX_VECTOR_CLOCK_SIZE,
-        );
+        // All keys preserved — no client-side pruning (server handles it)
+        expect(Object.keys(appendedOp.vectorClock).length).toBe(12);
       });
 
-      it('should preserve protected client IDs during pruning', async () => {
+      it('should include all client IDs in unpruned merged clock', async () => {
         const protectedId = 'protected-sync-import-client';
-        mockOpLogStore.getProtectedClientIds.and.returnValue(
-          Promise.resolve([protectedId]),
-        );
 
-        // Protected client has the lowest counter, should still be preserved
         const globalClock: VectorClock = { [protectedId]: 1 };
         for (let i = 1; i <= 10; i++) {
           globalClock[`high-${i}`] = i * 100;
@@ -1243,25 +1239,20 @@ describe('SupersededOperationResolverService', () => {
           .args[0] as Operation;
         expect(appendedOp.vectorClock[protectedId]).toBeDefined();
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
-          MAX_VECTOR_CLOCK_SIZE,
-        );
+        // No client-side pruning — all keys from global + op + client ID are preserved
+        expect(Object.keys(appendedOp.vectorClock).length).toBe(13);
       });
 
-      it('should preserve existingClock client IDs even when protectedClientIds fill MAX slots', async () => {
-        // Simulate the sync loop scenario: 10 protected IDs from SYNC_IMPORT fill all slots,
-        // but the server's existingClock has client ID "serverEntityClient" that must be preserved
-        // to prevent the replacement op from being seen as CONCURRENT.
-        const protectedIds = Array.from(
+      it('should include existingClock client IDs in unpruned merged clock', async () => {
+        // Simulate scenario where existingClock has server entity client IDs
+        // that must be preserved for the server to see GREATER_THAN (not CONCURRENT).
+        const clientIds = Array.from(
           { length: MAX_VECTOR_CLOCK_SIZE },
-          (_, i) => `protected-${i}`,
-        );
-        mockOpLogStore.getProtectedClientIds.and.returnValue(
-          Promise.resolve(protectedIds),
+          (_, i) => `client-${i}`,
         );
 
         const globalClock: VectorClock = {};
-        for (const id of protectedIds) {
+        for (const id of clientIds) {
           globalClock[id] = 5;
         }
         globalClock['serverEntityClient'] = 7; // Server entity clock entry
@@ -1289,23 +1280,17 @@ describe('SupersededOperationResolverService', () => {
 
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
-        // serverEntityClient MUST be preserved — without it the server sees CONCURRENT → rejection loop
+        // No client-side pruning — all keys preserved including server entity client
         expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
-          MAX_VECTOR_CLOCK_SIZE,
-        );
+        expect(Object.keys(appendedOp.vectorClock).length).toBe(12);
       });
 
-      it('should preserve existingClock client IDs for moveToArchive ops', async () => {
+      it('should include existingClock client IDs in unpruned moveToArchive merged clock', async () => {
         const protectedIds = Array.from(
           { length: MAX_VECTOR_CLOCK_SIZE },
           (_, i) => `protected-${i}`,
         );
-        mockOpLogStore.getProtectedClientIds.and.returnValue(
-          Promise.resolve(protectedIds),
-        );
-
         const globalClock: VectorClock = {};
         for (const id of protectedIds) {
           globalClock[id] = 5;
@@ -1341,11 +1326,10 @@ describe('SupersededOperationResolverService', () => {
 
         const appendedOp = mockOpLogStore.appendWithVectorClockUpdate.calls.first()
           .args[0] as Operation;
+        // No client-side pruning — all keys preserved including server entity client
         expect(appendedOp.vectorClock['serverEntityClient']).toBe(7);
         expect(appendedOp.vectorClock[TEST_CLIENT_ID]).toBeDefined();
-        expect(Object.keys(appendedOp.vectorClock).length).toBeLessThanOrEqual(
-          MAX_VECTOR_CLOCK_SIZE,
-        );
+        expect(Object.keys(appendedOp.vectorClock).length).toBe(12);
       });
     });
   });

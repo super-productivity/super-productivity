@@ -10,6 +10,7 @@ import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.serv
 import { ArchiveModel } from '../../features/archive/archive.model';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { OpType, Operation } from '../core/operation.types';
+import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 
 describe('BackupService', () => {
   let service: BackupService;
@@ -389,6 +390,38 @@ describe('BackupService', () => {
       expect(appendedOp.opType).toBe(OpType.BackupImport);
       // Verify it's NOT using SyncImport (which would cause 409 errors)
       expect(appendedOp.opType).not.toBe(OpType.SyncImport);
+    });
+
+    it('should prune vector clock to MAX_VECTOR_CLOCK_SIZE when currentClock exceeds MAX', async () => {
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 12; i++) {
+        largeClock[`device_${i}`] = (i + 1) * 100;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(largeClock);
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true);
+
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      const clockSize = Object.keys(appendedOp.vectorClock).length;
+      expect(clockSize).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+      // The client ID should always be preserved
+      expect(appendedOp.vectorClock['test-client-id']).toBeDefined();
+    });
+
+    it('should still produce { [clientId]: 2 } when isForceConflict is true and currentClock is large', async () => {
+      const largeClock: Record<string, number> = {};
+      for (let i = 0; i < 15; i++) {
+        largeClock[`device_${i}`] = (i + 1) * 100;
+      }
+      mockVectorClockService.getCurrentVectorClock.and.resolveTo(largeClock);
+      mockClientIdService.generateNewClientId.and.resolveTo('newForceClient');
+      const backupData = createMinimalValidBackup();
+
+      await service.importCompleteBackup(backupData as any, true, true, true);
+
+      const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
+      expect(appendedOp.vectorClock).toEqual({ newForceClient: 2 });
     });
   });
 });

@@ -54,15 +54,24 @@ import { IssueLog } from '../../../../core/log';
 const BLOCK_ACCESS_KEY = 'SUP_BLOCK_JIRA_ACCESS';
 const API_VERSION = 'latest';
 
+interface JiraCallbackResponse {
+  requestId?: string;
+  error?: {
+    statusCode?: number;
+    status?: number;
+    message?: string;
+  };
+}
+
 interface JiraRequestLogItem {
-  transform: (res: any, cfg: any) => any;
+  transform: ((res: any, cfg: JiraCfg) => unknown) | undefined;
   requestInit: RequestInit;
   timeoutId: number;
   jiraCfg: JiraCfg;
 
-  resolve(res: any): Promise<void>;
+  resolve(res: unknown): void;
 
-  reject(reason?: any): Promise<unknown>;
+  reject(reason?: unknown): void;
 }
 
 interface JiraRequestCfg {
@@ -72,7 +81,7 @@ interface JiraRequestCfg {
   query?: {
     [key: string]: string | boolean | number | string[];
   };
-  transform?: (res: any, jiraCfg?: JiraCfg) => any;
+  transform?: (res: any, jiraCfg: JiraCfg) => unknown;
   body?: Record<string, unknown>;
 }
 
@@ -106,8 +115,8 @@ export class JiraApiService {
   constructor() {
     // set up callback listener for electron
     if (IS_ELECTRON) {
-      window.ea.on(IPC.JIRA_CB_EVENT, (ev: IpcRendererEvent, res: any) => {
-        this._handleResponse(res);
+      window.ea.on(IPC.JIRA_CB_EVENT, (ev: IpcRendererEvent, ...args: unknown[]) => {
+        this._handleResponse(args[0] as JiraCallbackResponse);
       });
     }
 
@@ -115,8 +124,8 @@ export class JiraApiService {
       this._isExtension = true;
       this._chromeExtensionInterfaceService.addEventListener(
         'SP_JIRA_RESPONSE',
-        (ev: unknown, data: any) => {
-          this._handleResponse(data);
+        (ev: unknown, data?: unknown) => {
+          this._handleResponse(data as JiraCallbackResponse);
         },
       );
     });
@@ -164,7 +173,7 @@ export class JiraApiService {
         }
         return throwError(() => err);
       }),
-    );
+    ) as Observable<SearchResultItem[]>;
   }
 
   issuePicker$(searchTerm: string, cfg: JiraCfg): Observable<SearchResultItem[]> {
@@ -189,10 +198,10 @@ export class JiraApiService {
       // switchMap((res) =>
       //   res.length > 0 ? of(res) : this.fallBackSearch$(searchTerm, cfg),
       // ),
-      ();
+      () as Observable<SearchResultItem[]>;
   }
 
-  listFields$(cfg: JiraCfg): Observable<any> {
+  listFields$(cfg: JiraCfg): Observable<unknown> {
     return this._sendRequest$({
       jiraReqCfg: {
         pathname: 'field',
@@ -227,7 +236,7 @@ export class JiraApiService {
 
     return this._sendRequest$({
       jiraReqCfg: {
-        transform: mapIssuesResponse as (res: any, cfg?: JiraCfg) => any,
+        transform: mapIssuesResponse,
         pathname: 'search/jql',
         method: 'POST',
         body: {
@@ -244,7 +253,7 @@ export class JiraApiService {
         // Fallback for Server/DC: POST /search with jql in body
         return this._sendRequest$({
           jiraReqCfg: {
-            transform: mapIssuesResponse as (res: any, cfg?: JiraCfg) => any,
+            transform: mapIssuesResponse,
             pathname: 'search',
             method: 'POST',
             body: { ...options, jql: searchQuery },
@@ -252,7 +261,7 @@ export class JiraApiService {
           cfg,
         });
       }),
-    );
+    ) as Observable<JiraIssueReduced[]>;
   }
 
   getIssueById$(issueId: string, cfg: JiraCfg): Observable<JiraIssue> {
@@ -271,7 +280,7 @@ export class JiraApiService {
       },
       cfg,
       isForce,
-    });
+    }) as Observable<JiraOriginalUser>;
   }
 
   listStatus$(cfg: JiraCfg): Observable<JiraOriginalStatus[]> {
@@ -281,7 +290,7 @@ export class JiraApiService {
         transform: mapResponse,
       },
       cfg,
-    });
+    }) as Observable<JiraOriginalStatus[]>;
   }
 
   getTransitionsForIssue$(
@@ -298,10 +307,14 @@ export class JiraApiService {
         transform: mapTransitionResponse,
       },
       cfg,
-    });
+    }) as Observable<JiraOriginalTransition[]>;
   }
 
-  transitionIssue$(issueId: string, transitionId: string, cfg: JiraCfg): Observable<any> {
+  transitionIssue$(
+    issueId: string,
+    transitionId: string,
+    cfg: JiraCfg,
+  ): Observable<unknown> {
     return this._sendRequest$({
       jiraReqCfg: {
         pathname: `issue/${issueId}/transitions`,
@@ -317,7 +330,7 @@ export class JiraApiService {
     });
   }
 
-  updateAssignee$(issueId: string, accountId: string, cfg: JiraCfg): Observable<any> {
+  updateAssignee$(issueId: string, accountId: string, cfg: JiraCfg): Observable<unknown> {
     return this._sendRequest$({
       jiraReqCfg: {
         pathname: `issue/${issueId}/assignee`,
@@ -342,7 +355,7 @@ export class JiraApiService {
     timeSpent: number;
     comment: string;
     cfg: JiraCfg;
-  }): Observable<any> {
+  }): Observable<unknown> {
     const worklog = {
       started: formatJiraDate(started),
       timeSpentSeconds: Math.floor(timeSpent / 1000),
@@ -366,14 +379,14 @@ export class JiraApiService {
   ): Observable<JiraIssue> {
     return this._sendRequest$({
       jiraReqCfg: {
-        transform: mapIssueResponse as (res: any, cfg?: JiraCfg) => any,
+        transform: mapIssueResponse,
         pathname: `issue/${issueId}`,
         query: {
           expand: isGetChangelog ? ['changelog', 'description'] : ['description'],
         },
       },
       cfg,
-    });
+    }) as Observable<JiraIssue>;
   }
 
   // Complex Functions
@@ -476,7 +489,7 @@ export class JiraApiService {
     requestId: string,
     url: string,
     requestInit: RequestInit,
-    transform: any,
+    transform: ((res: any, cfg: JiraCfg) => unknown) | undefined,
     jiraCfg: JiraCfg,
     suppressErrorSnack: boolean,
   ): Observable<any> {
@@ -516,10 +529,11 @@ export class JiraApiService {
       return from(
         fetch(url, requestInit)
           .then((response) => response.body)
-          .then(streamToJsonIfPossible as any)
+          .then((body) => streamToJsonIfPossible(body as ReadableStream))
           .then((res) => {
-            if ((res as any)?.errorMessages?.length) {
-              throw new Error((res as any).errorMessages.join(', '));
+            const resObj = res as Record<string, unknown>;
+            if (Array.isArray(resObj?.errorMessages)) {
+              throw new Error((resObj.errorMessages as string[]).join(', '));
             }
             return transform ? transform({ response: res }, jiraCfg) : { response: res };
           }),
@@ -625,11 +639,11 @@ export class JiraApiService {
     transform,
     jiraCfg,
   }: {
-    promiseResolve: any;
-    promiseReject: any;
+    promiseResolve: (value: unknown) => void;
+    promiseReject: (reason?: unknown) => void;
     requestId: string;
     requestInit: RequestInit;
-    transform: any;
+    transform: ((res: any, cfg: JiraCfg) => unknown) | undefined;
     jiraCfg: JiraCfg;
   }): JiraRequestLogItem {
     return {
@@ -654,7 +668,7 @@ export class JiraApiService {
     };
   }
 
-  private _handleResponse(res: { requestId?: string; error?: any }): void {
+  private _handleResponse(res: JiraCallbackResponse): void {
     // check if proper id is given in callback and if exists in requestLog
     if (res.requestId && this._requestsLog[res.requestId]) {
       const currentRequest = this._requestsLog[res.requestId];
@@ -668,7 +682,7 @@ export class JiraApiService {
         if (
           res?.error &&
           (res.error.statusCode === 401 ||
-            res.error === 401 ||
+            res.error.status === 401 ||
             res.error.message === 'Forbidden' ||
             res.error.message === 'Unauthorized')
         ) {
@@ -710,7 +724,7 @@ export class JiraApiService {
   }
 
   private _b64EncodeUnicode(str: string): string {
-    if (typeof (btoa as any) === 'function') {
+    if (typeof btoa === 'function') {
       return btoa(str);
     }
     throw new Error('Jira: btoo not supported');
@@ -737,7 +751,7 @@ async function streamToString(stream: ReadableStream): Promise<string> {
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-async function streamToJsonIfPossible(stream: ReadableStream): Promise<any> {
+async function streamToJsonIfPossible(stream: ReadableStream): Promise<unknown> {
   const text = await streamToString(stream);
   try {
     return JSON.parse(text);

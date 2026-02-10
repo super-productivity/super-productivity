@@ -71,7 +71,6 @@ export class PluginHooksEffects {
                 });
               }
             }),
-            map(() => EMPTY),
           ),
         ),
       ),
@@ -143,7 +142,6 @@ export class PluginHooksEffects {
                 });
               }
             }),
-            map(() => EMPTY),
           );
         }),
       ),
@@ -191,12 +189,8 @@ export class PluginHooksEffects {
                   taskId: task.id,
                   task,
                 });
-                // Also dispatch legacy update for backward compatibility if needed,
-                // but generally TASK_CREATED should be preferred.
-                // Leaving TASK_UPDATE out as 'taskCreated' is the specific hook now.
               }
             }),
-            map(() => EMPTY),
           ),
         ),
       ),

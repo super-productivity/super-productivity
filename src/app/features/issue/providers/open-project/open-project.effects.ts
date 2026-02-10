@@ -27,7 +27,7 @@ import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 @Injectable()
 export class OpenProjectEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
-  private readonly _store$ = inject<Store<any>>(Store);
+  private readonly _store$ = inject(Store);
   private readonly _snackService = inject(SnackService);
   private readonly _openProjectApiService = inject(OpenProjectApiService);
   private readonly _issueProviderService = inject(IssueProviderService);
@@ -35,7 +35,7 @@ export class OpenProjectEffects {
   private readonly _taskService = inject(TaskService);
   private readonly _issueService = inject(IssueService);
 
-  postTime$: any = createEffect(
+  postTime$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
@@ -88,7 +88,7 @@ export class OpenProjectEffects {
     { dispatch: false },
   );
 
-  checkForStartTransition$: Observable<any> = createEffect(
+  checkForStartTransition$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(setCurrentTask),
@@ -123,7 +123,7 @@ export class OpenProjectEffects {
     { dispatch: false },
   );
 
-  checkForDoneTransition$: Observable<any> = createEffect(
+  checkForDoneTransition$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
@@ -182,7 +182,7 @@ export class OpenProjectEffects {
     localState: IssueLocalState,
     openProjectCfg: OpenProjectCfg,
     task: Task,
-  ): Observable<any> {
+  ): Observable<unknown> {
     const chosenTransition: OpenProjectTransitionOption | undefined =
       openProjectCfg.transitionConfig?.[localState];
 
@@ -260,7 +260,7 @@ export class OpenProjectEffects {
     issue: OpenProjectWorkPackage,
     localState: IssueLocalState,
     task: Task,
-  ): Observable<any> {
+  ): Observable<unknown> {
     return this._matDialog
       .open(DialogOpenProjectTransitionComponent, {
         restoreFocus: true,

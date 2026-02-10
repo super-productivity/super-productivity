@@ -34,11 +34,11 @@ export interface JiraOriginalUser extends JiraOriginalAuthor {
   expand: string;
   locale: string;
   groups: {
-    items: any[];
+    items: unknown[];
     size: number;
   };
   applicationRoles: {
-    items: any[];
+    items: unknown[];
     size: number;
   };
 }
@@ -144,9 +144,9 @@ export type JiraOriginalChangelog = Readonly<{
       field: string;
       fieldId: string;
       fieldtype: string;
-      from: any;
+      from: string | number | null;
       fromString: string;
-      to: any;
+      to: string | number | null;
       toString: string;
     }[];
   }[];
@@ -192,3 +192,44 @@ export type JiraIssueOriginalSubtask = Omit<
   JiraIssueOriginal,
   'expand' | 'changelog' | 'subtasks'
 >;
+
+// Issue picker result (different shape from JiraIssueOriginal)
+export interface JiraPickerIssue {
+  key: string;
+  summary: string; // HTML-highlighted
+  summaryText: string; // plain text
+  id?: string;
+  img?: string;
+  [key: string]: unknown;
+}
+
+// API envelope types for Jira responses
+
+export interface JiraApiEnvelope<T = unknown> {
+  response: T;
+  requestId?: string;
+  error?: {
+    statusCode?: number;
+    status?: number;
+    message?: string;
+    errorMessages?: string[];
+  };
+}
+
+export type JiraPickerSearchEnvelope = JiraApiEnvelope<{
+  sections: Array<{ issues: JiraPickerIssue[] }>;
+}>;
+
+export type JiraJQLSearchEnvelope = JiraApiEnvelope<{
+  issues: JiraPickerIssue[];
+}>;
+
+export type JiraIssuesEnvelope = JiraApiEnvelope<{
+  issues: JiraIssueOriginal[];
+}>;
+
+export type JiraIssueEnvelope = JiraApiEnvelope<JiraIssueOriginal>;
+
+export type JiraTransitionsEnvelope = JiraApiEnvelope<{
+  transitions: JiraOriginalTransition[];
+}>;

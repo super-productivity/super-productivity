@@ -17,14 +17,13 @@ const config: CapacitorConfig = {
       resize: 'body',
       resizeOnFullScreen: true,
     },
-    StatusBar: {
-      // Status bar overlays webview (iOS)
-      overlaysWebView: false,
-    },
+  },
+  android: {
+    adjustMarginsForEdgeToEdge: 'auto',
   },
   ios: {
     // Content inset for safe areas (notch, home indicator)
-    contentInset: 'automatic',
+    contentInset: 'never',
     // Background color for safe areas (home indicator, notch)
     // Use dark color to match dark theme (most common on mobile)
     backgroundColor: '#131314',
@@ -34,6 +33,9 @@ const config: CapacitorConfig = {
     scrollEnabled: true,
     // iOS-specific plugin overrides
     plugins: {
+      StatusBar: {
+        overlaysWebView: true,
+      },
       Keyboard: {
         // Resize the native WebView when keyboard appears
         // This shrinks the viewport so 100vh/100% automatically fits above keyboard

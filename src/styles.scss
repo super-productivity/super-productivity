@@ -50,7 +50,8 @@ body.isNativeMobile {
   padding-right: var(--safe-area-right);
 
   // Bottom padding only when keyboard is not visible
-  &:not(.isKeyboardVisible) {
+  // Skip when bottom nav is present — the nav and content area handle it themselves
+  &:not(.isKeyboardVisible):not(.hasMobileBottomNav) {
     padding-bottom: var(--safe-area-bottom);
   }
 }

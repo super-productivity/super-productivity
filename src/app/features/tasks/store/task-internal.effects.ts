@@ -41,13 +41,12 @@ export class TaskInternalEffects {
           !!tasksCfg &&
           tasksCfg.isAutoMarkParentAsDone &&
           !!task.changes.isDone &&
-          // @ts-ignore
-          !!state.entities[task.id].parentId,
+          !!state.entities[task.id as string]?.parentId,
       ),
       filter(([action, miscCfg, state]) => {
         const task = state.entities[action.task.id];
         if (!task || !task.parentId) {
-          throw new Error('!task || !task.parentId');
+          return false;
         }
         const parent = state.entities[task.parentId] as Task;
         const undoneSubTasks = parent.subTaskIds.filter(

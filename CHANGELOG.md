@@ -1,3 +1,28 @@
+## [17.1.6](https://github.com/super-productivity/super-productivity/compare/v17.1.5...v17.1.6) (2026-02-09)
+
+### Bug Fixes
+
+- **6289:** alphabet sorting ([#6430](https://github.com/super-productivity/super-productivity/issues/6430)) ([27b35ee](https://github.com/super-productivity/super-productivity/commit/27b35ee65ef71b47700ca3d3ce2cfe612476c5c8))
+- address 4 code review findings ([694bdbd](https://github.com/super-productivity/super-productivity/commit/694bdbde3b560ef90f7d36e15942892459762e15))
+- address 9 code review findings ([d4cd9a3](https://github.com/super-productivity/super-productivity/commit/d4cd9a357525d58039c60830bec9fc6328250251))
+- allow bare hostnames in Jira host URL validation [#4731](https://github.com/super-productivity/super-productivity/issues/4731) ([#6436](https://github.com/super-productivity/super-productivity/issues/6436)) ([dd80ab6](https://github.com/super-productivity/super-productivity/commit/dd80ab6a37da004e21578e2130db6023c1316e24))
+- **context-menu:** disable long-press context menu on touch to prevent conflict with drag ([#6439](https://github.com/super-productivity/super-productivity/issues/6439)) ([a416661](https://github.com/super-productivity/super-productivity/commit/a416661bf6b322deac46afeb3ef0e81640ef2059))
+- **ical:** sanitize input to prevent crash on malformed lines (cc [@johannesjo](https://github.com/johannesjo)) ([#6443](https://github.com/super-productivity/super-productivity/issues/6443)) ([f41853e](https://github.com/super-productivity/super-productivity/commit/f41853e5b42085c8efc75ff19fd6ab66866dd087))
+- **magic-side-nav:** restore vertical scrolling by removing drag region ([#6435](https://github.com/super-productivity/super-productivity/issues/6435)) ([9d6927a](https://github.com/super-productivity/super-productivity/commit/9d6927a015ec701c685272b3714002f13ef0a73c)), closes [#6330](https://github.com/super-productivity/super-productivity/issues/6330)
+- **migration:** handle missing entity states during v16→v17 data repair ([#6428](https://github.com/super-productivity/super-productivity/issues/6428)) ([b6f0bc1](https://github.com/super-productivity/super-productivity/commit/b6f0bc1079a3e149038cf4c78d17de97a1f9a6de))
+- **sync:** detect server-side pruning artifacts in SYNC_IMPORT filter to prevent silent op loss ([fe74ae3](https://github.com/super-productivity/super-productivity/commit/fe74ae31b6be72fdd058bf0e3422057981950ca7))
+- **sync:** prevent infinite loop when concurrent modification resolution keeps failing ([#6434](https://github.com/super-productivity/super-productivity/issues/6434)) ([fdc942b](https://github.com/super-productivity/super-productivity/commit/fdc942babbab90b10535a796c5100fc9f1b70c10))
+- **sync:** remove client-side vector clock pruning and fix pruning-aware comparison ([8937163](https://github.com/super-productivity/super-productivity/commit/8937163513e7cd20692a138f15d52af87f2914ad)), closes [#13](https://github.com/super-productivity/super-productivity/issues/13)
+- **sync:** remove client-side vector clock pruning from ConflictResolutionService and fix rejection counting ([a774c46](https://github.com/super-productivity/super-productivity/commit/a774c46700c67ea073a160d8fb95ca1249943624))
+- **sync:** save WebDAV settings after successful Test Connection ([#6345](https://github.com/super-productivity/super-productivity/issues/6345)) ([273d1b7](https://github.com/super-productivity/super-productivity/commit/273d1b7dc37073c6b110507949d1a792367216bb))
+- **tasks:** reschedule task when repeat config settings are updated ([2323f5a](https://github.com/super-productivity/super-productivity/commit/2323f5a16eb9a0a594855fffa18fddb3aef5d65b))
+- **tasks:** skip planTaskForDay for timed repeat tasks with future first occurrence ([80624ab](https://github.com/super-productivity/super-productivity/commit/80624abc004ab061d533ff238daafe40520dc313))
+- **tasks:** use planTaskForDay for future repeat occurrences ([#6433](https://github.com/super-productivity/super-productivity/issues/6433)) ([3b9a15a](https://github.com/super-productivity/super-productivity/commit/3b9a15a260c1d63ed270dca1322714b5426a5d4f))
+
+### Features
+
+- **backgroundOverlayOpacity:** add background overlay opacity ([#6294](https://github.com/super-productivity/super-productivity/issues/6294)) ([6a5dd88](https://github.com/super-productivity/super-productivity/commit/6a5dd88806928b869a02040ca95f9186c496fd8d))
+
 ## [17.1.5](https://github.com/super-productivity/super-productivity/compare/v17.1.4...v17.1.5) (2026-02-08)
 
 ### Bug Fixes

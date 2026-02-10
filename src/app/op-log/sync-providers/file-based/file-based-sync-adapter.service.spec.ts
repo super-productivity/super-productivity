@@ -117,9 +117,12 @@ describe('FileBasedSyncAdapterService', () => {
     // Reset TestBed to ensure fresh service instance for each test
     // This is critical because FileBasedSyncAdapterService caches state in memory
     TestBed.resetTestingModule();
+    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 500;
   });
 
   beforeEach(() => {
+    // Eliminate real retry delays to prevent slow tests and timer accumulation
+    (FILE_BASED_SYNC_CONSTANTS as any).RETRY_BASE_DELAY_MS = 0;
     mockArchiveDbAdapter = jasmine.createSpyObj('ArchiveDbAdapter', [
       'loadArchiveYoung',
       'loadArchiveOld',
