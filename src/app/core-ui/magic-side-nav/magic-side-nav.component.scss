@@ -31,7 +31,7 @@
   align-items: center;
   justify-content: center;
   position: fixed;
-  top: 8px;
+  top: calc(8px + var(--safe-area-top));
   left: 8px;
   background: var(--sidenav-bg);
   border: 1px solid var(--sidenav-border-color);
@@ -200,7 +200,7 @@
   justify-content: flex-start;
 
   @media (max-width: 600px) {
-    padding-top: 0;
+    padding-top: var(--safe-area-top);
   }
 
   :host-context(.isMac.isElectron) & {
