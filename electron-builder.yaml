@@ -31,6 +31,9 @@ win:
     - github
 nsis:
   artifactName: ${productName} Setup-${arch}.${ext}
+  # allow to install to custom location
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 portable:
   artifactName: ${name}-${arch}.${ext}
 appx:
