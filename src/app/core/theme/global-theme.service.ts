@@ -284,11 +284,11 @@ export class GlobalThemeService {
     // Add native mobile platform classes
     if (this._platformService.isNative) {
       this.document.body.classList.add(BodyClass.isNativeMobile);
+      this._initMobileStatusBar();
 
       if (this._platformService.isIOS()) {
         this.document.body.classList.add(BodyClass.isIOS);
         this._initIOSKeyboardHandling();
-        this._initIOSStatusBar();
 
         // Add iPad-specific class for tablet optimizations
         if (this._platformService.isIPad()) {
@@ -504,16 +504,22 @@ export class GlobalThemeService {
   }
 
   /**
-   * Initialize iOS status bar styling.
-   * Syncs status bar style with app dark/light mode.
+   * Initialize mobile status bar styling.
+   * Syncs status bar style with app dark/light mode on both iOS and Android.
    */
-  private _initIOSStatusBar(): void {
-    // Set initial status bar style based on current theme
+  private _initMobileStatusBar(): void {
     effect(() => {
       const isDark = this.isDarkTheme();
       StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch((err) => {
-        Log.warn('Failed to set iOS status bar style', err);
+        Log.warn('Failed to set status bar style', err);
       });
+      if (this._platformService.isAndroid()) {
+        StatusBar.setBackgroundColor({ color: isDark ? '#131314' : '#ffffff' }).catch(
+          (err) => {
+            Log.warn('Failed to set status bar background color', err);
+          },
+        );
+      }
     });
   }
 }
