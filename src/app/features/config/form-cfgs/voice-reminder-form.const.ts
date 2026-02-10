@@ -65,16 +65,24 @@ export const VOICE_REMINDER_FORM: ConfigFormSection<DominaModeConfig> = {
       },
       hooks: {
         onInit: (field) => {
-          let voices: SpeechSynthesisVoice[] = getAvailableVoices() || [];
-          voices = getAvailableVoices();
-          //Log.log(voices);
+          const populateVoices = (): void => {
+            const voices = getAvailableVoices();
+            if (field.templateOptions) {
+              field.templateOptions.options = voices.map((voice) => ({
+                label: voice.name,
+                value: voice.voiceURI,
+              }));
+            }
+          };
 
-          if (field.templateOptions) {
-            field.templateOptions.options = voices.map((voiceName) => ({
-              label: voiceName.name,
-              value: voiceName.voiceURI,
-            }));
-          }
+          populateVoices();
+
+          // On some platforms (e.g. Linux/Chromium), voices load asynchronously
+          // and getVoices() returns [] on first call. Listen for voiceschanged
+          // to populate the dropdown when voices become available.
+          window.speechSynthesis?.addEventListener('voiceschanged', populateVoices, {
+            once: true,
+          });
         },
       },
     },
