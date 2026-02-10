@@ -22,7 +22,7 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
       case 'TRELLO':
         return issueProvider.boardName || issueProvider.boardId;
       case 'AZURE_DEVOPS':
-        return issueProvider.project || 'Project missing';
+        return issueProvider.project || undefined;
       default:
         return undefined;
     }

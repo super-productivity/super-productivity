@@ -12,6 +12,7 @@ export const AZURE_DEVOPS_ISSUE_CONTENT_CONFIG: IssueContentConfig<AzureDevOpsIs
       label: T.F.ISSUE.ISSUE_CONTENT.DESCRIPTION,
       type: IssueFieldType.MARKDOWN,
       value: (issue: AzureDevOpsIssue) => issue.description,
+      isVisible: (issue: AzureDevOpsIssue) => !!issue.description,
     },
     {
       label: T.F.ISSUE.ISSUE_CONTENT.STATUS,
