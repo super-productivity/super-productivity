@@ -5,14 +5,14 @@
       "INSTALL": "Installera",
       "MSG": "Vill du installera Super Productivity som en PWA?"
     },
-    "B_OFFLINE": "Du är bortkopplad från internet. Synkronisering och begäran om data från problemleverantören fungerar inte.",
+    "B_OFFLINE": "Du är bortkopplad från internet. Synkronisering och begäran om data från ärendeleverantören fungerar inte.",
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "Ändra bakgrund"
     },
     "UPDATE_WEB_APP": "Ny version tillgänglig. Ladda in ny version?"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "Visa Issue Panel",
+    "SHOW_ISSUE_PANEL": "Visa ärendepanelen",
     "SHOW_NOTES": "Visa projektanteckningar"
   },
   "BL": {
@@ -85,7 +85,7 @@
         "CREATE_NEW_TAG_BTN": "Skapa tagg",
         "CREATE_NEW_TAG_MSG": "1 ny tagg måste skapas för att denna tavla ska fungera",
         "CREATE_NEW_TAGS_BTN": "Skapa taggar",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} nya taggar måste skapas för att denna styrelse ska fungera",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} nya taggar måste skapas för att denna tavla ska fungera",
         "EDIT_BOARD": "Redigera tavla",
         "NO_PANELS_BTN": "Konfigurera tavla",
         "NO_PANELS_MSG": "Denna tavla har inga konfigurerade paneler. Lägg till några paneler på den."
@@ -107,7 +107,7 @@
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kunde inte hitta kalendern \"{{calendarName}}\"",
         "CALENDAR_READ_ONLY": "CalDav: Kalendern \"{{calendarName}}\" är skrivskyddad",
-        "ISSUE_NOT_FOUND": "CalDav: Todo \"{{issueId}}\" verkar ha raderats på servern."
+        "ISSUE_NOT_FOUND": "CalDav: Ärendet \"{{issueId}}\" verkar ha raderats på servern."
       }
     },
     "CALENDARS": {
@@ -157,7 +157,7 @@
     },
     "ISSUE_PANEL": {
       "CALENDAR_AGENDA": {
-        "OFFLINE_BANNER_MSG": "Visar cachade kalenderresultat. Uppgifterna kan vara inaktuella."
+        "OFFLINE_BANNER_MSG": "Visar cachade kalenderresultat. Ärendena kan vara inaktuella."
       }
     },
     "FINISH_DAY_BEFORE_EXIT": {
@@ -185,7 +185,7 @@
       "GET_READY": "Gör dig redo för din fokusering!",
       "GOGOGO": "Kör, kör, kör!!!",
       "ON": "på",
-      "OPEN_ISSUE_IN_BROWSER": "Öppet problem i webbläsaren",
+      "OPEN_ISSUE_IN_BROWSER": "Öppna ärende i webbläsaren",
       "PAUSE_SESSION": "Pausa session",
       "PAUSE_TRACKING": "Pausspårning",
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Pausa spårning för aktuell uppgift",
@@ -322,8 +322,8 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Denna integration kommer troligen inte att fungera i din webbläsare. Ladda ner Desktop- eller Android-versionen av Super Productivity!",
       "DEFAULT": {
-        "ISSUE_STR": "fråga",
-        "ISSUES_STR": "frågor"
+        "ISSUE_STR": "ärende",
+        "ISSUES_STR": "ärenden"
       },
       "DEFAULT_PROJECT_DESCRIPTION": "Projekt tilldelat uppgifter som skapats från ärenden.",
       "DEFAULT_PROJECT_LABEL": "Standardprojekt för Super Productivity",
@@ -383,7 +383,7 @@
         "MAP_CUSTOM_FIELDS": "Ladda berättelsepoäng",
         "MAP_CUSTOM_FIELDS_INFO": "Tyvärr sparas vissa av Jiras data under anpassade fält som skiljer sig åt för varje installation. Om du vill inkludera dessa data måste du välja rätt anpassat fält för dem. För närvarande är det endast fältet för storypoäng som behöver mappas.",
         "OPEN": "Status för pausad uppgift",
-        "SELECT_ISSUE_FOR_TRANSITIONS": "Välj problem för att ladda tillgängliga övergångar",
+        "SELECT_ISSUE_FOR_TRANSITIONS": "Välj ärende för att ladda tillgängliga övergångar",
         "STORY_POINTS": "Story Points-fältnamn",
         "TRANSITION": "Övergångshantering"
       },
@@ -479,8 +479,8 @@
         "NO_AUTO_IMPORT_JQL": "Jira: Ingen sökfråga definierad för automatisk import",
         "NO_VALID_TRANSITION": "Jira: Ingen giltig övergång konfigurerad",
         "TIMED_OUT": "Jira: Begäran har gått ut",
-        "TRANSITION": "Jira: Ställ in problem \"{{issueKey}}\" till \"{{name}}\"",
-        "TRANSITION_SUCCESS": "Jira: Ställ in problem {{issueKey}} till <strong>{{chosenTransition}}</strong>",
+        "TRANSITION": "Jira: Ställ in ärende \"{{issueKey}}\" till \"{{name}}\"",
+        "TRANSITION_SUCCESS": "Jira: Ställ in ärende {{issueKey}} till <strong>{{chosenTransition}}</strong>",
         "TRANSITIONS_LOADED": "Jira: Övergångar laddade. Använd valen nedan för att tilldela dem"
       }
     },
@@ -511,7 +511,7 @@
         "SIMPLE_COUNTERS": "Enkla räknare & vaneloggning",
         "SIMPLE_STOPWATCH_COUNTERS_OVER_TIME": "Stoppurräknare över tid",
         "TASKS_DONE_CREATED": "Uppgifter (avklarade/skapade)",
-        "TIME_ESTIMATED": "Anslagen tid",
+        "TIME_ESTIMATED": "Beräknad tid",
         "TIME_SPENT": "Använd tid",
         "TIME_FRAME_LABEL": "Tidsram",
         "TIME_FRAME_2_WEEKS": "2 veckor",
@@ -600,7 +600,7 @@
         "IN_PROGRESS": "Status för start av uppgift",
         "OPEN": "Status för pausad uppgift",
         "PROGRESS_ON_SAVE": "Standardförlopp vid sparande",
-        "SELECT_ISSUE_FOR_TRANSITIONS": "Välj problem för att ladda tillgängliga övergångar",
+        "SELECT_ISSUE_FOR_TRANSITIONS": "Välj ärende för att ladda tillgängliga övergångar",
         "TRANSITION": "Hantering av övergångar"
       },
       "DIALOG_INITIAL": {},
@@ -1005,15 +1005,15 @@
     "TASK": {
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Lägg till den existerande uppgiften \"{{taskTitle}}\"",
-        "PLACEHOLDER_SEARCH": "Lägg till befintliga uppgifter eller problem...",
+        "PLACEHOLDER_SEARCH": "Lägg till befintliga uppgifter eller ärenden...",
         "PLACEHOLDER_CREATE": "En uppgiftstitel #tagg @16:00",
         "TOOLTIP_ADD_TASK": "Lägg till uppgift",
         "TOOLTIP_ADD_TO_TOP": "Lägg till i toppen (Ctrl+1)",
         "TOOLTIP_ADD_TO_BOTTOM": "Lägg till längst ner (Ctrl+1)",
         "TOOLTIP_ADD_TO_TODAY": "Lägg till idag",
         "TOOLTIP_ADD_TO_BACKLOG": "Lägg till i backloggen",
-        "TOOLTIP_ENABLE_SEARCH": "Aktivera sökning efter problem (Ctrl+2)",
-        "TOOLTIP_DISABLE_SEARCH": "Inaktivera problemsökning (Ctrl+2)",
+        "TOOLTIP_ENABLE_SEARCH": "Aktivera sökning efter ärenden (Ctrl+2)",
+        "TOOLTIP_DISABLE_SEARCH": "Inaktivera ärendesökning (Ctrl+2)",
         "SEARCH_INFO_TEXT": "Sök och lägg till ärenden och uppgifter från arkivet och andra projekt",
         "DUE_BUTTON": "På grund av",
         "TAGS_BUTTON": "Taggar",
@@ -1072,7 +1072,7 @@
         "TRACK_TIME": "Börja spåra tid",
         "TRACK_TIME_STOP": "Pausa spårningstiden",
         "UNSCHEDULE_TASK": "Avboka uppgift",
-        "UPDATE_ISSUE_DATA": "Uppdatera problemdata"
+        "UPDATE_ISSUE_DATA": "Uppdatera ärendedata"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Vill du skapa en ny tagg? {{tagsTxt}}?",
@@ -1438,7 +1438,7 @@
     "SUBMIT": "Skicka",
     "TITLE": "Titel",
     "TODAY_TAG_TITLE": "Idag",
-    "TRACKING_INTERVAL_DESCRIPTION": "Spåra tiden med hjälp av detta intervall i millisekunder. Du kanske vill ändra detta för att minska skrivningarna på disken. Se problem #2355.",
+    "TRACKING_INTERVAL_DESCRIPTION": "Spåra tiden med hjälp av detta intervall i millisekunder. Du kanske vill ändra detta för att minska skrivningarna på disken. Se ärende #2355.",
     "UNDO": "Ångra",
     "WITHOUT_PROJECT": "Utan projekt",
     "YESTERDAY": "Igår"
@@ -1522,7 +1522,7 @@
       "TASK_TOGGLE_DONE": "Växla Klar",
       "TITLE": "Tangentbordsgenvägar",
       "TOGGLE_BACKLOG": "Visa/dölj uppgiftsbacklog",
-      "TOGGLE_ISSUE_PANEL": "Visa/dölj problemspanelen",
+      "TOGGLE_ISSUE_PANEL": "Visa/dölj ärendepanelen",
       "TOGGLE_PLAY": "Starta/stoppa uppgift",
       "TOGGLE_SIDE_NAV": "Fokus Sidenav",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Växla mellan filter-/grupp-/sorteringspanelen",
@@ -1729,8 +1729,8 @@
     "DBX_GEN_TOKEN": "Dropbox: Skapa token...",
     "DBX_META": "Dropbox: Hämta filmeta...",
     "DBX_UPLOAD": "Dropbox: Ladda upp fil...",
-    "GITHUB_LOAD_ISSUE": "GitHub: Ladda problemdata...",
-    "JIRA_LOAD_ISSUE": "Jira: Ladda problemdata...",
+    "GITHUB_LOAD_ISSUE": "GitHub: Ladda ärendedata...",
+    "JIRA_LOAD_ISSUE": "Jira: Ladda ärendedata...",
     "SYNC": "Synkroniserar data...",
     "UNKNOWN": "Laddar fjärrdata",
     "WEB_DAV_DOWNLOAD": "WebDAV: Laddar ned data...",
@@ -1739,7 +1739,7 @@
   "MH": {
     "ADD_NEW_TASK": "Lägg till ny uppgift",
     "ALL_PLANNED_LIST": "Planerad / Upprepa",
-    "BOARDS": "Styrelser",
+    "BOARDS": "Tavlor",
     "CREATE_PROJECT": "Skapa projekt",
     "CREATE_TAG": "Skapa tagg",
     "DELETE_PROJECT": "Radera projekt",
@@ -1767,7 +1767,7 @@
     "SETTINGS": "Inställningar",
     "UNPLAN_ALL_TASKS": "Avplanera alla uppgifter",
     "TAGS": "Taggar",
-    "TOGGLE_SHOW_ISSUE_PANEL": "Visa/dölj problemspanelen",
+    "TOGGLE_SHOW_ISSUE_PANEL": "Visa/dölj ärendepanelen",
     "TOGGLE_SHOW_NOTES": "Visa/dölj projektanteckningar",
     "TOGGLE_TRACK_TIME": "Starta/stoppa spårningstiden",
     "TRIGGER_SYNC": "Synkronisera!",
@@ -1945,7 +1945,7 @@
     "DONE_TASKS_IN_ARCHIVE": "Det finns för närvarande inga slutförda uppgifter här, men det finns några som redan har arkiverats.",
     "ESTIMATE_REMAINING": "Uppskattad återstående tid:",
     "LATER_TODAY": "Senare idag",
-    "FINISH_DAY": "Sista dagen",
+    "FINISH_DAY": "Avsluta dagen",
     "FINISH_DAY_TOOLTIP": "Utvärdera din dag, flytta alla avslutade uppgifter till arkivet (valfritt) och/eller planera din nästa dag.",
     "MOVE_DONE_TO_ARCHIVE": "Flyttad till arkivet",
     "NO_DONE_TASKS": "Det finns för närvarande inga slutförda uppgifter.",
