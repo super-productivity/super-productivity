@@ -82,13 +82,15 @@
   }
 }
 
-// Ensure the overlay container respects screen boundaries
+// Ensure the overlay container respects screen boundaries and safe areas
 .cdk-overlay-container {
   @media (hover: none) and (pointer: coarse) {
     .cdk-overlay-connected-position-bounding-box {
-      // Prevent menus from going off-screen
+      // Prevent menus from going off-screen, accounting for status bar and home indicator
       max-width: calc(100vw - 32px) !important;
-      max-height: calc(100vh - 32px) !important;
+      max-height: calc(
+        100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px
+      ) !important;
       margin: 0 16px !important;
     }
   }

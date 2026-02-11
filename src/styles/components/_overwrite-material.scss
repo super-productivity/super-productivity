@@ -61,6 +61,18 @@ body.isDarkTheme {
   z-index: 1000;
 }
 
+// Prevent overlays from rendering behind the status bar on native mobile.
+// With overlaysWebView (iOS) and edge-to-edge (Android), the CDK overlay
+// container spans the full viewport including the status bar area.
+// Adding safe area padding to the global overlay wrapper ensures dialogs
+// and other globally-positioned overlays center within the safe area.
+body.isNativeMobile {
+  .cdk-global-overlay-wrapper {
+    padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom)
+      var(--safe-area-left);
+  }
+}
+
 // DIALOGS
 // ----------
 .mat-mdc-dialog-title.mat-mdc-dialog-title,
