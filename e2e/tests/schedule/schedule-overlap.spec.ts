@@ -9,11 +9,6 @@ test.describe('Schedule overlap', () => {
 
     // Navigate to schedule view
     await page.getByRole('menuitem', { name: 'Schedule' }).click();
-    // Wait for and dismiss the scheduling information dialog
-    const dialog = page.locator('mat-dialog-container');
-    await dialog.waitFor({ state: 'visible', timeout: 10000 });
-    await dialog.locator('button', { hasText: /Cancel/ }).click();
-    await dialog.waitFor({ state: 'detached', timeout: 10000 });
 
     const addTask = async (taskDescription: string): Promise<void> => {
       // Last day is far enough into the future to avoid any created tasks

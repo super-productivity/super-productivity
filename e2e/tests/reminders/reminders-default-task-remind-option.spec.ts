@@ -142,11 +142,6 @@ test.describe('Default task reminder option', () => {
     await changeDefaultTaskReminderOption(page);
 
     await page.getByRole('menuitem', { name: 'Schedule' }).click();
-    // Wait for and dismiss the scheduling information dialog
-    const scheduleDialog = page.locator('mat-dialog-container');
-    await scheduleDialog.waitFor({ state: 'visible', timeout: 10000 });
-    await scheduleDialog.locator('button', { hasText: /Cancel/ }).click();
-    await scheduleDialog.waitFor({ state: 'detached', timeout: 10000 });
     // Click somewhere during the final day column to create a placeholder task
     await page.locator('schedule-week [data-day]').last().click();
     const taskInput = page.getByPlaceholder('Schedule task...');
