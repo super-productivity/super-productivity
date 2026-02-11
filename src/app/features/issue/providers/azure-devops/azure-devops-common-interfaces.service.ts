@@ -65,7 +65,7 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
       .toPromise()
       .then((issues) =>
         (issues ?? []).map((issue) => ({
-          title: `#${issue.id} ${issue.summary}`,
+          title: issue.summary,
           issueType: 'AZURE_DEVOPS',
           issueData: issue,
         })),
@@ -164,7 +164,7 @@ export class AzureDevOpsCommonInterfacesService implements IssueServiceInterface
 
   getAddTaskData(issue: AzureDevOpsIssueReduced): Partial<Task> & { title: string } {
     return {
-      title: `#${issue.id} ${issue.summary}`,
+      title: issue.summary,
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updated).getTime(),
       dueWithTime: issue.due ? new Date(issue.due).getTime() : null,

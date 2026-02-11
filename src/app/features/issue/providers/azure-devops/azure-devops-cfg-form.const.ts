@@ -1,6 +1,7 @@
 import { ConfigFormSection } from '../../../config/global-config.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 import { AzureDevOpsCfg } from './azure-devops.model';
+import { T } from '../../../../t.const';
 
 export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg> = {
   title: 'Azure DevOps',
@@ -43,8 +44,7 @@ export const AZURE_DEVOPS_CONFIG_FORM_SECTION: ConfigFormSection<AzureDevOpsCfg>
     },
     {
       type: 'collapsible',
-      // todo translate
-      props: { label: 'Advanced Config' },
+      props: { label: T.G.ADVANCED_CFG },
       fieldGroup: [
         ...ISSUE_PROVIDER_COMMON_FORM_FIELDS,
         {

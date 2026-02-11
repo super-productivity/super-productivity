@@ -62,6 +62,39 @@ describe('AzureDevOpsApiService', () => {
 
       req.flush({ workItems: [] });
     });
+
+    it('should map search results correctly including ticket type', () => {
+      const searchTerm = 'test';
+      service.searchIssues$(searchTerm, mockCfg).subscribe((issues) => {
+        expect(issues.length).toBe(1);
+        expect(issues[0].summary).toBe('Bug 1: Test Issue');
+      });
+
+      const req = httpMock.expectOne(
+        `${mockCfg.host}/${mockCfg.project}/_apis/wit/wiql?api-version=6.0`,
+      );
+      req.flush({
+        workItems: [{ id: 1 }],
+      });
+
+      const detailsReq = httpMock.expectOne((r) =>
+        r.url.includes(`${mockCfg.host}/${mockCfg.project}/_apis/wit/workitems`),
+      );
+      detailsReq.flush({
+        value: [
+          {
+            id: 1,
+            /* eslint-disable @typescript-eslint/naming-convention */
+            fields: {
+              'System.Title': 'Test Issue',
+              'System.WorkItemType': 'Bug',
+              'System.State': 'To Do',
+            },
+            /* eslint-enable @typescript-eslint/naming-convention */
+          },
+        ],
+      });
+    });
   });
 
   describe('getCurrentUser$', () => {
@@ -69,7 +102,7 @@ describe('AzureDevOpsApiService', () => {
       service.getCurrentUser$(mockCfg).subscribe();
 
       const req = httpMock.expectOne(
-        `${mockCfg.host}/_apis/connectionData?api-version=6.0`,
+        `${mockCfg.host}/_apis/connectionData?api-version=5.1-preview`,
       );
       expect(req.request.method).toBe('GET');
 

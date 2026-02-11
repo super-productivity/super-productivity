@@ -54,7 +54,7 @@ export class AzureDevOpsApiService {
   getCurrentUser$(cfg: AzureDevOpsCfg): Observable<AzureDevOpsUser> {
     return this._http
       .get<AzureDevOpsConnectionData>(
-        `${this._getBaseUrl(cfg)}/_apis/connectionData?api-version=6.0`,
+        `${this._getBaseUrl(cfg)}/_apis/connectionData?api-version=5.1-preview`,
         { headers: this._getHeaders(cfg) },
       )
       .pipe(map((res) => res.authenticatedUser));
@@ -123,6 +123,7 @@ export class AzureDevOpsApiService {
     const fields = [
       'System.Id',
       'System.Title',
+      'System.WorkItemType',
       'System.State',
       'Microsoft.VSTS.Common.Priority',
       'System.CreatedDate',
@@ -142,7 +143,7 @@ export class AzureDevOpsApiService {
           return detailsRes.value.map(
             (item): AzureDevOpsIssueReduced => ({
               id: item.id.toString(),
-              summary: String(item.fields['System.Title'] || ''),
+              summary: `${item.fields['System.WorkItemType']} ${item.id}: ${item.fields['System.Title']}`,
               description: '',
               status: String(item.fields['System.State'] || ''),
               priority: item.fields['Microsoft.VSTS.Common.Priority'] as
@@ -178,7 +179,7 @@ export class AzureDevOpsApiService {
         map(
           (res): AzureDevOpsIssueReduced => ({
             id: res.id.toString(),
-            summary: String(res.fields['System.Title'] || ''),
+            summary: `${res.fields['System.WorkItemType']} ${res.id}: ${res.fields['System.Title']}`,
             description: (res.fields['System.Description'] as string) || undefined,
             status: String(res.fields['System.State'] || ''),
             priority: res.fields['Microsoft.VSTS.Common.Priority'] as number | undefined,
