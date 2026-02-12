@@ -4,6 +4,10 @@
       [style.background]="'url(' + bgImage + ')'"
       class="bg-image"
     ></div>
+    <div
+      class="bg-overlay"
+      [style.opacity]="bgOverlayOpacity()"
+    ></div>
   }
   <!--TODO move inside page container somehow -->
   @if (layoutService.isShowAddTaskBar()) {
@@ -58,10 +62,6 @@
           </div>
         </right-panel>
         <global-progress-bar></global-progress-bar>
-        <div
-          class="bg-overlay"
-          [style.opacity]="bgOverlayOpacity()"
-        ></div>
       </main>
 
       <!-- Mobile Bottom Navigation -->
