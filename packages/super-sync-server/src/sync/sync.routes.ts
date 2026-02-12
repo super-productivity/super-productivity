@@ -94,6 +94,8 @@ const UploadSnapshotSchema = z.object({
   // Client's operation ID - server MUST use this to prevent ID mismatch bugs
   opId: z.string().uuid().optional(),
   isCleanSlate: z.boolean().optional(),
+  // Client-provided opType for correct operation typing (optional for backward compat)
+  snapshotOpType: z.enum(['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR']).optional(),
 });
 
 // Error helper
@@ -651,6 +653,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           isPayloadEncrypted,
           opId,
           isCleanSlate,
+          snapshotOpType,
         } = parseResult.data;
         const syncService = getSyncService();
 
@@ -749,7 +752,10 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           id: opId ?? uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT' as const,
+          opType: (snapshotOpType ?? 'SYNC_IMPORT') as
+            | 'SYNC_IMPORT'
+            | 'BACKUP_IMPORT'
+            | 'REPAIR',
           entityType: 'ALL',
           payload: state,
           vectorClock,

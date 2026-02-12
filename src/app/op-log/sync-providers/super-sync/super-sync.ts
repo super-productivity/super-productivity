@@ -11,6 +11,7 @@ import {
   SnapshotUploadResponse,
   RestoreCapable,
   RestorePoint,
+  RestorePointType,
   RestoreSnapshotResponse,
 } from '../provider.interface';
 import { SyncCredentialStore } from '../credential-store.service';
@@ -236,6 +237,7 @@ export class SuperSyncProvider
     isPayloadEncrypted: boolean | undefined,
     opId: string,
     isCleanSlate?: boolean,
+    snapshotOpType?: RestorePointType,
   ): Promise<SnapshotUploadResponse> {
     SyncLog.normal(this.logLabel, 'uploadSnapshot: Starting...', {
       clientId,
@@ -244,6 +246,7 @@ export class SuperSyncProvider
       isPayloadEncrypted,
       opId,
       isCleanSlate,
+      snapshotOpType,
     });
     const cfg = await this._cfgOrError();
 
@@ -257,6 +260,7 @@ export class SuperSyncProvider
       isPayloadEncrypted,
       opId, // CRITICAL: Server must use this ID to prevent ID mismatch bugs
       isCleanSlate,
+      snapshotOpType,
     });
 
     // On native platforms (Android/iOS), use CapacitorHttp with base64-encoded gzip

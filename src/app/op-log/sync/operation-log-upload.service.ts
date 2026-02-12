@@ -14,6 +14,7 @@ import { LOCK_NAMES, MAX_OPS_PER_UPLOAD_REQUEST } from '../core/operation-log.co
 import { chunkArray } from '../../util/chunk-array';
 import {
   OperationSyncCapable,
+  RestorePointType,
   SyncOperation,
 } from '../sync-providers/provider.interface';
 import { syncOpToOperation } from './operation-sync.util';
@@ -436,6 +437,7 @@ export class OperationLogUploadService {
         isPayloadEncrypted,
         op.id, // CRITICAL: Pass op.id to prevent ID mismatch bugs
         isCleanSlate,
+        op.opType as RestorePointType,
       );
       return response;
     } catch (err) {
