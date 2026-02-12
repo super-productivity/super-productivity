@@ -1046,7 +1046,11 @@
         "DROPBOX": {
           "INFO_TEXT": "Dropbox authentication uses OAuth. Click the button below to authenticate with your Dropbox account.",
           "BTN_AUTHENTICATE": "Authenticate with Dropbox",
+          "BTN_REAUTHENTICATE": "Re-authenticate with Dropbox",
           "AUTH_SUCCESS": "Dropbox authentication successful! Credentials saved.",
+          "REAUTH_SUCCESS": "Dropbox re-authentication successful! Credentials updated.",
+          "STATUS_CONFIGURED": "Dropbox is configured and ready to sync",
+          "STATUS_NOT_CONFIGURED": "Not configured - authenticate to enable sync",
           "L_ACCESS_TOKEN": "Access Token (generated from Auth Code)"
         },
         "GOOGLE": {

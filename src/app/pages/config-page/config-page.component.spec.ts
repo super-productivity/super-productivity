@@ -14,6 +14,7 @@ import { ShareService } from '../../core/share/share.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { MatDialog } from '@angular/material/dialog';
 import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { TranslateService } from '@ngx-translate/core';
 
 describe('ConfigPageComponent', () => {
   let component: ConfigPageComponent;
@@ -55,6 +56,10 @@ describe('ConfigPageComponent', () => {
         {
           provide: MatDialog,
           useValue: jasmine.createSpyObj('MatDialog', ['open']),
+        },
+        {
+          provide: TranslateService,
+          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
         },
       ],
     })

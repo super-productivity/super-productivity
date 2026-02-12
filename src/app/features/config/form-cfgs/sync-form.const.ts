@@ -233,6 +233,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             text: T.F.SYNC.FORM.DROPBOX.INFO_TEXT,
           },
         },
+        {
+          type: 'tpl',
+          key: 'authStatus',
+          className: 'auth-status-indicator',
+          templateOptions: {
+            tag: 'p',
+            // Text will be set dynamically in config-page.component.ts
+            text: '',
+          },
+        },
         // Authentication button will be added programmatically in config-page.component.ts
       ],
     },

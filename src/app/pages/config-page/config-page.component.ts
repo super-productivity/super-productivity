@@ -34,7 +34,7 @@ import { getAutomaticBackUpFormCfg } from '../../features/config/form-cfgs/autom
 import { getAppVersionStr } from '../../util/get-app-version-str';
 import { ConfigSectionComponent } from '../../features/config/config-section/config-section.component';
 import { ConfigSoundFormComponent } from '../../features/config/config-sound-form/config-sound-form.component';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { SYNC_FORM } from '../../features/config/form-cfgs/sync-form.const';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { map } from 'rxjs/operators';
@@ -93,6 +93,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _shareService = inject(ShareService);
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
+  private readonly _translateService = inject(TranslateService);
 
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
@@ -375,6 +376,31 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
 
       // Find the Dropbox fieldGroup and add the authentication button
       if ((item as any).props?.dropboxAuth && item.fieldGroup) {
+        // Check if Dropbox is already authenticated
+        const dropboxProvider = this._providerManager.getProviderById(
+          toSyncProviderId(LegacySyncProvider.Dropbox)!,
+        );
+
+        // We need to check auth status asynchronously, so we'll set initial state
+        // and update it when the form is rendered
+        let isAuthenticated = false;
+        dropboxProvider?.isReady().then((ready) => {
+          isAuthenticated = ready;
+          // Update the status field text after checking
+          const statusField = item.fieldGroup?.find(
+            (f: any) => f.key === 'authStatus',
+          ) as any;
+          if (statusField?.templateOptions) {
+            statusField.templateOptions.text = isAuthenticated
+              ? '✓ ' +
+                this._translateService.instant(T.F.SYNC.FORM.DROPBOX.STATUS_CONFIGURED)
+              : '⚠ ' +
+                this._translateService.instant(
+                  T.F.SYNC.FORM.DROPBOX.STATUS_NOT_CONFIGURED,
+                );
+          }
+        });
+
         return {
           ...item,
           fieldGroup: [
@@ -383,10 +409,14 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
               type: 'btn',
               className: 'mt3 block e2e-dropbox-auth-btn',
               templateOptions: {
+                // Button text will be determined by checking if already authenticated
                 text: T.F.SYNC.FORM.DROPBOX.BTN_AUTHENTICATE,
                 btnType: 'primary',
                 onClick: async (_field: unknown, _form: unknown, model: unknown) => {
                   try {
+                    // Check current auth status before opening dialog
+                    const isCurrentlyAuth = await dropboxProvider?.isReady();
+
                     const result =
                       await this._syncWrapperService.configuredAuthForSyncProviderIfNecessary(
                         toSyncProviderId(LegacySyncProvider.Dropbox)!,
@@ -395,8 +425,29 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                     if (result.wasConfigured) {
                       this._snackService.open({
                         type: 'SUCCESS',
-                        msg: T.F.SYNC.FORM.DROPBOX.AUTH_SUCCESS,
+                        msg: isCurrentlyAuth
+                          ? T.F.SYNC.FORM.DROPBOX.REAUTH_SUCCESS
+                          : T.F.SYNC.FORM.DROPBOX.AUTH_SUCCESS,
                       });
+
+                      // Update the status field to show configured
+                      const statusField = item.fieldGroup?.find(
+                        (f: any) => f.key === 'authStatus',
+                      ) as any;
+                      if (statusField?.templateOptions) {
+                        statusField.templateOptions.text =
+                          '✓ ' +
+                          this._translateService.instant(
+                            T.F.SYNC.FORM.DROPBOX.STATUS_CONFIGURED,
+                          );
+                      }
+
+                      // Update button text to "Re-authenticate"
+                      const btnField = _field as any;
+                      if (btnField?.templateOptions) {
+                        btnField.templateOptions.text =
+                          T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE;
+                      }
 
                       // Save the updated credentials to persist them
                       const fullSyncModel = (
@@ -412,6 +463,15 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                   } catch (e) {
                     // Error handling is done in SyncWrapperService
                     // (shows error snackbar automatically)
+                  }
+                },
+              },
+              hooks: {
+                // Update button text based on auth status when form initializes
+                onInit: async (field: any) => {
+                  const isAuth = await dropboxProvider?.isReady();
+                  if (field?.templateOptions && isAuth) {
+                    field.templateOptions.text = T.F.SYNC.FORM.DROPBOX.BTN_REAUTHENTICATE;
                   }
                 },
               },
