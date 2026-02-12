@@ -16,6 +16,7 @@ import {
   DEFAULT_SYNC_CONFIG,
   OP_TYPES,
   SYNC_ERROR_CODES,
+  SYNC_STATE_REPLACE_OP_TYPES,
 } from './sync.types';
 
 const gunzipAsync = promisify(zlib.gunzip);
@@ -708,8 +709,8 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           }
         }
 
-        // FIX: Reject duplicate SYNC_IMPORT to prevent data loss
-        // Only the FIRST client to sync with an empty server should create SYNC_IMPORT.
+        // FIX: Reject duplicate SYNC_STATE_REPLACE to prevent data loss
+        // Only the FIRST client to sync with an empty server should create SYNC_STATE_REPLACE.
         // Subsequent clients should download existing data and upload their ops as regular ops.
         // Exceptions that bypass this check:
         // - 'recovery': Explicit backup restore or repair (user action)
@@ -720,14 +721,14 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           const existingImport = await prisma.operation.findFirst({
             where: {
               userId,
-              opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+              opType: { in: [...SYNC_STATE_REPLACE_OP_TYPES, 'BACKUP_IMPORT', 'REPAIR'] },
             },
             select: { id: true, clientId: true },
           });
 
           if (existingImport) {
             Logger.warn(
-              `[user:${userId}] Rejecting duplicate SYNC_IMPORT from client ${clientId}. ` +
+              `[user:${userId}] Rejecting duplicate SYNC_STATE_REPLACE from client ${clientId}. ` +
                 `Existing import from client ${existingImport.clientId} (id: ${existingImport.id}). ` +
                 `Client should download and merge instead.`,
             );
@@ -735,13 +736,13 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
               error: 'SYNC_IMPORT_EXISTS',
               errorCode: 'SYNC_IMPORT_EXISTS',
               message:
-                'A SYNC_IMPORT already exists. Download existing data and upload your changes as regular operations.',
+                'A SYNC_STATE_REPLACE already exists. Download existing data and upload your changes as regular operations.',
               existingImportId: existingImport.id,
             });
           }
         }
 
-        // Create a SYNC_IMPORT operation
+        // Create a SYNC_STATE_REPLACE operation
         // Use the correct NgRx action type so the operation can be replayed on other clients
         // FIX: Use client's opId if provided to prevent ID mismatch bugs
         // When client doesn't send opId (legacy clients), fall back to server-generated UUID
@@ -749,7 +750,7 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
           id: opId ?? uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT' as const,
+          opType: 'SYNC_STATE_REPLACE' as const,
           entityType: 'ALL',
           payload: state,
           vectorClock,

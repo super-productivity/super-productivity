@@ -178,7 +178,7 @@ describe('ServerMigrationService', () => {
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
       const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
-      expect(appendedOp.opType).toBe(OpType.SyncImport);
+      expect(appendedOp.opType).toBe(OpType.SyncStateReplace);
     });
   });
 
@@ -272,7 +272,7 @@ describe('ServerMigrationService', () => {
 
       expect(opLogStoreSpy.append).toHaveBeenCalled();
       const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
-      expect(appendedOp.opType).toBe(OpType.SyncImport);
+      expect(appendedOp.opType).toBe(OpType.SyncStateReplace);
       expect(appendedOp.entityType).toBe('ALL');
       expect(appendedOp.clientId).toBe('test-client');
       expect(appendedOp.payload).toEqual(mockState);

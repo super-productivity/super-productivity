@@ -152,7 +152,7 @@ describe('operation-converter utility', () => {
           tag: { ids: ['tag1'], entities: { tag1: { id: 'tag1', name: 'Tag' } } },
         };
         const op = createMockOperation({
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
           payload: fullState, // NOT wrapped in appDataComplete
@@ -176,7 +176,7 @@ describe('operation-converter utility', () => {
           task: { ids: ['t1'], entities: {} },
         };
         const op = createMockOperation({
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
           payload: { appDataComplete: fullState }, // Already wrapped
@@ -222,14 +222,14 @@ describe('operation-converter utility', () => {
 
       it('should preserve meta properties for full-state operations', () => {
         const op = createMockOperation({
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
           payload: { task: {} },
         });
         const action = convertOpToAction(op);
 
-        expect(action.meta.opType).toBe(OpType.SyncImport);
+        expect(action.meta.opType).toBe(OpType.SyncStateReplace);
         expect(action.meta.entityType).toBe('ALL');
         expect(action.meta.isPersistent).toBe(true);
         expect(action.meta.isRemote).toBe(true);
@@ -250,7 +250,7 @@ describe('operation-converter utility', () => {
           },
         };
         const op = createMockOperation({
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
           payload: fullState,

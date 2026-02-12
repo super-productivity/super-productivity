@@ -236,7 +236,7 @@ export class ServerMigrationService {
     const op: Operation = {
       id: uuidv7(),
       actionType: ActionType.LOAD_ALL_DATA,
-      opType: OpType.SyncImport,
+      opType: OpType.SyncStateReplace,
       entityType: 'ALL',
       payload: currentState,
       clientId,

@@ -46,14 +46,14 @@ describe('Snapshot Skip Optimization', () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }), // SYNC_IMPORT at seq 10
+            findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }), // SYNC_STATE_REPLACE at seq 10
             findMany: vi.fn().mockResolvedValue([
               {
                 id: 'op-10',
                 serverSeq: 10,
                 clientId: 'client-a',
                 actionType: '[SP_ALL] Load(import) all data',
-                opType: 'SYNC_IMPORT',
+                opType: 'SYNC_STATE_REPLACE',
                 entityType: 'ALL',
                 entityId: null,
                 payload: {},
@@ -113,7 +113,7 @@ describe('Snapshot Skip Optimization', () => {
                   serverSeq: 50,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: {},
@@ -317,7 +317,7 @@ describe('Snapshot Skip Optimization', () => {
                   serverSeq: 1,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: {},
@@ -399,7 +399,7 @@ describe('Snapshot Skip Optimization', () => {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 100 }),
             findMany: vi.fn().mockImplementation(async (args: any) => {
-              // Skip to seq 99, return only the SYNC_IMPORT itself
+              // Skip to seq 99, return only the SYNC_STATE_REPLACE itself
               expect(args.where.serverSeq.gt).toBe(99);
               return [
                 {
@@ -407,7 +407,7 @@ describe('Snapshot Skip Optimization', () => {
                   serverSeq: 100,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: {},
@@ -431,9 +431,9 @@ describe('Snapshot Skip Optimization', () => {
 
       const result = await service.getOpsSinceWithSeq(userId, 0);
 
-      // Should return just the SYNC_IMPORT
+      // Should return just the SYNC_STATE_REPLACE
       expect(result.ops.length).toBe(1);
-      expect(result.ops[0].op.opType).toBe('SYNC_IMPORT');
+      expect(result.ops[0].op.opType).toBe('SYNC_STATE_REPLACE');
       expect(result.latestSnapshotSeq).toBe(100);
     });
 
@@ -506,7 +506,7 @@ describe('Snapshot Skip Optimization', () => {
                 serverSeq: 100,
                 clientId: 'client-a',
                 actionType: '[SP_ALL] Load(import) all data',
-                opType: 'SYNC_IMPORT',
+                opType: 'SYNC_STATE_REPLACE',
                 entityType: 'ALL',
                 entityId: null,
                 payload: {},
@@ -722,7 +722,7 @@ describe('Snapshot Skip Optimization', () => {
                   serverSeq: 100,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: {},
@@ -790,7 +790,7 @@ describe('Snapshot Skip Optimization', () => {
                   serverSeq: 100,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: {},

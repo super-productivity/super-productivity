@@ -134,7 +134,7 @@ describe('OperationApplierService', () => {
         id: 'sync-import-1',
         clientId: 'remoteClient',
         actionType: ActionType.LOAD_ALL_DATA,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: 'sync-import-1',
         payload: {

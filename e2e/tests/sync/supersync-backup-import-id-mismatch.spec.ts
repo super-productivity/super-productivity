@@ -284,7 +284,7 @@ test.describe('@supersync Backup Import ID Mismatch Bug', () => {
       const dbQuery =
         `SELECT id, op_type FROM operations ` +
         `WHERE user_id = '${user.userId}' ` +
-        `AND op_type IN ('SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR') ` +
+        `AND op_type IN ('SYNC_STATE_REPLACE', 'BACKUP_IMPORT', 'REPAIR') ` +
         `ORDER BY server_seq DESC LIMIT 1;`;
 
       let serverOpId: string | null = null;

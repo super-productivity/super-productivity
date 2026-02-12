@@ -17,7 +17,7 @@ import {
   stateNeedsMigration,
   type OperationLike,
 } from '@sp/shared-schema';
-import { Operation } from '../sync.types';
+import { Operation, SYNC_STATE_REPLACE_OP_TYPES } from '../sync.types';
 import { ALLOWED_ENTITY_TYPES } from './validation.service';
 
 /**
@@ -59,7 +59,7 @@ export interface SnapshotResult {
 export interface RestorePoint {
   serverSeq: number;
   timestamp: number;
-  type: 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
+  type: 'SYNC_STATE_REPLACE' | 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
   clientId: string;
   description?: string;
 }
@@ -313,7 +313,7 @@ export class SnapshotService {
 
   /**
    * Get available restore points for a user.
-   * Returns significant state-change operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
+   * Returns significant state-change operations (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR)
    * which represent complete snapshots of the application state.
    */
   async getRestorePoints(userId: number, limit: number = 30): Promise<RestorePoint[]> {
@@ -322,7 +322,7 @@ export class SnapshotService {
       where: {
         userId,
         opType: {
-          in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'],
+          in: [...SYNC_STATE_REPLACE_OP_TYPES, 'BACKUP_IMPORT', 'REPAIR'],
         },
       },
       orderBy: {
@@ -340,18 +340,23 @@ export class SnapshotService {
     return ops.map((op) => ({
       serverSeq: op.serverSeq,
       timestamp: Number(op.clientTimestamp),
-      type: op.opType as 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
+      type: op.opType as
+        | 'SYNC_STATE_REPLACE'
+        | 'SYNC_IMPORT'
+        | 'BACKUP_IMPORT'
+        | 'REPAIR',
       clientId: op.clientId,
       description: this._getRestorePointDescription(
-        op.opType as 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
+        op.opType as 'SYNC_STATE_REPLACE' | 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
       ),
     }));
   }
 
   private _getRestorePointDescription(
-    opType: 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
+    opType: 'SYNC_STATE_REPLACE' | 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR',
   ): string {
     switch (opType) {
+      case 'SYNC_STATE_REPLACE':
       case 'SYNC_IMPORT':
         return 'Full sync import';
       case 'BACKUP_IMPORT':
@@ -595,6 +600,7 @@ export class SnapshotService {
         // Handle full-state operations BEFORE entity type check
         // These operations replace the entire state and don't use a specific entity type
         if (
+          processOpType === 'SYNC_STATE_REPLACE' ||
           processOpType === 'SYNC_IMPORT' ||
           processOpType === 'BACKUP_IMPORT' ||
           processOpType === 'REPAIR'

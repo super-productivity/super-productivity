@@ -350,7 +350,7 @@ describe('BackupService', () => {
       // CRITICAL: Must use BackupImport so server receives reason='recovery'
       expect(appendedOp.opType).toBe(OpType.BackupImport);
       // Verify it's NOT using SyncImport (which would cause 409 errors)
-      expect(appendedOp.opType).not.toBe(OpType.SyncImport);
+      expect(appendedOp.opType).not.toBe(OpType.SyncStateReplace);
     });
 
     it('should produce fresh { [clientId]: 1 } clock on import', async () => {

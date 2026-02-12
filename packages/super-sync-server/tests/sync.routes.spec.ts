@@ -1071,7 +1071,7 @@ describe('Restore Points API', () => {
     });
 
     it('should return restore points for SYNC_IMPORT operations', async () => {
-      // Upload a SYNC_IMPORT operation
+      // Upload a SYNC_STATE_REPLACE operation
       await app.inject({
         method: 'POST',
         url: '/api/sync/ops',
@@ -1079,7 +1079,7 @@ describe('Restore Points API', () => {
         payload: {
           ops: [
             createOp(clientId, {
-              opType: 'SYNC_IMPORT',
+              opType: 'SYNC_STATE_REPLACE',
               entityType: 'ALL',
               actionType: '[SP_ALL] Load(import) all data',
               payload: { globalConfig: {}, tasks: {} },
@@ -1098,7 +1098,7 @@ describe('Restore Points API', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.restorePoints).toHaveLength(1);
-      expect(body.restorePoints[0].type).toBe('SYNC_IMPORT');
+      expect(body.restorePoints[0].type).toBe('SYNC_STATE_REPLACE');
       expect(body.restorePoints[0].serverSeq).toBe(1);
     });
 
@@ -1133,7 +1133,7 @@ describe('Restore Points API', () => {
     });
 
     it('should respect limit query parameter', async () => {
-      // Upload 5 SYNC_IMPORT operations
+      // Upload 5 SYNC_STATE_REPLACE operations
       for (let i = 1; i <= 5; i++) {
         await app.inject({
           method: 'POST',
@@ -1142,7 +1142,7 @@ describe('Restore Points API', () => {
           payload: {
             ops: [
               createOp(clientId, {
-                opType: 'SYNC_IMPORT',
+                opType: 'SYNC_STATE_REPLACE',
                 entityType: 'ALL',
                 actionType: '[SP_ALL] Load(import) all data',
                 payload: { version: i },

@@ -9,6 +9,7 @@ import {
   limitVectorClockSize,
   VectorClock,
   SYNC_ERROR_CODES,
+  SYNC_STATE_REPLACE_OP_TYPES,
 } from './sync.types';
 import { Logger } from '../logger';
 import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
@@ -58,6 +59,7 @@ export class SyncService {
   ): Promise<{ hasConflict: boolean; reason?: string; existingClock?: VectorClock }> {
     // Skip conflict detection for full-state operations
     if (
+      op.opType === 'SYNC_STATE_REPLACE' ||
       op.opType === 'SYNC_IMPORT' ||
       op.opType === 'BACKUP_IMPORT' ||
       op.opType === 'REPAIR'
@@ -246,7 +248,7 @@ export class SyncService {
           });
         },
         {
-          // Large operations like SYNC_IMPORT/BACKUP_IMPORT can have payloads up to 20MB.
+          // Large operations like SYNC_STATE_REPLACE/BACKUP_IMPORT can have payloads up to 20MB.
           // Default Prisma timeout (5s) is too short for these. Use 60s to match generateSnapshot.
           timeout: 60000,
           // FIX 1.6: Set explicit isolation level for strict consistency.
@@ -594,7 +596,7 @@ export class SyncService {
     {
       serverSeq: number;
       timestamp: number;
-      type: 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
+      type: 'SYNC_STATE_REPLACE' | 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
       clientId: string;
       description?: string;
     }[]
@@ -726,7 +728,7 @@ export class SyncService {
     const restorePoints = await prisma.operation.findMany({
       where: {
         userId,
-        opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+        opType: { in: [...SYNC_STATE_REPLACE_OP_TYPES, 'BACKUP_IMPORT', 'REPAIR'] },
       },
       orderBy: { serverSeq: 'asc' },
       select: { serverSeq: true, opType: true },
@@ -856,7 +858,7 @@ export class SyncService {
       const restorePoints = await prisma.operation.findMany({
         where: {
           userId,
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          opType: { in: [...SYNC_STATE_REPLACE_OP_TYPES, 'BACKUP_IMPORT', 'REPAIR'] },
         },
         orderBy: { serverSeq: 'asc' },
         select: { serverSeq: true },

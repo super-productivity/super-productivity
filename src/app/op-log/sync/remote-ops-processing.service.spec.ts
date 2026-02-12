@@ -584,7 +584,7 @@ describe('RemoteOpsProcessingService', () => {
     it('should skip conflict detection when SYNC_IMPORT is in remote ops', async () => {
       const syncImportOp: Operation = {
         id: 'sync-import-1',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         actionType: '[All] Load All Data' as ActionType,
         entityType: 'ALL',
         payload: {},
@@ -640,7 +640,7 @@ describe('RemoteOpsProcessingService', () => {
       // ALL of these must be protected from pruning, not just the clientId
       const syncImportOp: Operation = {
         id: 'sync-import-1',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         actionType: '[All] Load All Data' as ActionType,
         entityType: 'ALL',
         payload: {},
@@ -710,7 +710,7 @@ describe('RemoteOpsProcessingService', () => {
 
       const syncImportOp: Operation = {
         id: 'sync-import-large',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         actionType: '[All] Load All Data' as ActionType,
         entityType: 'ALL',
         payload: {},
@@ -781,7 +781,7 @@ describe('RemoteOpsProcessingService', () => {
       // excluding the newly stored ID so we don't delete what we just added.
       const syncImportOp: Operation = {
         id: 'sync-import-1',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         actionType: '[All] Load All Data' as ActionType,
         entityType: 'ALL',
         payload: {},
@@ -855,7 +855,7 @@ describe('RemoteOpsProcessingService', () => {
       it('should return allOpsFilteredBySyncImport=true and correct count when all ops are filtered', async () => {
         const syncImportOp = createFullOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-A',
           entityType: 'ALL',
           vectorClock: { clientA: 5 },
@@ -896,7 +896,7 @@ describe('RemoteOpsProcessingService', () => {
       it('should return allOpsFilteredBySyncImport=false when some ops pass filter', async () => {
         const syncImportOp = createFullOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-A',
           entityType: 'ALL',
           vectorClock: { clientA: 5 },
@@ -992,7 +992,7 @@ describe('RemoteOpsProcessingService', () => {
         const syncImportOp: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },

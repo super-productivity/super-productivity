@@ -845,9 +845,9 @@ describe('SyncService', () => {
         id: uuidv7(),
         clientId,
         actionType: '[SP_ALL] Load(import) all data',
-        opType: 'SYNC_IMPORT',
+        opType: 'SYNC_STATE_REPLACE',
         entityType: 'ALL',
-        payload: createDeeplyNested(25), // Exceeds max depth of 20 but allowed for SYNC_IMPORT
+        payload: createDeeplyNested(25), // Exceeds max depth of 20 but allowed for SYNC_STATE_REPLACE
         vectorClock: {},
         timestamp: Date.now(),
         schemaVersion: 1,
@@ -1885,7 +1885,7 @@ describe('SyncService', () => {
           id: uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT',
+          opType: 'SYNC_STATE_REPLACE',
           entityType: 'ALL',
           payload: { globalConfig: {}, tasks: {} },
           vectorClock: {},
@@ -1897,7 +1897,7 @@ describe('SyncService', () => {
       const restorePoints = await service.getRestorePoints(userId);
 
       expect(restorePoints).toHaveLength(1);
-      expect(restorePoints[0].type).toBe('SYNC_IMPORT');
+      expect(restorePoints[0].type).toBe('SYNC_STATE_REPLACE');
       expect(restorePoints[0].serverSeq).toBe(1);
       expect(restorePoints[0].clientId).toBe(clientId);
       expect(restorePoints[0].description).toBe('Full sync import');
@@ -1961,7 +1961,7 @@ describe('SyncService', () => {
             id: uuidv7(),
             clientId,
             actionType: '[SP_ALL] Load(import) all data',
-            opType: 'SYNC_IMPORT',
+            opType: 'SYNC_STATE_REPLACE',
             entityType: 'ALL',
             payload: { version: i },
             vectorClock: {},
@@ -1989,7 +1989,7 @@ describe('SyncService', () => {
             id: uuidv7(),
             clientId,
             actionType: '[SP_ALL] Load(import) all data',
-            opType: 'SYNC_IMPORT',
+            opType: 'SYNC_STATE_REPLACE',
             entityType: 'ALL',
             payload: { version: i },
             vectorClock: {},
@@ -2030,7 +2030,7 @@ describe('SyncService', () => {
           id: uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT',
+          opType: 'SYNC_STATE_REPLACE',
           entityType: 'ALL',
           payload: { globalConfig: {} },
           vectorClock: {},
@@ -2057,7 +2057,7 @@ describe('SyncService', () => {
       const restorePoints = await service.getRestorePoints(userId);
 
       expect(restorePoints).toHaveLength(1);
-      expect(restorePoints[0].type).toBe('SYNC_IMPORT');
+      expect(restorePoints[0].type).toBe('SYNC_STATE_REPLACE');
       expect(restorePoints[0].serverSeq).toBe(2);
     });
   });
@@ -2180,13 +2180,13 @@ describe('SyncService', () => {
         },
       };
 
-      // Upload a SYNC_IMPORT (full state)
+      // Upload a SYNC_STATE_REPLACE (full state)
       await service.uploadOps(userId, clientId, [
         {
           id: uuidv7(),
           clientId,
           actionType: '[SP_ALL] Load(import) all data',
-          opType: 'SYNC_IMPORT',
+          opType: 'SYNC_STATE_REPLACE',
           entityType: 'ALL',
           payload: importPayload,
           vectorClock: {},

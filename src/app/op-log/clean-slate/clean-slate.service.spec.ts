@@ -88,7 +88,7 @@ describe('CleanSlateService', () => {
       expect(mockOpLogStore.append).toHaveBeenCalled();
       const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
       expect(appendedOp.actionType).toBe(ActionType.LOAD_ALL_DATA);
-      expect(appendedOp.opType).toBe(OpType.SyncImport);
+      expect(appendedOp.opType).toBe(OpType.SyncStateReplace);
       expect(appendedOp.entityType).toBe('ALL');
       expect(appendedOp.payload).toBe(mockState);
       expect(appendedOp.clientId).toBe('eNewC');

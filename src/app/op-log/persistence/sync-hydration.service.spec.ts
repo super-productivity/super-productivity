@@ -121,7 +121,7 @@ describe('SyncHydrationService', () => {
       expect(mockOpLogStore.append).toHaveBeenCalledWith(
         jasmine.objectContaining({
           actionType: ActionType.LOAD_ALL_DATA,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           clientId: 'localClient',
         }),
@@ -479,7 +479,7 @@ describe('SyncHydrationService', () => {
 
         expect(mockOpLogStore.append).toHaveBeenCalledWith(
           jasmine.objectContaining({
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
           }),
           'remote',
         );
@@ -490,7 +490,7 @@ describe('SyncHydrationService', () => {
 
         expect(mockOpLogStore.append).toHaveBeenCalledWith(
           jasmine.objectContaining({
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
           }),
           'remote',
         );

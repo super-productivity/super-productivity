@@ -479,7 +479,7 @@ export class ArchiveOperationHandler {
     if (archiveYoung !== undefined) {
       if (hasExistingYoung && isIncomingYoungEmpty) {
         const existingCount = originalArchiveYoung?.task?.ids?.length ?? 0;
-        if (action.meta.opType === OpType.SyncImport) {
+        if (action.meta.opType === OpType.SyncStateReplace) {
           // SYNC_IMPORT with empty archives is likely a bug (sync snapshot used sync instead of async)
           // Preserve local archives - the next SYNC_IMPORT (after the fix) will have correct data
           OpLog.warn(
@@ -513,7 +513,7 @@ export class ArchiveOperationHandler {
 
       if (hasExistingOld && isIncomingOldEmpty) {
         const existingCount = originalArchiveOld?.task?.ids?.length ?? 0;
-        if (action.meta.opType === OpType.SyncImport) {
+        if (action.meta.opType === OpType.SyncStateReplace) {
           // SYNC_IMPORT with empty archives is likely a bug (sync snapshot used sync instead of async)
           // Preserve local archives - the next SYNC_IMPORT (after the fix) will have correct data
           OpLog.warn(

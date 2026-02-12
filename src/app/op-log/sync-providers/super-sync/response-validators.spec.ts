@@ -187,7 +187,9 @@ describe('response-validators', () => {
 
     it('should accept response with restore points', () => {
       const response = {
-        restorePoints: [{ serverSeq: 100, type: 'SYNC_IMPORT', createdAt: '2024-01-01' }],
+        restorePoints: [
+          { serverSeq: 100, type: 'SYNC_STATE_REPLACE', createdAt: '2024-01-01' },
+        ],
       };
       expect(() => validateRestorePointsResponse(response)).not.toThrow();
     });

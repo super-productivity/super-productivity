@@ -72,7 +72,7 @@ describe('Snapshot Skip Optimization Integration', () => {
                 serverSeq: 10,
                 clientId: 'client-a',
                 actionType: '[SP_ALL] Load(import) all data',
-                opType: 'SYNC_IMPORT',
+                opType: 'SYNC_STATE_REPLACE',
                 entityType: 'ALL',
                 entityId: null,
                 payload: { appDataComplete: {} },
@@ -140,7 +140,7 @@ describe('Snapshot Skip Optimization Integration', () => {
                   serverSeq: 100,
                   clientId: 'client-a',
                   actionType: '[SP_ALL] Load(import) all data',
-                  opType: 'SYNC_IMPORT',
+                  opType: 'SYNC_STATE_REPLACE',
                   entityType: 'ALL',
                   entityId: null,
                   payload: { appDataComplete: {} },
@@ -190,7 +190,7 @@ describe('Snapshot Skip Optimization Integration', () => {
       // Should only return ops starting from SYNC_IMPORT
       expect(body.ops.length).toBe(2);
       expect(body.ops[0].serverSeq).toBe(100);
-      expect(body.ops[0].op.opType).toBe('SYNC_IMPORT');
+      expect(body.ops[0].op.opType).toBe('SYNC_STATE_REPLACE');
       expect(body.latestSnapshotSeq).toBe(100);
     });
 

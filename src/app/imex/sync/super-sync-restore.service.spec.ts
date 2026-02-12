@@ -89,7 +89,7 @@ describe('SuperSyncRestoreService', () => {
       {
         serverSeq: 100,
         timestamp: Date.now() - 3600000,
-        type: 'SYNC_IMPORT',
+        type: 'SYNC_STATE_REPLACE',
         clientId: 'client-1',
       },
       {

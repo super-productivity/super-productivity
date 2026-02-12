@@ -75,7 +75,7 @@ export class OperationLogHydratorService {
     for (let i = ops.length - 1; i >= 0; i--) {
       const op = ops[i];
       if (
-        op.opType === OpType.SyncImport ||
+        op.opType === OpType.SyncStateReplace ||
         op.opType === OpType.BackupImport ||
         op.opType === OpType.Repair
       ) {
@@ -535,7 +535,7 @@ export class OperationLogHydratorService {
    * Returns undefined for operations that don't contain full state (normal CRUD ops).
    *
    * Operations that contain full state:
-   * - OpType.SyncImport: Full state from remote sync
+   * - OpType.SyncStateReplace: Full state from remote sync
    * - OpType.Repair: Full repaired state from auto-repair
    * - OpType.BackupImport: Full state from backup file restore
    */
@@ -546,7 +546,7 @@ export class OperationLogHydratorService {
 
     // Handle full state operations
     if (
-      op.opType === OpType.SyncImport ||
+      op.opType === OpType.SyncStateReplace ||
       op.opType === OpType.BackupImport ||
       op.opType === OpType.Repair
     ) {

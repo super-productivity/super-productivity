@@ -147,7 +147,7 @@ export class SyncImportFilterService {
     // Find full state import operations (SYNC_IMPORT, BACKUP_IMPORT, or REPAIR) in current batch
     const fullStateImportsInBatch = ops.filter(
       (op) =>
-        op.opType === OpType.SyncImport ||
+        op.opType === OpType.SyncStateReplace ||
         op.opType === OpType.BackupImport ||
         op.opType === OpType.Repair,
     );
@@ -229,7 +229,7 @@ export class SyncImportFilterService {
     for (const op of ops) {
       // Full state import operations themselves are always valid
       if (
-        op.opType === OpType.SyncImport ||
+        op.opType === OpType.SyncStateReplace ||
         op.opType === OpType.BackupImport ||
         op.opType === OpType.Repair
       ) {

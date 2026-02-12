@@ -1323,7 +1323,7 @@ export class OperationLogStoreService {
     const mergedClock = { ...currentClock };
     for (const op of ops) {
       // Log each op's clock being merged (especially important for SYNC_IMPORT)
-      if (op.opType === OpType.SyncImport || op.opType === OpType.BackupImport) {
+      if (op.opType === OpType.SyncStateReplace || op.opType === OpType.BackupImport) {
         Log.log(
           `[OpLogStore] mergeRemoteOpClocks: Merging FULL-STATE op ${op.opType}\n` +
             `  Op ID:         ${op.id}\n` +

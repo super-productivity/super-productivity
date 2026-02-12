@@ -101,11 +101,12 @@ export class ValidationService {
     }
 
     // Require entityId for regular entity operations.
-    // Full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) and bulk entity types
+    // Full-state operations (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR) and bulk entity types
     // (ALL, RECOVERY) legitimately don't have entityId.
     // This prevents corrupt operations (e.g., TASK with undefined entityId) from being
     // accepted and causing infinite rejection loops when synced to other clients.
     const isFullStateOp =
+      op.opType === 'SYNC_STATE_REPLACE' ||
       op.opType === 'SYNC_IMPORT' ||
       op.opType === 'BACKUP_IMPORT' ||
       op.opType === 'REPAIR';
@@ -154,7 +155,7 @@ export class ValidationService {
     // DoS protection: sanitizeVectorClock() above caps at 5x MAX_VECTOR_CLOCK_SIZE (50).
 
     // Validate payload complexity to prevent DoS attacks via deeply nested objects.
-    // Full-state ops (SYNC_IMPORT, BACKUP_IMPORT, REPAIR) get higher thresholds
+    // Full-state ops (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR) get higher thresholds
     // since they legitimately contain more data (including archives which can have 300K+ keys).
     // Note: isFullStateOp is already defined above in entityId validation.
     const maxDepth = isFullStateOp ? 50 : 20;

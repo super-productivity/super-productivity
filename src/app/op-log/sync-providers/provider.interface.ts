@@ -328,7 +328,11 @@ export interface SnapshotUploadResponse {
 /**
  * Type of restore point
  */
-export type RestorePointType = 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR';
+export type RestorePointType =
+  | 'SYNC_STATE_REPLACE'
+  | 'SYNC_IMPORT'
+  | 'BACKUP_IMPORT'
+  | 'REPAIR';
 
 /**
  * A point in time that can be restored to

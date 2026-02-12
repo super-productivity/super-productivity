@@ -206,7 +206,7 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     pageA.on('console', (msg) => {
       if (
         msg.text().includes('Discarded') ||
-        msg.text().includes('SYNC_IMPORT') ||
+        msg.text().includes('SYNC_STATE_REPLACE') ||
         msg.text().includes('SyncImportFilterService') ||
         msg.text().includes('SyncHydrationService')
       ) {
@@ -236,10 +236,10 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     pageC.on('console', (msg) => {
       if (
         msg.text().includes('Discarded') ||
-        msg.text().includes('SYNC_IMPORT') ||
+        msg.text().includes('SYNC_STATE_REPLACE') ||
         msg.text().includes('SyncImportFilterService') ||
         msg.text().includes('SyncHydrationService') ||
-        msg.text().includes('Skipping SYNC_IMPORT')
+        msg.text().includes('Skipping SYNC_STATE_REPLACE')
       ) {
         console.log(`[Client C] ${msg.type()}: ${msg.text()}`);
       }
@@ -402,8 +402,8 @@ test.describe('@webdav WebDAV Provider Switch', () => {
     pageC.on('console', (msg) => {
       if (
         msg.text().includes('Discarded') ||
-        msg.text().includes('SYNC_IMPORT') ||
-        msg.text().includes('Skipping SYNC_IMPORT')
+        msg.text().includes('SYNC_STATE_REPLACE') ||
+        msg.text().includes('Skipping SYNC_STATE_REPLACE')
       ) {
         console.log(`[Client C] ${msg.type()}: ${msg.text()}`);
       }

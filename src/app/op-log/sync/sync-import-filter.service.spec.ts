@@ -64,14 +64,14 @@ describe('SyncImportFilterService', () => {
     it('should keep SYNC_IMPORT operation itself as valid', async () => {
       const syncImportOp = createOp({
         id: '019afd68-0050-7000-0000-000000000000',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         clientId: 'client-B',
       });
 
       const result = await service.filterOpsInvalidatedBySyncImport([syncImportOp]);
 
       expect(result.validOps.length).toBe(1);
-      expect(result.validOps[0].opType).toBe(OpType.SyncImport);
+      expect(result.validOps[0].opType).toBe(OpType.SyncStateReplace);
       expect(result.invalidatedOps.length).toBe(0);
     });
 
@@ -88,7 +88,7 @@ describe('SyncImportFilterService', () => {
         // Client B's SYNC_IMPORT with higher clock
         createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientA: 5, clientB: 3 }, // Import has knowledge of clientA up to 5
@@ -99,7 +99,7 @@ describe('SyncImportFilterService', () => {
 
       // SYNC_IMPORT is valid, Client A's earlier op is invalidated (LESS_THAN)
       expect(result.validOps.length).toBe(1);
-      expect(result.validOps[0].opType).toBe(OpType.SyncImport);
+      expect(result.validOps[0].opType).toBe(OpType.SyncStateReplace);
       expect(result.invalidatedOps.length).toBe(1);
       expect(result.invalidatedOps[0].clientId).toBe('client-A');
     });
@@ -117,7 +117,7 @@ describe('SyncImportFilterService', () => {
         // Client B's SYNC_IMPORT
         createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 5 }, // Import's clock
@@ -152,7 +152,7 @@ describe('SyncImportFilterService', () => {
         // Client B's SYNC_IMPORT
         createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 5 }, // Import's clock
@@ -215,7 +215,7 @@ describe('SyncImportFilterService', () => {
         // First SYNC_IMPORT from Client B
         createOp({
           id: '019afd68-0010-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 1 },
@@ -231,7 +231,7 @@ describe('SyncImportFilterService', () => {
         // Second SYNC_IMPORT from Client C (latest)
         createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-C',
           entityType: 'ALL',
           vectorClock: { clientB: 1, clientC: 1 }, // Latest import's clock
@@ -261,7 +261,7 @@ describe('SyncImportFilterService', () => {
       const existingSyncImport: Operation = {
         id: '019afd68-0050-7000-0000-000000000000',
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: 'import-1',
         payload: { appDataComplete: {} },
@@ -324,7 +324,7 @@ describe('SyncImportFilterService', () => {
       const existingSyncImport: Operation = {
         id: '019afd68-0050-7000-0000-000000000000',
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: 'import-1',
         payload: { appDataComplete: {} },
@@ -386,7 +386,7 @@ describe('SyncImportFilterService', () => {
           {
             id: '019afd68-0050-7000-0000-000000000000',
             actionType: '[SP_ALL] Load(import) all data' as ActionType,
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             entityType: 'ALL',
             entityId: 'import-1',
             payload: { appDataComplete: {} },
@@ -422,7 +422,7 @@ describe('SyncImportFilterService', () => {
           {
             id: '019afd68-0050-7000-0000-000000000000',
             actionType: '[SP_ALL] Load(import) all data' as ActionType,
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             entityType: 'ALL',
             entityId: 'import-1',
             payload: { appDataComplete: {} },
@@ -436,7 +436,7 @@ describe('SyncImportFilterService', () => {
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
         expect(result.validOps.length).toBe(1);
-        expect(result.validOps[0].opType).toBe(OpType.SyncImport);
+        expect(result.validOps[0].opType).toBe(OpType.SyncStateReplace);
         expect(result.invalidatedOps.length).toBe(1);
       });
 
@@ -445,7 +445,7 @@ describe('SyncImportFilterService', () => {
           {
             id: '019afd68-0050-7000-0000-000000000000',
             actionType: '[SP_ALL] Load(import) all data' as ActionType,
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             entityType: 'ALL',
             entityId: 'import-1',
             payload: { appDataComplete: {} },
@@ -479,7 +479,7 @@ describe('SyncImportFilterService', () => {
           {
             id: '019afd68-0050-7000-0000-000000000000',
             actionType: '[SP_ALL] Load(import) all data' as ActionType,
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             entityType: 'ALL',
             entityId: 'import-1',
             payload: { appDataComplete: {} },
@@ -526,7 +526,7 @@ describe('SyncImportFilterService', () => {
           {
             id: '019afd68-0050-7000-0000-000000000000',
             actionType: '[SP_ALL] Load(import) all data' as ActionType,
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             entityType: 'ALL',
             entityId: 'import-1',
             payload: { appDataComplete: {} },
@@ -609,7 +609,7 @@ describe('SyncImportFilterService', () => {
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -665,7 +665,7 @@ describe('SyncImportFilterService', () => {
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -719,7 +719,7 @@ describe('SyncImportFilterService', () => {
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -803,7 +803,7 @@ describe('SyncImportFilterService', () => {
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -855,7 +855,7 @@ describe('SyncImportFilterService', () => {
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -904,7 +904,7 @@ describe('SyncImportFilterService', () => {
       it('should return filteringImport when ops are filtered by SYNC_IMPORT in batch', async () => {
         const syncImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-A',
           entityType: 'ALL',
           vectorClock: { clientA: 5 },
@@ -923,7 +923,7 @@ describe('SyncImportFilterService', () => {
 
         expect(result.filteringImport).toBeDefined();
         expect(result.filteringImport!.id).toBe('019afd68-0050-7000-0000-000000000000');
-        expect(result.filteringImport!.opType).toBe(OpType.SyncImport);
+        expect(result.filteringImport!.opType).toBe(OpType.SyncStateReplace);
         expect(result.invalidatedOps.length).toBe(1);
       });
 
@@ -931,7 +931,7 @@ describe('SyncImportFilterService', () => {
         const storedImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -986,7 +986,7 @@ describe('SyncImportFilterService', () => {
       it('should return filteringImport even when no ops are actually filtered (all valid)', async () => {
         const syncImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-A',
           entityType: 'ALL',
           vectorClock: { clientA: 5 },
@@ -1014,14 +1014,14 @@ describe('SyncImportFilterService', () => {
         const ops: Operation[] = [
           createOp({
             id: '019afd68-0010-7000-0000-000000000000',
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             clientId: 'client-A',
             entityType: 'ALL',
             vectorClock: { clientA: 1 },
           }),
           createOp({
             id: '019afd68-0050-7000-0000-000000000000', // Later UUIDv7 = latest
-            opType: OpType.SyncImport,
+            opType: OpType.SyncStateReplace,
             clientId: 'client-B',
             entityType: 'ALL',
             vectorClock: { clientB: 1 },
@@ -1040,7 +1040,7 @@ describe('SyncImportFilterService', () => {
         const storedImport: Operation = {
           id: '019afd68-0100-7000-0000-000000000000', // Newer than batch import
           actionType: '[SP_ALL] Load(import) all data' as ActionType,
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           entityType: 'ALL',
           entityId: 'import-1',
           payload: { appDataComplete: {} },
@@ -1063,7 +1063,7 @@ describe('SyncImportFilterService', () => {
 
         const batchImport = createOp({
           id: '019afd68-0050-7000-0000-000000000000', // Older than stored
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 1 },
@@ -1132,7 +1132,7 @@ describe('SyncImportFilterService', () => {
         // so it's not a local unsynced import
         const syncImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 1 },
@@ -1184,7 +1184,7 @@ describe('SyncImportFilterService', () => {
       it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {
         const storedImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-A',
           entityType: 'ALL',
           vectorClock: { clientA: 1 },
@@ -1211,7 +1211,7 @@ describe('SyncImportFilterService', () => {
       it('should set isLocalUnsyncedImport=false when stored import is remote', async () => {
         const storedImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientB: 1 },
@@ -1254,7 +1254,7 @@ describe('SyncImportFilterService', () => {
         // Newer SYNC_IMPORT in the batch
         const batchImport = createOp({
           id: '019afd68-0050-7000-0000-000000000000', // Newer ID
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'client-B',
           entityType: 'ALL',
           vectorClock: { clientA: 1, clientB: 1 },
@@ -1324,7 +1324,7 @@ describe('SyncImportFilterService', () => {
 
         const syncImport = createOp({
           id: '019c4290-0a51-7184-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'B_pr52',
           entityType: 'ALL',
           vectorClock: importClock,
@@ -1392,7 +1392,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1467,7 +1467,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1515,7 +1515,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'clientA',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1554,7 +1554,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'clientA',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1607,7 +1607,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1663,7 +1663,7 @@ describe('SyncImportFilterService', () => {
 
         const syncImport = createOp({
           id: '019c4290-0a51-7184-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'B_pr52',
           entityType: 'ALL',
           vectorClock: importClock,
@@ -1714,7 +1714,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'clientA',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1772,7 +1772,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1839,7 +1839,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1896,7 +1896,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -1953,7 +1953,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2020,7 +2020,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2093,7 +2093,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2158,7 +2158,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2215,7 +2215,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2274,7 +2274,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2374,7 +2374,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2433,7 +2433,7 @@ describe('SyncImportFilterService', () => {
             seq: 3,
             op: createOp({
               id: '019c4290-0a51-7184-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2503,7 +2503,7 @@ describe('SyncImportFilterService', () => {
 
         const syncImport = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'A_Jxm0',
           entityType: 'ALL',
           vectorClock: syncImportClock,
@@ -2568,7 +2568,7 @@ describe('SyncImportFilterService', () => {
 
         const syncImport = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'A_Jxm0',
           entityType: 'ALL',
           vectorClock: syncImportClock,
@@ -2639,7 +2639,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'B_pr52',
               entityType: 'ALL',
               vectorClock: syncImportClock,
@@ -2706,7 +2706,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'import_client',
               entityType: 'ALL',
               vectorClock: syncImportClock,
@@ -2749,7 +2749,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'import_client',
               entityType: 'ALL',
               vectorClock: syncImportClock,
@@ -2791,7 +2791,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'import_client',
               entityType: 'ALL',
               vectorClock: syncImportClock,
@@ -2844,7 +2844,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'client_0',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2895,7 +2895,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'client_0',
               entityType: 'ALL',
               vectorClock: importClock,
@@ -2965,7 +2965,7 @@ describe('SyncImportFilterService', () => {
             seq: 1,
             op: createOp({
               id: '019afd68-0050-7000-0000-000000000000',
-              opType: OpType.SyncImport,
+              opType: OpType.SyncStateReplace,
               clientId: 'client_0',
               entityType: 'ALL',
               vectorClock: oversizedImportClock,

@@ -368,7 +368,7 @@ describe('validateOperationPayload', () => {
   describe('SYNC_IMPORT/BACKUP_IMPORT operations', () => {
     it('should validate SYNC_IMPORT with appDataComplete', () => {
       const op = createTestOperation({
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'GLOBAL_CONFIG' as EntityType,
         payload: {
           appDataComplete: {
@@ -397,7 +397,7 @@ describe('validateOperationPayload', () => {
 
     it('should reject SYNC_IMPORT without expected keys', () => {
       const op = createTestOperation({
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'GLOBAL_CONFIG' as EntityType,
         payload: { randomData: 'value' },
       });

@@ -106,7 +106,7 @@ export class CleanSlateService {
     const syncImportOp: Operation = {
       id: uuidv7(),
       actionType: ActionType.LOAD_ALL_DATA,
-      opType: OpType.SyncImport, // Maps to reason='initial' on server
+      opType: OpType.SyncStateReplace, // Maps to reason='initial' on server
       entityType: 'ALL',
       entityId: undefined,
       payload: currentState,

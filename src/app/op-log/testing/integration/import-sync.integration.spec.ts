@@ -105,7 +105,7 @@ describe('Import + Sync Integration', () => {
       // Create the SyncImport operation (mimicking PfapiService behavior)
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: importedAppData },
@@ -119,7 +119,7 @@ describe('Import + Sync Integration', () => {
       expect(allOps.length).toBe(1);
 
       const storedOp = allOps[0];
-      expect(storedOp.op.opType).toBe(OpType.SyncImport);
+      expect(storedOp.op.opType).toBe(OpType.SyncStateReplace);
       expect(storedOp.op.entityType).toBe('ALL');
       expect(storedOp.op.actionType).toBe('[SP_ALL] Load(import) all data');
       expect(storedOp.source).toBe('local');
@@ -142,7 +142,7 @@ describe('Import + Sync Integration', () => {
       // Create an import operation
       const importOp = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: {} },
@@ -200,7 +200,7 @@ describe('Import + Sync Integration', () => {
       const importOp = await clientA.createLocalOp(
         'ALL',
         uuidv7(),
-        OpType.SyncImport,
+        OpType.SyncStateReplace,
         '[SP_ALL] Load(import) all data',
         importPayload,
       );
@@ -212,7 +212,7 @@ describe('Import + Sync Integration', () => {
       // Verify server received the import operation
       const serverOps = server.getAllOps();
       expect(serverOps.length).toBe(1);
-      expect(serverOps[0].op.opType).toBe(OpType.SyncImport);
+      expect(serverOps[0].op.opType).toBe(OpType.SyncStateReplace);
 
       // Client B syncs (download)
       const syncResultB = await clientB.sync(server);
@@ -222,7 +222,7 @@ describe('Import + Sync Integration', () => {
       const clientBOps = await clientB.getAllOps();
       const downloadedImport = clientBOps.find((e) => e.op.id === importOp.id);
       expect(downloadedImport).toBeDefined();
-      expect(downloadedImport!.op.opType).toBe(OpType.SyncImport);
+      expect(downloadedImport!.op.opType).toBe(OpType.SyncStateReplace);
 
       // Verify the payload includes archive data
       const receivedPayload = downloadedImport!.op.payload as typeof importPayload;
@@ -279,7 +279,7 @@ describe('Import + Sync Integration', () => {
       await clientA.createLocalOp(
         'ALL',
         uuidv7(),
-        OpType.SyncImport,
+        OpType.SyncStateReplace,
         '[SP_ALL] Load(import) all data',
         importPayload,
       );
@@ -289,7 +289,7 @@ describe('Import + Sync Integration', () => {
 
       // Verify Client B received both archive tiers
       const clientBOps = await clientB.getAllOps();
-      const importOp = clientBOps.find((e) => e.op.opType === OpType.SyncImport);
+      const importOp = clientBOps.find((e) => e.op.opType === OpType.SyncStateReplace);
       expect(importOp).toBeDefined();
 
       const payload = importOp!.op.payload as typeof importPayload;
@@ -346,7 +346,7 @@ describe('Import + Sync Integration', () => {
       await client.createLocalOp(
         'ALL',
         uuidv7(),
-        OpType.SyncImport,
+        OpType.SyncStateReplace,
         '[SP_ALL] Load(import) all data',
         {
           appDataComplete: {
@@ -365,12 +365,12 @@ describe('Import + Sync Integration', () => {
       expect(allOps.length).toBe(3);
 
       // Import should be the last operation
-      const importOp = allOps.find((e) => e.op.opType === OpType.SyncImport);
+      const importOp = allOps.find((e) => e.op.opType === OpType.SyncStateReplace);
       expect(importOp).toBeDefined();
 
       // Verify ordering: import should be last (highest seq)
       const sortedOps = [...allOps].sort((a, b) => a.seq - b.seq);
-      expect(sortedOps[sortedOps.length - 1].op.opType).toBe(OpType.SyncImport);
+      expect(sortedOps[sortedOps.length - 1].op.opType).toBe(OpType.SyncStateReplace);
 
       // Use first operation's seq as baseline for relative comparison
       // (auto-increment keys continue across tests even after clearing)
@@ -405,7 +405,7 @@ describe('Import + Sync Integration', () => {
       // Create a SyncImport operation (from sync download)
       const syncImportOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: { task: { ids: [], entities: {} } } },
@@ -418,7 +418,7 @@ describe('Import + Sync Integration', () => {
       expect(allOps.length).toBe(2);
 
       const backupOp = allOps.find((e) => e.op.opType === OpType.BackupImport);
-      const syncOp = allOps.find((e) => e.op.opType === OpType.SyncImport);
+      const syncOp = allOps.find((e) => e.op.opType === OpType.SyncStateReplace);
 
       expect(backupOp).toBeDefined();
       expect(syncOp).toBeDefined();
@@ -436,7 +436,7 @@ describe('Import + Sync Integration', () => {
         id: uuidv7(),
         clientId: 'test-client',
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: {} },

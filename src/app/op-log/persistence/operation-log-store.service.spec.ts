@@ -2107,7 +2107,7 @@ describe('OperationLogStoreService', () => {
 
       const syncImportOp = createTestOperation({
         clientId: 'clientA',
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         vectorClock: { clientA: 1 },
       });
 
@@ -2258,7 +2258,7 @@ describe('OperationLogStoreService', () => {
 
       // Another client did a SYNC_IMPORT that only knew about some clients
       const syncImportOp = createTestOperation({
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         clientId: 'clientX',
         vectorClock: {
           clientX: 1,
@@ -2341,7 +2341,7 @@ describe('OperationLogStoreService', () => {
       // 2. Client B receives SYNC_IMPORT and merges the clock
       await service.mergeRemoteOpClocks([
         createTestOperation({
-          opType: OpType.SyncImport,
+          opType: OpType.SyncStateReplace,
           clientId: 'clientA',
           vectorClock: { clientA: 1 },
         }),

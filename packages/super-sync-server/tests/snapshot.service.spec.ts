@@ -333,7 +333,9 @@ describe('SnapshotService', () => {
       expect(prisma.operation.findMany).toHaveBeenCalledWith({
         where: {
           userId: 1,
-          opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+          opType: {
+            in: ['SYNC_STATE_REPLACE', 'SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'],
+          },
         },
         orderBy: { serverSeq: 'desc' },
         take: 30,
@@ -351,7 +353,7 @@ describe('SnapshotService', () => {
         {
           serverSeq: 100,
           clientId: 'client-1',
-          opType: 'SYNC_IMPORT',
+          opType: 'SYNC_STATE_REPLACE',
           clientTimestamp: BigInt(1000),
         },
         {
@@ -374,7 +376,7 @@ describe('SnapshotService', () => {
         {
           serverSeq: 100,
           timestamp: 1000,
-          type: 'SYNC_IMPORT',
+          type: 'SYNC_STATE_REPLACE',
           clientId: 'client-1',
           description: 'Full sync import',
         },
@@ -568,7 +570,7 @@ describe('SnapshotService', () => {
       const ops = [
         {
           id: 'op-1',
-          opType: 'SYNC_IMPORT',
+          opType: 'SYNC_STATE_REPLACE',
           entityType: 'FULL_STATE',
           entityId: null,
           payload: {

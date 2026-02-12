@@ -84,7 +84,7 @@ describe('EncryptionPasswordChangeService', () => {
         return Promise.resolve([]);
       } else {
         // Second call: SYNC_IMPORT was created by clean slate
-        return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+        return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
       }
     });
 
@@ -208,7 +208,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -226,13 +226,13 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           // First call: only full-state ops (should be ignored)
           return Promise.resolve([
-            { seq: 1, op: { opType: OpType.SyncImport } } as any,
+            { seq: 1, op: { opType: OpType.SyncStateReplace } } as any,
             { seq: 2, op: { opType: OpType.BackupImport } } as any,
             { seq: 3, op: { opType: OpType.Repair } } as any,
           ]);
         } else {
           // Second call: fresh SYNC_IMPORT from clean slate
-          return Promise.resolve([{ seq: 4, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 4, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -246,7 +246,7 @@ describe('EncryptionPasswordChangeService', () => {
       // First call returns mixed ops - user op should cause throw
       mockOpLogStore.getUnsynced.and.returnValue(
         Promise.resolve([
-          { seq: 1, op: { opType: OpType.SyncImport } } as any, // Ignored
+          { seq: 1, op: { opType: OpType.SyncStateReplace } } as any, // Ignored
           { seq: 2, op: { opType: OpType.Create } } as any, // Counts
         ]),
       );
@@ -272,7 +272,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -306,7 +306,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -332,7 +332,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -361,7 +361,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (getUnsyncedCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 
@@ -505,7 +505,7 @@ describe('EncryptionPasswordChangeService', () => {
         if (callCount === 1) {
           return Promise.resolve([]);
         } else {
-          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncImport } }]);
+          return Promise.resolve([{ seq: 1, op: { opType: OpType.SyncStateReplace } }]);
         }
       });
 

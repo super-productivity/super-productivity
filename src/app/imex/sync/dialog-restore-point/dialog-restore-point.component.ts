@@ -112,6 +112,7 @@ export class DialogRestorePointComponent implements OnInit {
 
   getTypeIcon(type: RestorePoint['type']): string {
     switch (type) {
+      case 'SYNC_STATE_REPLACE':
       case 'SYNC_IMPORT':
         return 'cloud_download';
       case 'BACKUP_IMPORT':
@@ -125,6 +126,7 @@ export class DialogRestorePointComponent implements OnInit {
 
   getTypeLabel(type: RestorePoint['type']): string {
     switch (type) {
+      case 'SYNC_STATE_REPLACE':
       case 'SYNC_IMPORT':
         return T.F.SYNC.D_RESTORE.TYPE_SYNC_IMPORT;
       case 'BACKUP_IMPORT':

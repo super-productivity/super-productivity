@@ -18,7 +18,7 @@ describe('DialogRestorePointComponent', () => {
     {
       serverSeq: 100,
       timestamp: Date.now() - 3600000,
-      type: 'SYNC_IMPORT',
+      type: 'SYNC_STATE_REPLACE',
       clientId: 'client-1',
     },
     {
@@ -216,8 +216,8 @@ describe('DialogRestorePointComponent', () => {
   });
 
   describe('getTypeIcon', () => {
-    it('should return cloud_download for SYNC_IMPORT', () => {
-      expect(component.getTypeIcon('SYNC_IMPORT')).toBe('cloud_download');
+    it('should return cloud_download for SYNC_STATE_REPLACE', () => {
+      expect(component.getTypeIcon('SYNC_STATE_REPLACE')).toBe('cloud_download');
     });
 
     it('should return backup for BACKUP_IMPORT', () => {
@@ -234,8 +234,8 @@ describe('DialogRestorePointComponent', () => {
   });
 
   describe('getTypeLabel', () => {
-    it('should return translation key for SYNC_IMPORT', () => {
-      expect(component.getTypeLabel('SYNC_IMPORT')).toBe(
+    it('should return translation key for SYNC_STATE_REPLACE', () => {
+      expect(component.getTypeLabel('SYNC_STATE_REPLACE')).toBe(
         T.F.SYNC.D_RESTORE.TYPE_SYNC_IMPORT,
       );
     });

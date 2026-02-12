@@ -142,7 +142,7 @@ describe('Time Tracking Sync Integration', () => {
 
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: importedAppData },
@@ -364,7 +364,7 @@ describe('Time Tracking Sync Integration', () => {
       // Existing client has comprehensive time tracking data
       const fullStateImport = existingClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: {
@@ -405,7 +405,7 @@ describe('Time Tracking Sync Integration', () => {
       const downloadResponse = server.downloadOps(0);
 
       expect(downloadResponse.ops.length).toBe(1);
-      expect(downloadResponse.ops[0].op.opType).toBe(OpType.SyncImport);
+      expect(downloadResponse.ops[0].op.opType).toBe(OpType.SyncStateReplace);
 
       // Verify all timeTracking data is present
       const payload = downloadResponse.ops[0].op.payload as {

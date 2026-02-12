@@ -10,7 +10,7 @@ import { InjectionToken } from '@angular/core';
  * |-------|-------|----------|-------|
  * | Vector clock clients | 10 | MAX_VECTOR_CLOCK_SIZE | Pruning keeps most active clients |
  * | Client ID length | ≥5 chars | (vector-clock.ts) | Throws error if shorter |
- * | Vector clock counter | MAX_SAFE_INTEGER-1000 | (vector-clock.ts) | Requires SYNC_IMPORT on overflow |
+ * | Vector clock counter | MAX_SAFE_INTEGER-1000 | (vector-clock.ts) | Requires SYNC_STATE_REPLACE on overflow |
  * | Ops per upload batch | 25 | MAX_OPS_PER_UPLOAD_REQUEST | Reduced from 100 to avoid 413 errors |
  * | Download page size | 500 | DOWNLOAD_PAGE_SIZE | Operations per download request |
  * | Max download iterations | 1000 | MAX_DOWNLOAD_ITERATIONS | Server bug protection (500K ops max) |

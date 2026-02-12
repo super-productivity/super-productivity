@@ -947,7 +947,7 @@ describe('OperationLogDownloadService', () => {
                     id: 'op-316',
                     clientId: 'c1',
                     actionType: '[All] Sync Import' as ActionType,
-                    opType: 'SYNC_IMPORT' as OpType,
+                    opType: 'SYNC_STATE_REPLACE' as OpType,
                     entityType: 'ALL',
                     payload: {},
                     vectorClock: snapshotClock,

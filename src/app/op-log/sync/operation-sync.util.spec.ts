@@ -149,13 +149,13 @@ describe('operation-sync utility', () => {
 
     it('should handle SyncImport operation type', () => {
       const syncOp = createMockSyncOp({
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         actionType: '[Sync] Import State' as ActionType,
       });
       const op = syncOpToOperation(syncOp);
 
-      expect(op.opType).toBe(OpType.SyncImport);
+      expect(op.opType).toBe(OpType.SyncStateReplace);
       expect(op.entityType).toBe('ALL');
     });
 

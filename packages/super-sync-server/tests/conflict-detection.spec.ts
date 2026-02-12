@@ -405,12 +405,12 @@ describe('Conflict Detection', () => {
       });
       await service.uploadOps(userId, clientA, [op1]);
 
-      // SYNC_IMPORT with superseded clock should still be accepted
+      // SYNC_STATE_REPLACE with superseded clock should still be accepted
       const op2 = createOp({
         entityId,
         clientId: clientB,
         vectorClock: {},
-        opType: 'SYNC_IMPORT',
+        opType: 'SYNC_STATE_REPLACE',
         entityType: 'ALL',
       });
       const result = await service.uploadOps(userId, clientB, [op2]);

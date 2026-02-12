@@ -245,7 +245,7 @@ export class RemoteOpsProcessingService {
     // These replace the entire state, so conflict detection doesn't apply.
     // ─────────────────────────────────────────────────────────────────────────
     const hasFullStateOp = validOps.some(
-      (op) => op.opType === OpType.SyncImport || op.opType === OpType.BackupImport,
+      (op) => op.opType === OpType.SyncStateReplace || op.opType === OpType.BackupImport,
     );
 
     if (hasFullStateOp) {
@@ -400,7 +400,7 @@ export class RemoteOpsProcessingService {
         // causing new ops to appear CONCURRENT instead of GREATER_THAN with the import.
         const appliedFullStateOp = result.appliedOps.find(
           (op) =>
-            op.opType === OpType.SyncImport ||
+            op.opType === OpType.SyncStateReplace ||
             op.opType === OpType.BackupImport ||
             op.opType === OpType.Repair,
         );
@@ -433,7 +433,7 @@ export class RemoteOpsProcessingService {
           const newFullStateOpIds = result.appliedOps
             .filter(
               (op) =>
-                op.opType === OpType.SyncImport ||
+                op.opType === OpType.SyncStateReplace ||
                 op.opType === OpType.BackupImport ||
                 op.opType === OpType.Repair,
             )
@@ -501,7 +501,7 @@ export class RemoteOpsProcessingService {
     // DIAGNOSTIC: Check if any full-state ops will be applied
     const fullStateOps = ops.filter(
       (op) =>
-        op.opType === OpType.SyncImport ||
+        op.opType === OpType.SyncStateReplace ||
         op.opType === OpType.BackupImport ||
         op.opType === OpType.Repair,
     );

@@ -17,8 +17,8 @@ describe('operation.types full-state payload utilities', () => {
   };
 
   describe('FULL_STATE_OP_TYPES', () => {
-    it('should contain SyncImport, BackupImport, and Repair', () => {
-      expect(FULL_STATE_OP_TYPES.has(OpType.SyncImport)).toBe(true);
+    it('should contain SyncStateReplace, BackupImport, and Repair', () => {
+      expect(FULL_STATE_OP_TYPES.has(OpType.SyncStateReplace)).toBe(true);
       expect(FULL_STATE_OP_TYPES.has(OpType.BackupImport)).toBe(true);
       expect(FULL_STATE_OP_TYPES.has(OpType.Repair)).toBe(true);
     });
@@ -34,7 +34,7 @@ describe('operation.types full-state payload utilities', () => {
 
   describe('isFullStateOpType', () => {
     it('should return true for full-state op types', () => {
-      expect(isFullStateOpType(OpType.SyncImport)).toBe(true);
+      expect(isFullStateOpType(OpType.SyncStateReplace)).toBe(true);
       expect(isFullStateOpType(OpType.BackupImport)).toBe(true);
       expect(isFullStateOpType(OpType.Repair)).toBe(true);
     });
@@ -46,8 +46,12 @@ describe('operation.types full-state payload utilities', () => {
     });
 
     it('should handle string values', () => {
-      expect(isFullStateOpType('SYNC_IMPORT')).toBe(true);
+      expect(isFullStateOpType('SYNC_STATE_REPLACE')).toBe(true);
       expect(isFullStateOpType('CRT')).toBe(false);
+    });
+
+    it('should handle legacy SYNC_IMPORT string via normalization', () => {
+      expect(isFullStateOpType('SYNC_IMPORT')).toBe(true);
     });
   });
 

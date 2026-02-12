@@ -9,10 +9,26 @@ export enum OpType {
   Delete = 'DEL',
   Move = 'MOV', // For list reordering
   Batch = 'BATCH', // For bulk operations (import, mass update)
-  SyncImport = 'SYNC_IMPORT', // Full state import from remote sync
+  SyncStateReplace = 'SYNC_STATE_REPLACE', // Full state replacement from remote sync
   BackupImport = 'BACKUP_IMPORT', // Full state import from backup file
   Repair = 'REPAIR', // Auto-repair operation with full repaired state
 }
+
+/**
+ * Maps legacy OpType string values to their current equivalents.
+ * Used for backwards compatibility when reading operations from IndexedDB
+ * or receiving them from the server.
+ */
+export const LEGACY_OP_TYPE_MAP: Record<string, OpType> = {
+  SYNC_IMPORT: OpType.SyncStateReplace,
+};
+
+/**
+ * Normalizes an OpType string, mapping legacy values to current ones.
+ * Returns the input unchanged if no mapping exists.
+ */
+export const normalizeOpType = (opType: string): string =>
+  LEGACY_OP_TYPE_MAP[opType] ?? opType;
 
 /**
  * Entity type - identifies the kind of data entity being operated on.
@@ -199,16 +215,17 @@ export interface RepairPayload {
  * Used for type guards and validation.
  */
 export const FULL_STATE_OP_TYPES = new Set<OpType>([
-  OpType.SyncImport,
+  OpType.SyncStateReplace,
   OpType.BackupImport,
   OpType.Repair,
 ]);
 
 /**
  * Type guard to check if an operation is a full-state operation.
+ * Handles legacy OpType values via normalizeOpType for backwards compatibility.
  */
 export const isFullStateOpType = (opType: OpType | string): boolean =>
-  FULL_STATE_OP_TYPES.has(opType as OpType);
+  FULL_STATE_OP_TYPES.has(normalizeOpType(opType) as OpType);
 
 /**
  * Legacy wrapper format for full-state payloads.

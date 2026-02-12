@@ -22,7 +22,7 @@ export const createTaskOperation = (
     [OpType.Delete]: '[Task] Delete Task',
     [OpType.Move]: '[Task] Move',
     [OpType.Batch]: '[Task] Batch Update',
-    [OpType.SyncImport]: '[Task] Sync Import',
+    [OpType.SyncStateReplace]: '[Task] Sync Import',
     [OpType.BackupImport]: '[Task] Backup Import',
     [OpType.Repair]: '[Task] Repair',
   };
@@ -51,7 +51,7 @@ export const createProjectOperation = (
     [OpType.Delete]: '[Project] Delete Project',
     [OpType.Move]: '[Project] Move',
     [OpType.Batch]: '[Project] Batch Update',
-    [OpType.SyncImport]: '[Project] Sync Import',
+    [OpType.SyncStateReplace]: '[Project] Sync Import',
     [OpType.BackupImport]: '[Project] Backup Import',
     [OpType.Repair]: '[Project] Repair',
   };
@@ -80,7 +80,7 @@ export const createTagOperation = (
     [OpType.Delete]: '[Tag] Delete Tag',
     [OpType.Move]: '[Tag] Move',
     [OpType.Batch]: '[Tag] Batch Update',
-    [OpType.SyncImport]: '[Tag] Sync Import',
+    [OpType.SyncStateReplace]: '[Tag] Sync Import',
     [OpType.BackupImport]: '[Tag] Backup Import',
     [OpType.Repair]: '[Tag] Repair',
   };
@@ -175,7 +175,7 @@ export const createNoteOperation = (
     [OpType.Delete]: '[Note] Delete Note',
     [OpType.Move]: '[Note] Move',
     [OpType.Batch]: '[Note] Batch Update',
-    [OpType.SyncImport]: '[Note] Sync Import',
+    [OpType.SyncStateReplace]: '[Note] Sync Import',
     [OpType.BackupImport]: '[Note] Backup Import',
     [OpType.Repair]: '[Note] Repair',
   };
@@ -203,7 +203,7 @@ export const createGlobalConfigOperation = (
     [OpType.Delete]: '[Global Config] Update Global Config Section',
     [OpType.Move]: '[Global Config] Update Global Config Section',
     [OpType.Batch]: '[Global Config] Update Global Config Section',
-    [OpType.SyncImport]: '[Global Config] Sync Import',
+    [OpType.SyncStateReplace]: '[Global Config] Sync Import',
     [OpType.BackupImport]: '[Global Config] Backup Import',
     [OpType.Repair]: '[Global Config] Repair',
   };
@@ -259,7 +259,7 @@ export const createTaskRepeatCfgOperation = (
     [OpType.Delete]: '[TaskRepeatCfg] Delete Task Repeat Cfg',
     [OpType.Move]: '[TaskRepeatCfg] Move',
     [OpType.Batch]: '[TaskRepeatCfg] Batch Update',
-    [OpType.SyncImport]: '[TaskRepeatCfg] Sync Import',
+    [OpType.SyncStateReplace]: '[TaskRepeatCfg] Sync Import',
     [OpType.BackupImport]: '[TaskRepeatCfg] Backup Import',
     [OpType.Repair]: '[TaskRepeatCfg] Repair',
   };

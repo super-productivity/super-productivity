@@ -167,7 +167,7 @@ describe('ValidationService', () => {
     it('should accept null entityId for SYNC_IMPORT operation', () => {
       const op = createValidOp({
         entityId: null,
-        opType: 'SYNC_IMPORT',
+        opType: 'SYNC_STATE_REPLACE',
         entityType: 'TASK',
         payload: { appDataComplete: {} },
       });
@@ -324,7 +324,7 @@ describe('ValidationService', () => {
       for (let i = 0; i < 25; i++) {
         payload = { nested: payload };
       }
-      const op = createValidOp({ opType: 'SYNC_IMPORT', payload, entityId: null });
+      const op = createValidOp({ opType: 'SYNC_STATE_REPLACE', payload, entityId: null });
       const result = validationService.validateOp(op, clientId);
       expect(result.valid).toBe(true);
     });

@@ -251,7 +251,7 @@ const createOp = (
 const createRestorePoint = (
   clientId: string,
   userId: number,
-  opType: 'SYNC_IMPORT' | 'BACKUP_IMPORT' | 'REPAIR' = 'SYNC_IMPORT',
+  opType: 'SYNC_STATE_REPLACE' | 'BACKUP_IMPORT' | 'REPAIR' = 'SYNC_STATE_REPLACE',
 ) => {
   return createOp(clientId, userId, {
     actionType: '[SP_ALL] Load(import) all data',
@@ -379,7 +379,7 @@ describe('Storage Quota Cleanup', () => {
       createOp(clientId, userId); // seq 1
       createRestorePoint(clientId, userId, 'BACKUP_IMPORT'); // seq 2
       createOp(clientId, userId); // seq 3
-      createRestorePoint(clientId, userId, 'SYNC_IMPORT'); // seq 4
+      createRestorePoint(clientId, userId, 'SYNC_STATE_REPLACE'); // seq 4
 
       const result = await service.deleteOldestRestorePointAndOps(userId);
 
@@ -619,7 +619,7 @@ describe('Storage Quota Cleanup', () => {
       );
       expect(remainingOps[0].serverSeq).toBe(3);
       expect(remainingOps[1].serverSeq).toBe(4);
-      expect(remainingOps[1].opType).toBe('SYNC_IMPORT');
+      expect(remainingOps[1].opType).toBe('SYNC_STATE_REPLACE');
     });
 
     it('should return stats even when cleanup fails', async () => {

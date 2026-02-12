@@ -10,6 +10,7 @@ import {
   ServerOperation,
   VectorClock,
   limitVectorClockSize,
+  SYNC_STATE_REPLACE_OP_TYPES,
 } from '../sync.types';
 import { Logger } from '../../logger';
 
@@ -58,7 +59,7 @@ export class OperationDownloadService {
   /**
    * Get operations and latest sequence atomically with gap detection.
    *
-   * OPTIMIZATION: When sinceSeq is before the latest full-state operation (SYNC_IMPORT,
+   * OPTIMIZATION: When sinceSeq is before the latest full-state operation (SYNC_STATE_REPLACE,
    * BACKUP_IMPORT, REPAIR), we skip to that operation's sequence instead. This prevents
    * sending operations that will be filtered out by the client anyway, saving bandwidth
    * and processing time.
@@ -77,12 +78,12 @@ export class OperationDownloadService {
   }> {
     return prisma.$transaction(
       async (tx) => {
-        // Find the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR)
+        // Find the latest full-state operation (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR)
         // These operations supersede all previous operations
         const latestFullStateOp = await tx.operation.findFirst({
           where: {
             userId,
-            opType: { in: ['SYNC_IMPORT', 'BACKUP_IMPORT', 'REPAIR'] },
+            opType: { in: [...SYNC_STATE_REPLACE_OP_TYPES, 'BACKUP_IMPORT', 'REPAIR'] },
           },
           orderBy: { serverSeq: 'desc' },
           select: { serverSeq: true, clientId: true },

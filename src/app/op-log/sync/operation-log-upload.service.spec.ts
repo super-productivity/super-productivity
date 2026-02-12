@@ -564,7 +564,12 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should route SyncImport operations through snapshot endpoint', async () => {
-        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        const entry = createFullStateEntry(
+          1,
+          'op-1',
+          'client-1',
+          OpType.SyncStateReplace,
+        );
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
         await service.uploadPendingOps(mockApiProvider);
@@ -594,7 +599,12 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should use correct reason for SyncImport (initial)', async () => {
-        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        const entry = createFullStateEntry(
+          1,
+          'op-1',
+          'client-1',
+          OpType.SyncStateReplace,
+        );
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
         await service.uploadPendingOps(mockApiProvider);
@@ -788,7 +798,12 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should NOT auto-set isCleanSlate for SyncImport unlike BackupImport/Repair', async () => {
-        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        const entry = createFullStateEntry(
+          1,
+          'op-1',
+          'client-1',
+          OpType.SyncStateReplace,
+        );
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
         await service.uploadPendingOps(mockApiProvider);
@@ -831,7 +846,12 @@ describe('OperationLogUploadService', () => {
       });
 
       it('should update server seq after snapshot upload', async () => {
-        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        const entry = createFullStateEntry(
+          1,
+          'op-1',
+          'client-1',
+          OpType.SyncStateReplace,
+        );
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
         mockApiProvider.uploadSnapshot.and.returnValue(
           Promise.resolve({ accepted: true, serverSeq: 42 }),
@@ -933,7 +953,12 @@ describe('OperationLogUploadService', () => {
        * existing data atomically before accepting the new snapshot.
        */
       it('should pass isCleanSlate to snapshot upload when provided', async () => {
-        const entry = createFullStateEntry(1, 'op-1', 'client-1', OpType.SyncImport);
+        const entry = createFullStateEntry(
+          1,
+          'op-1',
+          'client-1',
+          OpType.SyncStateReplace,
+        );
         mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
 
         await service.uploadPendingOps(mockApiProvider, { isCleanSlate: true });
@@ -956,7 +981,7 @@ describe('OperationLogUploadService', () => {
             1,
             'my-import',
             'client-1',
-            OpType.SyncImport,
+            OpType.SyncStateReplace,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           mockApiProvider.uploadSnapshot.and.returnValue(
@@ -979,7 +1004,7 @@ describe('OperationLogUploadService', () => {
             1,
             'my-import',
             'client-1',
-            OpType.SyncImport,
+            OpType.SyncStateReplace,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           mockApiProvider.uploadSnapshot.and.returnValue(
@@ -1003,7 +1028,7 @@ describe('OperationLogUploadService', () => {
             1,
             'my-import',
             'client-1',
-            OpType.SyncImport,
+            OpType.SyncStateReplace,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           mockApiProvider.uploadSnapshot.and.returnValue(
@@ -1024,7 +1049,7 @@ describe('OperationLogUploadService', () => {
             1,
             'sync-import-op',
             'client-1',
-            OpType.SyncImport,
+            OpType.SyncStateReplace,
           );
           const regularEntry = createMockEntry(2, 'regular-op', 'client-1');
           mockOpLogStore.getUnsynced.and.returnValue(
@@ -1061,7 +1086,7 @@ describe('OperationLogUploadService', () => {
             1,
             'my-import',
             'client-1',
-            OpType.SyncImport,
+            OpType.SyncStateReplace,
           );
           mockOpLogStore.getUnsynced.and.returnValue(Promise.resolve([entry]));
           // Mock throwing an error with SYNC_IMPORT_EXISTS in the message
@@ -1387,7 +1412,7 @@ describe('OperationLogUploadService', () => {
       (service as any)._opTypeToSnapshotReason(opType);
 
     it('should map SyncImport to initial', () => {
-      expect(opTypeToSnapshotReason(OpType.SyncImport)).toBe('initial');
+      expect(opTypeToSnapshotReason(OpType.SyncStateReplace)).toBe('initial');
     });
 
     it('should map BackupImport to recovery', () => {

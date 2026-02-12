@@ -183,7 +183,7 @@ describe('Legacy Archive Subtasks Integration', () => {
       // Create import operation (simulating what PfapiService does)
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: legacyData },
@@ -232,7 +232,7 @@ describe('Legacy Archive Subtasks Integration', () => {
       // Create and store import operation
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: legacyData },
@@ -289,7 +289,7 @@ describe('Legacy Archive Subtasks Integration', () => {
       // Step 1: Import (create SyncImport operation)
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: originalData },
@@ -350,7 +350,7 @@ describe('Legacy Archive Subtasks Integration', () => {
       const firstData = createLegacyArchiveData();
       const firstImportOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: firstData },
@@ -369,7 +369,7 @@ describe('Legacy Archive Subtasks Integration', () => {
       // Second import (same data, simulating re-import)
       const secondImportOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: firstData },
@@ -404,7 +404,7 @@ describe('Legacy Archive Subtasks Integration', () => {
 
       const importOp: Operation = testClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: legacyData },

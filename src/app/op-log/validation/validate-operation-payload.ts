@@ -489,7 +489,7 @@ export const validateOperationPayload = (op: Operation): PayloadValidationResult
       result = validateBatchPayload(actionPayload);
       break;
 
-    case OpType.SyncImport:
+    case OpType.SyncStateReplace:
     case OpType.BackupImport:
       result = validateFullStatePayload(actionPayload);
       break;

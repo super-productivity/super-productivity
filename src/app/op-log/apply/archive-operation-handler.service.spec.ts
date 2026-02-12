@@ -1032,7 +1032,11 @@ describe('ArchiveOperationHandler', () => {
             const action = {
               type: loadAllData.type,
               appDataComplete: { archiveYoung: emptyArchive },
-              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+              meta: {
+                isPersistent: true,
+                isRemote: true,
+                opType: OpType.SyncStateReplace,
+              },
             } as unknown as PersistentAction;
 
             // Should not throw - instead preserves local archives
@@ -1046,7 +1050,11 @@ describe('ArchiveOperationHandler', () => {
             const action = {
               type: loadAllData.type,
               appDataComplete: { archiveOld: emptyArchive },
-              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+              meta: {
+                isPersistent: true,
+                isRemote: true,
+                opType: OpType.SyncStateReplace,
+              },
             } as unknown as PersistentAction;
 
             // Should not throw - instead preserves local archives
@@ -1061,7 +1069,11 @@ describe('ArchiveOperationHandler', () => {
             const action = {
               type: loadAllData.type,
               appDataComplete: { archiveYoung: newArchive },
-              meta: { isPersistent: true, isRemote: true, opType: OpType.SyncImport },
+              meta: {
+                isPersistent: true,
+                isRemote: true,
+                opType: OpType.SyncStateReplace,
+              },
             } as unknown as PersistentAction;
 
             await service.handleOperation(action);

@@ -474,7 +474,7 @@ describe('OperationLogHydratorService', () => {
       it('should load SyncImport operation directly without replay', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
         });
@@ -516,7 +516,7 @@ describe('OperationLogHydratorService', () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const syncImportPayload = { task: {}, project: {} };
         const syncClock = { clientA: 10, clientB: 5 };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           vectorClock: syncClock,
@@ -548,7 +548,7 @@ describe('OperationLogHydratorService', () => {
         });
         const syncImportPayload = { task: {}, project: {} };
         const syncClock = { clientA: 5, clientB: 10 }; // Newer clock with clientB
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           vectorClock: syncClock,
@@ -604,7 +604,7 @@ describe('OperationLogHydratorService', () => {
         // This tests the fix at lines 275-285 in operation-log-hydrator.service.ts
         const syncImportPayload = { task: {}, project: {} };
         const syncClock = { clientA: 5, clientB: 10 };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           vectorClock: syncClock,
@@ -718,7 +718,7 @@ describe('OperationLogHydratorService', () => {
       it('should set protected client IDs from vectorClock when loading SYNC_IMPORT as last tail op', async () => {
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           clientId: 'import-client-123',
@@ -788,7 +788,7 @@ describe('OperationLogHydratorService', () => {
         const regularOp1 = createMockOperation('op-1', OpType.Update, {
           clientId: 'regular-client',
         });
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           clientId: 'import-client-middle',
@@ -818,13 +818,13 @@ describe('OperationLogHydratorService', () => {
       it('should set protected client IDs from LAST full-state op vectorClock when multiple exist in tail ops', async () => {
         // When multiple full-state ops exist, only the LAST one matters
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
-        const syncImportOp1 = createMockOperation('sync-op-1', OpType.SyncImport, {
+        const syncImportOp1 = createMockOperation('sync-op-1', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           clientId: 'first-import-client',
           vectorClock: { first_import_client: 1, old_client: 5 },
         });
-        const syncImportOp2 = createMockOperation('sync-op-2', OpType.SyncImport, {
+        const syncImportOp2 = createMockOperation('sync-op-2', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           clientId: 'second-import-client',
@@ -859,7 +859,7 @@ describe('OperationLogHydratorService', () => {
         for (let i = 0; i < 15; i++) {
           largeClock[`device_${i}`] = i + 1;
         }
-        const syncImportOp = createMockOperation('sync-large', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-large', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           clientId: 'device_14',
@@ -899,7 +899,7 @@ describe('OperationLogHydratorService', () => {
         }
         const syncImportOp = createMockOperation(
           'sync-large-no-snap',
-          OpType.SyncImport,
+          OpType.SyncStateReplace,
           {
             payload: { appDataComplete: { task: {}, project: {} } },
             entityType: 'ALL',
@@ -954,7 +954,7 @@ describe('OperationLogHydratorService', () => {
         // No snapshot - triggers the no-snapshot branch
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
         const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           clientId: 'no-snapshot-import-client',
@@ -975,7 +975,7 @@ describe('OperationLogHydratorService', () => {
       it('should set protected client IDs from vectorClock in no-snapshot replay path containing SYNC_IMPORT', async () => {
         // No snapshot - triggers the no-snapshot branch
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           clientId: 'replay-import-client',
@@ -1028,7 +1028,7 @@ describe('OperationLogHydratorService', () => {
         // the local clock contains all necessary entries before protection takes effect
         const snapshot = createMockSnapshot({ lastAppliedOpSeq: 5 });
         const syncImportPayload = { task: {}, project: {} };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           clientId: 'import-client',
@@ -1073,12 +1073,16 @@ describe('OperationLogHydratorService', () => {
 
       it('should migrate protectedClientIds from existing SYNC_IMPORT vectorClock when empty', async () => {
         const snapshot = createMockSnapshot();
-        const syncImportOp = createMockOperation('old-import-op', OpType.SyncImport, {
-          clientId: 'legacy-import-client',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: { legacy_import_client: 1, old_device: 30 },
-        });
+        const syncImportOp = createMockOperation(
+          'old-import-op',
+          OpType.SyncStateReplace,
+          {
+            clientId: 'legacy-import-client',
+            entityType: 'ALL',
+            payload: { appDataComplete: { task: {}, project: {} } },
+            vectorClock: { legacy_import_client: 1, old_device: 30 },
+          },
+        );
 
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
         mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
@@ -1101,12 +1105,16 @@ describe('OperationLogHydratorService', () => {
 
       it('should NOT migrate when protectedClientIds already contains all vectorClock keys', async () => {
         const snapshot = createMockSnapshot();
-        const syncImportOp = createMockOperation('existing-import', OpType.SyncImport, {
-          clientId: 'existing_protected_client',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: { existing_protected_client: 1, other_protected_client: 5 },
-        });
+        const syncImportOp = createMockOperation(
+          'existing-import',
+          OpType.SyncStateReplace,
+          {
+            clientId: 'existing_protected_client',
+            entityType: 'ALL',
+            payload: { appDataComplete: { task: {}, project: {} } },
+            vectorClock: { existing_protected_client: 1, other_protected_client: 5 },
+          },
+        );
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
         mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
         // Simulate: protectedClientIds already has ALL required keys
@@ -1152,12 +1160,16 @@ describe('OperationLogHydratorService', () => {
         for (let i = 0; i < 15; i++) {
           largeClock[`device_${i}`] = i + 1;
         }
-        const syncImportOp = createMockOperation('large-import', OpType.SyncImport, {
-          clientId: 'device_14',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: largeClock,
-        });
+        const syncImportOp = createMockOperation(
+          'large-import',
+          OpType.SyncStateReplace,
+          {
+            clientId: 'device_14',
+            entityType: 'ALL',
+            payload: { appDataComplete: { task: {}, project: {} } },
+            vectorClock: largeClock,
+          },
+        );
 
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
         mockOpLogStore.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
@@ -1184,12 +1196,16 @@ describe('OperationLogHydratorService', () => {
         for (let i = 0; i < 15; i++) {
           largeClock[`device_${i}`] = i + 1;
         }
-        const syncImportOp = createMockOperation('large-import-2', OpType.SyncImport, {
-          clientId: 'device_14',
-          entityType: 'ALL',
-          payload: { appDataComplete: { task: {}, project: {} } },
-          vectorClock: largeClock,
-        });
+        const syncImportOp = createMockOperation(
+          'large-import-2',
+          OpType.SyncStateReplace,
+          {
+            clientId: 'device_14',
+            entityType: 'ALL',
+            payload: { appDataComplete: { task: {}, project: {} } },
+            vectorClock: largeClock,
+          },
+        );
 
         const snapshot = createMockSnapshot();
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
@@ -1212,7 +1228,7 @@ describe('OperationLogHydratorService', () => {
       });
 
       it('should run migration in no-snapshot path too', async () => {
-        const syncImportOp = createMockOperation('old-import', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('old-import', OpType.SyncStateReplace, {
           clientId: 'no-snapshot-legacy-client',
           entityType: 'ALL',
           payload: { appDataComplete: { task: {}, project: {} } },
@@ -1613,7 +1629,7 @@ describe('OperationLogHydratorService', () => {
       it('should merge full-state op clock in full replay when last op is SyncImport', async () => {
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
         const syncClock = { clientA: 10 };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: { task: {} } },
           entityType: 'ALL',
           vectorClock: syncClock,
@@ -1632,7 +1648,7 @@ describe('OperationLogHydratorService', () => {
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(null));
         const syncImportPayload = { task: {}, project: {} };
         const syncClock = { clientA: 5, clientB: 10 };
-        const syncImportOp = createMockOperation('sync-op', OpType.SyncImport, {
+        const syncImportOp = createMockOperation('sync-op', OpType.SyncStateReplace, {
           payload: { appDataComplete: syncImportPayload },
           entityType: 'ALL',
           vectorClock: syncClock,

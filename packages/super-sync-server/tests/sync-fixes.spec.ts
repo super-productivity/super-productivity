@@ -347,7 +347,7 @@ describe('Sync System Fixes', () => {
       const snapshotBody = snapshotResponse.json();
       expect(snapshotBody.accepted).toBe(true);
 
-      // Download ops and verify the SYNC_IMPORT has isPayloadEncrypted
+      // Download ops and verify the SYNC_STATE_REPLACE has isPayloadEncrypted
       const downloadResponse = await app.inject({
         method: 'GET',
         url: '/api/sync/ops?sinceSeq=0',
@@ -356,7 +356,7 @@ describe('Sync System Fixes', () => {
 
       const downloadBody = downloadResponse.json();
       const syncImportOp = downloadBody.ops.find(
-        (op: { op: { opType: string } }) => op.op.opType === 'SYNC_IMPORT',
+        (op: { op: { opType: string } }) => op.op.opType === 'SYNC_STATE_REPLACE',
       );
       expect(syncImportOp).toBeDefined();
       expect(syncImportOp.op.isPayloadEncrypted).toBe(true);
@@ -387,7 +387,7 @@ describe('Sync System Fixes', () => {
 
       const downloadBody = downloadResponse.json();
       const syncImportOp = downloadBody.ops.find(
-        (op: { op: { opType: string } }) => op.op.opType === 'SYNC_IMPORT',
+        (op: { op: { opType: string } }) => op.op.opType === 'SYNC_STATE_REPLACE',
       );
       expect(syncImportOp.op.isPayloadEncrypted).toBe(false);
     });

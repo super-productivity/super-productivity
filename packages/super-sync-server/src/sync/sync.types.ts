@@ -61,12 +61,36 @@ export const OP_TYPES = [
   'DEL',
   'MOV',
   'BATCH',
-  'SYNC_IMPORT',
+  'SYNC_STATE_REPLACE',
   'BACKUP_IMPORT',
   'REPAIR',
+  // Legacy alias kept for backwards compatibility with old clients
+  'SYNC_IMPORT',
 ] as const;
 
 export type OpType = (typeof OP_TYPES)[number];
+
+/**
+ * Maps legacy OpType string values to their current equivalents.
+ * Used for backwards compatibility when reading operations from the database
+ * or receiving them from old clients.
+ */
+export const LEGACY_OP_TYPE_MAP: Record<string, string> = {
+  SYNC_IMPORT: 'SYNC_STATE_REPLACE',
+};
+
+/**
+ * Normalizes an OpType string, mapping legacy values to current ones.
+ * Returns the input unchanged if no mapping exists.
+ */
+export const normalizeOpType = (opType: string): string =>
+  LEGACY_OP_TYPE_MAP[opType] ?? opType;
+
+/**
+ * All string values that represent a full-state sync import (current + legacy).
+ * Use this in Prisma queries and comparisons where both forms must be matched.
+ */
+export const SYNC_STATE_REPLACE_OP_TYPES = ['SYNC_STATE_REPLACE', 'SYNC_IMPORT'] as const;
 
 // VectorClock, VectorClockComparison, and compareVectorClocks are imported from @sp/shared-schema
 // and re-exported above. This ensures client and server use identical implementations.
@@ -212,7 +236,7 @@ export interface DownloadOpsResponse {
    */
   gapDetected?: boolean;
   /**
-   * Server sequence of the latest full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+   * Server sequence of the latest full-state operation (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR).
    * Fresh clients (sinceSeq=0) can use this to understand where the effective state starts.
    * Operations before this seq are superseded by the full-state operation.
    */
@@ -255,7 +279,8 @@ export interface SyncStatusResponse {
 
 // Restore point types
 export type RestorePointType =
-  | 'SYNC_IMPORT'
+  | 'SYNC_STATE_REPLACE'
+  | 'SYNC_IMPORT' // Legacy, kept for backwards compat
   | 'BACKUP_IMPORT'
   | 'REPAIR'
   | 'DAILY_BOUNDARY';
@@ -304,7 +329,12 @@ export const validatePayload = (
   payload: unknown,
 ): PayloadValidationResult => {
   // Skip validation for full-state operations (too complex to validate server-side)
-  if (opType === 'SYNC_IMPORT' || opType === 'BACKUP_IMPORT' || opType === 'REPAIR') {
+  if (
+    opType === 'SYNC_STATE_REPLACE' ||
+    opType === 'SYNC_IMPORT' ||
+    opType === 'BACKUP_IMPORT' ||
+    opType === 'REPAIR'
+  ) {
     return { valid: true };
   }
 
