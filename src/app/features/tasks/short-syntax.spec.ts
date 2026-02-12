@@ -1535,5 +1535,52 @@ describe('shortSyntax', () => {
       expect(r?.attachments[0].title).toBe('projects');
       expect(r?.taskChanges.title).toBe('Task');
     });
+
+    it('should not create duplicate attachments when URL already exists', async () => {
+      const existingAttachment = {
+        id: 'existing-1',
+        type: 'LINK' as const,
+        title: 'example',
+        path: 'https://example.com',
+        icon: 'bookmark',
+      };
+
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com again',
+        attachments: [existingAttachment],
+      };
+
+      const r = await shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments).toBeDefined();
+      // shortSyntax returns only NEW attachments (0 because duplicate filtered)
+      expect(r?.attachments.length).toBe(0);
+      expect(r?.taskChanges.title).toBe('Check again');
+    });
+
+    it('should add new URL even when task has other attachments', async () => {
+      const existingAttachment = {
+        id: 'existing-1',
+        type: 'LINK' as const,
+        title: 'old-site',
+        path: 'https://old-site.com',
+        icon: 'bookmark',
+      };
+
+      const t = {
+        ...TASK,
+        title: 'Task https://new-site.com',
+        attachments: [existingAttachment],
+      };
+
+      const r = await shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments).toBeDefined();
+      // shortSyntax returns only NEW attachments (effects merges with existing)
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://new-site.com');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
   });
 });

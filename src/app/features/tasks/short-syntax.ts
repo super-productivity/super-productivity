@@ -176,8 +176,9 @@ export const shortSyntax = async (
     ...task,
     title: taskChanges.title || task.title,
   });
-  if (urlChanges.attachments.length > 0) {
-    attachments = urlChanges.attachments;
+  if (urlChanges.hadUrls) {
+    // Merge existing attachments with new ones (deduplicated in parseUrlAttachments)
+    attachments = [...(task.attachments || []), ...urlChanges.attachments];
     taskChanges = {
       ...taskChanges,
       title: urlChanges.title,
@@ -488,16 +489,22 @@ const parseUrlAttachments = (
 ): {
   attachments: TaskAttachment[];
   title: string;
+  hadUrls: boolean;
 } => {
   if (!task.title || task.issueId) {
-    return { attachments: [], title: task.title || '' };
+    return { attachments: [], title: task.title || '', hadUrls: false };
   }
 
   const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
 
   if (!urlMatches || urlMatches.length === 0) {
-    return { attachments: [], title: task.title };
+    return { attachments: [], title: task.title, hadUrls: false };
   }
+
+  // Build set of existing attachment paths for deduplication
+  const existingPaths = new Set(
+    (task.attachments || []).map((a) => a.path).filter((p): p is string => !!p),
+  );
 
   const attachments: TaskAttachment[] = urlMatches.map((url) => {
     let path = url.trim();
@@ -542,7 +549,7 @@ const parseUrlAttachments = (
     };
   });
 
-  // Clean URLs from title - use trimmed URLs without trailing punctuation
+  // Clean URLs from title - use ALL detected URLs (before deduplication)
   let cleanedTitle = task.title;
   attachments.forEach((attachment) => {
     const attachmentPath = attachment.path;
@@ -557,7 +564,12 @@ const parseUrlAttachments = (
   });
   cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
 
-  return { attachments, title: cleanedTitle };
+  // Filter out attachments that already exist (prevent duplicates)
+  const newAttachments = attachments.filter(
+    (attachment) => attachment.path && !existingPaths.has(attachment.path),
+  );
+
+  return { attachments: newAttachments, title: cleanedTitle, hadUrls: true };
 };
 
 const _baseNameForUrl = (passedStr: string): string => {
