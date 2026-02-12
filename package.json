@@ -181,7 +181,7 @@
     "@angular/service-worker": "^21.0.8",
     "@capacitor/android": "^7.4.4",
     "@capacitor/app": "^7.1.0",
-    "@capacitor/cli": "^7.4.4",
+    "@capacitor/cli": "^7.5.0",
     "@capacitor/core": "^7.4.3",
     "@capacitor/filesystem": "^7.1.1",
     "@capacitor/local-notifications": "^7.0.1",
