@@ -194,6 +194,11 @@ export class SimulatedClient {
       this.lastKnownServerSeq = response.latestSeq;
     }
 
+    // Apply remote ops to merge their vector clocks into our local knowledge
+    if (response.ops.length > 0) {
+      await this._applyRemoteOps(response.ops);
+    }
+
     return { downloaded: response.ops.length };
   }
 
