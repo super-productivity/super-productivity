@@ -57,6 +57,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
 import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
 import { LegacySyncProvider } from '../../imex/sync/legacy-sync-provider.model';
+import { toSyncProviderId } from '../../op-log/sync-exports';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
@@ -371,6 +372,54 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
           ],
         };
       }
+
+      // Find the Dropbox fieldGroup and add the authentication button
+      if ((item as any).props?.dropboxAuth && item.fieldGroup) {
+        return {
+          ...item,
+          fieldGroup: [
+            ...item.fieldGroup,
+            {
+              type: 'btn',
+              className: 'mt3 block e2e-dropbox-auth-btn',
+              templateOptions: {
+                text: T.F.SYNC.FORM.DROPBOX.BTN_AUTHENTICATE,
+                btnType: 'primary',
+                onClick: async (_field: unknown, _form: unknown, model: unknown) => {
+                  try {
+                    const result =
+                      await this._syncWrapperService.configuredAuthForSyncProviderIfNecessary(
+                        toSyncProviderId(LegacySyncProvider.Dropbox)!,
+                      );
+
+                    if (result.wasConfigured) {
+                      this._snackService.open({
+                        type: 'SUCCESS',
+                        msg: T.F.SYNC.FORM.DROPBOX.AUTH_SUCCESS,
+                      });
+
+                      // Save the updated credentials to persist them
+                      const fullSyncModel = (
+                        _field as { parent?: { parent?: { model?: SyncConfig } } }
+                      )?.parent?.parent?.model;
+                      if (fullSyncModel) {
+                        await this.syncSettingsService.updateSettingsFromForm(
+                          fullSyncModel,
+                          true,
+                        );
+                      }
+                    }
+                  } catch (e) {
+                    // Error handling is done in SyncWrapperService
+                    // (shows error snackbar automatically)
+                  }
+                },
+              },
+            },
+          ],
+        };
+      }
+
       return item;
     });
 

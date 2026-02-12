@@ -1044,6 +1044,9 @@
       },
       "FORM": {
         "DROPBOX": {
+          "INFO_TEXT": "Dropbox authentication uses OAuth. Click the button below to authenticate with your Dropbox account.",
+          "BTN_AUTHENTICATE": "Authenticate with Dropbox",
+          "AUTH_SUCCESS": "Dropbox authentication successful! Credentials saved.",
           "L_ACCESS_TOKEN": "Access Token (generated from Auth Code)"
         },
         "GOOGLE": {
