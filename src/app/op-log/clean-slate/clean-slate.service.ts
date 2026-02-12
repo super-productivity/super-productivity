@@ -133,10 +133,7 @@ export class CleanSlateService {
     await this.opLogStore.setVectorClock(newVectorClock);
     OpLog.normal('[CleanSlate] Updated vector clock', { vectorClock: newVectorClock });
 
-    // 9. Protect the new client ID from pruning (consistent with BackupService)
-    await this.opLogStore.setProtectedClientIds([newClientId]);
-
-    // 10. Save new snapshot with the clean state
+    // 9. Save new snapshot with the clean state
     await this.opLogStore.saveStateCache({
       state: currentState,
       lastAppliedOpSeq: 0, // Fresh start - no ops applied yet

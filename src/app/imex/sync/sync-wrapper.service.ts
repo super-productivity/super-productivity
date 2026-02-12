@@ -940,26 +940,4 @@ export class SyncWrapperService {
       SyncLog.log('[SyncWrapper] No vector clock in SUP_OPS, skipping sync');
     }
   }
-
-  /**
-   * Syncs the vector clock from pf.META_MODEL to SUP_OPS.vector_clock.
-   * Called after downloading data from remote (UpdateLocal/UpdateLocalAll).
-   * This ensures SUP_OPS has the latest vector clock from the remote,
-   * so subsequent syncs correctly detect changes.
-   */
-  private async _syncVectorClockFromPfapi(): Promise<void> {
-    const metaModel = await this._legacyPfDb.loadMetaModel();
-    if (metaModel?.vectorClock && Object.keys(metaModel.vectorClock).length > 0) {
-      SyncLog.log('[SyncWrapper] Syncing vector clock from pf.META_MODEL to SUP_OPS', {
-        clockSize: Object.keys(metaModel.vectorClock).length,
-        lastUpdate: metaModel.lastUpdate,
-      });
-
-      await this._opLogStore.setVectorClock(metaModel.vectorClock);
-    } else {
-      SyncLog.log(
-        '[SyncWrapper] No vector clock in pf.META_MODEL, skipping sync to SUP_OPS',
-      );
-    }
-  }
 }

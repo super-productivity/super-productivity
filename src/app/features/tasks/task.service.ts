@@ -779,6 +779,20 @@ export class TaskService {
     );
   }
 
+  /**
+   * Adds time spent to a task AND dispatches the persistent syncTimeSpent action.
+   * Use this instead of addTimeSpent when the caller is NOT using BatchedTimeSyncAccumulator
+   * (e.g. idle dialog, tracking reminder). The tick path uses the accumulator instead.
+   */
+  addTimeSpentAndSync(task: Task, duration: number): void {
+    if (duration <= 0) {
+      return;
+    }
+    const date = this._dateService.todayStr();
+    this.addTimeSpent(task, duration, date);
+    this._store.dispatch(syncTimeSpent({ taskId: task.id, date, duration }));
+  }
+
   removeTimeSpent(
     id: string,
     duration: number,

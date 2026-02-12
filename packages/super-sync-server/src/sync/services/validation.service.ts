@@ -150,9 +150,9 @@ export class ValidationService {
     // It is performed in processOperation() AFTER conflict detection but BEFORE storage.
     // Pruning before comparison drops entity clock IDs when the merged clock exceeds
     // MAX_VECTOR_CLOCK_SIZE (e.g., during conflict resolution where the client includes
-    // all entity clock IDs + its own ID). The pruning-aware comparison then sees non-shared
-    // keys and returns CONCURRENT instead of GREATER_THAN → infinite rejection loop.
-    // DoS protection: sanitizeVectorClock() above caps at 5x MAX_VECTOR_CLOCK_SIZE (50).
+    // all entity clock IDs + its own ID). The comparison then sees non-shared keys and
+    // returns CONCURRENT instead of GREATER_THAN → infinite rejection loop.
+    // DoS protection: sanitizeVectorClock() above caps at 2.5x MAX_VECTOR_CLOCK_SIZE (50).
 
     // Validate payload complexity to prevent DoS attacks via deeply nested objects.
     // Full-state ops (SYNC_STATE_REPLACE, BACKUP_IMPORT, REPAIR) get higher thresholds

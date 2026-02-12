@@ -213,7 +213,7 @@ export class TrackingReminderService {
               });
               this._taskService.setCurrentId(currId);
             } else {
-              this._taskService.addTimeSpent(task, timeSpent, undefined, true);
+              this._taskService.addTimeSpentAndSync(task, timeSpent);
               this._taskService.setCurrentId(task.id);
             }
           }

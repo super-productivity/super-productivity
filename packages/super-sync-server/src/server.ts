@@ -133,6 +133,7 @@ export const createServer = (
             'Authorization',
             'Content-Type',
             'Content-Encoding',
+            'Content-Transfer-Encoding', // Used by some HTTP clients for binary/base64 payloads
             'X-Expected-Rev',
             'X-Force-Overwrite',
             'X-Requested-With',

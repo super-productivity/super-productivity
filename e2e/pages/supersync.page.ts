@@ -172,7 +172,12 @@ export class SuperSyncPage extends BasePage {
             `[SuperSyncPage] Unexpected confirm dialog: "${message}". Accepting anyway...`,
           );
         }
-        await dialog.accept();
+        // Try/catch: another handler (e.g. syncAndWait) may have already handled this dialog
+        try {
+          await dialog.accept();
+        } catch {
+          // Dialog already handled by another listener - ignore
+        }
       }
     });
 
@@ -191,7 +196,8 @@ export class SuperSyncPage extends BasePage {
 
     // Open sync settings via right-click (context menu)
     // This allows configuring sync even when already set up
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
 
     // Wait for the provider select (indicates dialog is open)
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
@@ -654,7 +660,8 @@ export class SuperSyncPage extends BasePage {
    */
   async enableEncryption(password: string): Promise<void> {
     // Open sync settings via right-click
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // CRITICAL: Select "SuperSync" from provider dropdown to load current configuration
@@ -996,13 +1003,64 @@ export class SuperSyncPage extends BasePage {
   }
 
   /**
+   * Handle any sync-blocking dialogs (Angular Material or native).
+   * Returns true if a dialog was handled, false otherwise.
+   * @private
+   */
+  private async _handleSyncDialogs(useLocal: boolean): Promise<boolean> {
+    // 1. Fresh client confirmation dialog (Angular Material)
+    if (await this.freshClientDialog.isVisible().catch(() => false)) {
+      console.log('[syncAndWait] Fresh client dialog detected, confirming...');
+      await this.freshClientConfirmBtn.click();
+      await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      return true;
+    }
+
+    // 2. Conflict resolution dialog
+    if (await this.conflictDialog.isVisible().catch(() => false)) {
+      console.log(
+        `[syncAndWait] Conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+      );
+      if (useLocal) {
+        await this.conflictApplyBtn.click();
+      } else {
+        await this.conflictUseRemoteBtn.click();
+        await this.page.waitForTimeout(200);
+        await this.conflictApplyBtn.click();
+      }
+      await this.conflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      return true;
+    }
+
+    // 3. Sync import conflict dialog
+    if (await this.syncImportConflictDialog.isVisible().catch(() => false)) {
+      console.log(
+        `[syncAndWait] Sync import conflict detected, using ${useLocal ? 'local' : 'remote'} data...`,
+      );
+      if (useLocal) {
+        await this.syncImportUseLocalBtn.click();
+      } else {
+        await this.syncImportUseRemoteBtn.click();
+      }
+      await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Trigger a manual sync and wait for it to complete, handling any dialogs that appear.
    * This is the main method to use for syncing in tests.
    *
    * Automatically handles:
-   * - Fresh client confirmation dialogs
+   * - Native window.confirm dialogs (fresh client sync confirmation)
+   * - Fresh client confirmation dialogs (Angular Material)
    * - Conflict resolution (uses "Use All Remote" by default)
    * - Sync import conflicts (uses remote by default)
+   *
+   * Dialogs are checked continuously during the sync wait, not just once at the start.
+   * This prevents sync hangs when dialogs appear mid-sync.
    *
    * @param options.useLocal - For conflicts, use local data instead of remote (default: false)
    * @param options.timeout - Maximum time to wait for sync (default: 30000ms)
@@ -1013,77 +1071,92 @@ export class SuperSyncPage extends BasePage {
     // Increased default timeout from 15s to 30s for multi-client scenarios under load
     const { useLocal = false, timeout = 30000 } = options;
 
-    // Click sync button
-    await this.syncBtn.click();
-
-    // Check if sync already completed (for very fast syncs)
-    const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
-
-    if (!checkAlreadyVisible) {
-      // Sync not yet complete, wait for it to start or complete
-      // Try to wait for spinner, but if it's already gone (sync completed quickly), that's fine
-      const spinnerAppeared = await this.syncSpinner
-        .waitFor({ state: 'visible', timeout: 2000 })
-        .then(() => true)
-        .catch(() => false);
-
-      if (spinnerAppeared) {
-        // Spinner appeared, now wait for dialogs and completion
-        // Check for dialogs that might appear during sync
-        // These can appear in any order or not at all
-
-        // 1. Check for fresh client confirmation dialog
-        const freshDialogVisible = await this.freshClientDialog
-          .isVisible()
-          .catch(() => false);
-        if (freshDialogVisible) {
-          console.log('[SuperSyncPage] Fresh client dialog detected, confirming...');
-          await this.freshClientConfirmBtn.click();
-          await this.freshClientDialog.waitFor({ state: 'hidden', timeout: 5000 });
-        }
-
-        // 2. Check for conflict resolution dialog
-        const conflictDialogVisible = await this.conflictDialog
-          .isVisible()
-          .catch(() => false);
-        if (conflictDialogVisible) {
+    // Register handler for native window.confirm dialogs that may appear during sync
+    // (e.g., fresh client confirmation, data repair). Use a non-once handler that
+    // removes itself when sync completes.
+    let dialogHandlerActive = true;
+    const dialogHandler = async (
+      dialog: import('@playwright/test').Dialog,
+    ): Promise<void> => {
+      if (!dialogHandlerActive) return;
+      try {
+        if (dialog.type() === 'confirm') {
           console.log(
-            `[SuperSyncPage] Conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+            `[syncAndWait] Native confirm dialog: "${dialog.message().substring(0, 80)}..." - accepting`,
           );
-          if (useLocal) {
-            // Keep local changes (manual resolution required - just click Apply)
-            await this.conflictApplyBtn.click();
-          } else {
-            // Use all remote changes
-            await this.conflictUseRemoteBtn.click();
-            await this.page.waitForTimeout(200);
-            await this.conflictApplyBtn.click();
-          }
-          await this.conflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
-        }
-
-        // 3. Check for sync import conflict dialog
-        const syncImportConflictVisible = await this.syncImportConflictDialog
-          .isVisible()
-          .catch(() => false);
-        if (syncImportConflictVisible) {
+          await dialog.accept();
+        } else if (dialog.type() === 'alert') {
           console.log(
-            `[SuperSyncPage] Sync import conflict dialog detected, using ${useLocal ? 'local' : 'remote'} data...`,
+            `[syncAndWait] Native alert dialog: "${dialog.message().substring(0, 80)}..." - dismissing`,
           );
-          if (useLocal) {
-            await this.syncImportUseLocalBtn.click();
-          } else {
-            await this.syncImportUseRemoteBtn.click();
-          }
-          await this.syncImportConflictDialog.waitFor({ state: 'hidden', timeout: 5000 });
+          await dialog.dismiss();
         }
-
-        // Wait for sync to complete (spinner disappears)
-        await this.syncSpinner.waitFor({ state: 'hidden', timeout });
+      } catch {
+        // Dialog already handled by another listener - ignore
       }
+    };
+    this.page.on('dialog', dialogHandler);
 
-      // Now wait for check icon to appear (whether spinner appeared or not)
-      await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 5000 });
+    try {
+      // Click sync button
+      await this.syncBtn.click();
+
+      // Check if sync already completed (for very fast syncs)
+      const checkAlreadyVisible = await this.syncCheckIcon.isVisible().catch(() => false);
+
+      if (!checkAlreadyVisible) {
+        // Sync not yet complete, wait for it to start or complete
+        const spinnerAppeared = await this.syncSpinner
+          .waitFor({ state: 'visible', timeout: 2000 })
+          .then(() => true)
+          .catch(() => false);
+
+        if (spinnerAppeared) {
+          // Wait for sync to complete, continuously checking for blocking dialogs.
+          // Previously we checked dialogs once then blocked on spinner - but dialogs
+          // can appear at any point during sync (especially after server round-trips).
+          const startTime = Date.now();
+
+          while (Date.now() - startTime < timeout) {
+            // Handle any visible dialog first
+            const handledDialog = await this._handleSyncDialogs(useLocal);
+            if (handledDialog) {
+              continue; // Re-check immediately after handling
+            }
+
+            // Wait for spinner to hide with short timeout to allow periodic dialog checks
+            const remaining = Math.max(timeout - (Date.now() - startTime), 1000);
+            const waitChunk = Math.min(3000, remaining);
+
+            try {
+              await this.syncSpinner.waitFor({ state: 'hidden', timeout: waitChunk });
+              break; // Spinner hidden - sync complete
+            } catch {
+              // Spinner still visible - check for error state
+              const hasError = await this.syncErrorIcon.isVisible().catch(() => false);
+              if (hasError) {
+                throw new Error('Sync failed with error state during syncAndWait()');
+              }
+              // Continue loop to re-check for dialogs
+            }
+          }
+
+          // Final check
+          const isStillSpinning = await this.syncSpinner.isVisible().catch(() => false);
+          if (isStillSpinning) {
+            throw new Error(
+              `syncAndWait timed out after ${timeout}ms - spinner still visible`,
+            );
+          }
+        }
+
+        // Now wait for check icon to appear (whether spinner appeared or not)
+        await this.syncCheckIcon.waitFor({ state: 'visible', timeout: 5000 });
+      }
+    } finally {
+      // Clean up the dialog handler
+      dialogHandlerActive = false;
+      this.page.off('dialog', dialogHandler);
     }
   }
 
@@ -1111,7 +1184,8 @@ export class SuperSyncPage extends BasePage {
    */
   async changeEncryptionPassword(newPassword: string): Promise<void> {
     // Open sync settings via right-click
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // Wait for the form to initialize and load the current configuration
@@ -1251,7 +1325,8 @@ export class SuperSyncPage extends BasePage {
    */
   async disableSync(): Promise<void> {
     // Open sync settings via right-click
-    await this.syncBtn.click({ button: 'right' });
+    // Use noWaitAfter to prevent blocking on Angular hash navigation
+    await this.syncBtn.click({ button: 'right', noWaitAfter: true });
     await this.providerSelect.waitFor({ state: 'visible', timeout: 10000 });
 
     // Look for "Enable Syncing" toggle (appears when editing existing config)

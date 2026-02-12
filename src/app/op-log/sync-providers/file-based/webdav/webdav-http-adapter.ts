@@ -111,9 +111,8 @@ export class WebDavHttpAdapter {
         error: e,
       });
       // Create a fake Response object for the error
-      const errorResponse = new Response('Network error', {
+      const errorResponse = new Response(`Network error: ${e}`, {
         status: WebDavHttpStatus.INTERNAL_SERVER_ERROR,
-        statusText: `Network error: ${e}`,
       });
       throw new HttpNotOkAPIError(errorResponse);
     }
@@ -162,9 +161,8 @@ export class WebDavHttpAdapter {
       // Create a fake Response object for the error
       // Ensure status is valid (200-599) for Response constructor
       const safeStatus = status >= 200 && status <= 599 ? status : 500;
-      const errorResponse = new Response('', {
+      const errorResponse = new Response(`HTTP ${status} for ${url}`, {
         status: safeStatus,
-        statusText: `HTTP ${status} for ${url}`,
       });
       throw new HttpNotOkAPIError(errorResponse, body);
     }

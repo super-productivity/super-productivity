@@ -31,6 +31,8 @@ import * as MarkdownToolbar from '../inline-markdown/markdown-toolbar.util';
 import { ClipboardImageService } from '../../core/clipboard-image/clipboard-image.service';
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { HISTORY_STATE } from 'src/app/app.constants';
+import { IS_MOBILE } from 'src/app/util/is-mobile';
 
 type ViewMode = 'SPLIT' | 'PARSED' | 'TEXT_ONLY';
 const ALL_VIEW_MODES: ['SPLIT', 'PARSED', 'TEXT_ONLY'] = ['SPLIT', 'PARSED', 'TEXT_ONLY'];
@@ -130,6 +132,16 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   }
 
   async ngOnInit(): Promise<void> {
+    // Push a fake state for our dialog in the history when it's displayed in fullscreen
+    if (IS_MOBILE) {
+      if (!window.history.state?.[HISTORY_STATE.DIALOG_FULLSCREEN_MARKDOWN]) {
+        window.history.pushState(
+          { [HISTORY_STATE.DIALOG_FULLSCREEN_MARKDOWN]: true },
+          '',
+        );
+      }
+    }
+
     // Update resolved content asynchronously for image processing
     if (this.data.content) {
       await this._updateResolvedContent(this.data.content);

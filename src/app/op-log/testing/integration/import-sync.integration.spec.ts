@@ -11,6 +11,13 @@ import {
 } from './helpers/operation-factory.helper';
 import { CURRENT_SCHEMA_VERSION } from '../../persistence/schema-migration.service';
 import { uuidv7 } from '../../../util/uuid-v7';
+import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
+import {
+  compareVectorClocks,
+  VectorClockComparison,
+  limitVectorClockSize,
+} from '../../../core/util/vector-clock';
+// MAX_VECTOR_CLOCK_SIZE is 20 — used implicitly by limitVectorClockSize
 
 /**
  * Integration tests for Import + Sync scenarios.
@@ -449,6 +456,122 @@ describe('Import + Sync Integration', () => {
 
       const allOps = await storeService.getOpsAfterSeq(0);
       expect(allOps[0].op.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    });
+  });
+
+  describe('SYNC_IMPORT Vector Clock Merge-vs-Replace Bug', () => {
+    /**
+     * BUG: When a remote client receives a SYNC_IMPORT, mergeRemoteOpClocks()
+     * MERGES the import's fresh clock into the old accumulated clock instead of
+     * REPLACING it. After server-side pruning removes the import's low-counter
+     * entry, new ops from that client appear CONCURRENT with the import and get
+     * discarded by SyncImportFilterService.
+     *
+     * Scenario:
+     * 1. Client B has accumulated a large vector clock (13 entries from long history)
+     * 2. Client A does an import, creating SYNC_IMPORT with fresh clock {import-fresh: 1}
+     * 3. Client B receives the SYNC_IMPORT and calls mergeRemoteOpClocks()
+     * 4. BUG: B's clock becomes 14 entries (old 13 + new 1) instead of being reset
+     * 5. Server prunes B's subsequent ops to MAX=20, dropping import-fresh:1 (lowest counter)
+     * 6. compareVectorClocks returns CONCURRENT: B has old entries import doesn't know,
+     *    import has import-fresh that B lost to pruning
+     * 7. SyncImportFilterService filters B's ops as "concurrent with import"
+     */
+    it('should reset vector clock when receiving SYNC_IMPORT, not merge into old clock', async () => {
+      // Set Client B's vector clock to 13 entries simulating long history
+      const bloatedClock: Record<string, number> = {};
+      for (let i = 0; i < 13; i++) {
+        bloatedClock[`old-device-${String(i).padStart(2, '0')}`] = 100 + i;
+      }
+      await storeService.setVectorClock(bloatedClock);
+
+      // Create SYNC_IMPORT with fresh clock (simulating Client A's import)
+      const importClient = new TestClient('import-fresh');
+      const importOp: Operation = importClient.createOperation({
+        actionType: '[SP_ALL] Load(import) all data' as ActionType,
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        entityId: uuidv7(),
+        payload: { appDataComplete: {} },
+      });
+
+      // Client B receives the SYNC_IMPORT and merges its clock
+      await storeService.mergeRemoteOpClocks([importOp]);
+
+      // After receiving a SYNC_IMPORT, the clock should be REPLACED, not merged.
+      // The import represents a complete state reset — the old clock entries are meaningless.
+      const clockAfterMerge = await storeService.getVectorClock();
+      const entryCount = Object.keys(clockAfterMerge!).length;
+
+      // BUG: This will be 14 (old entries + new entry) instead of ≤1
+      // The fix should replace the clock with the import's clock, not merge into old
+      expect(entryCount).toBeLessThanOrEqual(1);
+    });
+
+    it('should produce post-import ops that are GREATER_THAN the import, not CONCURRENT', async () => {
+      // Set Client B's vector clock to 13 entries simulating long history
+      const bloatedClock: Record<string, number> = {};
+      for (let i = 0; i < 13; i++) {
+        bloatedClock[`old-device-${String(i).padStart(2, '0')}`] = 100 + i;
+      }
+      await storeService.setVectorClock(bloatedClock);
+
+      // Create SYNC_IMPORT with fresh clock (simulating Client A's import)
+      const importClient = new TestClient('import-fresh');
+      const importOp: Operation = importClient.createOperation({
+        actionType: '[SP_ALL] Load(import) all data' as ActionType,
+        opType: OpType.SyncImport,
+        entityType: 'ALL',
+        entityId: uuidv7(),
+        payload: { appDataComplete: {} },
+      });
+
+      // Store the import op so SyncImportFilterService can find it
+      await storeService.append(importOp, 'remote');
+
+      // Client B receives the SYNC_IMPORT and merges its clock
+      await storeService.mergeRemoteOpClocks([importOp]);
+
+      // Now simulate Client B creating a post-import operation.
+      // B's clock is bloated (old entries + new entry after buggy merge).
+      // Build B's post-import clock by reading the store and incrementing.
+      const clockAfterMerge = await storeService.getVectorClock();
+      const clientBId = 'client-bbbbb';
+      const postImportClock = {
+        ...clockAfterMerge!,
+        [clientBId]: (clockAfterMerge![clientBId] ?? 0) + 1,
+      };
+
+      // Simulate server-side pruning of B's op clock to MAX=20
+      const prunedOpClock = limitVectorClockSize(postImportClock, clientBId);
+
+      // BUG: After pruning, import-fresh:1 gets dropped
+      // (it has the lowest counter). Now compareVectorClocks returns CONCURRENT
+      // because B has old entries the import doesn't know about, and the import
+      // has import-fresh that B lost to pruning.
+      const comparison = compareVectorClocks(prunedOpClock, importOp.vectorClock);
+      expect(comparison).toBe(VectorClockComparison.GREATER_THAN);
+
+      // Also verify SyncImportFilterService would keep B's op
+      const filterService = TestBed.inject(SyncImportFilterService);
+      const postImportOp: Operation = {
+        id: uuidv7(),
+        clientId: clientBId,
+        actionType: '[Task] Add Task' as ActionType,
+        opType: OpType.Create,
+        entityType: 'TASK',
+        entityId: uuidv7(),
+        payload: createMinimalTaskPayload('post-import-task'),
+        vectorClock: prunedOpClock,
+        timestamp: Date.now(),
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+      };
+
+      const result = await filterService.filterOpsInvalidatedBySyncImport([postImportOp]);
+
+      // BUG: B's post-import op gets filtered as invalidated
+      expect(result.validOps.length).toBe(1);
+      expect(result.invalidatedOps.length).toBe(0);
     });
   });
 });

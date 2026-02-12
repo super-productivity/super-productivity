@@ -268,7 +268,7 @@ describe('Vector Clock Sync Integration', () => {
      * 1. Local operations update SUP_OPS.vector_clock
      * 2. Before sync: _syncVectorClockToPfapi() copies to pf.META_MODEL
      * 3. Sync compares vector clocks
-     * 4. After download: _syncVectorClockFromPfapi() copies back to SUP_OPS
+     * 4. After download: setVectorClock() updates SUP_OPS directly
      */
 
     it('should maintain clock through simulated sync upload cycle', async () => {
@@ -293,7 +293,7 @@ describe('Vector Clock Sync Integration', () => {
     it('should restore clock after simulated sync download', async () => {
       // Simulate: Client downloads data from remote
       // After download, pf.META_MODEL has the remote vector clock
-      // _syncVectorClockFromPfapi should copy it to SUP_OPS
+      // setVectorClock copies the remote clock to SUP_OPS
 
       // Simulate the copy from pf.META_MODEL to SUP_OPS
       const remoteVectorClock: VectorClock = {

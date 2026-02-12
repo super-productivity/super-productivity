@@ -94,4 +94,6 @@ export const HANDLED_ERROR_PROP_STR = 'HANDLED_ERROR_PROP';
 export const HISTORY_STATE = {
   MOBILE_NAVIGATION: 'mobileSideNav',
   TASK_DETAIL_PANEL: 'taskDetailPanel',
+  DIALOG_FULLSCREEN_MARKDOWN: 'dialogFullscreenMarkdown',
+  NOTES: 'notes',
 };

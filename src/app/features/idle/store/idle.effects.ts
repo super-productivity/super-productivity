@@ -340,7 +340,7 @@ export class IdleEffects {
               });
             } else if (taskItem.task) {
               taskItemId = taskItem.task.id;
-              this._taskService.addTimeSpent(taskItem.task, taskItem.time);
+              this._taskService.addTimeSpentAndSync(taskItem.task, taskItem.time);
             }
           });
 

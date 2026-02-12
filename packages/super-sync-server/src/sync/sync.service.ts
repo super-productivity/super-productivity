@@ -10,6 +10,8 @@ import {
   VectorClock,
   SYNC_ERROR_CODES,
   SYNC_STATE_REPLACE_OP_TYPES,
+  ConflictType,
+  ConflictResult,
 } from './sync.types';
 import { Logger } from '../logger';
 import { CURRENT_SCHEMA_VERSION } from '@sp/shared-schema';
@@ -25,6 +27,19 @@ import {
   SnapshotService,
 } from './services';
 
+/**
+ * Main sync orchestration service.
+ *
+ * IMPORTANT: Single-instance deployment assumption
+ * This service uses process-local in-memory caches for:
+ * - Rate limiting (RateLimitService)
+ * - Request deduplication (RequestDeduplicationService)
+ * - Snapshot caching (SnapshotService)
+ *
+ * For multi-instance deployment behind a load balancer, these caches
+ * would need to be moved to a shared store (e.g., Redis) to ensure
+ * consistent behavior across instances.
+ */
 export class SyncService {
   private config: SyncConfig;
   private validationService: ValidationService;
@@ -56,7 +71,7 @@ export class SyncService {
     userId: number,
     op: Operation,
     tx: Prisma.TransactionClient,
-  ): Promise<{ hasConflict: boolean; reason?: string; existingClock?: VectorClock }> {
+  ): Promise<ConflictResult> {
     // Skip conflict detection for full-state operations
     if (
       op.opType === 'SYNC_STATE_REPLACE' ||
@@ -100,7 +115,7 @@ export class SyncService {
     op: Operation,
     entityId: string,
     tx: Prisma.TransactionClient,
-  ): Promise<{ hasConflict: boolean; reason?: string; existingClock?: VectorClock }> {
+  ): Promise<ConflictResult> {
     // Get the latest operation for this entity
     const existingOp = await tx.operation.findFirst({
       where: {
@@ -139,6 +154,7 @@ export class SyncService {
     if (comparison === 'EQUAL') {
       return {
         hasConflict: true,
+        conflictType: 'equal_different_client',
         reason: `Equal vector clocks from different clients for ${op.entityType}:${entityId} (client ${op.clientId} vs ${existingOp.clientId})`,
         existingClock,
       };
@@ -148,6 +164,7 @@ export class SyncService {
     if (comparison === 'CONCURRENT') {
       return {
         hasConflict: true,
+        conflictType: 'concurrent',
         reason: `Concurrent modification detected for ${op.entityType}:${entityId}`,
         existingClock,
       };
@@ -157,6 +174,7 @@ export class SyncService {
     if (comparison === 'LESS_THAN') {
       return {
         hasConflict: true,
+        conflictType: 'superseded',
         reason: `Superseded operation: server has newer version of ${op.entityType}:${entityId}`,
         existingClock,
       };
@@ -166,6 +184,7 @@ export class SyncService {
     // But if we do, default to conflict for safety
     return {
       hasConflict: true,
+      conflictType: 'unknown',
       reason: `Unknown vector clock comparison result for ${op.entityType}:${entityId}`,
       existingClock,
     };
@@ -198,8 +217,18 @@ export class SyncService {
             // Delete all devices
             await tx.syncDevice.deleteMany({ where: { userId } });
 
-            // Reset sync state (delete if exists)
-            await tx.userSyncState.deleteMany({ where: { userId } });
+            // Reset snapshot data but PRESERVE lastSeq so sequence numbers continue.
+            // If we deleted the sync state row, lastSeq would reset to 0 and new ops
+            // would reuse sequence numbers that other clients already saw — causing
+            // those clients to miss the SYNC_IMPORT and any ops that land on reused seqs.
+            await tx.userSyncState.updateMany({
+              where: { userId },
+              data: {
+                lastSnapshotSeq: null,
+                snapshotData: null,
+                snapshotAt: null,
+              },
+            });
 
             // Reset storage usage
             await tx.user.update({
@@ -361,10 +390,11 @@ export class SyncService {
       // Check for conflicts with existing operations
       const conflict = await this.detectConflict(userId, op, tx);
       if (conflict.hasConflict) {
-        const isConcurrent = conflict.reason?.includes('Concurrent');
-        const errorCode = isConcurrent
-          ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
+        const errorCode =
+          conflict.conflictType === 'concurrent' ||
+          conflict.conflictType === 'equal_different_client'
+            ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
+            : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,
@@ -398,10 +428,11 @@ export class SyncService {
       // isolation, this ensures no undetected concurrent modifications.
       const finalConflict = await this.detectConflict(userId, op, tx);
       if (finalConflict.hasConflict) {
-        const isConcurrent = finalConflict.reason?.includes('Concurrent');
-        const errorCode = isConcurrent
-          ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
-          : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
+        const errorCode =
+          finalConflict.conflictType === 'concurrent' ||
+          finalConflict.conflictType === 'equal_different_client'
+            ? SYNC_ERROR_CODES.CONFLICT_CONCURRENT
+            : SYNC_ERROR_CODES.CONFLICT_SUPERSEDED;
         Logger.audit({
           event: 'OP_REJECTED',
           userId,
@@ -458,8 +489,8 @@ export class SyncService {
       // for conflict comparison. This prevents false CONCURRENT results when the client
       // builds a merged clock with MAX+1 entries during conflict resolution (all entity
       // clock IDs + its own client ID). Pruning before comparison would drop an entity
-      // clock ID, causing the pruning-aware comparison to see a non-shared key and return
-      // CONCURRENT instead of GREATER_THAN, leading to an infinite rejection loop.
+      // clock ID, causing the comparison to return CONCURRENT instead of GREATER_THAN,
+      // leading to an infinite rejection loop.
       const beforeSize = Object.keys(op.vectorClock).length;
       op.vectorClock = limitVectorClockSize(op.vectorClock, [op.clientId]);
       const afterSize = Object.keys(op.vectorClock).length;
@@ -761,20 +792,15 @@ export class SyncService {
       return { deletedCount: 0, freedBytes: 0, success: false };
     }
 
-    // Calculate approximate size of ops being deleted
-    const opsToDelete = await prisma.operation.findMany({
-      where: {
-        userId,
-        serverSeq: { lte: deleteUpToSeq },
-      },
-      select: { payload: true, vectorClock: true },
-    });
-
-    const freedBytes = opsToDelete.reduce((sum, op) => {
-      const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
-      const clockSize = op.vectorClock ? JSON.stringify(op.vectorClock).length : 0;
-      return sum + payloadSize + clockSize;
-    }, 0);
+    // Calculate approximate size of ops being deleted using SQL aggregate
+    // to avoid loading potentially large payloads into Node memory.
+    // NOTE: Column names match the Prisma `Operation` model's `@@map("operations")`
+    // and `@map(...)` annotations (see prisma/schema.prisma).
+    const sizeResult = await prisma.$queryRaw<[{ total: bigint | null }]>`
+      SELECT COALESCE(SUM(LENGTH(payload::text) + LENGTH(vector_clock::text)), 0) as total
+      FROM operations WHERE user_id = ${userId} AND server_seq <= ${deleteUpToSeq}
+    `;
+    const freedBytes = Number(sizeResult[0]?.total ?? 0);
 
     // Delete the operations
     const result = await prisma.operation.deleteMany({
@@ -841,8 +867,13 @@ export class SyncService {
     let deletedRestorePoints = 0;
     let totalDeletedOps = 0;
 
+    const MAX_CLEANUP_ITERATIONS = 50;
+    let iterations = 0;
+
     // Keep trying until we have enough space or hit minimum
-    while (true) {
+    while (iterations < MAX_CLEANUP_ITERATIONS) {
+      iterations++;
+
       // Check if we now have enough space
       const quotaCheck = await this.checkStorageQuota(userId, requiredBytes);
       if (quotaCheck.allowed) {
@@ -898,6 +929,17 @@ export class SyncService {
           `${restorePoints.length - 1} restore points remaining`,
       );
     }
+
+    // Exhausted max iterations without freeing enough space
+    Logger.warn(
+      `[user:${userId}] Storage cleanup exceeded max iterations (${MAX_CLEANUP_ITERATIONS})`,
+    );
+    return {
+      success: false,
+      freedBytes: totalFreedBytes,
+      deletedRestorePoints,
+      deletedOps: totalDeletedOps,
+    };
   }
 
   async deleteStaleDevices(beforeTime: number): Promise<number> {
@@ -921,7 +963,11 @@ export class SyncService {
       // Delete all devices
       await tx.syncDevice.deleteMany({ where: { userId } });
 
-      // Reset sync state (delete if exists)
+      // Delete sync state entirely, resetting lastSeq to 0.
+      // Unlike uploadOps clean slate (which preserves lastSeq), account reset
+      // intentionally wipes everything. Clients detect the wipe via latestSeq=0
+      // and trigger a full state re-upload. This is correct because account reset
+      // (e.g., encryption password change) requires ALL clients to re-sync.
       await tx.userSyncState.deleteMany({ where: { userId } });
 
       // Reset storage usage

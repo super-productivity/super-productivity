@@ -143,8 +143,8 @@ export class SupersededOperationResolverService {
           );
           // Don't prune here — the server prunes AFTER conflict detection (before storage).
           // Client-side pruning would drop entity clock IDs when the merged clock exceeds
-          // MAX_VECTOR_CLOCK_SIZE, causing the server's pruning-aware comparison to return
-          // CONCURRENT instead of GREATER_THAN → infinite rejection loop.
+          // MAX_VECTOR_CLOCK_SIZE, causing the comparison to return CONCURRENT instead of
+          // GREATER_THAN → infinite rejection loop.
           const newOp = this._recreateOpWithMergedClock(
             item.op,
             mergedClock,

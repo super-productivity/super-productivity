@@ -3,6 +3,9 @@
 :host {
   display: block;
   padding: 0 12px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 .items {
   display: grid;

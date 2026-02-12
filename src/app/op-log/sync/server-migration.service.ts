@@ -7,7 +7,6 @@ import {
   incrementVectorClock,
   limitVectorClockSize,
   mergeVectorClocks,
-  selectProtectedClientIds,
 } from '../../core/util/vector-clock';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { ValidateStateService } from '../validation/validate-state.service';
@@ -222,7 +221,6 @@ export class ServerMigrationService {
     const newClock = limitVectorClockSize(
       incrementVectorClock(mergedClock, clientId),
       clientId,
-      [],
     );
 
     OpLog.normal(
@@ -247,18 +245,6 @@ export class ServerMigrationService {
 
     // Append to operation log - will be uploaded via snapshot endpoint
     await this.opLogStore.append(op, 'local');
-
-    // CRITICAL: Set protected client IDs to include ALL vector clock keys from the SYNC_IMPORT.
-    // When new operations are created after this SYNC_IMPORT, limitVectorClockSize() is called
-    // which prunes low-counter entries. Without protecting all these IDs, subsequent ops
-    // would have incomplete clocks (missing the pruned entries), causing them to appear
-    // CONCURRENT with this SYNC_IMPORT instead of GREATER_THAN. This leads to the bug where
-    // other clients filter out legitimate ops as "invalidated by SYNC_IMPORT".
-    const protectedIds = selectProtectedClientIds(newClock);
-    await this.opLogStore.setProtectedClientIds(protectedIds);
-    OpLog.normal(
-      `ServerMigrationService: Set protected client IDs from SYNC_IMPORT: [${protectedIds.join(', ')}]`,
-    );
 
     OpLog.normal(
       'ServerMigrationService: Created SYNC_IMPORT operation for server migration. ' +

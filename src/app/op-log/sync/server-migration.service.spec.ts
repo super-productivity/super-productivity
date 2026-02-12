@@ -62,7 +62,6 @@ describe('ServerMigrationService', () => {
       'hasSyncedOps',
       'append',
       'getOpsAfterSeq',
-      'setProtectedClientIds',
     ]);
     vectorClockServiceSpy = jasmine.createSpyObj('VectorClockService', [
       'getCurrentVectorClock',
@@ -81,7 +80,6 @@ describe('ServerMigrationService', () => {
     opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
     opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
     opLogStoreSpy.getOpsAfterSeq.and.returnValue(Promise.resolve([]));
-    opLogStoreSpy.setProtectedClientIds.and.returnValue(Promise.resolve());
     vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ 'test-client': 5 }),
     );
@@ -580,76 +578,6 @@ describe('ServerMigrationService', () => {
 
       // Should just increment current clock
       expect(appendedOp.vectorClock['test-client']).toBe(11);
-    });
-
-    it('should call setProtectedClientIds with all vector clock keys from SYNC_IMPORT', async () => {
-      // BUG FIX: After creating a SYNC_IMPORT locally, we must protect all vector clock keys.
-      // Without this, when new ops are created, limitVectorClockSize() would prune low-counter
-      // entries, causing those ops to appear CONCURRENT with the import instead of GREATER_THAN.
-      // This leads to the bug where other clients filter out legitimate ops.
-
-      const localOps = [
-        {
-          seq: 1,
-          op: {
-            id: 'op-1',
-            vectorClock: { 'client-A': 1, 'client-B': 50 },
-          },
-          appliedAt: Date.now(),
-          source: 'local' as const,
-        },
-      ];
-
-      opLogStoreSpy.getOpsAfterSeq.and.returnValue(Promise.resolve(localOps as any));
-      vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
-        Promise.resolve({ 'test-client': 5, 'client-C': 100 }),
-      );
-
-      await service.handleServerMigration(defaultProvider);
-
-      expect(opLogStoreSpy.append).toHaveBeenCalled();
-      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalled();
-
-      // The protected IDs should include ALL keys from the SYNC_IMPORT's vector clock:
-      // merged clock = { test-client: 5, client-A: 1, client-B: 50, client-C: 100 }
-      // then incremented = { test-client: 6, client-A: 1, client-B: 50, client-C: 100 }
-      const protectedIds = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
-        .args[0] as string[];
-      expect(protectedIds).toContain('test-client');
-      expect(protectedIds).toContain('client-A');
-      expect(protectedIds).toContain('client-B');
-      expect(protectedIds).toContain('client-C');
-    });
-
-    it('should cap protected client IDs to MAX_VECTOR_CLOCK_SIZE - 1 with large merged clock', async () => {
-      // Simulate: local ops produce a clock with many entries after merging
-      const largeClock: Record<string, number> = {};
-      for (let i = 0; i < 14; i++) {
-        largeClock[`device_${i}`] = i + 1;
-      }
-
-      const localOps = [
-        {
-          seq: 1,
-          op: { id: 'op-1', vectorClock: largeClock },
-          appliedAt: Date.now(),
-          source: 'local' as const,
-        },
-      ];
-
-      opLogStoreSpy.getOpsAfterSeq.and.returnValue(Promise.resolve(localOps as any));
-      vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
-        Promise.resolve({ 'test-client': 5 }),
-      );
-
-      await service.handleServerMigration(defaultProvider);
-
-      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalled();
-      const protectedIds = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
-        .args[0] as string[];
-      // merged clock has 15 entries (14 from large + test-client)
-      // selectProtectedClientIds caps to 9
-      expect(protectedIds.length).toBeLessThanOrEqual(9);
     });
 
     // Note: Test for non-operation-sync-capable providers removed.

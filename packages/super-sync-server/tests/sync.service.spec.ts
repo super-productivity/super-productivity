@@ -200,6 +200,19 @@ vi.mock('../src/db', async () => {
         }
         return { count: deleted };
       }),
+      updateMany: vi.fn().mockImplementation(async (args: any) => {
+        let updated = 0;
+        for (const [key, syncState] of state.userSyncStates) {
+          if (
+            args.where?.userId !== undefined &&
+            syncState.userId === args.where.userId
+          ) {
+            Object.assign(syncState, args.data);
+            updated++;
+          }
+        }
+        return { count: updated };
+      }),
     },
     syncDevice: {
       upsert: vi.fn().mockImplementation(async (args: any) => {
@@ -379,6 +392,19 @@ vi.mock('../src/db', async () => {
               return false;
             return true;
           });
+        }),
+        updateMany: vi.fn().mockImplementation(async (args: any) => {
+          let updated = 0;
+          for (const [, syncState] of state.userSyncStates) {
+            if (
+              args.where?.userId !== undefined &&
+              syncState.userId === args.where.userId
+            ) {
+              Object.assign(syncState, args.data);
+              updated++;
+            }
+          }
+          return { count: updated };
         }),
       },
       syncDevice: {
