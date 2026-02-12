@@ -7,6 +7,7 @@ import {
   MAX_VECTOR_CLOCK_SIZE,
 } from '@sp/shared-schema';
 import { MIN_CLIENT_ID_LENGTH } from '../../op-log/core/operation-log.const';
+import { Subject } from 'rxjs';
 
 /**
  * Vector Clock implementation for distributed synchronization
@@ -294,6 +295,15 @@ export interface VectorClockMetrics {
 }
 
 /**
+ * Emits when vector clock pruning occurs.
+ * Subscribe to this to notify the user about the pruning event.
+ */
+export const vectorClockPruned$ = new Subject<{
+  originalSize: number;
+  maxSize: number;
+}>();
+
+/**
  * Limits the size of a vector clock by keeping only the most active clients.
  * Wraps the shared implementation from @sp/shared-schema with client-side logging.
  *
@@ -315,6 +325,11 @@ export const limitVectorClockSize = (
     maxSize: MAX_VECTOR_CLOCK_SIZE,
     currentClientId,
     pruned: entries.length - MAX_VECTOR_CLOCK_SIZE,
+  });
+
+  vectorClockPruned$.next({
+    originalSize: entries.length,
+    maxSize: MAX_VECTOR_CLOCK_SIZE,
   });
 
   return sharedLimitVectorClockSize(clock, [currentClientId]);
