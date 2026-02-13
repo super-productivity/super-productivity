@@ -220,7 +220,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
 
           this._bottomSheetRef = this._bottomSheet.open(BottomPanelContainerComponent, {
             hasBackdrop: true,
-            closeOnNavigation: true,
+            closeOnNavigation: false,
             panelClass: 'bottom-panel-sheet',
             // Let CSS handle positioning and height
           });

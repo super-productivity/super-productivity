@@ -694,6 +694,67 @@ describe('TaskService', () => {
     });
   });
 
+  describe('addTimeSpentAndSync', () => {
+    it('should dispatch both addTimeSpent and syncTimeSpent', () => {
+      const task = createMockTask('task-1');
+
+      service.addTimeSpentAndSync(task, 60000);
+
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Add time spent',
+          task,
+          duration: 60000,
+          date: '2026-01-05',
+        }),
+      );
+      expect(store.dispatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: '[TimeTracking] Sync time spent',
+          taskId: 'task-1',
+          duration: 60000,
+          date: '2026-01-05',
+        }),
+      );
+    });
+
+    it('should use same date for both dispatches', () => {
+      const task = createMockTask('task-1');
+
+      service.addTimeSpentAndSync(task, 5000);
+
+      const calls = (store.dispatch as jasmine.Spy).calls.allArgs();
+      const addCall = calls.find(
+        ([a]: any) => a.type === '[TimeTracking] Add time spent',
+      );
+      const syncCall = calls.find(
+        ([a]: any) => a.type === '[TimeTracking] Sync time spent',
+      );
+
+      expect(addCall).toBeTruthy();
+      expect(syncCall).toBeTruthy();
+      expect(addCall![0].date).toBe(syncCall![0].date);
+    });
+
+    it('should not dispatch when duration is zero', () => {
+      const task = createMockTask('task-1');
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.addTimeSpentAndSync(task, 0);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('should not dispatch when duration is negative', () => {
+      const task = createMockTask('task-1');
+      (store.dispatch as jasmine.Spy).calls.reset();
+
+      service.addTimeSpentAndSync(task, -1000);
+
+      expect(store.dispatch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('removeTimeSpent', () => {
     it('should dispatch removeTimeSpent action', () => {
       service.removeTimeSpent('task-1', 30000);

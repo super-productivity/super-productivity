@@ -54,7 +54,6 @@ describe('OperationLogEffects', () => {
       'appendWithVectorClockUpdate',
       'getCompactionCounter',
       'clearVectorClockCache',
-      'getProtectedClientIds',
     ]);
     mockLockService = jasmine.createSpyObj('LockService', ['request']);
     mockVectorClockService = jasmine.createSpyObj('VectorClockService', [
@@ -83,7 +82,6 @@ describe('OperationLogEffects', () => {
     mockOpLogStore.append.and.returnValue(Promise.resolve(1));
     mockOpLogStore.appendWithVectorClockUpdate.and.returnValue(Promise.resolve(1));
     mockOpLogStore.getCompactionCounter.and.returnValue(Promise.resolve(0));
-    mockOpLogStore.getProtectedClientIds.and.returnValue(Promise.resolve([]));
     mockVectorClockService.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ testClient: 5 }),
     );

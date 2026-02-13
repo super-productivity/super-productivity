@@ -75,13 +75,6 @@ npm run test:watch
 npm run test:coverage
 ```
 
-## Documentation
-
-For detailed documentation, see:
-
-- [Full Documentation](../../../docs/ai/sync-md-plugin-documentation.md)
-- [Migration Guide](../../../docs/ai/sync-md-documentation-migration.md)
-
 ## Cleanup
 
 To remove old/unnecessary files after updating:

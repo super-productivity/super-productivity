@@ -31,8 +31,12 @@ export type VectorClockComparison = 'EQUAL' | 'LESS_THAN' | 'GREATER_THAN' | 'CO
 /**
  * Maximum number of entries in a vector clock.
  * Shared between client and server to ensure consistent pruning.
+ *
+ * At 6-char client IDs, a 20-entry clock is ~333 bytes — negligible bandwidth.
+ * A user needs 21+ unique client IDs (reinstalls/new browsers) before pruning
+ * triggers, which is extremely unlikely for a personal productivity app.
  */
-export const MAX_VECTOR_CLOCK_SIZE = 10;
+export const MAX_VECTOR_CLOCK_SIZE = 20;
 
 /**
  * Compare two vector clocks to determine their relationship.
@@ -40,20 +44,9 @@ export const MAX_VECTOR_CLOCK_SIZE = 10;
  * CRITICAL: This algorithm must produce identical results on client and server.
  * Both implementations import from this shared module to ensure consistency.
  *
- * Pruning-aware mode: When both clocks are at MAX_VECTOR_CLOCK_SIZE, they may
- * have been pruned by different clients (each preserving its own clientId).
- * Missing keys could mean "pruned away" rather than "genuinely zero". Comparing
- * only shared keys avoids false CONCURRENT from cross-client pruning asymmetry.
- * To avoid false dominance, if the side that appears behind on shared keys has
- * any non-shared keys, we conservatively return CONCURRENT.
- *
- * Known limitation: A clock that naturally grew to exactly MAX_VECTOR_CLOCK_SIZE
- * entries (without pruning) is indistinguishable from a pruned clock. In that case,
- * missing keys genuinely mean "never seen" but are treated as "possibly pruned".
- * This could produce LESS_THAN/GREATER_THAN instead of CONCURRENT when one clock
- * was pruned and the other naturally reached MAX size. This is accepted as a pragmatic
- * tradeoff — it requires exactly MAX_VECTOR_CLOCK_SIZE active clients, which is
- * unlikely for a personal productivity app.
+ * Standard vector clock comparison: missing keys mean "genuinely zero".
+ * With MAX_VECTOR_CLOCK_SIZE=20, pruning is extremely rare (needs 21+ unique
+ * client IDs), so pruning-aware comparison is unnecessary.
  *
  * @param a First vector clock
  * @param b Second vector clock
@@ -63,54 +56,21 @@ export const compareVectorClocks = (
   a: VectorClock,
   b: VectorClock,
 ): VectorClockComparison => {
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-
-  // When both clocks have EXACTLY MAX_VECTOR_CLOCK_SIZE entries, they may have
-  // been pruned by limitVectorClockSize (which caps at exactly MAX). Missing
-  // keys could mean "pruned away" rather than "genuinely zero". Comparing only
-  // shared keys avoids false CONCURRENT from cross-client pruning asymmetry.
-  // Use === (not >=): a clock with MORE than MAX entries was never pruned and
-  // should use normal comparison mode to correctly detect dominance.
-  const bothPossiblyPruned =
-    aKeys.length === MAX_VECTOR_CLOCK_SIZE && bKeys.length === MAX_VECTOR_CLOCK_SIZE;
-
-  let keysToCompare: Set<string>;
-  let aOnlyCount = 0;
-  let bOnlyCount = 0;
-  if (bothPossiblyPruned) {
-    const bKeySet = new Set(bKeys);
-    keysToCompare = new Set(aKeys.filter((k) => bKeySet.has(k)));
-    // If no shared keys at all, clocks are from independent client populations → CONCURRENT
-    if (keysToCompare.size === 0) return 'CONCURRENT';
-    aOnlyCount = aKeys.length - keysToCompare.size;
-    bOnlyCount = bKeys.length - keysToCompare.size;
-  } else {
-    keysToCompare = new Set([...aKeys, ...bKeys]);
-  }
-
+  const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
   let aGreater = false;
   let bGreater = false;
 
-  for (const key of keysToCompare) {
+  for (const key of allKeys) {
     const aVal = a[key] ?? 0;
     const bVal = b[key] ?? 0;
-
     if (aVal > bVal) aGreater = true;
     if (bVal > aVal) bGreater = true;
+    if (aGreater && bGreater) return 'CONCURRENT';
   }
 
   if (aGreater && bGreater) return 'CONCURRENT';
-  if (bothPossiblyPruned && aGreater && bOnlyCount > 0) return 'CONCURRENT';
-  if (bothPossiblyPruned && bGreater && aOnlyCount > 0) return 'CONCURRENT';
   if (aGreater) return 'GREATER_THAN';
   if (bGreater) return 'LESS_THAN';
-
-  // In pruning-aware mode, if shared keys are equal but either side has
-  // non-shared keys, the clocks may have genuinely different causal histories.
-  // Returning EQUAL would cause silent data loss (skip as duplicate).
-  // Returning CONCURRENT triggers LWW conflict resolution (safe direction).
-  if (bothPossiblyPruned && (aOnlyCount > 0 || bOnlyCount > 0)) return 'CONCURRENT';
   return 'EQUAL';
 };
 
@@ -134,10 +94,10 @@ export const mergeVectorClocks = (a: VectorClock, b: VectorClock): VectorClock =
 
 /**
  * Limits vector clock size by keeping only the most active clients.
- * Used by the server (when storing ops after comparison).
+ * Used by the server (when storing ops after comparison) and the client.
  *
  * @param clock The vector clock to limit
- * @param preserveClientIds Client IDs to always keep (e.g., current client, protected IDs)
+ * @param preserveClientIds Client IDs to always keep (e.g., current client)
  * @returns A clock with at most MAX_VECTOR_CLOCK_SIZE entries
  */
 export const limitVectorClockSize = (
@@ -151,8 +111,11 @@ export const limitVectorClockSize = (
 
   const alwaysPreserve = new Set(preserveClientIds);
 
-  // Sort by value descending to keep most active clients
-  entries.sort(([, a], [, b]) => b - a);
+  // Sort by value descending to keep most active clients.
+  // Secondary sort by client ID for deterministic tie-breaking when values are equal.
+  entries.sort(
+    ([keyA, a], [keyB, b]) => b - a || (keyA < keyB ? -1 : keyA > keyB ? 1 : 0),
+  );
 
   const limited: VectorClock = {};
 

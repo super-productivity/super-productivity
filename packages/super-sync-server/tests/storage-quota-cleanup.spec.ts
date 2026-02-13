@@ -192,7 +192,18 @@ vi.mock('../src/db', () => {
         }),
         update: vi.fn().mockResolvedValue({}),
       },
-      $queryRaw: vi.fn().mockResolvedValue([{ total: BigInt(0) }]),
+      $queryRaw: vi.fn().mockImplementation(async () => {
+        // Compute total bytes from test operations (mirrors SQL aggregate).
+        // NOTE: This mock ignores WHERE clause params (e.g. server_seq filter),
+        // returning the total size of ALL operations — acceptable for unit tests.
+        let total = BigInt(0);
+        for (const op of testOperations.values()) {
+          const payloadSize = op.payload ? JSON.stringify(op.payload).length : 0;
+          const clockSize = op.vectorClock ? JSON.stringify(op.vectorClock).length : 0;
+          total += BigInt(payloadSize + clockSize);
+        }
+        return [{ total }];
+      }),
     },
     initDb: vi.fn(),
     getDb: vi.fn(),

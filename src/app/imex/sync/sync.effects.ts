@@ -36,6 +36,7 @@ import { InitialPwaUpdateCheckService } from '../../core/initial-pwa-update-chec
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncLog } from '../../core/log';
 import { alertDialog } from '../../util/native-dialogs';
+import { vectorClockPruned$ } from '../../core/util/vector-clock';
 
 @Injectable()
 export class SyncEffects {
@@ -95,6 +96,24 @@ export class SyncEffects {
           ),
     { dispatch: false },
   );
+  vectorClockPruningNotification$ = createEffect(
+    () =>
+      vectorClockPruned$.pipe(
+        tap(({ originalSize, maxSize }) => {
+          this._snackService.open({
+            msg: T.F.SYNC.S.VECTOR_CLOCK_LIMIT_REACHED,
+            type: 'WARNING',
+            translateParams: {
+              originalSize,
+              maxSize,
+            },
+            config: { duration: 0 },
+          });
+        }),
+      ),
+    { dispatch: false },
+  );
+
   // private _wasJustEnabled$: Observable<boolean> = of(false);
   private _wasJustEnabled$: Observable<boolean> =
     this._dataInitStateService.isAllDataLoadedInitially$.pipe(

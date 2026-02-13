@@ -102,6 +102,10 @@
   text-align: center;
   font-style: italic;
   padding: var(--s3);
+
+  a[href] {
+    color: inherit;
+  }
 }
 
 :host .config-section ::ng-deep {

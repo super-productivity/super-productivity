@@ -9,17 +9,9 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';
 import { Logger } from './logger';
+import { getJwtSecret, JWT_EXPIRY_PASSKEY } from './auth';
 
 const BCRYPT_ROUNDS = 12;
-const JWT_EXPIRY = '7d';
-
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET environment variable is required');
-  }
-  return secret;
-};
 
 interface CreateUserBody {
   email: string;
@@ -70,7 +62,9 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
             `[TEST] Returning existing user: ${email} (ID: ${userId}) - Clearing old data`,
           );
 
-          // Clear old data for this user to ensure clean state
+          // Clear old data for this user to ensure clean state.
+          // Unlike production clean-slate (which preserves lastSeq for existing clients),
+          // test reset deletes everything — no existing clients need sequence continuity.
           await prisma.$transaction([
             prisma.operation.deleteMany({ where: { userId } }),
             prisma.syncDevice.deleteMany({ where: { userId } }),
@@ -96,7 +90,7 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Generate JWT token (include tokenVersion for consistency with auth.ts)
         const token = jwt.sign({ userId, email, tokenVersion }, getJwtSecret(), {
-          expiresIn: JWT_EXPIRY,
+          expiresIn: JWT_EXPIRY_PASSKEY,
         });
 
         return reply.status(201).send({

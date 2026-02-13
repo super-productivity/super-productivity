@@ -35,18 +35,33 @@ export abstract class BasePage {
   async ensureOverlaysClosed(): Promise<void> {
     const backdrop = this.page.locator('.cdk-overlay-backdrop');
     const dialogContainer = this.page.locator('mat-dialog-container');
+    const menuPanel = this.page.locator('.mat-mdc-menu-panel');
 
-    // Check if any overlays or dialogs are present
+    // Check if any overlays, dialogs, or menus are present
     const backdropCount = await backdrop.count();
     const dialogCount = await dialogContainer.count();
+    const menuCount = await menuPanel.count();
 
-    if (backdropCount === 0 && dialogCount === 0) {
-      return; // No overlays or dialogs - nothing to do
+    if (backdropCount === 0 && dialogCount === 0 && menuCount === 0) {
+      return; // No overlays, dialogs, or menus - nothing to do
     }
 
-    // Overlays/dialogs present - try dismissing with Escape
+    // Orphaned backdrops (no dialog, no menu) - Escape won't help, just wait for Material cleanup
+    if (backdropCount > 0 && dialogCount === 0 && menuCount === 0) {
+      console.log(
+        `[ensureOverlaysClosed] Found ${backdropCount} orphaned backdrop(s), waiting for cleanup`,
+      );
+      await backdrop
+        .first()
+        .waitFor({ state: 'detached', timeout: 3000 })
+        .catch(() => {});
+      return;
+    }
+
+    // Overlays/dialogs/menus present - try dismissing with Escape
     console.log(
-      `[ensureOverlaysClosed] Found ${backdropCount} backdrop(s) and ${dialogCount} dialog(s), attempting to dismiss with Escape`,
+      `[ensureOverlaysClosed] Found ${backdropCount} backdrop(s), ${dialogCount} dialog(s), ` +
+        `and ${menuCount} menu(s), attempting to dismiss with Escape`,
     );
 
     // Wait for any running animations to complete before dismissing
@@ -63,7 +78,7 @@ export abstract class BasePage {
     await this.page.keyboard.press('Escape');
 
     try {
-      // Wait for both backdrop and dialog to be removed
+      // Wait for backdrop, dialog, and menu to be removed
       const waitPromises: Promise<void>[] = [];
 
       if (backdropCount > 0) {
@@ -74,16 +89,23 @@ export abstract class BasePage {
           dialogContainer.first().waitFor({ state: 'detached', timeout: 3000 }),
         );
       }
+      if (menuCount > 0) {
+        waitPromises.push(
+          menuPanel.first().waitFor({ state: 'detached', timeout: 3000 }),
+        );
+      }
 
       await Promise.all(waitPromises);
     } catch (e) {
       // Fallback: try Escape again for stacked overlays
       const remainingBackdrops = await backdrop.count();
       const remainingDialogs = await dialogContainer.count();
+      const remainingMenus = await menuPanel.count();
 
-      if (remainingBackdrops > 0 || remainingDialogs > 0) {
+      if (remainingBackdrops > 0 || remainingDialogs > 0 || remainingMenus > 0) {
         console.warn(
-          `[ensureOverlaysClosed] ${remainingBackdrops} backdrop(s) and ${remainingDialogs} dialog(s) still present after first Escape, trying again`,
+          `[ensureOverlaysClosed] ${remainingBackdrops} backdrop(s), ${remainingDialogs} dialog(s), ` +
+            `and ${remainingMenus} menu(s) still present after first Escape, trying again`,
         );
         await this.page.keyboard.press('Escape');
 
@@ -99,6 +121,10 @@ export abstract class BasePage {
             .first()
             .waitFor({ state: 'detached', timeout: 2000 })
             .catch(() => {}),
+          menuPanel
+            .first()
+            .waitFor({ state: 'detached', timeout: 2000 })
+            .catch(() => {}),
         ]).catch(() => {
           console.error(
             '[ensureOverlaysClosed] Failed to close overlays after multiple attempts',
@@ -111,6 +137,10 @@ export abstract class BasePage {
   async addTask(taskName: string, skipClose = false): Promise<void> {
     // Add test prefix to task name for isolation
     const prefixedTaskName = this.applyPrefix(taskName);
+
+    // Wait for any in-flight navigation to complete before interacting.
+    // Angular hash-based routing can block Playwright's fill/click operations.
+    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
 
     // Dismiss any blocking dialogs/overlays before interacting
     await this.ensureOverlaysClosed();

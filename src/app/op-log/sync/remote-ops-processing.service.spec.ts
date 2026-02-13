@@ -61,7 +61,6 @@ describe('RemoteOpsProcessingService', () => {
       'getLatestFullStateOp',
       'getOpById',
       'markRejected',
-      'setProtectedClientIds',
       'clearFullStateOps',
       'clearFullStateOpsExcept',
     ]);
@@ -77,8 +76,6 @@ describe('RemoteOpsProcessingService', () => {
     opLogStoreSpy.getLatestFullStateOp.and.returnValue(Promise.resolve(undefined));
     // By default, mergeRemoteOpClocks succeeds
     opLogStoreSpy.mergeRemoteOpClocks.and.resolveTo();
-    // By default, setProtectedClientIds succeeds
-    opLogStoreSpy.setProtectedClientIds.and.resolveTo();
     // By default, clearFullStateOps returns 0 (no ops cleared)
     opLogStoreSpy.clearFullStateOps.and.resolveTo(0);
     // By default, clearFullStateOpsExcept returns 0 (no ops cleared)
@@ -633,140 +630,6 @@ describe('RemoteOpsProcessingService', () => {
       await service.processRemoteOps([backupImportOp]);
 
       expect(service.detectConflicts).not.toHaveBeenCalled();
-    });
-
-    it('should call setProtectedClientIds with ALL vectorClock keys when SYNC_IMPORT is applied', async () => {
-      // The import's vectorClock contains ALL clients known at import time
-      // ALL of these must be protected from pruning, not just the clientId
-      const syncImportOp: Operation = {
-        id: 'sync-import-1',
-        opType: OpType.SyncImport,
-        actionType: '[All] Load All Data' as ActionType,
-        entityType: 'ALL',
-        payload: {},
-        clientId: 'importClientId',
-        vectorClock: { importClientId: 1, otherClient: 5, thirdClient: 3 },
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
-
-      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
-      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
-      operationApplierServiceSpy.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [syncImportOp] }),
-      );
-
-      await service.processRemoteOps([syncImportOp]);
-
-      // All keys from vectorClock must be protected, not just the clientId
-      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalledWith(
-        jasmine.arrayContaining(['importClientId', 'otherClient', 'thirdClient']),
-      );
-      // Verify we got exactly 3 keys
-      const calledWith = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
-        .args[0] as string[];
-      expect(calledWith.length).toBe(3);
-    });
-
-    it('should call setProtectedClientIds with ALL vectorClock keys when BACKUP_IMPORT is applied', async () => {
-      // Same as SYNC_IMPORT: backup's vectorClock contains all known clients
-      // and all must be protected from pruning
-      const backupImportOp: Operation = {
-        id: 'backup-import-1',
-        opType: OpType.BackupImport,
-        actionType: '[All] Load All Data' as ActionType,
-        entityType: 'ALL',
-        payload: {},
-        clientId: 'backupClientId',
-        vectorClock: { backupClientId: 1, deviceA: 10, deviceB: 7 },
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
-
-      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
-      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
-      operationApplierServiceSpy.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [backupImportOp] }),
-      );
-
-      await service.processRemoteOps([backupImportOp]);
-
-      // All keys from vectorClock must be protected
-      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalledWith(
-        jasmine.arrayContaining(['backupClientId', 'deviceA', 'deviceB']),
-      );
-      // Verify we got exactly 3 keys
-      const calledWith = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
-        .args[0] as string[];
-      expect(calledWith.length).toBe(3);
-    });
-
-    it('should cap setProtectedClientIds to MAX_VECTOR_CLOCK_SIZE - 1 when SYNC_IMPORT has many clock entries', async () => {
-      // Simulate a SYNC_IMPORT with 15 entries in its vectorClock (from many device reinstalls)
-      const largeClock: Record<string, number> = {};
-      for (let i = 0; i < 15; i++) {
-        largeClock[`device_${i}`] = i + 1;
-      }
-
-      const syncImportOp: Operation = {
-        id: 'sync-import-large',
-        opType: OpType.SyncImport,
-        actionType: '[All] Load All Data' as ActionType,
-        entityType: 'ALL',
-        payload: {},
-        clientId: 'device_14',
-        vectorClock: largeClock,
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
-
-      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
-      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
-      operationApplierServiceSpy.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [syncImportOp] }),
-      );
-
-      await service.processRemoteOps([syncImportOp]);
-
-      expect(opLogStoreSpy.setProtectedClientIds).toHaveBeenCalled();
-      const protectedIds = opLogStoreSpy.setProtectedClientIds.calls.mostRecent()
-        .args[0] as string[];
-      // Must be capped to MAX_VECTOR_CLOCK_SIZE - 1 (9)
-      expect(protectedIds.length).toBeLessThanOrEqual(9);
-      // Should keep highest-counter entries
-      expect(protectedIds).toContain('device_14'); // counter 15
-      expect(protectedIds).toContain('device_13'); // counter 14
-      // Lowest entries should be dropped
-      expect(protectedIds).not.toContain('device_0'); // counter 1
-    });
-
-    it('should NOT call setProtectedClientIds when no full-state op is applied', async () => {
-      const regularOp: Operation = {
-        id: 'regular-op-1',
-        opType: OpType.Update,
-        actionType: '[Task] Update Task' as ActionType,
-        entityType: 'TASK',
-        entityId: 'task-1',
-        payload: { title: 'Test' },
-        clientId: 'client1',
-        vectorClock: { client1: 1 },
-        timestamp: Date.now(),
-        schemaVersion: 1,
-      };
-
-      opLogStoreSpy.getUnsynced.and.returnValue(Promise.resolve([]));
-      opLogStoreSpy.getUnsyncedByEntity.and.returnValue(Promise.resolve(new Map()));
-      vectorClockServiceSpy.getEntityFrontier.and.returnValue(Promise.resolve(new Map()));
-      vectorClockServiceSpy.getSnapshotVectorClock.and.returnValue(Promise.resolve({}));
-      opLogStoreSpy.hasOp.and.returnValue(Promise.resolve(false));
-      opLogStoreSpy.append.and.returnValue(Promise.resolve(1));
-      operationApplierServiceSpy.applyOperations.and.returnValue(
-        Promise.resolve({ appliedOps: [regularOp] }),
-      );
-
-      await service.processRemoteOps([regularOp]);
-
-      expect(opLogStoreSpy.setProtectedClientIds).not.toHaveBeenCalled();
     });
 
     it('should call clearFullStateOpsExcept when SYNC_IMPORT is applied to prevent stale import filtering', async () => {

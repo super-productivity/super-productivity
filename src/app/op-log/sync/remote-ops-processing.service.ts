@@ -23,7 +23,6 @@ import { LOCK_NAMES } from '../core/operation-log.const';
 import { LockService } from './lock.service';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { SyncImportFilterService } from './sync-import-filter.service';
-import { selectProtectedClientIds } from '../../core/util/vector-clock';
 
 /**
  * Handles the core pipeline for processing remote operations.
@@ -394,10 +393,7 @@ export class RemoteOpsProcessingService {
         // filtered by SyncImportFilterService as "invalidated by import".
         await this.opLogStore.mergeRemoteOpClocks(result.appliedOps);
 
-        // CRITICAL: Update protected client IDs for vector clock pruning.
-        // When a full-state op is applied, its client ID must be preserved in future
-        // vector clocks. Otherwise, pruning could remove it (if it has a low counter),
-        // causing new ops to appear CONCURRENT instead of GREATER_THAN with the import.
+        // Check if a full-state op was applied, and clear older full-state ops
         const appliedFullStateOp = result.appliedOps.find(
           (op) =>
             op.opType === OpType.SyncImport ||
@@ -405,20 +401,6 @@ export class RemoteOpsProcessingService {
             op.opType === OpType.Repair,
         );
         if (appliedFullStateOp) {
-          // CRITICAL FIX: Protect ALL client IDs in the import's vector clock, not just
-          // the import's own clientId. The import's vectorClock contains merged clocks
-          // from all clients at import time. If any of these are pruned from the local
-          // clock, new ops will appear CONCURRENT with the import instead of GREATER_THAN.
-          //
-          // Example: Import has {A_EemJ:1, B_HSxu:10342}. If we only protect B_HSxu,
-          // then A_EemJ gets pruned. New ops have {A_ypDK:6, B_HSxu:10714} (missing A_EemJ).
-          // Comparison: Import wins on A_EemJ (1>0), op wins on A_ypDK (6>0) → CONCURRENT!
-          const protectedIds = selectProtectedClientIds(appliedFullStateOp.vectorClock);
-          await this.opLogStore.setProtectedClientIds(protectedIds);
-          OpLog.normal(
-            `RemoteOpsProcessingService: Updated protected client IDs from ${appliedFullStateOp.opType}: [${protectedIds.join(', ')}]`,
-          );
-
           // CRITICAL FIX: Clear older full-state ops AFTER successfully storing the new one.
           // This prevents the scenario where:
           // 1. Client A has old SYNC_IMPORT from client X with minimal clock {X:1}
