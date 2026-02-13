@@ -608,6 +608,7 @@ describe('OperationLogUploadService', () => {
           false, // isPayloadEncrypted
           'op-1', // op.id
           undefined, // isCleanSlate
+          'SYNC_IMPORT', // snapshotOpType
         );
       });
 
@@ -626,6 +627,7 @@ describe('OperationLogUploadService', () => {
           false, // isPayloadEncrypted
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
+          'BACKUP_IMPORT', // snapshotOpType
         );
       });
 
@@ -644,6 +646,7 @@ describe('OperationLogUploadService', () => {
           false, // isPayloadEncrypted
           'op-1', // op.id
           true, // isCleanSlate - auto true for Repair
+          'REPAIR', // snapshotOpType
         );
       });
 
@@ -871,8 +874,8 @@ describe('OperationLogUploadService', () => {
         // Get the call arguments
         const callArgs = mockApiProvider.uploadSnapshot.calls.mostRecent().args;
 
-        // Verify all 8 args are passed including op.id and isCleanSlate
-        expect(callArgs.length).toBe(8);
+        // Verify all 9 args are passed including op.id, isCleanSlate, and snapshotOpType
+        expect(callArgs.length).toBe(9);
 
         // Verify specific args
         expect(callArgs[1]).toBe('client-1'); // clientId
@@ -922,6 +925,7 @@ describe('OperationLogUploadService', () => {
           false, // isPayloadEncrypted
           'op-1', // op.id
           true, // isCleanSlate - auto true for BackupImport
+          'BACKUP_IMPORT', // snapshotOpType
         );
       });
 
