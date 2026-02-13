@@ -395,6 +395,146 @@ describe('limitVectorClockSize locale-independent sort edge cases', () => {
   });
 });
 
+describe('limitVectorClockSize with multiple preserveClientIds', () => {
+  it('should preserve two low-counter IDs when both are in preserveClientIds', () => {
+    // Simulates the server's getOpsSinceWithSeq passing [requestingClient, snapshotAuthor]
+    const clock: Record<string, number> = {
+      requestingClient: 1, // Low counter
+      snapshotAuthor: 2, // Low counter
+    };
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 3; i++) {
+      clock[`high_${i}`] = 100 + i; // All higher counters
+    }
+
+    const result = limitVectorClockSize(clock, ['requestingClient', 'snapshotAuthor']);
+    expect(Object.keys(result).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    // Both low-counter preserved IDs must be kept
+    expect(result['requestingClient']).toBe(1);
+    expect(result['snapshotAuthor']).toBe(2);
+    // Remaining slots filled with highest-counter entries
+    const nonPreservedEntries = Object.entries(result).filter(
+      ([k]) => k !== 'requestingClient' && k !== 'snapshotAuthor',
+    );
+    expect(nonPreservedEntries.length).toBe(MAX_VECTOR_CLOCK_SIZE - 2);
+    // The kept non-preserved entries should be the highest-counter ones
+    for (const [, value] of nonPreservedEntries) {
+      // Should be the top (MAX-2) entries from high_0..high_(MAX+2)
+      expect(value).toBeGreaterThanOrEqual(100 + 5); // lowest 5 pruned
+    }
+  });
+
+  it('should handle overlapping preserveClientIds (same ID listed twice)', () => {
+    const clock: Record<string, number> = { clientA: 1 };
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 2; i++) {
+      clock[`high_${i}`] = 100 + i;
+    }
+
+    // clientA listed twice — Set deduplicates, so only one slot consumed
+    const result = limitVectorClockSize(clock, ['clientA', 'clientA']);
+    expect(Object.keys(result).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    expect(result['clientA']).toBe(1);
+    // Should have MAX-1 non-preserved entries (not MAX-2)
+    const nonPreserved = Object.keys(result).filter((k) => k !== 'clientA');
+    expect(nonPreserved.length).toBe(MAX_VECTOR_CLOCK_SIZE - 1);
+  });
+
+  it('should handle one preserveClientId present and one missing from clock', () => {
+    // Simulates getOpsSinceWithSeq when excludeClient is not in the aggregated snapshot clock
+    const clock: Record<string, number> = { snapshotAuthor: 5 };
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 2; i++) {
+      clock[`client_${i}`] = 50 + i;
+    }
+
+    const result = limitVectorClockSize(clock, ['missingClient', 'snapshotAuthor']);
+    expect(Object.keys(result).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    // Missing client is silently ignored (no crash, no placeholder)
+    expect(result['missingClient']).toBeUndefined();
+    // Present preserved client is kept
+    expect(result['snapshotAuthor']).toBe(5);
+  });
+
+  it('should handle all preserveClientIds missing from clock', () => {
+    const clock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 3; i++) {
+      clock[`client_${i}`] = i + 1;
+    }
+
+    const result = limitVectorClockSize(clock, ['ghost_a', 'ghost_b']);
+    expect(Object.keys(result).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    expect(result['ghost_a']).toBeUndefined();
+    expect(result['ghost_b']).toBeUndefined();
+    // All MAX slots filled by highest-counter entries
+    for (let i = 3; i < MAX_VECTOR_CLOCK_SIZE + 3; i++) {
+      expect(result[`client_${i}`]).toBe(i + 1);
+    }
+  });
+});
+
+describe('snapshot vector clock aggregation scenario', () => {
+  it('should correctly aggregate multiple op clocks and prune with preserved IDs', () => {
+    // Simulates the server's getOpsSinceWithSeq aggregation logic:
+    // 1. Multiple ops from different clients are aggregated (max per key)
+    // 2. Result is pruned with requesting client + snapshot author preserved
+
+    // Simulate 25 operations from different clients
+    const opClocks: Record<string, number>[] = [];
+    for (let i = 0; i < 25; i++) {
+      opClocks.push({ [`client_${i}`]: i + 1, shared_client: i + 10 });
+    }
+
+    // Aggregate: take max for each key (mimics the server loop)
+    const aggregated: Record<string, number> = {};
+    for (const clock of opClocks) {
+      for (const [clientId, value] of Object.entries(clock)) {
+        aggregated[clientId] = Math.max(aggregated[clientId] ?? 0, value);
+      }
+    }
+
+    // Should have 26 entries: client_0..client_24 + shared_client
+    expect(Object.keys(aggregated).length).toBe(26);
+    expect(aggregated['shared_client']).toBe(34); // 24 + 10
+
+    // Prune with two preserved IDs (requesting client + snapshot author)
+    const pruned = limitVectorClockSize(aggregated, ['client_0', 'client_24']);
+    expect(Object.keys(pruned).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // Both preserved IDs must survive
+    expect(pruned['client_0']).toBe(1); // Lowest counter, preserved
+    expect(pruned['client_24']).toBe(25); // High counter, preserved
+
+    // shared_client has value 34 (highest), should be kept
+    expect(pruned['shared_client']).toBe(34);
+  });
+
+  it('pruned snapshot clock still produces correct comparison with post-snapshot ops', () => {
+    // After the server prunes the snapshot clock, a fresh client receives it.
+    // The client's new ops (merged with snapshot clock) must still be GREATER_THAN
+    // the snapshot clock itself.
+
+    // Simulate aggregated snapshot clock from many clients
+    const snapshotClock: Record<string, number> = {};
+    for (let i = 0; i < MAX_VECTOR_CLOCK_SIZE + 5; i++) {
+      snapshotClock[`old_client_${i}`] = 50 + i;
+    }
+
+    // Server prunes, preserving the requesting client (freshClient)
+    const prunedSnapshot = limitVectorClockSize(snapshotClock, ['old_client_0']);
+    expect(Object.keys(prunedSnapshot).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+
+    // Fresh client merges pruned snapshot + increments own counter
+    const freshClock: Record<string, number> = { ...prunedSnapshot, freshClient: 1 };
+
+    // freshClock has all of prunedSnapshot's keys at same values PLUS freshClient
+    expect(compareVectorClocks(freshClock, prunedSnapshot)).toBe('GREATER_THAN');
+
+    // Even after the fresh client's clock is pruned for storage, the pruned entries
+    // (old_client_0..4) were also not in prunedSnapshot, so comparison is still safe
+    const freshPruned = limitVectorClockSize(freshClock, ['freshClient']);
+    expect(Object.keys(freshPruned).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+    expect(freshPruned['freshClient']).toBe(1);
+  });
+});
+
 describe('mergeVectorClocks', () => {
   it('should merge by taking max of each key', () => {
     const a = { x: 3, y: 1 };
