@@ -489,16 +489,16 @@ describe('Import + Sync Integration', () => {
       const importClient = new TestClient('import-fresh');
       const importOp: Operation = importClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: {} },
       });
 
-      // Client B receives the SYNC_IMPORT and merges its clock
+      // Client B receives the SYNC_STATE_REPLACE and merges its clock
       await storeService.mergeRemoteOpClocks([importOp]);
 
-      // After receiving a SYNC_IMPORT, the clock should be REPLACED, not merged.
+      // After receiving a SYNC_STATE_REPLACE, the clock should be REPLACED, not merged.
       // The import represents a complete state reset — the old clock entries are meaningless.
       const clockAfterMerge = await storeService.getVectorClock();
       const entryCount = Object.keys(clockAfterMerge!).length;
@@ -520,7 +520,7 @@ describe('Import + Sync Integration', () => {
       const importClient = new TestClient('import-fresh');
       const importOp: Operation = importClient.createOperation({
         actionType: '[SP_ALL] Load(import) all data' as ActionType,
-        opType: OpType.SyncImport,
+        opType: OpType.SyncStateReplace,
         entityType: 'ALL',
         entityId: uuidv7(),
         payload: { appDataComplete: {} },
@@ -529,7 +529,7 @@ describe('Import + Sync Integration', () => {
       // Store the import op so SyncImportFilterService can find it
       await storeService.append(importOp, 'remote');
 
-      // Client B receives the SYNC_IMPORT and merges its clock
+      // Client B receives the SYNC_STATE_REPLACE and merges its clock
       await storeService.mergeRemoteOpClocks([importOp]);
 
       // Now simulate Client B creating a post-import operation.

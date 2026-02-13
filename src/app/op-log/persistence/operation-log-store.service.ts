@@ -1308,14 +1308,14 @@ export class OperationLogStoreService {
         `  Merging ${ops.length} remote ops`,
     );
 
-    // Check if any op is a full-state operation (SYNC_IMPORT / BACKUP_IMPORT / REPAIR).
+    // Check if any op is a full-state operation (SYNC_STATE_REPLACE / BACKUP_IMPORT / REPAIR).
     // Full-state ops represent a complete state reset — old clock entries are irrelevant.
     // Using the import's clock as the base (REPLACE) instead of the current clock (MERGE)
     // prevents clock bloat that causes server-side pruning to drop the import's entry,
     // which would make subsequent ops appear CONCURRENT with the import.
     const fullStateOp = ops.find(
       (op) =>
-        op.opType === OpType.SyncImport ||
+        op.opType === OpType.SyncStateReplace ||
         op.opType === OpType.BackupImport ||
         op.opType === OpType.Repair,
     );
