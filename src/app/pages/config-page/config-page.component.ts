@@ -420,6 +420,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                     const result =
                       await this._syncWrapperService.configuredAuthForSyncProviderIfNecessary(
                         toSyncProviderId(LegacySyncProvider.Dropbox)!,
+                        true, // force re-authentication even if already configured
                       );
 
                     if (result.wasConfigured) {

@@ -529,6 +529,7 @@ export class SyncWrapperService {
 
   async configuredAuthForSyncProviderIfNecessary(
     providerId: SyncProviderId,
+    force = false,
   ): Promise<{ wasConfigured: boolean }> {
     const provider = this._providerManager.getProviderById(providerId);
 
@@ -540,7 +541,7 @@ export class SyncWrapperService {
       return { wasConfigured: false };
     }
 
-    if (await provider.isReady()) {
+    if (!force && (await provider.isReady())) {
       SyncLog.warn('Provider already configured');
       return { wasConfigured: false };
     }
