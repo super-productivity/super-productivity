@@ -41,6 +41,11 @@
     "INTRO_1": "Super Productivity is funded entirely by the community. There is no tracking, no ads, and no data collection — your tasks stay on your device.",
     "INTRO_2": "If you value this approach and want to keep the project healthy and evolving, a voluntary donation is greatly appreciated."
   },
+  "SIMPLE_COUNTER": {
+    "DIALOG_SELECT_HABIT_TASK": {
+      "NO_MATCHING_TASKS": "No matching tasks found"
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {

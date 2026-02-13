@@ -103,7 +103,7 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
     ),
   );
 
-  private _isManualStop = false;
+  private _skipNextAutoToggle = false;
 
   // Watch for task stop events to stop linked habit
   // Use toObservable + switchMap to reactively manage subscription when settings change
@@ -123,8 +123,9 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
         }),
       )
       .subscribe((currentTaskId) => {
-        // If manual stop is in progress, skip this auto-toggle to avoid double-toggling
-        if (this._isManualStop) {
+        // Skip the next auto-toggle after a manual stop to prevent double-toggling
+        if (this._skipNextAutoToggle) {
+          this._skipNextAutoToggle = false;
           return;
         }
 
@@ -191,12 +192,11 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
     // If stopping the habit, stop the task first
     if (c.isOn && c.enableAutoTrackFromTasks) {
-      this._isManualStop = true;
+      this._skipNextAutoToggle = true;
       const currentTaskId = await firstValueFrom(this._taskService.currentTaskId$);
       if (currentTaskId) {
         this._taskService.setCurrentId(null);
       }
-      this._isManualStop = false;
       // Toggle the habit counter
       this._simpleCounterService.toggleCounter(c.id);
       return;

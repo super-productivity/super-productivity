@@ -1,8 +1,7 @@
 import { nanoid } from 'nanoid';
 import typia from 'typia';
 import { distinctUntilChanged, first, map, take, withLatestFrom } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
-import { SimpleCounterType } from '../simple-counter/simple-counter.model';
+import { SimpleCounter, SimpleCounterType } from '../simple-counter/simple-counter.model';
 import { computed, effect, inject, Injectable, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
@@ -120,6 +119,14 @@ export class TaskService {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
   private readonly _simpleCounterService = inject(SimpleCounterService);
+
+  // Cache for linked habits to improve performance of auto-tracking
+  private _linkedHabitsCache: SimpleCounter[] = [];
+  private _linkedHabitsCacheTime = 0;
+  private readonly _CACHE_TTL_MS = 5000;
+  private _isUpdatingHabitsCache = false;
+  private _pendingHabitUpdates: Array<{ task: Task; duration: number; date: string }> =
+    [];
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -797,55 +804,98 @@ export class TaskService {
       return;
     }
 
-    // Get linked habits directly from service (async to avoid subscription leaks)
-    firstValueFrom(this._simpleCounterService.enabledSimpleCounters$)
-      .then((counters) => {
-        const linkedHabits = counters.filter(
-          (counter) =>
-            counter.type === SimpleCounterType.StopWatch &&
-            counter.enableAutoTrackFromTasks &&
-            (counter.linkedTagIds?.length || counter.linkedProjectIds?.length),
-        );
+    const now = Date.now();
+    const cacheExpired = now - this._linkedHabitsCacheTime > this._CACHE_TTL_MS;
 
-        // Early exit if no relevant counters
-        if (linkedHabits.length === 0) {
-          return;
-        }
+    if (cacheExpired || this._linkedHabitsCache.length === 0) {
+      if (this._isUpdatingHabitsCache) {
+        // Queue this update instead of dropping it
+        this._pendingHabitUpdates.push({ task, duration, date });
+        return;
+      }
 
-        // Process each linked habit
-        linkedHabits.forEach((counter) => {
-          // Check exclusions first (faster to exit early)
-          if (counter.excludedTagIds?.length) {
-            if (counter.excludedTagIds.some((tagId) => task.tagIds.includes(tagId))) {
-              return;
-            }
-          }
+      this._isUpdatingHabitsCache = true;
+      this._simpleCounterService.enabledSimpleCounters$
+        .pipe(take(1))
+        .subscribe((counters) => {
+          this._linkedHabitsCache = counters.filter(
+            (counter) =>
+              counter.type === SimpleCounterType.StopWatch &&
+              counter.enableAutoTrackFromTasks &&
+              (counter.linkedTagIds?.length || counter.linkedProjectIds?.length),
+          );
+          this._linkedHabitsCacheTime = now;
+          this._isUpdatingHabitsCache = false;
 
-          if (counter.excludedProjectIds?.length && task.projectId) {
-            if (counter.excludedProjectIds.includes(task.projectId)) {
-              return;
-            }
-          }
+          // Process immediately after cache update
+          this._processLinkedHabits(task, duration, date);
 
-          // Check matches
-          const hasMatchingTag =
-            counter.linkedTagIds?.length &&
-            counter.linkedTagIds.some((tagId) => task.tagIds.includes(tagId));
-
-          const hasMatchingProject =
-            counter.linkedProjectIds?.length &&
-            task.projectId &&
-            counter.linkedProjectIds.includes(task.projectId);
-
-          // If there's a match, update the counter
-          if (hasMatchingTag || hasMatchingProject) {
-            this._simpleCounterService.incrementCounterByDate(counter.id, date, duration);
+          // Process any queued updates
+          if (this._pendingHabitUpdates.length > 0) {
+            const updates = [...this._pendingHabitUpdates];
+            this._pendingHabitUpdates = [];
+            updates.forEach((u) => this._processLinkedHabits(u.task, u.duration, u.date));
           }
         });
-      })
-      .catch((err) => {
-        console.error('Error updating linked habits:', err);
-      });
+    } else {
+      // Use existing cache
+      this._processLinkedHabits(task, duration, date);
+    }
+  }
+
+  private _processLinkedHabits(task: Task, duration: number, date: string): void {
+    const linkedHabits = this._linkedHabitsCache;
+
+    // Verify minimum duration threshold again (defensive check)
+    if (duration < 100) {
+      return;
+    }
+
+    // Process each linked habit
+    linkedHabits.forEach((counter) => {
+      // Check exclusions first - they have priority and exit early
+      const hasExcludedTag =
+        counter.excludedTagIds?.length &&
+        task.tagIds.some((tagId) => counter.excludedTagIds!.includes(tagId));
+
+      if (hasExcludedTag) {
+        return;
+      }
+
+      const hasExcludedProject =
+        counter.excludedProjectIds?.length &&
+        task.projectId &&
+        counter.excludedProjectIds.includes(task.projectId);
+
+      if (hasExcludedProject) {
+        return;
+      }
+
+      // Now check if task matches linked tags or projects
+      // At least one linkedTag or linkedProject must be configured
+      const hasLinkedTagsOrProjects =
+        (counter.linkedTagIds?.length || 0) > 0 ||
+        (counter.linkedProjectIds?.length || 0) > 0;
+
+      if (!hasLinkedTagsOrProjects) {
+        // No filters configured - skip this habit
+        return;
+      }
+
+      const hasMatchingTag =
+        counter.linkedTagIds?.length &&
+        counter.linkedTagIds.some((tagId) => task.tagIds.includes(tagId));
+
+      const hasMatchingProject =
+        counter.linkedProjectIds?.length &&
+        task.projectId &&
+        counter.linkedProjectIds.includes(task.projectId);
+
+      // If there's a match, update the counter
+      if (hasMatchingTag || hasMatchingProject) {
+        this._simpleCounterService.incrementCounterByDate(counter.id, date, duration);
+      }
+    });
   }
 
   removeTimeSpent(

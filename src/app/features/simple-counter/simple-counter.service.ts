@@ -29,7 +29,7 @@ import {
   SimpleCounterType,
 } from './simple-counter.model';
 import { nanoid } from 'nanoid';
-import { distinctUntilChanged, take, withLatestFrom } from 'rxjs/operators';
+import { distinctUntilChanged, withLatestFrom } from 'rxjs/operators';
 import { isEqualSimpleCounterCfg } from './is-equal-simple-counter-cfg.util';
 import { DateService } from 'src/app/core/date/date.service';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
@@ -50,6 +50,10 @@ export class SimpleCounterService implements OnDestroy {
   private _stopwatchAccumulator = new BatchedTimeSyncAccumulator(
     SimpleCounterService.SYNC_INTERVAL_MS,
     (id, date, _duration) => this._syncStopwatchAbsoluteValue(id, date),
+  );
+  private _autoTrackAccumulator = new BatchedTimeSyncAccumulator(
+    SimpleCounterService.SYNC_INTERVAL_MS,
+    (id, date, duration) => this._syncAutoTrackedCounterByDuration(id, date, duration),
   );
   private _subscriptions = new Subscription();
   private _visibilityHandler: (() => void) | null = null;
@@ -177,6 +181,7 @@ export class SimpleCounterService implements OnDestroy {
     // Flush StopWatch accumulated time only
     // Click counters sync immediately in increaseCounterToday/decreaseCounterToday
     this._stopwatchAccumulator.flush();
+    this._autoTrackAccumulator.flush();
   }
 
   /**
@@ -199,6 +204,33 @@ export class SimpleCounterService implements OnDestroy {
       });
   }
 
+  private _syncAutoTrackedCounterByDuration(
+    id: string,
+    date: string,
+    duration: number,
+  ): void {
+    if (duration <= 0) {
+      return;
+    }
+
+    firstValueFrom(this._store$.pipe(select(selectSimpleCounterById, { id })))
+      .then((counter) => {
+        if (counter) {
+          const currentValue = counter.countOnDay[date] || 0;
+          const newValue = currentValue + duration;
+          this._store$.dispatch(
+            setSimpleCounterCounterForDate({ id, newVal: newValue, date }),
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          '[SimpleCounterService] Error syncing auto-tracked counter value:',
+          error,
+        );
+      });
+  }
+
   updateAll(items: SimpleCounter[]): void {
     this._store$.dispatch(updateAllSimpleCounters({ items }));
   }
@@ -213,18 +245,11 @@ export class SimpleCounterService implements OnDestroy {
   }
 
   incrementCounterByDate(id: string, date: string, duration: number): void {
-    // Get current value and add the duration - use take(1) to auto-unsubscribe
-    this._store$
-      .pipe(select(selectSimpleCounterById, { id }), take(1))
-      .subscribe((counter) => {
-        if (counter) {
-          const currentValue = counter.countOnDay[date] || 0;
-          const newValue = currentValue + duration;
-          this._store$.dispatch(
-            setSimpleCounterCounterForDate({ id, newVal: newValue, date }),
-          );
-        }
-      });
+    this._autoTrackAccumulator.accumulate(id, duration, date);
+
+    if (this._autoTrackAccumulator.shouldFlush()) {
+      this._autoTrackAccumulator.flush();
+    }
   }
 
   /**

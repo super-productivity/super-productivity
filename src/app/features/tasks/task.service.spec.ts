@@ -836,6 +836,180 @@ describe('TaskService', () => {
 
         expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
       }));
+
+      it('should handle tasks with multiple matching tags', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1', 'tag-2', 'tag-3'] });
+        const counter = createMockCounter('c1', { linkedTagIds: ['tag-2', 'tag-4'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          1000,
+        );
+      }));
+
+      it('should handle combined tag and project filters (OR logic)', fakeAsync(() => {
+        const task = createMockTask('task-1', {
+          tagIds: ['tag-1'],
+          projectId: 'proj-1',
+        });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          linkedProjectIds: ['proj-2'], // Different project
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        // Should match because tag matches (OR logic)
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          1000,
+        );
+      }));
+
+      it('should require at least one linked tag or project', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: [],
+          linkedProjectIds: [],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should prioritize exclusions over linked tags', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1', 'excluded-tag'] });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          excludedTagIds: ['excluded-tag'],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should prioritize project exclusions over linked projects', fakeAsync(() => {
+        const task = createMockTask('task-1', { projectId: 'excluded-proj' });
+        const counter = createMockCounter('c1', {
+          linkedProjectIds: ['excluded-proj'],
+          excludedProjectIds: ['excluded-proj'],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should handle tasks with no project ID', fakeAsync(() => {
+        const task = createMockTask('task-1', {
+          tagIds: ['tag-1'],
+          projectId: null as any,
+        });
+        const counter = createMockCounter('c1', { linkedProjectIds: ['proj-1'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should handle tasks with no tags', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: [], projectId: 'proj-1' });
+        const counter = createMockCounter('c1', {
+          linkedTagIds: ['tag-1'],
+          linkedProjectIds: [],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should update multiple linked habits simultaneously', fakeAsync(() => {
+        const task = createMockTask('task-1', {
+          tagIds: ['tag-1'],
+          projectId: 'proj-1',
+        });
+        const counter1 = createMockCounter('c1', { linkedTagIds: ['tag-1'] });
+        const counter2 = createMockCounter('c2', { linkedProjectIds: ['proj-1'] });
+        enabledSimpleCountersSubject.next([counter1, counter2]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          1000,
+        );
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c2',
+          '2026-01-01',
+          1000,
+        );
+      }));
+
+      it('should not update habit if excluded tag present even with matching project', fakeAsync(() => {
+        const task = createMockTask('task-1', {
+          tagIds: ['excluded-tag'],
+          projectId: 'proj-1',
+        });
+        const counter = createMockCounter('c1', {
+          linkedProjectIds: ['proj-1'],
+          excludedTagIds: ['excluded-tag'],
+        });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 1000, '2026-01-01');
+        tick();
+        flush();
+
+        expect(simpleCounterServiceSpy.incrementCounterByDate).not.toHaveBeenCalled();
+      }));
+
+      it('should handle exact 100ms duration (boundary condition)', fakeAsync(() => {
+        const task = createMockTask('task-1', { tagIds: ['tag-1'] });
+        const counter = createMockCounter('c1', { linkedTagIds: ['tag-1'] });
+        enabledSimpleCountersSubject.next([counter]);
+
+        service.addTimeSpent(task, 100, '2026-01-01');
+        tick();
+        flush();
+
+        // 100ms should be accepted (>= 100)
+        expect(simpleCounterServiceSpy.incrementCounterByDate).toHaveBeenCalledWith(
+          'c1',
+          '2026-01-01',
+          100,
+        );
+      }));
     });
   });
 

@@ -70,7 +70,9 @@ export interface DialogSelectHabitTaskData {
                 [value]="null"
                 [disabled]="true"
               >
-                {{ T.F.SIMPLE_COUNTER.DIALOG_SELECT_TASK.NO_MATCHING_TASKS | translate }}
+                {{
+                  T.SIMPLE_COUNTER.DIALOG_SELECT_HABIT_TASK.NO_MATCHING_TASKS | translate
+                }}
               </mat-option>
             }
           </mat-autocomplete>
