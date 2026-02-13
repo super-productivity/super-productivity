@@ -87,6 +87,27 @@ export class TaskTitleComponent implements OnDestroy {
   }
 
   /**
+   * Computed signal that determines if the title contains URLs or markdown links.
+   * Used to decide whether to render with innerHTML (for links) or text binding (for plain text).
+   */
+  readonly hasUrlsOrMarkdown = computed<boolean>(() => {
+    const text = this.tmpValue();
+    if (!text) {
+      return false;
+    }
+
+    // Check for markdown links
+    MARKDOWN_LINK_REGEX.lastIndex = 0;
+    if (MARKDOWN_LINK_REGEX.test(text)) {
+      return true;
+    }
+
+    // Check for plain URLs
+    URL_REGEX.lastIndex = 0;
+    return URL_REGEX.test(text);
+  });
+
+  /**
    * Memoized computed signal that converts URLs and Markdown links to clickable links.
    * Only recalculates when tmpValue changes, providing optimal performance.
    * Returns SafeHtml for use with [innerHTML] in the template.

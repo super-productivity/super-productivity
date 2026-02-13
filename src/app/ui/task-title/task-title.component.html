@@ -6,11 +6,18 @@
 @let placeholder = T.F.TASK.ADDITIONAL_INFO.TITLE_PLACEHOLDER | translate;
 <div class="wrapper">
   @if (!isEditing()) {
-    <span
-      class="display-value"
-      [class.is-placeholder]="!hasContent"
-      [innerHTML]="hasContent ? displayHtml() : displayText"
-    ></span>
+    @if (hasContent && hasUrlsOrMarkdown()) {
+      <span
+        class="display-value"
+        [innerHTML]="displayHtml()"
+      ></span>
+    } @else {
+      <span
+        class="display-value"
+        [class.is-placeholder]="!hasContent"
+        >{{ displayText }}</span
+      >
+    }
   }
   @if (isEditing()) {
     <span
