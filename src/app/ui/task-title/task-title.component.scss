@@ -35,6 +35,11 @@
     @include inlineEditElevation();
     box-shadow: var(--whiteframe-shadow-4dp);
   }
+
+  // In readonly mode, use default cursor instead of text cursor
+  &.is-readonly {
+    cursor: inherit;
+  }
 }
 
 .wrapper {
@@ -68,6 +73,7 @@
     padding: 0;
     line-height: inherit;
     vertical-align: baseline;
+    cursor: pointer;
   }
 }
 

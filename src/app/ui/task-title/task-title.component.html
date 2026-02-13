@@ -19,7 +19,7 @@
       >
     }
   }
-  @if (isEditing()) {
+  @if (isEditing() && !readonly) {
     <span
       class="height-measure"
       aria-hidden="true"

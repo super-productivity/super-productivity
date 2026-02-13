@@ -38,11 +38,14 @@ const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(([^)]+)\)/g;
   host: {
     ['[class.is-focused]']: 'isFocused()',
     ['[class.is-editing]']: 'isEditing()',
+    ['[class.is-readonly]']: 'readonly',
   },
 })
 export class TaskTitleComponent implements OnDestroy {
   T: typeof T = T;
   private _sanitizer = inject(DomSanitizer);
+
+  @Input() readonly = false; // When true, disables editing and only displays the value
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {
@@ -241,16 +244,38 @@ export class TaskTitleComponent implements OnDestroy {
   // Click anywhere to enter edit mode (except links)
   @HostListener('mousedown', ['$event'])
   onMouseDown(event: MouseEvent): void {
-    event.stopPropagation();
     const target = event.target as HTMLElement | null;
-    // Don't enter edit mode if clicking a link or textarea
-    if (event.button !== 0 || target?.tagName === 'TEXTAREA' || target?.tagName === 'A') {
+    // Don't enter edit mode if readonly, clicking a link, or clicking textarea
+    if (
+      this.readonly ||
+      event.button !== 0 ||
+      target?.tagName === 'TEXTAREA' ||
+      target?.tagName === 'A'
+    ) {
+      // Let event propagate for drag-and-drop, link clicks, etc.
       return;
     }
+    // Only stop propagation when entering edit mode
+    // This prevents parent click handlers while allowing drag in readonly mode
+    event.stopPropagation();
     this.focusInput();
   }
 
+  // Stop click events from propagating when clicking links
+  // This prevents parent components (board, planner) from handling the click
+  @HostListener('click', ['$event'])
+  onClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    // If clicking on a link or any element inside a link, stop propagation
+    if (target?.tagName === 'A' || target?.closest('a')) {
+      event.stopPropagation();
+    }
+  }
+
   focusInput(): void {
+    if (this.readonly) {
+      return; // Don't allow focusing in readonly mode
+    }
     this._isEditing.set(true);
     if (this._focusTimeoutId) {
       window.clearTimeout(this._focusTimeoutId);
