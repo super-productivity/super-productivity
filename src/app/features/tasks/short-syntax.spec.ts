@@ -9,6 +9,7 @@ import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG } from '../tag/tag.const';
 import { Project } from '../project/project.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { ShortSyntaxConfig } from '../config/global-config.model';
 import { INBOX_PROJECT } from '../project/project.const';
 
 const TASK: TaskCopy = {
@@ -47,7 +48,10 @@ const ALL_TAGS: Tag[] = [
   { ...DEFAULT_TAG, id: 'A_id', title: 'A' },
   { ...DEFAULT_TAG, id: 'multi_word_id', title: 'Multi Word Tag' },
 ];
-const CONFIG = DEFAULT_GLOBAL_CONFIG.shortSyntax;
+const CONFIG: ShortSyntaxConfig = {
+  ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+  urlBehavior: 'extract', // Tests expect extract mode by default
+};
 
 const getPlannedDateTimestampFromShortSyntaxReturnValue = async (
   taskInput: TaskCopy,
@@ -1212,6 +1216,7 @@ describe('shortSyntax', () => {
         isEnableDue: false,
         isEnableProject: false,
         isEnableTag: false,
+        urlBehavior: 'extract',
       });
       expect(r).toEqual(undefined);
     });
@@ -1581,6 +1586,62 @@ describe('shortSyntax', () => {
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://new-site.com');
       expect(r?.taskChanges.title).toBe('Task');
+    });
+  });
+
+  describe('URL behavior modes', () => {
+    describe('extract mode (default)', () => {
+      it('should remove URLs from title and create attachments', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com');
+      });
+    });
+
+    describe('keep-url mode', () => {
+      it('should keep URL in title and create attachment', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check https://example.com');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com');
+      });
+
+      it('should keep multiple URLs in title', async () => {
+        const t = {
+          ...TASK,
+          title: 'Compare https://site1.com and https://site2.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe(
+          'Compare https://site1.com and https://site2.com',
+        );
+        expect(r?.attachments.length).toBe(2);
+      });
+
+      it('should still work with short syntax tags and projects', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com #blu 30m',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' }, ALL_TAGS);
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check https://example.com');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.taskChanges.tagIds).toContain('blu_id');
+        expect(r?.taskChanges.timeEstimate).toBe(1800000);
+      });
     });
   });
 });

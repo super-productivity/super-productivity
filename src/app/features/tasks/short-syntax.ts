@@ -172,13 +172,17 @@ export const shortSyntax = async (
     };
   }
 
-  const urlChanges = parseUrlAttachments({
-    ...task,
-    title: taskChanges.title || task.title,
-  });
+  // Process URLs when enabled in config
+  const urlChanges = await parseUrlAttachments(
+    {
+      ...task,
+      title: taskChanges.title || task.title,
+    },
+    config.urlBehavior || 'extract',
+  );
   if (urlChanges.hadUrls) {
-    // Merge existing attachments with new ones (deduplicated in parseUrlAttachments)
-    attachments = [...(task.attachments || []), ...urlChanges.attachments];
+    // Return only new attachments - effects will merge with existing
+    attachments = urlChanges.attachments;
     taskChanges = {
       ...taskChanges,
       title: urlChanges.title,
@@ -484,13 +488,14 @@ const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   };
 };
 
-const parseUrlAttachments = (
+const parseUrlAttachments = async (
   task: Partial<TaskCopy>,
-): {
+  urlBehavior: 'extract' | 'keep-url' | 'keep-title',
+): Promise<{
   attachments: TaskAttachment[];
   title: string;
   hadUrls: boolean;
-} => {
+}> => {
   if (!task.title || task.issueId) {
     return { attachments: [], title: task.title || '', hadUrls: false };
   }
@@ -500,13 +505,34 @@ const parseUrlAttachments = (
   if (!urlMatches || urlMatches.length === 0) {
     return { attachments: [], title: task.title, hadUrls: false };
   }
+  const urlsToProcess = urlMatches.filter((url) => {
+    let trimmedUrl = url.trim().replace(/[.,;!?]+$/, '');
+
+    // Strip trailing ) characters (which the regex may have captured from Markdown syntax)
+    // Keep stripping until we find a version that's in the Markdown links set
+    while (trimmedUrl.endsWith(')') && trimmedUrl.length > 0) {
+      const withoutParen = trimmedUrl.slice(0, -1);
+      if (urlsInMarkdownLinks.has(withoutParen)) {
+        return false; // This URL is already in a Markdown link
+      }
+      trimmedUrl = withoutParen;
+    }
+
+    // Check the final trimmed URL
+    return !urlsInMarkdownLinks.has(trimmedUrl);
+  });
+
+  if (urlsToProcess.length === 0) {
+    return { attachments: [], title: task.title, hadUrls: false };
+  }
 
   // Build set of existing attachment paths for deduplication
   const existingPaths = new Set(
     (task.attachments || []).map((a) => a.path).filter((p): p is string => !!p),
   );
 
-  const attachments: TaskAttachment[] = urlMatches.map((url) => {
+  // Create attachments array (sync for now, will fetch metadata later)
+  const attachments: TaskAttachment[] = urlsToProcess.map((url) => {
     let path = url.trim();
 
     // Remove trailing punctuation that's not part of the URL
@@ -551,18 +577,23 @@ const parseUrlAttachments = (
 
   // Clean URLs from title - use ALL detected URLs (before deduplication)
   let cleanedTitle = task.title;
-  attachments.forEach((attachment) => {
-    const attachmentPath = attachment.path;
-    if (!attachmentPath) return;
-    // For www URLs, the path has '//' prepended, but the original doesn't
-    const originalUrl = attachmentPath.startsWith('//')
-      ? attachmentPath.substring(2)
-      : attachmentPath;
-    // Escape special regex characters for safe replacement
-    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
-  });
-  cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
+
+  if (urlBehavior === 'extract') {
+    // Extract mode: Remove URLs from title (original behavior)
+    attachments.forEach((attachment) => {
+      const attachmentPath = attachment.path;
+      if (!attachmentPath) return;
+      // For www URLs, the path has '//' prepended, but the original doesn't
+      const originalUrl = attachmentPath.startsWith('//')
+        ? attachmentPath.substring(2)
+        : attachmentPath;
+      // Escape special regex characters for safe replacement
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
+    });
+    cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
+  }
+  // else: keep-url mode - URLs stay in title as-is
 
   // Filter out attachments that already exist (prevent duplicates)
   const newAttachments = attachments.filter(
