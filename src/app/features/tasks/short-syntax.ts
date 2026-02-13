@@ -592,8 +592,9 @@ const parseUrlAttachments = async (
   });
 
   // Fetch metadata for attachments in keep-title mode
+  let finalAttachments = attachments;
   if (urlBehavior === 'keep-title' && urlMetadataService) {
-    const attachmentsWithMetadata = await Promise.all(
+    finalAttachments = await Promise.all(
       attachments.map(async (attachment) => {
         if (attachment.path && attachment.type !== 'FILE') {
           // Fetch page title with fallback to basename
@@ -613,9 +614,6 @@ const parseUrlAttachments = async (
         return attachment;
       }),
     );
-    // Replace attachments array with metadata-enriched version
-    attachments.length = 0;
-    attachments.push(...attachmentsWithMetadata);
   }
 
   // Clean URLs from title based on urlBehavior mode
@@ -623,7 +621,7 @@ const parseUrlAttachments = async (
 
   if (urlBehavior === 'extract') {
     // Extract mode: Remove URLs from title (original behavior)
-    attachments.forEach((attachment) => {
+    finalAttachments.forEach((attachment) => {
       const attachmentPath = attachment.path;
       if (!attachmentPath) return;
       // For www URLs, the path has '//' prepended, but the original doesn't
@@ -637,7 +635,7 @@ const parseUrlAttachments = async (
     cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
   } else if (urlBehavior === 'keep-title') {
     // keep-title mode: Replace URLs with Markdown link syntax [title](url)
-    attachments.forEach((attachment) => {
+    finalAttachments.forEach((attachment) => {
       const attachmentPath = attachment.path;
       if (!attachmentPath) return;
       // For www URLs, the path has '//' prepended, but the original doesn't
@@ -654,7 +652,7 @@ const parseUrlAttachments = async (
   // else: keep-url mode - URLs stay in title as-is
 
   // Filter out attachments that already exist (prevent duplicates)
-  const newAttachments = attachments.filter(
+  const newAttachments = finalAttachments.filter(
     (attachment) => attachment.path && !existingPaths.has(attachment.path),
   );
 
