@@ -120,12 +120,7 @@ export class TagPage extends BasePage {
       await tagNameInput.waitFor({ state: 'hidden', timeout: 3000 });
     }
 
-    // Wait for all menus and overlays to fully close before returning
-    await this.page
-      .locator('.mat-mdc-menu-panel')
-      .first()
-      .waitFor({ state: 'detached', timeout: 3000 })
-      .catch(() => {});
+    // Close the toggle menu (it stays open for multi-tag selection) and wait for cleanup
     await this.ensureOverlaysClosed();
 
     // Wait for the tag to actually appear on the task

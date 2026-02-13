@@ -30,7 +30,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: Sync error while writing to ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );
@@ -87,7 +87,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: Sync error while loading file from ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );
@@ -109,7 +109,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: Sync error while loading file from ' + filePath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );
@@ -131,7 +131,7 @@ export const initLocalFileSyncAdapter = (): void => {
       } catch (e) {
         log('ERR: error while checking dir ' + dirPath);
         error(e);
-        return new Error(e as string);
+        return e instanceof Error ? e : new Error(String(e));
       }
     },
   );

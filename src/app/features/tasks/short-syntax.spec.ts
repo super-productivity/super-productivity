@@ -1067,6 +1067,42 @@ describe('shortSyntax', () => {
       expect(r).toEqual(undefined);
     });
 
+    it('should not parse when there is a space after +', async () => {
+      const t = {
+        ...TASK,
+        title: 'Fun title + ProjectEasyShort',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual(undefined);
+    });
+
+    it('should not parse when there is a space after + with other syntax', async () => {
+      const t = {
+        ...TASK,
+        title: 'Fun title + ProjectEasyShort 10m',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual({
+        newTagTitles: [],
+        remindAt: null,
+        projectId: undefined,
+        attachments: [],
+        taskChanges: {
+          title: 'Fun title + ProjectEasyShort',
+          timeEstimate: 600000,
+        },
+      });
+    });
+
+    it('should not parse when + is followed by multiple spaces', async () => {
+      const t = {
+        ...TASK,
+        title: 'Fun title +  ProjectEasyShort',
+      };
+      const r = await shortSyntax(t, CONFIG, [], projects);
+      expect(r).toEqual(undefined);
+    });
+
     it('should prefer shortest prefix full project title match', async () => {
       const t = {
         ...TASK,

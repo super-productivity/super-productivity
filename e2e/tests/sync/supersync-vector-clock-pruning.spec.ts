@@ -20,7 +20,7 @@ import { waitForAppReady } from '../../utils/waits';
  * BUG SCENARIO:
  * 1. Client A creates SYNC_IMPORT with clock {A: 1}
  * 2. Client B receives it, merges clocks → {A: 1, B: x, ...other clients...}
- * 3. When B has 91+ clients, pruning triggers (MAX_VECTOR_CLOCK_SIZE = 10)
+ * 3. When B has 21+ clients, pruning triggers (MAX_VECTOR_CLOCK_SIZE = 20)
  * 4. A's entry (counter=1, lowest) gets PRUNED
  * 5. New tasks from B have clock {B: y} - MISSING A's entry!
  * 6. Comparison: {A: 0} vs {A: 1} → CONCURRENT

@@ -372,7 +372,7 @@ There are several ways to help.
 Recently support for Super Productivity has been growing! A big thank you to all our sponsors, especially the ones below!
 
 <p style="font-size:21px; color:black;">Agentic AI Quality Engineering via
-        <a href="https://www.testmu.ai/?utm_source=superproductivity&utm_medium=sponsor" target="_blank">
+        <a href="https://www.testmuai.com/?utm_medium=sponsor&utm_source=superproductivity" target="_blank">
             <picture>
                 <source srcset="https://super-productivity.com/_astro/test-mu-log-dark.Dy0yXuJ7.svg" media="(prefers-color-scheme: dark)" />
                 <img src="https://super-productivity.com/_astro/test-mu-log-light.CehEzLCt.svg" style="vertical-align: middle;" width="250" height="45" alt="TestMu AI" />

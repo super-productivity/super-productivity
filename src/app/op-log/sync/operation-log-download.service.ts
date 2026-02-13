@@ -272,7 +272,8 @@ export class OperationLogDownloadService implements OnDestroy {
         hasMore = response.hasMore;
 
         // Monotonicity check: warn if server seq decreased (indicates potential server bug)
-        if (response.latestSeq < lastServerSeq) {
+        // Skip after gap reset: server was reset/replaced, so lower seq is expected
+        if (response.latestSeq < lastServerSeq && !hasResetForGap) {
           OpLog.warn(
             `OperationLogDownloadService: Server sequence decreased from ${lastServerSeq} to ${response.latestSeq}. ` +
               `This may indicate a server bug or data loss.`,

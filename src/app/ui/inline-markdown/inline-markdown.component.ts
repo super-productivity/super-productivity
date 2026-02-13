@@ -120,7 +120,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (v) {
       this._updateResolvedModel(v);
     } else {
-      this.resolvedModel.set(undefined);
+      this.resolvedModel.set('');
     }
 
     if (!this.isShowEdit()) {
@@ -423,7 +423,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
   private async _updateResolvedModel(content: string | undefined): Promise<void> {
     if (!content) {
-      this.resolvedModel.set(content);
+      this.resolvedModel.set('');
       this._cd.markForCheck();
       return;
     }

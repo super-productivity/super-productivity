@@ -4,6 +4,7 @@ import {
   HostListener,
   inject,
   viewChild,
+  OnInit,
 } from '@angular/core';
 import { NoteService } from '../note.service';
 import { MatButton } from '@angular/material/button';
@@ -20,8 +21,10 @@ import { MatIcon } from '@angular/material/icon';
 import { NoteComponent } from '../note/note.component';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
+import { DRAG_DELAY_FOR_TOUCH, HISTORY_STATE } from '../../../app.constants';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { LayoutService } from 'src/app/core-ui/layout/layout.service';
+import { IS_MOBILE } from 'src/app/util/is-mobile';
 
 @Component({
   selector: 'notes',
@@ -40,10 +43,11 @@ import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
     CdkDragHandle,
   ],
 })
-export class NotesComponent {
+export class NotesComponent implements OnInit {
   noteService = inject(NoteService);
   workContextService = inject(WorkContextService);
   private _matDialog = inject(MatDialog);
+  private _layoutService = inject(LayoutService);
 
   T: typeof T = T;
   isElementWasAdded: boolean = false;
@@ -82,6 +86,25 @@ export class NotesComponent {
     this.noteService.updateOrder(
       moveItemInArray(notes, previousIndex, currentIndex).map((note) => note.id),
     );
+  }
+
+  ngOnInit(): void {
+    if (IS_MOBILE) {
+      if (!window.history.state?.[HISTORY_STATE.NOTES]) {
+        window.history.pushState({ [HISTORY_STATE.NOTES]: true }, '');
+      }
+    }
+  }
+
+  @HostListener('window:popstate')
+  onBack(): void {
+    // This prevents the project notes bottom sheet from closing automatically
+    // when a note (dialog-fullscreen-markdown) was opened before and closed via back button
+    if (IS_MOBILE) {
+      if (!window.history.state?.[HISTORY_STATE.NOTES]) {
+        this._layoutService.hideNotes();
+      }
+    }
   }
 
   addNote(): void {

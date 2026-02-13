@@ -30,7 +30,6 @@ describe('CleanSlateService', () => {
       'clearAllOperations',
       'append',
       'setVectorClock',
-      'setProtectedClientIds',
       'saveStateCache',
     ]);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
@@ -62,7 +61,6 @@ describe('CleanSlateService', () => {
     mockOpLogStore.clearAllOperations.and.resolveTo();
     mockOpLogStore.append.and.resolveTo(1);
     mockOpLogStore.setVectorClock.and.resolveTo();
-    mockOpLogStore.setProtectedClientIds.and.resolveTo();
     mockOpLogStore.saveStateCache.and.resolveTo();
   });
 
@@ -97,9 +95,6 @@ describe('CleanSlateService', () => {
 
       // Should update vector clock
       expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith({ eNewC: 1 });
-
-      // Should protect new client ID from pruning
-      expect(mockOpLogStore.setProtectedClientIds).toHaveBeenCalledWith(['eNewC']);
 
       // Should save snapshot
       expect(mockOpLogStore.saveStateCache).toHaveBeenCalledWith({
@@ -193,16 +188,6 @@ describe('CleanSlateService', () => {
       );
     });
 
-    it('should propagate setProtectedClientIds errors', async () => {
-      mockOpLogStore.setProtectedClientIds.and.rejectWith(
-        new Error('SetProtectedClientIds failed'),
-      );
-
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
-        jasmine.objectContaining({ message: 'SetProtectedClientIds failed' }),
-      );
-    });
-
     it('should propagate saveStateCache errors', async () => {
       mockOpLogStore.saveStateCache.and.rejectWith(new Error('SaveCache failed'));
 
@@ -241,20 +226,6 @@ describe('CleanSlateService', () => {
       await service.createCleanSlate('ENCRYPTION_CHANGE');
 
       expect(callOrder).toEqual(['append', 'setVectorClock']);
-    });
-
-    it('should set vector clock before protecting client IDs', async () => {
-      const callOrder: string[] = [];
-      mockOpLogStore.setVectorClock.and.callFake(async () => {
-        callOrder.push('setVectorClock');
-      });
-      mockOpLogStore.setProtectedClientIds.and.callFake(async () => {
-        callOrder.push('setProtectedClientIds');
-      });
-
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
-
-      expect(callOrder).toEqual(['setVectorClock', 'setProtectedClientIds']);
     });
   });
 });

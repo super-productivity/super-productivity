@@ -62,7 +62,6 @@ export class WebdavApi {
         response.status >= 200 && response.status <= 599 ? response.status : 500;
       const errorResponse = new Response(response.data, {
         status: safeStatus,
-        statusText: `HTTP ${safeStatus}`,
       });
       throw new HttpNotOkAPIError(errorResponse); // Other errors
     } catch (e) {

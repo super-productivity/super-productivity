@@ -203,9 +203,6 @@ export class BackupService {
     // Update vector clock store (append() doesn't do this, unlike appendWithVectorClockUpdate)
     await this._opLogStore.setVectorClock(newClock);
 
-    // Protect the client ID from pruning (single-entry fresh clock)
-    await this._opLogStore.setProtectedClientIds([clientId]);
-
     await this._opLogStore.saveStateCache({
       state: importedData,
       lastAppliedOpSeq: lastSeq,

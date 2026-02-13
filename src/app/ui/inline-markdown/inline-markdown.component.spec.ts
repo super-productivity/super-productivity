@@ -580,8 +580,8 @@ describe('InlineMarkdownComponent', () => {
       resolveDelayed('Task A notes');
       await Promise.resolve();
 
-      // Assert: resolvedModel should remain undefined (not stale Task A content)
-      expect(component.resolvedModel()).toBeUndefined();
+      // Assert: resolvedModel should remain empty (not stale Task A content)
+      expect(component.resolvedModel()).toBe('');
     });
   });
 

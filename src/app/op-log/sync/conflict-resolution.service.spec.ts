@@ -2298,8 +2298,8 @@ describe('ConflictResolutionService', () => {
 
     it('should NOT prune local-win update op clock (server handles pruning)', async () => {
       const now = Date.now();
-      const localClock = createLargeClock('local', 6, 1);
-      const remoteClock = createLargeClock('remote', 6, 10);
+      const localClock = createLargeClock('local', 16, 1);
+      const remoteClock = createLargeClock('remote', 16, 10);
 
       const conflicts: EntityConflict[] = [
         {
@@ -2329,8 +2329,8 @@ describe('ConflictResolutionService', () => {
 
     it('should NOT prune archive-win op clock (server handles pruning)', async () => {
       const now = Date.now();
-      const archiveClock = createLargeClock('archive', 6, 1);
-      const remoteClock = createLargeClock('remote', 6, 10);
+      const archiveClock = createLargeClock('archive', 16, 1);
+      const remoteClock = createLargeClock('remote', 16, 10);
 
       const conflicts: EntityConflict[] = [
         {

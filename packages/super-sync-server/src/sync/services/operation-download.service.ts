@@ -131,7 +131,7 @@ export class OperationDownloadService {
 
           // Limit snapshot clock to MAX_VECTOR_CLOCK_SIZE to prevent oversized
           // clocks from being sent to clients. Preserve the requesting client's ID
-          // and the snapshot author's ID to avoid false EQUAL in pruning-aware comparison.
+          // and the snapshot author's ID to avoid false EQUAL in comparison.
           const preserveIds: string[] = [];
           if (excludeClient) preserveIds.push(excludeClient);
           if (latestFullStateOp?.clientId) preserveIds.push(latestFullStateOp.clientId);

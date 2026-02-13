@@ -73,14 +73,14 @@ npm start
 
 All configuration is done via environment variables.
 
-| Variable       | Default                              | Description                                                                    |
-| :------------- | :----------------------------------- | :----------------------------------------------------------------------------- |
-| `PORT`         | `1900`                               | Server port                                                                    |
-| `DATABASE_URL` | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`) |
-| `JWT_SECRET`   | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                           |
-| `PUBLIC_URL`   | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`)              |
-| `CORS_ORIGINS` | `https://app.super-productivity.com` | Allowed CORS origins                                                           |
-| `SMTP_HOST`    | -                                    | SMTP Server for emails                                                         |
+| Variable       | Default                              | Description                                                                     |
+| :------------- | :----------------------------------- | :------------------------------------------------------------------------------ |
+| `PORT`         | `1900`                               | Server port                                                                     |
+| `DATABASE_URL` | -                                    | PostgreSQL connection string (e.g. `postgresql://user:pass@localhost:5432/db`)  |
+| `JWT_SECRET`   | -                                    | **Required.** Secret for signing JWTs (min 32 chars)                            |
+| `PUBLIC_URL`   | -                                    | **Required.** Public URL used for email links (e.g. `https://sync.example.com`) |
+| `CORS_ORIGINS` | `https://app.super-productivity.com` | Allowed CORS origins                                                            |
+| `SMTP_HOST`    | -                                    | SMTP Server for emails                                                          |
 
 ## API Endpoints
 
@@ -255,7 +255,7 @@ Used for full-state operations (BackupImport, SyncImport, Repair):
 | **Timing Attack Mitigation**  | Dummy hash comparison on invalid users            |
 | **Input Validation**          | Operation ID, entity ID, schema version validated |
 | **Rate Limiting**             | Configurable per-user limits                      |
-| **Vector Clock Sanitization** | Limited to 100 entries, 255 char keys             |
+| **Vector Clock Sanitization** | Limited to 50 entries, 255 char keys              |
 | **Entity Type Allowlist**     | Prevents injection of invalid entity types        |
 | **Request Deduplication**     | Prevents duplicate operations on retry            |
 

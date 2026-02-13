@@ -92,11 +92,48 @@ export const waitForAppReady = async (
     }
   }
 
+  // Re-check loading screen (may appear after initial check during Angular bootstrap)
+  const loadingRecheck = page.locator('.loading-full-page-wrapper');
+  const isStillLoading = await loadingRecheck.isVisible().catch(() => false);
+  if (isStillLoading) {
+    await loadingRecheck.waitFor({ state: 'hidden', timeout: 30000 });
+  }
+
   // Wait for main route wrapper to be visible (indicates app shell loaded)
-  await page
-    .locator('.route-wrapper')
-    .first()
-    .waitFor({ state: 'visible', timeout: 15000 });
+  try {
+    await page
+      .locator('.route-wrapper')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+  } catch {
+    // Safety net: reload and retry if app got stuck
+    console.log(
+      '[waitForAppReady] .route-wrapper not visible after 15s, attempting reload...',
+    );
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    for (let i = 0; i < 3; i++) {
+      try {
+        const btn = page.locator('dialog-confirm button[e2e="confirmBtn"]');
+        await btn.waitFor({ state: 'visible', timeout: 2000 });
+        await btn.click();
+        await page.waitForTimeout(500);
+      } catch {
+        break;
+      }
+    }
+    const rl = page.locator('.loading-full-page-wrapper');
+    if (await rl.isVisible().catch(() => false)) {
+      await rl.waitFor({ state: 'hidden', timeout: 30000 });
+    }
+    if (ensureRoute) {
+      await page.waitForURL(routeRegex, { timeout: 15000 });
+    }
+    await page
+      .locator('.route-wrapper')
+      .first()
+      .waitFor({ state: 'visible', timeout: 15000 });
+  }
 
   // Wait for optional selector
   if (selector) {

@@ -54,6 +54,19 @@ export const SYNC_ERROR_CODES = {
 
 export type SyncErrorCode = (typeof SYNC_ERROR_CODES)[keyof typeof SYNC_ERROR_CODES];
 
+export type ConflictType =
+  | 'concurrent'
+  | 'superseded'
+  | 'equal_different_client'
+  | 'unknown';
+
+export interface ConflictResult {
+  hasConflict: boolean;
+  reason?: string;
+  conflictType?: ConflictType;
+  existingClock?: VectorClock;
+}
+
 // Operation types - single source of truth
 export const OP_TYPES = [
   'CRT',
@@ -76,9 +89,9 @@ export type OpType = (typeof OP_TYPES)[number];
  * Returns a sanitized clock with validated entries, or an error.
  *
  * Validation rules:
- * - Maximum MAX_VECTOR_CLOCK_SIZE * 5 (50) entries (prevents DoS via huge clocks)
+ * - Maximum 50 entries (prevents DoS via huge clocks)
  * - Keys must be non-empty strings, max 255 characters
- * - Values must be non-negative integers, max 10 million
+ * - Values must be non-negative integers, capped at 100,000,000
  * - Invalid entries are removed (not rejected)
  */
 export const sanitizeVectorClock = (
@@ -93,10 +106,10 @@ export const sanitizeVectorClock = (
   // Reject absurdly large clocks (DoS protection).
   // Legitimate clocks can temporarily exceed MAX_VECTOR_CLOCK_SIZE during conflict
   // resolution: entity clock IDs + client ID + merged clocks from multiple concurrent
-  // clients. 5x MAX gives ample room for multi-client merge scenarios while catching
+  // clients. 2.5x MAX gives room for multi-client merge scenarios while catching
   // adversarial inputs. Server-side pruning (limitVectorClockSize) will trim to MAX
   // before storage.
-  const MAX_SANITIZE_VECTOR_CLOCK_SIZE = MAX_VECTOR_CLOCK_SIZE * 5;
+  const MAX_SANITIZE_VECTOR_CLOCK_SIZE = Math.ceil(MAX_VECTOR_CLOCK_SIZE * 2.5);
   if (entries.length > MAX_SANITIZE_VECTOR_CLOCK_SIZE) {
     return {
       valid: false,
@@ -119,7 +132,10 @@ export const sanitizeVectorClock = (
       typeof value !== 'number' ||
       !Number.isInteger(value) ||
       value < 0 ||
-      value > 10000000
+      // Cap at 100M — impossibly large for normal use (would need ~1 op/second
+      // for 3+ years) but prevents an adversarial client from sending a huge
+      // counter that makes all other clocks LESS_THAN it.
+      value > 100_000_000
     ) {
       strippedCount++;
       continue; // Skip invalid values

@@ -738,8 +738,8 @@ export class ConflictResolutionService {
       ...conflict.remoteOps.map((op) => op.vectorClock),
     ];
     // No client-side pruning — server prunes AFTER conflict detection, BEFORE storage.
-    // Client-side pruning can drop entity clock IDs, causing the server's pruning-aware
-    // comparison to return CONCURRENT instead of GREATER_THAN (infinite rejection loop).
+    // Client-side pruning can drop entity clock IDs, causing the comparison to return
+    // CONCURRENT instead of GREATER_THAN (infinite rejection loop).
     const newClock = this.mergeAndIncrementClocks(allClocks, clientId);
 
     // Preserve the maximum timestamp from local ops.

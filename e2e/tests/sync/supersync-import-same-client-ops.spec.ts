@@ -18,18 +18,17 @@ import { waitForAppReady } from '../../utils/waits';
  * a SYNC_IMPORT are correctly synced to other clients.
  *
  * BUG SCENARIO (vector clock pruning asymmetry):
- * 1. Client A creates SYNC_IMPORT with a 10-entry (MAX) vector clock
+ * 1. Client A creates SYNC_IMPORT with a 20-entry (MAX) vector clock
  * 2. Client A continues creating ops; over time, new clients join, pushing
  *    A's clock past MAX → server prunes entries
  * 3. A's ops have different pruned entries than A's frozen import clock
  * 4. Receiving client sees CONCURRENT (both have MAX entries, different keys)
- * 5. isLikelyPruningArtifact returns false (A's clientId IS in import clock)
- * 6. Ops incorrectly filtered as "concurrent with import"
+ * 5. CONCURRENT comparison → ops incorrectly filtered
  *
  * FIX: Same-client counter comparison is definitive. If op.clientId matches
  * import.clientId and op's counter > import's counter, the op is post-import.
  *
- * NOTE: This E2E test can't trigger actual pruning (needs 10+ clients).
+ * NOTE: This E2E test can't trigger actual pruning (needs 21+ unique client IDs with MAX=20).
  * It verifies the end-to-end flow: import client's own post-import ops
  * must sync correctly to other clients. The unit tests verify the pruning-
  * specific detection logic.
@@ -90,7 +89,30 @@ test.describe('@supersync @pruning Import client post-import ops sync correctly'
       // Reload and re-enable sync
       await clientA.page.reload({ timeout: 60000 });
       await waitForAppReady(clientA.page, { ensureRoute: false });
-      await clientA.sync.setupSuperSync(syncConfig);
+
+      // Configure sync WITHOUT waiting for initial sync
+      // (initial sync will show sync-import-conflict dialog since we have a local BackupImport)
+      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+
+      // Wait for either sync import conflict dialog OR sync completion
+      // The dialog appears because download-first order finds server ops that conflict with our local import
+      const syncImportDialog = clientA.sync.syncImportConflictDialog;
+      const syncResult = await Promise.race([
+        syncImportDialog
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'dialog' as const),
+        clientA.sync.syncCheckIcon
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'complete' as const),
+      ]);
+
+      if (syncResult === 'dialog') {
+        // Choose "Use My Data" to preserve the import (not "Use Server Data" which discards it)
+        await clientA.sync.syncImportUseLocalBtn.click();
+        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        // Wait for sync to complete after dialog handling
+        await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+      }
 
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
       console.log('[Same-Client Import] Client A showing imported data');
@@ -212,7 +234,26 @@ test.describe('@supersync @pruning Import client post-import ops sync correctly'
 
       await clientA.page.reload({ timeout: 60000 });
       await waitForAppReady(clientA.page, { ensureRoute: false });
-      await clientA.sync.setupSuperSync(syncConfig);
+
+      // Configure sync WITHOUT waiting for initial sync (same dialog handling as test 1)
+      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+
+      const syncImportDialog2 = clientA.sync.syncImportConflictDialog;
+      const syncResult2 = await Promise.race([
+        syncImportDialog2
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'dialog' as const),
+        clientA.sync.syncCheckIcon
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'complete' as const),
+      ]);
+
+      if (syncResult2 === 'dialog') {
+        await clientA.sync.syncImportUseLocalBtn.click();
+        await syncImportDialog2.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+      }
+
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
       await clientA.sync.syncAndWait();
