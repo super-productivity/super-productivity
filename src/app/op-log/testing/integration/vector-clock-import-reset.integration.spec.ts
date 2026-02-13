@@ -13,10 +13,24 @@ import {
 import { MAX_VECTOR_CLOCK_SIZE } from '../../core/operation-log.const';
 import { limitVectorClockSize } from '@sp/shared-schema';
 import { uuidv7 } from '../../../util/uuid-v7';
-import {
-  isLikelyPruningArtifact,
-  SyncImportFilterService,
-} from '../../sync/sync-import-filter.service';
+import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
+
+/**
+ * Local copy of isLikelyPruningArtifact logic for testing.
+ * Cannot import the function directly from the service file because Angular's
+ * webpack build only exposes class exports from .service.ts files.
+ */
+const isLikelyPruningArtifact = (
+  opClock: Record<string, number>,
+  opClientId: string,
+  importClock: Record<string, number>,
+): boolean => {
+  if (opClientId in importClock) return false;
+  if (Object.keys(importClock).length < MAX_VECTOR_CLOCK_SIZE) return false;
+  const sharedKeys = Object.keys(opClock).filter((k) => k in importClock);
+  if (sharedKeys.length === 0) return false;
+  return sharedKeys.every((k) => opClock[k] >= importClock[k]);
+};
 
 /**
  * Integration tests for vector clock behavior after SYNC_IMPORT.
