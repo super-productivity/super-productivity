@@ -10,8 +10,18 @@ interface UrlMetadataResult {
   error?: string;
 }
 
-const fetchUrlMetadata = async (url: string): Promise<UrlMetadataResult> => {
+const MAX_REDIRECTS = 5;
+
+const fetchUrlMetadata = async (
+  url: string,
+  redirectCount = 0,
+): Promise<UrlMetadataResult> => {
   try {
+    // Prevent infinite redirect loops
+    if (redirectCount > MAX_REDIRECTS) {
+      return { title: null, error: 'Too many redirects' };
+    }
+
     // Skip file:// URLs
     if (url.startsWith('file://')) {
       return { title: null };
@@ -64,8 +74,11 @@ const fetchUrlMetadata = async (url: string): Promise<UrlMetadataResult> => {
           res.headers.location
         ) {
           clearTimeout(timeout);
-          // Recursively fetch from redirect location
-          const redirectResult = await fetchUrlMetadata(res.headers.location);
+          // Recursively fetch from redirect location, incrementing redirect count
+          const redirectResult = await fetchUrlMetadata(
+            res.headers.location,
+            redirectCount + 1,
+          );
           resolve(redirectResult);
           return;
         }
