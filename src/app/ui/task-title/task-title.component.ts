@@ -105,10 +105,12 @@ export class TaskTitleComponent implements OnDestroy {
     }
 
     let htmlWithLinks = text;
+    let hasMarkdown = false;
+    let hasUrls = false;
 
     // First, handle Markdown links (keep-title mode): [title](url)
     MARKDOWN_LINK_REGEX.lastIndex = 0;
-    const hasMarkdown = MARKDOWN_LINK_REGEX.test(text);
+    hasMarkdown = MARKDOWN_LINK_REGEX.test(text);
     if (hasMarkdown) {
       MARKDOWN_LINK_REGEX.lastIndex = 0;
       htmlWithLinks = htmlWithLinks.replace(MARKDOWN_LINK_REGEX, (_match, title, url) => {
@@ -135,32 +137,62 @@ export class TaskTitleComponent implements OnDestroy {
     }
 
     // Then, handle regular URLs (keep-url mode)
-    // Only process if we didn't already handle Markdown links (to avoid double-processing)
-    let hasUrls = false;
-    if (!hasMarkdown) {
-      URL_REGEX.lastIndex = 0;
-      hasUrls = URL_REGEX.test(htmlWithLinks);
-      if (hasUrls) {
-        URL_REGEX.lastIndex = 0;
-        htmlWithLinks = htmlWithLinks.replace(URL_REGEX, (url) => {
-          // Clean trailing punctuation
-          const cleanUrl = url.replace(/[.,;!?]+$/, '');
-          // Handle different URL formats (same logic as Markdown links)
-          let href = cleanUrl;
-          if (cleanUrl.match(/^(?:https?|file):\/\//)) {
-            href = cleanUrl;
-          } else if (cleanUrl.startsWith('//')) {
-            href = `https:${cleanUrl}`;
-          } else {
-            href = `http://${cleanUrl}`;
-          }
-          // IMPORTANT: Escape both href and displayed URL using Angular's sanitizer to prevent XSS
-          const escapedHref = this._escapeHtml(href);
-          const escapedDisplay = this._escapeHtml(cleanUrl);
-          // Return clickable link (mousedown handler prevents edit mode for A tags)
-          return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer">${escapedDisplay}</a>`;
-        });
+    // Process plain URLs even if markdown exists, but avoid double-processing URLs inside <a> tags
+    URL_REGEX.lastIndex = 0;
+    hasUrls = URL_REGEX.test(htmlWithLinks);
+    if (hasUrls) {
+      // Split by anchor tags to process only text outside of <a>...</a>
+      const anchorRegex = /<a\b[^>]*>.*?<\/a>/gs;
+      const parts: Array<{ text: string; isAnchor: boolean }> = [];
+      let lastIndex = 0;
+      let anchorMatch: RegExpExecArray | null;
+
+      // Extract all anchor tags and the text between them
+      while ((anchorMatch = anchorRegex.exec(htmlWithLinks)) !== null) {
+        // Add text before this anchor
+        if (anchorMatch.index > lastIndex) {
+          parts.push({
+            text: htmlWithLinks.slice(lastIndex, anchorMatch.index),
+            isAnchor: false,
+          });
+        }
+        // Add the anchor tag itself (don't process URLs inside it)
+        parts.push({ text: anchorMatch[0], isAnchor: true });
+        lastIndex = anchorRegex.lastIndex;
       }
+      // Add remaining text after last anchor
+      if (lastIndex < htmlWithLinks.length) {
+        parts.push({ text: htmlWithLinks.slice(lastIndex), isAnchor: false });
+      }
+
+      // Process URLs only in non-anchor parts
+      htmlWithLinks = parts
+        .map((part) => {
+          if (part.isAnchor) {
+            return part.text;
+          }
+          // Process plain URLs in this text segment
+          URL_REGEX.lastIndex = 0;
+          return part.text.replace(URL_REGEX, (url) => {
+            // Clean trailing punctuation
+            const cleanUrl = url.replace(/[.,;!?]+$/, '');
+            // Handle different URL formats (same logic as Markdown links)
+            let href = cleanUrl;
+            if (cleanUrl.match(/^(?:https?|file):\/\//)) {
+              href = cleanUrl;
+            } else if (cleanUrl.startsWith('//')) {
+              href = `https:${cleanUrl}`;
+            } else {
+              href = `http://${cleanUrl}`;
+            }
+            // IMPORTANT: Escape both href and displayed URL using Angular's sanitizer to prevent XSS
+            const escapedHref = this._escapeHtml(href);
+            const escapedDisplay = this._escapeHtml(cleanUrl);
+            // Return clickable link (mousedown handler prevents edit mode for A tags)
+            return `<a href="${escapedHref}" target="_blank" rel="noopener noreferrer">${escapedDisplay}</a>`;
+          });
+        })
+        .join('');
     }
 
     // If no links or markdown, return plain text

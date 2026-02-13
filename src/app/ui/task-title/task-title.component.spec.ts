@@ -85,4 +85,54 @@ describe('TaskTitleComponent', () => {
       expect(htmlString).not.toContain('href="javascript:');
     });
   });
+
+  describe('displayHtml - Mixed Content', () => {
+    it('should render both markdown links and plain URLs in the same title', () => {
+      component.tmpValue.set('Review [docs](https://docs.com) and https://example.com');
+      const html = component.displayHtml();
+      const htmlString = html.toString();
+
+      // Both URLs should be clickable links
+      expect(htmlString).toContain('href="https://docs.com"');
+      expect(htmlString).toContain('>docs</a>'); // markdown link title
+      expect(htmlString).toContain('href="https://example.com"');
+      expect(htmlString).toContain('>https://example.com</a>'); // plain URL as text
+
+      // Should have 2 anchor tags total
+      const anchorCount = (htmlString.match(/<a /g) || []).length;
+      expect(anchorCount).toBe(2);
+    });
+
+    it('should not double-process URLs that are already in markdown links', () => {
+      component.tmpValue.set('[https://example.com](https://example.com)');
+      const html = component.displayHtml();
+      const htmlString = html.toString();
+
+      // Should only have 1 anchor tag (the markdown link)
+      const anchorCount = (htmlString.match(/<a /g) || []).length;
+      expect(anchorCount).toBe(1);
+
+      // The URL should appear in both href and link text, but not double-wrapped
+      expect(htmlString).toContain('href="https://example.com"');
+      expect(htmlString).toContain('>https://example.com</a>');
+    });
+
+    it('should handle multiple markdown links and multiple plain URLs', () => {
+      component.tmpValue.set(
+        'Check [docs](https://docs.com) and [api](https://api.com), also see https://example.com and https://github.com',
+      );
+      const html = component.displayHtml();
+      const htmlString = html.toString();
+
+      // Should have 4 anchor tags total
+      const anchorCount = (htmlString.match(/<a /g) || []).length;
+      expect(anchorCount).toBe(4);
+
+      // All 4 URLs should be present
+      expect(htmlString).toContain('href="https://docs.com"');
+      expect(htmlString).toContain('href="https://api.com"');
+      expect(htmlString).toContain('href="https://example.com"');
+      expect(htmlString).toContain('href="https://github.com"');
+    });
+  });
 });
