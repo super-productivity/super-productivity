@@ -249,10 +249,22 @@ export class SimulatedClient {
 
   /**
    * Apply remote operations to the local store.
+   *
+   * IMPORTANT: Clock merge happens BEFORE the hasOp check because all
+   * SimulatedClient instances share one IndexedDB. When client A creates
+   * an op, it's immediately visible to client B via hasOp(). Without
+   * merging first, B would skip A's clock entirely, leaving B's vector
+   * clock with only its own entry.
    */
   private async _applyRemoteOps(serverOps: ServerSyncOperation[]): Promise<void> {
     for (const serverOp of serverOps) {
-      // Skip if already have this op
+      // Always merge the remote clock into our local knowledge.
+      // This must happen regardless of whether the op is already in the
+      // shared store, because this client's TestClient needs to learn
+      // about the remote causal history.
+      this.testClient.mergeRemoteClock(serverOp.op.vectorClock);
+
+      // Skip store write if already have this op (shared DB between clients)
       if (await this.store.hasOp(serverOp.op.id)) {
         continue;
       }
@@ -273,9 +285,6 @@ export class SimulatedClient {
       };
 
       await this.store.append(op, 'remote');
-
-      // Merge the remote clock into our local knowledge
-      this.testClient.mergeRemoteClock(op.vectorClock);
     }
   }
 }

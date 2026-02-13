@@ -11,6 +11,7 @@ import {
   VectorClockComparison,
 } from '../../../core/util/vector-clock';
 import { MAX_VECTOR_CLOCK_SIZE } from '../../core/operation-log.const';
+import { limitVectorClockSize } from '@sp/shared-schema';
 import { uuidv7 } from '../../../util/uuid-v7';
 import {
   isLikelyPruningArtifact,
@@ -393,19 +394,13 @@ describe('Vector Clock Import Reset Integration', () => {
       newClientClock[newClientId] = 1; // New client's first op
       // Now clock has MAX+1 entries
 
-      // Server prunes: drops the lowest-value entry to get back to MAX
-      // Sort entries by value, remove the lowest that isn't the new client
-      const entries = Object.entries(newClientClock).sort(([, a], [, b]) => b - a);
-      const prunedClock: Record<string, number> = {};
-      let count = 0;
-      for (const [key, value] of entries) {
-        if (count >= MAX_VECTOR_CLOCK_SIZE) break;
-        prunedClock[key] = value;
-        count++;
-      }
+      // Server prunes using limitVectorClockSize, preserving the uploading
+      // client's ID (this is what the real server does).
+      const prunedClock = limitVectorClockSize(newClientClock, [newClientId]);
 
-      // The pruned clock is missing one entry from the import clock
+      // The pruned clock keeps the new client but drops the lowest import entry
       expect(Object.keys(prunedClock).length).toBe(MAX_VECTOR_CLOCK_SIZE);
+      expect(prunedClock[newClientId]).toBe(1); // Preserved by server
 
       // Direct comparison should return CONCURRENT (both at MAX, different keys)
       const comparison = compareVectorClocks(prunedClock, importClock);
