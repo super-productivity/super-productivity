@@ -455,14 +455,22 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
                       )?.parent?.parent?.model;
                       if (fullSyncModel) {
                         await this.syncSettingsService.updateSettingsFromForm(
-                          fullSyncModel,
+                          fullSyncModel!,
                           true,
                         );
                       }
                     }
                   } catch (e) {
-                    // Error handling is done in SyncWrapperService
-                    // (shows error snackbar automatically)
+                    // Log error for debugging (storage failures, auth errors, etc.)
+                    Log.err('Dropbox authentication failed:', e);
+                    // Show user-friendly error with actual error message for context
+                    this._snackService.open({
+                      type: 'ERROR',
+                      msg: T.F.SYNC.S.INCOMPLETE_CFG,
+                      translateParams: {
+                        error: e instanceof Error ? e.message : String(e),
+                      },
+                    });
                   }
                 },
               },
