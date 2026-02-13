@@ -8,6 +8,7 @@ import {
   OpDownloadResponse,
   ServerSyncOperation,
   SnapshotUploadResponse,
+  RestorePointType,
 } from '../provider.interface';
 import { EncryptAndCompressHandlerService } from '../../encryption/encrypt-and-compress-handler.service';
 import { EncryptAndCompressCfg } from '../../core/types/sync.types';
@@ -338,6 +339,7 @@ export class FileBasedSyncAdapterService {
         isPayloadEncrypted: boolean | undefined,
         _opId: string, // Not used in file-based sync (operation IDs are client-local)
         _isCleanSlate?: boolean, // Not used - file-based sync replaces entire file
+        _snapshotOpType?: RestorePointType, // Not used - file-based sync has no server-side op log
       ): Promise<SnapshotUploadResponse> => {
         return this._uploadSnapshot(
           provider,
