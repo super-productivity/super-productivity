@@ -1942,6 +1942,11 @@
       "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimate / time spent",
       "TASK_SCHEDULE": "Schedule task",
       "TASK_UNSCHEDULE": "Unschedule task",
+      "TASK_RESCHEDULE_TO_TOMORROW": "Reschedule Task to Tomorrow",
+      "TASK_RESCHEDULE_TO_THIS_WEEK": "Reschedule Task to This Week (End)",
+      "TASK_RESCHEDULE_TO_NEXT_WEEK": "Reschedule Task to Next Week (Start)",
+      "TASK_RESCHEDULE_TO_THIS_MONTH": "Reschedule Task to This Month (End)",
+      "TASK_RESCHEDULE_TO_NEXT_MONTH": "Reschedule Task to Next Month (Start)"
       "TASK_SHORTCUTS": "Tasks",
       "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/hide additional task info",
