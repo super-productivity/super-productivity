@@ -7,6 +7,7 @@ import { Log } from '../../core/log';
 import { TaskComponent } from './task/task.component';
 import { TaskContextMenuComponent } from './task-context-menu/task-context-menu.component';
 import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-menu-inner/task-context-menu-inner.component';
+import { calculateRescheduleDate, RescheduleType } from './task-reschedule.helper';
 
 type TaskId = string;
 
