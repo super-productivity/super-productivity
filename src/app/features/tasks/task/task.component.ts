@@ -86,6 +86,7 @@ import {
   calculateRescheduleDate, 
   RescheduleType 
 } from '../task-reschedule.helper';
+import { TaskReminderOptionId } from '../task.model';
 
 @Component({
   selector: 'task',
