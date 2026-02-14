@@ -267,18 +267,13 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       },
     });
 
-    let lastEmittedContent: string | null = null;
-
-    // Subscribe to live auto-save updates from fullscreen dialog
-    dialogRef.componentInstance.contentChanged.subscribe((content: string) => {
-      lastEmittedContent = content;
-      this.modelCopy.set(content);
-      this.changed.emit(content);
-    });
-
     dialogRef.afterClosed().subscribe((res) => {
-      // Only emit if content differs from last auto-saved content
-      if (typeof res === 'string' && res !== lastEmittedContent) {
+      // This resets the task note to its default text
+      if (res?.action === 'DELETE') {
+        this.modelCopy.set('');
+        this.changed.emit('');
+        // This updates the task note on click of the "Save" button only if it contains text.
+      } else if (typeof res === 'string') {
         this.modelCopy.set(res);
         this.changed.emit(res);
       }

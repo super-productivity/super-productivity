@@ -46,6 +46,7 @@ export class DialogAddNoteComponent extends DialogFullscreenMarkdownComponent {
     this.data = { content: sessionStorage.getItem(SS.NOTE_TMP) || '' };
   }
 
+  // TODOM: TRY TO MAKE SENSE OF THIS. ESPECIALLY isEscapeClose
   override close(isSkipSave: boolean = false, isEscapeClose: boolean = false): void {
     if (!isEscapeClose) {
       if (!isSkipSave && this.data?.content && this.data.content.trim().length > 0) {

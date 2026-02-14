@@ -176,12 +176,16 @@ export class NoteComponent implements OnChanges {
         },
       })
       .afterClosed()
-      .subscribe((content) => {
+      .subscribe((res) => {
         if (!this.note) {
           throw new Error('No note');
         }
-        if (typeof content === 'string') {
-          this._noteService.update(this.note.id, { content });
+        // This removes the project note if the note is made empty and saved by the user.
+        if (res?.action === 'DELETE') {
+          this._noteService.remove(this.note);
+          // This updates the note, when the user clicks the "Save" button.
+        } else if (typeof res === 'string') {
+          this._noteService.update(this.note.id, { content: res });
         }
       });
   }

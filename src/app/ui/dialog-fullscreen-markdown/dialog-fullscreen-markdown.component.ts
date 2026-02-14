@@ -179,8 +179,17 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
     this._contentChanges$.next(content);
   }
 
-  close(): void {
-    this._matDialogRef.close(this.data?.content);
+  close(isSkipSave: boolean = false): void {
+    // When the "Close" button is hit by the user, the note is closed without saving.
+    if (isSkipSave) {
+      this._matDialogRef.close();
+      // When the note is made empty manually by the user and the "Save" button is hit, the note is automatically deleted instead of being left blank.
+    } else if (!this.data?.content && this.data.content.trim().length < 1) {
+      this._matDialogRef.close({ action: 'DELETE' });
+      // When the "Save" button is clicked by the user and the note has content, it will save.
+    } else {
+      this._matDialogRef.close(this.data?.content);
+    }
   }
 
   onViewModeChange(): void {
