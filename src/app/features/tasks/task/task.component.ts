@@ -87,6 +87,7 @@ import {
   RescheduleType 
 } from '../task-reschedule.helper';
 import { TaskReminderOptionId } from '../task.model';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
 @Component({
   selector: 'task',
