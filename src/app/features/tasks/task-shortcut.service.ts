@@ -121,6 +121,34 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskRescheduleToTomorrow)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'tomorrow');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskRescheduleToThisWeek)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'thisWeek');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToNextWeek)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'nextWeek');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToThisMonth)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'thisMonth');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToNextMonth)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'nextMonth');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskToggleDone)) {
       this._handleTaskShortcut(focusedTaskId, 'toggleDoneKeyboard');
       ev.preventDefault();
@@ -277,6 +305,34 @@ export class TaskShortcutService {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
     }
   }
+
+  /**
+   * Calls a method on the currently focused task component.
+   *
+   * @param taskId - The ID of the task (for validation)
+   * @param rescheduleType - The desired reschedule type for this task
+   */
+  private _handleRescheduleShortcut(
+  taskId: string,
+  rescheduleType: RescheduleType,
+): void {
+  const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
+  if (!taskComponent) {
+    Log.warn(`No focused task component available for ID: ${taskId}`);
+    return;
+  }
+
+  this._closeContextMenuIfOpen(taskComponent);
+
+  if (typeof taskComponent.rescheduleTaskToType === 'function') {
+    taskComponent.rescheduleTaskToType(rescheduleType);
+  } else {
+    Log.warn(
+      `Method rescheduleTaskToType not found on task component`,
+      taskComponent,
+    );
+  }
+}
 
   /**
    * Checks if the context menu is open for the currently focused task.
