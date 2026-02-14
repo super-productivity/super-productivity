@@ -271,6 +271,41 @@ export const KEYBOARD_SETTINGS_FORM_CFG: ConfigFormSection<KeyboardConfig> = {
       },
     },
     {
+      key: 'taskRescheduleToTomorrow',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_RESCHEDULE_TO_TOMORROW,
+      },
+    },
+    {
+      key: 'taskRescheduleToThisWeek',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_RESCHEDULE_TO_THIS_WEEK,
+      },
+    },
+    {
+      key: 'taskRescheduleToNextWeek',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_RESCHEDULE_TO_NEXT_WEEK,
+      },
+    },
+    {
+      key: 'taskRescheduleToThisMonth',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_RESCHEDULE_TO_THIS_MONTH,
+      },
+    },
+    {
+      key: 'taskRescheduleToNextMonth',
+      type: 'keyboard',
+      templateOptions: {
+        label: T.GCF.KEYBOARD.TASK_RESCHEDULE_TO_NEXT_MONTH,
+      },
+    },
+    {
       key: 'taskToggleDone',
       type: 'keyboard',
       templateOptions: {
