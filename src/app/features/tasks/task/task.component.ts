@@ -82,6 +82,10 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { TaskLog } from '../../../core/log';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
 import { TaskFocusService } from '../task-focus.service';
+import { 
+  calculateRescheduleDate, 
+  RescheduleType 
+} from '../task-reschedule.helper';
 
 @Component({
   selector: 'task',
@@ -706,6 +710,24 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
         id: this.task().id,
       }),
     );
+  }
+
+  rescheduleTaskToType(rescheduleType: RescheduleType): void {
+    this._storeNextFocusEl();
+  
+    const targetDate = calculateRescheduleDate(rescheduleType);
+    const currentReminderCfgId: TaskReminderOptionId =
+      (this._taskService as any)._getCurrentTaskReminder?.() ||
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption;
+  
+    this._taskService.reScheduleTask({
+      task: this.task(),
+      due: targetDate,
+      remindCfg: currentReminderCfgId,
+      isMoveToBacklog: false,
+    });
+  
+    this.focusSelfOrNextIfNotPossible();
   }
 
   titleBarClick(event: MouseEvent): void {
