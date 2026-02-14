@@ -1,5 +1,5 @@
 import { TaskCopy } from './task.model';
-import { shortSyntax } from './short-syntax';
+import { shortSyntax, parseTimeSpentChanges } from './short-syntax';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import {
   MONTH_SHORT_NAMES,
@@ -1571,5 +1571,47 @@ describe('shortSyntax', () => {
       expect(r?.attachments[0].title).toBe('projects');
       expect(r?.taskChanges.title).toBe('Task');
     });
+  });
+});
+
+describe('parseTimeSpentChanges', () => {
+  it('should parse time estimate from title', () => {
+    const result = parseTimeSpentChanges({ title: 'Subtask 30m' });
+    expect(result.timeEstimate).toBe(30 * 60 * 1000);
+    expect(result.title).toBe('Subtask');
+  });
+
+  it('should parse time spent and estimate from title', () => {
+    const result = parseTimeSpentChanges({ title: 'Subtask 10m/1h' });
+    expect(result.timeEstimate).toBe(60 * 60 * 1000);
+    expect(result.timeSpentOnDay?.[getDbDateStr()]).toBe(10 * 60 * 1000);
+    expect(result.title).toBe('Subtask');
+  });
+
+  it('should return empty object for title without time syntax', () => {
+    const result = parseTimeSpentChanges({ title: 'Just a regular subtask' });
+    expect(result).toEqual({});
+  });
+
+  it('should return empty object when title is undefined', () => {
+    const result = parseTimeSpentChanges({});
+    expect(result).toEqual({});
+  });
+
+  it('should return empty object for empty string title', () => {
+    const result = parseTimeSpentChanges({ title: '' });
+    expect(result).toEqual({});
+  });
+
+  it('should handle time-only title', () => {
+    const result = parseTimeSpentChanges({ title: '2h' });
+    expect(result.timeEstimate).toBe(2 * 60 * 60 * 1000);
+    expect(result.title).toBe('');
+  });
+
+  it('should work without timeSpentOnDay on the input', () => {
+    const result = parseTimeSpentChanges({ title: 'Task 15m/' });
+    expect(result.timeSpentOnDay?.[getDbDateStr()]).toBe(15 * 60 * 1000);
+    expect(result.title).toBe('Task');
   });
 });

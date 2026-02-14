@@ -24,6 +24,7 @@ import {
   REDMINE_TYPE,
   LINEAR_TYPE,
   CLICKUP_TYPE,
+  AZURE_DEVOPS_TYPE,
 } from './issue.const';
 import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
@@ -40,6 +41,7 @@ import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-int
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
 import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
+import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { TranslateService } from '@ngx-translate/core';
@@ -75,6 +77,7 @@ export class IssueService {
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
   private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
   private _clickUpCommonInterfaceService = inject(ClickUpCommonInterfacesService);
+  private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
   private _calendarCommonInterfaceService = inject(CalendarCommonInterfacesService);
   private _issueProviderService = inject(IssueProviderService);
   private _workContextService = inject(WorkContextService);
@@ -97,6 +100,7 @@ export class IssueService {
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
     [LINEAR_TYPE]: this._linearCommonInterfaceService,
     [CLICKUP_TYPE]: this._clickUpCommonInterfaceService,
+    [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
 
     // trello
     [TRELLO_TYPE]: this._trelloCommonInterfacesService,

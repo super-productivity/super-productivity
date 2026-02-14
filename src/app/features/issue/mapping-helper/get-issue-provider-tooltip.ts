@@ -21,6 +21,8 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.projectId;
       case 'TRELLO':
         return issueProvider.boardName || issueProvider.boardId;
+      case 'AZURE_DEVOPS':
+        return issueProvider.project || undefined;
       default:
         return undefined;
     }
@@ -90,6 +92,8 @@ export const getIssueProviderInitials = (
       return (issueProvider.boardName || issueProvider.boardId)
         ?.substring(0, 2)
         ?.toUpperCase();
+    case 'AZURE_DEVOPS':
+      return issueProvider.project?.substring(0, 2)?.toUpperCase() || 'AD';
   }
   return undefined;
 };

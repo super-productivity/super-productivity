@@ -177,6 +177,7 @@ export class GlobalThemeService {
       ['tomorrow', 'assets/icons/tomorrow.svg'],
       ['next_week', 'assets/icons/next-week.svg'],
       ['habit', 'assets/icons/habit.svg'],
+      ['azure_devops', 'assets/icons/azure_devops.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet

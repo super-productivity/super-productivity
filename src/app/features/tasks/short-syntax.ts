@@ -453,7 +453,7 @@ const parseScheduledDate = async (
   return {};
 };
 
-const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
+export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> => {
   if (!task.title) {
     return {};
   }

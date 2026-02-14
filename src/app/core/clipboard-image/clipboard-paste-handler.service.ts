@@ -25,6 +25,14 @@ export class ClipboardPasteHandlerService {
   async handlePaste(ev: ClipboardEvent, context: PasteContext): Promise<boolean> {
     if (!ev.clipboardData) return false;
 
+    // Check for text content first - prioritize text over images (e.g., OneNote copies both)
+    const hasText =
+      ev.clipboardData.types.includes('text/plain') ||
+      ev.clipboardData.types.includes('text/html');
+    if (hasText) {
+      return false; // Let default text paste behavior handle it
+    }
+
     const progress = this._clipboardImageService.handlePasteWithProgress(ev);
     if (!progress) return false;
 
