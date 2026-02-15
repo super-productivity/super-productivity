@@ -84,7 +84,8 @@ export class DateTimeFormatService {
   /** Monkey-patch DateAdapter to make locale-specific date parsing (DD/MM/YYYY) configurable via global config */
   private _initDateAdapterPatch(): void {
     effect(() => {
-      const originalParse = this._dateAdapter.parse.bind(this._dateAdapter);
+      const originalParse = (value: any, format: string): Date | null =>
+        this._dateAdapter.parse(value, format);
 
       // Override parse to handle locale-specific formats
       this._dateAdapter.parse = (value: any, format: string): Date | null => {

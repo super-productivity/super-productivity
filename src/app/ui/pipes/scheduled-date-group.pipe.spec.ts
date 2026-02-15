@@ -11,7 +11,7 @@ describe('ScheduledDateGroupPipe', () => {
 
   beforeEach(() => {
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => {

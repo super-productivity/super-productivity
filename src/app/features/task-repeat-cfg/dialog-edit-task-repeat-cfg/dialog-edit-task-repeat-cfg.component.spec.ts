@@ -87,7 +87,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
 
     await TestBed.configureTestingModule({
