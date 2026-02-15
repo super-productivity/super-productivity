@@ -1,11 +1,7 @@
 import { computed, effect, inject, Injectable } from '@angular/core';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { DateAdapter } from '@angular/material/core';
-import {
-  DEFAULT_FIRST_DAY_OF_WEEK,
-  DEFAULT_LOCALE,
-  DateTimeLocale,
-} from 'src/app/core/locale.constants';
+import { DEFAULT_LOCALE, DateTimeLocale } from 'src/app/core/locale.constants';
 
 @Injectable({
   providedIn: 'root',
@@ -50,58 +46,10 @@ export class DateTimeFormatService {
   });
 
   constructor() {
-    this._initMonkeyPatchFirstDayOfWeek();
-    this._initDateAdapterPatch();
-
     // Use effect to reactively update date adapter locale when config changes
     effect(() => {
       const cfgValue = this._globalConfigService.localization()?.dateTimeLocale;
       if (cfgValue) this.setDateAdapterLocale(cfgValue);
-    });
-  }
-
-  /** Monkey-patch DateAdapter to make first day of week configurable via global config */
-  private _initMonkeyPatchFirstDayOfWeek(): void {
-    // Use effect to reactively update firstDayOfWeek when config changes
-    effect(() => {
-      const cfgValue = this._globalConfigService.localization()?.firstDayOfWeek;
-
-      // If not set or reset - use Monday as default (ISO 8601 standard)
-      // Note: Must use explicit null/undefined check since 0 (Sunday) is a valid value
-      if (cfgValue === null || cfgValue === undefined) {
-        this._dateAdapter.getFirstDayOfWeek = () => DEFAULT_FIRST_DAY_OF_WEEK;
-        return;
-      }
-
-      // Default should be monday, if we have an invalid value for some reason
-      const validFirstDayOfWeek = cfgValue >= 0 ? cfgValue : DEFAULT_FIRST_DAY_OF_WEEK;
-
-      // Overwrites default method to make this configurable
-      this._dateAdapter.getFirstDayOfWeek = () => validFirstDayOfWeek;
-    });
-  }
-
-  /** Monkey-patch DateAdapter to make locale-specific date parsing (DD/MM/YYYY) configurable via global config */
-  private _initDateAdapterPatch(): void {
-    effect(() => {
-      const originalParse = (value: any, format: string): Date | null =>
-        this._dateAdapter.parse(value, format);
-
-      // Override parse to handle locale-specific formats
-      this._dateAdapter.parse = (value: any, format: string): Date | null => {
-        if (!value) return null;
-        if (value instanceof Date) return !isNaN(value.getTime()) ? value : null;
-        if (typeof value !== 'string') return originalParse(value, format);
-
-        const parsed = this.parseStringToDate(value, this.dateFormat().raw);
-        return parsed !== null ? parsed : originalParse(value, format);
-      };
-
-      // Override format to use locale-specific format
-      this._dateAdapter.format = (date: Date, displayFormat: string): string => {
-        if (!date || isNaN(date.getTime())) return '';
-        return this.formatDate(date, this.currentLocale());
-      };
     });
   }
 
@@ -174,7 +122,10 @@ export class DateTimeFormatService {
   parseStringToDate(dateString: string, format: string): Date | null {
     const separator = this.extractSeparator(format);
     const formatParts = format.split(separator);
-    const dateParts = dateString.trim().split(separator);
+    const dateParts = dateString
+      .trim()
+      .split(separator)
+      .filter((part) => part.trim() !== '');
 
     // Basic validation to ensure we have the expected number of parts
     if (formatParts.length !== 3 || dateParts.length !== 3) return null;

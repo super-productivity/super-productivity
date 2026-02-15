@@ -8,6 +8,7 @@ import {
   DEFAULT_FIRST_DAY_OF_WEEK,
 } from 'src/app/core/locale.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
+import { CustomDateAdapter } from './custom-date-adapter';
 
 describe('DateTimeFormatService', () => {
   let service: DateTimeFormatService;
@@ -29,6 +30,7 @@ describe('DateTimeFormatService', () => {
       imports: [MatNativeDateModule],
       providers: [
         DateTimeFormatService,
+        { provide: DateAdapter, useClass: CustomDateAdapter },
         provideMockStore({
           initialState: {
             globalConfig: config,
@@ -46,6 +48,7 @@ describe('DateTimeFormatService', () => {
       imports: [MatNativeDateModule],
       providers: [
         DateTimeFormatService,
+        { provide: DateAdapter, useClass: CustomDateAdapter },
         provideMockStore({
           initialState: {
             globalConfig: DEFAULT_GLOBAL_CONFIG,
@@ -165,8 +168,25 @@ describe('DateTimeFormatService', () => {
     });
 
     it('should return null for invalid date strings', () => {
-      const result = service.parseStringToDate('invalid', 'dd/MM/yyyy');
-      expect(result).toBeNull();
+      const result1 = service.parseStringToDate('invalid', 'dd/MM/yyyy');
+      expect(result1).toBeNull();
+
+      const result2 = service.parseStringToDate('/12/2000', 'dd/MM/yyyy');
+      expect(result2).toBeNull();
+
+      const result3 = service.parseStringToDate('0/12/2000', 'dd/MM/yyyy');
+      expect(result3).toBeNull();
+
+      const result4 = service.parseStringToDate('30/02/2000', 'dd/MM/yyyy');
+      expect(result4).toBeNull();
+    });
+
+    it('should return null for invalid date format', () => {
+      const result1 = service.parseStringToDate('31/12/2000', '/MM/yyyy');
+      expect(result1).toBeNull();
+
+      const result2 = service.parseStringToDate('31/12/2000', 'xx/MM/yyyy');
+      expect(result2).toBeNull();
     });
 
     it('should handle different separators', () => {

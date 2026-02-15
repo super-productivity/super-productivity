@@ -35,8 +35,6 @@ export class LocaleDatePipe implements PipeTransform {
       return null;
     }
 
-    const a = this._datePipe.transform(value, format, timezone, effectiveLocale);
-    console.log('locale a', value, format, timezone, effectiveLocale, a);
-    return a;
+    return this._datePipe.transform(value, format, timezone, effectiveLocale);
   }
 }
