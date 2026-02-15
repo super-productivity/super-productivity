@@ -26,10 +26,11 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
+import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
-interface NewTimeEntry {
+export interface NewTimeEntry {
   timeSpent: number;
-  date: string;
+  date: Date | null;
 }
 
 @Component({
@@ -60,18 +61,15 @@ interface NewTimeEntry {
   ],
 })
 export class DialogAddTimeEstimateForOtherDayComponent {
+  public dateTimeFormatService = inject(DateTimeFormatService);
   private _matDialogRef =
     inject<MatDialogRef<DialogAddTimeEstimateForOtherDayComponent>>(MatDialogRef);
 
   T: typeof T = T;
-  newEntry: NewTimeEntry;
-
-  constructor() {
-    this.newEntry = {
-      date: '',
-      timeSpent: 0,
-    };
-  }
+  newEntry: NewTimeEntry = {
+    date: null,
+    timeSpent: 0,
+  };
 
   submit(): void {
     this._matDialogRef.close(this.newEntry);

@@ -15,12 +15,13 @@ export class DateTimeFormatService {
   private _dateAdapter = inject(DateAdapter);
 
   // Signal for the locale to use
-  private readonly _locale = computed(() => {
+  readonly currentLocale = computed<DateTimeLocale>(() => {
     return this._globalConfigService.localization()?.dateTimeLocale || DEFAULT_LOCALE;
   });
 
+  /** Test formats to detect locale-specific time and date formats (e.g., 24h vs 12h, DD/MM vs MM/DD) */
   private readonly _testFormats = computed(() => {
-    const locale = this._locale();
+    const locale = this.currentLocale();
     const testDate = new Date(2000, 11, 31, 13, 0, 0);
     return {
       time: testDate.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }),
@@ -33,13 +34,24 @@ export class DateTimeFormatService {
     return this._testFormats().time.includes('13');
   });
 
-  // Get the current locale being used
-  get currentLocale(): DateTimeLocale {
-    return this._locale();
-  }
+  /** Detects the actual date format based on locale ('dd/MM/yyyy', 'MM/dd/yyyy', 'dd.MM.yyyy', etc) */
+  readonly dateFormat = computed(() => {
+    const localizedDate = this._testFormats().date;
+    const separator = this.extractSeparator(localizedDate);
+
+    const isDayFirst = localizedDate.startsWith('31');
+    const format = isDayFirst ? 'dd' : 'MM';
+    const fullFormat = `${format}${separator}${isDayFirst ? 'MM' : 'dd'}${separator}yyyy`;
+
+    return {
+      raw: fullFormat,
+      humanReadable: fullFormat.toUpperCase(),
+    };
+  });
 
   constructor() {
     this._initMonkeyPatchFirstDayOfWeek();
+    this._initDateAdapterPatch();
 
     // Use effect to reactively update date adapter locale when config changes
     effect(() => {
@@ -48,8 +60,7 @@ export class DateTimeFormatService {
     });
   }
 
-  initialFirstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-
+  /** Monkey-patch DateAdapter to make first day of week configurable via global config */
   private _initMonkeyPatchFirstDayOfWeek(): void {
     // Use effect to reactively update firstDayOfWeek when config changes
     effect(() => {
@@ -70,14 +81,132 @@ export class DateTimeFormatService {
     });
   }
 
+  /** Monkey-patch DateAdapter to make locale-specific date parsing (DD/MM/YYYY) configurable via global config */
+  private _initDateAdapterPatch(): void {
+    effect(() => {
+      const originalParse = this._dateAdapter.parse.bind(this._dateAdapter);
+
+      // Override parse to handle locale-specific formats
+      this._dateAdapter.parse = (value: any, format: string): Date | null => {
+        if (!value) return null;
+        if (value instanceof Date) return !isNaN(value.getTime()) ? value : null;
+        if (typeof value !== 'string') return originalParse(value, format);
+
+        const parsed = this.parseStringToDate(value, this.dateFormat().raw);
+        return parsed !== null ? parsed : originalParse(value, format);
+      };
+
+      // Override format to use locale-specific format
+      this._dateAdapter.format = (date: Date, displayFormat: string): string => {
+        if (!date || isNaN(date.getTime())) return '';
+        return this.formatDate(date, this.currentLocale());
+      };
+    });
+  }
+
+  /** Set the locale for the date adapter formatting */
   setDateAdapterLocale(locale: DateTimeLocale): void {
     this._dateAdapter.setLocale(locale);
   }
 
-  formatTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleTimeString(this.currentLocale, {
+  /**
+   * Format a timestamp to time string based on locale format
+   *
+   * @example
+   * // For en-US locale
+   * formatTime(new Date(2000, 11, 31, 13, 0, 0).getTime()); // 1:00 PM
+   *
+   * // For en-GB locale
+   * formatTime(new Date(2000, 11, 31, 13, 0, 0).getTime()); // 13:00
+   */
+  formatTime(timestamp: number, locale: DateTimeLocale = this.currentLocale()): string {
+    return new Date(timestamp).toLocaleTimeString(locale, {
       hour: 'numeric',
       minute: 'numeric',
     });
+  }
+
+  /**
+   * Format a date to string based on locale format
+   *
+   * @example
+   * // For en-US locale
+   * formatDate(new Date(2000, 11, 31), 'en-US'); // 12/31/2000
+   *
+   * // For en-GB locale
+   * formatDate(new Date(2000, 11, 31), 'en-GB'); // 31/12/2000
+   */
+  formatDate(date: Date, locale: DateTimeLocale = this.currentLocale()): string {
+    const formatter = new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+
+    return formatter.format(date);
+  }
+
+  // Extract separator from format string
+  extractSeparator(format: string): string {
+    const foundSeparator = format.match(/[^\w]+/)?.[0];
+    return foundSeparator || '/';
+  }
+
+  /**
+   * Parse a string date based on locale format
+   * Supported formats: `DD/MM/YYYY`, `MM/DD/YYYY`, `DD.MM.YYYY`, `DD. MM. YYYY`, etc
+   * Time parsing is not supported - will be set to 00:00:00
+   *
+   * @example
+   * // For en-US locale
+   * parseStringToDate('12/31/2000', 'MM/dd/yyyy'); // Date object for Dec 31, 2000
+   *
+   * // For en-GB locale
+   * parseStringToDate('31/12/2000', 'dd/MM/yyyy'); // Date object for Dec 31, 2000
+   *
+   * // For ru-RU locale
+   * parseStringToDate('31.12.2000', 'dd.MM.yyyy'); // Date object for Dec 31, 2000
+   *
+   * // For ko-KR locale
+   * parseStringToDate('2000. 12. 31.', 'yyyy. MM. dd.'); // Date object for Dec 31, 2000
+   */
+  parseStringToDate(dateString: string, format: string): Date | null {
+    const separator = this.extractSeparator(format);
+    const formatParts = format.split(separator);
+    const dateParts = dateString.trim().split(separator);
+
+    // Basic validation to ensure we have the expected number of parts
+    if (formatParts.length !== 3 || dateParts.length !== 3) return null;
+
+    // Build a format mapping by matching positions
+    const values: Record<string, number> = {};
+    formatParts.forEach((formatPart, i) => {
+      const key = formatPart
+        .trim()
+        .toLowerCase() // normalize to lowercase for easier matching
+        .replace(/[^\w]+/g, '');
+      const val = parseInt(dateParts[i].trim(), 10);
+      if (isNaN(val)) return;
+      values[key] = val;
+    });
+
+    const year = values['yyyy'];
+    const month = values['mm'];
+    const day = values['dd'];
+
+    if (year === undefined || month === undefined || day === undefined) return null;
+    if (year.toString().length !== 4 || day > 31 || day < 1 || month > 12 || month < 1) {
+      return null;
+    }
+
+    const date = new Date(year, month - 1, day);
+
+    // Validate the date by checking if constructed date matches input values
+    const isValid =
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day;
+
+    return isValid ? date : null;
   }
 }

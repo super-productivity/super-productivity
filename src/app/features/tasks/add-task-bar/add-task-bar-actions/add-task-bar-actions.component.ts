@@ -116,7 +116,7 @@ export class AddTaskBarActionsComponent {
     if (!state.time && this.isSameDate(date, tomorrow)) {
       return state.time || this._translateService.instant(T.F.TASK.ADD_TASK_BAR.TOMORROW);
     }
-    const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale, {
+    const dateStr = date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
       month: 'short',
       day: 'numeric',
     });

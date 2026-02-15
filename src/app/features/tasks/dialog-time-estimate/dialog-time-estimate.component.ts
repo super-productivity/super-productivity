@@ -19,7 +19,10 @@ import { Task, TaskCopy, TimeSpentOnDayCopy } from '../task.model';
 import { TaskService } from '../task.service';
 import { getTodayStr } from '../util/get-today-str';
 import { createTaskCopy } from '../util/create-task-copy';
-import { DialogAddTimeEstimateForOtherDayComponent } from '../dialog-add-time-estimate-for-other-day/dialog-add-time-estimate-for-other-day.component';
+import {
+  DialogAddTimeEstimateForOtherDayComponent,
+  NewTimeEntry,
+} from '../dialog-add-time-estimate-for-other-day/dialog-add-time-estimate-for-other-day.component';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { T } from '../../../t.const';
 import { FormsModule } from '@angular/forms';
@@ -32,6 +35,7 @@ import { InputDurationDirective } from '../../../ui/duration/input-duration.dire
 import { MatInput } from '@angular/material/input';
 import { KeysPipe } from '../../../ui/pipes/keys.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
+import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 
 @Component({
   selector: 'dialog-time-estimate',
@@ -56,6 +60,7 @@ import { TranslatePipe } from '@ngx-translate/core';
     MatDialogClose,
     KeysPipe,
     TranslatePipe,
+    LocaleDatePipe,
   ],
 })
 export class DialogTimeEstimateComponent implements AfterViewInit {
@@ -103,7 +108,7 @@ export class DialogTimeEstimateComponent implements AfterViewInit {
     this._matDialog
       .open(DialogAddTimeEstimateForOtherDayComponent)
       .afterClosed()
-      .subscribe((result) => {
+      .subscribe((result: NewTimeEntry) => {
         if (result && result.timeSpent > 0 && result.date) {
           this.timeSpentOnDayCopy = {
             ...this.timeSpentOnDayCopy,

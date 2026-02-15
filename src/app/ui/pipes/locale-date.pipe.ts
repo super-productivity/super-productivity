@@ -23,7 +23,7 @@ export class LocaleDatePipe implements PipeTransform {
     locale?: string,
   ): string | null {
     // Use explicitly provided locale or configured locale
-    const effectiveLocale = locale || this._dateTimeFormatService.currentLocale;
+    const effectiveLocale = locale || this._dateTimeFormatService.currentLocale();
 
     // Create or recreate DatePipe if locale changed
     if (!this._datePipe || this._lastLocale !== effectiveLocale) {
@@ -35,6 +35,8 @@ export class LocaleDatePipe implements PipeTransform {
       return null;
     }
 
-    return this._datePipe.transform(value, format, timezone, effectiveLocale);
+    const a = this._datePipe.transform(value, format, timezone, effectiveLocale);
+    console.log('locale a', value, format, timezone, effectiveLocale, a);
+    return a;
   }
 }

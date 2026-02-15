@@ -173,11 +173,14 @@ export class DialogFocusSessionEditComponent {
     const date = this.selectedDateStr();
     if (date === this.todayStr) return 'Today';
 
-    return new Date(date).toLocaleDateString(this._dateTimeFormatService.currentLocale, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    });
+    return new Date(date).toLocaleDateString(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      },
+    );
   }
 
   private _getChartDates(): string[] {
@@ -195,7 +198,7 @@ export class DialogFocusSessionEditComponent {
 
   private _formatChartLabel(dateStr: string): string {
     const date = new Date(dateStr);
-    return date.toLocaleDateString(this._dateTimeFormatService.currentLocale, {
+    return date.toLocaleDateString(this._dateTimeFormatService.currentLocale(), {
       month: 'numeric',
       day: 'numeric',
     });

@@ -187,7 +187,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         }
         const [key, params] = getTaskRepeatInfoText(
           repeatCfg,
-          this._dateTimeFormatService.currentLocale,
+          this._dateTimeFormatService.currentLocale(),
           this._dateTimeFormatService,
         );
         return this._translateService.instant(key, params);

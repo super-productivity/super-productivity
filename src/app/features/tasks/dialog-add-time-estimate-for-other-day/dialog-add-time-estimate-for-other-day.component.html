@@ -16,15 +16,22 @@
       <h3 class="mat-caption">
         {{
           T.F.TASK.D_TIME_FOR_DAY.ADD_ENTRY_FOR
-            | translate: { date: (newEntry.date | localeDate: 'dd-MM-yyyy') || '' }
+            | translate
+              : {
+                  date: newEntry.date
+                    ? (newEntry.date | localeDate: 'shortDate')
+                    : dateTimeFormatService.dateFormat().humanReadable,
+                }
         }}
       </h3>
+
       <mat-form-field>
         <mat-label>{{ T.F.TASK.D_TIME_FOR_DAY.DATE | translate }}</mat-label>
         <input
           [(ngModel)]="newEntry.date"
           [matDatepicker]="myDatepicker"
           matInput
+          [placeholder]="dateTimeFormatService.dateFormat().humanReadable"
           name="date"
           required
           type="text"
@@ -60,6 +67,7 @@
         color="primary"
         mat-stroked-button
         type="submit"
+        [disabled]="!newEntry.timeSpent || !newEntry.date"
       >
         <mat-icon>save</mat-icon>
         {{ T.G.SAVE | translate }}

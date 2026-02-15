@@ -17,7 +17,7 @@ export class ShortPlannedAtPipe implements PipeTransform {
     if (isToday(value) || timeOnly) {
       return this._shortTimeHtmlPipe.transform(value);
     } else {
-      const locale = this._dateTimeFormatService.currentLocale;
+      const locale = this._dateTimeFormatService.currentLocale();
       return formatMonthDay(new Date(value), locale);
     }
   }

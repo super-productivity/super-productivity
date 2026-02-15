@@ -2,8 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { DateTimeFormatService } from './date-time-format.service';
 import { provideMockStore } from '@ngrx/store/testing';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
-import { DateAdapter } from '@angular/material/core';
-import { DEFAULT_FIRST_DAY_OF_WEEK } from 'src/app/core/locale.constants';
+import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
+import {
+  DateTimeLocales,
+  DEFAULT_FIRST_DAY_OF_WEEK,
+} from 'src/app/core/locale.constants';
 import { GlobalConfigState } from '../../features/config/global-config.model';
 
 describe('DateTimeFormatService', () => {
@@ -21,13 +24,9 @@ describe('DateTimeFormatService', () => {
       },
     };
 
-    const mockDateAdapter = {
-      getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
-      setLocale: jasmine.createSpy('setLocale'),
-    } as unknown as DateAdapter<Date>;
-
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
+      imports: [MatNativeDateModule],
       providers: [
         DateTimeFormatService,
         provideMockStore({
@@ -35,7 +34,6 @@ describe('DateTimeFormatService', () => {
             globalConfig: config,
           },
         }),
-        { provide: DateAdapter, useValue: mockDateAdapter },
       ],
     });
 
@@ -44,12 +42,8 @@ describe('DateTimeFormatService', () => {
   };
 
   beforeEach(() => {
-    const mockDateAdapter = {
-      getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
-      setLocale: jasmine.createSpy('setLocale'),
-    } as unknown as DateAdapter<Date>;
-
     TestBed.configureTestingModule({
+      imports: [MatNativeDateModule],
       providers: [
         DateTimeFormatService,
         provideMockStore({
@@ -57,7 +51,6 @@ describe('DateTimeFormatService', () => {
             globalConfig: DEFAULT_GLOBAL_CONFIG,
           },
         }),
-        { provide: DateAdapter, useValue: mockDateAdapter },
       ],
     });
     dateAdapter = TestBed.inject(DateAdapter);
@@ -77,10 +70,22 @@ describe('DateTimeFormatService', () => {
     expect(typeof is24Hour).toBe('boolean');
   });
 
+  it('should detect correct date format based on locale', () => {
+    const format = service.dateFormat();
+    expect(format).toBeDefined();
+    expect(format.raw).toBeTruthy();
+    expect(format.humanReadable).toBeTruthy();
+    expect(format.raw.toLowerCase()).toContain('yyyy');
+  });
+
   it('should maintain consistent behavior', () => {
     const firstCheck = service.is24HourFormat();
     const secondCheck = service.is24HourFormat();
     expect(firstCheck).toBe(secondCheck);
+
+    const firstFormat = service.dateFormat();
+    const secondFormat = service.dateFormat();
+    expect(firstFormat.raw).toBe(secondFormat.raw);
 
     const testTime = new Date(2024, 0, 15, 14, 30).getTime();
     const formatted1 = service.formatTime(testTime);
@@ -136,6 +141,90 @@ describe('DateTimeFormatService', () => {
       TestBed.flushEffects();
 
       expect(dateAdapter.getFirstDayOfWeek()).toBe(DEFAULT_FIRST_DAY_OF_WEEK);
+    });
+  });
+
+  describe('dateFormat detection', () => {
+    it('should detect day-first format for appropriate locales', () => {
+      const format = service.dateFormat();
+      expect(format.raw).toBeTruthy();
+      expect(format.raw.toLowerCase()).toContain('yyyy');
+      expect(format.humanReadable).toBe(format.raw.toUpperCase());
+    });
+  });
+
+  describe('date string parsing', () => {
+    it('should parse valid date strings', () => {
+      const testDate = service.parseStringToDate('31/12/2000', 'dd/MM/yyyy');
+      expect(testDate?.getDate()).toBe(31);
+      expect(testDate?.getMonth()).toBe(11);
+      expect(testDate?.getFullYear()).toBe(2000);
+      expect(testDate?.getHours()).toBe(0);
+      expect(testDate?.getMinutes()).toBe(0);
+      expect(testDate?.getSeconds()).toBe(0);
+    });
+
+    it('should return null for invalid date strings', () => {
+      const result = service.parseStringToDate('invalid', 'dd/MM/yyyy');
+      expect(result).toBeNull();
+    });
+
+    it('should handle different separators', () => {
+      const formatEn = service.parseStringToDate('31/12/2000', 'dd/MM/yyyy');
+      expect(formatEn?.getDate()).toBe(31);
+      expect(formatEn?.getMonth()).toBe(11);
+      expect(formatEn?.getFullYear()).toBe(2000);
+
+      const formatEnUs = service.parseStringToDate('12/31/2000', 'MM/dd/yyyy');
+      expect(formatEnUs?.getDate()).toBe(31);
+      expect(formatEnUs?.getMonth()).toBe(11);
+      expect(formatEnUs?.getFullYear()).toBe(2000);
+
+      const formatRU = service.parseStringToDate('31.12.2000', 'dd.MM.yyyy');
+      expect(formatRU?.getDate()).toBe(31);
+      expect(formatRU?.getMonth()).toBe(11);
+      expect(formatRU?.getFullYear()).toBe(2000);
+
+      const formatKr = service.parseStringToDate('2000. 12. 31.', 'yyyy. MM. dd.');
+      expect(formatKr?.getDate()).toBe(31);
+      expect(formatKr?.getMonth()).toBe(11);
+      expect(formatKr?.getFullYear()).toBe(2000);
+    });
+  });
+
+  describe('formatDate', () => {
+    it('should correctly format date', () => {
+      const testDate = new Date(2000, 11, 31);
+
+      const formattedEnUs = service.formatDate(testDate, DateTimeLocales.en_us);
+      expect(formattedEnUs).toBe('12/31/2000');
+
+      const formattedEnGb = service.formatDate(testDate, DateTimeLocales.en_gb);
+      expect(formattedEnGb).toBe('31/12/2000');
+
+      const formattedRuRu = service.formatDate(testDate, DateTimeLocales.ru_ru);
+      expect(formattedRuRu).toBe('31.12.2000');
+
+      const formattedKoKr = service.formatDate(testDate, DateTimeLocales.ko_kr);
+      expect(formattedKoKr).toBe('2000. 12. 31.');
+    });
+  });
+
+  describe('formatTime', () => {
+    it('should correctly format time', () => {
+      const testTime = new Date(2000, 11, 31, 14, 0, 0).getTime();
+
+      const formattedEnUs = service.formatTime(testTime, DateTimeLocales.en_us);
+      expect(formattedEnUs).toBe('2:00 PM');
+
+      const formattedEnGb = service.formatTime(testTime, DateTimeLocales.en_gb);
+      expect(formattedEnGb).toBe('14:00');
+
+      const formattedRuRu = service.formatTime(testTime, DateTimeLocales.ru_ru);
+      expect(formattedRuRu).toBe('14:00');
+
+      const formattedKoKr = service.formatTime(testTime, DateTimeLocales.ko_kr);
+      expect(formattedKoKr).toBe('오후 2:00');
     });
   });
 });

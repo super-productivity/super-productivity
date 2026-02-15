@@ -94,11 +94,14 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   times = computed(() => {
     const uses24Hour = this._dateTimeFormatService.is24HourFormat();
-    const formatter = new Intl.DateTimeFormat(this._dateTimeFormatService.currentLocale, {
-      hour: uses24Hour ? '2-digit' : 'numeric',
-      minute: '2-digit',
-      hour12: !uses24Hour,
-    });
+    const formatter = new Intl.DateTimeFormat(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        hour: uses24Hour ? '2-digit' : 'numeric',
+        minute: '2-digit',
+        hour12: !uses24Hour,
+      },
+    );
 
     return this.rowsByNr.map((_, hourIndex) => {
       const date = new Date(2000, 0, 1, hourIndex, 0, 0);
@@ -338,7 +341,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     if (Number.isNaN(date.getTime())) {
       return dayStr;
     }
-    return formatMonthDay(date, this._dateTimeFormatService.currentLocale);
+    return formatMonthDay(date, this._dateTimeFormatService.currentLocale());
   }
 
   // Public methods for external preview control (used by schedule-day-panel)
