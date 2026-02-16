@@ -34,7 +34,7 @@ vi.mock('../src/logger', () => ({
   },
 }));
 
-import { replaceToken, JWT_EXPIRY_PASSKEY, JWT_EXPIRY_MAGIC_LINK } from '../src/auth';
+import { replaceToken, JWT_EXPIRY } from '../src/auth';
 import { prisma } from '../src/db';
 
 describe('replaceToken', () => {
@@ -54,14 +54,13 @@ describe('replaceToken', () => {
     );
   });
 
-  it('should use JWT_EXPIRY_PASSKEY (7d), not JWT_EXPIRY_MAGIC_LINK (365d)', async () => {
+  it('should use JWT_EXPIRY (365d)', async () => {
     await replaceToken(1, 'user@example.com');
 
     expect(jwtSignSpy).toHaveBeenCalledTimes(1);
     const [, , options] = jwtSignSpy.mock.calls[0];
-    expect(options.expiresIn).toBe(JWT_EXPIRY_PASSKEY);
-    expect(options.expiresIn).toBe('7d');
-    expect(options.expiresIn).not.toBe(JWT_EXPIRY_MAGIC_LINK);
+    expect(options.expiresIn).toBe(JWT_EXPIRY);
+    expect(options.expiresIn).toBe('365d');
   });
 
   it('should include incremented tokenVersion in JWT payload', async () => {

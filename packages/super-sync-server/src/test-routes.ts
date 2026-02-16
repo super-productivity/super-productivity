@@ -9,7 +9,7 @@ import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { prisma } from './db';
 import { Logger } from './logger';
-import { getJwtSecret, JWT_EXPIRY_PASSKEY } from './auth';
+import { getJwtSecret, JWT_EXPIRY } from './auth';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -90,7 +90,7 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
         // Generate JWT token (include tokenVersion for consistency with auth.ts)
         const token = jwt.sign({ userId, email, tokenVersion }, getJwtSecret(), {
-          expiresIn: JWT_EXPIRY_PASSKEY,
+          expiresIn: JWT_EXPIRY,
         });
 
         return reply.status(201).send({

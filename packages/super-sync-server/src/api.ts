@@ -7,7 +7,7 @@ import {
   requestLoginMagicLink,
   verifyLoginMagicLink,
   getJwtSecret,
-  JWT_EXPIRY_PASSKEY,
+  JWT_EXPIRY,
 } from './auth';
 import {
   generateRegistrationOptions,
@@ -354,7 +354,7 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         const token = jwt.sign(
           { userId: userInfo.userId, email: userInfo.email, tokenVersion },
           getJwtSecret(),
-          { expiresIn: JWT_EXPIRY_PASSKEY },
+          { expiresIn: JWT_EXPIRY },
         );
 
         return reply.send({

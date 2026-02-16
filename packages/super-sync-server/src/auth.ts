@@ -7,14 +7,10 @@ import { sendLoginMagicLinkEmail } from './email';
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
 
-// Magic link tokens are long-lived (365d) because they represent a verified email session.
-// Users who authenticate via magic link don't have a stored credential (like a passkey),
-// so frequent re-authentication would be disruptive.
-export const JWT_EXPIRY_MAGIC_LINK = '365d';
-
-// Passkey and general tokens are short-lived (7d) because passkey re-authentication
-// is fast and frictionless — the user just taps their device.
-export const JWT_EXPIRY_PASSKEY = '7d';
+// All JWT tokens live for 365 days regardless of authentication method.
+// The auth method (passkey, magic link) only matters during login —
+// once a JWT is issued, it represents a verified session.
+export const JWT_EXPIRY = '365d';
 
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 const LOGIN_MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
@@ -98,10 +94,8 @@ export const replaceToken = async (
     return user.tokenVersion;
   });
 
-  // Use the shorter passkey expiry for replaced tokens — token replacement is a security
-  // action (compromised token), so a shorter lifetime is more conservative.
   const token = jwt.sign({ userId, email, tokenVersion: newTokenVersion }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRY_PASSKEY,
+    expiresIn: JWT_EXPIRY,
   });
 
   Logger.info(`Token replaced for user ${userId} (new version: ${newTokenVersion})`);
@@ -251,7 +245,7 @@ export const verifyLoginMagicLink = async (
   const jwtToken = jwt.sign(
     { userId: user.id, email: user.email, tokenVersion },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRY_MAGIC_LINK },
+    { expiresIn: JWT_EXPIRY },
   );
 
   Logger.info(`User logged in via magic link (ID: ${user.id})`);

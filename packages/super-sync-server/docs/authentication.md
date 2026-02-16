@@ -25,7 +25,7 @@ JWTs are issued but never persisted to the database.
 **Trade-off:**
 
 - Cannot revoke individual tokens - only all tokens via version increment
-- Token remains valid until expiry (7d for passkey, 365d for magic link) unless version bumped
+- Token remains valid until expiry (365 days) unless version bumped
 
 ### Why Token Versioning (Not Blacklisting)
 
@@ -86,17 +86,17 @@ Email verification tokens are stored as plain 64-character hex strings (32 rando
 
 ## Security Features
 
-| Feature                  | Implementation        | Value                        |
-| ------------------------ | --------------------- | ---------------------------- |
-| Password hashing         | bcrypt                | 12 rounds                    |
-| Password minimum         | Zod validation        | 12 characters                |
-| JWT signing              | HMAC-SHA256           | Secret min 32 chars          |
-| JWT expiry               | Per auth method       | 7d passkey / 365d magic link |
-| Verification token       | `crypto.randomBytes`  | 32 bytes (256 bits)          |
-| Verification expiry      | Time-based            | 24 hours                     |
-| Lockout threshold        | Failed attempts       | 5 attempts                   |
-| Lockout duration         | Time-based            | 15 minutes                   |
-| Timing attack mitigation | Dummy hash comparison | Always compare               |
+| Feature                  | Implementation        | Value               |
+| ------------------------ | --------------------- | ------------------- |
+| Password hashing         | bcrypt                | 12 rounds           |
+| Password minimum         | Zod validation        | 12 characters       |
+| JWT signing              | HMAC-SHA256           | Secret min 32 chars |
+| JWT expiry               | Uniform               | 365 days            |
+| Verification token       | `crypto.randomBytes`  | 32 bytes (256 bits) |
+| Verification expiry      | Time-based            | 24 hours            |
+| Lockout threshold        | Failed attempts       | 5 attempts          |
+| Lockout duration         | Time-based            | 15 minutes          |
+| Timing attack mitigation | Dummy hash comparison | Always compare      |
 
 ### Timing Attack Mitigation
 
@@ -126,7 +126,7 @@ await bcrypt.compare(password, hashToCompare);
                                                       │
                                                       ▼
                                              ┌─────────────────┐
-                                             │  JWT (7d/365d)  │
+                                             │  JWT (365d)     │
                                              │  contains:      │
                                              │  - userId       │
                                              │  - email        │
@@ -165,8 +165,7 @@ All auth-related constants are defined in `src/auth.ts`:
 ```typescript
 const MIN_JWT_SECRET_LENGTH = 32;
 const BCRYPT_ROUNDS = 12;
-const JWT_EXPIRY_MAGIC_LINK = '365d'; // Verified email session, no stored credential
-const JWT_EXPIRY_PASSKEY = '7d'; // Fast re-auth via biometrics
+const JWT_EXPIRY = '365d'; // All JWT tokens, regardless of auth method
 const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 ```
 
