@@ -183,8 +183,6 @@ export class CalendarGestureHandler {
           snapExpanded = currentHeight > SNAP_MIDPOINT;
         }
         this.snapTo(snapExpanded);
-      } else {
-        this.snapTo(!this._cb.getIsExpanded(), this._cb.getActiveWeekIndex());
       }
       return;
     }

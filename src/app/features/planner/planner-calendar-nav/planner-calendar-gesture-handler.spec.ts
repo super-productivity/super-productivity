@@ -223,54 +223,7 @@ describe('CalendarGestureHandler', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 5. Handle tap (no drag) toggles expansion
-  // -----------------------------------------------------------------------
-  describe('handle tap', () => {
-    let handleEl: HTMLElement;
-
-    beforeEach(() => {
-      handleEl = document.createElement('div');
-      handleEl.classList.add('handle');
-      el.appendChild(handleEl);
-    });
-
-    it('should call onExpandChanged when tapping the handle while collapsed', () => {
-      cb.getIsExpanded.and.returnValue(false);
-      cb.getActiveWeekIndex.and.returnValue(2);
-
-      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
-      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 100));
-
-      jasmine.clock().tick(SNAP_DURATION + 20);
-
-      expect(cb.onExpandChanged).toHaveBeenCalledWith(true);
-    });
-
-    it('should toggle to collapsed when already expanded', () => {
-      cb.getIsExpanded.and.returnValue(true);
-      cb.getActiveWeekIndex.and.returnValue(0);
-
-      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
-      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 100));
-
-      jasmine.clock().tick(SNAP_DURATION + 20);
-
-      expect(cb.onExpandChanged).toHaveBeenCalledWith(false);
-    });
-
-    it('should use active week index from callback on tap', () => {
-      cb.getIsExpanded.and.returnValue(false);
-      cb.getActiveWeekIndex.and.returnValue(3);
-
-      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
-      handleEl.dispatchEvent(makeTouchEvent('touchend', 100, 100));
-
-      expect(cb.getActiveWeekIndex).toHaveBeenCalled();
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 6. snapTo() method
+  // 5. snapTo() method
   // -----------------------------------------------------------------------
   describe('snapTo', () => {
     it('should apply CSS transition to weeks element when expanding', () => {
@@ -343,7 +296,7 @@ describe('CalendarGestureHandler', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 7. slideContent() method
+  // 6. slideContent() method
   // -----------------------------------------------------------------------
   describe('slideContent', () => {
     let onUpdateSpy: jasmine.Spy;
@@ -436,7 +389,7 @@ describe('CalendarGestureHandler', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 8. Gestures blocked during snapping
+  // 7. Gestures blocked during snapping
   // -----------------------------------------------------------------------
   describe('gestures blocked during snapping', () => {
     it('should ignore touch events while snapTo animation is in progress', () => {

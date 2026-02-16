@@ -341,19 +341,6 @@ describe('PlannerCalendarNavComponent', () => {
       expect(gridcells.length).toBe(WEEKS_SHOWN * 7);
     });
 
-    it('should render aria-expanded on handle', () => {
-      const el: HTMLElement = fixture.nativeElement;
-      const handle = el.querySelector('.handle');
-
-      expect(handle).toBeTruthy();
-      expect(handle!.getAttribute('aria-expanded')).toBe('false');
-
-      component.isExpanded.set(true);
-      fixture.detectChanges();
-
-      expect(handle!.getAttribute('aria-expanded')).toBe('true');
-    });
-
     it('should set aria-current="date" on today button', () => {
       const el: HTMLElement = fixture.nativeElement;
       const todayBtn = el.querySelector('[aria-current="date"]');
@@ -371,18 +358,6 @@ describe('PlannerCalendarNavComponent', () => {
 
       expect(pressedBtn).toBeTruthy();
       expect(pressedBtn!.getAttribute('aria-label')).toBe('2026-02-18');
-    });
-
-    it('should render aria-label on handle for expand/collapse', () => {
-      const el: HTMLElement = fixture.nativeElement;
-      const handle = el.querySelector('.handle');
-
-      expect(handle!.getAttribute('aria-label')).toBe('Expand calendar');
-
-      component.isExpanded.set(true);
-      fixture.detectChanges();
-
-      expect(handle!.getAttribute('aria-label')).toBe('Collapse calendar');
     });
   });
 });
