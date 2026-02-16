@@ -10,7 +10,6 @@
 <div
   class="weeks"
   #weeksContainer
-  [class.is-expanded]="isExpanded()"
   [style.max-height.px]="maxHeight()"
 >
   <div
@@ -37,7 +36,4 @@
     }
   </div>
 </div>
-<div
-  class="handle"
-  (click)="onHandleClick()"
-></div>
+<div class="handle"></div>

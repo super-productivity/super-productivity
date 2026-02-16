@@ -3,6 +3,7 @@
   padding: 4px 8px 0;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
+  touch-action: none;
 }
 
 .month-label {
@@ -27,15 +28,6 @@
 
 .weeks {
   overflow: hidden;
-
-  &.is-expanded {
-    overflow-y: auto;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
 }
 
 .week button {
@@ -90,7 +82,7 @@
 .handle {
   display: flex;
   justify-content: center;
-  padding: 6px 0;
+  padding: 12px 0;
   cursor: pointer;
 
   &::after {
