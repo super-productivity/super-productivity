@@ -15,4 +15,9 @@ export class DateService {
     }
     return getDbDateStr(date);
   }
+
+  isToday(date: number | Date): boolean {
+    const ts = typeof date === 'number' ? date : date.getTime();
+    return getDbDateStr(new Date(ts - this.startOfNextDayDiff)) === this.todayStr();
+  }
 }
