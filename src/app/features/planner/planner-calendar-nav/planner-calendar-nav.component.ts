@@ -309,8 +309,8 @@ export class PlannerCalendarNavComponent {
   private _handleVerticalSwipe(isDown: boolean): void {
     if (isDown) {
       if (!this.isExpanded()) {
-        this.isExpanded.set(true);
-        this._cdr.detectChanges();
+        this._dragActiveIdx = this.activeWeekIndex();
+        this._snapTo(true);
       } else if (!this._isAtPastLimit()) {
         // Swipe down → previous month, content follows finger downward
         this._slideContent(1, () => this._shiftToMonth(-1), 'y');
