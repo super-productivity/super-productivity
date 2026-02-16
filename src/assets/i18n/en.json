@@ -1545,6 +1545,7 @@
         "ADD": "Add Recurring Task Config",
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
+        "HEATMAP_LABEL": "Activity",
         "HELP1": "Recurring tasks are meant for daily chores, e.g. \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
         "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project and will be automatically marked as completed at the end of the day. They will be handled as different instances. So you can freely add subtasks etc.",
         "HELP3": "Tasks imported from Jira or Git Issues cannot be recurring.",

@@ -33,6 +33,10 @@
       </div>
     </div>
 
+    @if (label()) {
+      <div class="heatmap-label">{{ label() }}</div>
+    }
+
     @if (showLegend()) {
       <div class="heatmap-legend">
         <span>Less</span>

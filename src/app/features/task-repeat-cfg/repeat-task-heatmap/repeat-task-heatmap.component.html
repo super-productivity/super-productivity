@@ -1,6 +1,7 @@
 @if (heatmapData(); as data) {
   <heatmap
     [data]="data"
+    [label]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
     [showLegend]="false"
     [scrollToEnd]="true"
   />

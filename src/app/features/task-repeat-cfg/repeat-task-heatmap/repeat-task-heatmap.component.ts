@@ -18,6 +18,8 @@ import {
   HeatmapData,
   HeatmapComponent,
 } from '../../../ui/heatmap/heatmap.component';
+import { T } from '../../../t.const';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'repeat-task-heatmap',
@@ -25,9 +27,10 @@ import {
   styleUrls: ['./repeat-task-heatmap.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [HeatmapComponent],
+  imports: [HeatmapComponent, TranslateModule],
 })
 export class RepeatTaskHeatmapComponent {
+  readonly T = T;
   private readonly _taskService = inject(TaskService);
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _dateAdapter = inject(DateAdapter);

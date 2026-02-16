@@ -39,6 +39,7 @@ export class HeatmapComponent {
   private readonly _dateAdapter = inject(DateAdapter);
 
   readonly data = input.required<HeatmapData | null>();
+  readonly label = input<string>('');
   readonly showLegend = input<boolean>(true);
   readonly scrollToEnd = input<boolean>(false);
 
