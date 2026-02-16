@@ -295,7 +295,7 @@ export class PlannerCalendarNavComponent {
             const dir: 1 | -1 = deltaX < 0 ? 1 : -1;
             if (this.isExpanded()) {
               if (dir === -1 && this._isAtPastLimit()) return;
-              this._slideContent(dir, () => this._shiftAnchor(dir * DAYS_IN_VIEW), 'x');
+              this._slideContent(dir, () => this._shiftToMonth(dir), 'x');
             } else {
               this._slideCollapsedWeek(dir);
             }
@@ -321,12 +321,12 @@ export class PlannerCalendarNavComponent {
         this._cdr.detectChanges();
       } else if (!this._isAtPastLimit()) {
         // Swipe down → previous month, content follows finger downward
-        this._slideContent(1, () => this._shiftAnchor(-DAYS_IN_VIEW), 'y');
+        this._slideContent(1, () => this._shiftToMonth(-1), 'y');
       }
     } else {
       if (this.isExpanded()) {
         // Swipe up → next month, content follows finger upward
-        this._slideContent(-1, () => this._shiftAnchor(DAYS_IN_VIEW), 'y');
+        this._slideContent(-1, () => this._shiftToMonth(1), 'y');
       }
     }
   }
@@ -390,6 +390,26 @@ export class PlannerCalendarNavComponent {
       return;
     }
     this._anchorWeekStart.set(getDbDateStr(newAnchor));
+  }
+
+  /** Set anchor to the week containing the 1st of the next/previous month */
+  private _shiftToMonth(dir: 1 | -1): void {
+    const allWeeks = this.weeks();
+    const midWeek = allWeeks[Math.floor(allWeeks.length / 2)];
+    const midDate = parseDbDateStr(midWeek[Math.floor(midWeek.length / 2)].dateStr);
+
+    const firstOfMonth = new Date(midDate.getFullYear(), midDate.getMonth() + dir, 1);
+    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+    const weekStart = getWeekRange(firstOfMonth, firstDayOfWeek).start;
+
+    const todayStr = this._dateService.todayStr();
+    const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
+
+    if (weekStart < todayWeekStart) {
+      this._anchorWeekStart.set(getDbDateStr(todayWeekStart));
+    } else {
+      this._anchorWeekStart.set(getDbDateStr(weekStart));
+    }
   }
 
   private _startDrag(): void {
