@@ -190,11 +190,6 @@ export class TaskTitleBenchmarkComponent {
     this.linkRenderingEnabled.set(!this.linkRenderingEnabled());
   }
 
-  reset(): void {
-    this.results.set(null);
-    this.tasks.set([]);
-  }
-
   getTasksByType(type: BenchmarkTask['type']): number {
     return this.tasks().filter((t) => t.type === type).length;
   }

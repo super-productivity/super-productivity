@@ -28,14 +28,6 @@
         >
           Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}
         </button>
-
-        <button
-          mat-raised-button
-          (click)="reset()"
-          [disabled]="isRunning()"
-        >
-          Reset
-        </button>
       </div>
 
       @if (isRunning()) {
