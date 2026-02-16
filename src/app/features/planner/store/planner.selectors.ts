@@ -21,8 +21,11 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
 import { ScheduleConfig } from '../../config/global-config.model';
-import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
-import { isToday } from '../../../util/is-today.util';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
@@ -31,9 +34,15 @@ export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState
 
 export const selectAllTasksDueToday = createSelector(
   selectTodayStr,
+  selectStartOfNextDayDiffMs,
   selectTaskFeatureState,
   selectPlannerState,
-  (todayStr, taskState, plannerState): (TaskWithDueTime | TaskWithDueDay)[] => {
+  (
+    todayStr,
+    startOfNextDayDiffMs,
+    taskState,
+    plannerState,
+  ): (TaskWithDueTime | TaskWithDueDay)[] => {
     // Start with tasks from planner state for today
     const allDue: (TaskWithDueTime | TaskWithDueDay)[] = (
       plannerState.days[todayStr] || []
@@ -55,7 +64,7 @@ export const selectAllTasksDueToday = createSelector(
       // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity pattern)
       let isDueToday = false;
       if (task.dueWithTime) {
-        isDueToday = isToday(task.dueWithTime);
+        isDueToday = isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
       } else if (task.dueDay === todayStr) {
         isDueToday = true;
       }

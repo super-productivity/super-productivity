@@ -18,6 +18,7 @@ import {
   plannerFeatureKey,
   plannerInitialState,
 } from '../../features/planner/store/planner.reducer';
+import { appStateFeatureKey } from '../app-state/app-state.reducer';
 
 describe('taskSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -227,6 +228,7 @@ describe('taskSharedMetaReducer', () => {
         entities: { project1: mockProject },
       },
       [plannerFeatureKey]: plannerInitialState,
+      [appStateFeatureKey]: { todayStr: getDbDateStr(), startOfNextDayDiffMs: 0 },
     } as any as RootState;
   });
 
@@ -2441,13 +2443,25 @@ describe('taskSharedMetaReducer', () => {
       );
     });
 
-    it('should not change state when task is not in Today and not planned for today', () => {
+    it('should update planner days but not Today tag when task is not in Today and planned for different day', () => {
       const testState = createStateWithExistingTasks([], [], [], ['other-task']);
       const task = createMockTask({ id: 'task1' });
       const action = createPlanTaskForDayAction(task, 'tomorrow', false);
 
-      metaReducer(testState, action);
-      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+      expectStateUpdate(
+        {
+          // Today tag should be unchanged
+          ...expectTagUpdate('TODAY', { taskIds: ['other-task'] }),
+          // Planner days should have the task added to 'tomorrow'
+          [plannerFeatureKey]: jasmine.objectContaining({
+            days: jasmine.objectContaining({
+              tomorrow: ['task1'],
+            }),
+          }),
+        },
+        action,
+        testState,
+      );
     });
   });
 

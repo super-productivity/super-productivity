@@ -3,8 +3,8 @@ import { RootState } from '../../root-state';
 import { PlannerActions } from '../../../features/planner/store/planner.actions';
 import { Task } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { unique } from '../../../util/unique';
+import { appStateFeatureKey, AppState } from '../../app-state/app-state.reducer';
 import {
   ActionHandlerMap,
   filterOutTodayTag,
@@ -167,7 +167,8 @@ const handlePlanTaskForDay = (
   day: string,
   isAddToTop: boolean,
 ): RootState => {
-  const todayStr = getDbDateStr();
+  const todayStr = (state[appStateFeatureKey as keyof RootState] as unknown as AppState)
+    .todayStr;
   const todayTag = getTag(state, TODAY_TAG.id);
   const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
   const currentTagIds = currentTask?.tagIds || [];
@@ -205,8 +206,6 @@ const handlePlanTaskForDay = (
         ),
       };
     }
-
-    return state;
   } else if (todayTag.taskIds.includes(task.id)) {
     // Moving away from today - update both tag.taskIds and task.tagIds
     const newTagTaskIds = todayTag.taskIds.filter((id) => id !== task.id);
@@ -232,9 +231,33 @@ const handlePlanTaskForDay = (
         ),
       };
     }
-
-    return state;
   }
+
+  // Update planner days
+  const plannerState = state[plannerFeatureKey as keyof RootState] as any;
+  const daysCopy = { ...plannerState.days };
+
+  // Remove task from all days
+  Object.keys(daysCopy).forEach((dayI) => {
+    daysCopy[dayI] = daysCopy[dayI].filter((id: string) => id !== task.id);
+  });
+
+  // Add to target day if not today (today's ordering is managed by TODAY_TAG.taskIds)
+  if (day !== todayStr) {
+    daysCopy[day] = unique(
+      isAddToTop
+        ? [task.id, ...(daysCopy[day] || [])]
+        : [...(daysCopy[day] || []), task.id],
+    ).filter((id: string) => !task.subTaskIds.includes(id));
+  }
+
+  state = {
+    ...state,
+    [plannerFeatureKey]: {
+      ...plannerState,
+      days: daysCopy,
+    },
+  };
 
   return state;
 };

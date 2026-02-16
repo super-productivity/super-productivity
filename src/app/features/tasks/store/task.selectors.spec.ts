@@ -172,6 +172,7 @@ describe('Task Selectors', () => {
   const mockState = {
     [appStateFeatureKey]: {
       todayStr: today,
+      startOfNextDayDiffMs: 0,
     },
     [TASK_FEATURE_NAME]: mockTaskState,
     [PROJECT_FEATURE_NAME]: {

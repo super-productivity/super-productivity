@@ -50,8 +50,9 @@ import { throttle } from '../../../util/decorators';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { Update } from '@ngrx/entity';
-import { isToday } from '../../../util/is-today.util';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
@@ -140,6 +141,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  private readonly _dateService = inject(DateService);
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -174,25 +176,40 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   );
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
-  isRepeatTaskCreatedToday = computed(
-    () => !!(this.task().repeatCfgId && isToday(this.task().created)),
-  );
+  isRepeatTaskCreatedToday = computed(() => {
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
+    return !!(
+      this.task().repeatCfgId &&
+      isTodayWithOffset(
+        this.task().created,
+        todayStr,
+        this._dateService.startOfNextDayDiff,
+      )
+    );
+  });
   isOverdue = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
       !t.isDone &&
       ((t.dueWithTime && t.dueWithTime < Date.now()) ||
         // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
         // which is lexicographically sortable. This avoids timezone conversion issues that occur
         // when creating Date objects from date strings.
-        (t.dueDay && t.dueDay !== getDbDateStr() && t.dueDay < getDbDateStr()))
+        (t.dueDay && t.dueDay !== todayStr && t.dueDay < todayStr))
     );
   });
   isScheduledToday = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
-      (t.dueWithTime && isToday(t.dueWithTime)) ||
-      (t.dueDay && t.dueDay === this.globalTrackingIntervalService.todayDateStr())
+      (t.dueWithTime &&
+        isTodayWithOffset(
+          t.dueWithTime,
+          todayStr,
+          this._dateService.startOfNextDayDiff,
+        )) ||
+      (t.dueDay && t.dueDay === todayStr)
     );
   });
 
@@ -221,12 +238,15 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isShowAddToToday = computed(() => {
     const task = this.task();
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
+    const offsetMs = this._dateService.startOfNextDayDiff;
+    const dueWithTimeIsToday =
+      task.dueWithTime && isTodayWithOffset(task.dueWithTime, todayStr, offsetMs);
     return this.isTodayListActive()
-      ? (task.dueWithTime && !isToday(task.dueWithTime)) ||
+      ? (task.dueWithTime && !dueWithTimeIsToday) ||
           (task.dueDay && task.dueDay !== todayStr)
       : !this.isShowRemoveFromToday() &&
           task.dueDay !== todayStr &&
-          (!task.dueWithTime || !isToday(task.dueWithTime));
+          (!task.dueWithTime || !dueWithTimeIsToday);
   });
 
   isPanHelperVisible = signal(false);

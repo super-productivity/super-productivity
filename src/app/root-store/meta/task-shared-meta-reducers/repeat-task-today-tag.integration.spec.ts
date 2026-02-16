@@ -27,6 +27,8 @@ import { Task } from '../../../features/tasks/task.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { WorkContextType } from '../../../features/work-context/work-context.model';
 import { getRepeatableTaskId } from '../../../features/task-repeat-cfg/get-repeatable-task-id.util';
+import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('Recurring task TODAY_TAG integration (#6269)', () => {
   let combinedReducer: ActionReducer<any, Action>;
@@ -66,6 +68,18 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
   afterEach(() => {
     jasmine.clock().uninstall();
   });
+
+  // Helper to advance the day and update appState.todayStr in the state
+  const advanceToDay = (state: RootState, date: Date): RootState => {
+    jasmine.clock().mockDate(date);
+    return {
+      ...state,
+      [appStateFeatureKey]: {
+        ...(state[appStateFeatureKey as keyof RootState] as any),
+        todayStr: getDbDateStr(),
+      },
+    } as RootState;
+  };
 
   // Helpers
   const getTodayTagTaskIds = (state: RootState): string[] => {
@@ -141,8 +155,8 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
         createScheduleAction(day1TaskId, day1_9am),
       );
 
-      // Now advance to Day 2
-      jasmine.clock().mockDate(DAY2);
+      // Now advance to Day 2 (update both clock and appState.todayStr)
+      stateAfterDay1 = advanceToDay(stateAfterDay1, DAY2);
     });
 
     it('should remove Day 1 task from TODAY_TAG via removeTasksFromTodayTag', () => {
@@ -181,8 +195,7 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
   describe('Day 2: Sync replay of Day 1 operations from another device', () => {
     it('should NOT add Day 1 task to Day 2 TODAY_TAG when synced operations replay', () => {
       // Start on Day 2 with empty state
-      jasmine.clock().mockDate(DAY2);
-      let state = baseState;
+      let state = advanceToDay(baseState, DAY2);
 
       // Device A's operations arrive via sync: addTask with dueDay = Day 1
       state = combinedReducer(state, createAddTaskAction(day1TaskId, day1Str));
@@ -198,8 +211,7 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
     });
 
     it('should keep Day 2 task in TODAY_TAG even after Day 1 sync operations', () => {
-      jasmine.clock().mockDate(DAY2);
-      let state = baseState;
+      let state = advanceToDay(baseState, DAY2);
 
       // First: Day 2's task was already created locally
       state = combinedReducer(state, createAddTaskAction(day2TaskId, day2Str));
@@ -228,7 +240,7 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
       expect(getTodayTagTaskIds(state)).toContain(day1TaskId);
 
       // === Day 2 ===
-      jasmine.clock().mockDate(DAY2);
+      state = advanceToDay(state, DAY2);
 
       // Remove Day 1's overdue task
       state = combinedReducer(
@@ -243,7 +255,7 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
       expect(getTodayTagTaskIds(state)).toContain(day2TaskId);
 
       // === Day 3 ===
-      jasmine.clock().mockDate(DAY3);
+      state = advanceToDay(state, DAY3);
 
       // Remove Day 2's overdue task
       state = combinedReducer(
@@ -431,8 +443,7 @@ describe('Recurring task TODAY_TAG integration (#6269)', () => {
     it('should handle scheduleTaskWithTime for yesterday arriving on today', () => {
       // This is the critical sync scenario: Device A created a task yesterday
       // with dueWithTime = yesterday 9am. Today, Device B receives this operation.
-      jasmine.clock().mockDate(DAY2);
-      let state = baseState;
+      let state = advanceToDay(baseState, DAY2);
 
       // Device A's addTask from yesterday arrives (dueDay = yesterday)
       state = combinedReducer(state, createAddTaskAction(day1TaskId, day1Str));

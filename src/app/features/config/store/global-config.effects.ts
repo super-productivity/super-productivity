@@ -18,6 +18,7 @@ import {
 } from './global-config.reducer';
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
+import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -99,35 +100,39 @@ export class GlobalConfigEffects {
     { dispatch: false },
   );
 
-  setStartOfNextDayDiffOnChange = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(updateGlobalConfigSection),
-        filter(({ sectionKey, sectionCfg }) => sectionKey === 'misc'),
-        filter(
-          ({ sectionCfg }) =>
-            sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
-        ),
-        tap(({ sectionKey, sectionCfg }) => {
-          this._dateService.setStartOfNextDayDiff(
-            (sectionCfg as MiscConfig).startOfNextDay,
-          );
-        }),
+  setStartOfNextDayDiffOnChange = createEffect(() =>
+    this._actions$.pipe(
+      ofType(updateGlobalConfigSection),
+      filter(({ sectionKey, sectionCfg }) => sectionKey === 'misc'),
+      filter(
+        ({ sectionCfg }) =>
+          sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
       ),
-    { dispatch: false },
+      map(({ sectionCfg }) => {
+        this._dateService.setStartOfNextDayDiff(
+          (sectionCfg as MiscConfig).startOfNextDay,
+        );
+        return AppStateActions.setTodayString({
+          todayStr: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+        });
+      }),
+    ),
   );
 
-  setStartOfNextDayDiffOnLoad = createEffect(
-    () =>
-      this._actions$.pipe(
-        ofType(loadAllData),
-        tap(({ appDataComplete }) => {
-          const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
-          const startOfNextDay = cfg && cfg.misc && cfg.misc.startOfNextDay;
-          this._dateService.setStartOfNextDayDiff(startOfNextDay);
-        }),
-      ),
-    { dispatch: false },
+  setStartOfNextDayDiffOnLoad = createEffect(() =>
+    this._actions$.pipe(
+      ofType(loadAllData),
+      map(({ appDataComplete }) => {
+        const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
+        const startOfNextDay = cfg && cfg.misc && cfg.misc.startOfNextDay;
+        this._dateService.setStartOfNextDayDiff(startOfNextDay);
+        return AppStateActions.setTodayString({
+          todayStr: this._dateService.todayStr(),
+          startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+        });
+      }),
+    ),
   );
 
   notifyElectronAboutCfgChange =

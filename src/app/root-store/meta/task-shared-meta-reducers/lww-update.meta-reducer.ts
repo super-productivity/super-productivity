@@ -22,8 +22,9 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { unique } from '../../../util/unique';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { OpLog } from '../../../core/log';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 /**
  * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
@@ -214,7 +215,7 @@ const syncTodayTagTaskIds = (
   oldDueDay: string | undefined,
   newDueDay: string | undefined,
 ): RootState => {
-  const todayStr = getDbDateStr();
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const wasToday = oldDueDay === todayStr;
   const isNowToday = newDueDay === todayStr;
 

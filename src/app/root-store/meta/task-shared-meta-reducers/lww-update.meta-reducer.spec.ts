@@ -11,6 +11,8 @@ import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { OpLog } from '../../../core/log';
 import { CONFIG_FEATURE_NAME } from '../../../features/config/store/global-config.reducer';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('lwwUpdateMetaReducer', () => {
   const mockReducer = jasmine.createSpy('reducer');
@@ -106,6 +108,10 @@ describe('lwwUpdateMetaReducer', () => {
         entities: {
           [TAG_ID]: createMockTag(),
         },
+      },
+      [appStateFeatureKey]: {
+        todayStr: getDbDateStr(),
+        startOfNextDayDiffMs: 0,
       },
     }) as Partial<RootState>;
 
@@ -1318,6 +1324,10 @@ describe('lwwUpdateMetaReducer', () => {
             }),
           },
         },
+        [appStateFeatureKey]: {
+          todayStr: TODAY_STR,
+          startOfNextDayDiffMs: 0,
+        },
       }) as Partial<RootState>;
 
     it('should add task to TODAY_TAG.taskIds when LWW Update recreates task with dueDay = today', () => {
@@ -1345,6 +1355,10 @@ describe('lwwUpdateMetaReducer', () => {
               taskIds: [],
             }),
           },
+        },
+        [appStateFeatureKey]: {
+          todayStr: TODAY_STR,
+          startOfNextDayDiffMs: 0,
         },
       } as Partial<RootState>;
 
@@ -1467,6 +1481,10 @@ describe('lwwUpdateMetaReducer', () => {
         [TAG_FEATURE_NAME]: {
           ids: [],
           entities: {},
+        },
+        [appStateFeatureKey]: {
+          todayStr: TODAY_STR,
+          startOfNextDayDiffMs: 0,
         },
       } as Partial<RootState>;
 

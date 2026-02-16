@@ -10,6 +10,9 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { updateGlobalConfigSection } from './global-config.actions';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
+import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
+import { loadAllData } from '../../../root-store/meta/load-all-data.action';
+import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 
 describe('GlobalConfigEffects', () => {
   let effects: GlobalConfigEffects;
@@ -18,7 +21,12 @@ describe('GlobalConfigEffects', () => {
 
   beforeEach(() => {
     actions$ = new Subject<Action>();
-    dateServiceSpy = jasmine.createSpyObj('DateService', ['setStartOfNextDayDiff']);
+    dateServiceSpy = jasmine.createSpyObj('DateService', [
+      'setStartOfNextDayDiff',
+      'todayStr',
+    ]);
+    dateServiceSpy.todayStr.and.returnValue('2026-02-16');
+    dateServiceSpy.startOfNextDayDiff = 0;
 
     TestBed.configureTestingModule({
       providers: [
@@ -43,8 +51,8 @@ describe('GlobalConfigEffects', () => {
     });
 
     effects = TestBed.inject(GlobalConfigEffects);
-    // Subscribe to the effect to activate it
     effects.setStartOfNextDayDiffOnChange.subscribe();
+    effects.setStartOfNextDayDiffOnLoad.subscribe();
   });
 
   describe('setStartOfNextDayDiffOnChange', () => {
@@ -79,6 +87,71 @@ describe('GlobalConfigEffects', () => {
       );
 
       expect(dateServiceSpy.setStartOfNextDayDiff).not.toHaveBeenCalled();
+    });
+
+    it('should dispatch setTodayString with todayStr and startOfNextDayDiffMs', () => {
+      dateServiceSpy.startOfNextDayDiff = 14400000;
+      let emittedAction: Action | undefined;
+      effects.setStartOfNextDayDiffOnChange.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        updateGlobalConfigSection({
+          sectionKey: 'misc',
+          sectionCfg: { startOfNextDay: 4 },
+        }),
+      );
+
+      expect(emittedAction).toEqual(
+        AppStateActions.setTodayString({
+          todayStr: '2026-02-16',
+          startOfNextDayDiffMs: 14400000,
+        }),
+      );
+    });
+  });
+
+  describe('setStartOfNextDayDiffOnLoad', () => {
+    it('should call setStartOfNextDayDiff when loadAllData is dispatched', () => {
+      actions$.next(
+        loadAllData({
+          appDataComplete: {
+            globalConfig: {
+              ...DEFAULT_GLOBAL_CONFIG,
+              misc: { ...DEFAULT_GLOBAL_CONFIG.misc, startOfNextDay: 4 },
+            },
+          } as any,
+        }),
+      );
+
+      expect(dateServiceSpy.setStartOfNextDayDiff).toHaveBeenCalledWith(4);
+    });
+
+    it('should dispatch setTodayString when loadAllData is dispatched', () => {
+      dateServiceSpy.startOfNextDayDiff = 14400000;
+      let emittedAction: Action | undefined;
+      effects.setStartOfNextDayDiffOnLoad.subscribe((action) => {
+        emittedAction = action;
+      });
+
+      actions$.next(
+        loadAllData({
+          appDataComplete: {
+            globalConfig: {
+              ...DEFAULT_GLOBAL_CONFIG,
+              misc: { ...DEFAULT_GLOBAL_CONFIG.misc, startOfNextDay: 4 },
+            },
+          } as any,
+        }),
+      );
+
+      expect(emittedAction).toEqual(
+        AppStateActions.setTodayString({
+          todayStr: '2026-02-16',
+          startOfNextDayDiffMs: 14400000,
+        }),
+      );
     });
   });
 });
