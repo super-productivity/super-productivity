@@ -1,24 +1,21 @@
+---
 name: Close Stale Discussions
 
-# This is a new workflow that uses the modified thenick775/stalesweeper action.
-# https://github.com/LizardByte/community/blob/master/.github/workflows/discussions-stale.yml
-# Verbose mode appears to built-in now: https://github.com/LizardByte/community/commit/b7f8c5e1c3f90b902ecb1f570d015d8847b3abb3
-# This workflow requires additional modifications as it uses environment variables and other settings that are not applicable to the SP repo.
+# Includes numerous modifications to the original workflow. See git commit body for details.
 
-permissions: {}
-
-on:
+'on':
   schedule:
-    - cron: '00 11 * * *'
+    - cron: '0 0 * * SUN'
   workflow_dispatch:
     inputs:
       days-before-close:
         description: 'days-before-close: number of days of inactivity before closing a discussion'
         required: false
-        default: '365'
+        default: '0'
         type: string
       dry-run:
         description: 'dry-run: when checked, no discussions will be closed'
+        default: true
         type: boolean
 
 jobs:
@@ -26,17 +23,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: stalesweeper
-        uses: thenick775/stalesweeper@1970ca7c8eb73680d0be642c0a60a08e28a9692e  # repo does not have releases
+        uses: thenick775/stalesweeper@1970ca7c8eb73680d0be642c0a60a08e28a9692e
         env:
-          DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '365' || github.event.inputs.days-before-close }}
+          DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '180' || github.event.inputs.days-before-close }}
           DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
         with:
-          categories: 'Actions,GSMS,Libraries,Sunshine,Themerr'
+          categories: ''
           close-reason: 'OUTDATED'
+          close-unanswered: 'false'
+          days-before-close: '${{ env.DAYS_BEFORE_CLOSE}}'
+          dry-run: ${{ env.DRY_RUN }}
+          exempt-labels: 'documentation gap'
+          message: >-
+            This discussion was automatically closed because it has been inactive for ${{ env.DAYS_BEFORE_CLOSE}} days.
+            If the topic is still relevant, please feel free to reopen the discussion and add some more context or detail.
+
+  close-stale-answers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: stalesweeper
+        uses: thenick775/stalesweeper@1970ca7c8eb73680d0be642c0a60a08e28a9692e
+        env:
+          DAYS_BEFORE_CLOSE: ${{ github.event_name == 'schedule' && '90' || github.event.inputs.days-before-close }}
+          DRY_RUN: ${{ github.event_name == 'schedule' && 'false' || github.event.inputs.dry-run }}
+        with:
+          categories: 'Q&A'
+          close-reason: 'RESOLVED'
           close-unanswered: 'true'
           days-before-close: '${{ env.DAYS_BEFORE_CLOSE}}'
           dry-run: ${{ env.DRY_RUN }}
-          exempt-labels: 'Feature Request'
-          message: >
-            This discussion was automatically closed because it has been inactive for ${{ env.DAYS_BEFORE_CLOSE}} days.
-          repo-token: ${{ secrets.GH_BOT_TOKEN }}
+          exempt-labels: 'documentation gap'
+          message: >-
+            This discussion was automatically closed because it was answered.
+            If the topic is still relevant, please feel free to reopen the discussion and add some more context or detail.
