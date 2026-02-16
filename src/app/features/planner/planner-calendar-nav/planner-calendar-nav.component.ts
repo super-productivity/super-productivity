@@ -260,8 +260,8 @@ export class PlannerCalendarNavComponent {
           this._snapTo(snapExpanded);
         } else {
           // Tap on handle (no drag) → toggle
-          this.isExpanded.set(!this.isExpanded());
-          this._cdr.detectChanges();
+          this._dragActiveIdx = this.activeWeekIndex();
+          this._snapTo(!this.isExpanded());
         }
         return;
       }
