@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, Input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  HostBinding,
+  inject,
+  Input,
+} from '@angular/core';
 import { T } from '../../../t.const';
 import { PlannerDay, ScheduleItem, ScheduleItemType } from '../planner.model';
 import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
@@ -59,6 +65,10 @@ export class PlannerDayComponent {
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
   //  and migrating would break narrowing currently.
   @Input() day!: PlannerDay;
+
+  @HostBinding('attr.data-day') get dataDayAttr(): string | undefined {
+    return this.day?.dayDate;
+  }
 
   protected readonly T = T;
   protected readonly SCHEDULE_ITEM_TYPE = ScheduleItemType;

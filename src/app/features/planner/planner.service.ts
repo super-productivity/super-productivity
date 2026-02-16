@@ -12,6 +12,8 @@ import { GlobalTrackingIntervalService } from '../../core/global-tracking-interv
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { msToString } from '../../ui/duration/ms-to-string.pipe';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { parseDbDateStr } from '../../util/parse-db-date-str';
+import { getDiffInDays } from '../../util/get-diff-in-days';
 import { selectAllTaskRepeatCfgs } from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { Log } from '../../core/log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
@@ -179,6 +181,16 @@ export class PlannerService {
       this._daysToShowCount$.next(currentCount + PlannerService.AUTO_LOAD_INCREMENT);
       this.isLoadingMore$.next(false);
     }, 0);
+  }
+
+  ensureDayLoaded(dayDate: string): void {
+    const target = parseDbDateStr(dayDate);
+    const todayMs = Date.now() - this._dateService.startOfNextDayDiff;
+    const diff = getDiffInDays(new Date(todayMs), target);
+    if (diff >= 0 && diff >= this._daysToShowCount$.value) {
+      this._userHasScrolled.set(true);
+      this._daysToShowCount$.next(diff + 3);
+    }
   }
 
   resetScrollState(): void {
