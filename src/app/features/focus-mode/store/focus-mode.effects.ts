@@ -203,21 +203,28 @@ export class FocusModeEffects {
         this.store.select(selectors.selectPausedTaskId),
         this.taskService.currentTaskId$,
       ),
-      filter(
-        ([_action, cfg, timer, pausedTaskId, currentTaskId]) =>
-          !!cfg?.isSyncSessionWithTracking &&
-          (timer.purpose === 'work' || timer.purpose === 'break') &&
-          !(timer.purpose === 'break' && cfg?.isPauseTrackingDuringBreak) &&
-          !currentTaskId &&
-          !!pausedTaskId,
-      ),
-      switchMap(([_action, _cfg, _timer, pausedTaskId]) =>
-        this.store.select(selectTaskById, { id: pausedTaskId! }).pipe(
+      switchMap(([_action, cfg, timer, pausedTaskId, currentTaskId]) => {
+        if (
+          !cfg?.isSyncSessionWithTracking ||
+          (timer.purpose !== 'work' && timer.purpose !== 'break')
+        ) {
+          return EMPTY;
+        }
+        // Bug #6534 Fix: Clear _isResumingBreak flag when not resuming tracking during break.
+        // Without this, the flag stays stale and causes syncTrackingStartToSession$
+        // to treat the next manual tracking start as a break resume.
+        if (timer.purpose === 'break' && cfg?.isPauseTrackingDuringBreak) {
+          return of(actions.clearResumingBreakFlag());
+        }
+        if (currentTaskId || !pausedTaskId) {
+          return EMPTY;
+        }
+        return this.store.select(selectTaskById, { id: pausedTaskId }).pipe(
           take(1),
-          map((task) => (task ? setCurrentTask({ id: pausedTaskId! }) : null)),
-        ),
-      ),
-      filter((action): action is ReturnType<typeof setCurrentTask> => action !== null),
+          filter((task) => !!task),
+          map(() => setCurrentTask({ id: pausedTaskId })),
+        );
+      }),
     ),
   );
 

@@ -254,6 +254,150 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
     }));
   });
 
+  describe('Bug #6534: Stale _isResumingBreak flag when isPauseTrackingDuringBreak is enabled', () => {
+    it('should dispatch clearResumingBreakFlag when isPauseTrackingDuringBreak is enabled and break is resumed', fakeAsync(() => {
+      // Setup: Break is paused, isPauseTrackingDuringBreak = true, tracking stopped
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isSyncSessionWithTracking: true,
+        isPauseTrackingDuringBreak: true,
+      });
+
+      const pausedBreakTimer = createMockTimer({
+        purpose: 'break',
+        isRunning: false,
+        elapsed: 2 * 60 * 1000,
+        duration: 5 * 60 * 1000,
+      });
+
+      store.overrideSelector(selectors.selectTimer, pausedBreakTimer);
+      store.overrideSelector(selectors.selectPausedTaskId, 'test-task-id');
+      currentTaskId$.next(null);
+
+      const dispatchedActions: Action[] = [];
+      effects.syncSessionResumeToTracking$.subscribe((action) => {
+        dispatchedActions.push(action);
+      });
+
+      // Action: Resume the break
+      actions$.next(actions.unPauseFocusSession());
+      tick(10);
+
+      // Verify: clearResumingBreakFlag dispatched (not setCurrentTask)
+      expect(dispatchedActions.length).toBe(1);
+      expect(dispatchedActions[0].type).toBe(actions.clearResumingBreakFlag.type);
+
+      flush();
+    }));
+
+    it('should skip break when user manually starts tracking after pause/resume with isPauseTrackingDuringBreak', fakeAsync(() => {
+      // Setup: Break is running, isPauseTrackingDuringBreak = true, _isResumingBreak = false
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isSyncSessionWithTracking: true,
+        isPauseTrackingDuringBreak: true,
+      });
+
+      const runningBreakTimer = createMockTimer({
+        purpose: 'break',
+        isRunning: true,
+        elapsed: 2 * 60 * 1000,
+        duration: 5 * 60 * 1000,
+      });
+
+      store.overrideSelector(selectors.selectTimer, runningBreakTimer);
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Main);
+      store.overrideSelector(selectors.selectPausedTaskId, 'test-task-id');
+      store.overrideSelector(selectors.selectIsResumingBreak, false);
+
+      const dispatchedActions: Action[] = [];
+      effects.syncTrackingStartToSession$.subscribe((action) => {
+        dispatchedActions.push(action);
+      });
+
+      // Action: User manually starts tracking during break
+      currentTaskId$.next('test-task-id');
+      tick(10);
+
+      // Verify: skipBreak dispatched (not clearResumingBreakFlag)
+      expect(dispatchedActions.length).toBe(1);
+      expect(dispatchedActions[0].type).toBe(actions.skipBreak.type);
+
+      flush();
+    }));
+
+    it('full lifecycle: resume break dispatches clearResumingBreakFlag, then manual tracking dispatches skipBreak', fakeAsync(() => {
+      // This integration test verifies the complete bug #6534 scenario:
+      // Without the fix, step 2 would dispatch clearResumingBreakFlag instead of skipBreak.
+      store.overrideSelector(selectFocusModeConfig, {
+        isSkipPreparation: false,
+        isSyncSessionWithTracking: true,
+        isPauseTrackingDuringBreak: true,
+      });
+
+      const pausedBreakTimer = createMockTimer({
+        purpose: 'break',
+        isRunning: false,
+        elapsed: 2 * 60 * 1000,
+        duration: 5 * 60 * 1000,
+      });
+
+      store.overrideSelector(selectors.selectTimer, pausedBreakTimer);
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Main);
+      store.overrideSelector(selectors.selectPausedTaskId, 'test-task-id');
+      store.overrideSelector(selectors.selectIsResumingBreak, false);
+      currentTaskId$.next(null);
+
+      const resumeActions: Action[] = [];
+      const trackingActions: Action[] = [];
+
+      effects.syncSessionResumeToTracking$.subscribe((action) => {
+        resumeActions.push(action);
+        // Simulate reducer: clearResumingBreakFlag clears the flag
+        if (action.type === actions.clearResumingBreakFlag.type) {
+          store.overrideSelector(selectors.selectIsResumingBreak, false);
+          store.refreshState();
+        }
+      });
+
+      effects.syncTrackingStartToSession$.subscribe((action) => {
+        trackingActions.push(action);
+      });
+
+      // Step 1: Resume break (reducer sets _isResumingBreak = true)
+      store.overrideSelector(selectors.selectIsResumingBreak, true);
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          purpose: 'break',
+          isRunning: true,
+          elapsed: 2 * 60 * 1000,
+          duration: 5 * 60 * 1000,
+        }),
+      );
+      store.refreshState();
+      actions$.next(actions.unPauseFocusSession());
+      tick(10);
+
+      // Verify step 1: effect dispatched clearResumingBreakFlag
+      expect(resumeActions.length).toBe(1);
+      expect(resumeActions[0].type).toBe(actions.clearResumingBreakFlag.type);
+
+      // Step 2: User manually starts tracking during break
+      // _isResumingBreak is now false (cleared by subscribe callback above)
+      currentTaskId$.next('test-task-id');
+      tick(10);
+
+      // Verify step 2: skipBreak dispatched (NOT clearResumingBreakFlag)
+      expect(trackingActions.length).toBe(1);
+      expect(trackingActions[0].type).toBe(actions.skipBreak.type);
+
+      flush();
+    }));
+  });
+
   describe('syncSessionResumeToTracking$', () => {
     it('should resume tracking when break is paused and unPauseFocusSession is dispatched', fakeAsync(() => {
       // Setup: Paused break with pausedTaskId, tracking stopped

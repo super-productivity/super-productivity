@@ -2014,7 +2014,7 @@ describe('FocusModeEffects', () => {
       });
     });
 
-    it('should NOT dispatch setCurrentTask when BREAK resumes and isPauseTrackingDuringBreak is true', (done) => {
+    it('should dispatch clearResumingBreakFlag (not setCurrentTask) when BREAK resumes and isPauseTrackingDuringBreak is true', (done) => {
       store.overrideSelector(selectFocusModeConfig, {
         isSyncSessionWithTracking: true,
         isPauseTrackingDuringBreak: true,
@@ -2034,15 +2034,10 @@ describe('FocusModeEffects', () => {
 
       actions$ = of(actions.unPauseFocusSession());
 
-      let emitted = false;
-      effects.syncSessionResumeToTracking$.subscribe(() => {
-        emitted = true;
-      });
-
-      setTimeout(() => {
-        expect(emitted).toBe(false);
+      effects.syncSessionResumeToTracking$.subscribe((action) => {
+        expect(action.type).toEqual(actions.clearResumingBreakFlag.type);
         done();
-      }, 50);
+      });
     });
   });
 
