@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import { plannerInitialState, plannerReducer } from './planner.reducer';
 import { PlannerActions } from './planner.actions';
 import { DEFAULT_TASK } from '../../tasks/task.model';
