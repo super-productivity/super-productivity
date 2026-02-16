@@ -1,0 +1,28 @@
+---
+name: Close Stale Discussions
+
+# This is the original workflow from steffen-karlsson/stalesweeper@v1.1.1
+# https://github.com/marketplace/actions/stalesweeper
+# The debug mode does not work which makes testing with dry-run impossible.
+# There is a re-worked action that probably won't get merged: https://github.com/thenick775/stalesweeper
+# I'm preserving the original workflow for posterity and potential troubleshooting. See next commit for details.
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight UTC
+
+jobs:
+  close-stale-discussions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run action
+        uses: steffen-karlsson/stalesweeper@v1.1.1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          message: 'This discussion has been closed due to inactivity.'
+          days-before-close: '14'
+          close-unanswered: 'false'
+          category: 'Issue'
+          close-reason: 'OUTDATED'
+          dry-run: 'false'
