@@ -31,18 +31,25 @@ export class PlannerComponent {
   layoutService = inject(LayoutService);
 
   readonly T = T;
-  isPanelOpen = false;
 
   private _days = toSignal(this._plannerService.days$, { initialValue: [] });
-  daysWithTasks = computed(() => {
+  private _prevDaysWithTasksKey = '';
+  private _prevDaysWithTasks: ReadonlySet<string> = new Set();
+  daysWithTasks = computed<ReadonlySet<string>>(() => {
     const days = this._days();
-    const result = new Set<string>();
+    const dayDates: string[] = [];
     for (const day of days) {
       if (day.tasks.length > 0) {
-        result.add(day.dayDate);
+        dayDates.push(day.dayDate);
       }
     }
-    return result;
+    const key = dayDates.join(',');
+    if (key === this._prevDaysWithTasksKey) {
+      return this._prevDaysWithTasks;
+    }
+    this._prevDaysWithTasksKey = key;
+    this._prevDaysWithTasks = new Set(dayDates);
+    return this._prevDaysWithTasks;
   });
 
   constructor() {

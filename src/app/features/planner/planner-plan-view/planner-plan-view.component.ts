@@ -48,7 +48,9 @@ export class PlannerPlanViewComponent {
 
   private _visibleDayObserver?: IntersectionObserver;
   private _visibleDayElements = new Set<Element>();
-  _isScrollingToDay = false;
+  private _isScrollingToDay = false;
+  private _pendingTimers: ReturnType<typeof setTimeout>[] = [];
+  private _pendingIntervals: ReturnType<typeof setInterval>[] = [];
 
   visibleDayDate = signal<string | null>(null);
 
@@ -64,10 +66,12 @@ export class PlannerPlanViewComponent {
       }
     });
 
-    // Cleanup observers on component destroy
+    // Cleanup observers and timers on component destroy
     this._destroyRef.onDestroy(() => {
       this._intersectionObserver?.disconnect();
       this._visibleDayObserver?.disconnect();
+      this._pendingTimers.forEach(clearTimeout);
+      this._pendingIntervals.forEach(clearInterval);
       this._plannerService.resetScrollState();
     });
   }
@@ -77,17 +81,19 @@ export class PlannerPlanViewComponent {
     this.visibleDayDate.set(dayDate);
 
     const host = this._elRef.nativeElement as HTMLElement;
-    const el = host.querySelector(`[data-day="${dayDate}"]`);
+    const el = host.querySelector(
+      `[data-day="${CSS.escape(dayDate)}"]`,
+    ) as HTMLElement | null;
     if (el) {
-      this._scrollToElement(el);
+      this._scrollToElement(host, el);
     } else {
       this._plannerService.ensureDayLoaded(dayDate);
       this._pollForElement(dayDate);
     }
   }
 
-  private _scrollToElement(el: Element): void {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  private _scrollToElement(host: HTMLElement, el: HTMLElement): void {
+    host.scrollTo({ top: el.offsetTop - host.offsetTop, behavior: 'smooth' });
     this._waitForScrollEnd();
   }
 
@@ -117,6 +123,7 @@ export class PlannerPlanViewComponent {
         }
       }
     }, 100);
+    this._pendingIntervals.push(poll);
   }
 
   private _pollForElement(dayDate: string, attempt = 0): void {
@@ -124,15 +131,18 @@ export class PlannerPlanViewComponent {
       this._isScrollingToDay = false;
       return;
     }
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       const host = this._elRef.nativeElement as HTMLElement;
-      const el = host.querySelector(`[data-day="${dayDate}"]`);
+      const el = host.querySelector(
+        `[data-day="${CSS.escape(dayDate)}"]`,
+      ) as HTMLElement | null;
       if (el) {
-        this._scrollToElement(el);
+        this._scrollToElement(host, el);
       } else {
         this._pollForElement(dayDate, attempt + 1);
       }
     }, 100);
+    this._pendingTimers.push(timer);
   }
 
   private _setupVisibleDayObserver(elements: readonly ElementRef[]): void {
