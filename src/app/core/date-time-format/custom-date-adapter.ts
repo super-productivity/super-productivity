@@ -8,8 +8,9 @@ import { GlobalConfigService } from '../../features/config/global-config.service
 @Injectable({ providedIn: 'root' })
 export class CustomDateAdapter extends NativeDateAdapter {
   private readonly _globalConfigService = inject(GlobalConfigService);
-  private readonly _injector = inject(Injector);
 
+  // Use a getter to avoid circular dependency issues with DateTimeFormatService
+  private readonly _injector = inject(Injector);
   private get _dateTimeFormatService(): DateTimeFormatService {
     return this._injector.get(DateTimeFormatService);
   }
@@ -27,7 +28,7 @@ export class CustomDateAdapter extends NativeDateAdapter {
 
   override parse(value: any, format: string): Date | null {
     if (!value) return null;
-    if (value instanceof Date) return !isNaN(value.getTime()) ? value : null;
+    if (value instanceof Date) return this.isValid(value) ? value : null;
     if (typeof value !== 'string') return super.parse(value, format);
 
     // Parse using locale-aware format
@@ -43,15 +44,12 @@ export class CustomDateAdapter extends NativeDateAdapter {
     date: Date,
     displayFormat: Intl.DateTimeFormatOptions | string,
   ): string {
-    if (!date || isNaN(date.getTime())) return '';
+    if (!this.isValid(date)) throw Error('DateAdapter: Cannot format invalid date.');
 
-    // For date input, use user's locale-specific date format
-    const userDateFormat = this._dateTimeFormatService.dateFormat().raw;
-    if (displayFormat === userDateFormat || !displayFormat) {
-      return this._dateTimeFormatService.formatDate(
-        date,
-        this._dateTimeFormatService.currentLocale(),
-      );
+    // locale-specific format
+    const localeSpecificFormat = this._dateTimeFormatService.dateFormat().raw;
+    if (displayFormat === localeSpecificFormat) {
+      return this._dateTimeFormatService.formatDate(date);
     }
 
     // For other formats, use default
