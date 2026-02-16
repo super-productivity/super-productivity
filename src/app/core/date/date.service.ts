@@ -20,4 +20,13 @@ export class DateService {
     const ts = typeof date === 'number' ? date : date.getTime();
     return getDbDateStr(new Date(ts - this.startOfNextDayDiff)) === this.todayStr();
   }
+
+  isYesterday(date: number | Date): boolean {
+    const ts = typeof date === 'number' ? date : date.getTime();
+    const yesterday = new Date(Date.now() - this.startOfNextDayDiff);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return (
+      getDbDateStr(new Date(ts - this.startOfNextDayDiff)) === getDbDateStr(yesterday)
+    );
+  }
 }
