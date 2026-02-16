@@ -1,5 +1,6 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   computed,
   DestroyRef,
@@ -50,6 +51,7 @@ const DIRECTION_RATIO = 1.5;
 export class PlannerCalendarNavComponent {
   private _dateAdapter = inject(DateAdapter);
   private _dateService = inject(DateService);
+  private _cdr = inject(ChangeDetectorRef);
   private _elRef = inject(ElementRef);
   private _zone = inject(NgZone);
   private _destroyRef = inject(DestroyRef);
@@ -60,6 +62,9 @@ export class PlannerCalendarNavComponent {
 
   isExpanded = signal(false);
   private _anchorWeekStart = signal<string | null>(null);
+
+  // Override for which week row is shown in collapsed mode (null = use visibleDayDate)
+  private _displayedRow = signal<number | null>(null);
 
   // Touch state
   private _touchStartY = 0;
@@ -121,6 +126,8 @@ export class PlannerCalendarNavComponent {
   });
 
   activeWeekIndex = computed(() => {
+    const override = this._displayedRow();
+    if (override !== null) return override;
     const visibleDay = this.visibleDayDate();
     if (!visibleDay) return 0;
     const allWeeks = this.weeks();
@@ -142,9 +149,13 @@ export class PlannerCalendarNavComponent {
 
   monthLabel = computed(() => {
     const allWeeks = this.weeks();
-    const midWeek = allWeeks[Math.floor(allWeeks.length / 2)];
-    if (midWeek?.length > 0) {
-      const date = parseDbDateStr(midWeek[Math.floor(midWeek.length / 2)].dateStr);
+    // In collapsed mode, use the active (visible) week row; in expanded mode, use the middle
+    const weekIdx = this.isExpanded()
+      ? Math.floor(allWeeks.length / 2)
+      : this.activeWeekIndex();
+    const week = allWeeks[weekIdx];
+    if (week?.length > 0) {
+      const date = parseDbDateStr(week[Math.floor(week.length / 2)].dateStr);
       return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
     }
     const visibleDay = this.visibleDayDate() || this._dateService.todayStr();
@@ -176,6 +187,12 @@ export class PlannerCalendarNavComponent {
       }
       const range = getWeekRange(visibleDate, firstDayOfWeek);
       this._anchorWeekStart.set(getDbDateStr(range.start));
+    });
+
+    // Reset collapsed row override when visibleDayDate changes (planner scrolled)
+    effect(() => {
+      this.visibleDayDate();
+      untracked(() => this._displayedRow.set(null));
     });
 
     this._zone.runOutsideAngular(() => {
@@ -230,7 +247,7 @@ export class PlannerCalendarNavComponent {
 
         // --- Handle touch ---
         if (this._touchOnHandle) {
-          e.preventDefault(); // Suppress any follow-up browser behavior
+          e.preventDefault();
           if (this._isDragging) {
             const touch = e.changedTouches[0];
             const deltaY = touch.clientY - this._touchStartY;
@@ -250,7 +267,8 @@ export class PlannerCalendarNavComponent {
             this._snapTo(snapExpanded);
           } else {
             // Tap on handle (no drag) → toggle
-            this._zone.run(() => this.isExpanded.set(!this.isExpanded()));
+            this.isExpanded.set(!this.isExpanded());
+            this._cdr.detectChanges();
           }
           return;
         }
@@ -275,8 +293,12 @@ export class PlannerCalendarNavComponent {
             Math.abs(deltaX) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
           if (isSwipe) {
             const dir: 1 | -1 = deltaX < 0 ? 1 : -1;
-            const days = this.isExpanded() ? DAYS_IN_VIEW : 7;
-            this._slideContent(dir, dir * days, 'x');
+            if (this.isExpanded()) {
+              if (dir === -1 && this._isAtPastLimit()) return;
+              this._slideContent(dir, () => this._shiftAnchor(dir * DAYS_IN_VIEW), 'x');
+            } else {
+              this._slideCollapsedWeek(dir);
+            }
           }
         }
       };
@@ -295,17 +317,62 @@ export class PlannerCalendarNavComponent {
   private _handleVerticalSwipe(isDown: boolean): void {
     if (isDown) {
       if (!this.isExpanded()) {
-        this._zone.run(() => this.isExpanded.set(true));
-      } else {
+        this.isExpanded.set(true);
+        this._cdr.detectChanges();
+      } else if (!this._isAtPastLimit()) {
         // Swipe down → previous month, content follows finger downward
-        this._slideContent(1, -DAYS_IN_VIEW, 'y');
+        this._slideContent(1, () => this._shiftAnchor(-DAYS_IN_VIEW), 'y');
       }
     } else {
       if (this.isExpanded()) {
         // Swipe up → next month, content follows finger upward
-        this._slideContent(-1, DAYS_IN_VIEW, 'y');
+        this._slideContent(-1, () => this._shiftAnchor(DAYS_IN_VIEW), 'y');
       }
     }
+  }
+
+  /** Navigate collapsed week view left/right */
+  private _slideCollapsedWeek(dir: 1 | -1): void {
+    const currentRow = this.activeWeekIndex();
+
+    // Don't go before today's week
+    if (dir === -1 && this.weeks()[currentRow]?.some((d) => d.isToday)) return;
+
+    const targetRow = currentRow + dir;
+
+    if (targetRow >= 0 && targetRow < WEEKS_SHOWN) {
+      // Target week is within the current 5-week window — just slide to it
+      this._slideContent(dir, () => this._displayedRow.set(targetRow), 'x');
+    } else if (dir === 1) {
+      // Past the end — shift anchor forward and show week 0
+      this._slideContent(
+        dir,
+        () => {
+          this._shiftAnchor(DAYS_IN_VIEW);
+          this._displayedRow.set(0);
+        },
+        'x',
+      );
+    } else {
+      // Before the start — shift anchor backward and show last week
+      this._slideContent(
+        dir,
+        () => {
+          this._shiftAnchor(-DAYS_IN_VIEW);
+          this._displayedRow.set(WEEKS_SHOWN - 1);
+        },
+        'x',
+      );
+    }
+  }
+
+  private _isAtPastLimit(): boolean {
+    const todayStr = this._dateService.todayStr();
+    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+    const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
+    const currentAnchor = this._anchorWeekStart();
+    const anchorDate = currentAnchor ? parseDbDateStr(currentAnchor) : todayWeekStart;
+    return anchorDate <= todayWeekStart;
   }
 
   private _shiftAnchor(dayOffset: number): void {
@@ -366,7 +433,7 @@ export class PlannerCalendarNavComponent {
     }
 
     setTimeout(() => {
-      // Clean up inline styles BEFORE zone.run so Angular CD applies correct values
+      // Clean up inline styles BEFORE signal update so Angular CD applies correct values
       weeksEl.style.transition = '';
       weeksEl.style.maxHeight = '';
       if (innerEl) {
@@ -374,25 +441,16 @@ export class PlannerCalendarNavComponent {
         innerEl.style.transform = '';
       }
 
-      this._zone.run(() => this.isExpanded.set(expanded));
+      this.isExpanded.set(expanded);
+      this._cdr.detectChanges();
 
       this._isDragging = false;
       this._isSnapping = false;
     }, SNAP_DURATION + 10);
   }
 
-  /** Slide content out, update data, slide new content in along the given axis */
-  private _slideContent(direction: 1 | -1, dayOffset: number, axis: 'x' | 'y'): void {
-    // Don't animate if at the past limit
-    if (dayOffset < 0) {
-      const todayStr = this._dateService.todayStr();
-      const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-      const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
-      const currentAnchor = this._anchorWeekStart();
-      const anchorDate = currentAnchor ? parseDbDateStr(currentAnchor) : todayWeekStart;
-      if (anchorDate <= todayWeekStart) return;
-    }
-
+  /** Slide content out, run update callback, slide new content in */
+  private _slideContent(direction: 1 | -1, onUpdate: () => void, axis: 'x' | 'y'): void {
     this._isSnapping = true;
     const weeksEl = this._weeksEl()?.nativeElement;
     if (!weeksEl) return;
@@ -410,7 +468,8 @@ export class PlannerCalendarNavComponent {
 
     setTimeout(() => {
       innerEl.style.transition = 'none';
-      this._zone.run(() => this._shiftAnchor(dayOffset));
+      onUpdate();
+      this._cdr.detectChanges();
 
       // Position new content on the opposite side
       const inv = `${-sign * 100}%`;
