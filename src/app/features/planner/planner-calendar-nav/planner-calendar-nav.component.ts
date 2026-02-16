@@ -36,6 +36,7 @@ const MAX_HEIGHT = ROW_HEIGHT * WEEKS_SHOWN;
 const SNAP_MIDPOINT = (MIN_HEIGHT + MAX_HEIGHT) / 2;
 const SNAP_VELOCITY = 0.3;
 const SNAP_DURATION = 200;
+const SLIDE_DURATION = 150;
 const SWIPE_THRESHOLD = 50;
 const SWIPE_VELOCITY_THRESHOLD = 0.3;
 const DIRECTION_RATIO = 1.5;
@@ -266,14 +267,16 @@ export class PlannerCalendarNavComponent {
           const isSwipe =
             Math.abs(deltaY) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
           if (isSwipe) {
-            this._zone.run(() => this._handleVerticalSwipe(deltaY > 0));
+            this._handleVerticalSwipe(deltaY > 0);
           }
         } else {
           const velocity = Math.abs(deltaX) / Math.max(elapsed, 1);
           const isSwipe =
             Math.abs(deltaX) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
           if (isSwipe) {
-            this._zone.run(() => this._shiftAnchor(deltaX < 0 ? 7 : -7));
+            const dir: 1 | -1 = deltaX < 0 ? 1 : -1;
+            const days = this.isExpanded() ? DAYS_IN_VIEW : 7;
+            this._slideContent(dir, dir * days, 'x');
           }
         }
       };
@@ -292,13 +295,15 @@ export class PlannerCalendarNavComponent {
   private _handleVerticalSwipe(isDown: boolean): void {
     if (isDown) {
       if (!this.isExpanded()) {
-        this.isExpanded.set(true);
+        this._zone.run(() => this.isExpanded.set(true));
       } else {
-        this._shiftAnchor(DAYS_IN_VIEW);
+        // Swipe down → previous month, content follows finger downward
+        this._slideContent(1, -DAYS_IN_VIEW, 'y');
       }
     } else {
       if (this.isExpanded()) {
-        this._shiftAnchor(-DAYS_IN_VIEW);
+        // Swipe up → next month, content follows finger upward
+        this._slideContent(-1, DAYS_IN_VIEW, 'y');
       }
     }
   }
@@ -374,5 +379,55 @@ export class PlannerCalendarNavComponent {
       this._isDragging = false;
       this._isSnapping = false;
     }, SNAP_DURATION + 10);
+  }
+
+  /** Slide content out, update data, slide new content in along the given axis */
+  private _slideContent(direction: 1 | -1, dayOffset: number, axis: 'x' | 'y'): void {
+    // Don't animate if at the past limit
+    if (dayOffset < 0) {
+      const todayStr = this._dateService.todayStr();
+      const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+      const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
+      const currentAnchor = this._anchorWeekStart();
+      const anchorDate = currentAnchor ? parseDbDateStr(currentAnchor) : todayWeekStart;
+      if (anchorDate <= todayWeekStart) return;
+    }
+
+    this._isSnapping = true;
+    const weeksEl = this._weeksEl()?.nativeElement;
+    if (!weeksEl) return;
+    const innerEl = weeksEl.firstElementChild as HTMLElement;
+    if (!innerEl) return;
+
+    // For x: direction 1 → slide left (-100%), -1 → slide right (100%)
+    // For y: direction 1 → slide down (100%), -1 → slide up (-100%)
+    const sign = axis === 'x' ? -direction : direction;
+    const out = `${sign * 100}%`;
+    const slideOut = axis === 'x' ? `${out} 0` : `0 ${out}`;
+
+    innerEl.style.transition = `translate ${SLIDE_DURATION}ms ease-out`;
+    innerEl.style.translate = slideOut;
+
+    setTimeout(() => {
+      innerEl.style.transition = 'none';
+      this._zone.run(() => this._shiftAnchor(dayOffset));
+
+      // Position new content on the opposite side
+      const inv = `${-sign * 100}%`;
+      const slideIn = axis === 'x' ? `${inv} 0` : `0 ${inv}`;
+      innerEl.style.translate = slideIn;
+
+      // Force reflow so the position change applies before transition
+      void innerEl.offsetWidth;
+
+      innerEl.style.transition = `translate ${SLIDE_DURATION}ms ease-out`;
+      innerEl.style.translate = '0 0';
+
+      setTimeout(() => {
+        innerEl.style.transition = '';
+        innerEl.style.translate = '';
+        this._isSnapping = false;
+      }, SLIDE_DURATION + 10);
+    }, SLIDE_DURATION + 10);
   }
 }
