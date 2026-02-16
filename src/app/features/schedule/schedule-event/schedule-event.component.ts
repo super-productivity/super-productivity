@@ -36,12 +36,13 @@ import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-con
 import { IssueService } from '../../issue/issue.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
+import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'schedule-event',
-  imports: [MatIcon, TranslateModule, TaskContextMenuComponent],
+  imports: [MatIcon, TranslateModule, TaskContextMenuComponent, TaskTitleComponent],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

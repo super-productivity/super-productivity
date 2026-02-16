@@ -237,6 +237,8 @@ export class AddTaskBarComponent implements AfterViewInit, OnInit, OnDestroy {
           projects,
           defaultColor: activeWorkContext?.theme?.primary || DEFAULT_PROJECT_COLOR,
           shortSyntaxConfig,
+          // Don't fetch metadata during preview - only when task is actually created
+          urlMetadataService: undefined,
         }),
       ),
     ),

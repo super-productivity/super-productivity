@@ -7,6 +7,7 @@ import {
   initGlobalShortcutsIpc,
   initJiraIpc,
   initSystemIpc,
+  initUrlMetadataIpc,
 } from './ipc-handlers';
 import { initClipboardImageHandlers } from './clipboard-image-handler';
 
@@ -26,4 +27,5 @@ export const initIpcInterfaces = (): void => {
   initGlobalShortcutsIpc();
   initExecIpc();
   initClipboardImageHandlers();
+  initUrlMetadataIpc();
 };

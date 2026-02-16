@@ -80,6 +80,8 @@ export interface ElectronAPI {
     files?: string[];
   }): Promise<{ success: boolean; error?: string }>;
 
+  fetchUrlMetadata(url: string): Promise<{ title: string | null; error?: string }>;
+
   isLinux(): boolean;
 
   isMacOS(): boolean;

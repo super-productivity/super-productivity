@@ -65,6 +65,8 @@ export enum IPC {
 
   SAVE_FILE_DIALOG = 'SAVE_FILE_DIALOG',
 
+  FETCH_URL_METADATA = 'FETCH_URL_METADATA',
+
   SHARE_NATIVE = 'SHARE_NATIVE',
 
   // Clipboard Images

@@ -10,6 +10,7 @@ import { Project } from '../../project/project.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { ShortSyntaxConfig } from '../../config/global-config.model';
 import { TaskLog } from '../../../core/log';
+import { UrlMetadataService } from '../../../util/url-metadata.service';
 
 export interface ShortSyntaxTag {
   title: string;
@@ -25,12 +26,14 @@ export const shortSyntaxToTags = async ({
   projects,
   defaultColor,
   shortSyntaxConfig,
+  urlMetadataService,
 }: {
   val: string;
   tags: Tag[];
   projects: Project[];
   defaultColor: string;
   shortSyntaxConfig: ShortSyntaxConfig;
+  urlMetadataService?: UrlMetadataService;
 }): Promise<ShortSyntaxTag[]> => {
   const r = await shortSyntax(
     {
@@ -41,6 +44,9 @@ export const shortSyntaxToTags = async ({
     shortSyntaxConfig,
     tags,
     projects,
+    undefined,
+    'combine',
+    urlMetadataService,
   );
   const shortSyntaxTags: ShortSyntaxTag[] = [];
 

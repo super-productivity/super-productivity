@@ -74,11 +74,10 @@
     ...
     <!-- -->
   } @else {
-    @if (isMonthView()) {
-      {{ title() }}
-    } @else {
-      {{ title() }}
-    }
+    <task-title
+      [value]="title()"
+      [readonly]="true"
+    ></task-title>
   }
 </div>
 

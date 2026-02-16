@@ -35,6 +35,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { INBOX_PROJECT } from '../../project/project.const';
 import { devError } from '../../../util/dev-error';
 import { TaskLog } from '../../../core/log';
+import { UrlMetadataService } from '../../../util/url-metadata.service';
 
 @Injectable()
 export class ShortSyntaxEffects {
@@ -47,6 +48,7 @@ export class ShortSyntaxEffects {
   private _matDialog = inject(MatDialog);
   private _layoutService = inject(LayoutService);
   private _workContextService = inject(WorkContextService);
+  private _urlMetadataService = inject(UrlMetadataService);
 
   shortSyntax$ = createEffect(() =>
     this._actions$.pipe(
@@ -112,6 +114,7 @@ export class ShortSyntaxEffects {
             projects,
             undefined,
             isReplaceTagIds ? 'replace' : 'combine',
+            this._urlMetadataService,
           ).then((r) => {
             if (environment.production) {
               TaskLog.log('shortSyntax', r);

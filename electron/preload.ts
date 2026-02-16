@@ -160,6 +160,11 @@ const ea: ElectronAPI = {
       success: boolean;
       error?: string;
     }>,
+  fetchUrlMetadata: (url: string) =>
+    _invoke('FETCH_URL_METADATA', url) as Promise<{
+      title: string | null;
+      error?: string;
+    }>,
   scheduleRegisterBeforeClose: (id) => _send('REGISTER_BEFORE_CLOSE', { id }),
   unscheduleRegisterBeforeClose: (id) => _send('UNREGISTER_BEFORE_CLOSE', { id }),
   setDoneRegisterBeforeClose: (id) => _send('BEFORE_CLOSE_DONE', { id }),

@@ -8,6 +8,7 @@ import { isImageUrlSimple } from '../../util/is-image-url';
 import { TaskAttachment } from './task-attachment/task-attachment.model';
 import { nanoid } from 'nanoid';
 import type { Chrono, ParsingContext, ParsingResult } from 'chrono-node';
+import { UrlMetadataService } from '../../util/url-metadata.service';
 type ProjectChanges = {
   title?: string;
   projectId?: string;
@@ -111,6 +112,7 @@ export const shortSyntax = async (
   allProjects?: Project[],
   now = new Date(),
   mode: 'combine' | 'replace' = 'combine',
+  urlMetadataService?: UrlMetadataService,
 ): Promise<
   | {
       taskChanges: Partial<Task>;
@@ -170,11 +172,18 @@ export const shortSyntax = async (
     };
   }
 
-  const urlChanges = parseUrlAttachments({
-    ...task,
-    title: taskChanges.title || task.title,
-  });
-  if (urlChanges.attachments.length > 0) {
+  // Process URLs when enabled in config
+  // urlMetadataService is optional - only needed for fetching page titles in keep-title mode
+  const urlChanges = await parseUrlAttachments(
+    {
+      ...task,
+      title: taskChanges.title || task.title,
+    },
+    config.urlBehavior || 'extract',
+    urlMetadataService,
+  );
+  if (urlChanges.hadUrls) {
+    // Return only new attachments - effects will merge with existing
     attachments = urlChanges.attachments;
     taskChanges = {
       ...taskChanges,
@@ -481,23 +490,63 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
   };
 };
 
-const parseUrlAttachments = (
+const parseUrlAttachments = async (
   task: Partial<TaskCopy>,
-): {
+  urlBehavior: 'extract' | 'keep-url' | 'keep-title',
+  urlMetadataService?: UrlMetadataService,
+): Promise<{
   attachments: TaskAttachment[];
   title: string;
-} => {
+  hadUrls: boolean;
+}> => {
   if (!task.title || task.issueId) {
-    return { attachments: [], title: task.title || '' };
+    return { attachments: [], title: task.title || '', hadUrls: false };
   }
 
   const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
 
   if (!urlMatches || urlMatches.length === 0) {
-    return { attachments: [], title: task.title };
+    return { attachments: [], title: task.title, hadUrls: false };
   }
 
-  const attachments: TaskAttachment[] = urlMatches.map((url) => {
+  // Filter out URLs that are already inside Markdown links [title](url)
+  // This prevents double-processing when shortSyntax runs multiple times
+  const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const urlsInMarkdownLinks = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = markdownLinkRegex.exec(task.title)) !== null) {
+    urlsInMarkdownLinks.add(match[2]); // match[2] is the URL inside (url)
+  }
+
+  // Only process URLs that are NOT already in Markdown links
+  const urlsToProcess = urlMatches.filter((url) => {
+    let trimmedUrl = url.trim().replace(/[.,;!?]+$/, '');
+
+    // Strip trailing ) characters (which the regex may have captured from Markdown syntax)
+    // Keep stripping until we find a version that's in the Markdown links set
+    while (trimmedUrl.endsWith(')') && trimmedUrl.length > 0) {
+      const withoutParen = trimmedUrl.slice(0, -1);
+      if (urlsInMarkdownLinks.has(withoutParen)) {
+        return false; // This URL is already in a Markdown link
+      }
+      trimmedUrl = withoutParen;
+    }
+
+    // Check the final trimmed URL
+    return !urlsInMarkdownLinks.has(trimmedUrl);
+  });
+
+  if (urlsToProcess.length === 0) {
+    return { attachments: [], title: task.title, hadUrls: false };
+  }
+
+  // Build set of existing attachment paths for deduplication
+  const existingPaths = new Set(
+    (task.attachments || []).map((a) => a.path).filter((p): p is string => !!p),
+  );
+
+  // Create attachments array (sync for now, will fetch metadata later)
+  const attachments: TaskAttachment[] = urlsToProcess.map((url) => {
     let path = url.trim();
 
     // Remove trailing punctuation that's not part of the URL
@@ -528,7 +577,7 @@ const parseUrlAttachments = (
       icon = 'bookmark';
     }
 
-    // Extract basename for title
+    // Extract basename for title (will be replaced by metadata in keep-title mode)
     const title = _baseNameForUrl(path);
 
     return {
@@ -540,22 +589,94 @@ const parseUrlAttachments = (
     };
   });
 
-  // Clean URLs from title - use trimmed URLs without trailing punctuation
-  let cleanedTitle = task.title;
-  attachments.forEach((attachment) => {
-    const attachmentPath = attachment.path;
-    if (!attachmentPath) return;
-    // For www URLs, the path has '//' prepended, but the original doesn't
-    const originalUrl = attachmentPath.startsWith('//')
-      ? attachmentPath.substring(2)
-      : attachmentPath;
-    // Escape special regex characters for safe replacement
-    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
-  });
-  cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
+  // Fetch metadata for attachments in keep-title mode
+  let finalAttachments = attachments;
+  if (urlBehavior === 'keep-title' && urlMetadataService) {
+    finalAttachments = await Promise.all(
+      attachments.map(async (attachment) => {
+        if (attachment.path && attachment.type !== 'FILE') {
+          // Fetch page title with fallback to basename
+          const pageTitle = await urlMetadataService.fetchTitle(
+            attachment.path,
+            attachment.title || 'Link',
+          );
 
-  return { attachments, title: cleanedTitle };
+          // Sanitize the title to prevent markdown injection
+          // Remove or escape characters that would break markdown link syntax: [ ] ( )
+          // This prevents malicious titles like "][evil](javascript:alert(1)) ["
+          const sanitizedTitle = _sanitizeMarkdownLinkTitle(pageTitle);
+
+          // Return new attachment object with sanitized title
+          return { ...attachment, title: sanitizedTitle };
+        }
+        return attachment;
+      }),
+    );
+  }
+
+  // Clean URLs from title based on urlBehavior mode
+  let cleanedTitle = task.title;
+
+  if (urlBehavior === 'extract') {
+    // Extract mode: Remove URLs from title (original behavior)
+    finalAttachments.forEach((attachment) => {
+      const attachmentPath = attachment.path;
+      if (!attachmentPath) return;
+      // For www URLs, the path has '//' prepended, but the original doesn't
+      const originalUrl = attachmentPath.startsWith('//')
+        ? attachmentPath.substring(2)
+        : attachmentPath;
+      // Escape special regex characters for safe replacement
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
+    });
+    cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
+  } else if (urlBehavior === 'keep-title') {
+    // keep-title mode: Replace URLs with Markdown link syntax [title](url)
+    finalAttachments.forEach((attachment) => {
+      const attachmentPath = attachment.path;
+      if (!attachmentPath) return;
+      // For www URLs, the path has '//' prepended, but the original doesn't
+      const originalUrl = attachmentPath.startsWith('//')
+        ? attachmentPath.substring(2)
+        : attachmentPath;
+      // Escape special regex characters for safe replacement
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Replace with Markdown link syntax
+      const markdownLink = `[${attachment.title}](${attachmentPath})`;
+      cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), markdownLink);
+    });
+  }
+  // else: keep-url mode - URLs stay in title as-is
+
+  // Filter out attachments that already exist (prevent duplicates)
+  const newAttachments = finalAttachments.filter(
+    (attachment) => attachment.path && !existingPaths.has(attachment.path),
+  );
+
+  // In keep-url mode, if all URLs already exist as attachments and title is unchanged,
+  // return hadUrls: false to prevent infinite effect loop
+  // (title stays the same, no new attachments = no actual changes)
+  if (urlBehavior === 'keep-url' && newAttachments.length === 0) {
+    return { attachments: [], title: task.title, hadUrls: false };
+  }
+
+  return { attachments: newAttachments, title: cleanedTitle, hadUrls: true };
+};
+
+/**
+ * Sanitizes a page title to prevent markdown injection attacks.
+ * Removes characters that would break markdown link syntax: [ ] ( )
+ * This prevents malicious titles like "][evil](javascript:alert(1)) [" from
+ * creating unintended markdown links.
+ */
+const _sanitizeMarkdownLinkTitle = (title: string): string => {
+  // Remove markdown link syntax characters that could break the [title](url) format
+  // We remove these characters entirely rather than escaping them because:
+  // 1. They're unlikely to be legitimate in page titles
+  // 2. Escaping them would make the title ugly (e.g., "Title \[with\] brackets")
+  // 3. Complete removal is the safest option against injection attacks
+  return title.replace(/[\[\]()]/g, '');
 };
 
 const _baseNameForUrl = (passedStr: string): string => {
@@ -568,7 +689,14 @@ const _baseNameForUrl = (passedStr: string): string => {
     base = str.substring(str.lastIndexOf('/') + 1);
   }
 
-  if (base.lastIndexOf('.') !== -1) {
+  // Check if this is a domain-only URL (no path, just domain)
+  // Examples: "https://example.com" or "//example.com"
+  // In these cases, 'base' will be the domain like "example.com"
+  // We want to keep the full domain including TLD for clarity
+  const isDomainOnly = str.match(/^(?:https?:)?\/\/[^\/]+\/?$/);
+
+  // Only strip extension if this is NOT a domain-only URL
+  if (!isDomainOnly && base.lastIndexOf('.') !== -1) {
     base = base.substring(0, base.lastIndexOf('.'));
   }
   return base;

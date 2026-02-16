@@ -61,6 +61,7 @@ export type ShortSyntaxConfig = Readonly<{
   isEnableProject: boolean;
   isEnableDue: boolean;
   isEnableTag: boolean;
+  urlBehavior: 'extract' | 'keep-url' | 'keep-title';
 }>;
 
 export type TimeTrackingConfig = Readonly<{

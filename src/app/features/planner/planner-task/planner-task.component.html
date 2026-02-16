@@ -42,7 +42,11 @@
       <div class="parent-title">{{ parentTitle }}</div>
     }
 
-    <div class="title">{{ task.title }}</div>
+    <task-title
+      [value]="task.title"
+      [readonly]="true"
+      class="title"
+    ></task-title>
 
     <tag-list
       [isShowProjectTagAlways]="true"

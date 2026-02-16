@@ -9,6 +9,7 @@ import { Tag } from '../tag/tag.model';
 import { DEFAULT_TAG } from '../tag/tag.const';
 import { Project } from '../project/project.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { ShortSyntaxConfig } from '../config/global-config.model';
 import { INBOX_PROJECT } from '../project/project.const';
 
 const TASK: TaskCopy = {
@@ -47,7 +48,10 @@ const ALL_TAGS: Tag[] = [
   { ...DEFAULT_TAG, id: 'A_id', title: 'A' },
   { ...DEFAULT_TAG, id: 'multi_word_id', title: 'Multi Word Tag' },
 ];
-const CONFIG = DEFAULT_GLOBAL_CONFIG.shortSyntax;
+const CONFIG: ShortSyntaxConfig = {
+  ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+  urlBehavior: 'extract', // Tests expect extract mode by default
+};
 
 const getPlannedDateTimestampFromShortSyntaxReturnValue = async (
   taskInput: TaskCopy,
@@ -1248,6 +1252,7 @@ describe('shortSyntax', () => {
         isEnableDue: false,
         isEnableProject: false,
         isEnableTag: false,
+        urlBehavior: 'extract',
       });
       expect(r).toEqual(undefined);
     });
@@ -1626,6 +1631,241 @@ describe('shortSyntax', () => {
       expect(r?.attachments[0].path).toBe('https://example.com/projects/');
       expect(r?.attachments[0].title).toBe('projects');
       expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should not create duplicate attachments when URL already exists', async () => {
+      const existingAttachment = {
+        id: 'existing-1',
+        type: 'LINK' as const,
+        title: 'example',
+        path: 'https://example.com',
+        icon: 'bookmark',
+      };
+
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com again',
+        attachments: [existingAttachment],
+      };
+
+      const r = await shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments).toBeDefined();
+      // shortSyntax returns only NEW attachments (0 because duplicate filtered)
+      expect(r?.attachments.length).toBe(0);
+      expect(r?.taskChanges.title).toBe('Check again');
+    });
+
+    it('should add new URL even when task has other attachments', async () => {
+      const existingAttachment = {
+        id: 'existing-1',
+        type: 'LINK' as const,
+        title: 'old-site',
+        path: 'https://old-site.com',
+        icon: 'bookmark',
+      };
+
+      const t = {
+        ...TASK,
+        title: 'Task https://new-site.com',
+        attachments: [existingAttachment],
+      };
+
+      const r = await shortSyntax(t, CONFIG);
+      expect(r).toBeDefined();
+      expect(r?.attachments).toBeDefined();
+      // shortSyntax returns only NEW attachments (effects merges with existing)
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://new-site.com');
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+  });
+
+  describe('URL behavior modes', () => {
+    describe('extract mode (default)', () => {
+      it('should remove URLs from title and create attachments', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com');
+      });
+    });
+
+    describe('keep-url mode', () => {
+      it('should keep URL in title and create attachment', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check https://example.com');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].path).toBe('https://example.com');
+      });
+
+      it('should keep multiple URLs in title', async () => {
+        const t = {
+          ...TASK,
+          title: 'Compare https://site1.com and https://site2.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' });
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe(
+          'Compare https://site1.com and https://site2.com',
+        );
+        expect(r?.attachments.length).toBe(2);
+      });
+
+      it('should still work with short syntax tags and projects', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com #blu 30m',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' }, ALL_TAGS);
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBe('Check https://example.com');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.taskChanges.tagIds).toContain('blu_id');
+        expect(r?.taskChanges.timeEstimate).toBe(1800000);
+      });
+
+      it('should return undefined when URL already exists as attachment (prevent infinite loop)', async () => {
+        // This is critical for preventing infinite effect loops in keep-url mode
+        const existingAttachment = {
+          id: 'existing-1',
+          type: 'LINK' as const,
+          title: 'example',
+          path: 'https://example.com',
+          icon: 'bookmark',
+        };
+
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+          attachments: [existingAttachment],
+        };
+
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-url' });
+
+        // Should return undefined because:
+        // 1. Title is unchanged (URL stays in title in keep-url mode)
+        // 2. No new attachments (URL already exists)
+        // 3. Returning a result would trigger the effect again -> infinite loop
+        expect(r).toBeUndefined();
+      });
+    });
+
+    describe('keep-title mode', () => {
+      it('should replace URL with Markdown link using basename as title', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://example.com',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-title' });
+        expect(r).toBeDefined();
+        // keep-title mode replaces URL with Markdown link: [title](url)
+        // Title is basename since metadata service is not provided
+        // For domain-only URLs, keeps full domain (e.g., example.com) for clarity
+        expect(r?.taskChanges.title).toBe('Check [example.com](https://example.com)');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].title).toBe('example.com');
+      });
+
+      it('should handle URL with trailing slash correctly', async () => {
+        const t = {
+          ...TASK,
+          title: 'Check https://docs.python.org/3/',
+        };
+        const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-title' });
+        expect(r).toBeDefined();
+        // Should produce clean Markdown link, not malformed output
+        expect(r?.taskChanges.title).toBe('Check [3](https://docs.python.org/3/)');
+        expect(r?.attachments.length).toBe(1);
+        expect(r?.attachments[0].title).toBe('3');
+      });
+
+      it('should not double-process Markdown links if shortSyntax runs twice', async () => {
+        // First run: convert URL to Markdown
+        const t1 = {
+          ...TASK,
+          title: 'Check https://docs.python.org/3/',
+        };
+        const r1 = await shortSyntax(t1, { ...CONFIG, urlBehavior: 'keep-title' });
+        expect(r1?.taskChanges.title).toBe('Check [3](https://docs.python.org/3/)');
+
+        // Second run: process the already-processed title
+        // This simulates what might happen if shortSyntax is triggered again
+        const t2 = {
+          ...TASK,
+          title: r1!.taskChanges.title!, // 'Check [3](https://docs.python.org/3/)'
+          attachments: r1!.attachments,
+        };
+
+        const r2 = await shortSyntax(t2, { ...CONFIG, urlBehavior: 'keep-title' });
+
+        // Should return undefined (no changes needed - URL already in Markdown link)
+        expect(r2).toBeUndefined();
+      });
+
+      it('should sanitize malicious page titles to prevent markdown injection', async () => {
+        // Mock a URL metadata service that returns a malicious title
+        const mockMetadataService = {
+          fetchTitle: async (_url: string, _fallback: string) => {
+            // Malicious title tries to break markdown syntax and inject a JS link
+            return '][evil](javascript:alert(1)) [';
+          },
+          clearCache: () => {},
+        } as any;
+
+        const t = {
+          ...TASK,
+          title: 'Check https://evil.com',
+        };
+
+        const r = await shortSyntax(
+          t,
+          { ...CONFIG, urlBehavior: 'keep-title' },
+          undefined,
+          undefined,
+          undefined,
+          'combine',
+          mockMetadataService,
+        );
+
+        expect(r).toBeDefined();
+        expect(r?.taskChanges.title).toBeDefined();
+
+        const title = r!.taskChanges.title!;
+
+        // The key security check: the URL in the markdown link should be safe
+        const markdownLinkPattern = /\[([^\]]+)\]\(([^)]+)\)/;
+        const matches = title.match(markdownLinkPattern);
+
+        expect(matches).toBeTruthy();
+        if (matches) {
+          // The URL (second capture group) must be the legitimate URL, not javascript:
+          expect(matches[2]).toBe('https://evil.com');
+          expect(matches[2]).not.toContain('javascript:');
+
+          // The title (first capture group) should have markdown special chars removed
+          // The original malicious title was: '][evil](javascript:alert(1)) ['
+          // After sanitization it should have all []() removed: 'eviljavascript:alert1 '
+          expect(matches[1]).not.toContain('[');
+          expect(matches[1]).not.toContain(']');
+          expect(matches[1]).not.toContain('(');
+          expect(matches[1]).not.toContain(')');
+        }
+
+        // Verify the attachment also has the sanitized title
+        expect(r?.attachments[0].title).not.toContain('[');
+        expect(r?.attachments[0].title).not.toContain(']');
+      });
     });
   });
 });

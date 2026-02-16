@@ -51,13 +51,20 @@ export class AddTaskBarParserService {
 
     // Get current tags from state to preserve pre-selected tags
     const currentState = this._stateService.state();
+
+    // In keep-title mode, use keep-url for preview to avoid fetching metadata
+    // The effect will convert to markdown with fetched title when task is created
+    const previewUrlBehavior =
+      config.urlBehavior === 'keep-title' ? 'keep-url' : config.urlBehavior;
+
     const parseResult = await shortSyntax(
       { title: text, tagIds: currentState.tagIdsFromTxt },
-      config,
+      { ...config, urlBehavior: previewUrlBehavior },
       allTags,
       allProjects,
       undefined,
       'replace',
+      undefined, // Don't fetch URL metadata during preview - only when task is created
     );
 
     // Create current parse result data structure
