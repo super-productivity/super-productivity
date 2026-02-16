@@ -2077,8 +2077,9 @@
       "IS_ENABLE_TAG": "Enable tag short syntax (#<tag>)",
       "TITLE": "Short Syntax",
       "URL_BEHAVIOR_LABEL": "URL behavior when adding tasks",
-      "URL_BEHAVIOR_KEEP_URL": "Keep URL in title (also add as attachment)",
-      "URL_BEHAVIOR_EXTRACT": "Extract URL to attachment (remove from title)"
+      "URL_BEHAVIOR_KEEP": "Keep URL in task title",
+      "URL_BEHAVIOR_EXTRACT": "Extract URL to attachments",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Keep URL in task title and add to attachments"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Take a break reminder sound",

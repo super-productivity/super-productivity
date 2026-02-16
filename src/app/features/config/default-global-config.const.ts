@@ -61,7 +61,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableProject: true,
     isEnableDue: true,
     isEnableTag: true,
-    urlBehavior: 'keep-url',
+    urlBehavior: 'keep',
   },
   evaluation: {
     isHideEvaluationSheet: false,

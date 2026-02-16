@@ -144,6 +144,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.tasks,
         ...appDataComplete.globalConfig.tasks,
       },
+      shortSyntax: {
+        ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
+        ...appDataComplete.globalConfig.shortSyntax,
+      },
       sync: {
         ...incomingSyncConfig,
         syncProvider,

@@ -504,6 +504,12 @@ const parseUrlAttachments = (
     return undefined;
   }
 
+  // Handle 'keep' mode: no changes, URL stays in title, no attachment
+  // Default to 'keep' if urlBehavior is undefined
+  if (!config.urlBehavior || config.urlBehavior === 'keep') {
+    return undefined;
+  }
+
   // Filter out attachments that already exist (prevent duplicates)
   const newAttachments = filterDuplicateUrlAttachments(
     urlMatches,
