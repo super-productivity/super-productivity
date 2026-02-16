@@ -422,6 +422,38 @@ describe('CalendarGestureHandler', () => {
       expect(cb.onVerticalSwipe).not.toHaveBeenCalled();
     });
 
+    it('should recover _isSnapping when snapTo callback throws', () => {
+      cb.onExpandChanged.and.throwError('test error');
+
+      expect(() => {
+        handler.snapTo(true);
+        jasmine.clock().tick(SNAP_DURATION + 15);
+      }).toThrowError('test error');
+
+      // _isSnapping should be reset despite the error
+      el.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      el.dispatchEvent(makeTouchEvent('touchmove', 250, 100));
+      el.dispatchEvent(makeTouchEvent('touchend', 250, 100));
+
+      expect(cb.onHorizontalSwipe).toHaveBeenCalledTimes(1);
+    });
+
+    it('should recover _isSnapping when slideContent callback throws', () => {
+      const throwingUpdate = jasmine.createSpy('onUpdate').and.throwError('test error');
+
+      expect(() => {
+        handler.slideContent(1, throwingUpdate, 'x');
+        jasmine.clock().tick(SLIDE_DURATION + 15);
+      }).toThrowError('test error');
+
+      // _isSnapping should be reset despite the error
+      el.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      el.dispatchEvent(makeTouchEvent('touchmove', 250, 100));
+      el.dispatchEvent(makeTouchEvent('touchend', 250, 100));
+
+      expect(cb.onHorizontalSwipe).toHaveBeenCalledTimes(1);
+    });
+
     it('should allow gestures after slideContent animation completes', () => {
       handler.slideContent(1, () => {}, 'x');
 
@@ -447,6 +479,41 @@ describe('CalendarGestureHandler', () => {
       handleEl = document.createElement('div');
       handleEl.classList.add('handle');
       el.appendChild(handleEl);
+    });
+
+    it('should preventDefault on handle touchmove before drag threshold', () => {
+      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      const moveEvent = makeTouchEvent('touchmove', 100, 102);
+      spyOn(moveEvent, 'preventDefault');
+      handleEl.dispatchEvent(moveEvent);
+
+      expect(moveEvent.preventDefault).toHaveBeenCalled();
+    });
+
+    it('should not throw on non-cancelable touchmove', () => {
+      handleEl.dispatchEvent(makeTouchEvent('touchstart', 100, 100));
+      const nonCancelable = new TouchEvent('touchmove', {
+        bubbles: true,
+        cancelable: false,
+        touches: [
+          new Touch({
+            identifier: ++touchIdCounter,
+            target: document.body,
+            clientX: 100,
+            clientY: 200,
+          }),
+        ],
+        changedTouches: [
+          new Touch({
+            identifier: touchIdCounter,
+            target: document.body,
+            clientX: 100,
+            clientY: 200,
+          }),
+        ],
+      });
+
+      expect(() => handleEl.dispatchEvent(nonCancelable)).not.toThrow();
     });
 
     it('should snap to expanded when dragging down past midpoint from collapsed', () => {

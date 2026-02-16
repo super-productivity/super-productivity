@@ -67,18 +67,20 @@ export class CalendarGestureHandler {
     }
 
     setTimeout(() => {
-      weeksEl.style.transition = '';
-      weeksEl.style.maxHeight = '';
-      if (innerEl) {
-        innerEl.style.transition = '';
-        innerEl.style.transform = '';
+      try {
+        weeksEl.style.transition = '';
+        weeksEl.style.maxHeight = '';
+        if (innerEl) {
+          innerEl.style.transition = '';
+          innerEl.style.transform = '';
+        }
+
+        this._cb.onExpandChanged(expanded);
+        this._cb.detectChanges();
+      } finally {
+        this._isDragging = false;
+        this._isSnapping = false;
       }
-
-      this._cb.onExpandChanged(expanded);
-      this._cb.detectChanges();
-
-      this._isDragging = false;
-      this._isSnapping = false;
     }, SNAP_DURATION + 10);
   }
 
@@ -97,25 +99,30 @@ export class CalendarGestureHandler {
     innerEl.style.translate = slideOut;
 
     setTimeout(() => {
-      innerEl.style.transition = 'none';
-      onUpdate();
-      this._cb.detectChanges();
+      try {
+        innerEl.style.transition = 'none';
+        onUpdate();
+        this._cb.detectChanges();
 
-      const inv = `${-sign * 100}%`;
-      const slideIn = axis === 'x' ? `${inv} 0` : `0 ${inv}`;
-      innerEl.style.translate = slideIn;
+        const inv = `${-sign * 100}%`;
+        const slideIn = axis === 'x' ? `${inv} 0` : `0 ${inv}`;
+        innerEl.style.translate = slideIn;
 
-      // Force reflow so the position change applies before transition
-      void innerEl.offsetWidth;
+        // Force reflow so the position change applies before transition
+        void innerEl.offsetWidth;
 
-      innerEl.style.transition = `translate ${SLIDE_DURATION}ms ease-out`;
-      innerEl.style.translate = '0 0';
+        innerEl.style.transition = `translate ${SLIDE_DURATION}ms ease-out`;
+        innerEl.style.translate = '0 0';
 
-      setTimeout(() => {
-        innerEl.style.transition = '';
-        innerEl.style.translate = '';
+        setTimeout(() => {
+          innerEl.style.transition = '';
+          innerEl.style.translate = '';
+          this._isSnapping = false;
+        }, SLIDE_DURATION + 10);
+      } catch (e) {
         this._isSnapping = false;
-      }, SLIDE_DURATION + 10);
+        throw e;
+      }
     }, SLIDE_DURATION + 10);
   }
 
@@ -136,27 +143,27 @@ export class CalendarGestureHandler {
     const deltaY = touch.clientY - this._touchStartY;
 
     if (this._touchOnHandle) {
+      if (e.cancelable) e.preventDefault();
       if (!this._isDragging) {
         if (Math.abs(deltaY) < 5) return;
         this._startDrag();
       }
-      e.preventDefault();
       this._updateDrag(deltaY);
       return;
     }
 
     if (this._gestureClaimed) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       return;
     }
     const absDeltaY = Math.abs(deltaY);
     const absDeltaX = Math.abs(touch.clientX - this._touchStartX);
 
     if (absDeltaY > absDeltaX * DIRECTION_RATIO) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       this._gestureClaimed = 'v';
     } else if (absDeltaX > absDeltaY * DIRECTION_RATIO) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       this._gestureClaimed = 'h';
     }
   };
@@ -165,7 +172,7 @@ export class CalendarGestureHandler {
     if (this._isSnapping) return;
 
     if (this._touchOnHandle) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       if (this._isDragging) {
         const touch = e.changedTouches[0];
         const deltaY = touch.clientY - this._touchStartY;
