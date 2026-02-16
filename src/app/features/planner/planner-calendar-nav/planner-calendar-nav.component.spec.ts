@@ -86,9 +86,12 @@ describe('PlannerCalendarNavComponent', () => {
     });
 
     it('should mark past days as isPast', () => {
+      mockTodayDateStr.set('2026-02-18');
+      fixture.detectChanges();
+
       const weeks = component.weeks();
       const allDays = weeks.flat();
-      const pastDay = allDays.find((d) => d.dateStr === '2026-02-15');
+      const pastDay = allDays.find((d) => d.dateStr === '2026-02-16');
 
       expect(pastDay).toBeTruthy();
       expect(pastDay!.isPast).toBeTrue();
@@ -136,8 +139,9 @@ describe('PlannerCalendarNavComponent', () => {
       for (let i = 1; i < allDays.length; i++) {
         const prev = parseDbDateStr(allDays[i - 1].dateStr);
         const curr = parseDbDateStr(allDays[i].dateStr);
-        const diffMs = curr.getTime() - prev.getTime();
-        expect(diffMs).toBe(86_400_000);
+        const prevUTC = Date.UTC(prev.getFullYear(), prev.getMonth(), prev.getDate());
+        const currUTC = Date.UTC(curr.getFullYear(), curr.getMonth(), curr.getDate());
+        expect(currUTC - prevUTC).toBe(86_400_000);
       }
     });
   });
