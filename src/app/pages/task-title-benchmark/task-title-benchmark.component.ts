@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TaskTitleComponent } from '../../ui/task-title/task-title.component';
 import { MatButtonModule } from '@angular/material/button';
@@ -31,7 +31,7 @@ interface BenchmarkResult {
   templateUrl: './task-title-benchmark.component.html',
   styleUrl: './task-title-benchmark.component.scss',
 })
-export class TaskTitleBenchmarkComponent implements OnInit {
+export class TaskTitleBenchmarkComponent {
   readonly tasks = signal<BenchmarkTask[]>([]);
   readonly isRunning = signal(false);
   readonly results = signal<BenchmarkResult | null>(null);
@@ -39,10 +39,6 @@ export class TaskTitleBenchmarkComponent implements OnInit {
 
   private readonly TASK_COUNT = 5000;
   private readonly TASKS_PER_TYPE = Math.floor(this.TASK_COUNT / 3);
-
-  ngOnInit(): void {
-    this.generateTasks();
-  }
 
   private generateTasks(): void {
     const tasks: BenchmarkTask[] = [];
@@ -93,16 +89,31 @@ export class TaskTitleBenchmarkComponent implements OnInit {
     this.isRunning.set(true);
     this.results.set(null);
 
-    // Wait for UI to update
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Clear any existing tasks first
+    this.tasks.set([]);
 
+    // Wait for UI to update (clear the list)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // Start timing BEFORE generating tasks
     const startTime = performance.now();
 
-    // Trigger change detection to render all tasks
-    // Force a reflow to ensure rendering is complete
+    // Generate tasks - this triggers Angular change detection
+    this.generateTasks();
+
+    // Wait for Angular to render the tasks
+    // Use double requestAnimationFrame to ensure layout is complete
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          resolve(undefined);
+        });
+      });
+    });
+
+    // Force a layout calculation to ensure everything is painted
     const container = document.querySelector('.task-list-container');
     if (container) {
-      // Force layout calculation
       void container.getBoundingClientRect();
     }
 
@@ -181,7 +192,7 @@ export class TaskTitleBenchmarkComponent implements OnInit {
 
   reset(): void {
     this.results.set(null);
-    this.generateTasks();
+    this.tasks.set([]);
   }
 
   getTasksByType(type: BenchmarkTask['type']): number {
