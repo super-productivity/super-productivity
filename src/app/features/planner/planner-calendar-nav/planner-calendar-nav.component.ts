@@ -13,8 +13,9 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { DateAdapter } from '@angular/material/core';
 import { DateService } from '../../../core/date/date.service';
+import { DEFAULT_FIRST_DAY_OF_WEEK } from '../../../core/locale.constants';
+import { GlobalConfigService } from '../../config/global-config.service';
 import { getWeekRange } from '../../../util/get-week-range';
 import { getWeekdaysMin } from '../../../util/get-weekdays-min';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -48,11 +49,16 @@ const DIRECTION_RATIO = 1.5;
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PlannerCalendarNavComponent {
-  private _dateAdapter = inject(DateAdapter);
+  private _globalConfigService = inject(GlobalConfigService);
   private _dateService = inject(DateService);
   private _cdr = inject(ChangeDetectorRef);
   private _elRef = inject(ElementRef);
   private _destroyRef = inject(DestroyRef);
+
+  private _firstDayOfWeek = computed(() => {
+    const cfg = this._globalConfigService.localization()?.firstDayOfWeek;
+    return cfg !== null && cfg !== undefined ? cfg : DEFAULT_FIRST_DAY_OF_WEEK;
+  });
 
   visibleDayDate = input<string | null>(null);
   daysWithTasks = input<ReadonlySet<string>>(new Set());
@@ -80,7 +86,7 @@ export class PlannerCalendarNavComponent {
   private _weeksEl = viewChild<ElementRef<HTMLElement>>('weeksContainer');
 
   dayLabels = computed(() => {
-    const firstDay = this._dateAdapter.getFirstDayOfWeek();
+    const firstDay = this._firstDayOfWeek();
     const allDays = getWeekdaysMin();
     const ordered: string[] = [];
     for (let i = 0; i < 7; i++) {
@@ -96,8 +102,7 @@ export class PlannerCalendarNavComponent {
 
     const weekStart = anchor
       ? parseDbDateStr(anchor)
-      : getWeekRange(parseDbDateStr(todayStr), this._dateAdapter.getFirstDayOfWeek())
-          .start;
+      : getWeekRange(parseDbDateStr(todayStr), this._firstDayOfWeek()).start;
 
     const weeks: CalendarDay[][] = [];
     const cursor = new Date(weekStart);
@@ -167,7 +172,7 @@ export class PlannerCalendarNavComponent {
     // Keep anchor in sync when visibleDayDate moves outside the current 5-week window
     effect(() => {
       const visibleDay = this.visibleDayDate() || this._dateService.todayStr();
-      const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
+      const firstDayOfWeek = this._firstDayOfWeek();
       const visibleDate = parseDbDateStr(visibleDay);
       const anchor = untracked(() => this._anchorWeekStart());
 
@@ -394,17 +399,14 @@ export class PlannerCalendarNavComponent {
     const midWeek = allWeeks[Math.floor(allWeeks.length / 2)];
     const midDate = parseDbDateStr(midWeek[Math.floor(midWeek.length / 2)].dateStr);
     const firstOfMonth = new Date(midDate.getFullYear(), midDate.getMonth() + dir, 1);
-    const weekStart = getWeekRange(
-      firstOfMonth,
-      this._dateAdapter.getFirstDayOfWeek(),
-    ).start;
+    const weekStart = getWeekRange(firstOfMonth, this._firstDayOfWeek()).start;
     this._setAnchorClamped(weekStart, this._getTodayWeekStart());
   }
 
   private _getTodayWeekStart(): Date {
     return getWeekRange(
       parseDbDateStr(this._dateService.todayStr()),
-      this._dateAdapter.getFirstDayOfWeek(),
+      this._firstDayOfWeek(),
     ).start;
   }
 
