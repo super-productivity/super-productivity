@@ -8,7 +8,6 @@ import {
   ElementRef,
   inject,
   input,
-  NgZone,
   output,
   signal,
   untracked,
@@ -53,7 +52,6 @@ export class PlannerCalendarNavComponent {
   private _dateService = inject(DateService);
   private _cdr = inject(ChangeDetectorRef);
   private _elRef = inject(ElementRef);
-  private _zone = inject(NgZone);
   private _destroyRef = inject(DestroyRef);
 
   visibleDayDate = input<string | null>(null);
@@ -94,8 +92,6 @@ export class PlannerCalendarNavComponent {
   weeks = computed<CalendarDay[][]>(() => {
     const anchor = this._anchorWeekStart();
     const todayStr = this._dateService.todayStr();
-    const todayDate = parseDbDateStr(todayStr);
-    todayDate.setHours(0, 0, 0, 0);
     const taskDays = this.daysWithTasks();
 
     const weekStart = anchor
@@ -109,13 +105,11 @@ export class PlannerCalendarNavComponent {
       const week: CalendarDay[] = [];
       for (let d = 0; d < 7; d++) {
         const dateStr = getDbDateStr(cursor);
-        const dayDate = new Date(cursor);
-        dayDate.setHours(0, 0, 0, 0);
         week.push({
           dateStr,
           dayOfMonth: cursor.getDate(),
           isToday: dateStr === todayStr,
-          isPast: dayDate < todayDate,
+          isPast: dateStr < todayStr,
           hasTasks: taskDays.has(dateStr),
         });
         cursor.setDate(cursor.getDate() + 1);
@@ -195,122 +189,120 @@ export class PlannerCalendarNavComponent {
       untracked(() => this._displayedRow.set(null));
     });
 
-    this._zone.runOutsideAngular(() => {
-      const el = this._elRef.nativeElement as HTMLElement;
+    const el = this._elRef.nativeElement as HTMLElement;
 
-      const onTouchStart = (e: TouchEvent): void => {
-        if (this._isSnapping) return;
-        const touch = e.touches[0];
-        this._touchStartY = touch.clientY;
-        this._touchStartX = touch.clientX;
-        this._touchStartTime = Date.now();
-        this._gestureClaimed = null;
-        this._isDragging = false;
-        this._touchOnHandle = !!(e.target as HTMLElement).closest('.handle');
-      };
+    const onTouchStart = (e: TouchEvent): void => {
+      if (this._isSnapping) return;
+      const touch = e.touches[0];
+      this._touchStartY = touch.clientY;
+      this._touchStartX = touch.clientX;
+      this._touchStartTime = Date.now();
+      this._gestureClaimed = null;
+      this._isDragging = false;
+      this._touchOnHandle = !!(e.target as HTMLElement).closest('.handle');
+    };
 
-      const onTouchMove = (e: TouchEvent): void => {
-        if (this._isSnapping) return;
-        const touch = e.touches[0];
-        const deltaY = touch.clientY - this._touchStartY;
+    const onTouchMove = (e: TouchEvent): void => {
+      if (this._isSnapping) return;
+      const touch = e.touches[0];
+      const deltaY = touch.clientY - this._touchStartY;
 
-        // --- Handle drag path ---
-        if (this._touchOnHandle) {
-          if (!this._isDragging) {
-            if (Math.abs(deltaY) < 5) return;
-            this._startDrag();
-          }
-          e.preventDefault();
-          this._updateDrag(deltaY);
-          return;
+      // --- Handle drag path ---
+      if (this._touchOnHandle) {
+        if (!this._isDragging) {
+          if (Math.abs(deltaY) < 5) return;
+          this._startDrag();
         }
+        e.preventDefault();
+        this._updateDrag(deltaY);
+        return;
+      }
 
-        // --- Calendar area: detect swipe direction ---
-        if (this._gestureClaimed) {
-          e.preventDefault();
-          return;
-        }
-        const absDeltaY = Math.abs(deltaY);
-        const absDeltaX = Math.abs(touch.clientX - this._touchStartX);
+      // --- Calendar area: detect swipe direction ---
+      if (this._gestureClaimed) {
+        e.preventDefault();
+        return;
+      }
+      const absDeltaY = Math.abs(deltaY);
+      const absDeltaX = Math.abs(touch.clientX - this._touchStartX);
 
-        if (absDeltaY > absDeltaX * DIRECTION_RATIO) {
-          e.preventDefault();
-          this._gestureClaimed = 'v';
-        } else if (absDeltaX > absDeltaY * DIRECTION_RATIO) {
-          e.preventDefault();
-          this._gestureClaimed = 'h';
-        }
-      };
+      if (absDeltaY > absDeltaX * DIRECTION_RATIO) {
+        e.preventDefault();
+        this._gestureClaimed = 'v';
+      } else if (absDeltaX > absDeltaY * DIRECTION_RATIO) {
+        e.preventDefault();
+        this._gestureClaimed = 'h';
+      }
+    };
 
-      const onTouchEnd = (e: TouchEvent): void => {
-        if (this._isSnapping) return;
+    const onTouchEnd = (e: TouchEvent): void => {
+      if (this._isSnapping) return;
 
-        // --- Handle touch ---
-        if (this._touchOnHandle) {
-          e.preventDefault();
-          if (this._isDragging) {
-            const touch = e.changedTouches[0];
-            const deltaY = touch.clientY - this._touchStartY;
-            const elapsed = Date.now() - this._touchStartTime;
-            const velocity = deltaY / Math.max(elapsed, 1);
-            const currentHeight = Math.max(
-              MIN_HEIGHT,
-              Math.min(MAX_HEIGHT, this._dragStartHeight + deltaY),
-            );
+      // --- Handle touch ---
+      if (this._touchOnHandle) {
+        e.preventDefault();
+        if (this._isDragging) {
+          const touch = e.changedTouches[0];
+          const deltaY = touch.clientY - this._touchStartY;
+          const elapsed = Date.now() - this._touchStartTime;
+          const velocity = deltaY / Math.max(elapsed, 1);
+          const currentHeight = Math.max(
+            MIN_HEIGHT,
+            Math.min(MAX_HEIGHT, this._dragStartHeight + deltaY),
+          );
 
-            let snapExpanded: boolean;
-            if (Math.abs(velocity) > SNAP_VELOCITY) {
-              snapExpanded = velocity > 0;
-            } else {
-              snapExpanded = currentHeight > SNAP_MIDPOINT;
-            }
-            this._snapTo(snapExpanded);
+          let snapExpanded: boolean;
+          if (Math.abs(velocity) > SNAP_VELOCITY) {
+            snapExpanded = velocity > 0;
           } else {
-            // Tap on handle (no drag) → toggle
-            this.isExpanded.set(!this.isExpanded());
-            this._cdr.detectChanges();
+            snapExpanded = currentHeight > SNAP_MIDPOINT;
           }
-          return;
-        }
-
-        // --- Calendar area swipe ---
-        if (!this._gestureClaimed) return;
-        const touch = e.changedTouches[0];
-        const deltaY = touch.clientY - this._touchStartY;
-        const deltaX = touch.clientX - this._touchStartX;
-        const elapsed = Date.now() - this._touchStartTime;
-
-        if (this._gestureClaimed === 'v') {
-          const velocity = Math.abs(deltaY) / Math.max(elapsed, 1);
-          const isSwipe =
-            Math.abs(deltaY) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
-          if (isSwipe) {
-            this._handleVerticalSwipe(deltaY > 0);
-          }
+          this._snapTo(snapExpanded);
         } else {
-          const velocity = Math.abs(deltaX) / Math.max(elapsed, 1);
-          const isSwipe =
-            Math.abs(deltaX) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
-          if (isSwipe) {
-            const dir: 1 | -1 = deltaX < 0 ? 1 : -1;
-            if (this.isExpanded()) {
-              if (dir === -1 && this._isAtPastLimit()) return;
-              this._slideContent(dir, () => this._shiftToMonth(dir), 'x');
-            } else {
-              this._slideCollapsedWeek(dir);
-            }
+          // Tap on handle (no drag) → toggle
+          this.isExpanded.set(!this.isExpanded());
+          this._cdr.detectChanges();
+        }
+        return;
+      }
+
+      // --- Calendar area swipe ---
+      if (!this._gestureClaimed) return;
+      const touch = e.changedTouches[0];
+      const deltaY = touch.clientY - this._touchStartY;
+      const deltaX = touch.clientX - this._touchStartX;
+      const elapsed = Date.now() - this._touchStartTime;
+
+      if (this._gestureClaimed === 'v') {
+        const velocity = Math.abs(deltaY) / Math.max(elapsed, 1);
+        const isSwipe =
+          Math.abs(deltaY) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
+        if (isSwipe) {
+          this._handleVerticalSwipe(deltaY > 0);
+        }
+      } else {
+        const velocity = Math.abs(deltaX) / Math.max(elapsed, 1);
+        const isSwipe =
+          Math.abs(deltaX) > SWIPE_THRESHOLD || velocity > SWIPE_VELOCITY_THRESHOLD;
+        if (isSwipe) {
+          const dir: 1 | -1 = deltaX < 0 ? 1 : -1;
+          if (this.isExpanded()) {
+            if (dir === -1 && this._isAtPastLimit()) return;
+            this._slideContent(dir, () => this._shiftToMonth(dir), 'x');
+          } else {
+            this._slideCollapsedWeek(dir);
           }
         }
-      };
+      }
+    };
 
-      el.addEventListener('touchstart', onTouchStart, { passive: true });
-      el.addEventListener('touchmove', onTouchMove, { passive: false });
-      el.addEventListener('touchend', onTouchEnd);
-      this._destroyRef.onDestroy(() => {
-        el.removeEventListener('touchstart', onTouchStart);
-        el.removeEventListener('touchmove', onTouchMove);
-        el.removeEventListener('touchend', onTouchEnd);
-      });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+    this._destroyRef.onDestroy(() => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
     });
   }
 
@@ -354,12 +346,26 @@ export class PlannerCalendarNavComponent {
         'x',
       );
     } else {
-      // Before the start — shift anchor backward and show last week
+      // Before the start — shift anchor backward
       this._slideContent(
         dir,
         () => {
+          const oldAnchorStr = this._anchorWeekStart();
           this._shiftAnchor(-DAYS_IN_VIEW);
-          this._displayedRow.set(WEEKS_SHOWN - 1);
+          const newAnchorStr = this._anchorWeekStart();
+          // Calculate correct row: anchor may have been clamped to today's week
+          if (oldAnchorStr && newAnchorStr) {
+            const diffDays = Math.round(
+              (parseDbDateStr(oldAnchorStr).getTime() -
+                parseDbDateStr(newAnchorStr).getTime()) /
+                86_400_000,
+            );
+            this._displayedRow.set(
+              Math.max(0, Math.min(WEEKS_SHOWN - 1, Math.floor(diffDays / 7) - 1)),
+            );
+          } else {
+            this._displayedRow.set(WEEKS_SHOWN - 1);
+          }
         },
         'x',
       );
@@ -367,29 +373,19 @@ export class PlannerCalendarNavComponent {
   }
 
   private _isAtPastLimit(): boolean {
-    const todayStr = this._dateService.todayStr();
-    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-    const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
+    const todayWeekStart = this._getTodayWeekStart();
     const currentAnchor = this._anchorWeekStart();
     const anchorDate = currentAnchor ? parseDbDateStr(currentAnchor) : todayWeekStart;
     return anchorDate <= todayWeekStart;
   }
 
   private _shiftAnchor(dayOffset: number): void {
-    const todayStr = this._dateService.todayStr();
-    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-    const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
-
+    const todayWeekStart = this._getTodayWeekStart();
     const currentAnchor = this._anchorWeekStart();
     const anchorDate = currentAnchor ? parseDbDateStr(currentAnchor) : todayWeekStart;
     const newAnchor = new Date(anchorDate);
     newAnchor.setDate(newAnchor.getDate() + dayOffset);
-
-    if (newAnchor < todayWeekStart) {
-      this._anchorWeekStart.set(getDbDateStr(todayWeekStart));
-      return;
-    }
-    this._anchorWeekStart.set(getDbDateStr(newAnchor));
+    this._setAnchorClamped(newAnchor, todayWeekStart);
   }
 
   /** Set anchor to the week containing the 1st of the next/previous month */
@@ -397,19 +393,23 @@ export class PlannerCalendarNavComponent {
     const allWeeks = this.weeks();
     const midWeek = allWeeks[Math.floor(allWeeks.length / 2)];
     const midDate = parseDbDateStr(midWeek[Math.floor(midWeek.length / 2)].dateStr);
-
     const firstOfMonth = new Date(midDate.getFullYear(), midDate.getMonth() + dir, 1);
-    const firstDayOfWeek = this._dateAdapter.getFirstDayOfWeek();
-    const weekStart = getWeekRange(firstOfMonth, firstDayOfWeek).start;
+    const weekStart = getWeekRange(
+      firstOfMonth,
+      this._dateAdapter.getFirstDayOfWeek(),
+    ).start;
+    this._setAnchorClamped(weekStart, this._getTodayWeekStart());
+  }
 
-    const todayStr = this._dateService.todayStr();
-    const todayWeekStart = getWeekRange(parseDbDateStr(todayStr), firstDayOfWeek).start;
+  private _getTodayWeekStart(): Date {
+    return getWeekRange(
+      parseDbDateStr(this._dateService.todayStr()),
+      this._dateAdapter.getFirstDayOfWeek(),
+    ).start;
+  }
 
-    if (weekStart < todayWeekStart) {
-      this._anchorWeekStart.set(getDbDateStr(todayWeekStart));
-    } else {
-      this._anchorWeekStart.set(getDbDateStr(weekStart));
-    }
+  private _setAnchorClamped(target: Date, floor: Date): void {
+    this._anchorWeekStart.set(getDbDateStr(target < floor ? floor : target));
   }
 
   private _startDrag(): void {
@@ -436,10 +436,10 @@ export class PlannerCalendarNavComponent {
   }
 
   private _snapTo(expanded: boolean): void {
-    this._isSnapping = true;
     const weeksEl = this._weeksEl()?.nativeElement;
     if (!weeksEl) return;
     const innerEl = weeksEl.firstElementChild as HTMLElement;
+    this._isSnapping = true;
 
     const targetHeight = expanded ? MAX_HEIGHT : MIN_HEIGHT;
     const idx = this._dragActiveIdx;
@@ -471,11 +471,11 @@ export class PlannerCalendarNavComponent {
 
   /** Slide content out, run update callback, slide new content in */
   private _slideContent(direction: 1 | -1, onUpdate: () => void, axis: 'x' | 'y'): void {
-    this._isSnapping = true;
     const weeksEl = this._weeksEl()?.nativeElement;
     if (!weeksEl) return;
     const innerEl = weeksEl.firstElementChild as HTMLElement;
     if (!innerEl) return;
+    this._isSnapping = true;
 
     // For x: direction 1 → slide left (-100%), -1 → slide right (100%)
     // For y: direction 1 → slide down (100%), -1 → slide up (-100%)
