@@ -37,7 +37,7 @@ export class TaskTitleBenchmarkComponent implements OnInit {
   readonly results = signal<BenchmarkResult | null>(null);
   readonly linkRenderingEnabled = signal(false);
 
-  private readonly TASK_COUNT = 1000;
+  private readonly TASK_COUNT = 5000;
   private readonly TASKS_PER_TYPE = Math.floor(this.TASK_COUNT / 3);
 
   ngOnInit(): void {
@@ -186,5 +186,27 @@ export class TaskTitleBenchmarkComponent implements OnInit {
 
   getTasksByType(type: BenchmarkTask['type']): number {
     return this.tasks().filter((t) => t.type === type).length;
+  }
+
+  copyResults(): void {
+    const results = this.results();
+    if (!results) {
+      return;
+    }
+
+    const text = `Initial Render Time: ${results.renderTimeMs.toFixed(2)} ms
+Average FPS (scrolling): ${results.avgFps.toFixed(1)}
+Min FPS: ${results.minFps.toFixed(1)}
+Max FPS: ${results.maxFps.toFixed(1)}
+Link Rendering: ${this.linkRenderingEnabled() ? 'ON' : 'OFF'}`;
+
+    navigator.clipboard.writeText(text).then(
+      () => {
+        console.log('Results copied to clipboard');
+      },
+      (err) => {
+        console.error('Failed to copy results:', err);
+      },
+    );
   }
 }

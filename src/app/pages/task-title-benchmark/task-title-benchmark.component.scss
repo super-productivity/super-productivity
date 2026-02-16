@@ -43,6 +43,16 @@
   }
 }
 
+.results-text {
+  font-family: monospace;
+  background-color: var(--c-dark-100);
+  padding: 12px;
+  border-radius: 4px;
+  margin: 12px 0;
+  white-space: pre;
+  user-select: all;
+}
+
 .task-list-container {
   flex: 1;
   overflow-y: auto;

@@ -45,15 +45,19 @@
       @if (results()) {
         <div class="results">
           <h3>Results</h3>
-          <p>
-            <strong>Initial Render Time:</strong>
-            {{ results()!.renderTimeMs.toFixed(2) }} ms
-          </p>
-          <p>
-            <strong>Average FPS (scrolling):</strong> {{ results()!.avgFps.toFixed(1) }}
-          </p>
-          <p><strong>Min FPS:</strong> {{ results()!.minFps.toFixed(1) }}</p>
-          <p><strong>Max FPS:</strong> {{ results()!.maxFps.toFixed(1) }}</p>
+          <pre class="results-text">
+Initial Render Time: {{ results()!.renderTimeMs.toFixed(2) }} ms
+Average FPS (scrolling): {{ results()!.avgFps.toFixed(1) }}
+Min FPS: {{ results()!.minFps.toFixed(1) }}
+Max FPS: {{ results()!.maxFps.toFixed(1) }}
+Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}</pre
+          >
+          <button
+            mat-raised-button
+            (click)="copyResults()"
+          >
+            Copy Results
+          </button>
         </div>
       }
     </mat-card-content>
