@@ -1,3 +1,7 @@
+<div class="month-label">
+  {{ monthLabel() }}
+</div>
+
 <div class="day-labels">
   @for (label of dayLabels(); track $index) {
     <div>{{ label }}</div>
@@ -5,6 +9,8 @@
 </div>
 <div
   class="weeks"
+  #weeksContainer
+  [class.is-expanded]="isExpanded()"
   [style.max-height.px]="maxHeight()"
 >
   <div
@@ -31,4 +37,7 @@
     }
   </div>
 </div>
-<div class="handle"></div>
+<div
+  class="handle"
+  (click)="onHandleClick()"
+></div>

@@ -5,6 +5,13 @@
   user-select: none;
 }
 
+.month-label {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 4px 8px;
+  text-align: center;
+}
+
 .day-labels,
 .week {
   display: grid;
@@ -20,11 +27,15 @@
 
 .weeks {
   overflow: hidden;
-  transition: max-height 250ms ease;
-}
 
-.weeks-inner {
-  transition: transform 250ms ease;
+  &.is-expanded {
+    overflow-y: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
 }
 
 .week button {
@@ -77,9 +88,16 @@
 }
 
 .handle {
-  width: 32px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--text-muted, rgba(255, 255, 255, 0.3));
-  margin: 4px auto 6px;
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+  cursor: pointer;
+
+  &::after {
+    content: '';
+    width: 32px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--text-muted, rgba(255, 255, 255, 0.3));
+  }
 }
