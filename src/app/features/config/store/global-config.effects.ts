@@ -6,7 +6,7 @@ import { Store } from '@ngrx/store';
 import { IS_ELECTRON } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { LanguageService } from '../../../core/language/language.service';
-import { DateService } from 'src/app/core/date/date.service';
+import { DateService } from '../../../core/date/date.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
@@ -108,30 +108,34 @@ export class GlobalConfigEffects {
         ({ sectionCfg }) =>
           sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
       ),
-      map(({ sectionCfg }) => {
+      tap(({ sectionCfg }) => {
         this._dateService.setStartOfNextDayDiff(
           (sectionCfg as MiscConfig).startOfNextDay,
         );
-        return AppStateActions.setTodayString({
+      }),
+      map(() =>
+        AppStateActions.setTodayString({
           todayStr: this._dateService.todayStr(),
           startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
-        });
-      }),
+        }),
+      ),
     ),
   );
 
   setStartOfNextDayDiffOnLoad = createEffect(() =>
     this._actions$.pipe(
       ofType(loadAllData),
-      map(({ appDataComplete }) => {
+      tap(({ appDataComplete }) => {
         const cfg = appDataComplete.globalConfig || DEFAULT_GLOBAL_CONFIG;
         const startOfNextDay = cfg && cfg.misc && cfg.misc.startOfNextDay;
         this._dateService.setStartOfNextDayDiff(startOfNextDay);
-        return AppStateActions.setTodayString({
+      }),
+      map(() =>
+        AppStateActions.setTodayString({
           todayStr: this._dateService.todayStr(),
           startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
-        });
-      }),
+        }),
+      ),
     ),
   );
 

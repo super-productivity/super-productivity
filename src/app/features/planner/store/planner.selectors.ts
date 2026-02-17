@@ -14,8 +14,8 @@ import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
 import { TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { isSameDay } from '../../../util/is-same-day';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
@@ -188,12 +188,12 @@ const getPlannerDay = (
 
   const scheduledTaskItems = getScheduledTaskItems(
     allPlannedTasks,
-    currentDayDate,
+    dayDate,
     startOfNextDayDiffMs,
   );
   const { timedEvents, allDayEvents } = getIcalEventsForDay(
     icalEvents,
-    currentDayDate,
+    dayDate,
     startOfNextDayDiffMs,
   );
 
@@ -297,11 +297,14 @@ const getAllRepeatableTasksForDay = (
 
 const getScheduledTaskItems = (
   allPlannedTasks: TaskWithDueTime[],
-  currentDayDate: Date,
+  dayDate: string,
   startOfNextDayDiffMs: number = 0,
 ): ScheduleItemTask[] =>
   allPlannedTasks
-    .filter((task) => isSameDay(task.dueWithTime, currentDayDate, startOfNextDayDiffMs))
+    .filter(
+      (task) =>
+        getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === dayDate,
+    )
     .map((task) => {
       const start = task.dueWithTime;
       const end = start + Math.max(task.timeEstimate - task.timeSpent, 0);
@@ -321,7 +324,7 @@ interface IcalEventsForDayResult {
 
 const getIcalEventsForDay = (
   icalEvents: ScheduleCalendarMapEntry[],
-  currentDayDate: Date,
+  dayDate: string,
   startOfNextDayDiffMs: number = 0,
 ): IcalEventsForDayResult => {
   const timedEvents: ScheduleItemEvent[] = [];
@@ -330,7 +333,7 @@ const getIcalEventsForDay = (
   icalEvents.forEach((icalMapEntry) => {
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
-      if (isSameDay(start, currentDayDate, startOfNextDayDiffMs)) {
+      if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
         if (calEv.isAllDay) {
           // All-day events go to a separate list with full event data
           allDayEvents.push({ ...calEv });

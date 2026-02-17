@@ -24,7 +24,8 @@ import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../../features/tasks/ta
 import { calcTotalTimeSpent } from '../../../features/tasks/util/calc-total-time-spent';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
-import { appStateFeatureKey, AppState } from '../../app-state/app-state.reducer';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -122,8 +123,7 @@ const handleAddTask = (
   let updatedState = state;
 
   // Determine if task should be added to Today tag
-  const todayStr = (state[appStateFeatureKey as keyof RootState] as unknown as AppState)
-    .todayStr;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const shouldAddToToday = task.dueDay === todayStr;
 
   // Add task to task state
@@ -221,8 +221,7 @@ const handleConvertToMainTask = (
     throw new Error('No parent for sub task');
   }
 
-  const todayStr = (state[appStateFeatureKey as keyof RootState] as unknown as AppState)
-    .todayStr;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
 
   // Handle parent-child relationship cleanup and task entity updates
   const taskStateAfterParentCleanup = removeTaskFromParentSideEffects(

@@ -4,19 +4,26 @@ import { PlannerActions } from '../../../features/planner/store/planner.actions'
 import { Task } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
 import { unique } from '../../../util/unique';
-import { appStateFeatureKey, AppState } from '../../app-state/app-state.reducer';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   ActionHandlerMap,
+  addTaskToPlannerDay,
   filterOutTodayTag,
   getTag,
   hasInvalidTodayTag,
+  removeTaskFromPlannerDays,
+  removeTasksFromPlannerDays,
   updateTags,
 } from './task-shared-helpers';
 import {
   TASK_FEATURE_NAME,
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
-import { plannerFeatureKey } from '../../../features/planner/store/planner.reducer';
+import {
+  plannerFeatureKey,
+  PlannerState,
+} from '../../../features/planner/store/planner.reducer';
 import {
   ADD_TASK_PANEL_ID,
   OVERDUE_LIST_ID,
@@ -51,7 +58,9 @@ const handleTransferTask = (
   };
 
   // Handle planner days updates (from planner.reducer)
-  const plannerState = state[plannerFeatureKey as keyof RootState] as any;
+  const plannerState = state[
+    plannerFeatureKey as keyof RootState
+  ] as unknown as PlannerState;
   const daysCopy = { ...plannerState.days };
 
   // Update previous day (remove task)
@@ -167,8 +176,7 @@ const handlePlanTaskForDay = (
   day: string,
   isAddToTop: boolean,
 ): RootState => {
-  const todayStr = (state[appStateFeatureKey as keyof RootState] as unknown as AppState)
-    .todayStr;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const todayTag = getTag(state, TODAY_TAG.id);
   const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
   const currentTagIds = currentTask?.tagIds || [];
@@ -233,31 +241,17 @@ const handlePlanTaskForDay = (
     }
   }
 
-  // Update planner days
-  const plannerState = state[plannerFeatureKey as keyof RootState] as any;
-  const daysCopy = { ...plannerState.days };
-
-  // Remove task from all days
-  Object.keys(daysCopy).forEach((dayI) => {
-    daysCopy[dayI] = daysCopy[dayI].filter((id: string) => id !== task.id);
-  });
+  // Remove task from all planner days (uses hasChanges optimization to avoid unnecessary state mutations)
+  state = removeTaskFromPlannerDays(state, task.id);
 
   // Add to target day if not today (today's ordering is managed by TODAY_TAG.taskIds)
   if (day !== todayStr) {
-    daysCopy[day] = unique(
-      isAddToTop
-        ? [task.id, ...(daysCopy[day] || [])]
-        : [...(daysCopy[day] || []), task.id],
-    ).filter((id: string) => !task.subTaskIds.includes(id));
+    state = addTaskToPlannerDay(state, task.id, day, isAddToTop ? 0 : Infinity);
+    // When moving a parent, remove sub-tasks from the target day
+    if (task.subTaskIds.length > 0) {
+      state = removeTasksFromPlannerDays(state, task.subTaskIds);
+    }
   }
-
-  state = {
-    ...state,
-    [plannerFeatureKey]: {
-      ...plannerState,
-      days: daysCopy,
-    },
-  };
 
   return state;
 };
