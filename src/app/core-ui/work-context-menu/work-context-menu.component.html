@@ -49,13 +49,15 @@
   </span>
 </button>
 
-<button
-  [routerLink]="[base, contextId, 'settings']"
-  mat-menu-item
->
-  <mat-icon>settings</mat-icon>
-  <span class="text">{{ T.MH.SETTINGS | translate }}</span>
-</button>
+@if (isForProject || contextId !== TODAY_TAG_ID) {
+  <button
+    [routerLink]="[base, contextId, 'settings']"
+    mat-menu-item
+  >
+    <mat-icon>settings</mat-icon>
+    <span class="text">{{ T.MH.SETTINGS | translate }}</span>
+  </button>
+}
 
 @if (!isForProject && contextId !== TODAY_TAG_ID) {
   <button

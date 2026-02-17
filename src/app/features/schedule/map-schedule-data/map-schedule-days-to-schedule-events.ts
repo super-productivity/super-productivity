@@ -70,8 +70,8 @@ export const mapScheduleDaysToScheduleEvents = (
             continue;
           }
           if (
-            entry.start + entry.duration <= activeEntries[i].start ||
-            activeEntries[i].start + activeEntries[i].duration <= entry.start
+            entry.start + Math.max(entry.duration, 1) <= activeEntries[i].start ||
+            activeEntries[i].start + Math.max(activeEntries[i].duration, 1) <= entry.start
           ) {
             delete activeEntries[i];
           } else {

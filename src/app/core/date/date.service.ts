@@ -6,9 +6,15 @@ export class DateService {
   startOfNextDayDiff: number = 0;
 
   setStartOfNextDayDiff(startOfNextDay: number): void {
-    this.startOfNextDayDiff = (startOfNextDay || 0) * 60 * 60 * 1000;
+    const clamped = Math.max(0, Math.min(23, startOfNextDay || 0));
+    this.startOfNextDayDiff = clamped * 60 * 60 * 1000;
   }
 
+  /**
+   * Returns today's date string with offset applied.
+   * NOTE: When a date argument is provided, the offset is NOT applied to it —
+   * the caller is responsible for adjusting the date if needed.
+   */
   todayStr(date?: Date | number): string {
     if (!date) {
       date = new Date(Date.now() - this.startOfNextDayDiff);

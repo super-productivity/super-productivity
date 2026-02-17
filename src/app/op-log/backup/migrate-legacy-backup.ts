@@ -371,7 +371,8 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
   }
 
   // Fix TODAY_TAG tasks
-  const startOfNextDayDiffMs = (data.globalConfig?.startOfNextDay || 0) * 60 * 60 * 1000;
+  const startOfNextDayDiffMs =
+    (data.globalConfig?.misc?.startOfNextDay || 0) * 60 * 60 * 1000;
   const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const todayTag = data.tag?.entities?.[TODAY_TAG.id];
   if (todayTag?.taskIds) {

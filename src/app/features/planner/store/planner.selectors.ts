@@ -110,7 +110,8 @@ export const selectPlannerDays = (
     selectPlannerState,
     // TODO this could be more efficient by limiting this to changes of the relevant stuff
     selectConfigFeatureState,
-    (taskState, plannerState, globalConfig): PlannerDay[] => {
+    selectStartOfNextDayDiffMs,
+    (taskState, plannerState, globalConfig, startOfNextDayDiffMs): PlannerDay[] => {
       const allDatesWithData = Object.keys(plannerState.days);
       const dayDatesToUse = [
         ...dayDates,
@@ -130,6 +131,7 @@ export const selectPlannerDays = (
           icalEvents,
           unplannedTaskIdsToday,
           globalConfig.schedule,
+          startOfNextDayDiffMs,
         ),
       );
     },
@@ -166,6 +168,7 @@ const getPlannerDay = (
   icalEvents: ScheduleCalendarMapEntry[],
   unplannedTaskIdsToday: string[] | false,
   scheduleConfig?: ScheduleConfig,
+  startOfNextDayDiffMs: number = 0,
 ): PlannerDay => {
   const isTodayI = dayDate === todayStr;
   const currentDayDate = dateStrToUtcDate(dayDate);
@@ -183,8 +186,16 @@ const getPlannerDay = (
   const { repeatProjectionsForDay, noStartTimeRepeatProjections } =
     getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
 
-  const scheduledTaskItems = getScheduledTaskItems(allPlannedTasks, currentDayDate);
-  const { timedEvents, allDayEvents } = getIcalEventsForDay(icalEvents, currentDayDate);
+  const scheduledTaskItems = getScheduledTaskItems(
+    allPlannedTasks,
+    currentDayDate,
+    startOfNextDayDiffMs,
+  );
+  const { timedEvents, allDayEvents } = getIcalEventsForDay(
+    icalEvents,
+    currentDayDate,
+    startOfNextDayDiffMs,
+  );
 
   const timeEstimate = getAllTimeSpent(
     normalTasks,
@@ -287,9 +298,10 @@ const getAllRepeatableTasksForDay = (
 const getScheduledTaskItems = (
   allPlannedTasks: TaskWithDueTime[],
   currentDayDate: Date,
+  startOfNextDayDiffMs: number = 0,
 ): ScheduleItemTask[] =>
   allPlannedTasks
-    .filter((task) => isSameDay(task.dueWithTime, currentDayDate))
+    .filter((task) => isSameDay(task.dueWithTime, currentDayDate, startOfNextDayDiffMs))
     .map((task) => {
       const start = task.dueWithTime;
       const end = start + Math.max(task.timeEstimate - task.timeSpent, 0);
@@ -310,6 +322,7 @@ interface IcalEventsForDayResult {
 const getIcalEventsForDay = (
   icalEvents: ScheduleCalendarMapEntry[],
   currentDayDate: Date,
+  startOfNextDayDiffMs: number = 0,
 ): IcalEventsForDayResult => {
   const timedEvents: ScheduleItemEvent[] = [];
   const allDayEvents: ScheduleFromCalendarEvent[] = [];
@@ -317,7 +330,7 @@ const getIcalEventsForDay = (
   icalEvents.forEach((icalMapEntry) => {
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
-      if (isSameDay(start, currentDayDate)) {
+      if (isSameDay(start, currentDayDate, startOfNextDayDiffMs)) {
         if (calEv.isAllDay) {
           // All-day events go to a separate list with full event data
           allDayEvents.push({ ...calEv });
