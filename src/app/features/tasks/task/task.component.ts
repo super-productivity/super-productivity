@@ -230,6 +230,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   });
 
   isPanHelperVisible = signal(false);
+  isLinkRenderingEnabled = computed(
+    () => this._configService.cfg()?.shortSyntax?.isEnableLinkRendering ?? true,
+  );
 
   T: typeof T = T;
   IS_TOUCH_PRIMARY: boolean = IS_TOUCH_PRIMARY;

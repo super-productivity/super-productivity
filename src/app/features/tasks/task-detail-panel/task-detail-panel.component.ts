@@ -230,6 +230,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     initialValue: null as IssueData | null,
   });
 
+  isLinkRenderingEnabled = computed(
+    () => this._globalConfigService.cfg()?.shortSyntax?.isEnableLinkRendering ?? true,
+  );
+
   isIssueDataLoadedForCurrentType = computed(() => {
     const data = this.issueData();
     return data !== null;

@@ -2080,7 +2080,8 @@
       "URL_BEHAVIOR_LABEL": "URL behavior when adding tasks",
       "URL_BEHAVIOR_KEEP": "Keep URL in task title",
       "URL_BEHAVIOR_EXTRACT": "Extract URL to attachments",
-      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Keep URL in task title and add to attachments"
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Keep URL in task title and add to attachments",
+      "IS_ENABLE_LINK_RENDERING": "Render URLs and markdown links as clickable links"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Take a break reminder sound",
