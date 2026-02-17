@@ -87,9 +87,9 @@ export class FinishDayBeforeCloseEffects {
               ) {
                 // User wants to finish day first - navigate them there
                 this._router.navigate([`tag/${TODAY_TAG.id}/daily-summary`]);
+                return; // Don't signal done — keep app open
               }
             }
-            // Always complete the handler to prevent hanging
             this._execBeforeCloseService.setDone(EXEC_BEFORE_CLOSE_ID);
           }),
         ),

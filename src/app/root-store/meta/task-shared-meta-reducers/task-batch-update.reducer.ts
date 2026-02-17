@@ -18,6 +18,22 @@ import { Log } from '../../../core/log';
 import { validateAndFixDataConsistencyAfterBatchUpdate } from './validate-and-fix-data-consistency-after-batch-update';
 
 /**
+ * Temp ID prefixes used by plugins to reference not-yet-created tasks.
+ * The plugin-bridge pre-generates real IDs and passes them in `createdTaskIds`.
+ * During batch processing, any ID starting with these prefixes must be resolved
+ * via the `createdTaskIds` map before being stored in state.
+ */
+const TEMP_ID_PREFIXES = ['temp-', 'temp_'] as const;
+
+/** Checks whether a task ID is a temporary placeholder that needs resolution. */
+const isTempId = (id: string): boolean =>
+  TEMP_ID_PREFIXES.some((prefix) => id.startsWith(prefix));
+
+/** Resolves a single task ID: if it's a temp ID, looks it up in the mapping. */
+const resolveTempId = (id: string, createdTaskIds: Record<string, string>): string =>
+  isTempId(id) ? createdTaskIds[id] || id : id;
+
+/**
  * Meta reducer for handling batch updates to tasks within a project
  * This reducer processes all operations in a single state update for efficiency
  */
@@ -103,11 +119,8 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
 
             // Resolve parent ID if it's a temp ID (convert null to undefined)
             let parentId = createOp.data.parentId || undefined;
-            if (
-              parentId &&
-              (parentId.startsWith('temp-') || parentId.startsWith('temp_'))
-            ) {
-              parentId = createdTaskIds[parentId] || parentId;
+            if (parentId && isTempId(parentId)) {
+              parentId = resolveTempId(parentId, createdTaskIds);
             }
 
             // Skip if circular dependency (task is its own parent)
@@ -181,6 +194,14 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
               },
             );
 
+            // Resolve temp IDs in subTaskIds — plugins may reference newly-created
+            // tasks by their temp IDs in parent subTaskIds update operations
+            if (updates.subTaskIds) {
+              updates.subTaskIds = (updates.subTaskIds as string[]).map((id: string) =>
+                resolveTempId(id, createdTaskIds),
+              );
+            }
+
             if (updateOp.updates.parentId !== undefined) {
               // Handle parent ID changes (moving subtasks)
               const oldTask = newState[TASK_FEATURE_NAME].entities[updateOp.taskId];
@@ -205,11 +226,8 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
 
                 // Add to new parent (convert null to undefined)
                 let newParentId = updateOp.updates.parentId || undefined;
-                if (
-                  newParentId &&
-                  (newParentId.startsWith('temp-') || newParentId.startsWith('temp_'))
-                ) {
-                  newParentId = createdTaskIds[newParentId] || newParentId;
+                if (newParentId && isTempId(newParentId)) {
+                  newParentId = resolveTempId(newParentId, createdTaskIds);
                 }
 
                 if (newParentId) {
@@ -277,12 +295,9 @@ export const taskBatchUpdateMetaReducer = <T extends Partial<RootState> = RootSt
           case 'reorder': {
             const reorderOp = op as BatchTaskReorder;
             // Resolve temp IDs in the order array
-            newTaskOrder = reorderOp.taskIds.map((id) => {
-              if (id.startsWith('temp-') || id.startsWith('temp_')) {
-                return createdTaskIds[id] || id;
-              }
-              return id;
-            });
+            newTaskOrder = reorderOp.taskIds.map((id) =>
+              resolveTempId(id, createdTaskIds),
+            );
             break;
           }
         }

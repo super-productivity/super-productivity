@@ -50,7 +50,6 @@ import { throttle } from '../../../util/decorators';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { Update } from '@ngrx/entity';
-import { isTodayWithOffset } from '../../../util/is-today.util';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
@@ -136,12 +135,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   private readonly _store = inject(Store);
   private readonly _projectService = inject(ProjectService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _dateService = inject(DateService);
   private readonly _destroyRef = inject(DestroyRef);
 
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
-  private readonly _dateService = inject(DateService);
 
   task = input.required<TaskWithSubTasks>();
   isBacklog = input<boolean>(false);
@@ -176,17 +175,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   );
   isTodayListActive = computed(() => this.workContextService.isTodayList);
   taskIdWithPrefix = computed(() => 't-' + this.task().id);
-  isRepeatTaskCreatedToday = computed(() => {
-    const todayStr = this.globalTrackingIntervalService.todayDateStr();
-    return !!(
-      this.task().repeatCfgId &&
-      isTodayWithOffset(
-        this.task().created,
-        todayStr,
-        this._dateService.startOfNextDayDiff,
-      )
-    );
-  });
+  isRepeatTaskCreatedToday = computed(
+    () => !!(this.task().repeatCfgId && this._dateService.isToday(this.task().created)),
+  );
   isOverdue = computed(() => {
     const t = this.task();
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
@@ -203,12 +194,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     const t = this.task();
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
-      (t.dueWithTime &&
-        isTodayWithOffset(
-          t.dueWithTime,
-          todayStr,
-          this._dateService.startOfNextDayDiff,
-        )) ||
+      (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
       (t.dueDay && t.dueDay === todayStr)
     );
   });
@@ -238,15 +224,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isShowAddToToday = computed(() => {
     const task = this.task();
     const todayStr = this.globalTrackingIntervalService.todayDateStr();
-    const offsetMs = this._dateService.startOfNextDayDiff;
-    const dueWithTimeIsToday =
-      task.dueWithTime && isTodayWithOffset(task.dueWithTime, todayStr, offsetMs);
     return this.isTodayListActive()
-      ? (task.dueWithTime && !dueWithTimeIsToday) ||
+      ? (task.dueWithTime && !this._dateService.isToday(task.dueWithTime)) ||
           (task.dueDay && task.dueDay !== todayStr)
       : !this.isShowRemoveFromToday() &&
           task.dueDay !== todayStr &&
-          (!task.dueWithTime || !dueWithTimeIsToday);
+          (!task.dueWithTime || !this._dateService.isToday(task.dueWithTime));
   });
 
   isPanHelperVisible = signal(false);

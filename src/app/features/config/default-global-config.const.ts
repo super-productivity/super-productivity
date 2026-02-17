@@ -26,6 +26,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isIssuesPanelEnabled: true,
     isProjectNotesEnabled: true,
     isSyncIconEnabled: true,
+    isSearchEnabled: true,
     isDonatePageEnabled: true,
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
@@ -61,6 +62,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableProject: true,
     isEnableDue: true,
     isEnableTag: true,
+    urlBehavior: 'keep',
   },
   evaluation: {
     isHideEvaluationSheet: false,

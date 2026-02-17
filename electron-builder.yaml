@@ -47,6 +47,9 @@ linux:
   # Fix for issue #5259: Set executable name without spaces for snap compatibility
   executableName: superproductivity
   category: Office;ProjectManagement
+  desktop:
+    entry:
+      StartupWMClass: superproductivity
   target:
     - AppImage
     - deb

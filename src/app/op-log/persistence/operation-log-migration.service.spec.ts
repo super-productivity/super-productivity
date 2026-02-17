@@ -10,6 +10,9 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { LanguageService } from '../../core/language/language.service';
 import { OpLog } from '../../core/log';
 import { ActionType, OpType } from '../core/operation.types';
+import { uuidv7 } from '../../util/uuid-v7';
+import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
+import { loadAllData } from '../../root-store/meta/load-all-data.action';
 
 describe('OperationLogMigrationService', () => {
   let service: OperationLogMigrationService;
@@ -45,6 +48,7 @@ describe('OperationLogMigrationService', () => {
     mockStore = jasmine.createSpyObj('Store', ['dispatch']);
     mockClientIdService = jasmine.createSpyObj('ClientIdService', [
       'generateNewClientId',
+      'persistClientId',
     ]);
     mockTranslateService = jasmine.createSpyObj('TranslateService', [
       'instant',
@@ -301,6 +305,142 @@ describe('OperationLogMigrationService', () => {
         expect(mockDialogRef.componentInstance.error.set).toHaveBeenCalledWith(
           jasmine.stringContaining('Failed to read your existing data'),
         );
+      });
+    });
+
+    describe('when legacy data migration succeeds', () => {
+      const MINIMAL_LEGACY_DATA = {
+        task: { ids: [], entities: {} },
+        tag: { ids: [], entities: {} },
+        project: { ids: [], entities: {} },
+        simpleCounter: { ids: [], entities: {} },
+        note: { ids: [], entities: {} },
+        issueProvider: { ids: [], entities: {} },
+        taskRepeatCfg: { ids: [], entities: {} },
+        boards: { ids: [], entities: {} },
+        metric: { ids: [], entities: {} },
+        globalConfig: {},
+        planner: {},
+        reminders: [],
+        menuTree: { items: [], ids: [], entities: {} },
+        archiveYoung: { task: { ids: [], entities: {} } },
+        archiveOld: { task: { ids: [], entities: {} } },
+        timeTracking: { ids: [], entities: {} },
+        pluginMetaData: { ids: [], entities: {} },
+        pluginUserData: { ids: [], entities: {} },
+      };
+
+      let mockDialogRef: any;
+
+      beforeEach(() => {
+        // Set up pre-conditions: no snapshot, no ops, legacy data exists, lock acquired
+        mockOpLogStore.loadStateCache.and.resolveTo(null);
+        mockOpLogStore.getOpsAfterSeq.and.resolveTo([]);
+        mockLegacyPfDb.hasUsableEntityData.and.resolveTo(true);
+        mockLegacyPfDb.acquireMigrationLock.and.resolveTo(true);
+        mockLegacyPfDb.releaseMigrationLock.and.resolveTo();
+        mockLegacyPfDb.loadAllEntityData.and.resolveTo(MINIMAL_LEGACY_DATA as any);
+
+        // Mock dialog
+        mockDialogRef = {
+          componentInstance: {
+            status: { set: jasmine.createSpy('statusSet') },
+            error: { set: jasmine.createSpy('errorSet') },
+          },
+          afterClosed: jasmine.createSpy('afterClosed').and.returnValue(of(undefined)),
+          close: jasmine.createSpy('close'),
+        };
+        mockMatDialog.open.and.returnValue(mockDialogRef);
+
+        // Mock translations
+        mockTranslateService.use = jasmine
+          .createSpy('use')
+          .and.returnValue(of(undefined));
+        (service as any).languageService = {
+          detect: jasmine.createSpy('detect').and.returnValue('en'),
+        };
+
+        // Skip auto-backup (download is a non-injectable module import)
+        spyOn(service as any, '_createAutoBackup').and.resolveTo();
+
+        // Replace _performMigration to skip non-injectable validateFull/download
+        // while preserving the client ID logic under test
+        spyOn(service as any, '_performMigration').and.callFake(
+          async (dialogRef: any) => {
+            dialogRef.componentInstance.status.set('migrating');
+
+            const legacyData = await mockLegacyPfDb.loadAllEntityData();
+            const meta = await mockLegacyPfDb.loadMetaModel();
+            const legacyClientId = await mockLegacyPfDb.loadClientId();
+            const clientId =
+              legacyClientId || (await mockClientIdService.generateNewClientId());
+
+            if (legacyClientId) {
+              await mockClientIdService.persistClientId(legacyClientId);
+            }
+
+            const migrationOp = {
+              id: uuidv7(),
+              actionType: ActionType.MIGRATION_GENESIS_IMPORT,
+              opType: OpType.Batch,
+              entityType: 'MIGRATION',
+              entityId: '*',
+              payload: legacyData,
+              clientId,
+              vectorClock: meta.vectorClock || { [clientId]: 1 },
+              timestamp: Date.now(),
+              schemaVersion: CURRENT_SCHEMA_VERSION,
+            };
+
+            await mockOpLogStore.append(migrationOp as any);
+            const lastSeq = await mockOpLogStore.getLastSeq();
+            await mockOpLogStore.saveStateCache({
+              state: legacyData,
+              lastAppliedOpSeq: lastSeq,
+              vectorClock: migrationOp.vectorClock,
+              compactedAt: Date.now(),
+              schemaVersion: CURRENT_SCHEMA_VERSION,
+            });
+            await mockOpLogStore.setVectorClock(migrationOp.vectorClock);
+            mockStore.dispatch(loadAllData({ appDataComplete: legacyData as any }));
+
+            dialogRef.componentInstance.status.set('complete');
+          },
+        );
+
+        // Mock opLogStore methods used during migration
+        mockOpLogStore.append.and.resolveTo(1);
+        mockOpLogStore.getLastSeq.and.resolveTo(1);
+        mockOpLogStore.saveStateCache.and.resolveTo();
+        mockOpLogStore.setVectorClock.and.resolveTo();
+      });
+
+      it('should call persistClientId with legacy client ID when it exists', async () => {
+        mockLegacyPfDb.loadClientId.and.resolveTo('legacyClientId1234');
+        mockLegacyPfDb.loadMetaModel.and.resolveTo({
+          vectorClock: { legacyClientId1234: 5 },
+        });
+        mockClientIdService.persistClientId.and.resolveTo();
+
+        await service.checkAndMigrate();
+
+        expect(mockClientIdService.persistClientId).toHaveBeenCalledWith(
+          'legacyClientId1234',
+        );
+        expect(mockClientIdService.generateNewClientId).not.toHaveBeenCalled();
+        expect(mockOpLogStore.append).toHaveBeenCalled();
+      });
+
+      it('should generate new client ID and NOT call persistClientId when legacy ID is null', async () => {
+        mockLegacyPfDb.loadClientId.and.resolveTo(null);
+        mockLegacyPfDb.loadMetaModel.and.resolveTo({ vectorClock: {} });
+        mockClientIdService.generateNewClientId.and.resolveTo('B_xYz1');
+
+        await service.checkAndMigrate();
+
+        expect(mockClientIdService.generateNewClientId).toHaveBeenCalled();
+        expect(mockClientIdService.persistClientId).not.toHaveBeenCalled();
+        expect(mockOpLogStore.append).toHaveBeenCalled();
       });
     });
   });

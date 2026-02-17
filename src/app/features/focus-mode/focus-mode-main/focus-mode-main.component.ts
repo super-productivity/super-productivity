@@ -297,6 +297,8 @@ export class FocusModeMainComponent {
   }
 
   finishCurrentTask(): void {
+    const sessionRunning = this.isSessionRunning();
+
     this._store.dispatch(completeTask());
 
     const t = this.currentTask();
@@ -315,7 +317,7 @@ export class FocusModeMainComponent {
       );
     }
 
-    if (this.isSessionRunning()) {
+    if (sessionRunning) {
       this.openTaskSelector();
     } else {
       this._store.dispatch(selectFocusTask());

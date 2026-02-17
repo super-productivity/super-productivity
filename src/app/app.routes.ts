@@ -80,15 +80,6 @@ export const APP_ROUTES: Routes = [
     canActivate: [ValidTagIdGuard, FocusOverlayOpenGuard],
   },
   {
-    path: 'tag/:id/settings',
-    loadComponent: () =>
-      import('./pages/tag-settings-page/tag-settings-page.component').then(
-        (m) => m.TagSettingsPageComponent,
-      ),
-    data: { page: 'tag-settings' },
-    canActivate: [ValidTagIdGuard, FocusOverlayOpenGuard],
-  },
-  {
     path: 'tag/:id/worklog',
     loadComponent: () =>
       import('./features/worklog/worklog.component').then((m) => m.WorklogComponent),
@@ -140,15 +131,6 @@ export const APP_ROUTES: Routes = [
         (m) => m.ProjectTaskPageComponent,
       ),
     data: { page: 'project-tasks' },
-    canActivate: [ValidProjectIdGuard, FocusOverlayOpenGuard],
-  },
-  {
-    path: 'project/:id/settings',
-    loadComponent: () =>
-      import('./pages/project-settings-page/project-settings-page.component').then(
-        (m) => m.ProjectSettingsPageComponent,
-      ),
-    data: { page: 'project-settings' },
     canActivate: [ValidProjectIdGuard, FocusOverlayOpenGuard],
   },
   {

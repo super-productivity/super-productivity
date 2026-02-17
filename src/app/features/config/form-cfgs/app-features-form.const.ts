@@ -78,6 +78,14 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
+      key: 'isSearchEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.SEARCH,
+        icon: 'search',
+      },
+    },
+    {
       key: 'isDonatePageEnabled',
       type: 'slide-toggle',
       templateOptions: {

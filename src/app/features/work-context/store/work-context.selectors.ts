@@ -272,7 +272,7 @@ export const selectTrackableTasksActiveContextFirst = createSelector(
       .filter(
         (task): task is Task =>
           !!task &&
-          (!!task.parentId || task.subTaskIds.length === 0) &&
+          (!!task.parentId || !task.subTaskIds?.length) &&
           !activeContextIdSet.has(task.id),
       );
     return [...forActiveContext, ...otherTasks].sort(sortDoneLast);

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import {
   Operation,
@@ -35,7 +35,8 @@ import {
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { vectorClockToString } from '../../core/util/vector-clock';
+import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 
 /**
  * Vector clock entry stored in the vector_clock object store.
@@ -159,6 +160,7 @@ interface OpLogDB extends DBSchema {
   providedIn: 'root',
 })
 export class OperationLogStoreService {
+  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
 
@@ -1340,19 +1342,34 @@ export class OperationLogStoreService {
       }
     }
 
+    // Prune the merged clock to MAX_VECTOR_CLOCK_SIZE to break the
+    // inflate/prune cycle: without this, the union of all downloaded ops'
+    // clocks re-introduces pruned client IDs, exceeding the limit again.
+    // The server already prunes with the same algorithm on upload.
+    const currentClientId = await this.clientIdProvider.loadClientId();
+    if (!currentClientId) {
+      Log.warn(
+        '[OpLogStore] mergeRemoteOpClocks: Cannot prune clock - no client ID available. ' +
+          'This is unexpected during sync and may indicate data corruption.',
+      );
+    }
+    const clockToStore = currentClientId
+      ? limitVectorClockSize(mergedClock, currentClientId)
+      : mergedClock;
+
     // DIAGNOSTIC LOGGING: Log merged clock after merge
     Log.debug(
       `[OpLogStore] mergeRemoteOpClocks: AFTER merge\n` +
-        `  Merged clock: ${vectorClockToString(mergedClock)}`,
+        `  Merged clock: ${vectorClockToString(clockToStore)}`,
     );
 
     // Update the vector clock store
     await this.db.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock: mergedClock, lastUpdate: Date.now() },
+      { clock: clockToStore, lastUpdate: Date.now() },
       SINGLETON_KEY,
     );
-    this._vectorClockCache = mergedClock;
+    this._vectorClockCache = clockToStore;
   }
 
   /**

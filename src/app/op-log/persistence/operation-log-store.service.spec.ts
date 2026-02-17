@@ -15,10 +15,14 @@ import {
   VectorClockComparison,
 } from '../../core/util/vector-clock';
 import { limitVectorClockSize, MAX_VECTOR_CLOCK_SIZE } from '@sp/shared-schema';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 
 describe('OperationLogStoreService', () => {
   let service: OperationLogStoreService;
   let vectorClockService: VectorClockService;
+  const mockClientIdProvider: ClientIdProvider = {
+    loadClientId: () => Promise.resolve('testClient'),
+  };
 
   // Helper to create test operations
   const createTestOperation = (overrides: Partial<Operation> = {}): Operation => ({
@@ -37,7 +41,11 @@ describe('OperationLogStoreService', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      providers: [OperationLogStoreService, VectorClockService],
+      providers: [
+        OperationLogStoreService,
+        VectorClockService,
+        { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+      ],
     });
     service = TestBed.inject(OperationLogStoreService);
     vectorClockService = TestBed.inject(VectorClockService);
@@ -52,11 +60,23 @@ describe('OperationLogStoreService', () => {
     });
 
     it('should handle concurrent initialization calls safely', async () => {
-      // Create a new service instance
-      const newService = new OperationLogStoreService();
+      // Reset module to get a truly fresh (un-initialized) service instance
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          VectorClockService,
+          { provide: CLIENT_ID_PROVIDER, useValue: mockClientIdProvider },
+        ],
+      });
+      const freshService = TestBed.inject(OperationLogStoreService);
 
-      // Call init multiple times concurrently
-      const initPromises = [newService.init(), newService.init(), newService.init()];
+      // Call init multiple times concurrently on a fresh instance
+      const initPromises = [
+        freshService.init(),
+        freshService.init(),
+        freshService.init(),
+      ];
 
       // All should resolve without error
       await expectAsync(Promise.all(initPromises)).toBeResolved();
@@ -2240,7 +2260,7 @@ describe('OperationLogStoreService', () => {
       });
     });
 
-    it('should handle large number of remote ops efficiently', async () => {
+    it('should handle large number of remote ops efficiently and prune to MAX_VECTOR_CLOCK_SIZE', async () => {
       await service.setVectorClock({ localClient: 1 });
 
       // Create 100 remote ops
@@ -2260,7 +2280,9 @@ describe('OperationLogStoreService', () => {
 
       const clock = await service.getVectorClock();
       expect(clock).not.toBeNull();
-      expect(Object.keys(clock!).length).toBe(101); // localClient + 100 remote clients
+      // Merged clock is pruned to MAX_VECTOR_CLOCK_SIZE to break the inflate/prune cycle
+      expect(Object.keys(clock!).length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+      // Highest-counter clients are preserved by the pruning algorithm
       expect(clock!['client99']).toBe(100);
     });
 

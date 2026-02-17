@@ -170,12 +170,17 @@ export const shortSyntax = async (
     };
   }
 
-  const urlChanges = parseUrlAttachments({
-    ...task,
-    title: taskChanges.title || task.title,
-  });
-  if (urlChanges.attachments.length > 0) {
-    attachments = urlChanges.attachments;
+  const urlChanges = parseUrlAttachments(
+    {
+      ...task,
+      title: taskChanges.title || task.title,
+    },
+    config,
+  );
+  if (urlChanges) {
+    if (urlChanges.attachments.length > 0) {
+      attachments = urlChanges.attachments;
+    }
     taskChanges = {
       ...taskChanges,
       title: urlChanges.title,
@@ -483,79 +488,129 @@ export const parseTimeSpentChanges = (task: Partial<TaskCopy>): Partial<Task> =>
 
 const parseUrlAttachments = (
   task: Partial<TaskCopy>,
-): {
-  attachments: TaskAttachment[];
-  title: string;
-} => {
+  config: ShortSyntaxConfig,
+):
+  | {
+      attachments: TaskAttachment[];
+      title: string;
+    }
+  | undefined => {
   if (!task.title || task.issueId) {
-    return { attachments: [], title: task.title || '' };
+    return undefined;
   }
 
   const urlMatches = task.title.match(SHORT_SYNTAX_URL_REG_EX);
-
   if (!urlMatches || urlMatches.length === 0) {
-    return { attachments: [], title: task.title };
+    return undefined;
   }
 
-  const attachments: TaskAttachment[] = urlMatches.map((url) => {
-    let path = url.trim();
+  // Handle 'keep' mode: no changes, URL stays in title, no attachment
+  // Default to 'keep' if urlBehavior is undefined
+  if (!config.urlBehavior || config.urlBehavior === 'keep') {
+    return undefined;
+  }
 
-    // Remove trailing punctuation that's not part of the URL
-    path = path.replace(/[.,;!?]+$/, '');
+  // Filter out attachments that already exist (prevent duplicates)
+  const newAttachments = filterDuplicateUrlAttachments(
+    urlMatches,
+    task.attachments || [],
+  );
 
-    const isFileProtocol = path.startsWith('file://');
+  // Only clean URLs from title if urlBehavior is 'extract'
+  let cleanedTitle = task.title;
+  if (config.urlBehavior === 'extract') {
+    cleanedTitle = removeUrlsFromTitle(task.title, urlMatches);
+  }
+
+  // Return undefined if nothing changed
+  const titleChanged = cleanedTitle !== task.title;
+  const hasNewAttachments = newAttachments.length > 0;
+
+  if (!titleChanged && !hasNewAttachments) {
+    return undefined;
+  }
+
+  return {
+    attachments: newAttachments,
+    title: cleanedTitle,
+  };
+};
+
+const createUrlAttachment = (url: string): TaskAttachment => {
+  let path = url.trim();
+
+  // Remove trailing punctuation that's not part of the URL
+  path = path.replace(/[.,;!?]+$/, '');
+
+  const isFileProtocol = path.startsWith('file://');
+
+  // Add protocol if missing (for www. URLs)
+  if (!path.match(/^(?:https?|file):\/\//)) {
+    path = '//' + path;
+  }
+
+  // Detect if it's an image
+  const isImage = isImageUrlSimple(path);
+
+  // Determine type and icon
+  let type: 'FILE' | 'LINK' | 'IMG';
+  let icon: string;
+
+  if (isImage) {
+    type = 'IMG';
+    icon = 'image';
+  } else if (isFileProtocol) {
+    type = 'FILE';
+    icon = 'insert_drive_file';
+  } else {
+    type = 'LINK';
+    icon = 'bookmark';
+  }
+
+  return {
+    id: nanoid(),
+    type,
+    path,
+    title: _baseNameForUrl(path),
+    icon,
+  };
+};
+
+const filterDuplicateUrlAttachments = (
+  urlMatches: string[],
+  existingAttachments: TaskAttachment[],
+): TaskAttachment[] => {
+  const existingPaths = new Set(
+    existingAttachments.map((a) => a.path).filter((p): p is string => !!p),
+  );
+
+  return urlMatches
+    .map((url) => createUrlAttachment(url))
+    .filter((attachment) => attachment.path && !existingPaths.has(attachment.path));
+};
+
+const removeUrlsFromTitle = (title: string, urlMatches: string[]): string => {
+  let cleanedTitle = title;
+
+  // Clean URLs from title - process all URL matches
+  // We need to remove URLs even if they already exist as attachments
+  urlMatches.forEach((url) => {
+    let path = url.trim().replace(/[.,;!?]+$/, '');
 
     // Add protocol if missing (for www. URLs)
     if (!path.match(/^(?:https?|file):\/\//)) {
       path = '//' + path;
     }
 
-    // Detect if it's an image
-    const isImage = isImageUrlSimple(path);
-
-    // Determine type and icon
-    let type: 'FILE' | 'LINK' | 'IMG';
-    let icon: string;
-
-    if (isImage) {
-      type = 'IMG';
-      icon = 'image';
-    } else if (isFileProtocol) {
-      type = 'FILE';
-      icon = 'insert_drive_file';
-    } else {
-      type = 'LINK';
-      icon = 'bookmark';
-    }
-
-    // Extract basename for title
-    const title = _baseNameForUrl(path);
-
-    return {
-      id: nanoid(),
-      type,
-      path,
-      title,
-      icon,
-    };
-  });
-
-  // Clean URLs from title - use trimmed URLs without trailing punctuation
-  let cleanedTitle = task.title;
-  attachments.forEach((attachment) => {
-    const attachmentPath = attachment.path;
-    if (!attachmentPath) return;
     // For www URLs, the path has '//' prepended, but the original doesn't
-    const originalUrl = attachmentPath.startsWith('//')
-      ? attachmentPath.substring(2)
-      : attachmentPath;
+    const originalUrl = path.startsWith('//') ? path.substring(2) : path;
+
     // Escape special regex characters for safe replacement
     const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     cleanedTitle = cleanedTitle.replace(new RegExp(escapedUrl, 'g'), '');
   });
-  cleanedTitle = cleanedTitle.trim().replace(/\s+/g, ' ');
 
-  return { attachments, title: cleanedTitle };
+  return cleanedTitle.trim().replace(/\s+/g, ' ');
 };
 
 const _baseNameForUrl = (passedStr: string): string => {

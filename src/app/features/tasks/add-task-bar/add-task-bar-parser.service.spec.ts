@@ -820,6 +820,7 @@ describe('AddTaskBarParserService', () => {
         isEnableProject: true,
         isEnableDue: true,
         isEnableTag: true,
+        urlBehavior: 'extract',
       } as ShortSyntaxConfig;
 
       mockDefaultProject = {

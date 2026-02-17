@@ -16,6 +16,7 @@ export type AppFeaturesConfig = Readonly<{
   isIssuesPanelEnabled: boolean;
   isProjectNotesEnabled: boolean;
   isSyncIconEnabled: boolean;
+  isSearchEnabled: boolean;
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
@@ -61,6 +62,7 @@ export type ShortSyntaxConfig = Readonly<{
   isEnableProject: boolean;
   isEnableDue: boolean;
   isEnableTag: boolean;
+  urlBehavior?: 'keep' | 'extract' | 'keep-and-attach';
 }>;
 
 export type TimeTrackingConfig = Readonly<{

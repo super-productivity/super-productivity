@@ -51,7 +51,7 @@
 
 @if (isForProject || contextId !== TODAY_TAG_ID) {
   <button
-    [routerLink]="[base, contextId, 'settings']"
+    (click)="openSettings()"
     mat-menu-item
   >
     <mat-icon>settings</mat-icon>

@@ -236,6 +236,12 @@ export class OperationLogMigrationService {
     const legacyClientId = await this.legacyPfDb.loadClientId();
     const clientId = legacyClientId || (await this.clientIdService.generateNewClientId());
 
+    // Persist legacy client ID under __client_id_ so loadClientId() finds it.
+    // Without this, a brand new ID is generated on next write, doubling IDs.
+    if (legacyClientId) {
+      await this.clientIdService.persistClientId(legacyClientId);
+    }
+
     OpLog.normal(`OperationLogMigrationService: Using client ID: ${clientId}`);
 
     // 4. Create MIGRATION genesis operation

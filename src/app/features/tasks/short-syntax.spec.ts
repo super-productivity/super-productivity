@@ -1248,6 +1248,7 @@ describe('shortSyntax', () => {
         isEnableDue: false,
         isEnableProject: false,
         isEnableTag: false,
+        urlBehavior: 'keep-and-attach',
       });
       expect(r).toEqual(undefined);
     });
@@ -1432,12 +1433,14 @@ describe('shortSyntax', () => {
   });
 
   describe('URL attachments', () => {
+    const EXTRACT_CONFIG = { ...CONFIG, urlBehavior: 'extract' as const };
+
     it('should extract single URL with https protocol', async () => {
       const t = {
         ...TASK,
         title: 'Task https://example.com',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments).toBeDefined();
       expect(r?.attachments.length).toBe(1);
@@ -1452,7 +1455,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task http://example.com',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('http://example.com');
@@ -1465,7 +1468,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task file:///path/to/document.pdf',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///path/to/document.pdf');
@@ -1479,7 +1482,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task www.example.com',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('//www.example.com');
@@ -1492,7 +1495,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task https://example.com www.test.org file:///home/doc.txt',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(3);
       expect(r?.attachments[0].path).toBe('https://example.com');
@@ -1509,7 +1512,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task https://example.com/image.png',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].type).toBe('IMG');
@@ -1522,7 +1525,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task file:///path/to/image.jpg',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].type).toBe('IMG');
@@ -1535,7 +1538,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task https://example.com @tomorrow #urgent 30m',
       };
-      const r = await shortSyntax(t, CONFIG, ALL_TAGS);
+      const r = await shortSyntax(t, EXTRACT_CONFIG, ALL_TAGS);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com');
@@ -1550,7 +1553,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task with https://example.com in middle',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.taskChanges.title).toBe('Task with in middle');
       expect(r?.attachments.length).toBe(1);
@@ -1561,7 +1564,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task file:///C:/Users/name/document.pdf',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///C:/Users/name/document.pdf');
@@ -1574,7 +1577,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task file:///home/user/document.txt',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('file:///home/user/document.txt');
@@ -1588,7 +1591,7 @@ describe('shortSyntax', () => {
         title: 'Task https://example.com',
         issueId: 'ISSUE-123',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeUndefined();
     });
 
@@ -1597,7 +1600,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Check https://example.com.',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com');
@@ -1609,7 +1612,7 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task https://example.com/path/to/file.pdf',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].title).toBe('file');
@@ -1620,12 +1623,222 @@ describe('shortSyntax', () => {
         ...TASK,
         title: 'Task https://example.com/projects/',
       };
-      const r = await shortSyntax(t, CONFIG);
+      const r = await shortSyntax(t, EXTRACT_CONFIG);
       expect(r).toBeDefined();
       expect(r?.attachments.length).toBe(1);
       expect(r?.attachments[0].path).toBe('https://example.com/projects/');
       expect(r?.attachments[0].title).toBe('projects');
       expect(r?.taskChanges.title).toBe('Task');
+    });
+  });
+
+  describe('URL behavior modes', () => {
+    it('should remove URL from title when urlBehavior is "extract"', async () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com for details',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.taskChanges.title).toBe('Check for details');
+    });
+
+    it('should keep URL in title and add attachment when urlBehavior is "keep-and-attach"', async () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com for details',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-and-attach' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.taskChanges.title).toBe('Check https://example.com for details');
+    });
+
+    it('should keep URL in title without attachment when urlBehavior is "keep"', async () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com for details',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep' });
+      expect(r).toBeUndefined();
+    });
+
+    it('should keep multiple URLs in title and add attachments when urlBehavior is "keep-and-attach"', async () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com and www.test.org',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-and-attach' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(2);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.attachments[1].path).toBe('//www.test.org');
+      expect(r?.taskChanges.title).toBe('Check https://example.com and www.test.org');
+    });
+
+    it('should remove multiple URLs from title when urlBehavior is "extract"', async () => {
+      const t = {
+        ...TASK,
+        title: 'Check https://example.com and www.test.org',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(2);
+      expect(r?.taskChanges.title).toBe('Check and');
+    });
+
+    it('should work with keep-and-attach mode and other short syntax', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com @tomorrow #urgent 30m',
+      };
+      const r = await shortSyntax(
+        t,
+        { ...CONFIG, urlBehavior: 'keep-and-attach' },
+        ALL_TAGS,
+      );
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://example.com');
+      expect(r?.taskChanges.title).toBe('Task https://example.com');
+      expect(r?.taskChanges.timeEstimate).toBe(1800000);
+      expect(r?.newTagTitles).toContain('urgent');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+    });
+
+    it('should work with keep mode and other short syntax', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com @tomorrow #urgent 30m',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep' }, ALL_TAGS);
+      expect(r).toBeDefined();
+      // In 'keep' mode, URL is not added as attachment, so attachments should be empty or undefined
+      expect(r?.attachments?.length || 0).toBe(0);
+      expect(r?.taskChanges.title).toBe('Task https://example.com');
+      expect(r?.taskChanges.timeEstimate).toBe(1800000);
+      expect(r?.newTagTitles).toContain('urgent');
+      expect(r?.taskChanges.dueWithTime).toBeDefined();
+    });
+
+    it('should create attachments in extract and keep-and-attach modes', async () => {
+      const t1 = {
+        ...TASK,
+        title: 'Task https://example.com',
+      };
+      const t2 = {
+        ...TASK,
+        title: 'Task https://example.com',
+      };
+
+      const extractResult = await shortSyntax(t1, { ...CONFIG, urlBehavior: 'extract' });
+      const keepAndAttachResult = await shortSyntax(t2, {
+        ...CONFIG,
+        urlBehavior: 'keep-and-attach',
+      });
+
+      expect(extractResult?.attachments.length).toBe(1);
+      expect(keepAndAttachResult?.attachments.length).toBe(1);
+      expect(extractResult?.attachments[0].path).toBe(
+        keepAndAttachResult?.attachments[0].path,
+      );
+      expect(extractResult?.attachments[0].type).toBe(
+        keepAndAttachResult?.attachments[0].type,
+      );
+    });
+
+    it('should use default urlBehavior "keep" from CONFIG', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+      };
+      // CONFIG has urlBehavior: 'keep' as default (from updated default config)
+      const r = await shortSyntax(t, CONFIG);
+      // In 'keep' mode, URL stays in title but no attachment is created, so no changes
+      expect(r).toBeUndefined();
+    });
+
+    it('should use default urlBehavior "keep" when undefined', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: undefined });
+      // When urlBehavior is undefined, defaults to 'keep' mode
+      expect(r).toBeUndefined();
+    });
+
+    it('should not create duplicate attachments in keep-and-attach mode', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+        attachments: [
+          {
+            id: 'existing-1',
+            type: 'LINK' as const,
+            path: 'https://example.com',
+            title: 'example',
+            icon: 'bookmark',
+          },
+        ],
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-and-attach' });
+      // Should return undefined because URL already exists as attachment and title unchanged
+      expect(r).toBeUndefined();
+    });
+
+    it('should not create duplicate attachments in extract mode', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com',
+        attachments: [
+          {
+            id: 'existing-1',
+            type: 'LINK' as const,
+            path: 'https://example.com',
+            title: 'example',
+            icon: 'bookmark',
+          },
+        ],
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'extract' });
+      // Should still remove URL from title but not create duplicate attachment
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(0);
+      expect(r?.taskChanges.title).toBe('Task');
+    });
+
+    it('should create attachment for new URL even with existing attachments in keep-and-attach mode', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com https://newsite.com',
+        attachments: [
+          {
+            id: 'existing-1',
+            type: 'LINK' as const,
+            path: 'https://example.com',
+            title: 'example',
+            icon: 'bookmark',
+          },
+        ],
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep-and-attach' });
+      expect(r).toBeDefined();
+      expect(r?.attachments.length).toBe(1);
+      expect(r?.attachments[0].path).toBe('https://newsite.com');
+      expect(r?.taskChanges.title).toBe('Task https://example.com https://newsite.com');
+    });
+
+    it('should not create any attachments in keep mode even with URLs', async () => {
+      const t = {
+        ...TASK,
+        title: 'Task https://example.com https://newsite.com',
+      };
+      const r = await shortSyntax(t, { ...CONFIG, urlBehavior: 'keep' });
+      expect(r).toBeUndefined();
     });
   });
 });

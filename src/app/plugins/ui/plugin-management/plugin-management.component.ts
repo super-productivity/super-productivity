@@ -34,6 +34,8 @@ import { PluginIconComponent } from '../plugin-icon/plugin-icon.component';
 import { PluginConfigDialogComponent } from '../plugin-config-dialog/plugin-config-dialog.component';
 import { IS_ELECTRON } from '../../../app.constants';
 import { PluginLog } from '../../../core/log';
+import { SnackService } from '../../../core/snack/snack.service';
+import { catchError, of } from 'rxjs';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { LanguageCode } from '../../../core/locale.constants';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
@@ -79,6 +81,7 @@ export class PluginManagementComponent {
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _dialog = inject(MatDialog);
   private readonly _http = inject(HttpClient);
+  private readonly _snackService = inject(SnackService);
 
   // Language code to human-readable name mapping
   /* eslint-disable @typescript-eslint/naming-convention */
@@ -112,7 +115,16 @@ export class PluginManagementComponent {
   /* eslint-enable @typescript-eslint/naming-convention */
 
   readonly communityPlugins = toSignal(
-    this._http.get<CommunityPlugin[]>('assets/community-plugins.json'),
+    this._http.get<CommunityPlugin[]>('assets/community-plugins.json').pipe(
+      catchError((err) => {
+        PluginLog.err('Failed to load community plugins:', err);
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.PLUGINS.FAILED_TO_LOAD_COMMUNITY_PLUGINS,
+        });
+        return of([] as CommunityPlugin[]);
+      }),
+    ),
     { initialValue: [] },
   );
 

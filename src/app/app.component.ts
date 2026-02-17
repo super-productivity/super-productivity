@@ -351,7 +351,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
 
   readonly bgOverlayOpacity = computed((): number => {
     const context = this._activeWorkContext();
-    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 0;
+    const baseOpacity = context?.theme?.backgroundOverlayOpacity ?? 20;
 
     return baseOpacity * 0.01;
   });

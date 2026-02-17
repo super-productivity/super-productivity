@@ -81,6 +81,25 @@ export class ClientIdService {
   }
 
   /**
+   * Persists an existing client ID (e.g., from legacy migration).
+   *
+   * Validates the format before writing to prevent invalid IDs from
+   * being stored. loadClientId() validates on read, so an invalid
+   * persisted ID would throw on next load.
+   */
+  async persistClientId(clientId: string): Promise<void> {
+    const isOldFormat = clientId.length >= 10;
+    const isNewFormat = /^[BEAI]_[a-zA-Z0-9]{4}$/.test(clientId);
+    if (!isOldFormat && !isNewFormat) {
+      throw new Error(`Cannot persist invalid clientId: ${clientId}`);
+    }
+    const db = await this._getDb();
+    await db.put(DB_STORE_NAME, clientId, CLIENT_ID_KEY);
+    this._cachedClientId = clientId;
+    OpLog.normal('ClientIdService.persistClientId() persisted:', { clientId });
+  }
+
+  /**
    * Clears the cached client ID.
    *
    * Used for testing or when the client ID storage needs to be re-read.

@@ -6,6 +6,7 @@ import { allDataWasLoaded } from '../../root-store/meta/all-data-was-loaded.acti
 import { DataInitStateService } from './data-init-state.service';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
 import { OperationLogHydratorService } from '../../op-log/persistence/operation-log-hydrator.service';
+import { OpLog } from '../log';
 
 @Injectable({ providedIn: 'root' })
 export class DataInitService {
@@ -20,10 +21,16 @@ export class DataInitService {
 
   constructor() {
     // TODO better construction than this
-    this._isAllDataLoadedInitially$.pipe(take(1)).subscribe((v) => {
-      // here because to avoid circular dependencies
-      this._store$.dispatch(allDataWasLoaded());
-      this._dataInitStateService._neverUpdateOutsideDataInitService$.next(v);
+    this._isAllDataLoadedInitially$.pipe(take(1)).subscribe({
+      next: (v) => {
+        // here because to avoid circular dependencies
+        this._store$.dispatch(allDataWasLoaded());
+        this._dataInitStateService._neverUpdateOutsideDataInitService$.next(v);
+      },
+      error: (err) => {
+        // Snack notification is already shown by OperationLogHydratorService
+        OpLog.err('DataInitService: Failed to initialize app data', err);
+      },
     });
   }
 

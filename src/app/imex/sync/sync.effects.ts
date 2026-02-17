@@ -143,7 +143,7 @@ export class SyncEffects {
               ),
             ),
 
-            // initial after starting app
+            // initial after starting app — wait for provider to actually be ready
             this._initialPwaUpdateCheckService.afterInitialUpdateCheck$.pipe(
               concatMap(() =>
                 this._syncWrapperService.isEnabledAndReady$.pipe(

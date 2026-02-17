@@ -892,6 +892,29 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     });
   });
 
+  describe('finishCurrentTask - session state captured before dispatch (issue #6127)', () => {
+    it('should use pre-dispatch session state when effects pause the session during dispatch', () => {
+      const isSessionRunningSignal = (TestBed.inject(FocusModeService) as any)
+        .isSessionRunning;
+      isSessionRunningSignal.set(true);
+      fixture.detectChanges();
+
+      // Simulate the NgRx effect chain: dispatching updateTask triggers
+      // autoSetNextTask$ → syncTrackingStopToSession$ → pauseFocusSession(),
+      // which sets isSessionRunning to false before finishCurrentTask continues.
+      (mockStore.dispatch as jasmine.Spy).and.callFake(() => {
+        isSessionRunningSignal.set(false);
+      });
+
+      component.finishCurrentTask();
+
+      // The task selector should open because the session WAS running
+      // before the dispatch, even though effects paused it during dispatch.
+      expect(component.isTaskSelectorOpen()).toBe(true);
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(actions.selectFocusTask());
+    });
+  });
+
   describe('startSession with sync tracking', () => {
     it('should open task selector when sync is enabled and no task selected', () => {
       focusModeConfigSignal.set({

@@ -137,6 +137,7 @@
   --c-light-50: rgba(255, 255, 255, 0.5);
   --c-light-60: rgba(255, 255, 255, 0.6);
   --c-light-70: rgba(255, 255, 255, 0.7);
+  --c-light-80: rgba(255, 255, 255, 0.8);
   --c-light-90: rgba(255, 255, 255, 0.9);
 
   // Legacy palette references
@@ -374,7 +375,7 @@ body {
   --transition-duration--leave: 195ms;
 
   // Background overlay
-  --c-bg-overlay: var(--c-light-60);
+  --c-bg-overlay: var(--c-light-80);
 }
 
 // -----------------------------
@@ -498,7 +499,7 @@ body.isDarkTheme {
   --mat-sidenav-scrim-color: var(--c-dark-80);
 
   // Background overlay
-  --c-bg-overlay: var(--c-dark-60);
+  --c-bg-overlay: var(--c-dark-80);
 }
 
 /* stylelint-disable */

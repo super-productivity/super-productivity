@@ -43,9 +43,16 @@ class SafBridgePlugin : Plugin() {
             val uri = result.data?.data
             if (uri != null) {
                 // Take persistable permission
-                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                try {
+                    val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+                } catch (e: SecurityException) {
+                    // Some devices/Android versions fail to persist SAF permission
+                    android.util.Log.w("SafBridgePlugin", "Failed to persist URI permission: ${e.message}")
+                    call.reject("Failed to persist folder permission: ${e.message}")
+                    return
+                }
 
                 val ret = JSObject()
                 ret.put("uri", uri.toString())

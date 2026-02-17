@@ -1,4 +1,12 @@
+@if (layoutService.isXs()) {
+  <planner-calendar-nav
+    [visibleDayDate]="planView.visibleDayDate()"
+    [daysWithTasks]="daysWithTasks()"
+    (dayTapped)="planView.scrollToDay($event)"
+  />
+}
 <planner-plan-view
+  #planView
   cdkDropListGroup
   cdkScrollable
-></planner-plan-view>
+/>

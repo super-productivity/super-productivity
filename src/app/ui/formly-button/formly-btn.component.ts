@@ -22,6 +22,8 @@ export class FormlyBtnComponent extends FieldType<FormlyFieldConfig> {
           Log.log('update', v, this);
           this.formControl.setValue(v);
           this.form.markAsDirty();
+        }).catch((err) => {
+          Log.err('FormlyBtnComponent onClick error', err);
         });
       } else {
         this.formControl.setValue(r);

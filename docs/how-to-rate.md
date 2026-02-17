@@ -46,6 +46,18 @@ This leads to the weird situation that a well-intentioned and fair 4-star rating
 
 ---
 
+## 🍎 iOS (App Store)
+
+1. Open the **App Store** on your iPhone or iPad
+2. Search for **Super Productivity**
+3. Tap the app's page
+4. Scroll down to **Ratings & Reviews**
+5. Tap the stars to rate
+6. (Optional) Tap **Write a Review**
+7. Tap **Send**
+
+---
+
 ## 🐧 Ubuntu Software Center
 
 1. Open **Ubuntu Software**

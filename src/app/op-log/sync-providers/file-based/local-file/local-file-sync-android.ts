@@ -30,7 +30,7 @@ export class LocalFileSyncAndroid extends LocalFileSyncBase {
     return false;
   }
 
-  async setupSaf(): Promise<string | undefined> {
+  async setupSaf(): Promise<string> {
     try {
       const uri = await SafService.selectFolder();
       await this.privateCfg.upsertPartial({
@@ -39,7 +39,7 @@ export class LocalFileSyncAndroid extends LocalFileSyncBase {
       return uri;
     } catch (error) {
       SyncLog.err('Failed to setup SAF:', error);
-      return undefined;
+      throw error;
     }
   }
 

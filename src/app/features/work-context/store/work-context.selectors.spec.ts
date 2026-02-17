@@ -6,13 +6,13 @@ import {
   selectTimelineTasks,
   selectTodayTaskIds,
   selectTodayTagRepair,
+  selectTrackableTasksActiveContextFirst,
   selectTrackableTasksForActiveContext,
   selectUndoneTodayTaskIds,
 } from './work-context.selectors';
 import { WorkContext, WorkContextType } from '../work-context.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-
 /**
  * Tests for work-context selectors.
  *
@@ -264,6 +264,31 @@ describe('workContext selectors', () => {
           dueDay: todayStr,
         },
       ] as Partial<TaskCopy>[] as TaskCopy[]);
+    });
+  });
+
+  describe('selectTrackableTasksActiveContextFirst', () => {
+    it('should not crash when a task entity has undefined subTaskIds (issue #6562)', () => {
+      const taskWithUndefinedSubTaskIds = {
+        id: 'broken-task',
+        tagIds: [],
+        subTaskIds: undefined, // Corrupted/legacy entity
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const normalTask = {
+        id: 'normal-task',
+        tagIds: [],
+        subTaskIds: [],
+      } as Partial<TaskCopy> as TaskCopy;
+
+      const taskState = fakeEntityStateFromArray([
+        taskWithUndefinedSubTaskIds,
+        normalTask,
+      ]) as any;
+
+      // Should not throw "Cannot read properties of undefined (reading 'length')"
+      const result = selectTrackableTasksActiveContextFirst.projector(taskState, []);
+      expect(result.length).toBe(2);
     });
   });
 

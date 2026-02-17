@@ -29,7 +29,7 @@ export const WORK_CONTEXT_DEFAULT_THEME: WorkContextThemeCfg = {
   hueWarn: '500',
   backgroundImageDark: null,
   backgroundImageLight: null,
-  backgroundOverlayOpacity: 0,
+  backgroundOverlayOpacity: 20,
 };
 
 export const WORK_CONTEXT_DEFAULT_COMMON: WorkContextCommon = {
@@ -163,11 +163,10 @@ export const WORK_CONTEXT_THEME_CONFIG_FORM_CONFIG: ConfigFormSection<WorkContex
         type: 'slider',
         props: {
           label: T.F.PROJECT.FORM_THEME.L_BACKGROUND_OVERLAY_OPACITY,
-          description:
-            'Adjust this value to make the background more or less transparent. The default is 0%.',
+          description: T.F.PROJECT.FORM_THEME.D_BACKGROUND_OVERLAY_OPACITY,
           type: 'number',
           min: 0,
-          max: 100,
+          max: 99,
           required: false,
           displayWith: (value: number): string => `${value}%`,
         },

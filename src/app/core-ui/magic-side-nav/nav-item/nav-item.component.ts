@@ -17,9 +17,13 @@ import {
 import { Project } from '../../../features/project/project.model';
 import { Tag } from '../../../features/tag/tag.model';
 import { DEFAULT_PROJECT_ICON } from '../../../features/project/project.const';
+import { AppFeaturesConfig } from '../../../features/config/global-config.model';
 import { WorkContextMenuComponent } from '../../work-context-menu/work-context-menu.component';
 import { FolderContextMenuComponent } from '../../folder-context-menu/folder-context-menu.component';
 import { ContextMenuComponent } from '../../../ui/context-menu/context-menu.component';
+import { MagicNavConfigService } from '../magic-nav-config.service';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../../t.const';
 import { CdkDragPlaceholder } from '@angular/cdk/drag-drop';
 import { MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -65,7 +69,10 @@ import { PluginIconComponent } from '../../../plugins/ui/plugin-icon/plugin-icon
   standalone: true,
 })
 export class NavItemComponent {
+  readonly T = T;
   private readonly _globalThemeService = inject(GlobalThemeService);
+  private readonly _navConfigService = inject(MagicNavConfigService);
+  private readonly _translateService = inject(TranslateService);
   private readonly _iconRegistrationEffect = effect(() => {
     const svgUrl = this.svgIcon();
     if (svgUrl && svgUrl.startsWith('assets/')) {
@@ -108,6 +115,9 @@ export class NavItemComponent {
 
   // Tour class for Shepherd.js guide
   tourClass = input<string | null>(null);
+
+  // Feature flag key for disable-feature context menu
+  featureConfigKey = input<keyof AppFeaturesConfig | undefined>(undefined);
 
   // Events
   clicked = output<void>();
@@ -213,4 +223,12 @@ export class NavItemComponent {
     const match = svgUrl.match(/^plugin-(.+)-icon$/);
     return match ? match[1] : null;
   });
+
+  disableFeature(): void {
+    const key = this.featureConfigKey();
+    if (!key) return;
+    const labelKey = this.label();
+    const translatedLabel = labelKey ? this._translateService.instant(labelKey) : '';
+    this._navConfigService.disableFeature(key, translatedLabel);
+  }
 }

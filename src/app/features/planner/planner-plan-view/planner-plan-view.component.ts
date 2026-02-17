@@ -5,6 +5,7 @@ import {
   effect,
   ElementRef,
   inject,
+  signal,
   viewChildren,
 } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -34,6 +35,7 @@ export class PlannerPlanViewComponent {
   private _plannerService = inject(PlannerService);
   private _store = inject(Store);
   private _destroyRef = inject(DestroyRef);
+  private _elRef = inject(ElementRef);
 
   overdue$ = this._store.select(selectUndoneOverdue);
   days$: Observable<PlannerDay[]> = this._plannerService.days$;
@@ -44,22 +46,142 @@ export class PlannerPlanViewComponent {
   private _intersectionObserver?: IntersectionObserver;
   private _lastObservedElement?: Element;
 
+  private _visibleDayObserver?: IntersectionObserver;
+  private _visibleDayElements = new Set<Element>();
+  private _isScrollingToDay = false;
+  private _pendingTimers: ReturnType<typeof setTimeout>[] = [];
+  private _pendingIntervals: ReturnType<typeof setInterval>[] = [];
+
+  visibleDayDate = signal<string | null>(null);
+
   protected readonly T = T;
 
   constructor() {
-    // Setup intersection observer when day elements change
+    // Setup intersection observers when day elements change
     effect(() => {
       const elements = this.dayElements();
       if (elements.length > 0) {
         this._setupIntersectionObserver(elements);
+        this._setupVisibleDayObserver(elements);
       }
     });
 
-    // Cleanup observer on component destroy
+    // Cleanup observers and timers on component destroy
     this._destroyRef.onDestroy(() => {
       this._intersectionObserver?.disconnect();
+      this._visibleDayObserver?.disconnect();
+      this._pendingTimers.forEach(clearTimeout);
+      this._pendingIntervals.forEach(clearInterval);
       this._plannerService.resetScrollState();
     });
+  }
+
+  scrollToDay(dayDate: string): void {
+    this._isScrollingToDay = true;
+    this.visibleDayDate.set(dayDate);
+
+    const host = this._elRef.nativeElement as HTMLElement;
+    const el = host.querySelector(
+      `[data-day="${CSS.escape(dayDate)}"]`,
+    ) as HTMLElement | null;
+    if (el) {
+      this._scrollToElement(host, el);
+    } else {
+      this._plannerService.ensureDayLoaded(dayDate);
+      this._pollForElement(dayDate);
+    }
+  }
+
+  private _scrollToElement(host: HTMLElement, el: HTMLElement): void {
+    host.scrollTo({ top: el.offsetTop - host.offsetTop, behavior: 'smooth' });
+    this._waitForScrollEnd();
+  }
+
+  private _waitForScrollEnd(): void {
+    const host = this._elRef.nativeElement as HTMLElement;
+    let settled = false;
+
+    const onScrollEnd = (): void => {
+      if (settled) return;
+      settled = true;
+      host.removeEventListener('scrollend', onScrollEnd);
+      this._isScrollingToDay = false;
+    };
+
+    host.addEventListener('scrollend', onScrollEnd, { once: true });
+
+    // Fallback: clear guard after reasonable time
+    let attempts = 0;
+    const poll = setInterval(() => {
+      attempts++;
+      if (settled || attempts > 20) {
+        clearInterval(poll);
+        if (!settled) {
+          settled = true;
+          host.removeEventListener('scrollend', onScrollEnd);
+          this._isScrollingToDay = false;
+        }
+      }
+    }, 100);
+    this._pendingIntervals.push(poll);
+  }
+
+  private _pollForElement(dayDate: string, attempt = 0): void {
+    if (attempt > 20) {
+      this._isScrollingToDay = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      const host = this._elRef.nativeElement as HTMLElement;
+      const el = host.querySelector(
+        `[data-day="${CSS.escape(dayDate)}"]`,
+      ) as HTMLElement | null;
+      if (el) {
+        this._scrollToElement(host, el);
+      } else {
+        this._pollForElement(dayDate, attempt + 1);
+      }
+    }, 100);
+    this._pendingTimers.push(timer);
+  }
+
+  private _setupVisibleDayObserver(elements: readonly ElementRef[]): void {
+    this._visibleDayObserver?.disconnect();
+    this._visibleDayElements.clear();
+
+    this._visibleDayObserver = new IntersectionObserver(
+      (entries) => {
+        if (this._isScrollingToDay) return;
+
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            this._visibleDayElements.add(entry.target);
+          } else {
+            this._visibleDayElements.delete(entry.target);
+          }
+        }
+
+        // Pick topmost visible element by DOM order
+        for (const elRef of elements) {
+          if (this._visibleDayElements.has(elRef.nativeElement)) {
+            const dayAttr = elRef.nativeElement.getAttribute('data-day');
+            if (dayAttr && dayAttr !== this.visibleDayDate()) {
+              this.visibleDayDate.set(dayAttr);
+            }
+            break;
+          }
+        }
+      },
+      {
+        root: this._elRef.nativeElement,
+        rootMargin: '0px 0px -80% 0px',
+        threshold: 0,
+      },
+    );
+
+    for (const elRef of elements) {
+      this._visibleDayObserver.observe(elRef.nativeElement);
+    }
   }
 
   private _setupIntersectionObserver(elements: readonly ElementRef[]): void {

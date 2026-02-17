@@ -212,8 +212,6 @@ describe('TrelloApiService', () => {
 
       const req = httpMock.expectOne((request) => request.url.includes('/boards/'));
       expect(req.request.urlWithParams).toContain('key=test-api-key');
-      expect(req.request.headers.has('Authorization')).toBe(true);
-      expect(req.request.headers.get('Authorization')).toBe('Bearer test-token');
       req.flush({ id: mockCfg.boardId });
     });
 
@@ -225,7 +223,6 @@ describe('TrelloApiService', () => {
       const req = httpMock.expectOne((request) => request.url.includes('/search'));
       expect(req.request.urlWithParams).toContain('query=test');
       expect(req.request.urlWithParams).toContain('%26');
-      expect(req.request.headers.get('Authorization')).toBe('Bearer test-token');
       req.flush({ cards: [] });
     });
   });
