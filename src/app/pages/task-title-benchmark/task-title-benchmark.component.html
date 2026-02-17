@@ -61,6 +61,7 @@ Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}</pre
         <task-title
           [value]="task.title"
           [readonly]="true"
+          [renderLinks]="linkRenderingEnabled()"
         ></task-title>
       </div>
     }
