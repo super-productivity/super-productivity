@@ -155,6 +155,7 @@
     "electron-window-state": "^5.0.3",
     "hash-wasm": "^4.12.0",
     "node-fetch": "^2.7.0",
+    "https-proxy-agent": "^7.0.0",
     "uuidv7": "^1.1.0"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import { session } from 'electron';
 import { JiraCfg } from '../src/app/features/issue/providers/jira/jira.model';
 import fetch, { RequestInit } from 'node-fetch';
 import { Agent } from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { error, log } from 'electron-log/main';
 
 export const sendJiraRequest = ({
@@ -21,18 +22,32 @@ export const sendJiraRequest = ({
   // log('--------------------------------------------------------------------');
   // log(url);
   // log('--------------------------------------------------------------------');
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
+
+  // Determine the agent to use:
+  // - If a proxy env var is set, use HttpsProxyAgent (supports self-signed certs via options).
+  // - Otherwise, fall back to a plain https.Agent only when self-signed certs are allowed.
+  // CodeQL alert js/disabling-certificate-validation is expected here (intentional user setting).
+  let agent;
+  if (proxyUrl) {
+    agent = new HttpsProxyAgent(proxyUrl, {
+      ...(jiraCfg && jiraCfg.isAllowSelfSignedCertificate
+        ? { rejectUnauthorized: false } // lgtm[js/disabling-certificate-validation]
+        : {}),
+    });
+  } else if (jiraCfg && jiraCfg.isAllowSelfSignedCertificate) {
+    agent = new Agent({
+      rejectUnauthorized: false, // lgtm[js/disabling-certificate-validation]
+    });
+  }
+
   fetch(url, {
     ...requestInit,
-    // Allow self-signed certificates for self-hosted Jira instances.
-    // This is an intentional user-configurable setting (isAllowSelfSignedCertificate).
-    // CodeQL alert js/disabling-certificate-validation is expected here.
-    ...(jiraCfg && jiraCfg.isAllowSelfSignedCertificate
-      ? {
-          agent: new Agent({
-            rejectUnauthorized: false, // lgtm[js/disabling-certificate-validation]
-          }),
-        }
-      : {}),
+    ...(agent ? { agent } : {}),
   } as RequestInit)
     .then(async (response) => {
       // log('JIRA_RAW_RESPONSE', response);
