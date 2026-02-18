@@ -3,11 +3,32 @@
 ## [[1.00-Quickstarts]]
 
 - [[1.01-First-Steps]]
+- [[1.02-Configure-Data-Synchronization]]
 
 ## [[2.00-How_To]]
 
+### Using Super-Productivity
+
 - [[2.01-Downloads and Install]]
 - [[2.02-Restore-Data-From-Backup]]
+- [[2.03-Add-Tasks]]
+- [[2.04-Manage-Subtasks]]
+- [[2.05-Manage-Scheduled-Tasks]]
+- [[2.06-Manage-Repeating-Tasks]]
+- [[2.07-Manage-Task-Integrations]]
+- [[2.08-Choose-Sync-Backend]]
+- [[2.09-Configure-Sync-Backend]]
+- [[2.13-Run-with-Docker]]
+
+### Contributing to Super-Productivity
+
+- [[2.18-Contribute-Translations]]
+- [[2.11-Run-the-Development-Server]]
+- [[2.16-Set-Up-Development-Environment]]
+- [[2.12-Package-the-App]]
+- [[2.14-Build-for-Android]]
+- [[2.15-Develop-a-Plugin]]
+- [[2.17-Add-a-New-Issue-Integration]]
 
 ## [[3.00-Reference]]
 
@@ -18,6 +39,7 @@
 - [[3.06-User-Data]]
 - [[3.07-Issue-Integration-Comparison]]
 - [[3.08-Sync-Integration-Comparison]]
+- [[3.10-Theming]]
 
 ## [[4.00-Concepts]]
 
