@@ -135,6 +135,24 @@ describe('RenderLinksPipe', () => {
     });
   });
 
+  describe('aria-label on plain-URL links', () => {
+    it('should add aria-label with the hostname for auto-detected URLs', () => {
+      const result = html(pipe.transform('See https://github.com/some/path here', true));
+      expect(result).toContain('aria-label="Open link: github.com"');
+    });
+
+    it('should not add aria-label to markdown links (title already provides context)', () => {
+      const result = html(pipe.transform('[GitHub](https://github.com/some/path)', true));
+      expect(result).not.toContain('aria-label=');
+    });
+
+    it('should omit aria-label when hostname cannot be determined', () => {
+      // www. URLs are normalised to http:// so hostname is available
+      const result = html(pipe.transform('See www.example.com here', true));
+      expect(result).toContain('aria-label="Open link: www.example.com"');
+    });
+  });
+
   describe('renderLinks=false', () => {
     it('should return escaped plain text without anchor tags', () => {
       const result = html(pipe.transform('Check https://example.com', false));

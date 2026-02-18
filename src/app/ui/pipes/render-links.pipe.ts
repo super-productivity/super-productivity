@@ -109,8 +109,12 @@ export class RenderLinksPipe implements PipeTransform {
         out.push(this._escapeHtml(match.title));
       } else {
         const href = this._normalizeHref(match.url);
+        // Plain-URL links use the raw URL as visible text, which is unreadable
+        // for screen readers. Add aria-label with just the hostname.
+        // Markdown links already have a meaningful title, so skip the label.
+        const ariaLabel = match.isMarkdown ? '' : this._ariaLabelForUrl(href);
         out.push(
-          `<a href="${this._escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${this._escapeHtml(match.title)}</a>`,
+          `<a href="${this._escapeHtml(href)}"${ariaLabel} target="_blank" rel="noopener noreferrer">${this._escapeHtml(match.title)}</a>`,
         );
       }
 
@@ -120,6 +124,18 @@ export class RenderLinksPipe implements PipeTransform {
     // Escape any remaining text after the last match
     out.push(this._escapeHtml(text.slice(cursor)));
     return out.join('');
+  }
+
+  /** Returns an aria-label attribute string for a plain-URL anchor. */
+  private _ariaLabelForUrl(href: string): string {
+    try {
+      const { hostname } = new URL(href);
+      return hostname
+        ? ` aria-label="${this._escapeHtml('Open link: ' + hostname)}"`
+        : '';
+    } catch {
+      return '';
+    }
   }
 
   /** Strip trailing punctuation and unmatched closing parentheses from a URL. */
