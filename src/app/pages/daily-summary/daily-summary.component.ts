@@ -203,8 +203,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           tasks?.length &&
           tasks.reduce((acc, task) => {
             if (
-              task.subTaskIds.length ||
-              (!task.timeSpentOnDay && !(task.timeSpentOnDay[dayStr] > 0))
+              task.subTaskIds?.length ||
+              !task.timeSpentOnDay ||
+              !(task.timeSpentOnDay[dayStr] > 0)
             ) {
               return acc;
             }
@@ -221,7 +222,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       ([tasks, dayStr]: [Task[], string]): number =>
         tasks?.length &&
         tasks.reduce((acc, task) => {
-          if (task.subTaskIds.length) {
+          if (task.subTaskIds?.length) {
             return acc;
           }
           return (
@@ -534,8 +535,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           !!(task as Task).parentId
             ? (
                 taskState.entities[(task as Task).parentId as string] as Task
-              ).tagIds.includes(activeId)
-            : (task as Task).tagIds.includes(activeId),
+              )?.tagIds?.includes(activeId)
+            : (task as Task).tagIds?.includes(activeId),
         ) as Task[];
       }
       // return filteredTasks;
@@ -543,7 +544,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       return filteredTasks
         .filter((task) => !task.parentId)
         .map((task) =>
-          task.subTaskIds.length
+          task.subTaskIds?.length
             ? {
                 ...task,
                 subTasks: task.subTaskIds

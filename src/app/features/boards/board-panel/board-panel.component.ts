@@ -129,13 +129,13 @@ export class BoardPanelComponent {
       let isTaskIncluded = true;
       if (panelCfg.includedTagIds?.length) {
         isTaskIncluded = panelCfg.includedTagIds.every((tagId) =>
-          task.tagIds.includes(tagId),
+          task.tagIds?.includes(tagId),
         );
       }
       if (panelCfg.excludedTagIds?.length) {
         isTaskIncluded =
           isTaskIncluded &&
-          !panelCfg.excludedTagIds.some((tagId) => task.tagIds.includes(tagId));
+          !panelCfg.excludedTagIds.some((tagId) => task.tagIds?.includes(tagId));
       }
 
       if (panelCfg.isParentTasksOnly) {
@@ -239,7 +239,7 @@ export class BoardPanelComponent {
       : // NOTE: original array is mutated and splice does not return a new array
         prevTaskIds.splice(ev.currentIndex, 0, task.id) && prevTaskIds;
 
-    let newTagIds: string[] = task.tagIds;
+    let newTagIds: string[] = task.tagIds || [];
     if (panelCfg.includedTagIds?.length) {
       newTagIds = newTagIds.concat(panelCfg.includedTagIds);
     }
@@ -250,7 +250,7 @@ export class BoardPanelComponent {
     const updates: Partial<TaskCopy> = {};
 
     // conditional updates
-    if (!fastArrayCompare(task.tagIds, newTagIds)) {
+    if (!fastArrayCompare(task.tagIds || [], newTagIds)) {
       this.taskService.updateTags(task, unique(newTagIds));
     }
     if (panelCfg.taskDoneState === BoardPanelCfgTaskDoneState.Done && !task.isDone) {

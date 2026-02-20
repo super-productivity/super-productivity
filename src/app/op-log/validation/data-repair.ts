@@ -81,6 +81,7 @@ export const dataRepair = (
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
   dataOut = _fixEntityStates(dataOut);
+  dataOut = _ensureTaskArrayProperties(dataOut);
   dataOut = _removeMissingTasksFromListsOrRestoreFromArchive(dataOut);
   dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut);
   dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut);
@@ -108,6 +109,40 @@ export const dataRepair = (
 
   // console.timeEnd('dataRepair');
   return dataOut;
+};
+
+const _ensureTaskArrayProperties = (data: AppDataComplete): AppDataComplete => {
+  const taskStates: TaskState[] = [
+    data.task,
+    data.archiveYoung.task as TaskState,
+    data.archiveOld.task as TaskState,
+  ];
+  let fixedCount = 0;
+
+  for (const taskState of taskStates) {
+    for (const id of taskState.ids as string[]) {
+      const t = taskState.entities[id] as TaskCopy;
+      if (!t) continue;
+      if (!Array.isArray(t.tagIds)) {
+        t.tagIds = [];
+        fixedCount++;
+      }
+      if (!Array.isArray(t.subTaskIds)) {
+        t.subTaskIds = [];
+        fixedCount++;
+      }
+      if (!Array.isArray(t.attachments)) {
+        t.attachments = [];
+        fixedCount++;
+      }
+    }
+  }
+
+  if (fixedCount > 0) {
+    OpLog.warn(`[data-repair] Fixed ${fixedCount} missing array properties on tasks`);
+  }
+
+  return data;
 };
 
 const _fixTaskRepeatMissingWeekday = (data: AppDataComplete): AppDataComplete => {
@@ -301,7 +336,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
       taskState.entities[t.id] = t;
       const par: TaskCopy = taskState.entities[t.parentId as string] as TaskCopy;
 
-      par.subTaskIds = unique([...par.subTaskIds, t.id]);
+      par.subTaskIds = unique([...(par.subTaskIds || []), t.id]);
 
       // and delete from archive
       taskArchiveYoungState.ids = taskArchiveYoungState.ids.filter((id) => t.id !== id);
@@ -349,7 +384,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
       taskState.entities[t.id] = t;
       const par: TaskCopy = taskState.entities[t.parentId as string] as TaskCopy;
 
-      par.subTaskIds = unique([...par.subTaskIds, t.id]);
+      par.subTaskIds = unique([...(par.subTaskIds || []), t.id]);
 
       // and delete from archive
       taskArchiveOldState.ids = taskArchiveOldState.ids.filter((id) => t.id !== id);
@@ -410,7 +445,7 @@ const _moveUnArchivedSubTasksToArchivedParents = (
       const par: TaskCopy = taskArchiveYoungState.entities[
         t.parentId as string
       ] as TaskCopy;
-      par.subTaskIds = unique([...par.subTaskIds, t.id]);
+      par.subTaskIds = unique([...(par.subTaskIds || []), t.id]);
 
       // and delete from today
       taskState.ids = taskState.ids.filter((id) => t.id !== id);
@@ -424,7 +459,7 @@ const _moveUnArchivedSubTasksToArchivedParents = (
       const par: TaskCopy = taskArchiveOldState.entities[
         t.parentId as string
       ] as TaskCopy;
-      par.subTaskIds = unique([...par.subTaskIds, t.id]);
+      par.subTaskIds = unique([...(par.subTaskIds || []), t.id]);
 
       // and delete from today
       taskState.ids = taskState.ids.filter((id) => t.id !== id);
@@ -598,7 +633,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
     }
 
     // while we are at it, we also cleanup the today tag
-    if (t.tagIds.includes(TODAY_TAG.id)) {
+    if (t.tagIds?.includes(TODAY_TAG.id)) {
       t.tagIds = t.tagIds.filter((idI) => idI !== TODAY_TAG.id);
     }
   });
@@ -613,7 +648,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
       t.projectId = INBOX_PROJECT.id;
     }
     // while we are at it, we also cleanup the today tag
-    if (t.tagIds.includes(TODAY_TAG.id)) {
+    if (t.tagIds?.includes(TODAY_TAG.id)) {
       t.tagIds = t.tagIds.filter((idI) => idI !== TODAY_TAG.id);
     }
   });
@@ -628,7 +663,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
       t.projectId = INBOX_PROJECT.id;
     }
     // while we are at it, we also cleanup the today tag
-    if (t.tagIds.includes(TODAY_TAG.id)) {
+    if (t.tagIds?.includes(TODAY_TAG.id)) {
       t.tagIds = t.tagIds.filter((idI) => idI !== TODAY_TAG.id);
     }
   });
@@ -807,7 +842,7 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
   taskRepeatCfgIds.forEach((id) => {
     const repeatCfg = taskRepeatCfg.entities[id] as TaskRepeatCfgCopy;
     if (repeatCfg.projectId && !projectIds.includes(repeatCfg.projectId)) {
-      if (repeatCfg.tagIds.length) {
+      if (repeatCfg.tagIds?.length) {
         OpLog.log(
           'Delete missing project id from task repeat cfg ' + repeatCfg.projectId,
         );
@@ -1028,8 +1063,8 @@ const _fixInconsistentTagId = (data: AppDataComplete): AppDataComplete => {
         const task = data.task.entities[tid];
         if (!task) {
           throw new Error('No task found');
-        } else if (!task?.tagIds.includes(tagItem.id)) {
-          (task as TaskCopy).tagIds = [...task.tagIds, tagItem.id];
+        } else if (!task.tagIds?.includes(tagItem.id)) {
+          (task as TaskCopy).tagIds = [...(task.tagIds || []), tagItem.id];
         }
       });
     });
@@ -1118,7 +1153,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         throw new Error('No task');
       }
 
-      if (taskItem.subTaskIds.length) {
+      if (taskItem.subTaskIds?.length) {
         let i = taskItem.subTaskIds.length - 1;
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
@@ -1140,7 +1175,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         throw new Error('No archive task');
       }
 
-      if (taskItem.subTaskIds.length) {
+      if (taskItem.subTaskIds?.length) {
         let i = taskItem.subTaskIds.length - 1;
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
@@ -1162,7 +1197,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
         throw new Error('No old archive task');
       }
 
-      if (taskItem.subTaskIds.length) {
+      if (taskItem.subTaskIds?.length) {
         let i = taskItem.subTaskIds.length - 1;
         while (i >= 0) {
           const sid = taskItem.subTaskIds[i];
