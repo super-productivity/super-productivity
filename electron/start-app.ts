@@ -8,6 +8,7 @@ import {
   ipcMain,
   powerMonitor,
   protocol,
+  session,
 } from 'electron';
 import { join } from 'path';
 import { initDebug } from './debug';
@@ -28,6 +29,7 @@ import {
   processPendingProtocolUrls,
 } from './protocol-handler';
 import { getIsQuiting, setIsLocked } from './shared-state';
+import { getProxyUrl } from './proxy-agent';
 
 const ICONS_FOLDER = __dirname + '/assets/icons/';
 const IS_MAC = process.platform === 'darwin';
@@ -152,6 +154,18 @@ export const startApp = (): void => {
 
   // APP EVENT LISTENERS
   // -------------------
+  appIN.on('ready', () => {
+    // Configure proxy for all renderer requests (GitHub, GitLab, Redmine, Gitea, etc.)
+    // before any windows are created. Chromium's network stack in the renderer will
+    // use this proxy for all HTTP/HTTPS requests made via Angular's HttpClient.
+    const proxyUrl = getProxyUrl();
+    if (proxyUrl) {
+      session.defaultSession
+        .setProxy({ proxyRules: proxyUrl })
+        .then(() => log('Session proxy configured successfully'))
+        .catch((err: unknown) => log('Failed to configure session proxy:', err));
+    }
+  });
   appIN.on('ready', () => createMainWin());
   appIN.on('ready', () => initBackupAdapter());
   appIN.on('ready', () => initLocalFileSyncAdapter());
