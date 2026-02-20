@@ -43,7 +43,6 @@ import { FormlyModule } from '@ngx-formly/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
-import { devError } from '../../../util/dev-error';
 import { IssueLog } from '../../../core/log';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 import { ClickUpAdditionalCfgComponent } from '../providers/clickup/clickup-view-components/clickup-cfg/clickup-additional-cfg.component';
@@ -168,7 +167,6 @@ export class DialogEditIssueProviderComponent {
         }
       });
     } catch (e) {
-      devError(e);
       const updates: any = {};
       Object.keys(model).forEach((key) => {
         if (key !== 'isEnabled') {

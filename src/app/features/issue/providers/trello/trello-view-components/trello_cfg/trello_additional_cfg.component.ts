@@ -149,13 +149,16 @@ export class TrelloAdditionalCfgComponent implements OnInit, OnDestroy {
             this._cdr.markForCheck();
           }),
           catchError((error) => {
+            console.error('Trello Fetch Boards Error:', error);
             this.isLoading$.next(false);
             this._boardsList$.next([]);
             this._cdr.markForCheck();
             // Show error notification
             this._snackService.open({
               type: 'ERROR',
-              msg: 'Failed to load Trello boards. Check your API credentials.',
+              msg:
+                'Failed to load Trello boards. Check your API credentials. Error: ' +
+                (error?.message || error?.statusText || 'Unknown'),
               isSkipTranslate: true,
             });
             return of<TrelloBoard[]>([]);

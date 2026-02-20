@@ -43,7 +43,6 @@ import { MatSelect } from '@angular/material/select';
 import { MatButton } from '@angular/material/button';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
-import { devError } from '../../../../../../util/dev-error';
 
 @Component({
   selector: 'jira-additonal-cfg',
@@ -184,7 +183,6 @@ export class JiraAdditionalCfgComponent implements OnInit, OnDestroy {
         }
       });
     } catch (e) {
-      devError(e);
       const updates: any = {};
       Object.keys(cfg).forEach((key) => {
         if (key !== 'isEnabled') {
