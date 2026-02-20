@@ -194,13 +194,14 @@
   padding: 0;
   padding-top: var(--pt);
   margin: 0;
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
 
   @media (max-width: 600px) {
     padding-top: var(--safe-area-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   :host-context(.isMac.isElectron) & {
