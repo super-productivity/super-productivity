@@ -1,8 +1,15 @@
 import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
-import { distinctUntilChanged, filter, map, tap, withLatestFrom } from 'rxjs/operators';
-import { Store } from '@ngrx/store';
+import {
+  distinctUntilChanged,
+  filter,
+  map,
+  mergeMap,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
+import { Action, Store } from '@ngrx/store';
 import { IS_ELECTRON } from '../../../app.constants';
 import { T } from '../../../t.const';
 import { LanguageService } from '../../../core/language/language.service';
@@ -19,6 +26,8 @@ import {
 import { AppFeaturesConfig, MiscConfig } from '../global-config.model';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { selectAllTasks } from '../../tasks/store/task.selectors';
 
 @Injectable()
 export class GlobalConfigEffects {
@@ -103,22 +112,39 @@ export class GlobalConfigEffects {
   setStartOfNextDayDiffOnChange = createEffect(() =>
     this._actions$.pipe(
       ofType(updateGlobalConfigSection),
-      filter(({ sectionKey, sectionCfg }) => sectionKey === 'misc'),
+      filter(({ sectionKey }) => sectionKey === 'misc'),
       filter(
         ({ sectionCfg }) =>
           sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
       ),
-      tap(({ sectionCfg }) => {
+      withLatestFrom(this._store.select(selectAllTasks)),
+      mergeMap(([{ sectionCfg }, allTasks]) => {
+        const oldTodayStr = this._dateService.todayStr();
         this._dateService.setStartOfNextDayDiff(
           (sectionCfg as MiscConfig).startOfNextDay,
         );
+        const newTodayStr = this._dateService.todayStr();
+
+        const actions: Action[] = [
+          AppStateActions.setTodayString({
+            todayStr: newTodayStr,
+            startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
+          }),
+        ];
+
+        // Migrate task dueDays so "today" tasks stay "today" after offset change
+        if (oldTodayStr !== newTodayStr) {
+          const taskUpdates = allTasks
+            .filter((t) => t.dueDay === oldTodayStr)
+            .map((t) => ({ id: t.id, changes: { dueDay: newTodayStr } }));
+
+          if (taskUpdates.length > 0) {
+            actions.push(TaskSharedActions.updateTasks({ tasks: taskUpdates }));
+          }
+        }
+
+        return actions;
       }),
-      map(() =>
-        AppStateActions.setTodayString({
-          todayStr: this._dateService.todayStr(),
-          startOfNextDayDiffMs: this._dateService.startOfNextDayDiff,
-        }),
-      ),
     ),
   );
 

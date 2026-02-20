@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideMockActions } from '@ngrx/effects/testing';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { Subject } from 'rxjs';
 import { Action } from '@ngrx/store';
 import { GlobalConfigEffects } from './global-config.effects';
@@ -13,11 +13,14 @@ import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { AppStateActions } from '../../../root-store/app-state/app-state.actions';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
+import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { selectAllTasks } from '../../tasks/store/task.selectors';
 
 describe('GlobalConfigEffects', () => {
   let effects: GlobalConfigEffects;
   let actions$: Subject<Action>;
   let dateServiceSpy: jasmine.SpyObj<DateService>;
+  let store: MockStore;
 
   beforeEach(() => {
     actions$ = new Subject<Action>();
@@ -25,7 +28,7 @@ describe('GlobalConfigEffects', () => {
       'setStartOfNextDayDiff',
       'todayStr',
     ]);
-    dateServiceSpy.todayStr.and.returnValue('2026-02-16');
+    dateServiceSpy.todayStr.and.returnValue('2026-02-20');
     dateServiceSpy.startOfNextDayDiff = 0;
 
     TestBed.configureTestingModule({
@@ -50,13 +53,21 @@ describe('GlobalConfigEffects', () => {
       ],
     });
 
+    store = TestBed.inject(MockStore);
+    store.overrideSelector(selectAllTasks, []);
     effects = TestBed.inject(GlobalConfigEffects);
-    effects.setStartOfNextDayDiffOnChange.subscribe();
     effects.setStartOfNextDayDiffOnLoad.subscribe();
+  });
+
+  afterEach(() => {
+    store.resetSelectors();
   });
 
   describe('setStartOfNextDayDiffOnChange', () => {
     it('should call setStartOfNextDayDiff when startOfNextDay is set to a non-zero value', () => {
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
       actions$.next(
         updateGlobalConfigSection({
           sectionKey: 'misc',
@@ -68,6 +79,9 @@ describe('GlobalConfigEffects', () => {
     });
 
     it('should call setStartOfNextDayDiff when startOfNextDay is set to 0', () => {
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
       actions$.next(
         updateGlobalConfigSection({
           sectionKey: 'misc',
@@ -79,6 +93,9 @@ describe('GlobalConfigEffects', () => {
     });
 
     it('should not call setStartOfNextDayDiff for other config sections', () => {
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
       actions$.next(
         updateGlobalConfigSection({
           sectionKey: 'keyboard',
@@ -87,13 +104,89 @@ describe('GlobalConfigEffects', () => {
       );
 
       expect(dateServiceSpy.setStartOfNextDayDiff).not.toHaveBeenCalled();
+      expect(dispatched.length).toBe(0);
+    });
+
+    it('should dispatch setTodayString when startOfNextDay changes', () => {
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
+      actions$.next(
+        updateGlobalConfigSection({
+          sectionKey: 'misc',
+          sectionCfg: { startOfNextDay: 4 },
+        }),
+      );
+
+      expect(dispatched).toContain(
+        AppStateActions.setTodayString({
+          todayStr: '2026-02-20',
+          startOfNextDayDiffMs: 0,
+        }),
+      );
+    });
+
+    it('should dispatch updateTasks when todayStr shifts and tasks have old dueDay', () => {
+      // First call returns old date, second call (after setStartOfNextDayDiff) returns new date
+      dateServiceSpy.todayStr.and.returnValues('2026-02-20', '2026-02-19');
+
+      store.overrideSelector(selectAllTasks, [
+        { id: 'task1', dueDay: '2026-02-20' } as any,
+        { id: 'task2', dueDay: '2026-02-20' } as any,
+        { id: 'task3', dueDay: '2026-02-18' } as any,
+      ]);
+      store.refreshState();
+
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
+      actions$.next(
+        updateGlobalConfigSection({
+          sectionKey: 'misc',
+          sectionCfg: { startOfNextDay: 4 },
+        }),
+      );
+
+      const updateTasksAction = dispatched.find(
+        (a) => a.type === TaskSharedActions.updateTasks.type,
+      );
+      expect(updateTasksAction).toBeTruthy();
+      expect((updateTasksAction as any).tasks).toEqual([
+        { id: 'task1', changes: { dueDay: '2026-02-19' } },
+        { id: 'task2', changes: { dueDay: '2026-02-19' } },
+      ]);
+    });
+
+    it('should not dispatch updateTasks when todayStr does not change', () => {
+      // Both calls return the same date
+      dateServiceSpy.todayStr.and.returnValue('2026-02-20');
+
+      store.overrideSelector(selectAllTasks, [
+        { id: 'task1', dueDay: '2026-02-20' } as any,
+      ]);
+      store.refreshState();
+
+      const dispatched: Action[] = [];
+      effects.setStartOfNextDayDiffOnChange.subscribe((a) => dispatched.push(a));
+
+      actions$.next(
+        updateGlobalConfigSection({
+          sectionKey: 'misc',
+          sectionCfg: { startOfNextDay: 0 },
+        }),
+      );
+
+      const updateTasksAction = dispatched.find(
+        (a) => a.type === TaskSharedActions.updateTasks.type,
+      );
+      expect(updateTasksAction).toBeUndefined();
     });
 
     it('should dispatch setTodayString with todayStr and startOfNextDayDiffMs', () => {
       dateServiceSpy.startOfNextDayDiff = 14400000;
-      let emittedAction: Action | undefined;
+      const dispatched: Action[] = [];
       effects.setStartOfNextDayDiffOnChange.subscribe((action) => {
-        emittedAction = action;
+        dispatched.push(action);
       });
 
       actions$.next(
@@ -103,9 +196,9 @@ describe('GlobalConfigEffects', () => {
         }),
       );
 
-      expect(emittedAction).toEqual(
+      expect(dispatched).toContain(
         AppStateActions.setTodayString({
-          todayStr: '2026-02-16',
+          todayStr: '2026-02-20',
           startOfNextDayDiffMs: 14400000,
         }),
       );
@@ -148,7 +241,7 @@ describe('GlobalConfigEffects', () => {
 
       expect(emittedAction).toEqual(
         AppStateActions.setTodayString({
-          todayStr: '2026-02-16',
+          todayStr: '2026-02-20',
           startOfNextDayDiffMs: 14400000,
         }),
       );
