@@ -116,3 +116,5 @@ test-results/
 data/
 /.actrc
 /.secrets.example
+
+.worktrees/
