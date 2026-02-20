@@ -5,7 +5,7 @@ import {
   distinctUntilChanged,
   filter,
   map,
-  mergeMap,
+  switchMap,
   tap,
   withLatestFrom,
 } from 'rxjs/operators';
@@ -118,7 +118,7 @@ export class GlobalConfigEffects {
           sectionCfg && typeof (sectionCfg as MiscConfig).startOfNextDay === 'number',
       ),
       withLatestFrom(this._store.select(selectAllTasks)),
-      mergeMap(([{ sectionCfg }, allTasks]) => {
+      switchMap(([{ sectionCfg }, allTasks]) => {
         const oldTodayStr = this._dateService.todayStr();
         this._dateService.setStartOfNextDayDiff(
           (sectionCfg as MiscConfig).startOfNextDay,
@@ -132,7 +132,8 @@ export class GlobalConfigEffects {
           }),
         ];
 
-        // Migrate task dueDays so "today" tasks stay "today" after offset change
+        // Migrate active task dueDays so "today" tasks stay "today" after offset change.
+        // Archived tasks are intentionally excluded — their dueDay is historical.
         if (oldTodayStr !== newTodayStr) {
           const taskUpdates = allTasks
             .filter((t) => t.dueDay === oldTodayStr)
