@@ -52,9 +52,9 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { formatLocalIsoWithoutSeconds } from '../../../../../../util/format-local-iso-without-seconds';
-import { formatDateYYYYMMDD } from '../../../../../../util/format-date-yyyy-mm-dd';
 import { msToIsoDuration } from '../../../../../../util/ms-to-iso-duration';
 import { IssueLog } from '../../../../../../core/log';
+import { getDbDateStr } from 'src/app/util/get-db-date-str';
 
 @Component({
   selector: 'dialog-open-project-track-time',
@@ -212,7 +212,7 @@ export class DialogOpenProjectTrackTimeComponent implements OnDestroy {
       this._openProjectApiService
         .trackTime$({
           workPackage: this.workPackage,
-          spentOn: formatDateYYYYMMDD(this.started),
+          spentOn: getDbDateStr(this.started),
           hours: msToIsoDuration(this.timeSpent),
           comment: this.comment,
           activityId: this.activityId,
