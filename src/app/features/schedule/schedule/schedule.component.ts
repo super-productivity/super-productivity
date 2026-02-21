@@ -17,6 +17,7 @@ import { MatIconButton, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { GlobalTrackingIntervalService } from '../../../core/global-tracking-interval/global-tracking-interval.service';
+import { LS } from 'src/app/core/persistence/storage-keys.const';
 import { selectTimelineWorkStartEndHours } from '../../config/store/global-config.reducer';
 import { FH } from '../schedule.const';
 import { mapScheduleDaysToScheduleEvents } from '../map-schedule-data/map-schedule-days-to-schedule-events';
@@ -258,8 +259,13 @@ export class ScheduleComponent {
     this._selectedDate.set(null); // Resets to "today" mode
   }
 
+  private getTimeView(): 'week' | 'month' {
+    const preservedView = localStorage.getItem(LS.SELECTED_TIME_VIEW);
+    return preservedView === 'month' ? 'month' : 'week';
+  }
+
   constructor() {
-    this.layoutService.selectedTimeView.set('week');
+    this.layoutService.selectedTimeView.set(this.getTimeView());
 
     effect(() => {
       if (this.isMonthView() === false) {

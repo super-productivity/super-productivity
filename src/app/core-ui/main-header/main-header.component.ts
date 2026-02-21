@@ -42,6 +42,7 @@ import { DesktopPanelButtonsComponent } from './desktop-panel-buttons/desktop-pa
 import { toSignal } from '@angular/core/rxjs-interop';
 import { MetricService } from '../../features/metric/metric.service';
 import { DateService } from '../../core/date/date.service';
+import { LS } from '../../core/persistence/storage-keys.const';
 import { UserProfileButtonComponent } from '../../features/user-profile/user-profile-button/user-profile-button.component';
 import { FocusButtonComponent } from './focus-button/focus-button.component';
 import { UserProfileService } from '../../features/user-profile/user-profile.service';
@@ -185,6 +186,7 @@ export class MainHeaderComponent implements OnDestroy {
 
   selectTimeView(view: 'week' | 'month'): void {
     this.layoutService.selectedTimeView.set(view);
+    localStorage.setItem(LS.SELECTED_TIME_VIEW, view);
   }
 
   ngOnDestroy(): void {
