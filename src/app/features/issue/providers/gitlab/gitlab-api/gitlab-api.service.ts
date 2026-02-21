@@ -206,7 +206,7 @@ export class GitlabApiService {
     }
     return this._sendPaginatedRequest$(
       {
-        url: `${issue.links.self}/notes`,
+        url: `${issue.links.self}/notes?sort=asc&order_by=updated_at`,
       },
       cfg,
     ).pipe(
