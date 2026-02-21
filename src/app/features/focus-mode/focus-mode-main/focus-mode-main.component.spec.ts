@@ -70,6 +70,9 @@ describe('FocusModeMainComponent', () => {
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
       }),
+      isLinkRenderingEnabled: jasmine
+        .createSpy('isLinkRenderingEnabled')
+        .and.returnValue(true),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -583,6 +586,9 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
       }),
+      isLinkRenderingEnabled: jasmine
+        .createSpy('isLinkRenderingEnabled')
+        .and.returnValue(true),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);
@@ -770,6 +776,9 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       tasks: jasmine.createSpy().and.returnValue({
         notesTemplate: 'Default task notes template',
       }),
+      isLinkRenderingEnabled: jasmine
+        .createSpy('isLinkRenderingEnabled')
+        .and.returnValue(true),
     });
 
     currentTaskSubject = new BehaviorSubject<TaskCopy | null>(mockTask);

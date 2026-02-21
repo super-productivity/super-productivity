@@ -119,6 +119,7 @@
           #taskTitleEditEl
           (valueEdited)="updateTaskTitleIfChanged($event)"
           [value]="t.title"
+          [renderLinks]="isLinkRenderingEnabled()"
           class="task-title"
         ></task-title>
 
