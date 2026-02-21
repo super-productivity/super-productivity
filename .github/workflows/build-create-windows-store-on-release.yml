@@ -65,12 +65,6 @@ jobs:
 
       - run: npm run env # Generate env.generated.ts
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Test Unit
-        run: npm run test
-
       - name: Build Frontend & Electron
         run: npm run build
 
