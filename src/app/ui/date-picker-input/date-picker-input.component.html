@@ -1,0 +1,27 @@
+<mat-form-field class="w-full">
+  <mat-label>{{ label() }}</mat-label>
+
+  <input
+    matInput
+    [matDatepicker]="picker"
+    [(ngModel)]="innerValue"
+    (ngModelChange)="onValueChange($event)"
+    [placeholder]="dateTimeFormatService.dateFormat().humanReadable"
+    [required]="required()"
+    [min]="formatDate(min())"
+    [max]="formatDate(max())"
+    type="text"
+  />
+
+  <mat-datepicker-toggle
+    matSuffix
+    [for]="picker"
+  />
+
+  <mat-datepicker #picker />
+
+  <!-- If controlled by parent or internal validation -->
+  @if (isInvalid() === true || isInvalid() === undefined) {
+    <mat-error>{{ errorMessage() || (T.V.E_DATETIME | translate) }}</mat-error>
+  }
+</mat-form-field>

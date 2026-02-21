@@ -138,14 +138,13 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
       },
       {
         key: 'startDate',
-        type: 'input',
-        defaultValue: getDbDateStr(),
+        type: 'date',
+        defaultValue: new Date(),
         templateOptions: {
           label: T.F.TASK_REPEAT.F.START_DATE,
           required: true,
-          // min: getWorklogStr() as any,
-          type: 'date',
         },
+        parsers: [getDbDateStr],
       },
       {
         fieldGroupClassName: 'weekdays',

@@ -160,6 +160,9 @@ describe('DateTimeFormatService', () => {
 
       const result4 = service.parseStringToDate('30/02/2000', 'dd/MM/yyyy');
       expect(result4).toBeNull();
+
+      const result5 = service.parseStringToDate('31/12/202', 'dd/MM/yyyy');
+      expect(result5).toBeNull();
     });
 
     it('should return null for invalid date format', () => {

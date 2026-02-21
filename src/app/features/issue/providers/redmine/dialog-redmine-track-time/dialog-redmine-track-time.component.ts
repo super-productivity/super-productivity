@@ -50,8 +50,8 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { formatLocalIsoWithoutSeconds } from '../../../../../util/format-local-iso-without-seconds';
-import { formatDateYYYYMMDD } from '../../../../../util/format-date-yyyy-mm-dd';
 import { IssueLog } from '../../../../../core/log';
+import { getDbDateStr } from 'src/app/util/get-db-date-str';
 
 const MS_PER_HOUR = 3600000;
 
@@ -202,7 +202,7 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
         .trackTime$({
           cfg: cfg!,
           issueId: this.redmineIssue.id,
-          spentOn: formatDateYYYYMMDD(this.started),
+          spentOn: getDbDateStr(this.started),
           hours: this.timeSpent / MS_PER_HOUR,
           comment: this.comment,
           activityId: this.activityId,

@@ -25,24 +25,12 @@
         }}
       </h3>
 
-      <mat-form-field>
-        <mat-label>{{ T.F.TASK.D_TIME_FOR_DAY.DATE | translate }}</mat-label>
-        <input
-          [(ngModel)]="newEntry.date"
-          [matDatepicker]="myDatepicker"
-          matInput
-          [placeholder]="dateTimeFormatService.dateFormat().humanReadable"
-          name="date"
-          required
-          type="text"
-        />
-        <mat-error>{{ T.V.E_DATETIME | translate }}</mat-error>
-        <mat-datepicker-toggle
-          [for]="myDatepicker"
-          matPrefix
-        ></mat-datepicker-toggle>
-        <mat-datepicker #myDatepicker></mat-datepicker>
-      </mat-form-field>
+      <date-picker-input
+        [(ngModel)]="newEntry.date"
+        [ngModelOptions]="{ standalone: true }"
+        [label]="T.F.TASK.D_TIME_FOR_DAY.DATE | translate"
+        [required]="true"
+      />
 
       <div class="wrap-time">
         <input-duration-slider
