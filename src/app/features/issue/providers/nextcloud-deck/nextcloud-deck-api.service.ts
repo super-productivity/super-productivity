@@ -94,7 +94,7 @@ export class NextcloudDeckApiService {
     return this._http
       .put<DeckCardResponse>(
         url,
-        { type: 'plain', ...changes },
+        { type: 'plain', owner: cfg.username, ...changes },
         { headers: this._getHeaders(cfg) },
       )
       .pipe(catchError((err) => this._handleError(err)));
