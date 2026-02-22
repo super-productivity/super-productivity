@@ -21,6 +21,7 @@ import { IssueProviderService } from '../../issue-provider.service';
 export class NextcloudDeckCommonInterfacesService implements IssueServiceInterface {
   private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _nextcloudDeckApiService = inject(NextcloudDeckApiService);
+  private _cachedCfg?: NextcloudDeckCfg;
 
   private static _formatIssueTitleForSnack(title: string): string {
     return truncate(title);
@@ -48,7 +49,7 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
     cfg?: NextcloudDeckCfg,
   ): Partial<Task> & { title: string } {
     return {
-      title: this._formatTitle(issueData, cfg),
+      title: this._formatTitle(issueData, cfg || this._cachedCfg),
       issueLastUpdated: issueData.lastModified,
       notes: (issueData as NextcloudDeckIssue).description || undefined,
     };
@@ -202,9 +203,13 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
   private _getCfgOnce$(
     issueProviderId: string | number,
   ): Observable<IssueProviderNextcloudDeck> {
-    return this._issueProviderService.getCfgOnce$(
-      issueProviderId.toString(),
-      'NEXTCLOUD_DECK',
-    );
+    return this._issueProviderService
+      .getCfgOnce$(issueProviderId.toString(), 'NEXTCLOUD_DECK')
+      .pipe(
+        map((cfg) => {
+          this._cachedCfg = cfg;
+          return cfg;
+        }),
+      );
   }
 }
