@@ -178,6 +178,7 @@ export class GlobalThemeService {
       ['next_week', 'assets/icons/next-week.svg'],
       ['habit', 'assets/icons/habit.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
+      ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet
