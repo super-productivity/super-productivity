@@ -96,14 +96,7 @@ export async function decompressGzipFromString(
   } catch (error) {
     OpLog.err(error);
     if (compressedBase64) {
-      OpLog.err(
-        'base64 input length:',
-        compressedBase64.length,
-        'first 50 chars:',
-        compressedBase64.slice(0, 50),
-        'last 50 chars:',
-        compressedBase64.slice(-50),
-      );
+      OpLog.err('base64 input length:', compressedBase64.length);
     }
     throw new DecompressError(error);
   }

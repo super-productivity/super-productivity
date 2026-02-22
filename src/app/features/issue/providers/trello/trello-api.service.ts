@@ -146,7 +146,7 @@ export class TrelloApiService {
       }),
       catchError((error) => {
         const errorMsg = `Trello failed to resolve username "${username}": ${getErrorTxt(error)}`;
-        console.error(errorMsg, error);
+        console.error(errorMsg);
         this._snackService.open({
           type: 'ERROR',
           msg: errorMsg,
