@@ -200,6 +200,14 @@ const ea: ElectronAPI = {
 
   exec: (command: string) => _send('EXEC', command),
 
+  updateTodayTasks: (tasks: any[]) => _send('TODAY_TASKS_UPDATED', tasks),
+
+  onSwitchTask: (listener: (taskId: string) => void) => {
+    // We register the listener directly without using standard 'on' method
+    // Because the standard 'on' method doesn't strip out the event arg like we need
+    ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
+  },
+
   // Plugin API
   pluginExecNodeScript: (
     pluginId: string,

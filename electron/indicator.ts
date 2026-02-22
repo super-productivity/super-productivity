@@ -1,4 +1,4 @@
-import { App, ipcMain, Menu, nativeTheme, Tray } from 'electron';
+import { App, ipcMain, IpcMainEvent, Menu, nativeTheme, Tray } from 'electron';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
@@ -9,10 +9,36 @@ import {
   updateOverlayEnabled,
   updateOverlayTask,
 } from './overlay-indicator/overlay-indicator';
+import { getWin } from './main-window';
 
 let tray: Tray;
+let _showApp: () => void;
+let _quitApp: () => void;
+let _todayTasks: {
+  id: string;
+  title: string;
+  timeEstimate: number;
+  timeSpent: number;
+}[] = [];
+let _isRunning: boolean = false;
+let _currentTaskId: string | null = null;
 let DIR: string;
 let shouldUseDarkColors: boolean;
+
+// Caching variables for preventing Linux tray menu flickering
+let _lastMsg: string | undefined;
+let _lastTrayMsg: string | undefined;
+let _lastIsRunning: boolean | undefined;
+let _lastCurrentTaskId: string | null | undefined;
+let _lastTodayTasksStr: string | undefined;
+
+let _lastCurrentTask: any;
+let _lastIsPomodoroEnabled: boolean;
+let _lastCurrentPomodoroSessionTime: number;
+let _lastIsFocusModeEnabled: boolean;
+let _lastCurrentFocusSessionTime: number;
+let _lastFocusModeMode: string;
+
 const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
 const IS_WINDOWS = process.platform === 'win32';
@@ -43,13 +69,16 @@ export const initIndicator = ({
     (IS_WINDOWS && !isWindows11()) ||
     nativeTheme.shouldUseDarkColors;
 
+  _showApp = showApp;
+  _quitApp = quitApp;
+
   initAppListeners(app);
   initListeners();
 
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
   const trayIconPath = DIR + `stopped${suf}`;
   tray = IS_WINDOWS ? new Tray(trayIconPath, WINDOWS_TRAY_GUID) : new Tray(trayIconPath);
-  tray.setContextMenu(createContextMenu(showApp, quitApp));
+  tray.setContextMenu(createContextMenu());
 
   tray.on('click', () => {
     showApp();
@@ -88,7 +117,7 @@ function initListeners(): void {
     }
   });
 
-  ipcMain.on(IPC.SET_PROGRESS_BAR, (ev, { progress }) => {
+  ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
     const suf = shouldUseDarkColors ? '-d' : '-l';
     if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
       const f = Math.min(Math.round(progress * 15), 15);
@@ -98,19 +127,86 @@ function initListeners(): void {
       const t = DIR + `running${suf}.png`;
       setTrayIcon(tray, t);
     }
+
+    // Also update the context menu and tray title during the progress bar tick
+    // This perfectly synchronizes the text "blinking" with the pie chart animation
+    if (_lastCurrentTask && tray) {
+      const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
+      const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();
+
+      const menuMsg = createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        true, // always show countdown in menu
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      );
+
+      const trayMsg = createIndicatorMessage(
+        _lastCurrentTask,
+        _lastIsPomodoroEnabled || false,
+        _lastCurrentPomodoroSessionTime || 0,
+        isTrayShowCurrentCountdown,
+        _lastIsFocusModeEnabled || false,
+        _lastCurrentFocusSessionTime || 0,
+        _lastFocusModeMode,
+      );
+
+      const todayTasksStr = JSON.stringify(
+        (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
+      );
+
+      const isMenuChanged =
+        menuMsg !== _lastMsg ||
+        _isRunning !== _lastIsRunning ||
+        _currentTaskId !== _lastCurrentTaskId ||
+        todayTasksStr !== _lastTodayTasksStr;
+
+      if (isMenuChanged) {
+        tray.setContextMenu(createContextMenu(menuMsg));
+        _lastMsg = menuMsg;
+        _lastIsRunning = _isRunning;
+        _lastCurrentTaskId = _currentTaskId;
+        _lastTodayTasksStr = todayTasksStr;
+      }
+
+      if (_lastTrayMsg !== trayMsg) {
+        if (isTrayShowCurrentTask) {
+          tray.setTitle(trayMsg);
+          if (!IS_MAC) tray.setToolTip(trayMsg);
+        } else {
+          tray.setTitle('');
+          if (!IS_MAC) tray.setToolTip('');
+        }
+        _lastTrayMsg = trayMsg;
+      }
+    }
   });
 
   ipcMain.on(
     IPC.CURRENT_TASK_UPDATED,
     (
-      ev,
-      currentTask,
-      isPomodoroEnabled,
-      currentPomodoroSessionTime,
-      isFocusModeEnabled,
-      currentFocusSessionTime,
-      focusModeMode,
+      ev: IpcMainEvent,
+      currentTask: any,
+      isPomodoroEnabled: boolean,
+      currentPomodoroSessionTime: number,
+      isFocusModeEnabled: boolean,
+      currentFocusSessionTime: number,
+      focusModeMode: string,
     ) => {
+      _isRunning = !!currentTask;
+      _currentTaskId = currentTask ? currentTask.id : null;
+
+      // Store current task details so SET_PROGRESS_BAR can re-render text
+      _lastCurrentTask = currentTask;
+      _lastIsPomodoroEnabled = isPomodoroEnabled;
+      _lastCurrentPomodoroSessionTime = currentPomodoroSessionTime;
+      _lastIsFocusModeEnabled = isFocusModeEnabled;
+      _lastCurrentFocusSessionTime = currentFocusSessionTime;
+      _lastFocusModeMode = focusModeMode;
+
       updateOverlayTask(
         currentTask,
         isPomodoroEnabled,
@@ -122,39 +218,89 @@ function initListeners(): void {
       const isTrayShowCurrentTask = getIsTrayShowCurrentTask();
       const isTrayShowCurrentCountdown = getIsTrayShowCurrentCountdown();
 
-      const msg =
-        isTrayShowCurrentTask && currentTask
-          ? createIndicatorMessage(
-              currentTask,
-              isPomodoroEnabled,
-              currentPomodoroSessionTime,
-              isTrayShowCurrentCountdown,
-              isFocusModeEnabled || false,
-              currentFocusSessionTime || 0,
-              focusModeMode,
-            )
-          : '';
+      const menuMsg = currentTask
+        ? createIndicatorMessage(
+            currentTask,
+            isPomodoroEnabled,
+            currentPomodoroSessionTime,
+            true, // isTrayShowCurrentCountdown: true for context menu to always show timer
+            isFocusModeEnabled || false,
+            currentFocusSessionTime || 0,
+            focusModeMode,
+          )
+        : '';
+
+      const trayMsg = currentTask
+        ? createIndicatorMessage(
+            currentTask,
+            isPomodoroEnabled,
+            currentPomodoroSessionTime,
+            isTrayShowCurrentCountdown,
+            isFocusModeEnabled || false,
+            currentFocusSessionTime || 0,
+            focusModeMode,
+          )
+        : '';
 
       if (tray) {
         // tray handling
-        if (currentTask && currentTask.title) {
-          tray.setTitle(msg);
-          if (!IS_MAC) {
-            // NOTE apparently this has no effect for gnome
-            tray.setToolTip(msg);
+        const todayTasksStr = JSON.stringify(
+          (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
+        );
+        const isMenuChanged =
+          menuMsg !== _lastMsg ||
+          _isRunning !== _lastIsRunning ||
+          _currentTaskId !== _lastCurrentTaskId ||
+          todayTasksStr !== _lastTodayTasksStr;
+
+        if (isMenuChanged) {
+          tray.setContextMenu(createContextMenu(menuMsg));
+          _lastMsg = menuMsg;
+          _lastIsRunning = _isRunning;
+          _lastCurrentTaskId = _currentTaskId;
+          _lastTodayTasksStr = todayTasksStr;
+        }
+
+        if (_lastTrayMsg !== trayMsg) {
+          if (currentTask && currentTask.title) {
+            if (isTrayShowCurrentTask) {
+              tray.setTitle(trayMsg);
+              if (!IS_MAC) {
+                // NOTE apparently this has no effect for gnome
+                tray.setToolTip(trayMsg);
+              }
+            } else {
+              tray.setTitle('');
+              if (!IS_MAC) {
+                tray.setToolTip('');
+              }
+            }
+          } else {
+            tray.setTitle('');
+            if (!IS_MAC) {
+              tray.setToolTip('');
+            }
+            const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
+            setTrayIcon(tray, DIR + `stopped${suf}`);
           }
-        } else {
-          tray.setTitle('');
-          if (!IS_MAC) {
-            // NOTE apparently this has no effect for gnome
-            tray.setToolTip(msg);
-          }
-          const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
-          setTrayIcon(tray, DIR + `stopped${suf}`);
+          _lastTrayMsg = trayMsg;
         }
       }
     },
   );
+
+  ipcMain.on(IPC.TODAY_TASKS_UPDATED, (ev: IpcMainEvent, tasks: any[]) => {
+    _todayTasks = tasks;
+    if (tray) {
+      const todayTasksStr = JSON.stringify(
+        (_todayTasks || []).map((t) => ({ id: t.id, title: t.title })),
+      );
+      if (todayTasksStr !== _lastTodayTasksStr) {
+        tray.setContextMenu(createContextMenu(_lastMsg));
+        _lastTodayTasksStr = todayTasksStr;
+      }
+    }
+  });
 
   // ipcMain.on(IPC.POMODORO_UPDATE, (ev, params) => {
   // const isOnBreak = params.isOnBreak;
@@ -177,60 +323,87 @@ function createIndicatorMessage(
   focusModeMode: string | undefined,
 ): string {
   if (task && task.title) {
-    let title = task.title;
     let timeStr = '';
-    if (title.length > 40) {
-      title = title.substring(0, 37) + '...';
-    }
 
     if (isTrayShowCurrentCountdown) {
       // Priority 1: Focus mode with countdown/pomodoro (show countdown)
       if (isFocusModeEnabled && focusModeMode && focusModeMode !== 'Flowtime') {
-        timeStr = getCountdownMessage(currentFocusSessionTime);
-        return `${title} ${timeStr}`;
+        timeStr = getProgressMessage(currentFocusSessionTime);
+        return timeStr;
       }
 
       // Priority 2: Flowtime mode (show nothing or task estimate)
       if (isFocusModeEnabled && focusModeMode === 'Flowtime') {
-        // Don't show timer for flowtime mode
-        // Optionally show task estimate if available
         if (task.timeEstimate) {
           const restOfTime = Math.max(task.timeEstimate - task.timeSpent, 0);
-          timeStr = getCountdownMessage(restOfTime);
-          return `${title} ${timeStr}`;
+          timeStr = getProgressMessage(task.timeSpent, restOfTime, '-');
+          return timeStr;
         }
-        return title; // No timer for flowtime
+        return getProgressMessage(task.timeSpent);
       }
 
       // Priority 3: Legacy pomodoro (if still used)
       if (isPomodoroEnabled) {
-        timeStr = getCountdownMessage(currentPomodoroSessionTime);
-        return `${title} ${timeStr}`;
+        timeStr = getProgressMessage(currentPomodoroSessionTime);
+        return timeStr;
       }
 
       // Priority 4: Normal task time (no focus mode)
       if (task.timeEstimate) {
-        const restOfTime = Math.max(task.timeEstimate - task.timeSpent, 0);
-        timeStr = getCountdownMessage(restOfTime);
+        let restOfTime = task.timeEstimate - task.timeSpent;
+        const prefix = restOfTime >= 0 ? '-' : '+';
+        restOfTime = Math.abs(restOfTime);
+        timeStr = getProgressMessage(task.timeSpent, restOfTime, prefix);
       } else if (task.timeSpent) {
-        timeStr = getCountdownMessage(task.timeSpent);
+        timeStr = getProgressMessage(task.timeSpent);
       }
-      return `${title} ${timeStr}`;
+      return timeStr;
     }
 
-    return title;
+    // Fallback if no countdown is supposed to be shown, but we have a running task
+    return getProgressMessage(task.timeSpent);
   }
 
-  // NOTE: we need to make sure that this is always a string
   return '';
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function createContextMenu(showApp: () => void, quitApp: () => void): Menu {
-  return Menu.buildFromTemplate([
-    { label: 'Show App', click: showApp },
-    { label: 'Quit', click: quitApp },
-  ]);
+function createContextMenu(msg?: string): Menu {
+  const template: any[] = [];
+
+  // Either show the time string (if task is running) or "Super Productivity"
+  if (msg) {
+    template.push({ label: msg, enabled: false });
+    template.push({ type: 'separator' });
+  }
+
+  if (_todayTasks && _todayTasks.length > 0) {
+    _todayTasks.forEach((t) => {
+      template.push({
+        label: t.title.length > 40 ? t.title.substring(0, 37) + '...' : t.title,
+        type: 'radio',
+        checked: _currentTaskId === t.id && _isRunning,
+        click: () => {
+          const mainWindow = getWin();
+          if (mainWindow) {
+            if (_currentTaskId === t.id) {
+              // Clicked the active task again -> toggle start/pause
+              mainWindow.webContents.send(IPC.TASK_TOGGLE_START);
+            } else {
+              // Clicked a different task -> switch to it
+              mainWindow.webContents.send(IPC.SWITCH_TASK, t.id);
+            }
+          }
+        },
+      });
+    });
+    template.push({ type: 'separator' });
+  }
+
+  template.push({ label: 'Show App', click: _showApp });
+  template.push({ label: 'Quit', click: _quitApp });
+
+  return Menu.buildFromTemplate(template);
 }
 
 let curIco: string;
@@ -262,9 +435,32 @@ function isWindows11(): boolean {
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-function getCountdownMessage(countdownMs: number): string {
-  const totalSeconds = Math.floor(countdownMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+function getProgressMessage(
+  elapsedMs: number,
+  diffMs?: number,
+  prefix: string = '',
+): string {
+  const formatTime = (ms: number): string => {
+    const numValue = Number(ms) || 0;
+    const hours = Math.floor(numValue / 3600000);
+    const minutes = Math.floor((numValue - hours * 3600000) / 60000); // eslint-disable-line no-mixed-operators
+
+    const parsed = (hours > 0 ? hours + 'h ' : '') + (minutes > 0 ? minutes + 'm ' : '');
+
+    return parsed.trim() || '0m';
+  };
+
+  const elapsedStr = formatTime(elapsedMs);
+
+  if (diffMs !== undefined) {
+    // If the difference rounds to exactly 0 minutes, avoid "-0m"
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes === 0) {
+      return `${elapsedStr}`;
+    }
+    const diffStr = formatTime(diffMs);
+    return `${elapsedStr} (${prefix}${diffStr})`;
+  }
+
+  return elapsedStr;
 }
