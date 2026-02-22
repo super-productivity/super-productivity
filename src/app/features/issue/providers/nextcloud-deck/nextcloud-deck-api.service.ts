@@ -91,12 +91,16 @@ export class NextcloudDeckApiService {
   ): Observable<DeckCardResponse> {
     this._checkSettings(cfg);
     const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks/${stackId}/cards/${cardId}`;
+    const body: Record<string, unknown> = {
+      type: 'plain',
+      owner: cfg.username,
+      ...changes,
+    };
+    if ('done' in changes) {
+      body['done'] = changes.done ? new Date().toISOString() : null;
+    }
     return this._http
-      .put<DeckCardResponse>(
-        url,
-        { type: 'plain', owner: cfg.username, ...changes },
-        { headers: this._getHeaders(cfg) },
-      )
+      .put<DeckCardResponse>(url, body, { headers: this._getHeaders(cfg) })
       .pipe(catchError((err) => this._handleError(err)));
   }
 

@@ -2,9 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
 import { TaskService } from '../../../tasks/task.service';
-import { concatMap, filter, first, map } from 'rxjs/operators';
-import { IssueService } from '../../issue.service';
-import { Observable } from 'rxjs';
+import { catchError, concatMap, filter, first, map } from 'rxjs/operators';
+import { EMPTY, Observable, of } from 'rxjs';
 import { Task } from 'src/app/features/tasks/task.model';
 import { NEXTCLOUD_DECK_TYPE } from '../../issue.const';
 import { isNextcloudDeckEnabled } from './is-nextcloud-deck-enabled.util';
@@ -18,7 +17,6 @@ import { assertTruthy } from '../../../../util/assert-truthy';
 export class NextcloudDeckIssueEffects {
   private readonly _actions$ = inject(LOCAL_ACTIONS);
   private readonly _nextcloudDeckApiService = inject(NextcloudDeckApiService);
-  private readonly _issueService = inject(IssueService);
   private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _taskService = inject(TaskService);
 
@@ -26,9 +24,7 @@ export class NextcloudDeckIssueEffects {
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
-        filter(
-          ({ task }): boolean => 'isDone' in task.changes || 'title' in task.changes,
-        ),
+        filter(({ task }): boolean => 'isDone' in task.changes),
         concatMap(({ task }) => this._taskService.getByIdOnce$(task.id.toString())),
         filter((task: Task) => task && task.issueType === NEXTCLOUD_DECK_TYPE),
         concatMap((task: Task) => {
@@ -63,27 +59,31 @@ export class NextcloudDeckIssueEffects {
         if (!issue) {
           throw new Error('Card not found: ' + cardId);
         }
-        return this._nextcloudDeckApiService
-          .updateCard$(cfg, boardId, issue.stackId, cardId, {
-            title: task.title,
-            done: task.isDone,
-          })
-          .pipe(
-            concatMap(() => {
-              if (task.isDone && cfg.doneStackId && issue.stackId !== cfg.doneStackId) {
-                return this._nextcloudDeckApiService.reorderCard$(
-                  cfg,
-                  boardId,
-                  issue.stackId,
-                  cardId,
-                  cfg.doneStackId,
-                  0,
-                );
-              }
-              return [null];
-            }),
-            concatMap(() => this._issueService.refreshIssueTask(task, true)),
-          );
+        const shouldMove =
+          task.isDone && cfg.doneStackId && issue.stackId !== cfg.doneStackId;
+        const targetStackId = shouldMove ? cfg.doneStackId! : issue.stackId;
+
+        const move$: Observable<unknown> = shouldMove
+          ? this._nextcloudDeckApiService.reorderCard$(
+              cfg,
+              boardId,
+              issue.stackId,
+              cardId,
+              targetStackId,
+              0,
+            )
+          : of(null);
+
+        return move$.pipe(
+          concatMap(() =>
+            this._nextcloudDeckApiService
+              .updateCard$(cfg, boardId, targetStackId, cardId, {
+                title: issue.title,
+                done: task.isDone,
+              })
+              .pipe(catchError(() => EMPTY)),
+          ),
+        );
       }),
     );
   }
