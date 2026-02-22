@@ -92,7 +92,11 @@ export class NextcloudDeckApiService {
     this._checkSettings(cfg);
     const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks/${stackId}/cards/${cardId}`;
     return this._http
-      .put<DeckCardResponse>(url, changes, { headers: this._getHeaders(cfg) })
+      .put<DeckCardResponse>(
+        url,
+        { type: 'plain', ...changes },
+        { headers: this._getHeaders(cfg) },
+      )
       .pipe(catchError((err) => this._handleError(err)));
   }
 
