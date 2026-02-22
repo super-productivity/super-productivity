@@ -55,6 +55,14 @@ export const NEXTCLOUD_DECK_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderN
             label: T.F.NEXTCLOUD_DECK.FORM.IS_TRANSITION_ISSUES_ENABLED,
           },
         },
+        {
+          key: 'titleTemplate',
+          type: 'input',
+          templateOptions: {
+            label: T.F.NEXTCLOUD_DECK.FORM.TITLE_TEMPLATE,
+            description: T.F.NEXTCLOUD_DECK.FORM.TITLE_TEMPLATE_DESCRIPTION,
+          },
+        },
       ],
     },
   ];

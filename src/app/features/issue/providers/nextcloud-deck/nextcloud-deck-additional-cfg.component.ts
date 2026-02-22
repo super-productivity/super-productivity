@@ -190,9 +190,11 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     this.selectedDoneStackId = null;
     this.stacks$.next([]);
 
+    const selectedBoard = this._boardsList$.value.find((b) => b.id === boardId);
     const updated: IssueProviderNextcloudDeck = {
       ...this._cfg,
       selectedBoardId: boardId,
+      selectedBoardTitle: selectedBoard?.title || null,
       importStackIds: null,
       doneStackId: null,
     };

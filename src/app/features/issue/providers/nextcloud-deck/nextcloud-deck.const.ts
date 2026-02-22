@@ -6,10 +6,12 @@ export const DEFAULT_NEXTCLOUD_DECK_CFG: NextcloudDeckCfg = {
   username: null,
   password: null,
   selectedBoardId: null,
+  selectedBoardTitle: null,
   importStackIds: null,
   doneStackId: null,
   isTransitionIssuesEnabled: false,
   filterByAssignee: true,
+  titleTemplate: null,
 };
 
 export const NEXTCLOUD_DECK_POLL_INTERVAL = 10 * 60 * 1000;

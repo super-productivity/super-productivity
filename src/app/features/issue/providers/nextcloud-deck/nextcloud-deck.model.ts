@@ -5,8 +5,10 @@ export interface NextcloudDeckCfg extends BaseIssueProviderCfg {
   username: string | null;
   password: string | null;
   selectedBoardId: number | null;
+  selectedBoardTitle: string | null;
   importStackIds: number[] | null;
   doneStackId: number | null;
   isTransitionIssuesEnabled: boolean;
   filterByAssignee: boolean;
+  titleTemplate: string | null;
 }

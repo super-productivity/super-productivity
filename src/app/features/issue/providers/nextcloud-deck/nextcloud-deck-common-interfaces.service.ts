@@ -45,9 +45,10 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
 
   getAddTaskData(
     issueData: NextcloudDeckIssueReduced | NextcloudDeckIssue,
+    cfg?: NextcloudDeckCfg,
   ): Partial<Task> & { title: string } {
     return {
-      title: issueData.title,
+      title: this._formatTitle(issueData, cfg),
       issueLastUpdated: issueData.lastModified,
       notes: (issueData as NextcloudDeckIssue).description || undefined,
     };
@@ -107,7 +108,7 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
     if (wasUpdated) {
       return {
         taskChanges: {
-          ...this.getAddTaskData(issue),
+          ...this.getAddTaskData(issue, cfg),
           issueWasUpdated: true,
           isDone: issue.done,
         },
@@ -148,7 +149,7 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
         return {
           task,
           taskChanges: {
-            ...this.getAddTaskData(card),
+            ...this.getAddTaskData(card, cfg),
             issueWasUpdated: true,
             isDone: card.done,
           },
@@ -180,6 +181,22 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
       .pipe(first())
       .toPromise();
     return allCards ?? [];
+  }
+
+  private _formatTitle(
+    issueData: NextcloudDeckIssueReduced | NextcloudDeckIssue,
+    cfg?: NextcloudDeckCfg,
+  ): string {
+    const template = cfg?.titleTemplate;
+    if (!template) {
+      return issueData.title;
+    }
+    return template
+      .replace(/\{CARD_TITLE}/g, issueData.title)
+      .replace(/\{COLUMN}/g, issueData.stackTitle || '')
+      .replace(/\{BOARD}/g, cfg?.selectedBoardTitle || '')
+      .replace(/\{ID}/g, String(issueData.id))
+      .replace(/\{LABELS}/g, (issueData.labels || []).map((l) => l.title).join(', '));
   }
 
   private _getCfgOnce$(
