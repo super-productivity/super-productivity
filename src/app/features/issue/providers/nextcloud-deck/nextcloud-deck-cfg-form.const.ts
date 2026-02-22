@@ -56,6 +56,16 @@ export const NEXTCLOUD_DECK_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderN
           },
         },
         {
+          key: 'pollIntervalMinutes',
+          type: 'input',
+          templateOptions: {
+            required: true,
+            label: T.F.NEXTCLOUD_DECK.FORM.POLL_INTERVAL_MINUTES,
+            type: 'number',
+            min: 1,
+          },
+        },
+        {
           key: 'titleTemplate',
           type: 'input',
           templateOptions: {

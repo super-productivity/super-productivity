@@ -11,4 +11,5 @@ export interface NextcloudDeckCfg extends BaseIssueProviderCfg {
   isTransitionIssuesEnabled: boolean;
   filterByAssignee: boolean;
   titleTemplate: string | null;
+  pollIntervalMinutes: number;
 }

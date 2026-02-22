@@ -129,6 +129,7 @@
         "PASSWORD": "Your Nextcloud app password",
         "FILTER_BY_ASSIGNEE": "Only import cards assigned to me",
         "IS_TRANSITION_ISSUES_ENABLED": "Sync completion status and title back to Nextcloud Deck",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
         "TITLE_TEMPLATE": "Task title template",
         "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Example: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leave empty for card title only."
       },

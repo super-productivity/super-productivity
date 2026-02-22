@@ -27,7 +27,11 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
     return truncate(title);
   }
 
-  pollInterval: number = NEXTCLOUD_DECK_POLL_INTERVAL;
+  get pollInterval(): number {
+    return this._cachedCfg?.pollIntervalMinutes
+      ? this._cachedCfg.pollIntervalMinutes * 60 * 1000
+      : NEXTCLOUD_DECK_POLL_INTERVAL;
+  }
 
   isEnabled(cfg: NextcloudDeckCfg): boolean {
     return isNextcloudDeckEnabled(cfg);
