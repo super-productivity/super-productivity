@@ -18,8 +18,8 @@ import { MatSelect, MatOption } from '@angular/material/select';
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { AsyncPipe } from '@angular/common';
-import { BehaviorSubject, Observable, Subscription, of } from 'rxjs';
-import { catchError, map, switchMap, tap } from 'rxjs/operators';
+import { BehaviorSubject, Subscription, of } from 'rxjs';
+import { catchError, first, map, tap } from 'rxjs/operators';
 
 interface DeckBoard {
   id: number;
@@ -53,7 +53,7 @@ interface DeckStack {
       type="button"
       style="margin-bottom: 12px"
       (click)="loadBoards()"
-      [disabled]="boardsLoading || !isCredentialsComplete"
+      [disabled]="boardsLoading"
     >
       @if (boardsLoading) {
         <mat-progress-spinner
@@ -73,18 +73,11 @@ interface DeckStack {
       <mat-select
         [(ngModel)]="selectedBoardId"
         (ngModelChange)="onBoardSelect($event)"
-        [disabled]="!isCredentialsComplete"
       >
         @for (board of boards$ | async; track board.id) {
           <mat-option [value]="board.id">
             {{ board.title }}
           </mat-option>
-        }
-        @if ((boards$ | async)?.length === 0 && isCredentialsComplete) {
-          <mat-option disabled>No boards found</mat-option>
-        }
-        @if (!isCredentialsComplete) {
-          <mat-option disabled>Enter credentials first</mat-option>
         }
       </mat-select>
     </mat-form-field>
@@ -142,89 +135,19 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
 
   private _cfg?: IssueProviderNextcloudDeck;
   private _boardsList$ = new BehaviorSubject<DeckBoard[]>([]);
-  private _loadBoards$ = new BehaviorSubject<IssueProviderNextcloudDeck | null>(null);
-  private _loadStacks$ = new BehaviorSubject<{
-    cfg: IssueProviderNextcloudDeck;
-    boardId: number;
-  } | null>(null);
+  private _boardsLoaded = false;
 
   selectedBoardId: number | null = null;
   selectedImportStackIds: number[] = [];
   selectedDoneStackId: number | null = null;
-  isCredentialsComplete = false;
 
   isBoardsLoading$ = new BehaviorSubject<boolean>(false);
   isStacksLoading$ = new BehaviorSubject<boolean>(false);
 
-  boards$: Observable<DeckBoard[]>;
-  stacks$: Observable<DeckStack[]>;
+  boards$ = new BehaviorSubject<DeckBoard[]>([]);
+  stacks$ = new BehaviorSubject<DeckStack[]>([]);
 
   private _subs = new Subscription();
-
-  constructor() {
-    this.boards$ = this._loadBoards$.pipe(
-      switchMap((cfg) => {
-        if (!cfg || !cfg.nextcloudBaseUrl || !cfg.username || !cfg.password) {
-          this.isCredentialsComplete = false;
-          this.isBoardsLoading$.next(false);
-          this._cdr.markForCheck();
-          return of<DeckBoard[]>([]);
-        }
-
-        this.isCredentialsComplete = true;
-        this.isBoardsLoading$.next(true);
-        this._cdr.markForCheck();
-
-        return this._deckApiService.getBoards$(cfg).pipe(
-          map((boards) => {
-            const mapped = boards.map((b) => ({ id: b.id, title: b.title }));
-            this._boardsList$.next(mapped);
-            return mapped;
-          }),
-          tap(() => {
-            this.isBoardsLoading$.next(false);
-            this._cdr.markForCheck();
-          }),
-          catchError(() => {
-            this.isBoardsLoading$.next(false);
-            this._boardsList$.next([]);
-            this._cdr.markForCheck();
-            this._snackService.open({
-              type: 'ERROR',
-              msg: 'Failed to load Deck boards. Check your credentials.',
-              isSkipTranslate: true,
-            });
-            return of<DeckBoard[]>([]);
-          }),
-        );
-      }),
-    );
-
-    this.stacks$ = this._loadStacks$.pipe(
-      switchMap((data) => {
-        if (!data) {
-          this.isStacksLoading$.next(false);
-          return of<DeckStack[]>([]);
-        }
-
-        this.isStacksLoading$.next(true);
-        this._cdr.markForCheck();
-
-        return this._deckApiService.getStacks$(data.cfg, data.boardId).pipe(
-          map((stacks) => stacks.map((s) => ({ id: s.id, title: s.title }))),
-          tap(() => {
-            this.isStacksLoading$.next(false);
-            this._cdr.markForCheck();
-          }),
-          catchError(() => {
-            this.isStacksLoading$.next(false);
-            this._cdr.markForCheck();
-            return of<DeckStack[]>([]);
-          }),
-        );
-      }),
-    );
-  }
 
   @Input() set cfg(cfg: IssueProviderNextcloudDeck) {
     this._cfg = cfg;
@@ -232,15 +155,20 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     this.selectedImportStackIds = cfg.importStackIds ?? [];
     this.selectedDoneStackId = cfg.doneStackId ?? null;
 
-    const hasCredentials = !!(cfg.nextcloudBaseUrl && cfg.username && cfg.password);
-    this.isCredentialsComplete = hasCredentials;
+    // Auto-load boards on first cfg set if credentials are present
+    if (!this._boardsLoaded && cfg.nextcloudBaseUrl && cfg.username && cfg.password) {
+      this._boardsLoaded = true;
+      this._fetchBoards(cfg);
+    }
   }
 
   ngOnDestroy(): void {
     this._subs.unsubscribe();
-    this._loadBoards$.complete();
-    this._loadStacks$.complete();
     this._boardsList$.complete();
+    this.boards$.complete();
+    this.stacks$.complete();
+    this.isBoardsLoading$.complete();
+    this.isStacksLoading$.complete();
   }
 
   loadBoards(): void {
@@ -252,7 +180,7 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
       });
       return;
     }
-    this._loadBoards$.next({ ...this._cfg });
+    this._fetchBoards(this._cfg);
   }
 
   onBoardSelect(boardId: number | null): void {
@@ -260,6 +188,7 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     this.selectedBoardId = boardId;
     this.selectedImportStackIds = [];
     this.selectedDoneStackId = null;
+    this.stacks$.next([]);
 
     const updated: IssueProviderNextcloudDeck = {
       ...this._cfg,
@@ -271,7 +200,7 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     this.modelChange.emit(updated);
 
     if (boardId) {
-      this._loadStacks$.next({ cfg: this._cfg, boardId });
+      this._fetchStacks(this._cfg, boardId);
     }
   }
 
@@ -295,5 +224,69 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     };
     this._cfg = updated;
     this.modelChange.emit(updated);
+  }
+
+  private _fetchBoards(cfg: IssueProviderNextcloudDeck): void {
+    this.isBoardsLoading$.next(true);
+    this._cdr.markForCheck();
+
+    this._subs.add(
+      this._deckApiService
+        .getBoards$(cfg)
+        .pipe(
+          first(),
+          map((boards) => boards.map((b) => ({ id: b.id, title: b.title }))),
+          tap((boards) => {
+            this._boardsList$.next(boards);
+            this.boards$.next(boards);
+            this.isBoardsLoading$.next(false);
+            this._cdr.markForCheck();
+
+            // Auto-load stacks if a board was already selected
+            if (this.selectedBoardId && this._cfg) {
+              this._fetchStacks(this._cfg, this.selectedBoardId);
+            }
+          }),
+          catchError(() => {
+            this.isBoardsLoading$.next(false);
+            this._boardsList$.next([]);
+            this.boards$.next([]);
+            this._cdr.markForCheck();
+            this._snackService.open({
+              type: 'ERROR',
+              msg: 'Failed to load Deck boards. Check your credentials.',
+              isSkipTranslate: true,
+            });
+            return of([]);
+          }),
+        )
+        .subscribe(),
+    );
+  }
+
+  private _fetchStacks(cfg: IssueProviderNextcloudDeck, boardId: number): void {
+    this.isStacksLoading$.next(true);
+    this._cdr.markForCheck();
+
+    this._subs.add(
+      this._deckApiService
+        .getStacks$(cfg, boardId)
+        .pipe(
+          first(),
+          map((stacks) => stacks.map((s) => ({ id: s.id, title: s.title }))),
+          tap((stacks) => {
+            this.stacks$.next(stacks);
+            this.isStacksLoading$.next(false);
+            this._cdr.markForCheck();
+          }),
+          catchError(() => {
+            this.stacks$.next([]);
+            this.isStacksLoading$.next(false);
+            this._cdr.markForCheck();
+            return of([]);
+          }),
+        )
+        .subscribe(),
+    );
   }
 }
