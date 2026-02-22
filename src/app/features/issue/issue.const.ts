@@ -44,6 +44,7 @@ import {
 import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.const';
 import { DEFAULT_NEXTCLOUD_DECK_CFG } from './providers/nextcloud-deck/nextcloud-deck.const';
 import { AZURE_DEVOPS_CONFIG_FORM_SECTION } from './providers/azure-devops/azure-devops-cfg-form.const';
+import { NEXTCLOUD_DECK_CONFIG_FORM_SECTION } from './providers/nextcloud-deck/nextcloud-deck.const';
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
@@ -138,6 +139,7 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [LINEAR_TYPE]: LINEAR_CONFIG_FORM_SECTION,
   [CLICKUP_TYPE]: CLICKUP_CONFIG_FORM_SECTION,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
+  [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
 } as const;
 
 const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
