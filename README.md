@@ -470,12 +470,15 @@ git clone https://github.com/super-productivity/super-productivity.git
 mkdir -p sp
 cp super-productivity/docker-compose.yaml sp/
 cp super-productivity/webdav.yaml sp/
+cp super-productivity/.env.example sp/
+
 cd sp
 ```
 
 **Setup user accounts**
 
 Edit `webdav.yaml` to configure username and password. Remember to create and assign different directories to different users (within `/data`) to avoid mixing up user data.
+You should also edit `.env.example` and rename it to `.env` with `cp .env.example .env` to add appropriate URL and user credentials
 
 **Start the services**
 
