@@ -64,7 +64,20 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
   }
 
   issueLink(issueId: string | number, issueProviderId: string): Promise<string> {
-    return Promise.resolve('');
+    return this._getCfgOnce$(issueProviderId)
+      .pipe(
+        map((cfg) => {
+          let baseUrl = cfg.nextcloudBaseUrl || '';
+          if (baseUrl.endsWith('/')) {
+            baseUrl = baseUrl.slice(0, -1);
+          }
+          return cfg.selectedBoardId
+            ? `${baseUrl}/apps/deck/board/${cfg.selectedBoardId}/card/${issueId}`
+            : '';
+        }),
+      )
+      .toPromise()
+      .then((result) => result ?? '');
   }
 
   async getFreshDataForIssueTask(task: Task): Promise<{
