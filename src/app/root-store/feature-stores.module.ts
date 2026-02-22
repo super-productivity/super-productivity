@@ -66,6 +66,7 @@ import { AndroidEffects } from '../features/android/store/android.effects';
 import { AndroidFocusModeEffects } from '../features/android/store/android-focus-mode.effects';
 import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
 import { CaldavIssueEffects } from '../features/issue/providers/caldav/caldav-issue.effects';
+import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
 import { VoiceReminderEffects } from '../features/voice-reminder/store/voice-reminder.effects';
@@ -173,6 +174,7 @@ import {
         : []),
     ]),
     EffectsModule.forFeature([CaldavIssueEffects]),
+    EffectsModule.forFeature([NextcloudDeckIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([ElectronEffects]),
     EffectsModule.forFeature([VoiceReminderEffects]),
