@@ -177,8 +177,6 @@ export class NextcloudDeckApiService {
     return new HttpHeaders({
       Authorization: `Basic ${credentials}`,
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      'OCS-APIREQUEST': 'true',
-      // eslint-disable-next-line @typescript-eslint/naming-convention
       'Content-Type': 'application/json',
     });
   }
