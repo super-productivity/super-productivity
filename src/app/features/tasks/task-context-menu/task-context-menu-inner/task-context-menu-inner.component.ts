@@ -70,7 +70,7 @@ import { TagService } from '../../../tag/tag.service';
 import { DialogPromptComponent } from '../../../../ui/dialog-prompt/dialog-prompt.component';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { selectTodayTaskIds } from '../../../work-context/store/work-context.selectors';
-import { isToday } from '../../../../util/is-today.util';
+import { DateService } from '../../../../core/date/date.service';
 import { MenuTouchFixDirective } from '../menu-touch-fix.directive';
 import { TaskLog } from '../../../../core/log';
 import { isTouchEventInstance } from '../../../../util/is-touch-event.util';
@@ -114,6 +114,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
   private readonly _translateService = inject(TranslateService);
   private readonly _workContextService = inject(WorkContextService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _dateService = inject(DateService);
 
   protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
   protected readonly T = T;
@@ -577,8 +578,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     if (this.task.projectId && !this.task.parentId) {
       this._projectService.moveTaskToBacklog(this.task.id, this.task.projectId);
       if (
-        this.task.dueDay === getDbDateStr() ||
-        (this.task.dueWithTime && isToday(this.task.dueWithTime))
+        this.task.dueDay === this._dateService.todayStr() ||
+        (this.task.dueWithTime && this._dateService.isToday(this.task.dueWithTime))
       ) {
         this.unschedule();
       }
@@ -650,8 +651,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     // just add to my day (which clears the reminder) instead of rescheduling
     if (
       this.task.dueWithTime &&
-      isToday(this.task.dueWithTime) &&
-      newDay === getDbDateStr()
+      this._dateService.isToday(this.task.dueWithTime) &&
+      newDay === this._dateService.todayStr()
     ) {
       this.addToMyDay();
       return;
@@ -661,7 +662,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
       this.unschedule();
     } else if (this.task.dueDay === newDay) {
       const formattedDate =
-        newDay == getDbDateStr()
+        newDay === this._dateService.todayStr()
           ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
           : (this._datePipe.transform(newDay, 'shortDate') as string);
       this._snackService.open({
@@ -682,7 +683,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
         false,
       );
     } else {
-      if (newDay === getDbDateStr()) {
+      if (newDay === this._dateService.todayStr()) {
         this.addToMyDay();
       } else {
         this._store.dispatch(

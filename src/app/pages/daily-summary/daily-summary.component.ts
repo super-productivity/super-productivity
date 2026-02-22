@@ -65,7 +65,6 @@ import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { InlineInputComponent } from '../../ui/inline-input/inline-input.component';
 import { InlineMarkdownComponent } from '../../ui/inline-markdown/inline-markdown.component';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
-import { isToday, isYesterday } from '../../util/is-today.util';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
@@ -502,14 +501,17 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             t.timeSpentOnDay[yesterdayStr] &&
             t.timeSpentOnDay[yesterdayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
-          (t.isDone && t.doneOn && (isToday(t.doneOn) || isYesterday(t.doneOn)));
+          (t.isDone &&
+            t.doneOn &&
+            (this._dateService.isToday(t.doneOn) ||
+              this._dateService.isYesterday(t.doneOn)));
       } else {
         return (t: Task) =>
           (t.timeSpentOnDay &&
             t.timeSpentOnDay[dayStr] &&
             t.timeSpentOnDay[dayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
-          (t.isDone && t.doneOn && isToday(t.doneOn));
+          (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
       }
     })();
 

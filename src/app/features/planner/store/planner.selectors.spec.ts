@@ -396,7 +396,7 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
     todayStr: string = today,
     // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   ) => ({
-    [appStateFeatureKey]: { todayStr },
+    [appStateFeatureKey]: { todayStr, startOfNextDayDiffMs: 0 },
     [TASK_FEATURE_NAME]: { ...mockTaskState, ...taskState },
     [plannerFeatureKey]: { ...mockPlannerState, ...plannerState },
   });
@@ -563,6 +563,116 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
       const ids = result.map((t) => t.id);
       expect(ids).toContain('taskDueTomorrow');
       expect(ids).not.toContain('taskDueToday');
+    });
+
+    describe('with startOfNextDayDiff offset', () => {
+      const FOUR_HOURS_MS = 4 * 3600000;
+      const offsetTodayStr = '2026-02-15';
+
+      // Helper to create a local timestamp for a specific date and time
+      const getLocalTimestamp = (
+        year: number,
+        month: number,
+        day: number,
+        hour: number,
+        minute: number = 0,
+      ): number => {
+        return new Date(year, month - 1, day, hour, minute, 0, 0).getTime();
+      };
+
+      const createOffsetState = (
+        tasks: { [id: string]: Task },
+        startOfNextDayDiffMs: number = FOUR_HOURS_MS,
+        todayStr: string = offsetTodayStr,
+        plannerDays: { [day: string]: string[] } = {},
+        // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+      ) => ({
+        [appStateFeatureKey]: { todayStr, startOfNextDayDiffMs },
+        [TASK_FEATURE_NAME]: {
+          ...mockTaskState,
+          ids: Object.keys(tasks),
+          entities: tasks,
+        },
+        [plannerFeatureKey]: {
+          ...mockPlannerState,
+          days: plannerDays,
+        },
+      });
+
+      it('should include dueWithTime task at 2 AM next day when offset extends today', () => {
+        // 2 AM Feb 16 minus 4h offset => Feb 15 22:00 => dateStr "2026-02-15" === todayStr
+        const task = createMockTask({
+          id: 'task2am',
+          title: 'Due at 2 AM Feb 16',
+          dueWithTime: getLocalTimestamp(2026, 2, 16, 2),
+        });
+
+        const mockState = createOffsetState({ task2am: task });
+        const result = fromSelectors.selectAllTasksDueToday(mockState);
+
+        const ids = result.map((t) => t.id);
+        expect(ids).toContain('task2am');
+      });
+
+      it('should NOT include dueWithTime task at 5 AM next day when offset is 4 hours', () => {
+        // 5 AM Feb 16 minus 4h offset => Feb 16 01:00 => dateStr "2026-02-16" !== todayStr
+        const task = createMockTask({
+          id: 'task5am',
+          title: 'Due at 5 AM Feb 16',
+          dueWithTime: getLocalTimestamp(2026, 2, 16, 5),
+        });
+
+        const mockState = createOffsetState({ task5am: task });
+        const result = fromSelectors.selectAllTasksDueToday(mockState);
+
+        const ids = result.map((t) => t.id);
+        expect(ids).not.toContain('task5am');
+      });
+
+      it('should include task with dueDay matching todayStr regardless of offset', () => {
+        // dueDay comparison is a simple string match, unaffected by offset
+        const task = createMockTask({
+          id: 'taskDueDay',
+          title: 'Due Day Feb 15',
+          dueDay: '2026-02-15',
+        });
+
+        const mockState = createOffsetState({ taskDueDay: task });
+        const result = fromSelectors.selectAllTasksDueToday(mockState);
+
+        const ids = result.map((t) => t.id);
+        expect(ids).toContain('taskDueDay');
+      });
+
+      it('should include dueWithTime task at 3:59 AM next day (boundary, just before offset)', () => {
+        // 3:59 AM Feb 16 minus 4h => Feb 15 23:59 => dateStr "2026-02-15" === todayStr
+        const task = createMockTask({
+          id: 'task359am',
+          title: 'Due at 3:59 AM Feb 16',
+          dueWithTime: getLocalTimestamp(2026, 2, 16, 3, 59),
+        });
+
+        const mockState = createOffsetState({ task359am: task });
+        const result = fromSelectors.selectAllTasksDueToday(mockState);
+
+        const ids = result.map((t) => t.id);
+        expect(ids).toContain('task359am');
+      });
+
+      it('should NOT include dueWithTime task at 4:00 AM next day (boundary, exactly at offset)', () => {
+        // 4:00 AM Feb 16 minus 4h => Feb 16 00:00 => dateStr "2026-02-16" !== todayStr
+        const task = createMockTask({
+          id: 'task400am',
+          title: 'Due at 4:00 AM Feb 16',
+          dueWithTime: getLocalTimestamp(2026, 2, 16, 4, 0),
+        });
+
+        const mockState = createOffsetState({ task400am: task });
+        const result = fromSelectors.selectAllTasksDueToday(mockState);
+
+        const ids = result.map((t) => t.id);
+        expect(ids).not.toContain('task400am');
+      });
     });
   });
 });

@@ -291,6 +291,7 @@ export class PluginManagementComponent {
       this.uploadError.set(null);
 
       await this._pluginCacheService.clearCache();
+      this._pluginService.clearUploadedPluginsFromMemory();
 
       PluginLog.log('Plugin cache cleared successfully');
     } catch (error) {

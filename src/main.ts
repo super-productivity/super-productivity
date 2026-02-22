@@ -164,12 +164,18 @@ bootstrapApplication(AppComponent, {
     {
       provide: MAT_DATE_FORMATS,
       useFactory: (dateTimeFormatService: DateTimeFormatService): MatDateFormats => {
+        // Use getters so dateInput re-evaluates when the user changes locale
         return {
           parse: {
-            dateInput: dateTimeFormatService.dateFormat().raw,
+            get dateInput(): string {
+              return dateTimeFormatService.dateFormat().raw;
+            },
+            timeInput: { hour: 'numeric', minute: 'numeric' },
           },
           display: {
-            dateInput: dateTimeFormatService.dateFormat().raw,
+            get dateInput(): string {
+              return dateTimeFormatService.dateFormat().raw;
+            },
             monthYearLabel: { year: 'numeric', month: 'short' },
             dateA11yLabel: { year: 'numeric', month: 'long', day: 'numeric' },
             monthYearA11yLabel: { year: 'numeric', month: 'long' },

@@ -18,9 +18,12 @@ import {
   selectTagFeatureState,
   selectTodayTagTaskIds,
 } from '../../tag/store/tag.reducer';
-import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
-import { isToday } from '../../../util/is-today.util';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 const mapSubTasksToTasks = (tasksIN: Task[]): TaskWithSubTasks[] => {
   // Create a Map for O(1) lookups instead of O(n) find() calls
   const taskMap = new Map<string, Task>();
@@ -142,10 +145,12 @@ export const selectStartableTasks = createSelector(
 export const selectOverdueTasks = createSelector(
   selectTaskFeatureState,
   selectTodayStr,
-  (s, todayStr): Task[] => {
-    const today = new Date(todayStr);
-    const todayStart = new Date(today);
-    todayStart.setHours(0, 0, 0, 0);
+  selectStartOfNextDayDiffMs,
+  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+    const today = dateStrToUtcDate(todayStr);
+    today.setHours(0, 0, 0, 0);
+    // The logical start of "today" is shifted by the offset
+    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
     return s.ids
       .map((id) => s.entities[id])
       .filter(
@@ -155,7 +160,7 @@ export const selectOverdueTasks = createSelector(
           // which is lexicographically sortable. This avoids timezone conversion issues.
           !!(
             (task.dueDay && task.dueDay < todayStr) ||
-            (task.dueWithTime && task.dueWithTime < todayStart.getTime())
+            (task.dueWithTime && task.dueWithTime < todayStartMs)
           ),
       );
   },
@@ -299,21 +304,23 @@ export const selectAllTasksWithSubTasks = createSelector(
 export const selectLaterTodayTasksWithSubTasks = createSelector(
   selectTaskFeatureState,
   selectTodayStr,
-  (taskState, todayStr): TaskWithSubTasks[] => {
+  selectStartOfNextDayDiffMs,
+  (taskState, todayStr, startOfNextDayDiffMs): TaskWithSubTasks[] => {
     if (!todayStr) {
       return [];
     }
 
     const now = Date.now();
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
-    const todayEndTime = todayEnd.getTime();
+    // End of "today" with offset: last ms of todayStr + offset
+    const todayDate = dateStrToUtcDate(todayStr);
+    todayDate.setHours(23, 59, 59, 999);
+    const todayEndTime = todayDate.getTime() + startOfNextDayDiffMs;
 
     // Helper to check if task is "in TODAY" via virtual tag pattern
     // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity)
     const isInToday = (task: Task): boolean => {
       if (task.dueWithTime) {
-        return isToday(task.dueWithTime);
+        return isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
       }
       return task.dueDay === todayStr;
     };

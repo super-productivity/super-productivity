@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "17.1.8",
+  "version": "17.2.1",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -49,7 +49,7 @@
     "dist:win:appx": "npm run buildAllElectron:prod && electron-builder --win --config=build/electron-builder.appx.yaml",
     "dist:win:only": "electron-builder --win",
     "dist:win:store": "git pull && npm run && copy electron-builder.win-store.yaml electron-builder.yaml && npm run dist:win && git checkout electron-builder.yaml || git checkout electron-builder.yaml",
-    "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync",
+    "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync android",
     "buildFrontend:e2e": "npm run plugins:build && npm run env && ng build",
     "serveFrontend:e2e:prod": "npx http-server .tmp/angular-dist/browser -p 4242 -c-1 --proxy http://localhost:4242?",
     "e2e": "npm run e2e:all -- --grep-invert \"@supersync|@webdav\"",

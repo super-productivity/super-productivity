@@ -22,8 +22,11 @@ import {
 import { SyncWrapperService } from '../../../imex/sync/sync-wrapper.service';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { AddTasksForTomorrowService } from '../../add-tasks-for-tomorrow/add-tasks-for-tomorrow.service';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { getDateRangeForDay } from '../../../util/get-date-range-for-day';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
 import { TaskLog } from '../../../core/log';
 import { SyncTriggerService } from '../../../imex/sync/sync-trigger.service';
 import { environment } from '../../../../environments/environment';
@@ -145,9 +148,12 @@ export class TaskDueEffects {
           }),
           debounceTime(2000), // Wait a bit longer to ensure all other effects have run
           switchMap(() => this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$),
-          switchMap(() => {
-            const todayStr = getDbDateStr();
-            const todayRange = getDateRangeForDay(Date.now());
+          withLatestFrom(
+            this._store$.select(selectTodayStr),
+            this._store$.select(selectStartOfNextDayDiffMs),
+          ),
+          switchMap(([, todayStr, startOfNextDayDiffMs]) => {
+            const todayRange = getDateRangeForDay(Date.now() - startOfNextDayDiffMs);
             return combineLatest([
               this._store$.select(selectTasksDueForDay, { day: todayStr }),
               this._store$.select(selectTasksWithDueTimeForRange, todayRange),

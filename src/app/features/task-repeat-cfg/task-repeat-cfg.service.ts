@@ -30,7 +30,7 @@ import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { isToday } from '../../util/is-today.util';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import {
   selectAllTaskRepeatCfgs,
@@ -50,6 +50,7 @@ export class TaskRepeatCfgService {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
+  private _dateService = inject(DateService);
 
   taskRepeatCfgs$: Observable<TaskRepeatCfg[]> = this._store$.pipe(
     select(selectAllTaskRepeatCfgs),
@@ -285,7 +286,7 @@ export class TaskRepeatCfgService {
           remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
           isMoveToBacklog: false,
           // Only keep in today list if scheduled for today (#5594)
-          isSkipAutoRemoveFromToday: isToday(dateTime),
+          isSkipAutoRemoveFromToday: this._dateService.isToday(dateTime),
         }),
       );
     }

@@ -180,20 +180,24 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   );
   isOverdue = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
       !t.isDone &&
-      ((t.dueWithTime && t.dueWithTime < Date.now()) ||
+      ((t.dueWithTime &&
+        !this._dateService.isToday(t.dueWithTime) &&
+        t.dueWithTime < Date.now()) ||
         // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
         // which is lexicographically sortable. This avoids timezone conversion issues that occur
         // when creating Date objects from date strings.
-        (t.dueDay && t.dueDay !== getDbDateStr() && t.dueDay < getDbDateStr()))
+        (t.dueDay && t.dueDay !== todayStr && t.dueDay < todayStr))
     );
   });
   isScheduledToday = computed(() => {
     const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
     return (
       (t.dueWithTime && this._dateService.isToday(t.dueWithTime)) ||
-      (t.dueDay && t.dueDay === this.globalTrackingIntervalService.todayDateStr())
+      (t.dueDay && t.dueDay === todayStr)
     );
   });
 
@@ -286,6 +290,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   @HostListener('focus') onFocus(): void {
     this._taskFocusService.focusedTaskId.set(this.task().id);
     this._taskFocusService.lastFocusedTaskComponent.set(this);
+
+    // If detail panel is open for another task, update it to show this task (#6578)
+    // Skip if this task is inside the detail panel (e.g. subtask list)
+    if (this._elementRef.nativeElement.closest('task-detail-panel')) {
+      return;
+    }
+    const selectedTaskId = this._taskService.selectedTaskId();
+    if (selectedTaskId && selectedTaskId !== this.task().id) {
+      this._taskService.setSelectedId(this.task().id);
+    }
   }
 
   @HostListener('blur') onBlur(): void {

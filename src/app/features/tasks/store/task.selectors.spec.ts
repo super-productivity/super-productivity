@@ -1,6 +1,7 @@
 import * as fromSelectors from './task.selectors';
-import { Task, TaskState } from '../task.model';
+import { DEFAULT_TASK, Task, TaskState } from '../task.model';
 import { TASK_FEATURE_NAME } from './task.reducer';
+import { taskAdapter } from './task.adapter';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { PROJECT_FEATURE_NAME } from '../../project/store/project.reducer';
@@ -172,6 +173,7 @@ describe('Task Selectors', () => {
   const mockState = {
     [appStateFeatureKey]: {
       todayStr: today,
+      startOfNextDayDiffMs: 0,
     },
     [TASK_FEATURE_NAME]: mockTaskState,
     [PROJECT_FEATURE_NAME]: {
@@ -449,6 +451,88 @@ describe('Task Selectors', () => {
       // Older overdue should come first (chronological order)
       expect(result[0].id).toBe('olderOverdue');
       expect(result[1].id).toBe('task6');
+    });
+    describe('selectOverdueTasks with startOfNextDayDiffMs offset', () => {
+      const FOUR_HOURS = 4 * 3600 * 1000;
+
+      // Helper to create a date at a specific hour/minute on a given day string
+      const makeTime = (dayStr: string, hours: number, minutes = 0): number => {
+        const d = new Date(dayStr + 'T00:00:00');
+        d.setHours(hours, minutes, 0, 0);
+        return d.getTime();
+      };
+
+      it('should NOT consider a task overdue if dueWithTime is within offset-adjusted today', () => {
+        // With 4h offset and todayStr='2026-02-15', "today" runs from Feb 15 4AM to Feb 16 4AM
+        // A task at Feb 15 5AM is within today => not overdue
+        const stateWithOffset = {
+          ...mockState,
+          [appStateFeatureKey]: {
+            todayStr: '2026-02-15',
+            startOfNextDayDiffMs: FOUR_HOURS,
+          },
+          [TASK_FEATURE_NAME]: taskAdapter.setAll(
+            [
+              {
+                ...DEFAULT_TASK,
+                id: 'timeTask1',
+                dueWithTime: makeTime('2026-02-15', 5),
+              } as Task,
+            ],
+            taskAdapter.getInitialState(),
+          ),
+        };
+        const result = fromSelectors.selectOverdueTasks(stateWithOffset as any);
+        expect(result.length).toBe(0);
+      });
+
+      it('should consider a task overdue if dueWithTime is before offset-adjusted today start', () => {
+        // With 4h offset and todayStr='2026-02-15', today starts at Feb 15 4AM
+        // A task at Feb 15 3:59AM is before today start => overdue
+        const stateWithOffset = {
+          ...mockState,
+          [appStateFeatureKey]: {
+            todayStr: '2026-02-15',
+            startOfNextDayDiffMs: FOUR_HOURS,
+          },
+          [TASK_FEATURE_NAME]: taskAdapter.setAll(
+            [
+              {
+                ...DEFAULT_TASK,
+                id: 'timeTask2',
+                dueWithTime: makeTime('2026-02-15', 3, 59),
+              } as Task,
+            ],
+            taskAdapter.getInitialState(),
+          ),
+        };
+        const result = fromSelectors.selectOverdueTasks(stateWithOffset as any);
+        expect(result.length).toBe(1);
+        expect(result[0].id).toBe('timeTask2');
+      });
+
+      it('should handle exact boundary: task at exactly todayStart is NOT overdue', () => {
+        // A task at exactly Feb 15 4:00AM (= todayStart) is NOT overdue
+        const stateWithOffset = {
+          ...mockState,
+          [appStateFeatureKey]: {
+            todayStr: '2026-02-15',
+            startOfNextDayDiffMs: FOUR_HOURS,
+          },
+          [TASK_FEATURE_NAME]: taskAdapter.setAll(
+            [
+              {
+                ...DEFAULT_TASK,
+                id: 'timeTask3',
+                dueWithTime: makeTime('2026-02-15', 4),
+              } as Task,
+            ],
+            taskAdapter.getInitialState(),
+          ),
+        };
+        const result = fromSelectors.selectOverdueTasks(stateWithOffset as any);
+        expect(result.length).toBe(0);
+      });
     });
   });
 

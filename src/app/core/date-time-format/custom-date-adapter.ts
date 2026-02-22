@@ -26,6 +26,7 @@ export class CustomDateAdapter extends NativeDateAdapter {
     return cfgValue >= 0 ? cfgValue : DEFAULT_FIRST_DAY_OF_WEEK;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- signature required by DateAdapter interface
   override parse(value: any, format: string): Date | null {
     if (!value) return null;
     if (value instanceof Date) return this.isValid(value) ? value : null;

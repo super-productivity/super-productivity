@@ -314,13 +314,12 @@ describe('FocusModeMainComponent', () => {
       });
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.changeTaskNotes('New notes')).toThrowError(
-        'Task is not loaded',
-      );
+      expect(() => component.changeTaskNotes('New notes')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
     it('should handle whitespace differences in comparison', () => {
@@ -479,13 +478,12 @@ describe('FocusModeMainComponent', () => {
       expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).toThrowError(
-        'No task data',
-      );
+      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
   });
 

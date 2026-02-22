@@ -8,6 +8,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Log } from '../../../core/log';
 import { expandAnimation } from '../../../ui/animations/expand.ani';
 import { from, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -290,7 +291,8 @@ export class FocusModeMainComponent {
     ) {
       const t = this.currentTask();
       if (!t) {
-        throw new Error('Task is not loaded');
+        Log.warn('changeTaskNotes: currentTask is null, skipping update');
+        return;
       }
       this.taskService.update(t.id, { notes: $event });
     }
@@ -332,7 +334,8 @@ export class FocusModeMainComponent {
     if (isChanged) {
       const t = this.currentTask();
       if (!t) {
-        throw new Error('No task data');
+        Log.warn('updateTaskTitleIfChanged: currentTask is null, skipping update');
+        return;
       }
       this.taskService.update(t.id, { title: newTitle });
     }

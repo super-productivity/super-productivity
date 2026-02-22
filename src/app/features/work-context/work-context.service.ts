@@ -280,7 +280,7 @@ export class WorkContextService {
   // See: docs/ai/today-tag-architecture.md
   mainListTasksInProject$: Observable<TaskWithSubTasks[]> = this.mainListTasks$.pipe(
     map((tasks) => {
-      const todayStr = getDbDateStr();
+      const todayStr = this._dateService.todayStr();
       return tasks
         .filter(
           (task) =>

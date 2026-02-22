@@ -1,0 +1,40 @@
+
+### Bug Fixes
+
+* **android:** prevent crash on SAF folder selection (#6545)
+* **build:** limit cap sync to android in droid script
+* **ci:** fix WebDAV config path for hacdias/webdav v5
+* **data-init:** add error handling for failed data hydration
+* **electron:** prevent app from closing when cancel is clicked on quit confirmation
+* **focus-mode:** capture session state before dispatch in finishCurrentTask (#6127)
+* **focus-mode:** clear stale _isResumingBreak flag when isPauseTrackingDuringBreak is enabled (#6534)
+* **focus-mode:** prevent crash when task becomes null during note/title edit (3cdd9e4), closes #6595
+* **focus-mode:** restore InProgress UI state when resuming paused work session (#6575)
+* improve date format reactivity, e2e error logging, and type annotation
+* **linux:** set StartupWMClass to fix dock icon on Cosmic DE (94442ea), closes #5971
+* **planner:** prevent calendar nav drag from getting stuck open
+* **plugins:** handle community plugins JSON load failure gracefully (#6560)
+* **plugins:** properly teardown old plugin on re-upload and cache clear (b1bdf84), closes #6564
+* remove dead translation key and deduplicate hydration error snack
+* **schedule:** guard against undefined subTaskIds in selector (#6562)
+* **schedule:** prevent zero-duration events from stacking on each other
+* **sync-md:** resolve temp IDs in subTaskIds during batch update (5b2fd70), closes #6283
+* **sync:** break vector clock inflate/prune cycle and persist legacy client ID
+* **sync:** fix subscription leak in SyncTriggerService constructor
+* **sync:** prevent loading screen from blocking indefinitely on conflict dialog
+* **sync:** sanitize base64 before atob() in decompression (#6581)
+* **sync:** sync before local day-change processing on app startup (2af5442), closes #6398
+* **tasks:** sync detail panel with focused task (#6578)
+* **theme:** increase background overlay effectiveness and cap slider at 99
+* **timepicker:** add missing parse.timeInput to MAT_DATE_FORMATS
+* trello can't be used (#6331) (#6442)
+### Features
+
+* add label to heatmap for repeat task
+* **bottom-panel:** increase mobile task detail panel initial height to 60%
+* **nav:** add context menu to disable features from sidebar (#6391)
+* **nav:** add search as toggleable app feature
+* stronger warning for file based sync
+* **tasks,planner:** migrate isToday to offset-aware DateService and improve calendar nav
+* **theme:** set default background overlay opacity to 20% and extract translation
+* tone down security warning for plugins

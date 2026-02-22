@@ -14,15 +14,18 @@ import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
 import { TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
-import { isSameDay } from '../../../util/is-same-day';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { ScheduleCalendarMapEntry } from '../../schedule/schedule.model';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { calculateAvailableHours } from '../util/calculate-available-hours';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
 import { ScheduleConfig } from '../../config/global-config.model';
-import { selectTodayStr } from '../../../root-store/app-state/app-state.selectors';
-import { isToday } from '../../../util/is-today.util';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 
 export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState>(
@@ -31,9 +34,15 @@ export const selectPlannerState = createFeatureSelector<fromPlanner.PlannerState
 
 export const selectAllTasksDueToday = createSelector(
   selectTodayStr,
+  selectStartOfNextDayDiffMs,
   selectTaskFeatureState,
   selectPlannerState,
-  (todayStr, taskState, plannerState): (TaskWithDueTime | TaskWithDueDay)[] => {
+  (
+    todayStr,
+    startOfNextDayDiffMs,
+    taskState,
+    plannerState,
+  ): (TaskWithDueTime | TaskWithDueDay)[] => {
     // Start with tasks from planner state for today
     const allDue: (TaskWithDueTime | TaskWithDueDay)[] = (
       plannerState.days[todayStr] || []
@@ -55,7 +64,7 @@ export const selectAllTasksDueToday = createSelector(
       // Priority: dueWithTime takes precedence over dueDay (mutual exclusivity pattern)
       let isDueToday = false;
       if (task.dueWithTime) {
-        isDueToday = isToday(task.dueWithTime);
+        isDueToday = isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs);
       } else if (task.dueDay === todayStr) {
         isDueToday = true;
       }
@@ -101,7 +110,8 @@ export const selectPlannerDays = (
     selectPlannerState,
     // TODO this could be more efficient by limiting this to changes of the relevant stuff
     selectConfigFeatureState,
-    (taskState, plannerState, globalConfig): PlannerDay[] => {
+    selectStartOfNextDayDiffMs,
+    (taskState, plannerState, globalConfig, startOfNextDayDiffMs): PlannerDay[] => {
       const allDatesWithData = Object.keys(plannerState.days);
       const dayDatesToUse = [
         ...dayDates,
@@ -121,6 +131,7 @@ export const selectPlannerDays = (
           icalEvents,
           unplannedTaskIdsToday,
           globalConfig.schedule,
+          startOfNextDayDiffMs,
         ),
       );
     },
@@ -157,6 +168,7 @@ const getPlannerDay = (
   icalEvents: ScheduleCalendarMapEntry[],
   unplannedTaskIdsToday: string[] | false,
   scheduleConfig?: ScheduleConfig,
+  startOfNextDayDiffMs: number = 0,
 ): PlannerDay => {
   const isTodayI = dayDate === todayStr;
   const currentDayDate = dateStrToUtcDate(dayDate);
@@ -174,8 +186,16 @@ const getPlannerDay = (
   const { repeatProjectionsForDay, noStartTimeRepeatProjections } =
     getAllRepeatableTasksForDay(taskRepeatCfgs, currentDayTimestamp);
 
-  const scheduledTaskItems = getScheduledTaskItems(allPlannedTasks, currentDayDate);
-  const { timedEvents, allDayEvents } = getIcalEventsForDay(icalEvents, currentDayDate);
+  const scheduledTaskItems = getScheduledTaskItems(
+    allPlannedTasks,
+    dayDate,
+    startOfNextDayDiffMs,
+  );
+  const { timedEvents, allDayEvents } = getIcalEventsForDay(
+    icalEvents,
+    dayDate,
+    startOfNextDayDiffMs,
+  );
 
   const timeEstimate = getAllTimeSpent(
     normalTasks,
@@ -277,10 +297,14 @@ const getAllRepeatableTasksForDay = (
 
 const getScheduledTaskItems = (
   allPlannedTasks: TaskWithDueTime[],
-  currentDayDate: Date,
+  dayDate: string,
+  startOfNextDayDiffMs: number = 0,
 ): ScheduleItemTask[] =>
   allPlannedTasks
-    .filter((task) => isSameDay(task.dueWithTime, currentDayDate))
+    .filter(
+      (task) =>
+        getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === dayDate,
+    )
     .map((task) => {
       const start = task.dueWithTime;
       const end = start + Math.max(task.timeEstimate - task.timeSpent, 0);
@@ -300,7 +324,8 @@ interface IcalEventsForDayResult {
 
 const getIcalEventsForDay = (
   icalEvents: ScheduleCalendarMapEntry[],
-  currentDayDate: Date,
+  dayDate: string,
+  startOfNextDayDiffMs: number = 0,
 ): IcalEventsForDayResult => {
   const timedEvents: ScheduleItemEvent[] = [];
   const allDayEvents: ScheduleFromCalendarEvent[] = [];
@@ -308,7 +333,7 @@ const getIcalEventsForDay = (
   icalEvents.forEach((icalMapEntry) => {
     icalMapEntry.items.forEach((calEv) => {
       const start = calEv.start;
-      if (isSameDay(start, currentDayDate)) {
+      if (getDbDateStr(new Date(start - startOfNextDayDiffMs)) === dayDate) {
         if (calEv.isAllDay) {
           // All-day events go to a separate list with full event data
           allDayEvents.push({ ...calEv });

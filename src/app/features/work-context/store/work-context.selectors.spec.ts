@@ -13,10 +13,6 @@ import {
 import { WorkContext, WorkContextType } from '../work-context.model';
 import { TaskCopy } from '../../tasks/task.model';
 import { getDbDateStr } from '../../../util/get-db-date-str';
-import { MiscConfig } from '../../config/global-config.model';
-
-const DEFAULT_MISC_CONFIG = { startOfNextDay: 0 } as MiscConfig;
-
 /**
  * Tests for work-context selectors.
  *
@@ -40,7 +36,8 @@ describe('workContext selectors', () => {
         fakeEntityStateFromArray([TODAY_TAG]),
         fakeEntityStateFromArray([]) as any, // taskState - no tasks
         [],
-        DEFAULT_MISC_CONFIG,
+        todayStr,
+        0,
       );
       expect(result).toEqual(
         jasmine.objectContaining({
@@ -108,11 +105,98 @@ describe('workContext selectors', () => {
         fakeEntityStateFromArray([todayTagWithStaleIds]),
         fakeEntityStateFromArray([task1, task2, taskNotForToday]) as any,
         [],
-        DEFAULT_MISC_CONFIG,
+        todayStr,
+        0,
       );
 
       // Should filter out task3 (stale) and auto-add task2 (missing from order)
       expect(result.taskIds).toEqual(['task1', 'task2']);
+    });
+
+    describe('with startOfNextDayDiff offset', () => {
+      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+      const offsetTodayStr = '2026-02-15';
+
+      it('should include task with dueWithTime at 2 AM next day when offset extends today', () => {
+        // 2 AM on Feb 16 local time; with 4h offset: 2 AM - 4h = 10 PM Feb 15 = today
+        const feb16_2am = new Date(2026, 1, 16, 2, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_2am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagWithOrder = { ...TODAY_TAG, taskIds: ['task1'] };
+
+        const result = selectActiveWorkContext.projector(
+          {
+            activeId: TODAY_TAG.id,
+            activeType: WorkContextType.TAG,
+          } as any,
+          fakeEntityStateFromArray([]),
+          fakeEntityStateFromArray([todayTagWithOrder]),
+          fakeEntityStateFromArray([task]) as any,
+          [],
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+
+        expect(result.taskIds).toEqual(['task1']);
+      });
+
+      it('should order tasks correctly when offset causes mixed dueDay and dueWithTime membership', () => {
+        // Task with dueDay = today (Feb 15)
+        const taskDueDay = {
+          id: 'task-dueday',
+          tagIds: [],
+          dueDay: offsetTodayStr,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Task with dueWithTime at 1 AM Feb 16 (offset makes it "today")
+        const feb16_1am = new Date(2026, 1, 16, 1, 0, 0, 0).getTime();
+        const taskDueWithTime = {
+          id: 'task-duewithtime',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_1am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Task with dueWithTime at 5 AM Feb 16 (offset does NOT make it "today")
+        const feb16_5am = new Date(2026, 1, 16, 5, 0, 0, 0).getTime();
+        const taskNotToday = {
+          id: 'task-not-today',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_5am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagWithOrder = {
+          ...TODAY_TAG,
+          taskIds: ['task-duewithtime', 'task-dueday'],
+        };
+
+        const result = selectActiveWorkContext.projector(
+          {
+            activeId: TODAY_TAG.id,
+            activeType: WorkContextType.TAG,
+          } as any,
+          fakeEntityStateFromArray([]),
+          fakeEntityStateFromArray([todayTagWithOrder]),
+          fakeEntityStateFromArray([taskDueDay, taskDueWithTime, taskNotToday]) as any,
+          [],
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+
+        // task-not-today excluded (5 AM - 4h = 1 AM Feb 16 != Feb 15)
+        expect(result.taskIds).toEqual(['task-duewithtime', 'task-dueday']);
+      });
     });
   });
   describe('selectTrackableTasksForActiveContext', () => {
@@ -298,11 +382,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([TODAY_TAG]);
       const taskState = fakeEntityStateFromArray([]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual([]);
     });
 
@@ -329,11 +409,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithTasks]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1', 'task2']);
     });
 
@@ -359,11 +435,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithStaleIds]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1']);
     });
 
@@ -389,11 +461,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagMissingTask2]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1', 'task2']);
     });
 
@@ -420,11 +488,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithTasks]);
       const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['parent']); // subtask excluded - shown nested under parent
     });
 
@@ -451,11 +515,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithTasks]);
       const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['subtask1']); // subtask included as top-level item
     });
 
@@ -476,11 +536,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithDeletedTask]);
       const taskState = fakeEntityStateFromArray([task1]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1']); // deleted tasks filtered out
     });
 
@@ -506,11 +562,7 @@ describe('workContext selectors', () => {
       // Only active task in state - archived-task-id doesn't exist
       const taskState = fakeEntityStateFromArray([activeTask]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['active-task']); // archived task ID filtered out
     });
 
@@ -537,11 +589,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskWithDueWithTimeOnly]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1']); // Should be included via dueWithTime fallback
     });
 
@@ -568,11 +616,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskWithBothFields]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1']); // dueWithTime takes priority - task IS in today
     });
 
@@ -599,11 +643,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskWithDueWithTimeTomorrow]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual([]); // Should NOT be included
     });
 
@@ -630,11 +670,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskWithBoth]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1']); // Should be included via dueWithTime (no duplicates)
     });
 
@@ -670,11 +706,7 @@ describe('workContext selectors', () => {
         taskWithDueWithTimeOnly,
       ]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual(['task1', 'task2']); // Both included, task2 appended
     });
 
@@ -706,11 +738,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskWithConflictingState]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       // dueWithTime takes priority - task IS in today (despite stale dueDay)
       expect(result).toEqual(['task1']);
     });
@@ -744,13 +772,214 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([taskScheduledForTomorrow]) as any;
 
-      const result = selectTodayTaskIds.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTaskIds.projector(tagState, taskState, todayStr, 0);
       // Task should NOT appear in today (dueWithTime is for tomorrow)
       expect(result).toEqual([]);
+    });
+
+    // Tests for startOfNextDayDiff offset behavior
+    describe('with startOfNextDayDiff offset', () => {
+      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+      const offsetTodayStr = '2026-02-15';
+
+      it('should include task with dueWithTime at 2 AM Feb 16 when offset is 4h (2 AM - 4h = 10 PM Feb 15 = today)', () => {
+        // 2 AM on Feb 16 local time
+        const feb16_2am = new Date(2026, 1, 16, 2, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_2am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual(['task1']);
+      });
+
+      it('should NOT include task with dueWithTime at 5 AM Feb 16 when offset is 4h (5 AM - 4h = 1 AM Feb 16 != Feb 15)', () => {
+        // 5 AM on Feb 16 local time
+        const feb16_5am = new Date(2026, 1, 16, 5, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_5am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual([]);
+      });
+
+      it('should NOT include task with dueWithTime at 11 PM Feb 14 when offset is 4h (11 PM - 4h = 7 PM Feb 14 != Feb 15)', () => {
+        // 11 PM on Feb 14 local time
+        const feb14_11pm = new Date(2026, 1, 14, 23, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb14_11pm,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual([]);
+      });
+
+      it('should NOT include task with dueWithTime at exactly 4:00 AM Feb 16 when offset is 4h (4 AM - 4h = midnight Feb 16 != Feb 15)', () => {
+        // Exactly 4:00 AM on Feb 16 local time
+        // 4 AM - 4h offset = midnight Feb 16, which is Feb 16, NOT Feb 15
+        const feb16_4am = new Date(2026, 1, 16, 4, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_4am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual([]);
+      });
+
+      it('should include task with dueWithTime at 3:59 AM Feb 16 when offset is 4h (3:59 AM - 4h = 11:59 PM Feb 15 = today)', () => {
+        // 3:59 AM on Feb 16 local time
+        // 3:59 AM - 4h offset = 11:59 PM Feb 15, which IS Feb 15 (today)
+        const feb16_3_59am = new Date(2026, 1, 16, 3, 59, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_3_59am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual(['task1']);
+      });
+
+      it('should still include task with dueDay matching todayStr regardless of offset', () => {
+        // dueDay is a string comparison against todayStr, offset does not affect it
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: offsetTodayStr, // Matches todayStr directly
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagEmpty = { ...TODAY_TAG, taskIds: [] };
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual(['task1']);
+      });
+
+      it('should handle mix of dueDay and offset-adjusted dueWithTime tasks', () => {
+        // Task via dueDay (string match)
+        const taskDueDay = {
+          id: 'task-dueday',
+          tagIds: [],
+          dueDay: offsetTodayStr,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Task via dueWithTime at 1 AM Feb 16 (offset: 1 AM - 4h = 9 PM Feb 15 = today)
+        const feb16_1am = new Date(2026, 1, 16, 1, 0, 0, 0).getTime();
+        const taskDueWithTimeInRange = {
+          id: 'task-offset-ok',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_1am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Task via dueWithTime at 6 AM Feb 16 (offset: 6 AM - 4h = 2 AM Feb 16 != Feb 15)
+        const feb16_6am = new Date(2026, 1, 16, 6, 0, 0, 0).getTime();
+        const taskDueWithTimeOutOfRange = {
+          id: 'task-offset-out',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_6am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagWithOrder = {
+          ...TODAY_TAG,
+          taskIds: ['task-dueday', 'task-offset-ok'],
+        };
+        const tagState = fakeEntityStateFromArray([todayTagWithOrder]);
+        const taskState = fakeEntityStateFromArray([
+          taskDueDay,
+          taskDueWithTimeInRange,
+          taskDueWithTimeOutOfRange,
+        ]) as any;
+
+        const result = selectTodayTaskIds.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        // task-offset-out excluded, the other two included in stored order
+        expect(result).toEqual(['task-dueday', 'task-offset-ok']);
+      });
     });
   });
 
@@ -851,11 +1080,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagConsistent]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toBeNull();
     });
 
@@ -873,7 +1098,8 @@ describe('workContext selectors', () => {
       const result = selectTodayTagRepair.projector(
         tagStateWithoutToday as any,
         taskState,
-        DEFAULT_MISC_CONFIG,
+        todayStr,
+        0,
       );
       expect(result).toBeNull();
     });
@@ -900,11 +1126,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithStaleIds]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['task1'], // task2 removed
@@ -933,11 +1155,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagMissingTask2]);
       const taskState = fakeEntityStateFromArray([task1, task2]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['task1', 'task2'], // task2 added
@@ -972,11 +1190,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithIssues]);
       const taskState = fakeEntityStateFromArray([task1, task2, task3]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['task1', 'task3'], // task2 removed, task3 added, order preserved for task1
@@ -1012,11 +1226,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagMissingOne]);
       const taskState = fakeEntityStateFromArray([task1, task2, task3]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['task3', 'task1', 'task2'], // Preserve task3, task1 order; append task2
@@ -1047,11 +1257,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithSubtask]);
       const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['parent'], // subtask removed - it will appear nested under parent
@@ -1082,11 +1288,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithSubtaskAsTopLevel]);
       const taskState = fakeEntityStateFromArray([parentTask, subtask]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       // No repair needed - subtask should be included because parent is not in Today
       expect(result).toBeNull();
     });
@@ -1125,11 +1327,7 @@ describe('workContext selectors', () => {
         regularTask,
       ]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['task1', 'subtask1'], // subtask added because parent not in Today
@@ -1145,11 +1343,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagEmpty]);
       const taskState = fakeEntityStateFromArray([]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toBeNull();
     });
 
@@ -1170,11 +1364,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithDuplicates]);
       const taskState = fakeEntityStateFromArray([task1]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       // All duplicates are valid (task1 has dueDay === today), so no repair needed
       // The repair logic filters by tasksForTodaySet.has(id), which returns true for all
       expect(result).toBeNull();
@@ -1198,11 +1388,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagWithOrphan]);
       const taskState = fakeEntityStateFromArray([orphanSubtask]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       // Orphan subtask's parent is not in allTasksWithDueToday, so subtask IS valid
       expect(result).toBeNull();
     });
@@ -1250,11 +1436,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTag]);
       const taskState = fakeEntityStateFromArray([parent, sub1, parent2, sub2]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       // No repair needed - parent is valid, sub2 is valid (parent2 not in today)
       expect(result).toBeNull();
     });
@@ -1284,11 +1466,7 @@ describe('workContext selectors', () => {
       const tagState = fakeEntityStateFromArray([todayTagIncorrect]);
       const taskState = fakeEntityStateFromArray([parent, sub1]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['parent'], // sub1 removed - it will appear nested under parent
@@ -1341,14 +1519,190 @@ describe('workContext selectors', () => {
         regularTask,
       ]) as any;
 
-      const result = selectTodayTagRepair.projector(
-        tagState,
-        taskState,
-        DEFAULT_MISC_CONFIG,
-      );
+      const result = selectTodayTagRepair.projector(tagState, taskState, todayStr, 0);
       expect(result).toEqual({
         needsRepair: true,
         repairedTaskIds: ['sub2', 'task1', 'sub1'], // Preserve order, append missing sub1
+      });
+    });
+
+    describe('with startOfNextDayDiff offset', () => {
+      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+      const offsetTodayStr = '2026-02-15';
+
+      it('should return null when task with offset-adjusted dueWithTime is consistent', () => {
+        // 2 AM on Feb 16: with 4h offset, maps to Feb 15 (today)
+        const feb16_2am = new Date(2026, 1, 16, 2, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_2am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagConsistent = {
+          ...TODAY_TAG,
+          taskIds: ['task1'],
+        };
+
+        const tagState = fakeEntityStateFromArray([todayTagConsistent]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTagRepair.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toBeNull();
+      });
+
+      it('should detect stale task when dueWithTime falls outside offset range', () => {
+        // 5 AM on Feb 16: with 4h offset, maps to 1 AM Feb 16 != Feb 15
+        const feb16_5am = new Date(2026, 1, 16, 5, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_5am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Stale: task1 is in storedTaskIds but its offset-adjusted time is NOT Feb 15
+        const todayTagWithStale = {
+          ...TODAY_TAG,
+          taskIds: ['task1'],
+        };
+
+        const tagState = fakeEntityStateFromArray([todayTagWithStale]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTagRepair.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual({
+          needsRepair: true,
+          repairedTaskIds: [],
+        });
+      });
+
+      it('should detect missing task when dueWithTime falls within offset range', () => {
+        // 1 AM on Feb 16: with 4h offset, maps to 9 PM Feb 15 = today
+        const feb16_1am = new Date(2026, 1, 16, 1, 0, 0, 0).getTime();
+
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_1am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Missing: task1 belongs to today but is not in storedTaskIds
+        const todayTagEmpty = {
+          ...TODAY_TAG,
+          taskIds: [],
+        };
+
+        const tagState = fakeEntityStateFromArray([todayTagEmpty]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTagRepair.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual({
+          needsRepair: true,
+          repairedTaskIds: ['task1'],
+        });
+      });
+
+      it('should correctly recognize dueDay task as belonging to today with non-zero offset', () => {
+        // dueDay is compared as string against todayStr; offset does not affect it
+        const task = {
+          id: 'task1',
+          tagIds: [],
+          dueDay: offsetTodayStr,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        const todayTagConsistent = {
+          ...TODAY_TAG,
+          taskIds: ['task1'],
+        };
+
+        const tagState = fakeEntityStateFromArray([todayTagConsistent]);
+        const taskState = fakeEntityStateFromArray([task]) as any;
+
+        const result = selectTodayTagRepair.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toBeNull();
+      });
+
+      it('should handle mixed dueDay and offset-adjusted dueWithTime tasks needing repair', () => {
+        // dueDay task - belongs to today
+        const taskDueDay = {
+          id: 'task-dueday',
+          tagIds: [],
+          dueDay: offsetTodayStr,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // dueWithTime at 3 AM Feb 16 (3 AM - 4h = 11 PM Feb 15 = today)
+        const feb16_3am = new Date(2026, 1, 16, 3, 0, 0, 0).getTime();
+        const taskInRange = {
+          id: 'task-in-range',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_3am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // dueWithTime at 6 AM Feb 16 (6 AM - 4h = 2 AM Feb 16 != Feb 15) - stale
+        const feb16_6am = new Date(2026, 1, 16, 6, 0, 0, 0).getTime();
+        const taskOutOfRange = {
+          id: 'task-out-range',
+          tagIds: [],
+          dueDay: undefined,
+          dueWithTime: feb16_6am,
+          subTaskIds: [],
+        } as Partial<TaskCopy> as TaskCopy;
+
+        // Stored order has stale task-out-range, missing task-in-range
+        const todayTag = {
+          ...TODAY_TAG,
+          taskIds: ['task-dueday', 'task-out-range'],
+        };
+
+        const tagState = fakeEntityStateFromArray([todayTag]);
+        const taskState = fakeEntityStateFromArray([
+          taskDueDay,
+          taskInRange,
+          taskOutOfRange,
+        ]) as any;
+
+        const result = selectTodayTagRepair.projector(
+          tagState,
+          taskState,
+          offsetTodayStr,
+          FOUR_HOURS_MS,
+        );
+        expect(result).toEqual({
+          needsRepair: true,
+          repairedTaskIds: ['task-dueday', 'task-in-range'],
+        });
       });
     });
   });

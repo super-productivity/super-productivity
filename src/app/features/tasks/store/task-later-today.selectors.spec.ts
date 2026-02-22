@@ -169,6 +169,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -193,6 +194,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -203,6 +205,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -213,6 +216,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -223,6 +227,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -255,6 +260,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState([...mockAllTasks, taskForTomorrow]),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -265,6 +271,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       todayStr,
+      0,
     );
 
     const parentIndex = result.findIndex((t) => t.id === 'PARENT_LATER');
@@ -293,6 +300,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(tasksWithCurrent),
       todayStr,
+      0,
     );
 
     // Task scheduled at exactly current time should be included
@@ -317,6 +325,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(tasksWithMidnight),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -340,6 +349,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(noMatchingTasks),
       todayStr,
+      0,
     );
 
     expect(result.length).toBe(0);
@@ -349,6 +359,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockAllTasks),
       null as any,
+      0,
     );
 
     expect(result.length).toBe(0);
@@ -376,6 +387,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Should include parent (because it has scheduled subtask) - not the subtask as separate item
@@ -407,6 +419,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -461,6 +474,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Should be sorted by earliest time: Parent 1 (has subtask at 2 PM), then Parent 2 (has subtask at 3 PM)
@@ -505,6 +519,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Should not include any tasks
@@ -533,6 +548,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     const taskIds = result.map((t) => t.id);
@@ -580,6 +596,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Only orphaned subtask should appear (parent is for tomorrow)
@@ -618,6 +635,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Parent should be included because it has a scheduled subtask
@@ -665,6 +683,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Only grandparent should appear as top-level
@@ -688,6 +707,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState([taskWithTimeOnly]),
       todayStr,
+      0,
     );
 
     // Task should be included because dueWithTime is for today
@@ -727,6 +747,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     const result = selectLaterTodayTasksWithSubTasks.projector(
       createTaskState(mockTasks),
       todayStr,
+      0,
     );
 
     // Parent should be included
@@ -735,5 +756,149 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
 
     // Both subtasks should be in subTasks array (done status doesn't affect inclusion in subTasks)
     expect(result[0].subTasks?.length).toBe(2);
+  });
+
+  describe('with startOfNextDayDiff offset', () => {
+    // Use a fixed date: Feb 15, 2026 at 10:00 AM
+    const feb15 = new Date(2026, 1, 15, 10, 0, 0, 0);
+    const feb15Str = '2026-02-15';
+    const FOUR_HOURS_MS = 4 * 3600000;
+
+    // Helper to create timestamps for a specific date at specific times
+    const dateAt = (
+      year: number,
+      month: number,
+      day: number,
+      hours: number,
+      minutes: number = 0,
+    ): number => {
+      return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+    };
+
+    beforeEach(() => {
+      jasmine.clock().mockDate(feb15);
+    });
+
+    it('should include task at 2 AM next day when offset extends today past midnight', () => {
+      // With 4h offset and todayStr "2026-02-15", a task at 2 AM Feb 16 is still "today"
+      // because isTodayWithOffset subtracts offset: 2 AM - 4h = 10 PM Feb 15 => "2026-02-15"
+      // And todayEndTime = Feb 15 23:59:59.999 + 4h = Feb 16 ~3:59:59.999 AM
+      // So 2 AM Feb 16 < 3:59:59.999 AM Feb 16 => within range
+      const taskAt2amFeb16 = createMockTask({
+        id: 'TASK_2AM_FEB16',
+        title: 'Task at 2 AM Feb 16',
+        dueWithTime: dateAt(2026, 2, 16, 2, 0),
+        dueDay: null,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt2amFeb16]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('TASK_2AM_FEB16');
+    });
+
+    it('should not include task at 5 AM next day when offset does not extend that far', () => {
+      // With 4h offset and todayStr "2026-02-15", a task at 5 AM Feb 16
+      // isTodayWithOffset: 5 AM - 4h = 1 AM Feb 16 => "2026-02-16" != "2026-02-15"
+      // So it is NOT today
+      const taskAt5amFeb16 = createMockTask({
+        id: 'TASK_5AM_FEB16',
+        title: 'Task at 5 AM Feb 16',
+        dueWithTime: dateAt(2026, 2, 16, 5, 0),
+        dueDay: null,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt5amFeb16]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(0);
+    });
+
+    it('should include task at 3:59 AM next day (just within end-of-day boundary)', () => {
+      // With 4h offset, todayEndTime = Feb 15 23:59:59.999 + 4h = Feb 16 03:59:59.999
+      // Task at 3:59 AM Feb 16:
+      //   isTodayWithOffset: 3:59 AM - 4h = 11:59 PM Feb 15 => "2026-02-15" == todayStr
+      //   dueWithTime (3:59 AM) <= todayEndTime (3:59:59.999 AM) => within range
+      const taskAt359amFeb16 = createMockTask({
+        id: 'TASK_359AM_FEB16',
+        title: 'Task at 3:59 AM Feb 16',
+        dueWithTime: dateAt(2026, 2, 16, 3, 59),
+        dueDay: null,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt359amFeb16]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('TASK_359AM_FEB16');
+    });
+
+    it('should not include task at 4:01 AM next day (just past end-of-day boundary)', () => {
+      // With 4h offset, todayEndTime = Feb 15 23:59:59.999 + 4h = Feb 16 03:59:59.999
+      // Task at 4:01 AM Feb 16:
+      //   isTodayWithOffset: 4:01 AM - 4h = 12:01 AM Feb 16 => "2026-02-16" != "2026-02-15"
+      //   Not today => excluded
+      const taskAt401amFeb16 = createMockTask({
+        id: 'TASK_401AM_FEB16',
+        title: 'Task at 4:01 AM Feb 16',
+        dueWithTime: dateAt(2026, 2, 16, 4, 1),
+        dueDay: null,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt401amFeb16]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(0);
+    });
+
+    it('should still include normal later-today tasks when offset is set', () => {
+      // A task at 3 PM Feb 15 should still be included with the offset
+      const taskAt3pmFeb15 = createMockTask({
+        id: 'TASK_3PM_FEB15',
+        title: 'Task at 3 PM Feb 15',
+        dueWithTime: dateAt(2026, 2, 15, 15, 0),
+        dueDay: feb15Str,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt3pmFeb15]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(1);
+      expect(result[0].id).toBe('TASK_3PM_FEB15');
+    });
+
+    it('should not include past tasks even with offset', () => {
+      // A task at 8 AM Feb 15 is in the past (clock is mocked to 10 AM Feb 15)
+      const taskAt8amFeb15 = createMockTask({
+        id: 'TASK_8AM_FEB15',
+        title: 'Task at 8 AM Feb 15',
+        dueWithTime: dateAt(2026, 2, 15, 8, 0),
+        dueDay: feb15Str,
+      });
+
+      const result = selectLaterTodayTasksWithSubTasks.projector(
+        createTaskState([taskAt8amFeb15]),
+        feb15Str,
+        FOUR_HOURS_MS,
+      );
+
+      expect(result.length).toBe(0);
+    });
   });
 });

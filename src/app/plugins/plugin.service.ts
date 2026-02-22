@@ -937,6 +937,16 @@ export class PluginService implements OnDestroy {
         PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
       }
 
+      // Teardown existing plugin runtime if re-uploading same ID
+      const existingState = this._getPluginState(manifest.id);
+      if (existingState) {
+        this._teardownPluginRuntime(manifest.id);
+        // Clear stale assets from previous version
+        this._pluginIndexHtml.delete(manifest.id);
+        this._pluginIcons.delete(manifest.id);
+        this._pluginIconsSignal.set(new Map(this._pluginIcons));
+      }
+
       // Check if plugin is enabled (default to true for new uploads)
       const isPluginEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
         manifest.id,
@@ -1172,6 +1182,58 @@ export class PluginService implements OnDestroy {
     PluginLog.log(`Uploaded plugin ${pluginId} removed completely`);
   }
 
+  /**
+   * Clear all uploaded plugins from memory. Called when IndexedDB cache is cleared
+   * so that in-memory state matches the empty cache.
+   */
+  clearUploadedPluginsFromMemory(): void {
+    const states = this._pluginStates();
+    const uploadedIds: string[] = [];
+    for (const [pluginId, state] of states.entries()) {
+      if (state.type === 'uploaded') {
+        uploadedIds.push(pluginId);
+      }
+    }
+    for (const pluginId of uploadedIds) {
+      this._teardownPluginRuntime(pluginId);
+      this._pluginPaths.delete(pluginId);
+      this._pluginIndexHtml.delete(pluginId);
+      this._pluginIcons.delete(pluginId);
+    }
+    // Batch-delete all uploaded plugin states in a single signal update
+    this._pluginStates.update((current) => {
+      const updated = new Map(current);
+      for (const pluginId of uploadedIds) {
+        updated.delete(pluginId);
+      }
+      return updated;
+    });
+    this._pluginIconsSignal.set(new Map(this._pluginIcons));
+  }
+
+  /**
+   * Teardown plugin runtime (hooks, runner, loaded-plugins list, side panel)
+   * without changing isEnabled or _pluginStates. Used for re-upload and reload.
+   */
+  private _teardownPluginRuntime(pluginId: string): void {
+    // Close the side panel if this plugin is active
+    const activePluginId = this.getActiveSidePanelPluginId();
+    if (activePluginId === pluginId) {
+      this.setActiveSidePanelPlugin(null);
+    }
+
+    // Remove from loaded plugins list
+    const index = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
+    if (index !== -1) {
+      this._loadedPlugins.splice(index, 1);
+    }
+
+    // Unregister hooks, translations, and unload from runner
+    this._pluginHooks.unregisterPluginHooks(pluginId);
+    this._pluginI18nService.unloadPluginTranslations(pluginId);
+    this._pluginRunner.unloadPlugin(pluginId);
+  }
+
   unloadPlugin(pluginId: string): boolean {
     // In lazy loading mode, update plugin state
     const state = this._getPluginState(pluginId);
@@ -1179,12 +1241,7 @@ export class PluginService implements OnDestroy {
       return false;
     }
 
-    // Check if this plugin is active in the side panel
-    const activePluginId = this.getActiveSidePanelPluginId();
-    if (activePluginId === pluginId) {
-      // Close the side panel if this plugin is active
-      this.setActiveSidePanelPlugin(null);
-    }
+    this._teardownPluginRuntime(pluginId);
 
     // Update state to not-loaded and disabled
     const updatedState: PluginState = {
@@ -1195,31 +1252,24 @@ export class PluginService implements OnDestroy {
     };
     this._setPluginState(pluginId, updatedState);
 
-    // Remove from loaded plugins list
-    const index = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
-    if (index !== -1) {
-      this._loadedPlugins.splice(index, 1);
-    }
-
-    // Unregister hooks
-    this._pluginHooks.unregisterPluginHooks(pluginId);
-
-    // Unload from runner
-    return this._pluginRunner.unloadPlugin(pluginId);
+    return true;
   }
 
   async reloadPlugin(pluginId: string): Promise<boolean> {
-    // In lazy loading mode, unload and re-activate
     const state = this._getPluginState(pluginId);
     if (!state) {
       PluginLog.err(`Cannot reload plugin ${pluginId}: not found`);
       return false;
     }
 
-    // Unload the plugin first
-    this.unloadPlugin(pluginId);
+    // Teardown runtime without disabling, so activatePlugin can re-enable
+    this._teardownPluginRuntime(pluginId);
+    this._setPluginState(pluginId, {
+      ...state,
+      status: 'not-loaded',
+      instance: undefined,
+    });
 
-    // Re-activate it
     const instance = await this.activatePlugin(pluginId);
     return instance !== null && instance.loaded;
   }

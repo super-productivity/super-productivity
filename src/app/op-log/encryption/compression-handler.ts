@@ -50,13 +50,34 @@ export async function compressWithGzipToString(input: string): Promise<string> {
   }
 }
 
+/**
+ * Sanitizes base64 input that may have been corrupted during network
+ * transfer (e.g., WebDAV servers adding BOM, trailing whitespace,
+ * or partial uploads causing truncated padding). See issue #6581.
+ */
+const sanitizeBase64 = (input: string): string => {
+  // Strip non-base64 characters (keep only A-Z, a-z, 0-9, +, /, =)
+  const cleaned = input.replace(/[^A-Za-z0-9+/=]/g, '');
+  // Fix truncated padding: base64 length must be a multiple of 4
+  const remainder = cleaned.length % 4;
+  if (remainder === 0) {
+    return cleaned;
+  }
+  // remainder=1 is never valid (1 char = 6 bits, need at least 8 for a byte),
+  // so strip the dangling char; remainder 2 or 3: add = padding
+  if (remainder === 1) {
+    return cleaned.slice(0, -1);
+  }
+  return cleaned + '='.repeat(4 - remainder);
+};
+
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
 export async function decompressGzipFromString(
   compressedBase64: string,
 ): Promise<string> {
   try {
-    // Decode base64 to binary using atob (more reliable than fetch with data URIs)
-    const binary = atob(compressedBase64);
+    const sanitized = sanitizeBase64(compressedBase64);
+    const binary = atob(sanitized);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
@@ -74,6 +95,16 @@ export async function decompressGzipFromString(
     return decoded;
   } catch (error) {
     OpLog.err(error);
+    if (compressedBase64) {
+      OpLog.err(
+        'base64 input length:',
+        compressedBase64.length,
+        'first 50 chars:',
+        compressedBase64.slice(0, 50),
+        'last 50 chars:',
+        compressedBase64.slice(-50),
+      );
+    }
     throw new DecompressError(error);
   }
 }

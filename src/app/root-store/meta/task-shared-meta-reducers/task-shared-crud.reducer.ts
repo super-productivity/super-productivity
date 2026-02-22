@@ -23,8 +23,9 @@ import { Project } from '../../../features/project/project.model';
 import { DEFAULT_TASK, Task, TaskWithSubTasks } from '../../../features/tasks/task.model';
 import { calcTotalTimeSpent } from '../../../features/tasks/util/calc-total-time-spent';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { unique } from '../../../util/unique';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   ActionHandlerMap,
   addTaskToList,
@@ -122,7 +123,8 @@ const handleAddTask = (
   let updatedState = state;
 
   // Determine if task should be added to Today tag
-  const shouldAddToToday = task.dueDay === getDbDateStr();
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const shouldAddToToday = task.dueDay === todayStr;
 
   // Add task to task state
   // IMPORTANT: TODAY_TAG should NEVER be in task.tagIds (virtual tag pattern)
@@ -186,7 +188,7 @@ const handleAddTask = (
   updatedState = updateTags(updatedState, tagUpdates);
 
   // Update planner days if task has a future dueDay
-  if (task.dueDay && task.dueDay !== getDbDateStr()) {
+  if (task.dueDay && task.dueDay !== todayStr) {
     const plannerState = updatedState[plannerFeatureKey as keyof RootState] as any;
     const daysCopy = { ...plannerState.days };
     const existingTaskIds = daysCopy[task.dueDay] || [];
@@ -219,6 +221,8 @@ const handleConvertToMainTask = (
     throw new Error('No parent for sub task');
   }
 
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+
   // Handle parent-child relationship cleanup and task entity updates
   const taskStateAfterParentCleanup = removeTaskFromParentSideEffects(
     state[TASK_FEATURE_NAME],
@@ -236,7 +240,7 @@ const handleConvertToMainTask = (
         modified: Date.now(),
         ...(isPlanForToday && !task.dueWithTime
           ? {
-              dueDay: getDbDateStr(),
+              dueDay: todayStr,
             }
           : {}),
       },

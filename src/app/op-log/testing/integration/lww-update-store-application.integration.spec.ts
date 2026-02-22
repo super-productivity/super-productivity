@@ -16,6 +16,8 @@ import { ActionReducer, Action } from '@ngrx/store';
 import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { convertOpToAction } from '../../apply/operation-converter.util';
 import { ActionType, Operation, OpType, EntityType } from '../../core/operation.types';
+import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('LWW Update Store Application Integration', () => {
   // Feature names matching actual NgRx feature names
@@ -65,6 +67,7 @@ describe('LWW Update Store Application Integration', () => {
     [TASKS_FEATURE]: TaskState;
     [PROJECTS_FEATURE]: ProjectState;
     [TAGS_FEATURE]: TagState;
+    [appStateFeatureKey]: { todayStr: string; startOfNextDayDiffMs: number };
   }
 
   const createLwwUpdateOperation = (
@@ -107,6 +110,7 @@ describe('LWW Update Store Application Integration', () => {
     [TASKS_FEATURE]: createTaskState(tasks),
     [PROJECTS_FEATURE]: createProjectState(projects),
     [TAGS_FEATURE]: createTagState(tags),
+    [appStateFeatureKey]: { todayStr: getDbDateStr(), startOfNextDayDiffMs: 0 },
   });
 
   /**

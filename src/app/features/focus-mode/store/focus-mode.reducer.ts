@@ -145,6 +145,10 @@ export const focusModeReducer = createReducer(
         isRunning: true,
         startedAt: Date.now() - state.timer.elapsed,
       },
+      // Restore InProgress state for work sessions (fixes UI showing preparation instead of active session)
+      ...(state.timer.purpose === 'work'
+        ? { mainState: FocusMainUIState.InProgress, currentScreen: FocusScreen.Main }
+        : {}),
       // Set flag ONLY when resuming a break (not work sessions)
       _isResumingBreak: state.timer.purpose === 'break',
     };

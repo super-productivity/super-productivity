@@ -54,9 +54,15 @@ export class FocusModeOverlayComponent implements OnDestroy {
   T: typeof T = T;
 
   private _onDestroy$ = new Subject<void>();
+  isSessionPaused = this.focusModeService.isSessionPaused;
+
   private _closeOnEscapeKeyListener = (ev: KeyboardEvent): void => {
     if (ev.key === 'Escape') {
-      if (this.activePage() === FocusScreen.Main && !this.isSessionRunning()) {
+      if (
+        this.activePage() === FocusScreen.Main &&
+        !this.isSessionRunning() &&
+        !this.isSessionPaused()
+      ) {
         this.cancelFocusSession();
       }
     }

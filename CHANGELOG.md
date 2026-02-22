@@ -1,3 +1,48 @@
+## [17.2.1](https://github.com/super-productivity/super-productivity/compare/v17.2.0...v17.2.1) (2026-02-21)
+
+# [17.2.0](https://github.com/super-productivity/super-productivity/compare/v17.1.8...v17.2.0) (2026-02-21)
+
+### Bug Fixes
+
+- **android:** prevent crash on SAF folder selection ([#6545](https://github.com/super-productivity/super-productivity/issues/6545)) ([de03a2d](https://github.com/super-productivity/super-productivity/commit/de03a2d11e4a23d14ad3d2a95bf54f5f42650125))
+- **build:** limit cap sync to android in droid script ([b044772](https://github.com/super-productivity/super-productivity/commit/b04477225b6c7faefc9afe3a4206f63592eb4171))
+- **ci:** fix WebDAV config path for hacdias/webdav v5 ([5e79162](https://github.com/super-productivity/super-productivity/commit/5e79162ca54751fc88447eda1c9534e7ca62ac2b))
+- **data-init:** add error handling for failed data hydration ([bc9c4e4](https://github.com/super-productivity/super-productivity/commit/bc9c4e4090130fd10423c6acc0c633a77706997b))
+- **electron:** prevent app from closing when cancel is clicked on quit confirmation ([a23af05](https://github.com/super-productivity/super-productivity/commit/a23af05759d1c01ae611ba5cf8b798477c2d22e3))
+- **focus-mode:** capture session state before dispatch in finishCurrentTask ([#6127](https://github.com/super-productivity/super-productivity/issues/6127)) ([a0d8108](https://github.com/super-productivity/super-productivity/commit/a0d810868ba59c0d60f928428b57071769d6e002))
+- **focus-mode:** clear stale \_isResumingBreak flag when isPauseTrackingDuringBreak is enabled ([#6534](https://github.com/super-productivity/super-productivity/issues/6534)) ([82c6273](https://github.com/super-productivity/super-productivity/commit/82c627331416b4b847194a31503b4736bf8a6b88))
+- **focus-mode:** prevent crash when task becomes null during note/title edit ([3cdd9e4](https://github.com/super-productivity/super-productivity/commit/3cdd9e424c073c8b3f25dcf3a439e161020098e4)), closes [#6595](https://github.com/super-productivity/super-productivity/issues/6595)
+- **focus-mode:** restore InProgress UI state when resuming paused work session ([#6575](https://github.com/super-productivity/super-productivity/issues/6575)) ([23ecdee](https://github.com/super-productivity/super-productivity/commit/23ecdeed24b1c62e0dcef96824c27f27ab338dff))
+- improve date format reactivity, e2e error logging, and type annotation ([60e9b27](https://github.com/super-productivity/super-productivity/commit/60e9b27c1bdfab5c1338b9f9428e8449f00ec88d))
+- **linux:** set StartupWMClass to fix dock icon on Cosmic DE ([94442ea](https://github.com/super-productivity/super-productivity/commit/94442eab3276713bb99bd9a938b863ad23936705)), closes [#5971](https://github.com/super-productivity/super-productivity/issues/5971)
+- **planner:** prevent calendar nav drag from getting stuck open ([5fc8fc1](https://github.com/super-productivity/super-productivity/commit/5fc8fc12bcd68989456f3cc568fec08a93a8ca6a))
+- **plugins:** handle community plugins JSON load failure gracefully ([#6560](https://github.com/super-productivity/super-productivity/issues/6560)) ([ad40ef5](https://github.com/super-productivity/super-productivity/commit/ad40ef5eb6864b29aef4d2ff80ec66b94f5d8232))
+- **plugins:** properly teardown old plugin on re-upload and cache clear ([b1bdf84](https://github.com/super-productivity/super-productivity/commit/b1bdf8489b13bdb725325c3eac050e9c534dbbd3)), closes [#6564](https://github.com/super-productivity/super-productivity/issues/6564)
+- remove dead translation key and deduplicate hydration error snack ([d43dc46](https://github.com/super-productivity/super-productivity/commit/d43dc460ef96ab9648d2f8aa1a2db245e8e2d4c7))
+- **schedule:** guard against undefined subTaskIds in selector ([#6562](https://github.com/super-productivity/super-productivity/issues/6562)) ([4444cad](https://github.com/super-productivity/super-productivity/commit/4444cadb7433c71e5d4f3359a33e966df20b32d7))
+- **schedule:** prevent zero-duration events from stacking on each other ([f014dc9](https://github.com/super-productivity/super-productivity/commit/f014dc9c6c8a611e62382bbd00af1c5533ca2991))
+- **sync-md:** resolve temp IDs in subTaskIds during batch update ([5b2fd70](https://github.com/super-productivity/super-productivity/commit/5b2fd70985c35017308393c2d5dd9319bd63c9bd)), closes [#6283](https://github.com/super-productivity/super-productivity/issues/6283)
+- **sync:** break vector clock inflate/prune cycle and persist legacy client ID ([921f573](https://github.com/super-productivity/super-productivity/commit/921f573058222ce3e9bdaff8086075f100650501))
+- **sync:** fix subscription leak in SyncTriggerService constructor ([9425956](https://github.com/super-productivity/super-productivity/commit/94259562490ec170a834e68455a921d7f1f46bae))
+- **sync:** prevent loading screen from blocking indefinitely on conflict dialog ([3d1430b](https://github.com/super-productivity/super-productivity/commit/3d1430b56a15ca17ccf06b4137888363eace6973))
+- **sync:** sanitize base64 before atob() in decompression ([#6581](https://github.com/super-productivity/super-productivity/issues/6581)) ([6f9320e](https://github.com/super-productivity/super-productivity/commit/6f9320e881ab739cd27d38cff5c154ba628e7812))
+- **sync:** sync before local day-change processing on app startup ([2af5442](https://github.com/super-productivity/super-productivity/commit/2af54422c10d00eb6c47860a673ab6819db0ba41)), closes [#6398](https://github.com/super-productivity/super-productivity/issues/6398)
+- **tasks:** sync detail panel with focused task ([#6578](https://github.com/super-productivity/super-productivity/issues/6578)) ([73d28d9](https://github.com/super-productivity/super-productivity/commit/73d28d93dc57ba9d22c692b4e1baa1612e4b8b5b))
+- **theme:** increase background overlay effectiveness and cap slider at 99 ([01c96f2](https://github.com/super-productivity/super-productivity/commit/01c96f22b92cf30f77bf99509fb903386a117e1d))
+- **timepicker:** add missing parse.timeInput to MAT_DATE_FORMATS ([121ef9f](https://github.com/super-productivity/super-productivity/commit/121ef9f7cd0c14bb8bae83a3e670ff600c839423))
+- trello can't be used ([#6331](https://github.com/super-productivity/super-productivity/issues/6331)) ([#6442](https://github.com/super-productivity/super-productivity/issues/6442)) ([ed06417](https://github.com/super-productivity/super-productivity/commit/ed064176d314b8d91f268c937632a7adf7226599))
+
+### Features
+
+- add label to heatmap for repeat task ([bc2404b](https://github.com/super-productivity/super-productivity/commit/bc2404b60a648f8023b1b6f0afe6b36896ab7ef9))
+- **bottom-panel:** increase mobile task detail panel initial height to 60% ([1554a11](https://github.com/super-productivity/super-productivity/commit/1554a1197a7717c2969baddc4ea63c4c7a5b7e65))
+- **nav:** add context menu to disable features from sidebar ([#6391](https://github.com/super-productivity/super-productivity/issues/6391)) ([4b7c638](https://github.com/super-productivity/super-productivity/commit/4b7c6382cb949d50cc3988b0def053760985e11e))
+- **nav:** add search as toggleable app feature ([4a18812](https://github.com/super-productivity/super-productivity/commit/4a188124484a1d47eaa695d2ad8fa7f566739634))
+- stronger warning for file based sync ([2dbdd6e](https://github.com/super-productivity/super-productivity/commit/2dbdd6e2332d62ab4957b2592595d3b120afbe14))
+- **tasks,planner:** migrate isToday to offset-aware DateService and improve calendar nav ([3f9abc4](https://github.com/super-productivity/super-productivity/commit/3f9abc48ab6d2797a8cd2f3b1fbddd9f7802217e))
+- **theme:** set default background overlay opacity to 20% and extract translation ([2d6c9b6](https://github.com/super-productivity/super-productivity/commit/2d6c9b637d8ee66bf06535f2da42a61517bdc4b8))
+- tone down security warning for plugins ([48dbe8f](https://github.com/super-productivity/super-productivity/commit/48dbe8fe5ca69461abe6b6f82fb35bbe5aa931cb))
+
 ## [17.1.8](https://github.com/super-productivity/super-productivity/compare/v17.1.7...v17.1.8) (2026-02-15)
 
 ### Bug Fixes

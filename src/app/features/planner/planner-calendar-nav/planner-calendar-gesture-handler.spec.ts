@@ -67,6 +67,12 @@ describe('CalendarGestureHandler', () => {
     // Mock Date.now() so jasmine.clock().tick() advances it correctly
     jasmine.clock().mockDate(new Date(2020, 0, 1));
 
+    // Ensure prefers-reduced-motion is always false so animation code paths
+    // are exercised consistently (Windows CI may report reduce).
+    spyOn(window, 'matchMedia').and.returnValue({
+      matches: false,
+    } as MediaQueryList);
+
     el = document.createElement('div');
     weeksEl = createMockWeeksEl();
     cb = createMockCallbacks();
