@@ -68,20 +68,6 @@ export class NextcloudDeckApiService {
       .pipe(catchError((err) => this._handleError(err)));
   }
 
-  getCardDetails$(
-    cfg: NextcloudDeckCfg,
-    boardId: number,
-    stackId: number,
-    cardId: number,
-  ): Observable<NextcloudDeckIssue> {
-    this._checkSettings(cfg);
-    const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks/${stackId}/cards/${cardId}`;
-    return this._http.get<DeckCardResponse>(url, { headers: this._getHeaders(cfg) }).pipe(
-      map((card) => this._mapCardToIssue(card, '', boardId)),
-      catchError((err) => this._handleError(err)),
-    );
-  }
-
   updateCard$(
     cfg: NextcloudDeckCfg,
     boardId: number,
@@ -181,7 +167,9 @@ export class NextcloudDeckApiService {
   }
 
   private _getHeaders(cfg: NextcloudDeckCfg): HttpHeaders {
-    const credentials = btoa(`${cfg.username}:${cfg.password}`);
+    const credentials = btoa(
+      unescape(encodeURIComponent(`${cfg.username}:${cfg.password}`)),
+    );
     return new HttpHeaders({
       Authorization: `Basic ${credentials}`,
       // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -212,13 +200,8 @@ export class NextcloudDeckApiService {
         if (card.archived || card.done) {
           continue;
         }
-        if (
-          cfg.filterByAssignee &&
-          cfg.username &&
-          card.assignedUsers &&
-          card.assignedUsers.length > 0
-        ) {
-          const isAssigned = card.assignedUsers.some(
+        if (cfg.filterByAssignee && cfg.username) {
+          const isAssigned = card.assignedUsers?.some(
             (u) => u.participant.uid === cfg.username,
           );
           if (!isAssigned) {
@@ -265,7 +248,11 @@ export class NextcloudDeckApiService {
     boardId: number,
     cardId: number,
   ): Promise<NextcloudDeckIssue | null> {
-    const stacks = await this.getStacks$(cfg, boardId).pipe(first()).toPromise();
+    const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks`;
+    const stacks = await this._http
+      .get<DeckStackResponse[]>(url, { headers: this._getHeaders(cfg) })
+      .pipe(first())
+      .toPromise();
     if (!stacks) {
       return null;
     }

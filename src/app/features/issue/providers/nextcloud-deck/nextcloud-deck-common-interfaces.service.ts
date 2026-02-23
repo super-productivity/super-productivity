@@ -130,7 +130,9 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
     tasks: Task[],
   ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: NextcloudDeckIssue }[]> {
     const issueProviderId =
-      tasks && tasks[0].issueProviderId ? tasks[0].issueProviderId : '';
+      tasks && tasks.length > 0 && tasks[0].issueProviderId
+        ? tasks[0].issueProviderId
+        : '';
     if (!issueProviderId) {
       throw new Error('No issueProviderId');
     }
@@ -185,7 +187,8 @@ export class NextcloudDeckCommonInterfacesService implements IssueServiceInterfa
       .getOpenCards$(cfg)
       .pipe(first())
       .toPromise();
-    return allCards ?? [];
+    const existingIds = new Set(allExistingIssueIds.map((id) => id.toString()));
+    return (allCards ?? []).filter((card) => !existingIds.has(card.id.toString()));
   }
 
   private _formatTitle(

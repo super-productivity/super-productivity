@@ -38,9 +38,9 @@ export class NextcloudDeckIssueEffects {
         filter(
           ({ cfg, task }) => isNextcloudDeckEnabled(cfg) && cfg.isTransitionIssuesEnabled,
         ),
-        concatMap(({ cfg, task }) => {
-          return this._handleTransitionForIssue$(cfg, task);
-        }),
+        concatMap(({ cfg, task }) =>
+          this._handleTransitionForIssue$(cfg, task).pipe(catchError(() => EMPTY)),
+        ),
       ),
     { dispatch: false },
   );
