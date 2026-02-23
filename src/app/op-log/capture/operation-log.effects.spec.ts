@@ -295,24 +295,31 @@ describe('OperationLogEffects', () => {
       expect(mockOpLogStore.appendWithVectorClockUpdate).toHaveBeenCalledTimes(2);
     }));
 
-    it('should cache clientId after first load', (done) => {
-      // Reset the spy counter
-      mockClientIdService.loadClientId.calls.reset();
-
-      // Emit two actions
+    it('should use updated clientId after backup import generates new one', (done) => {
       const action1 = createPersistentAction(ActionType.TASK_SHARED_ADD);
       const action2 = createPersistentAction(ActionType.TASK_SHARED_UPDATE);
 
-      // Subscribe and emit first action
+      // First operation uses original client ID
       actions$ = of(action1);
       effects.persistOperation$.subscribe({
         complete: () => {
-          // Emit second action
+          const firstOp =
+            mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+          expect(firstOp.clientId).toBe('testClient');
+
+          // Simulate backup import generating a new client ID
+          // (BackupService calls generateNewClientId which updates the cached value)
+          mockClientIdService.loadClientId.and.returnValue(
+            Promise.resolve('newImportClient'),
+          );
+
+          // Second operation should pick up the new client ID
           actions$ = of(action2);
           effects.persistOperation$.subscribe({
             complete: () => {
-              // ClientId should only be loaded once
-              expect(mockClientIdService.loadClientId).toHaveBeenCalledTimes(1);
+              const secondOp =
+                mockOpLogStore.appendWithVectorClockUpdate.calls.mostRecent().args[0];
+              expect(secondOp.clientId).toBe('newImportClient');
               done();
             },
           });
