@@ -1,1 +1,1 @@
-npm run lint && ./run.sh test
+npm run lint && npm run test
