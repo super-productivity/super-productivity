@@ -23,7 +23,7 @@ const PROFILE_DATA_PREFIX = 'sp_profile_data_';
 })
 export class UserProfileStorageService {
   private readonly _opLogStore = inject(OperationLogStoreService);
-  private _migrationDone = false;
+  private _migrationPromise: Promise<void> | null = null;
 
   /**
    * Load profile metadata from localStorage
@@ -94,6 +94,7 @@ export class UserProfileStorageService {
    */
   async deleteProfileData(profileId: string): Promise<void> {
     try {
+      await this._migrateFromLocalStorageIfNeeded();
       await this._opLogStore.deleteProfileData(profileId);
     } catch (error) {
       Log.err(
@@ -126,12 +127,17 @@ export class UserProfileStorageService {
    * One-time migration: moves profile data from localStorage to IndexedDB,
    * then removes the localStorage entries.
    */
-  private async _migrateFromLocalStorageIfNeeded(): Promise<void> {
-    if (this._migrationDone || typeof localStorage === 'undefined') {
-      return;
+  private _migrateFromLocalStorageIfNeeded(): Promise<void> {
+    if (typeof localStorage === 'undefined') {
+      return Promise.resolve();
     }
-    this._migrationDone = true;
+    if (!this._migrationPromise) {
+      this._migrationPromise = this._doMigration();
+    }
+    return this._migrationPromise;
+  }
 
+  private async _doMigration(): Promise<void> {
     const keysToMigrate: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
