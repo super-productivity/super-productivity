@@ -29,7 +29,7 @@ export class NextcloudDeckIssueEffects {
         filter((task: Task) => task && task.issueType === NEXTCLOUD_DECK_TYPE),
         concatMap((task: Task) => {
           if (!task.issueProviderId) {
-            throw new Error('No issueProviderId for task');
+            return EMPTY;
           }
           return this._issueProviderService
             .getCfgOnce$(task.issueProviderId, 'NEXTCLOUD_DECK')

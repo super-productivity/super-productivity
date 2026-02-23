@@ -119,7 +119,6 @@ export class NextcloudDeckApiService {
     }
     return this.getStacks$(cfg, boardId).pipe(
       map((stacks) => this._mapStacksToCards(stacks, cfg)),
-      catchError((err) => this._handleError(err)),
     );
   }
 
@@ -224,6 +223,7 @@ export class NextcloudDeckApiService {
 
   private _mapCardToIssue(
     card: DeckCardResponse,
+    stackId: number,
     stackTitle: string,
     boardId: number,
   ): NextcloudDeckIssue {
@@ -237,7 +237,7 @@ export class NextcloudDeckApiService {
       order: card.order,
       labels: card.labels || [],
       assignedUsers: card.assignedUsers || [],
-      stackId: 0,
+      stackId,
       stackTitle,
       boardId,
     };
@@ -262,8 +262,7 @@ export class NextcloudDeckApiService {
       }
       for (const card of stack.cards) {
         if (card.id === cardId) {
-          const issue = this._mapCardToIssue(card, stack.title, boardId);
-          return { ...issue, stackId: stack.id };
+          return this._mapCardToIssue(card, stack.id, stack.title, boardId);
         }
       }
     }
@@ -291,8 +290,14 @@ export class NextcloudDeckApiService {
         issueProviderName: ISSUE_PROVIDER_HUMANIZED[NEXTCLOUD_DECK_TYPE],
       },
     });
+    const errMsg =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? (err as { message: string }).message
+          : String(err);
     return throwError(() => ({
-      [HANDLED_ERROR_PROP_STR]: 'Nextcloud Deck: ' + err,
+      [HANDLED_ERROR_PROP_STR]: 'Nextcloud Deck: ' + errMsg,
     }));
   }
 }
