@@ -22,7 +22,7 @@
     "assemble:android:prod": "cd android && ./gradlew assembleRelease && cd ..",
     "assemble:android:stage": "cd android && ./gradlew assembleDebug && cd ..",
     "prebuild": "npm run env && node ./tools/git-version.js && npm run build:packages",
-    "prepare": "husky && ts-patch install && npm run shared-schema:build && npm run plugin-api:build",
+    "prepare": "husky && ts-patch install && npm run env && npm run shared-schema:build && npm run plugin-api:build",
     "build": "npm run buildAllElectron:noTests:prod",
     "build:packages": "node ./packages/build-packages.js",
     "buildAllElectron:noTests:prod": "npm run lint && npm run buildFrontend:prod:es6 && npm run electron:build",
