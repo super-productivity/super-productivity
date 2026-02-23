@@ -243,7 +243,9 @@ export class AndroidEffects {
     // Fallback snackbar so the user gets feedback even when the native APIs throw.
     this._snackService.open({
       type: 'ERROR',
-      msg: message || 'Notifications not supported',
+      msg:
+        message ||
+        'Notification permission not granted. Please enable notifications in your device settings for reminders to work.',
     });
   }
 }
