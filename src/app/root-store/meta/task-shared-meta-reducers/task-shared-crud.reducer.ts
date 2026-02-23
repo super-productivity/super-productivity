@@ -267,55 +267,7 @@ const handleConvertToMainTask = (
     ...(isPlanForToday ? [TODAY_TAG.id] : []),
   ].filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]);
 
-  // For convertToMainTask, we need to manually check if parent is in the tags
-  // since the parent-child relationship was already cleaned up
-  const parentTaskId = task.parentId;
-  if (parentTaskId) {
-    // Remove parent from all tags that the converted task will be in
-    const parentTaskUpdates: Update<Task>[] = [];
-    const tagUpdatesForParent: Update<Tag>[] = [];
-
-    for (const tagId of tagIdsToUpdate) {
-      const tag = getTag(updatedState, tagId);
-      if (tag.taskIds.includes(parentTaskId)) {
-        // Remove tag from parent task
-        const currentParent = updatedState[TASK_FEATURE_NAME].entities[
-          parentTaskId
-        ] as Task;
-        if (currentParent && currentParent.tagIds.includes(tagId)) {
-          parentTaskUpdates.push({
-            id: parentTaskId,
-            changes: {
-              tagIds: currentParent.tagIds.filter((id) => id !== tagId),
-            },
-          });
-        }
-        // Remove parent from tag
-        tagUpdatesForParent.push({
-          id: tagId,
-          changes: {
-            taskIds: tag.taskIds.filter((id) => id !== parentTaskId),
-          },
-        });
-      }
-    }
-
-    if (parentTaskUpdates.length > 0) {
-      updatedState = {
-        ...updatedState,
-        [TASK_FEATURE_NAME]: taskAdapter.updateMany(
-          parentTaskUpdates,
-          updatedState[TASK_FEATURE_NAME],
-        ),
-      };
-    }
-
-    if (tagUpdatesForParent.length > 0) {
-      updatedState = updateTags(updatedState, tagUpdatesForParent);
-    }
-  }
-
-  // Then add the task to all its tags at the beginning
+  // Add the converted task to all its tags at the beginning
   const tagUpdates = tagIdsToUpdate.map(
     (tagId): Update<Tag> => ({
       id: tagId,
