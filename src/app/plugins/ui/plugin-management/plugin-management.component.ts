@@ -111,6 +111,8 @@ export class PluginManagementComponent {
     uk: 'Ukrainian',
     zh: 'Chinese (Simplified)',
     'zh-tw': 'Chinese (Traditional)',
+    ro: 'Romanian',
+    'ro-md': 'Romanian (Moldova)',
   } as const;
   /* eslint-enable @typescript-eslint/naming-convention */
 
