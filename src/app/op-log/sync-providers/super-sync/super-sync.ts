@@ -309,6 +309,26 @@ export class SuperSyncProvider
     return validateRestoreSnapshotResponse(response);
   }
 
+  // === WebSocket Parameters ===
+
+  /**
+   * Returns the base URL and sanitized access token for WebSocket connection.
+   * Returns null if provider is not configured.
+   */
+  async getWebSocketParams(): Promise<{
+    baseUrl: string;
+    accessToken: string;
+  } | null> {
+    const cfg = await this.privateCfg.load();
+    if (!cfg?.accessToken) {
+      return null;
+    }
+    return {
+      baseUrl: this._resolveBaseUrl(cfg),
+      accessToken: this._sanitizeToken(cfg.accessToken),
+    };
+  }
+
   // === Data Management ===
 
   async deleteAllData(): Promise<{ success: boolean }> {
