@@ -23,7 +23,7 @@ import localeId from '@angular/common/locales/id';
 import localeFi from '@angular/common/locales/fi';
 import localeSv from '@angular/common/locales/sv';
 import localeRo from '@angular/common/locales/ro';
-import localeRoMd from '@angular/common/locales/ro-MD';
+import localeRoMD from '@angular/common/locales/ro-MD';
 
 /**
  * All of available app languages
@@ -142,8 +142,9 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   sv: localeSv,
   tr: localeTr,
   zh: localeZh,
+  ro: localeRo,
   ro_ro: localeRo,
-  ro_md: localeRoMd,
+  ro_md: localeRoMD,
 };
 
 export const DEFAULT_LANGUAGE = LanguageCode.en;
