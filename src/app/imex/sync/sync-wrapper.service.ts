@@ -61,10 +61,13 @@ import { alertDialog, confirmDialog } from '../../util/native-dialogs';
 import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SYNC_WAIT_TIMEOUT_MS, SYNC_REINIT_DELAY_MS } from './sync.const';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
+import { SuperSyncWebSocketService } from '../../op-log/sync/super-sync-websocket.service';
+import { WsTriggeredDownloadService } from '../../op-log/sync/ws-triggered-download.service';
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
 
 @Injectable({
   providedIn: 'root',
@@ -80,6 +83,8 @@ export class SyncWrapperService {
   private _reminderService = inject(ReminderService);
   private _userInputWaitState = inject(UserInputWaitStateService);
   private _superSyncStatusService = inject(SuperSyncStatusService);
+  private _superSyncWsService = inject(SuperSyncWebSocketService);
+  private _wsDownloadService = inject(WsTriggeredDownloadService);
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
@@ -93,12 +98,31 @@ export class SyncWrapperService {
     map((cfg) => toSyncProviderId(cfg.syncProvider)),
   );
 
-  // SuperSync always uses 1 minute interval; other providers use configured value
-  // Return 0 when manual sync only is enabled to disable automatic triggers
+  // Disconnect WebSocket when sync provider changes away from SuperSync or sync is disabled
+  private _wsProviderCleanup = this.syncProviderId$
+    .pipe(distinctUntilChanged())
+    .subscribe((providerId) => {
+      if (providerId !== SyncProviderId.SuperSync) {
+        this.disconnectWebSocket();
+      }
+    });
+
+  /**
+   * Sync interval in milliseconds.
+   * - When WebSocket is connected: 5 minutes (health check only)
+   * - When WebSocket is disconnected: 1 minute for SuperSync
+   * - Other providers: user-configured value
+   * - Return 0 when manual sync only is enabled to disable automatic triggers
+   */
   syncInterval$: Observable<number> = this.syncCfg$.pipe(
     map((cfg) => {
       if (cfg.isManualSyncOnly) return 0;
-      return cfg.syncProvider === SyncProviderId.SuperSync ? 60000 : cfg.syncInterval;
+      if (cfg.syncProvider === SyncProviderId.SuperSync) {
+        // When WS is connected, reduce polling to 5 minutes (health check)
+        // When WS is disconnected, poll every 1 minute
+        return this._superSyncWsService.isConnected() ? 300_000 : 60_000;
+      }
+      return cfg.syncInterval;
     }),
   );
 
@@ -246,6 +270,39 @@ export class SyncWrapperService {
     }
   }
 
+  /**
+   * Connects the WebSocket for real-time sync notifications.
+   * Called after a successful SuperSync sync cycle.
+   */
+  async connectWebSocket(): Promise<void> {
+    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    if (providerId !== SyncProviderId.SuperSync) {
+      return;
+    }
+
+    const provider = this._providerManager.getProviderById(SyncProviderId.SuperSync);
+    if (!provider) {
+      return;
+    }
+
+    const superSyncProvider = provider as unknown as SuperSyncProvider;
+    const wsParams = await superSyncProvider.getWebSocketParams();
+    if (!wsParams) {
+      return;
+    }
+
+    await this._superSyncWsService.connect(wsParams.baseUrl, wsParams.accessToken);
+    this._wsDownloadService.start();
+  }
+
+  /**
+   * Disconnects the WebSocket and stops WS-triggered downloads.
+   */
+  disconnectWebSocket(): void {
+    this._wsDownloadService.stop();
+    this._superSyncWsService.disconnect();
+  }
+
   private async _sync(): Promise<SyncStatus | 'HANDLED_ERROR'> {
     const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
     if (!providerId) {
@@ -370,6 +427,12 @@ export class SyncWrapperService {
       // This indicates the sync operation completed successfully
       this._providerManager.setSyncStatus('IN_SYNC');
       SyncLog.log('SyncWrapperService: Sync complete, status=IN_SYNC');
+
+      // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
+      if (!this._superSyncWsService.isConnected()) {
+        this.connectWebSocket();
+      }
+
       return SyncStatus.InSync;
     } catch (error) {
       SyncLog.err(error);
