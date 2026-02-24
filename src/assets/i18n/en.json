@@ -144,7 +144,9 @@
       },
       "S": {
         "BOARD_NOT_FOUND": "Nextcloud Deck: Board not found",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Card \"{{issueId}}\" seems to be deleted on server."
+        "CARD_NOT_FOUND": "Nextcloud Deck: Card \"{{issueId}}\" seems to be deleted on server.",
+        "ERR_CREDENTIALS_MISSING": "Enter Nextcloud URL, username, and password first.",
+        "ERR_LOAD_BOARDS": "Failed to load Deck boards. Check your credentials."
       }
     },
     "CALENDARS": {

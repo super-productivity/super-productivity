@@ -20,6 +20,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { AsyncPipe } from '@angular/common';
 import { BehaviorSubject, Subscription, of } from 'rxjs';
 import { catchError, first, map, tap } from 'rxjs/operators';
+import { T } from '../../../../t.const';
 
 interface DeckBoard {
   id: number;
@@ -175,8 +176,7 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
     if (!this._cfg?.nextcloudBaseUrl || !this._cfg?.username || !this._cfg?.password) {
       this._snackService.open({
         type: 'ERROR',
-        msg: 'Enter Nextcloud URL, username, and password first.',
-        isSkipTranslate: true,
+        msg: T.F.NEXTCLOUD_DECK.S.ERR_CREDENTIALS_MISSING,
       });
       return;
     }
@@ -256,8 +256,7 @@ export class NextcloudDeckAdditionalCfgComponent implements OnDestroy {
             this._cdr.markForCheck();
             this._snackService.open({
               type: 'ERROR',
-              msg: 'Failed to load Deck boards. Check your credentials.',
-              isSkipTranslate: true,
+              msg: T.F.NEXTCLOUD_DECK.S.ERR_LOAD_BOARDS,
             });
             return of([]);
           }),
