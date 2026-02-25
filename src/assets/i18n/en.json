@@ -1812,6 +1812,7 @@
     "SUBMIT": "Submit",
     "TITLE": "Title",
     "TODAY_TAG_TITLE": "Today",
+    "TRACKING_INTERVAL_DESCRIPTION": "Track time using this interval in milliseconds. You may want to increase this to reduce disk writes. See GitHub issue #2355.",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "Without Project",
     "YESTERDAY": "Yesterday"
@@ -2117,6 +2118,7 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "Focus app window when reminder is active (desktop only)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Notify when time tracking reminder is shown",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Show tracking reminder on mobile app",
+      "L_TRACKING_INTERVAL": "Time tracking interval (EXPERIMENTAL)",
       "L_TRACKING_REMINDER_MIN_TIME": "Time to wait before showing tracking reminder banner",
       "TITLE": "Time Tracking"
     }

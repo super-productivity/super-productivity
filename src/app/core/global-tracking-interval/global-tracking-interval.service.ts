@@ -11,10 +11,12 @@ import {
   share,
   shareReplay,
   startWith,
+  switchMap,
   tap,
 } from 'rxjs/operators';
 import { Tick } from './tick.model';
 import { DateService } from 'src/app/core/date/date.service';
+import { GlobalConfigService } from 'src/app/features/config/global-config.service';
 import { Log } from '../log';
 
 @Injectable({
@@ -22,8 +24,13 @@ import { Log } from '../log';
 })
 export class GlobalTrackingIntervalService {
   private _dateService = inject(DateService);
+  private _globalConfigService = inject(GlobalConfigService);
 
-  globalInterval$: Observable<number> = interval(TRACKING_INTERVAL).pipe(share());
+  globalInterval$: Observable<number> = this._globalConfigService.cfg$.pipe(
+    map((cfg) => cfg?.timeTracking?.trackingInterval ?? TRACKING_INTERVAL),
+    switchMap((_interval) => interval(_interval)),
+    share(),
+  );
   private _currentTrackingStart: number;
   tick$: Observable<Tick> = this.globalInterval$.pipe(
     map(() => {

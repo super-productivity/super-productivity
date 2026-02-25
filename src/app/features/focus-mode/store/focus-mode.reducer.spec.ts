@@ -142,6 +142,12 @@ describe('FocusModeReducer', () => {
       expect(result.mainState).toBe(FocusMainUIState.InProgress);
     });
 
+    it('should set isManualSessionCompletion to true when dispatched with isManualSessionCompletion: true', () => {
+      const action = a.startFocusSession({ isManualSessionCompletion: true });
+      const result = focusModeReducer(initialState, action);
+      expect(result.isManualSessionCompletion).toBe(true);
+    });
+
     it('should pause focus session', () => {
       const runningState = {
         ...initialState,
@@ -292,6 +298,23 @@ describe('FocusModeReducer', () => {
       expect(result.lastCompletedDuration).toBe(60000);
     });
 
+    it('should reset isManualSessionCompletion to false on completeFocusSession', () => {
+      const stateWithFlag = {
+        ...initialState,
+        isManualSessionCompletion: true,
+        timer: {
+          isRunning: false,
+          startedAt: Date.now(),
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+      const action = a.completeFocusSession({ isManual: false });
+      const result = focusModeReducer(stateWithFlag, action);
+      expect(result.isManualSessionCompletion).toBe(false);
+    });
+
     it('should cancel focus session', () => {
       const runningState = {
         ...initialState,
@@ -314,6 +337,23 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
       expect(result.isOverlayShown).toBe(false);
+    });
+
+    it('should reset isManualSessionCompletion to false on cancelFocusSession', () => {
+      const stateWithFlag = {
+        ...initialState,
+        isManualSessionCompletion: true,
+        timer: {
+          isRunning: true,
+          startedAt: Date.now(),
+          elapsed: 500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+      const action = a.cancelFocusSession();
+      const result = focusModeReducer(stateWithFlag, action);
+      expect(result.isManualSessionCompletion).toBe(false);
     });
   });
 
@@ -562,6 +602,27 @@ describe('FocusModeReducer', () => {
 
       expect(result.timer.isRunning).toBe(true);
       expect(result.timer.elapsed).toBe(3600000);
+    });
+
+    it('should NOT stop work session when duration reached and isManualSessionCompletion is true', () => {
+      const startTime = Date.now() - 1500000; // Started 25 minutes ago
+      const runningState = {
+        ...initialState,
+        isManualSessionCompletion: true,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const action = a.tick();
+      const result = focusModeReducer(runningState, action);
+
+      expect(result.timer.isRunning).toBe(true);
+      expect(result.timer.elapsed).toBeGreaterThanOrEqual(1500000);
     });
   });
 

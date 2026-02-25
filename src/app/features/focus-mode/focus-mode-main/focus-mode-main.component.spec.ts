@@ -426,7 +426,21 @@ describe('FocusModeMainComponent', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 900000 }),
+        actions.startFocusSession({ duration: 900000, isManualSessionCompletion: false }),
+      );
+    });
+
+    it('should dispatch startFocusSession with isManualSessionCompletion: true when isManualBreakStart is enabled', () => {
+      component.displayDuration.set(900000);
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: true,
+        isManualBreakStart: true,
+      });
+
+      component.startSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 900000, isManualSessionCompletion: true }),
       );
     });
 
@@ -439,7 +453,7 @@ describe('FocusModeMainComponent', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 0 }),
+        actions.startFocusSession({ duration: 0, isManualSessionCompletion: false }),
       );
     });
 
@@ -967,7 +981,10 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 1500000 }),
+        actions.startFocusSession({
+          duration: 1500000,
+          isManualSessionCompletion: false,
+        }),
       );
     });
   });

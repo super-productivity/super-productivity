@@ -21,7 +21,7 @@ export const startFocusPreparation = createAction('[FocusMode] Start Preparation
 
 export const startFocusSession = createAction(
   '[FocusMode] Start Session',
-  props<{ duration?: number }>(),
+  props<{ duration?: number; isManualSessionCompletion?: boolean }>(),
 );
 
 export const navigateToMainScreen = createAction('[FocusMode] Navigate To Main Screen');
