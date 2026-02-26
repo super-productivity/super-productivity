@@ -1562,7 +1562,7 @@
       },
       "D_CONFIRM_UPDATE_INSTANCES": {
         "CANCEL": "Only future tasks",
-        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or just future tasks?",
+        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
         "OK": "Update all instances"
       },
       "D_DELETE_INSTANCE": {
@@ -1574,11 +1574,11 @@
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
         "HEATMAP_LABEL": "Activity",
-        "HELP1": "Recurring tasks are meant for daily chores, e.g. \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
-        "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project and will be automatically marked as completed at the end of the day. They will be handled as different instances. So you can freely add subtasks etc.",
+        "HELP1": "Recurring tasks are for repeating tasks, e.g. 'Organization', 'Daily Meeting', 'Code Review', 'Check Emails', or similar tasks that are likely to occur again and again.",
+        "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project. Each occurance will be handled as a different instance. So you can freely make modifications to each task, such as adding subtasks.",
         "HELP3": "Tasks imported from Jira or Git Issues cannot be recurring.",
-        "HELP4": "The 'Order' field refers to the creation order recurring tasks. It is only in effect for recurring tasks that are created at the same time. A lower value means a task will be higher up the list; a higher number means that it will be further down. A value greater than 0 means items are created at the bottom of normal tasks.",
-        "TAG_LABEL": "Tags to add"
+        "HELP4": "The 'Order' field refers to the creation order for recurring tasks. It only affects recurring tasks created at the same time. A lower value means a task will created higher up the list; a higher number means it will be further down. A value greater than 0 means tasks are created below normal tasks.",
+        "TAG_LABEL": "Tags"
       },
       "F": {
         "C_DAY": "Day",
