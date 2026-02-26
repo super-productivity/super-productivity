@@ -101,28 +101,6 @@ export const createTestUser = async (
 };
 
 /**
- * Get encryption status of operations for a user.
- * Queries the test endpoint to check how many operations are encrypted vs unencrypted.
- *
- * @param userId - The user ID to check
- * @returns Counts of encrypted, unencrypted, and total operations
- */
-export const getEncryptionStatus = async (
-  userId: number,
-): Promise<{ encrypted: number; unencrypted: number; total: number }> => {
-  const response = await fetch(
-    `${SUPERSYNC_BASE_URL}/api/test/user/${userId}/encryption-status`,
-  );
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to get encryption status: ${response.status} - ${text}`);
-  }
-
-  return response.json();
-};
-
-/**
  * Clean up all test data on the server.
  * Call this in test teardown if needed.
  */

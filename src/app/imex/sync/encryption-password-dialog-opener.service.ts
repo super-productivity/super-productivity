@@ -10,9 +10,6 @@ import {
   EnableEncryptionDialogData,
   EnableEncryptionResult,
 } from './dialog-enable-encryption/dialog-enable-encryption.component';
-import { EncryptionDisableService } from './encryption-disable.service';
-import { SyncLog } from '../../core/log';
-import { SyncWrapperService } from './sync-wrapper.service';
 
 /**
  * Singleton service to open the encryption password change dialog.
@@ -23,8 +20,6 @@ import { SyncWrapperService } from './sync-wrapper.service';
 })
 export class EncryptionPasswordDialogOpenerService {
   private _matDialog = inject(MatDialog);
-  private _encryptionDisableService = inject(EncryptionDisableService);
-  private _syncWrapperService = inject(SyncWrapperService);
 
   /**
    * Closes all open dialogs. Useful after disabling encryption
@@ -90,22 +85,6 @@ export class EncryptionPasswordDialogOpenerService {
     });
 
     return dialogRef.afterClosed().toPromise();
-  }
-
-  /**
-   * Disables auto-encryption (server-derived key).
-   * Returns true if auto-encryption was successfully disabled.
-   */
-  async disableAutoEncryption(): Promise<boolean> {
-    try {
-      await this._syncWrapperService.runWithSyncBlocked(async () => {
-        await this._encryptionDisableService.disableAutoEncryption();
-      });
-      return true;
-    } catch (err) {
-      SyncLog.err('Failed to disable auto-encryption', err);
-      return false;
-    }
   }
 }
 
@@ -216,16 +195,4 @@ export const closeAllDialogs = (): void => {
     return;
   }
   dialogOpenerInstance.closeAllDialogs();
-};
-
-/**
- * Disables auto-encryption (server-derived key).
- * Can be called from form config onClick handlers.
- */
-export const disableAutoEncryption = (): Promise<boolean> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(false);
-  }
-  return dialogOpenerInstance.disableAutoEncryption();
 };

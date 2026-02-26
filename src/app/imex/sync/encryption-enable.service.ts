@@ -1,6 +1,5 @@
 import { inject, Injectable } from '@angular/core';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
-import { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
 import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
 import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
@@ -72,23 +71,22 @@ export class EncryptionEnableService {
       ...existingCfg,
       encryptKey,
       isEncryptionEnabled: true,
-      isAutoEncryptionEnabled: false,
-      autoEncryptionKey: undefined,
     } as SuperSyncPrivateCfg;
     await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, newConfig);
 
     // Clear cached adapters to ensure new encryption settings take effect
     this._wrappedProviderService.clearCache();
 
-    // Upload encrypted snapshot
-    SyncLog.normal(`${LOG_PREFIX}: Encrypting and uploading encrypted snapshot...`);
-    try {
-      // Encrypt inside try so revert fires on failure
-      const encryptedPayload = await this._encryptionService.encryptPayload(
-        state,
-        encryptKey,
-      );
+    // Encrypt the snapshot payload
+    SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
+    const encryptedPayload = await this._encryptionService.encryptPayload(
+      state,
+      encryptKey,
+    );
 
+    // Upload encrypted snapshot
+    SyncLog.normal(`${LOG_PREFIX}: Uploading encrypted snapshot...`);
+    try {
       const result = await this._snapshotUploadService.uploadSnapshot(
         syncProvider,
         encryptedPayload,
@@ -123,8 +121,6 @@ export class EncryptionEnableService {
         ...existingCfg,
         encryptKey: undefined,
         isEncryptionEnabled: false,
-        isAutoEncryptionEnabled: false,
-        autoEncryptionKey: undefined,
       } as SuperSyncPrivateCfg;
       await this._providerManager.setProviderConfig(
         SyncProviderId.SuperSync,
@@ -137,111 +133,6 @@ export class EncryptionEnableService {
       throw new Error(
         'CRITICAL: Failed to upload encrypted snapshot after deleting server data. ' +
           'Your local data is safe. Encryption has been reverted. Please use "Sync Now" to re-upload your data. ' +
-          `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
-      );
-    }
-  }
-
-  /**
-   * Enables auto-encryption using a server-derived key.
-   * This provides encryption at rest with zero user friction.
-   *
-   * Flow:
-   * 1. Fetch auto-encryption key from server
-   * 2. Delete all server data (unencrypted ops can't be mixed with encrypted)
-   * 3. Update local config with auto-encryption key
-   * 4. Encrypt and upload current state
-   * 5. Revert on failure
-   */
-  async enableAutoEncryption(): Promise<void> {
-    SyncLog.normal(`${LOG_PREFIX}: Starting auto-encryption enable...`);
-
-    // Check crypto availability BEFORE deleting server data
-    if (!isCryptoSubtleAvailable()) {
-      throw new WebCryptoNotAvailableError(
-        'Cannot enable auto-encryption: WebCrypto API is not available. ' +
-          'Encryption requires a secure context (HTTPS). ' +
-          'On Android, encryption is not supported.',
-      );
-    }
-
-    // Gather all data needed for upload (validates provider)
-    const { syncProvider, existingCfg, state, vectorClock, clientId } =
-      await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
-
-    // Cast to SuperSyncProvider to access fetchAutoEncryptionKey()
-    const superSyncProvider = syncProvider as unknown as SuperSyncProvider;
-
-    // Fetch auto-encryption key from server
-    SyncLog.normal(`${LOG_PREFIX}: Fetching auto-encryption key from server...`);
-    const autoEncryptionKey = await superSyncProvider.fetchAutoEncryptionKey();
-
-    // Delete all server data (unencrypted ops can't be mixed with encrypted)
-    SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
-    await syncProvider.deleteAllData();
-
-    // Update local config BEFORE upload
-    SyncLog.normal(`${LOG_PREFIX}: Updating local config for auto-encryption...`);
-    const newConfig = {
-      ...existingCfg,
-      isAutoEncryptionEnabled: true,
-      autoEncryptionKey,
-      isEncryptionEnabled: false,
-      encryptKey: undefined,
-    } as SuperSyncPrivateCfg;
-    await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, newConfig);
-
-    // Clear cached adapters to ensure new encryption settings take effect
-    this._wrappedProviderService.clearCache();
-
-    // Upload encrypted snapshot
-    SyncLog.normal(`${LOG_PREFIX}: Encrypting and uploading auto-encrypted snapshot...`);
-    try {
-      // Encrypt inside try so revert fires on failure
-      const encryptedPayload = await this._encryptionService.encryptPayload(
-        state,
-        autoEncryptionKey,
-      );
-
-      const result = await this._snapshotUploadService.uploadSnapshot(
-        syncProvider,
-        encryptedPayload,
-        clientId,
-        vectorClock,
-        true, // isPayloadEncrypted = true
-      );
-
-      if (!result.accepted) {
-        throw new Error(`Snapshot upload failed: ${result.error}`);
-      }
-
-      // Update lastServerSeq
-      await this._snapshotUploadService.updateLastServerSeq(
-        syncProvider,
-        result.serverSeq,
-        LOG_PREFIX,
-      );
-
-      SyncLog.normal(`${LOG_PREFIX}: Auto-encryption enabled successfully!`);
-    } catch (uploadError) {
-      // Revert local config on failure
-      SyncLog.err(`${LOG_PREFIX}: Auto-encrypted snapshot upload failed!`, uploadError);
-
-      const revertConfig = {
-        ...existingCfg,
-        isAutoEncryptionEnabled: false,
-        autoEncryptionKey: undefined,
-      } as SuperSyncPrivateCfg;
-      await this._providerManager.setProviderConfig(
-        SyncProviderId.SuperSync,
-        revertConfig,
-      );
-
-      this._wrappedProviderService.clearCache();
-
-      throw new Error(
-        'CRITICAL: Failed to upload auto-encrypted snapshot after deleting server data. ' +
-          'Your local data is safe. Auto-encryption has been reverted. Please use "Sync Now" to re-upload your data. ' +
           `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
       );
     }

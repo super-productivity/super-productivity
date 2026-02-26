@@ -4,7 +4,6 @@ import { SyncLog } from '../../core/log';
 import { SnapshotUploadService } from './snapshot-upload.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { StateSnapshotService } from '../../op-log/backup/state-snapshot.service';
 import { VectorClockService } from '../../op-log/sync/vector-clock.service';
 import {
@@ -80,15 +79,11 @@ export class EncryptionDisableService {
       }
 
       // Update local config AFTER successful upload - disable encryption and clear the key
-      // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
-      // to ensure the currentProviderPrivateCfg$ observable is updated for proper form state.
       SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
-      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
+      await syncProvider.setPrivateCfg({
         ...existingCfg,
         encryptKey: undefined,
         isEncryptionEnabled: false,
-        isAutoEncryptionEnabled: false,
-        autoEncryptionKey: undefined,
       } as SuperSyncPrivateCfg);
 
       // Clear cached adapters to ensure new encryption settings take effect
@@ -104,73 +99,6 @@ export class EncryptionDisableService {
       SyncLog.normal(`${LOG_PREFIX}: Encryption disabled successfully!`);
     } catch (uploadError) {
       // CRITICAL: Server data was deleted but new snapshot failed to upload.
-      SyncLog.err(
-        `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
-        uploadError,
-      );
-
-      throw new Error(
-        'CRITICAL: Failed to upload unencrypted snapshot after deleting server data. ' +
-          'Your local data is safe. Please use "Sync Now" to re-upload your data. ' +
-          `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
-      );
-    }
-  }
-
-  /**
-   * Disables auto-encryption (server-derived key) by deleting all server data
-   * and uploading a new unencrypted snapshot.
-   *
-   * @throws Error if sync provider is not SuperSync or not ready
-   */
-  async disableAutoEncryption(): Promise<void> {
-    SyncLog.normal(`${LOG_PREFIX}: Starting auto-encryption disable...`);
-
-    // Gather all data needed for upload (validates provider)
-    const { syncProvider, existingCfg, state, vectorClock, clientId } =
-      await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
-
-    // Delete all server data (encrypted ops can't be mixed with unencrypted)
-    SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
-    await syncProvider.deleteAllData();
-
-    // Upload unencrypted snapshot
-    SyncLog.normal(`${LOG_PREFIX}: Uploading unencrypted snapshot...`);
-    try {
-      const result = await this._snapshotUploadService.uploadSnapshot(
-        syncProvider,
-        state,
-        clientId,
-        vectorClock,
-        false, // isPayloadEncrypted = false
-      );
-
-      if (!result.accepted) {
-        throw new Error(`Snapshot upload failed: ${result.error}`);
-      }
-
-      // Update local config AFTER successful upload - disable auto-encryption
-      // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
-      // to ensure the currentProviderPrivateCfg$ observable is updated for proper form state.
-      SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
-      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
-        ...existingCfg,
-        isAutoEncryptionEnabled: false,
-        autoEncryptionKey: undefined,
-      } as SuperSyncPrivateCfg);
-
-      // Clear cached adapters to ensure new encryption settings take effect
-      this._wrappedProviderService.clearCache();
-
-      // Update lastServerSeq
-      await this._snapshotUploadService.updateLastServerSeq(
-        syncProvider,
-        result.serverSeq,
-        LOG_PREFIX,
-      );
-
-      SyncLog.normal(`${LOG_PREFIX}: Auto-encryption disabled successfully!`);
-    } catch (uploadError) {
       SyncLog.err(
         `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
         uploadError,

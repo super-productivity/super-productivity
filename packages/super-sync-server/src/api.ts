@@ -1,7 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import * as jwt from 'jsonwebtoken';
-import { createHmac } from 'crypto';
 import {
   verifyEmail,
   replaceToken,
@@ -206,44 +205,6 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
         Logger.error(`Delete account error: ${errMsg}`);
         return reply.status(500).send({
           error: 'Failed to delete account. Please try again.',
-        });
-      }
-    },
-  );
-
-  // Get a deterministic per-user encryption key derived from JWT_SECRET.
-  // Used for automatic encryption at rest (server-side derived key).
-  // The key is NOT stored in the database — it is derived on-the-fly.
-  //
-  // WARNING: Rotating JWT_SECRET changes all derived encryption keys.
-  // Clients cache the key locally, so existing sessions continue to work.
-  // But a client that clears local storage after rotation will get a NEW key
-  // and be unable to decrypt data encrypted with the OLD key.
-  // If JWT_SECRET must be rotated, coordinate a re-encryption migration first.
-  fastify.get(
-    '/user/encryption-key',
-    {
-      preHandler: authenticate,
-      config: {
-        rateLimit: {
-          max: 10,
-          timeWindow: '15 minutes',
-        },
-      },
-    },
-    async (req, reply) => {
-      try {
-        const user = getAuthUser(req);
-        const jwtSecret = getJwtSecret();
-        const key = createHmac('sha256', jwtSecret)
-          .update('sp-auto-encrypt:' + user.userId)
-          .digest('base64');
-        return reply.send({ encryptionKey: key });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : 'Unknown error';
-        Logger.error(`Encryption key derivation error: ${errMsg}`);
-        return reply.status(500).send({
-          error: 'Failed to derive encryption key. Please try again.',
         });
       }
     },

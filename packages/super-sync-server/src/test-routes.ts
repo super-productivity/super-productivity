@@ -185,58 +185,5 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
     },
   );
 
-  /**
-   * Get encryption status of operations for a user.
-   * Returns counts of encrypted vs unencrypted operations.
-   * Used by E2E tests to verify auto-encryption is working.
-   */
-  fastify.get<{ Params: { userId: string } }>(
-    '/user/:userId/encryption-status',
-    {
-      schema: {
-        params: {
-          type: 'object',
-          required: ['userId'],
-          properties: {
-            userId: { type: 'string' },
-          },
-        },
-      },
-      config: {
-        rateLimit: false,
-      },
-    },
-    async (request, reply) => {
-      const userId = parseInt(request.params.userId, 10);
-
-      if (isNaN(userId)) {
-        return reply.status(400).send({ error: 'Invalid userId' });
-      }
-
-      try {
-        const [encrypted, unencrypted] = await Promise.all([
-          prisma.operation.count({
-            where: { userId, isPayloadEncrypted: true },
-          }),
-          prisma.operation.count({
-            where: { userId, isPayloadEncrypted: false },
-          }),
-        ]);
-
-        return reply.send({
-          encrypted,
-          unencrypted,
-          total: encrypted + unencrypted,
-        });
-      } catch (err: unknown) {
-        Logger.error('[TEST] Failed to get encryption status:', err);
-        return reply.status(500).send({
-          error: 'Failed to get encryption status',
-          message: (err as Error).message,
-        });
-      }
-    },
-  );
-
   Logger.info('[TEST] Test routes registered at /api/test/*');
 };

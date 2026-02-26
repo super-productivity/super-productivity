@@ -1133,12 +1133,11 @@
           "ENABLE_ENCRYPTION_ITEM_2": "Your current data will be re-uploaded with encryption",
           "ENABLE_ENCRYPTION_ITEM_3": "All other devices will need to enter this encryption password",
           "ENABLE_ENCRYPTION_NOTE": "Your local data will NOT be deleted. You can disable encryption at any time.",
-          "BTN_ENABLE_ENCRYPTION": "Enable E2E Encryption Password",
+          "BTN_ENABLE_ENCRYPTION": "Enable Encryption",
           "ENABLE_ENCRYPTION_SUCCESS": "Encryption enabled successfully",
           "ENABLE_ENCRYPTION_NOT_READY": "Sync is not enabled or configured.",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "This feature is only available for SuperSync.",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Please enter an encryption password first.",
-          "AUTO_ENCRYPTION_ACTIVE": "Your data is automatically encrypted on the server. For stronger protection, set a separate encryption passphrase using the button above."
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Please enter an encryption password first."
         },
         "IMPORT_ENCRYPTION_WARNING": {
           "TITLE": "Encryption Settings Will Change",

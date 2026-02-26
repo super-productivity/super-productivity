@@ -373,37 +373,12 @@ export class SuperSyncProvider
 
   async getEncryptKey(): Promise<string | undefined> {
     const cfg = await this.privateCfg.load();
-    // Manual encryption takes priority over auto-encryption
+    // Only return encryption key if encryption is explicitly enabled
+    // This ensures encryption is not accidentally used when disabled
     if (cfg?.isEncryptionEnabled && cfg.encryptKey) {
       return cfg.encryptKey;
     }
-    // Auto-encryption fallback (server-derived key)
-    if (cfg?.isAutoEncryptionEnabled && cfg.autoEncryptionKey) {
-      return cfg.autoEncryptionKey;
-    }
     return undefined;
-  }
-
-  /**
-   * Fetches the auto-encryption key from the server.
-   * The key is derived deterministically from JWT_SECRET + userId,
-   * so it returns the same key for the same user on every call.
-   */
-  async fetchAutoEncryptionKey(): Promise<string> {
-    const cfg = await this._cfgOrError();
-    const response = await this._fetchApi<{ encryptionKey: string }>(
-      cfg,
-      '/api/user/encryption-key',
-      { method: 'GET' },
-    );
-    if (
-      !response.encryptionKey ||
-      typeof response.encryptionKey !== 'string' ||
-      response.encryptionKey.length < 32
-    ) {
-      throw new Error('Server returned invalid encryption key');
-    }
-    return response.encryptionKey;
   }
 
   // === Private Helper Methods ===
