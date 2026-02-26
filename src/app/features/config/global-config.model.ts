@@ -126,6 +126,8 @@ export interface SuperSyncConfig extends WebDavConfig {
   isEncryptionEnabled?: boolean;
   /** Encryption password (SuperSync-specific, stored in private config) */
   encryptKey?: string | null;
+  /** Whether auto-encryption (server-derived key) is active (read-only for display) */
+  isAutoEncryptionEnabled?: boolean;
 }
 
 export interface LocalFileSyncConfig {

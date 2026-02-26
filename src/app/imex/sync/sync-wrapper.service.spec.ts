@@ -26,8 +26,10 @@ import {
   SyncAlreadyInProgressError,
   LocalDataConflictError,
   MissingRefreshTokenAPIError,
+  DecryptNoPasswordError,
 } from '../../op-log/core/errors/sync-errors';
 import { MAX_LWW_REUPLOAD_RETRIES } from '../../op-log/core/operation-log.const';
+import { AutoEncryptionMigrationService } from './auto-encryption-migration.service';
 
 describe('SyncWrapperService', () => {
   let service: SyncWrapperService;
@@ -153,6 +155,14 @@ describe('SyncWrapperService', () => {
       hasNoPendingOps: signal(false),
     });
 
+    const mockAutoEncryptionMigration = jasmine.createSpyObj(
+      'AutoEncryptionMigrationService',
+      ['ensureAutoEncryption'],
+    );
+    mockAutoEncryptionMigration.ensureAutoEncryption.and.returnValue(
+      Promise.resolve(false),
+    );
+
     TestBed.configureTestingModule({
       providers: [
         SyncWrapperService,
@@ -169,6 +179,10 @@ describe('SyncWrapperService', () => {
         { provide: ReminderService, useValue: mockReminderService },
         { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
         { provide: SuperSyncStatusService, useValue: mockSuperSyncStatusService },
+        {
+          provide: AutoEncryptionMigrationService,
+          useValue: mockAutoEncryptionMigration,
+        },
       ],
     });
 
@@ -1129,6 +1143,10 @@ describe('SyncWrapperService', () => {
           { provide: ReminderService, useValue: mockReminderService },
           { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
           { provide: SuperSyncStatusService, useValue: signalMockSuperSyncStatusService },
+          {
+            provide: AutoEncryptionMigrationService,
+            useValue: { ensureAutoEncryption: () => Promise.resolve(false) },
+          },
         ],
       });
 
@@ -1257,6 +1275,10 @@ describe('SyncWrapperService', () => {
           { provide: ReminderService, useValue: mockReminderService },
           { provide: UserInputWaitStateService, useValue: mockUserInputWaitState },
           { provide: SuperSyncStatusService, useValue: signalMockSuperSyncStatusService },
+          {
+            provide: AutoEncryptionMigrationService,
+            useValue: { ensureAutoEncryption: () => Promise.resolve(false) },
+          },
         ],
       });
 
@@ -1457,6 +1479,132 @@ describe('SyncWrapperService', () => {
       // Total uploads: 1 initial + 1 retry = 2
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       expect(result).toBe(SyncStatus.InSync);
+    });
+  });
+
+  describe('Auto-encryption recovery', () => {
+    beforeEach(() => {
+      // Mock dialog to prevent "afterClosed is undefined" when recovery is skipped
+      // and _handleMissingPasswordDialog runs
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(undefined),
+      } as any);
+    });
+
+    it('should return HANDLED_ERROR when DecryptNoPasswordError with SuperSync triggers recovery', async () => {
+      // Make download throw DecryptNoPasswordError
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptNoPasswordError()),
+      );
+
+      // Mock the provider to have privateCfg.load() for recovery
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            baseUrl: 'https://test.example.com',
+            accessToken: 'test-token',
+          }),
+        },
+        fetchAutoEncryptionKey: jasmine
+          .createSpy('fetchAutoEncryptionKey')
+          .and.resolveTo('recovered-key-base64-xxxxxxxxxxxxxxxxx'),
+      };
+      mockProviderManager.getActiveProvider.and.returnValue(mockProvider as any);
+      mockProviderManager.setProviderConfig.and.resolveTo();
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      // Recovery should have fetched the key and saved config
+      expect(mockProvider.fetchAutoEncryptionKey).toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+        jasmine.objectContaining({
+          isAutoEncryptionEnabled: true,
+          autoEncryptionKey: 'recovered-key-base64-xxxxxxxxxxxxxxxxx',
+        }),
+      );
+    });
+
+    it('should skip recovery when manual encryption is already configured', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptNoPasswordError()),
+      );
+
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            baseUrl: 'https://test.example.com',
+            accessToken: 'test-token',
+            isEncryptionEnabled: true,
+            encryptKey: 'user-manual-key',
+          }),
+        },
+        fetchAutoEncryptionKey: jasmine.createSpy('fetchAutoEncryptionKey'),
+      };
+      mockProviderManager.getActiveProvider.and.returnValue(mockProvider as any);
+
+      await service.sync();
+
+      // Should NOT fetch auto key because manual encryption is set
+      expect(mockProvider.fetchAutoEncryptionKey).not.toHaveBeenCalled();
+    });
+
+    it('should skip recovery when auto-encryption is already configured', async () => {
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptNoPasswordError()),
+      );
+
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.resolveTo({
+            baseUrl: 'https://test.example.com',
+            accessToken: 'test-token',
+            isAutoEncryptionEnabled: true,
+            autoEncryptionKey: 'already-has-key',
+          }),
+        },
+        fetchAutoEncryptionKey: jasmine.createSpy('fetchAutoEncryptionKey'),
+      };
+      mockProviderManager.getActiveProvider.and.returnValue(mockProvider as any);
+
+      await service.sync();
+
+      // Should NOT fetch auto key because auto-encryption is already set
+      expect(mockProvider.fetchAutoEncryptionKey).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Auto-encryption migration', () => {
+    it('should return InSync and skip normal sync when migration completes', async () => {
+      const mockAutoMigration = TestBed.inject(
+        AutoEncryptionMigrationService,
+      ) as unknown as jasmine.SpyObj<AutoEncryptionMigrationService>;
+      mockAutoMigration.ensureAutoEncryption.and.returnValue(Promise.resolve(true));
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+      expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
+      // Normal sync should NOT have run
+      expect(mockSyncService.downloadRemoteOps).not.toHaveBeenCalled();
+      expect(mockSyncService.uploadPendingOps).not.toHaveBeenCalled();
+    });
+
+    it('should proceed with normal sync when migration returns false', async () => {
+      const mockAutoMigration = TestBed.inject(
+        AutoEncryptionMigrationService,
+      ) as unknown as jasmine.SpyObj<AutoEncryptionMigrationService>;
+      mockAutoMigration.ensureAutoEncryption.and.returnValue(Promise.resolve(false));
+
+      const result = await service.sync();
+
+      expect(result).toBe(SyncStatus.InSync);
+      // Normal sync SHOULD have run
+      expect(mockSyncService.downloadRemoteOps).toHaveBeenCalled();
     });
   });
 });

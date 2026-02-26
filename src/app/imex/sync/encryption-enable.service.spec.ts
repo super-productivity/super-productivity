@@ -32,10 +32,14 @@ describe('EncryptionEnableService', () => {
     mockSyncProvider = jasmine.createSpyObj('SyncProvider', [
       'deleteAllData',
       'setPrivateCfg',
+      'fetchAutoEncryptionKey',
     ]);
     mockSyncProvider.id = SyncProviderId.SuperSync;
     mockSyncProvider.deleteAllData.and.resolveTo({ success: true });
     mockSyncProvider.setPrivateCfg.and.resolveTo();
+    (mockSyncProvider as any).fetchAutoEncryptionKey.and.resolveTo(
+      'auto-generated-key-base64-string-here',
+    );
 
     mockSnapshotUploadService = jasmine.createSpyObj('SnapshotUploadService', [
       'gatherSnapshotData',
@@ -182,6 +186,98 @@ describe('EncryptionEnableService', () => {
 
       // Second call should revert
       expect(mockProviderManager.setProviderConfig).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('enableAutoEncryption', () => {
+    it('should fetch auto-encryption key from server', async () => {
+      await service.enableAutoEncryption();
+
+      expect((mockSyncProvider as any).fetchAutoEncryptionKey).toHaveBeenCalledTimes(1);
+    });
+
+    it('should delete server data after fetching key', async () => {
+      await service.enableAutoEncryption();
+
+      expect(mockSyncProvider.deleteAllData).toHaveBeenCalledTimes(1);
+      expect((mockSyncProvider as any).fetchAutoEncryptionKey).toHaveBeenCalledBefore(
+        mockSyncProvider.deleteAllData,
+      );
+    });
+
+    it('should set config with auto-encryption enabled and manual encryption disabled BEFORE upload', async () => {
+      await service.enableAutoEncryption();
+
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
+        jasmine.objectContaining({
+          isAutoEncryptionEnabled: true,
+          autoEncryptionKey: 'auto-generated-key-base64-string-here',
+          isEncryptionEnabled: false,
+          encryptKey: undefined,
+        }),
+      );
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledBefore(
+        mockSnapshotUploadService.uploadSnapshot,
+      );
+    });
+
+    it('should encrypt state with the auto-encryption key', async () => {
+      await service.enableAutoEncryption();
+
+      expect(mockEncryptionService.encryptPayload).toHaveBeenCalledWith(
+        { task: [] },
+        'auto-generated-key-base64-string-here',
+      );
+    });
+
+    it('should upload encrypted snapshot with isPayloadEncrypted=true', async () => {
+      await service.enableAutoEncryption();
+
+      expect(mockSnapshotUploadService.uploadSnapshot).toHaveBeenCalledWith(
+        mockSyncProvider as any,
+        'encrypted-data',
+        'testClient1',
+        { testClient1: 1 },
+        true, // isPayloadEncrypted
+      );
+    });
+
+    it('should revert config on upload failure', async () => {
+      mockSnapshotUploadService.uploadSnapshot.and.rejectWith(new Error('Network error'));
+
+      await expectAsync(service.enableAutoEncryption()).toBeRejected();
+
+      // Should have called setProviderConfig twice:
+      // 1. Enable auto-encryption before upload
+      // 2. Revert on failure
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledTimes(2);
+
+      // Second call should revert to auto-encryption disabled
+      const revertCall = mockProviderManager.setProviderConfig.calls.mostRecent();
+      expect(revertCall.args[1]).toEqual(
+        jasmine.objectContaining({
+          isAutoEncryptionEnabled: false,
+          autoEncryptionKey: undefined,
+        }),
+      );
+    });
+
+    it('should throw with CRITICAL message on upload failure', async () => {
+      mockSnapshotUploadService.uploadSnapshot.and.rejectWith(new Error('Network error'));
+
+      await expectAsync(service.enableAutoEncryption()).toBeRejectedWithError(
+        /CRITICAL.*Network error/,
+      );
+    });
+
+    it('should clear cache after config update', async () => {
+      await service.enableAutoEncryption();
+
+      expect(mockWrappedProviderService.clearCache).toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledBefore(
+        mockWrappedProviderService.clearCache,
+      );
     });
   });
 });

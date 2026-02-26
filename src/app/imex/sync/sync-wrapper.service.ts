@@ -65,6 +65,9 @@ import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OperationLogSyncService } from '../../op-log/sync/operation-log-sync.service';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { AutoEncryptionMigrationService } from './auto-encryption-migration.service';
+import type { SuperSyncProvider } from '../../op-log/sync-providers/super-sync/super-sync';
+import type { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 
 @Injectable({
   providedIn: 'root',
@@ -83,6 +86,7 @@ export class SyncWrapperService {
   private _opLogStore = inject(OperationLogStoreService);
   private _opLogSyncService = inject(OperationLogSyncService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _autoEncryptionMigration = inject(AutoEncryptionMigrationService);
 
   syncState$ = this._providerManager.syncStatus$;
 
@@ -273,6 +277,21 @@ export class SyncWrapperService {
         return SyncStatus.InSync;
       }
 
+      // Phase 1: Auto-encryption activation is disabled.
+      // This release ships the ability to HANDLE auto-encrypted data (decrypt, recover key)
+      // but does NOT proactively activate auto-encryption.
+      // This ensures older clients have time to update before any client starts encrypting.
+      // Phase 2 (next release): Re-enable by uncommenting the block below.
+      //
+      // const migrated = await this._autoEncryptionMigration.ensureAutoEncryption();
+      // if (migrated) {
+      //   SyncLog.log(
+      //     'SyncWrapperService: Auto-encryption migration completed, skipping normal sync',
+      //   );
+      //   this._providerManager.setSyncStatus('IN_SYNC');
+      //   return SyncStatus.InSync;
+      // }
+
       // Perform actual sync: download first, then upload
       SyncLog.log('SyncWrapperService: Starting op-log sync...');
 
@@ -427,6 +446,19 @@ export class SyncWrapperService {
         });
         return 'HANDLED_ERROR';
       } else if (error instanceof DecryptNoPasswordError) {
+        // For SuperSync: try auto-recovery with server-derived key before showing dialog
+        if (providerId === SyncProviderId.SuperSync) {
+          const recovered = await this._tryAutoEncryptionRecovery();
+          if (recovered) {
+            // Schedule retry after .finally() clears _isSyncInProgress$
+            setTimeout(
+              () =>
+                this.sync().catch((e) => SyncLog.err('Auto-encryption retry failed', e)),
+              0,
+            );
+            return 'HANDLED_ERROR';
+          }
+        }
         this._handleMissingPasswordDialog();
         return 'HANDLED_ERROR';
       } else if (error instanceof DecryptError) {
@@ -665,6 +697,61 @@ export class SyncWrapperService {
       return error.additionalLog;
     }
     return undefined;
+  }
+
+  /**
+   * Tries to recover auto-encryption key from server.
+   * Called when encrypted data is received but no key is configured locally.
+   * This handles: IndexedDB cleared, new device, or another device migrated to auto-encryption.
+   *
+   * @returns true if recovery succeeded and sync will be retried
+   */
+  private async _tryAutoEncryptionRecovery(): Promise<boolean> {
+    try {
+      const provider = this._providerManager.getActiveProvider();
+      if (!provider || provider.id !== SyncProviderId.SuperSync) {
+        return false;
+      }
+
+      const superSync = provider as unknown as SuperSyncProvider;
+
+      const existingCfg = await superSync.privateCfg.load();
+
+      // Guard: null config means no credentials — can't recover
+      if (!existingCfg) {
+        return false;
+      }
+
+      // Guard: if auto-encryption already configured, the key didn't work.
+      // Data was likely encrypted with a manual passphrase.
+      if (existingCfg.isAutoEncryptionEnabled && existingCfg.autoEncryptionKey) {
+        return false;
+      }
+
+      // Guard: if manual encryption was configured, don't overwrite
+      if (existingCfg.isEncryptionEnabled && existingCfg.encryptKey) {
+        return false;
+      }
+
+      SyncLog.log('SyncWrapperService: Attempting auto-encryption key recovery...');
+      const autoEncryptionKey = await superSync.fetchAutoEncryptionKey();
+
+      // Use setProviderConfig() to update both stored config AND the observable
+      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
+        ...existingCfg,
+        isAutoEncryptionEnabled: true,
+        autoEncryptionKey,
+      } as SuperSyncPrivateCfg);
+
+      // Clear cached adapters so new key takes effect
+      this._wrappedProvider.clearCache();
+
+      SyncLog.log('SyncWrapperService: Auto-encryption key recovered, will retry sync.');
+      return true;
+    } catch (err) {
+      SyncLog.warn('SyncWrapperService: Auto-encryption recovery failed', err);
+      return false;
+    }
   }
 
   /**

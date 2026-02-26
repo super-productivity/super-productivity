@@ -443,6 +443,19 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
                 },
               },
             },
+            // Auto-encryption info (shown when auto-encryption is active and manual is not)
+            {
+              hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+                !field?.model?.isAutoEncryptionEnabled ||
+                (field?.model?.isEncryptionEnabled ?? false),
+              type: 'tpl',
+              className: 'tpl',
+              templateOptions: {
+                tag: 'div',
+                class: 'password-set-info',
+                text: T.F.SYNC.FORM.SUPER_SYNC.AUTO_ENCRYPTION_ACTIVE,
+              },
+            },
             // Server URL
             {
               key: 'baseUrl',
