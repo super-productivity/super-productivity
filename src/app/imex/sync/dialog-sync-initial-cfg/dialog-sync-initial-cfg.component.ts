@@ -208,12 +208,15 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       ...this.form.value,
     };
 
+    // Strip _isInitialSetup before saving — it's only for form hideExpressions
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _isInitialSetup, ...cfgWithoutFlag } = this._tmpUpdatedCfg;
     const configToSave = {
-      ...this._tmpUpdatedCfg,
+      ...cfgWithoutFlag,
       isEnabled: this._tmpUpdatedCfg.isEnabled || !this.isWasEnabled(),
     };
 
-    await this.syncConfigService.updateSettingsFromForm(configToSave, true);
+    await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
