@@ -283,9 +283,9 @@ flatpak run com.super_productivity.SuperProductivity
 #### Aur - Arch Linux
 
 ```bash
-git clone https://aur.archlinux.org/superproductivity-bin.git
-cd superproductivity-bin
-makepkg -si
+paru -S superproductivity
+# or
+yay -S superproductivity
 ```
 
 #### AppImage
