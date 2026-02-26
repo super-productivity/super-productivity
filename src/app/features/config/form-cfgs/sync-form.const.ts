@@ -415,6 +415,37 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
           },
         },
+        // Encryption encouragement warning (shown when encryption is NOT enabled)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false),
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            class: 'encryption-warning',
+            text: T.F.SYNC.FORM.SUPER_SYNC.ENCRYPTION_ENCOURAGED,
+          },
+        },
+        // Enable encryption button for SuperSync (shown when encryption is disabled)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false),
+          type: 'btn',
+          className: 'e2e-enable-encryption-btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
+            btnType: 'primary',
+            onClick: async (field: FormlyFieldConfig) => {
+              const result = await openEnableEncryptionDialog();
+              if (result?.success && field?.model) {
+                field.model.isEncryptionEnabled = true;
+              }
+              return result?.success ? true : false;
+            },
+          },
+        },
         // Advanced settings for SuperSync
         {
           type: 'collapsible',
@@ -422,27 +453,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
           props: { label: T.G.ADVANCED_CFG },
           fieldGroup: [
-            // Enable encryption button for SuperSync (shown when encryption is disabled)
-            {
-              // Note: Using (m, v, field) signature for btn type fields to ensure
-              // hideExpression works correctly with the btn component.
-              // Using ?? false to ensure button stays hidden if field is undefined.
-              hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-                field?.model?.isEncryptionEnabled ?? false,
-              type: 'btn',
-              className: 'e2e-enable-encryption-btn',
-              templateOptions: {
-                text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
-                btnType: 'primary',
-                onClick: async (field: FormlyFieldConfig) => {
-                  const result = await openEnableEncryptionDialog();
-                  if (result?.success && field?.model) {
-                    field.model.isEncryptionEnabled = true;
-                  }
-                  return result?.success ? true : false;
-                },
-              },
-            },
             // Server URL
             {
               key: 'baseUrl',

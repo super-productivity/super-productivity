@@ -23,6 +23,13 @@
   </mat-dialog-actions>
 } @else {
   <mat-dialog-content>
+    @if (initialSetup) {
+      <div class="info-box">
+        <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
+        <p>{{ textKeys.ENCRYPTION_SETUP_INTRO | translate }}</p>
+      </div>
+    }
+
     <div class="warning-box">
       <mat-icon aria-hidden="true">warning</mat-icon>
       <p>{{ textKeys.ENABLE_ENCRYPTION_WARNING | translate }}</p>
@@ -73,14 +80,33 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button
-      mat-button
-      type="button"
-      [disabled]="isLoading()"
-      (click)="cancel()"
-    >
-      {{ T.G.CANCEL | translate }}
-    </button>
+    @if (initialSetup) {
+      <div class="skip-section">
+        <mat-checkbox
+          [checked]="skipConfirmed()"
+          (change)="skipConfirmed.set($event.checked)"
+        >
+          {{ textKeys.ENCRYPTION_SKIP_CONFIRM | translate }}
+        </mat-checkbox>
+        <button
+          mat-button
+          type="button"
+          [disabled]="!skipConfirmed() || isLoading()"
+          (click)="skipEncryption()"
+        >
+          {{ textKeys.ENCRYPTION_SKIP_BTN | translate }}
+        </button>
+      </div>
+    } @else {
+      <button
+        mat-button
+        type="button"
+        [disabled]="isLoading()"
+        (click)="cancel()"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+    }
     <button
       mat-flat-button
       color="warn"

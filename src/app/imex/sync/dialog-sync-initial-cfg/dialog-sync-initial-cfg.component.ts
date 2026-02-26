@@ -6,6 +6,7 @@ import {
   signal,
 } from '@angular/core';
 import {
+  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -24,7 +25,7 @@ import { SyncConfig } from '../../../features/config/global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
-import { Subscription } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
@@ -51,6 +52,7 @@ import { isOnline } from '../../../util/is-online';
 export class DialogSyncInitialCfgComponent implements AfterViewInit {
   syncConfigService = inject(SyncConfigService);
   syncWrapperService = inject(SyncWrapperService);
+  private _matDialog = inject(MatDialog);
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
 
@@ -212,6 +214,21 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
+    }
+
+    // Prompt for encryption when setting up SuperSync for the first time
+    if (
+      providerId === SyncProviderId.SuperSync &&
+      !this._tmpUpdatedCfg.isEncryptionEnabled &&
+      !(this._tmpUpdatedCfg.superSync as any)?.isEncryptionEnabled
+    ) {
+      const { DialogEnableEncryptionComponent } =
+        await import('../dialog-enable-encryption/dialog-enable-encryption.component');
+      const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+        data: { providerType: 'supersync', initialSetup: true },
+        disableClose: true,
+      });
+      await firstValueFrom(dialogRef.afterClosed());
     }
 
     this._matDialogRef.close();
