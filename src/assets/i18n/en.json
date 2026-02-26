@@ -1138,10 +1138,12 @@
           "ENABLE_ENCRYPTION_NOT_READY": "Sync is not enabled or configured.",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "This feature is only available for SuperSync.",
           "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Please enter an encryption password first.",
-          "ENCRYPTION_ENCOURAGED": "We strongly recommend setting an encryption password. Without it, your data is stored unencrypted on the server.",
-          "ENCRYPTION_SETUP_INTRO": "We strongly recommend encrypting your data. Please set an encryption password below.",
-          "ENCRYPTION_SKIP_CONFIRM": "I understand my data will be stored unencrypted on the server",
-          "ENCRYPTION_SKIP_BTN": "Continue without encryption"
+          "ENCRYPTION_ENCOURAGED": "Encryption is required for SuperSync. Please enable encryption to protect your data.",
+          "ENCRYPTION_SETUP_INTRO": "Encryption is required for SuperSync. Please set an encryption password below.",
+          "SETUP_ENCRYPTION_TITLE": "Setup End-to-End Encryption",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "If you forget your encryption password, your remote data cannot be recovered. But you can still overwrite it with your local data and re-encrypt with a new password. You must use the same password on all devices.",
+          "SETUP_ENCRYPTION_NOTE": "All your data will be encrypted before leaving your device. Only you can read it.",
+          "SETUP_ENCRYPTION_BTN": "Set Password & Continue"
         },
         "IMPORT_ENCRYPTION_WARNING": {
           "TITLE": "Encryption Settings Will Change",
@@ -1249,6 +1251,7 @@
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
         "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Encryption was disabled on another device. Your sync settings have been updated.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Encryption is required for SuperSync. Please set an encryption password to continue syncing.",
         "WEB_CRYPTO_NOT_AVAILABLE": "Encryption is not available on this device. On Android, encryption requires a secure context (HTTPS) which is not available. Please disable encryption in sync settings or sync from a desktop web browser.",
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",

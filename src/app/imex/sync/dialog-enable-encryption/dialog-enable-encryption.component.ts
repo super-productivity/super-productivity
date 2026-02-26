@@ -20,7 +20,6 @@ import { FileBasedEncryptionService } from '../file-based-encryption.service';
 import { FormsModule } from '@angular/forms';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
-import { MatCheckbox } from '@angular/material/checkbox';
 
 export interface EnableEncryptionDialogData {
   encryptKey?: string;
@@ -49,7 +48,6 @@ export interface EnableEncryptionResult {
     MatFormField,
     MatLabel,
     MatInput,
-    MatCheckbox,
   ],
 })
 export class DialogEnableEncryptionComponent {
@@ -70,7 +68,6 @@ export class DialogEnableEncryptionComponent {
   canProceed = signal(true);
   errorReason = signal<string | null>(null);
   initialSetup: boolean = this._data?.initialSetup || false;
-  skipConfirmed = signal(false);
   providerType: 'supersync' | 'file-based' = this._data?.providerType || 'supersync';
   textKeys: Record<string, string> =
     this.providerType === 'file-based'
@@ -155,10 +152,6 @@ export class DialogEnableEncryptionComponent {
       });
       this.isLoading.set(false);
     }
-  }
-
-  skipEncryption(): void {
-    this._matDialogRef.close({ success: false });
   }
 
   cancel(): void {

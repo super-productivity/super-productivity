@@ -64,7 +64,9 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
   }
-  _tmpUpdatedCfg: SyncConfig = {
+  // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
+  // to hide the encryption button/warning (encryption dialog opens automatically after save)
+  _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
     isEnabled: true,
     syncProvider: null,
     syncInterval: 300000,
@@ -73,6 +75,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     localFileSync: {},
     webDav: {},
     superSync: {},
+    _isInitialSetup: true,
   };
 
   private _matDialogRef =

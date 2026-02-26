@@ -1,5 +1,9 @@
 <h1 mat-dialog-title>
-  {{ textKeys.ENABLE_ENCRYPTION_TITLE | translate }}
+  @if (initialSetup) {
+    {{ textKeys.SETUP_ENCRYPTION_TITLE | translate }}
+  } @else {
+    {{ textKeys.ENABLE_ENCRYPTION_TITLE | translate }}
+  }
 </h1>
 
 @if (!canProceed()) {
@@ -21,15 +25,76 @@
       {{ T.G.CLOSE | translate }}
     </button>
   </mat-dialog-actions>
-} @else {
+} @else if (initialSetup) {
+  <!-- Simplified dialog for initial SuperSync setup -->
   <mat-dialog-content>
-    @if (initialSetup) {
-      <div class="info-box">
-        <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
-        <p>{{ textKeys.ENCRYPTION_SETUP_INTRO | translate }}</p>
-      </div>
-    }
+    <div class="info-box">
+      <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
+      <p>{{ textKeys.ENCRYPTION_SETUP_INTRO | translate }}</p>
+    </div>
 
+    <div class="warning-box">
+      <mat-icon aria-hidden="true">warning</mat-icon>
+      <p>{{ textKeys.SETUP_ENCRYPTION_PASSWORD_WARNING | translate }}</p>
+    </div>
+
+    <div class="password-fields">
+      <mat-form-field appearance="outline">
+        <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          type="password"
+          [(ngModel)]="password"
+          autocomplete="new-password"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          type="password"
+          [(ngModel)]="confirmPassword"
+          autocomplete="new-password"
+        />
+      </mat-form-field>
+
+      @if (passwordError) {
+        <div class="password-error">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ passwordError | translate }}</span>
+        </div>
+      }
+    </div>
+
+    <p class="note">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>{{ textKeys.SETUP_ENCRYPTION_NOTE | translate }}</span>
+    </p>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="isLoading() || !isPasswordValid"
+      (click)="confirm()"
+    >
+      @if (isLoading()) {
+        <mat-spinner
+          diameter="20"
+          aria-label="Processing"
+        ></mat-spinner>
+      } @else {
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        {{ textKeys.SETUP_ENCRYPTION_BTN | translate }}
+      }
+    </button>
+  </mat-dialog-actions>
+} @else {
+  <!-- Full dialog for enabling encryption on existing setup -->
+  <mat-dialog-content>
     <div class="warning-box">
       <mat-icon aria-hidden="true">warning</mat-icon>
       <p>{{ textKeys.ENABLE_ENCRYPTION_WARNING | translate }}</p>
@@ -80,33 +145,14 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    @if (initialSetup) {
-      <div class="skip-section">
-        <mat-checkbox
-          [checked]="skipConfirmed()"
-          (change)="skipConfirmed.set($event.checked)"
-        >
-          {{ textKeys.ENCRYPTION_SKIP_CONFIRM | translate }}
-        </mat-checkbox>
-        <button
-          mat-button
-          type="button"
-          [disabled]="!skipConfirmed() || isLoading()"
-          (click)="skipEncryption()"
-        >
-          {{ textKeys.ENCRYPTION_SKIP_BTN | translate }}
-        </button>
-      </div>
-    } @else {
-      <button
-        mat-button
-        type="button"
-        [disabled]="isLoading()"
-        (click)="cancel()"
-      >
-        {{ T.G.CANCEL | translate }}
-      </button>
-    }
+    <button
+      mat-button
+      type="button"
+      [disabled]="isLoading()"
+      (click)="cancel()"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
     <button
       mat-flat-button
       color="warn"
@@ -120,10 +166,8 @@
           aria-label="Processing"
         ></mat-spinner>
       } @else {
-        <ng-container>
-          <mat-icon aria-hidden="true">lock</mat-icon>
-          {{ textKeys.BTN_ENABLE_ENCRYPTION | translate }}
-        </ng-container>
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        {{ textKeys.BTN_ENABLE_ENCRYPTION | translate }}
       }
     </button>
   </mat-dialog-actions>

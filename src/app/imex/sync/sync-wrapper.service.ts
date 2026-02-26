@@ -182,6 +182,12 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
 
+    // Block sync if SuperSync is active without encryption — encryption is mandatory
+    const encryptionRequired = await this._checkSuperSyncEncryptionRequired();
+    if (encryptionRequired) {
+      return 'HANDLED_ERROR';
+    }
+
     // Race condition fix: Check-and-set atomically before starting sync
     if (this._isSyncInProgress$.getValue()) {
       SyncLog.log('Sync already in progress, skipping concurrent sync attempt');
@@ -900,6 +906,65 @@ export class SyncWrapperService {
    * Used to prevent multiple simultaneous password dialogs from opening.
    */
   private _passwordDialog?: MatDialogRef<any, any>;
+
+  /**
+   * Reference to the encryption-required dialog to prevent multiple opens.
+   */
+  private _encryptionRequiredDialog?: MatDialogRef<any, any>;
+
+  /**
+   * Checks if the active provider is SuperSync without encryption enabled.
+   * If so, blocks sync and opens the encryption dialog.
+   * Returns true if sync should be blocked.
+   */
+  private async _checkSuperSyncEncryptionRequired(): Promise<boolean> {
+    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    if (providerId !== SyncProviderId.SuperSync) {
+      return false;
+    }
+
+    const provider = this._providerManager.getActiveProvider();
+    if (!provider) {
+      return false;
+    }
+
+    const cfg = (await provider.privateCfg.load()) as
+      | { isEncryptionEnabled?: boolean; encryptKey?: string }
+      | undefined;
+    if (cfg?.isEncryptionEnabled && cfg?.encryptKey) {
+      return false;
+    }
+
+    // SuperSync is active without encryption — block sync and prompt
+    SyncLog.log('Sync blocked: encryption required for SuperSync');
+    this._providerManager.setSyncStatus('ERROR');
+
+    if (!this._encryptionRequiredDialog) {
+      this._snackService.open({
+        msg: T.F.SYNC.S.ENCRYPTION_REQUIRED_FOR_SUPERSYNC,
+        type: 'ERROR',
+      });
+
+      const { DialogEnableEncryptionComponent } =
+        await import('./dialog-enable-encryption/dialog-enable-encryption.component');
+      this._encryptionRequiredDialog = this._matDialog.open(
+        DialogEnableEncryptionComponent,
+        {
+          disableClose: true,
+          data: { providerType: 'supersync', initialSetup: true },
+        },
+      );
+
+      this._encryptionRequiredDialog.afterClosed().subscribe((result) => {
+        this._encryptionRequiredDialog = undefined;
+        if (result?.success) {
+          this.sync();
+        }
+      });
+    }
+
+    return true;
+  }
 
   private _openConflictDialog$(
     conflictData: ConflictData,
