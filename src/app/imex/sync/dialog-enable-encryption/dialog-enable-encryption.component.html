@@ -30,12 +30,10 @@
   <mat-dialog-content>
     <div class="info-box">
       <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
-      <p>{{ textKeys.ENCRYPTION_SETUP_INTRO | translate }}</p>
-    </div>
-
-    <div class="warning-box">
-      <mat-icon aria-hidden="true">warning</mat-icon>
-      <p>{{ textKeys.SETUP_ENCRYPTION_PASSWORD_WARNING | translate }}</p>
+      <div>
+        <p [innerHTML]="textKeys.ENCRYPTION_SETUP_INTRO | translate"></p>
+        <p>{{ textKeys.SETUP_ENCRYPTION_PASSWORD_WARNING | translate }}</p>
+      </div>
     </div>
 
     <div class="password-fields">
@@ -43,17 +41,29 @@
         <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
           autocomplete="new-password"
         />
+        <button
+          mat-icon-button
+          matSuffix
+          type="button"
+          (click)="showPassword.set(!showPassword())"
+        >
+          <mat-icon aria-hidden="true">{{
+            showPassword() ? 'visibility_off' : 'visibility'
+          }}</mat-icon>
+        </button>
       </mat-form-field>
+
+      <password-strength [password]="password" />
 
       <mat-form-field appearance="outline">
         <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
           autocomplete="new-password"
         />
@@ -66,14 +76,17 @@
         </div>
       }
     </div>
-
-    <p class="note">
-      <mat-icon aria-hidden="true">info</mat-icon>
-      <span>{{ textKeys.SETUP_ENCRYPTION_NOTE | translate }}</span>
-    </p>
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
+    <button
+      mat-button
+      type="button"
+      [disabled]="isLoading()"
+      (click)="disableSuperSync()"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
     <button
       mat-flat-button
       color="primary"
@@ -105,17 +118,29 @@
         <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
           autocomplete="new-password"
         />
+        <button
+          mat-icon-button
+          matSuffix
+          type="button"
+          (click)="showPassword.set(!showPassword())"
+        >
+          <mat-icon aria-hidden="true">{{
+            showPassword() ? 'visibility_off' : 'visibility'
+          }}</mat-icon>
+        </button>
       </mat-form-field>
+
+      <password-strength [password]="password" />
 
       <mat-form-field appearance="outline">
         <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
           autocomplete="new-password"
         />

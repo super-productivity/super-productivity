@@ -18,8 +18,11 @@ import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { isFileBasedProvider } from '../../../op-log/sync/operation-sync.util';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
 import { FormsModule } from '@angular/forms';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatFormField, MatLabel, MatSuffix } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
+import { MatIconButton } from '@angular/material/button';
+import { GlobalConfigService } from '../../../features/config/global-config.service';
+import { PasswordStrengthComponent } from '../../../ui/password-strength/password-strength.component';
 
 export interface EnableEncryptionDialogData {
   encryptKey?: string;
@@ -48,6 +51,9 @@ export interface EnableEncryptionResult {
     MatFormField,
     MatLabel,
     MatInput,
+    MatSuffix,
+    MatIconButton,
+    PasswordStrengthComponent,
   ],
 })
 export class DialogEnableEncryptionComponent {
@@ -55,6 +61,7 @@ export class DialogEnableEncryptionComponent {
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
   private _snackService = inject(SnackService);
   private _providerManager = inject(SyncProviderManager);
+  private _globalConfigService = inject(GlobalConfigService);
   private _data = inject<EnableEncryptionDialogData | null>(MAT_DIALOG_DATA, {
     optional: true,
   });
@@ -67,6 +74,7 @@ export class DialogEnableEncryptionComponent {
   isLoading = signal(false);
   canProceed = signal(true);
   errorReason = signal<string | null>(null);
+  showPassword = signal(false);
   initialSetup: boolean = this._data?.initialSetup || false;
   providerType: 'supersync' | 'file-based' = this._data?.providerType || 'supersync';
   textKeys: Record<string, string> =
@@ -152,6 +160,11 @@ export class DialogEnableEncryptionComponent {
       });
       this.isLoading.set(false);
     }
+  }
+
+  disableSuperSync(): void {
+    this._globalConfigService.updateSection('sync', { isEnabled: false });
+    this._matDialogRef.close({ success: false });
   }
 
   cancel(): void {
