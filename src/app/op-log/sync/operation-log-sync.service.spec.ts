@@ -1040,7 +1040,7 @@ describe('OperationLogSyncService', () => {
 
       expect(serverMigrationServiceSpy.handleServerMigration).toHaveBeenCalledWith(
         mockProvider,
-        { skipServerEmptyCheck: true }, // Force upload skips the server empty check
+        { skipServerEmptyCheck: true, syncImportReason: 'FORCE_UPLOAD' },
       );
     });
 

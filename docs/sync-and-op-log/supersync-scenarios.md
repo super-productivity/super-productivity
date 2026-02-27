@@ -6,11 +6,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 ## A. Normal Sync
 
-### A.1: Standard Incremental Sync (no conflicts)
+### A.1: Standard Incremental Sync (no conflicts) ✓
 
 **Trigger:** Automatic 1-minute timer or manual sync
 
 **Expected:**
+
 1. Download new remote ops since `lastServerSeq`
 2. Schema-migrate each op (receiver-side)
 3. Filter ops invalidated by any SYNC_IMPORT (vector clock comparison)
@@ -23,11 +24,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Sync indicator briefly shows syncing, then double-checkmark.
 
-### A.2: Sync with Piggybacked Ops
+### A.2: Sync with Piggybacked Ops ✓
 
 **Trigger:** Upload response includes ops from other clients
 
 **Expected:**
+
 1. Upload local ops
 2. Server returns piggybacked ops in response
 3. Piggybacked ops processed **before** marking rejected ops (critical ordering for correct conflict detection)
@@ -36,11 +38,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Seamless merge, no dialog.
 
-### A.3: No Changes on Either Side
+### A.3: No Changes on Either Side ✓
 
 **Trigger:** Sync fires but no new ops anywhere
 
 **Expected:**
+
 1. Download → 0 new ops
 2. Upload → 0 pending ops
 3. `lastServerSeq` updated even with no ops (keeps client in sync with server)
@@ -52,11 +55,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 ## B. Conflict Scenarios
 
-### B.1: Concurrent Modification — LWW Auto-Resolution
+### B.1: Concurrent Modification — LWW Auto-Resolution ✓
 
 **Trigger:** Two clients edit the same entity between syncs
 
 **Expected:**
+
 1. Download remote ops
 2. Conflict detection: op's vectorClock is `CONCURRENT` with local entity frontier
 3. `ConflictResolutionService.autoResolveConflictsLWW()`:
@@ -68,11 +72,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** No dialog. One client's change silently wins based on timestamp.
 
-### B.2: Server Rejects Op — CONFLICT_CONCURRENT
+### B.2: Server Rejects Op — CONFLICT_CONCURRENT ✓
 
 **Trigger:** Server already has a conflicting op for the same entity
 
 **Expected:**
+
 1. Upload op → server rejects with `CONFLICT_CONCURRENT`
 2. Piggybacked ops processed first (may contain the winning remote version)
 3. `RejectedOpsHandlerService`:
@@ -83,22 +88,24 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Sync completes normally (auto-resolved). Possible brief delay.
 
-### B.3: Permanent Rejection (VALIDATION_ERROR)
+### B.3: Permanent Rejection (VALIDATION_ERROR) ✓
 
 **Trigger:** Op has invalid data the server won't accept
 
 **Expected:**
+
 1. Upload op → server rejects with `VALIDATION_ERROR`
 2. Op marked as rejected in IndexedDB (won't retry)
 3. `permanentRejectionCount > 0` → status set to `ERROR`
 
 **User sees:** Error indicator. Op is lost (won't retry).
 
-### B.4: Payload Too Large
+### B.4: Payload Too Large ✓
 
 **Trigger:** Single op or batch exceeds server size limit
 
 **Expected:**
+
 1. Server returns 413 or error mentioning "Payload too large/complex"
 2. `alertDialog()` shown (maximum visibility)
 3. Status → `ERROR`
@@ -106,11 +113,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Alert dialog explaining the issue. Sync stops.
 
-### B.5: Infinite Conflict Loop Prevention
+### B.5: Infinite Conflict Loop Prevention ✓
 
 **Trigger:** Same entity keeps getting rejected due to vector clock pruning artifacts
 
 **Expected:**
+
 1. After `MAX_CONCURRENT_RESOLUTION_ATTEMPTS` (configurable) retries for the same entity
 2. Give up: mark op as permanently rejected
 3. Clear attempt counter
@@ -126,19 +134,21 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Brand new client (no op history, no meaningful store data) syncs for first time
 
 **Expected:**
+
 1. `isWhollyFreshClient()` = true
 2. `_hasMeaningfulLocalData()` = false
 3. Show native `confirmDialog()`: "Initial Sync — This appears to be a fresh installation. Remote data with X changes was found. Do you want to download and overwrite your local data with it?"
 4. If confirmed → download and apply all remote ops
 5. If cancelled → snackbar "Sync cancelled", no data applied
 
-**User sees:** Simple OK/Cancel confirmation.
+**User sees:** Simple OK/Cancel confirmation. ✓
 
 ### C.2: Fresh Client — Has Local Data (pre-op-log era)
 
 **Trigger:** Client has tasks/projects/tags in NgRx but no operation log history
 
 **Expected:**
+
 1. `isWhollyFreshClient()` = true
 2. `_hasMeaningfulLocalData()` = true (checks for tasks, non-INBOX projects, non-system tags, notes)
 3. Throw `LocalDataConflictError`
@@ -153,6 +163,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Client has unsynced ops containing task/project/tag/note create/update actions, receiving a snapshot from a file-based provider
 
 **Expected:**
+
 1. Download detects remote snapshot (file-based sync path)
 2. Check unsynced ops for meaningful user data: TASK/PROJECT/TAG/NOTE CREATE/UPDATE ops, or any full-state op (SYNC_IMPORT/BACKUP_IMPORT/REPAIR)
 3. If meaningful → throw `LocalDataConflictError` → full conflict dialog
@@ -160,58 +171,65 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Note:** This op-content check only applies to the file-based snapshot path. For SuperSync (incremental ops path), the fresh client check uses `_hasMeaningfulLocalData()` (store-based check) instead.
 
-**User sees:** Conflict dialog only when real user data would be lost.
+**User sees:** Conflict dialog only when real user data would be lost. ✓
 
 ---
 
 ## D. SYNC_IMPORT Scenarios
 
-### D.1: Incoming Remote SYNC_IMPORT — No Local Pending Ops
+### D.1: Incoming Remote SYNC_IMPORT — No Local Pending Ops ✓
 
 **Trigger:** Another client uploaded a SYNC_IMPORT (file import, encryption enable, etc.)
 
 **Expected:**
+
 1. Download batch contains SYNC_IMPORT/BACKUP_IMPORT/REPAIR
-2. Check pending local ops → 0
-3. `processRemoteOps()` applies the full-state op (replaces NgRx store)
-4. No conflict detection (full-state ops skip it)
-5. Other ops in the batch filtered by vector clock comparison against the import
+2. Check pending local ops → 0, BUT check `_hasMeaningfulLocalData()` → true
+3. **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the incoming op
+4. Dialog recommends "Use Server Data" (primary button) since this is an incoming import
+5. USE_LOCAL → `forceUploadLocalState()` (overrides remote with local data)
+6. USE_REMOTE → `forceDownloadRemoteState()` (clears local ops, downloads from seq 0)
+7. CANCEL → return with `cancelled: true`, skip upload phase
+8. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
 
-**User sees:** Data replaced seamlessly. No dialog.
+**User sees:** Conflict dialog explaining the reason for the remote import (encryption change, file import, etc.) with "Use Server Data" recommended. If client has no meaningful data, data is replaced seamlessly.
 
-### D.2: Incoming Remote SYNC_IMPORT — Has Local Pending Ops
+### D.2: Incoming Remote SYNC_IMPORT — Has Local Pending Ops ✓
 
 **Trigger:** Another client uploaded SYNC_IMPORT while this client has unsynced local ops
 
 **Expected:**
+
 1. Download batch contains SYNC_IMPORT
-2. Check pending local ops → N > 0
-3. **Show conflict dialog BEFORE processing** (prevents silent data loss)
+2. Check pending local ops → N > 0 (condition satisfied regardless of meaningful data)
+3. **Show conflict dialog BEFORE processing** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason`
 4. USE_LOCAL → `forceUploadLocalState()` (overrides remote with local data)
 5. USE_REMOTE → `forceDownloadRemoteState()` (clears local ops, downloads from seq 0)
 6. CANCEL → return with `cancelled: true`, skip upload phase
 
-**User sees:** Conflict dialog explaining remote import detected with local changes at risk.
+**User sees:** Conflict dialog explaining remote import detected with local changes at risk. "Use Server Data" recommended.
 
-### D.3: Remote Ops Filtered by Stored Local SYNC_IMPORT
+### D.3: Remote Ops Filtered by Stored Local SYNC_IMPORT ✓
 
 **Trigger:** This client created a SYNC_IMPORT (e.g., file import, enableEncryption). Later, ops from other clients arrive that are `CONCURRENT` with the import.
 
 **Expected:**
+
 1. `SyncImportFilterService` filters incoming remote ops against stored local import
 2. Vector clock comparison: `CONCURRENT` or `LESS_THAN` → filtered
 3. `isLocalUnsyncedImport` = true (import source is 'local')
-4. **Show conflict dialog** (this client created the import, user should decide about other clients' data)
+4. **Show conflict dialog** with `scenario: 'LOCAL_IMPORT_FILTERS_REMOTE'` and `syncImportReason` from stored import
 5. USE_LOCAL → `forceUploadLocalState()`
 6. USE_REMOTE → `forceDownloadRemoteState()`
 
 **User sees:** Conflict dialog. Prevents silent data loss from other clients.
 
-### D.4: Remote Ops Filtered by Stored Remote SYNC_IMPORT
+### D.4: Remote Ops Filtered by Stored Remote SYNC_IMPORT ✓
 
 **Trigger:** A previously-downloaded remote SYNC_IMPORT filters subsequent remote ops
 
 **Expected:**
+
 1. `SyncImportFilterService` filters incoming remote ops against stored remote import
 2. `isLocalUnsyncedImport` = false (import source is 'remote')
 3. **Silent filter** — no dialog
@@ -219,11 +237,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Nothing. This is correct — the import was already accepted from the remote source. Old concurrent ops are intentionally discarded (clean slate semantics).
 
-### D.5: Same-Client Ops After SYNC_IMPORT (Pruning Artifact)
+### D.5: Same-Client Ops After SYNC_IMPORT (Pruning Artifact) ✓
 
 **Trigger:** Ops from the same client that created the SYNC_IMPORT appear `CONCURRENT` due to vector clock pruning
 
 **Expected:**
+
 1. Vector clock comparison returns `CONCURRENT`
 2. Special check: `op.clientId === import.clientId && op.vectorClock[op.clientId] > importClock[op.clientId]`
 3. Keep the op (a client can't create ops concurrent with its own import)
@@ -234,11 +253,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 ## E. Encryption Scenarios
 
-### E.1: Enable Encryption
+### E.1: Enable Encryption ✓
 
 **Trigger:** User clicks "Enable Encryption" in sync settings or initial setup prompt
 
 **Expected:**
+
 1. Check WebCrypto availability (fail early on Android/insecure context)
 2. `runWithSyncBlocked()` blocks concurrent syncs
 3. Delete all server data (`deleteAllData()`)
@@ -253,11 +273,12 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Other clients:** Next sync gets `DecryptNoPasswordError` → password dialog.
 
-### E.2: Disable Encryption
+### E.2: Disable Encryption ✓
 
 **Trigger:** User clicks "Disable Encryption" in sync settings
 
 **Expected:**
+
 1. Confirmation dialog required
 2. `runWithSyncBlocked()`
 3. Delete all server data
@@ -274,6 +295,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** User enters new password in "Enter Encryption Password" dialog with "Use Local Data" option
 
 **Expected:**
+
 1. `runWithSyncBlocked()`
 2. Check for unsynced ops (error unless `allowUnsyncedOps=true`)
 3. `CleanSlateService.createCleanSlate()`:
@@ -293,6 +315,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Server has encrypted data but client has no/wrong password
 
 **Expected:**
+
 1. Download encrypted ops → decryption fails
 2. Throw `DecryptError` or `DecryptNoPasswordError`
 3. Set status → `ERROR`
@@ -308,6 +331,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Another client disabled encryption; this client still has encryption enabled
 
 **Expected:**
+
 1. Download/upload response: `serverHasOnlyUnencryptedData = true`
 2. Local config has `encryptKey` set
 3. Auto-update config: `isEncryptionEnabled=false, encryptKey=undefined`
@@ -321,6 +345,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** SuperSync active without encryption, sync completes successfully
 
 **Expected:**
+
 1. After `sync()` returns `InSync`
 2. Check: provider is SuperSync AND encryption not enabled AND not already showing dialog
 3. Open `DialogEnableEncryptionComponent` in `initialSetup` mode with `disableClose: true`
@@ -335,6 +360,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Sync fires while password change/enable/disable in progress
 
 **Expected:**
+
 1. `_isEncryptionOperationInProgress` = true
 2. `sync()` checks flag → return `HANDLED_ERROR` immediately
 3. Log: "Sync blocked: encryption operation in progress"
@@ -347,6 +373,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** User imports data from file while encryption is enabled
 
 **Expected:**
+
 1. `loadAllData` reducer preserves `isEncryptionEnabled` as local-only setting (not overwritten by imported config)
 2. `ImportEncryptionHandlerService`: if import would disable encryption → skip
 3. Encryption stays enabled after import
@@ -362,6 +389,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** `lastServerSeq === 0` AND server empty AND client has previously synced ops
 
 **Expected:**
+
 1. Detect during upload via `ServerMigrationService.checkAndHandleMigration()`
 2. Double-check server is still empty
 3. Create SYNC_IMPORT with full current state + merged vector clocks from all local ops
@@ -375,6 +403,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** Another client uploaded between the download check and the upload check
 
 **Expected:**
+
 1. Fresh server check finds data (`latestSeq !== 0`)
 2. Abort migration (don't create SYNC_IMPORT)
 3. Continue with normal upload of pending ops
@@ -396,6 +425,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### G.3: Authentication Failure
 
 **Expected:**
+
 1. Clear stale credentials
 2. Snackbar with "CONFIGURE" action button
 3. User re-enters credentials via dialog
@@ -435,6 +465,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### H.1: Client A Enables Encryption, Client B Has Pending Ops
 
 **Expected flow:**
+
 1. Client A: `enableEncryption()` → deletes server, uploads encrypted SYNC_IMPORT
 2. Client B syncs: downloads SYNC_IMPORT
 3. Client B has pending local ops → **conflict dialog shown**
@@ -447,6 +478,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### H.2: Client A Changes Password, Client B Uses Old Password
 
 **Expected flow:**
+
 1. Client A: `changePassword()` → clean slate, new SYNC_IMPORT encrypted with new password
 2. Client B syncs: decryption fails (old password)
 3. Password dialog shown
@@ -456,6 +488,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### H.3: Client A Imports File, Client B Has Changes
 
 **Expected flow:**
+
 1. Client A: file import → creates local SYNC_IMPORT (unsynced)
 2. Client A syncs: uploads SYNC_IMPORT
 3. Client B syncs: downloads SYNC_IMPORT
@@ -465,6 +498,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### H.4: Both Clients Import/Force-Upload Simultaneously
 
 **Expected flow:**
+
 1. Client A uploads SYNC_IMPORT first → server accepts
 2. Client B uploads SYNC_IMPORT → server rejects (or accepts with higher seq)
 3. Resolution depends on server behavior:
@@ -474,6 +508,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 ### H.5: Three Clients, Normal Concurrent Edits
 
 **Expected flow:**
+
 1. Each client edits different entities → no conflicts, all merge cleanly
 2. Each client edits same entity → LWW auto-resolution, last timestamp wins
 3. Vector clocks ensure causal ordering across all clients
@@ -487,6 +522,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** User opens sync settings for the first time, selects SuperSync, enters access token
 
 **Expected:**
+
 1. `DialogSyncInitialCfgComponent` opens
 2. `_isInitialSetup = true` → hides encryption button/warning in form (handled separately)
 3. User fills in SuperSync access token
@@ -506,6 +542,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Trigger:** User has been using Super Productivity offline, then sets up SuperSync for the first time
 
 **Expected:**
+
 1. Same setup flow as I.1 (config + encryption prompt)
 2. `sync()` fires → download from server
 3. Server is empty → `isWhollyFreshClient()` checks:
@@ -518,6 +555,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 8. Next sync: server still empty, same situation
 
 **Confirmed gap:** A pre-op-log client with data but empty op log gets stuck:
+
 - `isWhollyFreshClient()` = true → upload blocked
 - `ServerMigrationService` requires `hasSyncedOps() = true` → migration not triggered for fresh clients
 - Empty server → no remote ops → no conflict dialog
@@ -530,6 +568,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User already uses SuperSync on Client A, now sets up Client B
 
 **Expected:**
+
 1. Client B: setup dialog → encryption prompt
 2. If Client A has encryption: Client B either sets same password or cancels (disabling sync)
 3. `sync()` fires → download remote ops
@@ -550,6 +589,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** Client B has offline data, Client A already syncs to SuperSync
 
 **Expected:**
+
 1. Client B: setup → encryption prompt → `sync()`
 2. Download remote ops → `isWhollyFreshClient()` = true (empty op log)
 3. `_hasMeaningfulLocalData()` = true (has tasks/projects/tags)
@@ -565,6 +605,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User had SuperSync, disabled sync, then re-enables with same SuperSync account
 
 **Expected:**
+
 1. Open sync settings → re-enable SuperSync
 2. Provider-specific config still exists in storage (credentials preserved)
 3. `lastServerSeq` still in localStorage (per-account hash key)
@@ -584,6 +625,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User changes SuperSync access token or base URL
 
 **Expected:**
+
 1. Save new config → new `accessToken` and/or `baseUrl`
 2. `lastServerSeq` key changes (hash of `baseUrl|accessToken`), computed dynamically on each sync call
 3. New account starts with `lastServerSeq = 0` → downloads everything from new server
@@ -598,6 +640,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **User sees:** Brief re-sync. Data transfers to new server via SYNC_IMPORT if server is empty.
 
 **Key details:**
+
 - Encryption state is per-provider-config. Switching accounts may change encryption state.
 - Switching to an empty server works well (server migration covers full state).
 - Switching to a non-empty server with different data: old account's ops don't re-upload, only SYNC_IMPORT-level transfer or new ops.
@@ -611,6 +654,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User currently syncs via WebDAV, switches to SuperSync in settings
 
 **Expected:**
+
 1. Config updated: `syncProvider = SuperSync`, credentials saved
 2. Encryption prompt (SuperSync-specific, initialSetup mode if first time)
 3. Op log preserved — all operations stay in IndexedDB
@@ -626,11 +670,13 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **User sees:** Setup → encryption prompt → sync. Data migrates to SuperSync server via SYNC_IMPORT.
 
 **Preserved across switch:**
+
 - All tasks, projects, tags, notes (via SYNC_IMPORT full state)
 - Vector clocks
 - Client ID
 
 **NOT preserved:**
+
 - Individual op sync status (ops synced to WebDAV stay marked synced, server migration handles data transfer via SYNC_IMPORT instead)
 - `lastServerSeq` (reset for new provider)
 - File-based sync lock files / rev maps (irrelevant for SuperSync)
@@ -641,6 +687,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User currently syncs via SuperSync, switches to WebDAV in settings
 
 **Expected:**
+
 1. Config updated: `syncProvider = WebDAV`, credentials saved
 2. Op log preserved
 3. Vector clocks synced to `pf.META_MODEL` (bridge for legacy sync — `_syncVectorClockToPfapi()`)
@@ -657,6 +704,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User has SuperSync with encryption, switches to WebDAV
 
 **Expected:**
+
 1. Config updated: `syncProvider = WebDAV`
 2. SuperSync encryption state (`isEncryptionEnabled`, `encryptKey`) stored in SuperSync's privateCfg — **not shared** with WebDAV
 3. WebDAV has its own `encryptKey` in its privateCfg (initially empty)
@@ -672,6 +720,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User has WebDAV with encryption key set, switches to SuperSync
 
 **Expected:**
+
 1. Config updated: `syncProvider = SuperSync`
 2. WebDAV's `encryptKey` stays in WebDAV privateCfg
 3. SuperSync starts with `isEncryptionEnabled = false` (unless previously configured)
@@ -686,6 +735,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User switches SuperSync → WebDAV → SuperSync quickly
 
 **Expected:**
+
 1. Each switch preserves op log, vector clocks, client ID
 2. Each provider has independent `lastServerSeq` / rev tracking
 3. SuperSync's per-account `lastServerSeq` key survives the round-trip (stored in localStorage)
@@ -698,6 +748,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **User sees:** Seamless transitions. Data intact.
 
 **Important nuance:** `syncedAt` is global — ops synced to WebDAV during the away period are marked synced and won't re-upload to SuperSync individually. However, this is typically fine because:
+
 - SuperSync already had the data before the switch (it was synced there first)
 - Any new ops created during WebDAV period that weren't yet synced to WebDAV will upload to SuperSync
 - If SuperSync data was lost during the away period, server migration (SYNC_IMPORT) would recreate it from full state
@@ -707,6 +758,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User disables sync, creates data offline, then enables with a new provider
 
 **Expected:**
+
 1. Disable: config `isEnabled = false`, no sync fires
 2. User creates tasks/projects offline → ops logged to IndexedDB
 3. Re-enable with new provider (e.g., SuperSync)
@@ -726,6 +778,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** First-time SuperSync setup, user enters password in encryption dialog
 
 **Expected:**
+
 1. `DialogSyncInitialCfgComponent.save()` completes config save
 2. Opens `DialogEnableEncryptionComponent` with `initialSetup: true`
 3. User enters password → component calls `enableEncryption(password)`
@@ -747,6 +800,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** First-time SuperSync setup, user doesn't want to set a password
 
 **Expected:**
+
 1. Config saved, encryption dialog opens with `initialSetup: true` and `disableClose: true`
 2. User's only options are:
    - **Set password** → encryption enabled, dialog closes with `{ success: true }`
@@ -763,6 +817,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** Android/insecure context, user tries to set encryption password
 
 **Expected:**
+
 1. `enableEncryption()` called → `isCryptoSubtleAvailable()` returns false
 2. Throw `WebCryptoNotAvailableError` → caught by dialog's try/catch
 3. Dialog shows error snackbar: "Failed to enable encryption: ..."
@@ -778,6 +833,7 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 **Trigger:** User already has SuperSync configured, opens sync settings to modify
 
 **Expected:**
+
 1. `DialogSyncInitialCfgComponent` opens, `isWasEnabled = true`
 2. `_isInitialSetup = true` still set (always set in this dialog)
 3. Existing provider config loaded: access token, encryption state populated from privateCfg

@@ -195,6 +195,7 @@ export class BackupService {
       vectorClock: newClock,
       timestamp: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: 'BACKUP_RESTORE',
     };
 
     await this._opLogStore.append(op, 'local');

@@ -554,7 +554,7 @@ export class OperationLogSyncService {
     );
     if (incomingSyncImport) {
       const pendingLocalOps = await this.opLogStore.getUnsynced();
-      if (pendingLocalOps.length > 0) {
+      if (pendingLocalOps.length > 0 || this._hasMeaningfulLocalData()) {
         OpLog.warn(
           `OperationLogSyncService: Incoming SYNC_IMPORT from client ${incomingSyncImport.clientId} ` +
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
@@ -564,6 +564,8 @@ export class OperationLogSyncService {
           filteredOpCount: pendingLocalOps.length,
           localImportTimestamp: incomingSyncImport.timestamp ?? Date.now(),
           localImportClientId: incomingSyncImport.clientId ?? 'unknown',
+          syncImportReason: incomingSyncImport.syncImportReason,
+          scenario: 'INCOMING_IMPORT',
         });
 
         switch (resolution) {
@@ -629,6 +631,8 @@ export class OperationLogSyncService {
         filteredOpCount: processResult.filteredOpCount,
         localImportTimestamp: processResult.filteringImport?.timestamp ?? Date.now(),
         localImportClientId: processResult.filteringImport?.clientId ?? 'unknown',
+        syncImportReason: processResult.filteringImport?.syncImportReason,
+        scenario: 'LOCAL_IMPORT_FILTERS_REMOTE',
       });
 
       switch (resolution) {
@@ -739,6 +743,7 @@ export class OperationLogSyncService {
     // Pass skipServerEmptyCheck=true because we're forcing upload even if server has data
     await this.serverMigrationService.handleServerMigration(syncProvider, {
       skipServerEmptyCheck: true,
+      syncImportReason: 'FORCE_UPLOAD',
     });
 
     // Upload the SYNC_IMPORT (and any pending ops)

@@ -8,7 +8,7 @@ import { ClientIdService } from '../../core/util/client-id.service';
 import { VectorClockService } from '../sync/vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { Operation, OpType, ActionType } from '../core/operation.types';
+import { Operation, OpType, ActionType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import {
   incrementVectorClock,
@@ -69,6 +69,7 @@ export class SyncHydrationService {
     downloadedMainModelData?: Record<string, unknown>,
     remoteVectorClock?: Record<string, number>,
     createSyncImportOp: boolean = true,
+    syncImportReason?: SyncImportReason,
   ): Promise<void> {
     OpLog.normal('SyncHydrationService: Hydrating from remote sync...');
 
@@ -175,6 +176,7 @@ export class SyncHydrationService {
           vectorClock: newClock,
           timestamp: Date.now(),
           schemaVersion: CURRENT_SCHEMA_VERSION,
+          syncImportReason: syncImportReason ?? 'FILE_IMPORT',
         };
 
         // 5. Append operation to SUP_OPS

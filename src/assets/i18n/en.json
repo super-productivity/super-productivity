@@ -1021,12 +1021,23 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "TITLE": "Sync Conflict Detected",
-        "MESSAGE": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices.",
-        "EXPLANATION": "These changes were made without knowledge of your import and cannot be automatically merged.",
+        "MSG_INCOMING": "Another device performed a full data replacement. You have {{filteredOpCount}} local changes that may be affected.",
+        "MSG_INCOMING_NO_OPS": "Another device performed a full data replacement. Your current local data will be overwritten.",
+        "MSG_LOCAL_FILTERS": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices that cannot be automatically merged.",
         "IMPORT_DATE": "Import date",
-        "FILTERED_CHANGES": "Filtered changes",
+        "FILTERED_CHANGES": "Affected changes",
         "USE_LOCAL": "Use My Data",
-        "USE_REMOTE": "Use Server Data"
+        "USE_REMOTE": "Use Server Data",
+        "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
+        "REASON_ENCRYPTION_ENABLED": "Reason: Encryption was enabled on another device.",
+        "REASON_ENCRYPTION_DISABLED": "Reason: Encryption was disabled on another device.",
+        "REASON_PASSWORD_CHANGED": "Reason: The encryption password was changed on another device.",
+        "REASON_FILE_IMPORT": "Reason: A data file was imported on another device.",
+        "REASON_BACKUP_RESTORE": "Reason: A backup was restored on another device.",
+        "REASON_FORCE_UPLOAD": "Reason: Another device force-uploaded its local data.",
+        "REASON_SERVER_MIGRATION": "Reason: Data was migrated to a new sync server.",
+        "REASON_REPAIR": "Reason: An automatic data repair was performed.",
+        "REASON_UNKNOWN": "Reason: A full state replacement was performed."
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "You have {{count}} unsynced local changes that will be replaced by remote data. Do you want to continue?",

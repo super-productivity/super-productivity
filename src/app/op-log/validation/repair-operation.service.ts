@@ -78,6 +78,7 @@ export class RepairOperationService {
         vectorClock: newClock,
         timestamp: Date.now(),
         schemaVersion: CURRENT_SCHEMA_VERSION,
+        syncImportReason: 'REPAIR',
       };
 
       // 1. Append REPAIR operation to log and update vector clock atomically
