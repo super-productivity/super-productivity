@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { SyncConfigService } from '../sync-config.service';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -90,16 +91,17 @@ export class DialogEnterEncryptionPasswordComponent {
       return;
     }
 
-    const confirmed = await this._matDialog
-      .open(DialogConfirmComponent, {
-        data: {
-          title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
-          message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
-          okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
-        },
-      })
-      .afterClosed()
-      .toPromise();
+    const confirmed = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
+            message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
+            okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
+          },
+        })
+        .afterClosed(),
+    );
 
     if (!confirmed) {
       return;

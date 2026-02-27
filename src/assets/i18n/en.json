@@ -1009,10 +1009,10 @@
         "MESSAGE": "The sync server contains encrypted data, but no encryption password is configured on this device. Please enter your encryption password to decrypt and sync your data.",
         "PASSWORD_LABEL": "Encryption Password",
         "BTN_SAVE_AND_SYNC": "Save & Sync",
-        "FORCE_OVERWRITE_INFO": "If you don’t know the old password, you can overwrite the server with your local data and a new password.",
+        "FORCE_OVERWRITE_INFO": "If you prefer to keep your local data, you can overwrite the server instead.",
         "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
-        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Continue?",
-        "BTN_FORCE_OVERWRITE": "Force Overwrite Server"
+        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data encrypted with this password. Continue?",
+        "BTN_FORCE_OVERWRITE": "Use Local Data"
       },
       "D_FRESH_CLIENT_CONFIRM": {
         "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and apply this data?",
