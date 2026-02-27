@@ -20,10 +20,10 @@
     "SHOW_NOTES": "Afficher les notes du projet"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Vos données semblent endommagées. Voulez-vous essayer de le réparer automatiquement? Cela peut entraîner une perte de données partielle.",
+    "AUTO_FIX": "Vos données semblent endommagées. Voulez-vous essayer de le réparer automatiquement ? Cela peut entraîner une perte de données partielle.",
     "RELOAD_AFTER_IDB_ERROR": "Impossible d'accéder à la base de données :( Les causes possibles sont une mise à jour de l'application en arrière-plan ou un espace disque insuffisant. Appuyez sur OK pour recharger l'application (peut nécessiter un redémarrage manuel de l'application sur certaines plates-formes).",
     "RESTORE_FILE_BACKUP": "Il ne semble pas y avoir de DONNÉES, mais des sauvegardes sont disponibles sur \"{{dir}}\". Voulez-vous restaurer la dernière sauvegarde de {{from}}?",
-    "RESTORE_FILE_BACKUP_ANDROID": "Il semble qu'il n'y ait PAS DE DONNÉES, mais une sauvegarde est disponible. Voulez-vous le charger ?",
+    "RESTORE_FILE_BACKUP_ANDROID": "Il semble qu'il n'y ait PAS DE DONNÉES, mais une sauvegarde est disponible. Voulez-vous la charger ?",
     "RESTORE_STRAY_BACKUP": "Lors de la dernière synchronisation, une erreur s'est peut-être produite. Voulez-vous restaurer la dernière sauvegarde?"
   },
   "DATETIME_SCHEDULE": {
@@ -140,7 +140,7 @@
     "D_RATE": {
       "A_HOW": "Comment et où évaluer",
       "BTN_DONT_BOTHER": "Ne me dérange plus",
-      "TITLE": "\u001f926\u001f3fd Veuillez nous pardonner, mais...",
+      "TITLE": "🙈 Veuillez nous pardonner, mais...",
       "TXT": "Vous aideriez énormément le projet en <strong>l'évaluant positivement, si vous l'aimez !</strong>"
     },
     "VOICE_REMINDER": {
@@ -174,7 +174,7 @@
         "PAUSE": "Pause",
         "POMODORO_BREAK_RUNNING": "Pause #{{cycleNr}} en cours",
         "POMODORO_SESSION_RUNNING": "Session Pomodoro #{{cycleNr}} en cours",
-        "RESUME": "Résumé",
+        "RESUME": "Reprendre",
         "SESSION_RUNNING": "La session de concentration est en cours",
         "START": "Début",
         "TO_FOCUS_OVERLAY": "Pour superposition de concentration"
@@ -190,7 +190,7 @@
       "FLOWTIME": "Temps de flux",
       "FLOWTIME_HINT": "Rythme flexible sans minuteurs stricts",
       "FOCUS_TIME_TOOLTIP": "Temps de concentration",
-      "GET_READY": "Préparez-vous pour votre session de concentration !!!",
+      "GET_READY": "Préparez-vous pour votre session de concentration !",
       "GOGOGO": "Allez! Allez! Allez!!!",
       "LONG_BREAK": "Pause longue",
       "LONG_BREAK_TITLE": "Pause longue - Cycle {{cycle}}",
@@ -397,7 +397,7 @@
       },
       "DIALOG_CONFIRM_ASSIGNMENT": {
         "MSG": "<strong>{{summary}}</strong> est actuellement affecté à <strong>{{assignee}}</strong>. Voulez-vous vous l'attribuer ?",
-        "OK": "Oui!"
+        "OK": "Oui !"
       },
       "DIALOG_INITIAL": {
         "TITLE": "Configurer Jira pour le projet"
@@ -527,33 +527,33 @@
       },
       "EVAL_FORM": {
         "DAILY_STATE": "État quotidien",
-        "DAILY_STATE_TOOLTIP": "Système de quadrants basé sur les deux scores (\b950 est \u0000e9lev\u0000e9) : Flux Profond (\u0000e9lev\u0000e9/\u0000e9lev\u0000e9), Suralimentation (\u0000e9lev\u0000e9/faible), R\u0000e9cup\u0000e9ration (faible/\u0000e9lev\u0000e9), D\u0000e9rive (faible/faible)",
-        "ENERGY_LEVEL": "Comment est votre \u0000e9nergie ?",
-        "ENERGY_LEVEL_HINT": "\u0000d83d\u0000de2b \u0000c9puis\u0000e9 \u0000e2\u000e2 \u0000d83d\u0000de10 OK \u0000e2\u000e2 \u0000d83d\u0000de0a Bien",
-        "FOCUS_WORK_TIME": "Temps de travail concentr\u0000e9",
-        "IMPACT_OF_WORK": "Comment \u0000e9valuez-vous l\u0000e2\u000080\u000099impact de votre travail aujourd\u0000e2\u000080\u000097hui ?",
-        "IMPACT_OF_WORK_HINT": "1 : Pas de progr\u0000e8s significatif \u0000e2\u000e2 4 : Impact significatif",
+        "DAILY_STATE_TOOLTIP": "Système de quadrants basé sur les deux scores (950 est élevé) : Flux profond (élevé/élevé), Suralimentation (élevé/faible), Récupération (faible/élevé), Dérive (faible/faible)",
+        "ENERGY_LEVEL": "Comment est votre énergie ?",
+        "ENERGY_LEVEL_HINT": "😫 Épuisé • 😐 OK • 😊 Bien",
+        "FOCUS_WORK_TIME": "Temps de travail concentré",
+        "IMPACT_OF_WORK": "Comment évaluez-vous l’impact de votre travail aujourd’hui ?",
+        "IMPACT_OF_WORK_HINT": "1 : Pas de progrès significatif • 4 : Impact significatif",
         "NOTES": "Notes pour demain",
         "PRODUCTIVITY": "Avez-vous travaillé efficacement ?",
-        "PRODUCTIVITY_SCORE": "Score de productivit\u0000e9",
-        "PRODUCTIVITY_SCORE_TOOLTIP": "65 % Impact (\u0000e9chelle de 1 \u0000e0 4) \u0000b7 30 % Concentration vers l\u0000e2\u000080\u000099objectif de 4h \u0000b7 5 % travail total (limit\u0000e9 \u0000e0 10h)",
-        "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "R\u0000e9partition de la productivit\u0000e9 sur 7 jours",
-        "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "R\u0000e9partition de la durabilit\u0000e9 sur 7 jours",
-        "STATE_DEEP_FLOW_HEADLINE": "Flux Profond : Excellente concentration et rythme durable.",
-        "STATE_DEEP_FLOW_HINT": "Vous \u0000eates dans la zone id\u0000e9ale \u0000e2\u000080\u000094 r\u0000e9fl\u0000e9chissez \u0000e0 ce qui a rendu cette combinaison possible.",
-        "STATE_DRIFT_HEADLINE": "D\u0000e9rive : Faible concentration et faible \u0000e9nergie.",
-        "STATE_DRIFT_HINT": "C\u0000e2\u000087\u0000a7a va. R\u0000e9fl\u0000e9chissez \u0000e0 ce qui vous a distrait et ajustez doucement \u0000e2\u000080\u000094 chaque r\u0000e9initialisation est une chance d\u0000e2\u000080\u000099apprendre.",
-        "STATE_IMPACT_MISMATCH_HEADLINE": "Faible impact : Beaucoup de concentration, peu de r\u0000e9sultat.",
-        "STATE_IMPACT_MISMATCH_HINT": "Vous avez investi une concentration solide \u0000e2\u000080\u000094 orientez-la maintenant vers un travail \u0000e0 impact plus \u0000e9lev\u0000e9 pour sentir la diff\u0000e9rence.",
-        "STATE_OVERDRIVE_HEADLINE": "Suralimentation : Productif, mais \u0000e0 un co\u0000fbt.",
-        "STATE_OVERDRIVE_HINT": "Vous avez beaucoup accompli \u0000e2\u000080\u000094 assurez-vous maintenant de vous recharger avant que l\u0000e2\u000080\u000099\u0000e9puisement ne s\u0000e9installe.",
-        "STATE_RECOVERY_HEADLINE": "R\u0000e9cup\u0000e9ration : Repos et recharge.",
-        "STATE_RECOVERY_HINT": "Vous donnez à votre esprit l'espace nécessaire pour récupérer. Demain, vous aurez l'énergie pour plonger à nouveau plus profondément.",
-        "STATE_STEADY_HEADLINE": "Rythme régulier : progrès constant et durable.",
-        "STATE_STEADY_HINT": "Bon équilibre. Vous maintenez l'élan sans vous surmener — continuez à nourrir ce qui fait que ce rythme fonctionne.",
+        "PRODUCTIVITY_SCORE": "Score de productivité",
+        "PRODUCTIVITY_SCORE_TOOLTIP": "65 % Impact (échelle de 1 à 4) · 30 % Concentration vers l’objectif de 4 h · 5 % Travail total (limité à 10 h)",
+        "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "Répartition de la productivité sur 7 jours",
+        "SCORE_BREAKDOWN_TITLE_SUSTAINABILITY": "Répartition de la durabilité sur 7 jours",
+        "STATE_DEEP_FLOW_HEADLINE": "Flux profond : Excellente concentration et rythme durable.",
+        "STATE_DEEP_FLOW_HINT": "Vous êtes dans la zone idéale — réfléchissez à ce qui a rendu cette combinaison possible.",
+        "STATE_DRIFT_HEADLINE": "Dérive : Faible concentration et faible énergie.",
+        "STATE_DRIFT_HINT": "Ça va. Réfléchissez à ce qui vous a distrait et ajustez doucement — chaque réinitialisation est une chance d’apprendre.",
+        "STATE_IMPACT_MISMATCH_HEADLINE": "Faible impact : Beaucoup de concentration, peu de résultat.",
+        "STATE_IMPACT_MISMATCH_HINT": "Vous avez investi une concentration solide — orientez-la maintenant vers un travail à impact plus élevé pour sentir la différence.",
+        "STATE_OVERDRIVE_HEADLINE": "Suralimentation : Productif, mais à un coût.",
+        "STATE_OVERDRIVE_HINT": "Vous avez beaucoup accompli — assurez-vous maintenant de vous recharger avant que l’épuisement ne s’installe.",
+        "STATE_RECOVERY_HEADLINE": "Récupération : Repos et recharge.",
+        "STATE_RECOVERY_HINT": "Vous donnez à votre esprit l’espace nécessaire pour récupérer. Demain, vous aurez l’énergie pour plonger à nouveau plus profondément.",
+        "STATE_STEADY_HEADLINE": "Rythme régulier : Progrès constant et durable.",
+        "STATE_STEADY_HINT": "Bon équilibre. Vous maintenez l’élan sans vous surmener — continuez à nourrir ce qui fait que ce rythme fonctionne.",
         "SUSTAINABILITY_SCORE": "Score de durabilité",
-        "SUSTAINABILITY_SCORE_TOOLTIP": "45 % Niveau d'énergie  40 % Heures de travail raisonnables (0 à 10h)  15 % Équilibre de concentration (optimal à 4h)",
-        "TOTAL_WORK_TIME": "Temps total de travail aujourd'hui"
+        "SUSTAINABILITY_SCORE_TOOLTIP": "45 % Niveau d’énergie · 40 % Heures de travail raisonnables (0 à 10 h) · 15 % Équilibre de concentration (optimal à 4 h)",
+        "TOTAL_WORK_TIME": "Temps total de travail aujourd’hui"
       },
       "FOCUS_SESSION_DIALOG": {
         "ADD_BTN": "Ajouter",
@@ -698,8 +698,8 @@
       },
       "S": {
         "REMOVED_PLAN_DATE": "Date de planification supprimée pour la tâche \"{{taskTitle}}\"",
-        "TASK_ALREADY_PLANNED": "La tâche est déjà plannifiée le {{date}",
-        "TASK_PLANNED_FOR": "Tâche planifiée pour {date}"
+        "TASK_ALREADY_PLANNED": "La tâche est déjà planifiée le {{date}}",
+        "TASK_PLANNED_FOR": "Tâche planifiée pour le {{date}}"
       }
     },
     "POMODORO": {
@@ -827,8 +827,8 @@
     },
     "SIMPLE_COUNTER": {
       "D_CONFIRM_REMOVE": {
-        "MSG": "La suppression d'un simple compteur supprimera également toutes les données antérieures qui y sont suivies. Êtes-vous sur de vouloir continuer?",
-        "OK": "Fais le!"
+        "MSG": "La suppression d'un simple compteur supprimera également toutes les données antérieures qui y sont suivies. Êtes-vous sûr de vouloir continuer ?",
+        "OK": "Fais le !"
       },
       "D_EDIT": {
         "CURRENT_STREAK": "Série actuelle",
@@ -890,11 +890,11 @@
         "TIME": "Temps",
         "TIMESTAMP": "Horodatage",
         "TITLE": "Dropbox: données en conflit",
-        "USE_LOCAL": "Conserver la version local",
+        "USE_LOCAL": "Conserver la version locale",
         "USE_REMOTE": "Utiliser le serveur distant",
         "VECTOR_CLOCK": "Horloge vectorielle",
         "VECTOR_CLOCK_HEADING": "Horloge vectorielle",
-        "VECTOR_COMPARISON_CONCURRENT": "Concurent (Conflit réel)",
+        "VECTOR_COMPARISON_CONCURRENT": "Concurrent (Conflit réel)",
         "VECTOR_COMPARISON_EQUAL": "Égal",
         "VECTOR_COMPARISON_LOCAL_GREATER": "Local > Remote",
         "VECTOR_COMPARISON_LOCAL_LESS": "Local < Remote"
@@ -907,7 +907,7 @@
         "PASSWORD": "Mot de passe"
       },
       "D_INCOMPLETE_SYNC": {
-        "BTN_CLOSE_APP": "Femer l'application",
+        "BTN_CLOSE_APP": "Fermer l'application",
         "BTN_DOWNLOAD_BACKUP": "Télécharger une sauvegarde locale",
         "BTN_FORCE_UPLOAD": "Forcer un envoi des données locales",
         "P1": "Les données de synchronisation distante sont incohérentes !",
@@ -953,7 +953,7 @@
         "ALREADY_IN_SYNC": "Déjà synchronisé",
         "BTN_CONFIGURE": "Configurer",
         "BTN_FORCE_OVERWRITE": "Forcer l'écrasement",
-        "ERROR_CORS": "Erreur de synchronisation WebDAV : Échec de la requête réseau.\n\nCela pourrait être un problème CORS. Veuillez vous assurer que :\n\u001a Votre serveur WebDAV autorise les requêtes Cross-Origin\n\u001a L'URL du serveur est correcte et accessible\n\u001a Vous disposez d'une connexion Internet fonctionnelle",
+        "ERROR_CORS": "Erreur de synchronisation WebDAV : Échec de la requête réseau.\n\nCela pourrait être un problème CORS. Veuillez vous assurer que :\n• Votre serveur WebDAV autorise les requêtes Cross-Origin\n• L'URL du serveur est correcte et accessible\n•  Vous disposez d'une connexion Internet fonctionnelle",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Les données distantes sont en cours d'écriture",
         "ERROR_PERMISSION": "Accès au fichier refusé. Veuillez vérifier les permissions de votre système de fichiers.",
         "ERROR_PERMISSION_FLATPAK": "Accès au fichier refusé. Accordez la permission du système de fichiers via Flatseal ou utilisez un chemin à l'intérieur de ~ / .var / app /",
@@ -997,7 +997,7 @@
         "CREATE": "Créer une balise"
       },
       "D_DELETE": {
-        "CONFIRM_MSG": "Voulez-vous vraiment supprimer la balise \"{{tagName}}\"? Il sera supprimé de toutes les tâches. Ça ne peut pas être annulé."
+        "CONFIRM_MSG": "Voulez-vous vraiment supprimer la balise \"{{tagName}}\"? Elle sera supprimée de toutes les tâches. Ça ne peut pas être annulé."
       },
       "D_EDIT": {
         "ADD": "Ajouter des balises pour \"{{title}}\"",
@@ -1166,7 +1166,7 @@
         "ADD_ENTRY_FOR": "Ajouter une nouvelle entrée pour {{date}}",
         "DATE": "Date de la nouvelle entrée",
         "HELP": "Exemples:<br> 30m => 30 minutes<br> 2h => 2 heures<br> 2h 30m => 2 heures et 30 minutes<br> 1.5h => 1 heure et 30 minutes<br> 03:15 => 3 heures et 15 minutes",
-        "TINE_SPENT": "Temps passé",
+        "TIME_SPENT": "Temps passé",
         "TITLE": "Ajouter pour le jour"
       },
       "N": {
@@ -1202,7 +1202,7 @@
       "ADD_INFO_PANEL": {
         "CUSTOM": "Configuration de répétition customisée",
         "CUSTOM_AND_TIME": "Customisé, {timeStr}",
-        "CUSTOM_WEEKLY": "{daysStr}",
+        "CUSTOM_WEEKLY": "{{daysStr}}",
         "CUSTOM_WEEKLY_AND_TIME": "{{daysStr}}, {{timeStr}}",
         "DAILY": "Chaque jour",
         "DAILY_AND_TIME": "Chaque jour, {{timeStr}}",
@@ -1226,7 +1226,7 @@
         "OK": "Mettre à jour toutes les instances"
       },
       "D_CONFIRM_REMOVE": {
-        "MSG": "En supprimant la configuration de répétition, toutes les instances précédentes de cette tâche seront converties en tâches ordinaires. Êtes-vous sur de vouloir continuer",
+        "MSG": "En supprimant la configuration de répétition, toutes les instances précédentes de cette tâche seront converties en tâches ordinaires. Êtes-vous sur de vouloir continuer ?",
         "OK": "Supprimer complètement"
       },
       "D_CONFIRM_UPDATE_INSTANCES": {
@@ -1387,7 +1387,7 @@
           "ESTIMATE_AS_CLOCK": "Estimation format horaire (par exemple 5:23)",
           "ESTIMATE_AS_MILLISECONDS": "Estimation en millisecondes",
           "ESTIMATE_AS_STRING": "Estimation littérale (par exemple 5h 23m)",
-          "FULL_HALF_HOURS": "demi heures pleines",
+          "FULL_HALF_HOURS": "demi-heures pleines",
           "FULL_HOURS": "heures pleines",
           "FULL_QUARTERS": "quarts d'heure complets",
           "NOTES": "Descriptions des tâches",
@@ -1434,7 +1434,7 @@
     "IMPORT_FROM_URL_DIALOG_TITLE": "Importer depuis l'URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Importer depuis l'URL",
     "PRIVACY_EXPORT": "Exporter les données anonymisées (pour envoyer à contact@super-productivity.com dans un but de débogage)",
-    "S_BACKUP_DOWNLOADED": "Sauvegarde téléchargée dans le dossier documents d'android",
+    "S_BACKUP_DOWNLOADED": "Sauvegarde téléchargée dans le dossier documents d'Android",
     "S_ERR_IMPORT_FAILED": "L'importation des données a échoué",
     "S_ERR_INVALID_DATA": "Échec de l'importation: JSON non valide",
     "S_ERR_INVALID_URL": "Échec de l'importation : URL fournie invalide",
@@ -1445,7 +1445,7 @@
   "G": {
     "ADD": "Ajouter",
     "ADVANCED_CFG": "Configuration avancée",
-    "CANCEL": "annuler",
+    "CANCEL": "Annuler",
     "CLOSE": "Fermer",
     "COMPLETE": "Complet",
     "CONFIRM": "Confirmer",
@@ -1454,7 +1454,7 @@
     "DO_IT": "Fais le !",
     "DUPLICATE": "Dupliquer",
     "DURATION_DESCRIPTION": "ex: \"5h 23m\" ce qui équivaut à 5 heures et 23 minutes",
-    "EDIT": "modifier",
+    "EDIT": "Modifier",
     "ENABLED": "Activée",
     "EXAMPLE_VAL": "cliquer pour modifier",
     "EXTENSION_INFO": "Veuillez <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> télécharger l'extension chrome</a> afin de permettre la communication avec l'Api Jira et la gestion du temps d'inactivité. Notez que cela ne fonctionne pas sur mobile.",
@@ -1466,10 +1466,10 @@
     "MOVE_FORWARD": "Avancer",
     "NO_CON": "Vous êtes actuellement hors ligne. Veuillez vous reconnecter à Internet.",
     "NONE": "Aucun",
-    "OK": "Ok",
+    "OK": "OK",
     "OVERDUE": "En retard",
     "REMOVE": "Retirer",
-    "SAVE": "sauvegarder",
+    "SAVE": "Enregistrer",
     "SUBMIT": "Soumettre",
     "TITLE": "Titre",
     "TODAY_TAG_TITLE": "Aujourd'hui",
@@ -1530,7 +1530,7 @@
       "TITLE": "Gestion de l'inactivité"
     },
     "IMEX": {
-      "HELP": "<p>Ici, vous pouvez exporter toutes vos données sous forme de <strong>JSON</strong> pour les sauvegardes, mais également pour les utiliser dans un contexte différent (vous pouvez par exemple vouloir exporter vos projets dans le navigateur et les importer dans la version de bureau). ). </p> <p>L'importation nécessite la copie d'un fichier JSON valide dans la zone de texte. <strong>REMARQUE: une fois que vous avez cliqué sur le bouton d'importation, tous vos paramètres et données actuels seront écrasés!</strong></p>",
+      "HELP": "<p>Ici, vous pouvez exporter toutes vos données sous forme de <strong>JSON</strong> pour les sauvegardes, mais également pour les utiliser dans un contexte différent (vous pouvez par exemple vouloir exporter vos projets dans le navigateur et les importer dans la version de bureau). </p> <p>L'importation nécessite la copie d'un fichier JSON valide dans la zone de texte. <strong>REMARQUE: une fois que vous avez cliqué sur le bouton d'importation, tous vos paramètres et données actuels seront écrasés !</strong></p>",
       "TITLE": "Import / Export"
     },
     "KEYBOARD": {
@@ -1559,7 +1559,7 @@
       "MOVE_TO_REGULARS_TASKS": "Déplacer la tâche vers la liste des tâches du jour",
       "OPEN_PROJECT_NOTES": "Afficher / masquer les notes de projet",
       "PLUGIN_SHORTCUTS": "Raccourcis du plugin",
-      "SAVE_NOTE": "Sauvegarder la note",
+      "SAVE_NOTE": "Enregistrer la note",
       "SELECT_NEXT_TASK": "Sélectionner la tâche suivante",
       "SELECT_PREVIOUS_TASK": "Sélectionner la tâche précédente",
       "SHOW_SEARCH_BAR": "Afficher la barre de recherche",
@@ -1604,11 +1604,11 @@
       "KO": "한국어",
       "LABEL": "Merci de choisir une langue",
       "NB": "Norsk Bokmål",
-      "NL": "Pays-Bas",
+      "NL": "Néerlandais",
       "PL": "Polonais",
       "PT": "Português",
       "PT_BR": "Portugais (Brésil)",
-      "RU": "Russie",
+      "RU": "Russe",
       "SK": "Slovaque",
       "SV": "Suédois",
       "TIME_LOCALE": "Format de l'heure locale",
@@ -1715,7 +1715,7 @@
     "TAKE_A_BREAK": {
       "ADD_NEW_IMG": "Ajouter une image de motivation",
       "FULL_SCREEN_BLOCKER_DURATION": "Durée d'affichage du plein écran (application de bureau uniquement)",
-      "HELP": "<div> <p>vous permet de configurer un rappel récurrent lorsque vous avez travaillé pendant une durée déterminée sans prendre de pause.</p> <p>Vous pouvez modifier le message affiché. ${duration} sera remplacé par le temps passé sans pause.</p> </div>",
+      "HELP": "<div> <p>Vous permet de configurer un rappel récurrent lorsque vous avez travaillé pendant une durée déterminée sans prendre de pause.</p> <p>Vous pouvez modifier le message affiché. ${duration} sera remplacé par le temps passé sans pause.</p> </div>",
       "IS_ENABLED": "Activer le rappel de pause",
       "IS_FOCUS_WINDOW": "Mettre le focus sur l'application lorsque le rappel est actif (bureau uniquement)",
       "IS_FULL_SCREEN_BLOCKER": "Afficher un message en plein écran (application de bureau uniquement)",
@@ -1760,21 +1760,21 @@
       "YEARS": "dans {{count}} ans"
     },
     "PAST": {
-      "A_DAY": "il y a un jour",
+      "A_DAY": "Il y a un jour",
       "A_MINUTE": "Il y a une minute",
-      "A_MONTH": "il y a un mois",
+      "A_MONTH": "Il y a un mois",
       "A_YEAR": "Il y a un an",
       "AN_HOUR": "Il y a une heure",
-      "DAYS": "il y a {{count}} jours",
+      "DAYS": "Il y a {{count}} jours",
       "FEW_SECONDS": "Il y a quelques secondes",
-      "HOURS": "il y a {{count}} heures",
-      "MINUTES": "il y a {{count}} minutes",
-      "MONTHS": "il y a {{count}} mois",
-      "YEARS": "il y a {{count}} ans"
+      "HOURS": "Il y a {{count}} heures",
+      "MINUTES": "Il y a {{count}} minutes",
+      "MONTHS": "Il y a {{count}} mois",
+      "YEARS": "Il y a {{count}} ans"
     }
   },
   "GLOBAL_SNACK": {
-    "COPY_TO_CLIPPBOARD": "Copié dans le presse-papier",
+    "COPY_TO_CLIPBOARD": "Copié dans le presse-papier",
     "DUPLICATE_PROJECT_ERROR": "Le projet n'a pas pu être dupliqué",
     "DUPLICATE_PROJECT_SUCCESS": "Projet dupliqué avec succès",
     "FILE_DOWNLOADED": "{{fileName}} téléchargé",
@@ -1801,7 +1801,7 @@
     "SYNC": "Synchronisation des données...",
     "UNKNOWN": "Chargement des données à distance",
     "WEB_DAV_DOWNLOAD": "WebDAV: Téléchargement de données ...",
-    "WEB_DAV_UPLOAD": "WebDAV: Téléchargement de données ..."
+    "WEB_DAV_UPLOAD": "WebDAV: Envoi de données ..."
   },
   "MH": {
     "ADD_NEW_TASK": "Ajouter une nouvelle tâche",
@@ -1860,7 +1860,7 @@
       "SINGULAR": "{{count}} tâche parente terminée a été archivée"
     },
     "BREAK_LABEL": "Pauses (nr / heure)",
-    "CELEBRATE": "Prenez un moment pour célébrer <i>!</i>",
+    "CELEBRATE": "Prenez un moment pour célébrer !",
     "CLEAR_ALL_CONTINUE": "Effacer tout et continuer",
     "D_CONFIRM_APP_CLOSE": {
       "CANCEL": "Non, effacer seulement les tâches",
@@ -1943,7 +1943,7 @@
     "NO_PLUGIN_MANIFEST_NODE": "Le manifeste du plugin n'inclut pas de module Node.js",
     "NODE_EXECUTION_REQUIRED": "Ce plugin nécessite l'exécution de Node.js qui est uniquement disponible dans l'application de bureau.",
     "NODE_ONLY_DESKTOP": "L'exécution de Node.js est uniquement disponible dans l'application de bureau",
-    "OK": "D'ACCORD",
+    "OK": "OK",
     "PARENT_TASK_DOES_NOT_EXIST": "La tâche parente n'existe pas",
     "PARENT_TASK_NOT_FOUND": "Tâche parente non trouvée dans le contexte '{{contextId}}'",
     "PERMISSIONS": "Autorisations",
@@ -1971,7 +1971,7 @@
     "TOGGLE_PLUGIN": "Basculer {{pluginName}}",
     "TRUST_WARNING": "N'accordez la permission que si vous faites confiance à ce plugin",
     "TYPE": "Type : {{type}}",
-    "UNABLE_TO_PERSIST_DATA": "Impossible de sauvegarder les données dans le stockage du plugin",
+    "UNABLE_TO_PERSIST_DATA": "Impossible de d'enregistrer les données dans le stockage du plugin",
     "UNKNOWN_ERROR": "Une erreur inconnue est survenue",
     "UPLOAD_PLUGIN_INSTRUCTION": "Téléchargez un fichier ZIP de plugin pour l'installer :",
     "VALIDATION_FAILED": "Échec de la validation"
@@ -2031,7 +2031,7 @@
     "ADD_SOME_TASKS": "Ajoutez quelques tâches pour planifier votre journée!",
     "DONE_TASKS": "Tâches terminées",
     "DONE_TASKS_IN_ARCHIVE": "Il n'y a actuellement aucune tâche terminée ici, mais certaines sont déjà archivées.",
-    "ESTIMATE_REMAINING": "Tps. restant:",
+    "ESTIMATE_REMAINING": "Temps restant :",
     "FINISH_DAY": "Fin de journée",
     "FINISH_DAY_TOOLTIP": "Évaluer votre journée, archiver toutes les tâches finies (optionnel) et/ou planifier la prochaine journée.",
     "LATER_TODAY": "Plus tard aujourd'hui",
