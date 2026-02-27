@@ -43,16 +43,6 @@ export class EncryptionPasswordDialogOpenerService {
   }
 
   /**
-   * Opens the unified change password dialog in disable-only mode.
-   * @deprecated Use openChangePasswordDialog('disable-only') instead
-   */
-  openDisableEncryptionDialog(
-    providerType: 'supersync' | 'file-based' = 'supersync',
-  ): Promise<ChangeEncryptionPasswordResult | undefined> {
-    return this.openChangePasswordDialog('disable-only', providerType);
-  }
-
-  /**
    * Opens the disable encryption dialog for file-based providers.
    */
   openDisableEncryptionDialogForFileBased(): Promise<
@@ -128,20 +118,6 @@ export const openEncryptionPasswordChangeDialogForFileBased = (): Promise<
     return Promise.resolve(undefined);
   }
   return dialogOpenerInstance.openChangePasswordDialogForFileBased();
-};
-
-/**
- * Opens the disable encryption confirmation dialog.
- * Can be called from form config onChange handlers.
- */
-export const openDisableEncryptionDialog = (): Promise<
-  ChangeEncryptionPasswordResult | undefined
-> => {
-  if (!dialogOpenerInstance) {
-    console.error('EncryptionPasswordDialogOpenerService not initialized');
-    return Promise.resolve(undefined);
-  }
-  return dialogOpenerInstance.openDisableEncryptionDialog();
 };
 
 /**

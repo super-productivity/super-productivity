@@ -918,7 +918,7 @@ export class SyncWrapperService {
    * Returns true if sync should be blocked.
    */
   private async _checkSuperSyncEncryptionRequired(): Promise<boolean> {
-    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    const providerId = await firstValueFrom(this.syncProviderId$.pipe(take(1)));
     if (providerId !== SyncProviderId.SuperSync) {
       return false;
     }
