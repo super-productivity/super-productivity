@@ -1015,7 +1015,7 @@
         "BTN_FORCE_OVERWRITE": "Use Local Data"
       },
       "D_FRESH_CLIENT_CONFIRM": {
-        "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and apply this data?",
+        "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and overwrite your local data with it?",
         "OK": "Download Remote Data",
         "TITLE": "Initial Sync"
       },

@@ -128,7 +128,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 1. `isWhollyFreshClient()` = true
 2. `_hasMeaningfulLocalData()` = false
-3. Show native `confirmDialog()`: "Initial Sync — This appears to be a fresh installation. Remote data with X changes was found. Do you want to download and apply this data?"
+3. Show native `confirmDialog()`: "Initial Sync — This appears to be a fresh installation. Remote data with X changes was found. Do you want to download and overwrite your local data with it?"
 4. If confirmed → download and apply all remote ops
 5. If cancelled → snackbar "Sync cancelled", no data applied
 
