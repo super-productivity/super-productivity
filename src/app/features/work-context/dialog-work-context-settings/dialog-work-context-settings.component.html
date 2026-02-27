@@ -2,40 +2,35 @@
   {{ T.MH.SETTINGS | translate }}
 </h1>
 
-<form
-  (ngSubmit)="$event.preventDefault(); submit()"
-  [formGroup]="form"
->
-  <mat-dialog-content>
-    <formly-form
-      (modelChange)="entityData = $event"
-      [fields]="fields"
-      [form]="form"
-      [model]="entityData"
-    >
-    </formly-form>
-  </mat-dialog-content>
+<mat-dialog-content>
+  <formly-form
+    (modelChange)="onModelChange($event)"
+    [fields]="fields"
+    [form]="form"
+    [model]="entityData"
+  >
+  </formly-form>
+</mat-dialog-content>
 
-  <mat-dialog-actions align="end">
-    <div class="wrap-buttons">
-      <button
-        (click)="cancelEdit()"
-        class="btn btn-primary submit-button"
-        color="primary"
-        mat-button
-        type="button"
-      >
-        {{ T.G.CANCEL | translate }}
-      </button>
-      <button
-        [disabled]="!form.valid"
-        class="btn btn-primary submit-button"
-        color="primary"
-        mat-stroked-button
-        type="submit"
-      >
-        {{ T.G.SAVE | translate }}
-      </button>
-    </div>
-  </mat-dialog-actions>
-</form>
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="cancelEdit()"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-button
+      type="button"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+    <button
+      (click)="done()"
+      class="btn btn-primary submit-button"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      {{ T.G.CLOSE | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>

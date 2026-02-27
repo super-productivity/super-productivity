@@ -45,6 +45,52 @@ describe('compression-handler', () => {
         DecompressError,
       );
     });
+
+    // Issue #6581: decompressGzipFromString should sanitize base64 input
+    // to handle data corruption from WebDAV servers, partial uploads, etc.
+
+    it('gives DecompressError (not atob error) for truncated base64 (len%4=1)', async () => {
+      const original = JSON.stringify({ task: 'test', data: 'x'.repeat(200) });
+      const compressed = await compressWithGzipToString(original);
+      // Remove chars to create len%4=1 — previously threw opaque atob() error
+      const truncLen = compressed.length - (compressed.length % 4 || 4) + 1;
+      const truncated = compressed.slice(0, truncLen);
+      expect(truncated.length % 4).toBe(1);
+      // Should throw DecompressError from gzip (not from atob parsing)
+      await expectAsync(decompressGzipFromString(truncated)).toBeRejectedWithError(
+        DecompressError,
+      );
+    });
+
+    it('decompresses base64 with leading BOM from WebDAV', async () => {
+      const original = JSON.stringify({ task: 'test' });
+      const compressed = await compressWithGzipToString(original);
+      const withBOM = '\ufeff' + compressed;
+      const result = await decompressGzipFromString(withBOM);
+      expect(result).toEqual(original);
+    });
+
+    it('decompresses base64 with non-breaking space appended', async () => {
+      const original = JSON.stringify({ task: 'test' });
+      const compressed = await compressWithGzipToString(original);
+      const withNBSP = compressed + '\u00a0';
+      const result = await decompressGzipFromString(withNBSP);
+      expect(result).toEqual(original);
+    });
+
+    it('decompresses base64 with embedded zero-width space', async () => {
+      const original = JSON.stringify({ task: 'test' });
+      const compressed = await compressWithGzipToString(original);
+      const withZWS = compressed.slice(0, 5) + '\u200b' + compressed.slice(5);
+      const result = await decompressGzipFromString(withZWS);
+      expect(result).toEqual(original);
+    });
+
+    it('still throws DecompressError for genuinely corrupt data', async () => {
+      await expectAsync(
+        decompressGzipFromString('!!!completely-broken-data!!!'),
+      ).toBeRejectedWithError(DecompressError);
+    });
   });
 
   describe('compressWithGzip (binary)', () => {

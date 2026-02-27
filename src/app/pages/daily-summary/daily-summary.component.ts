@@ -65,7 +65,6 @@ import { MsToClockStringPipe } from '../../ui/duration/ms-to-clock-string.pipe';
 import { InlineInputComponent } from '../../ui/inline-input/inline-input.component';
 import { InlineMarkdownComponent } from '../../ui/inline-markdown/inline-markdown.component';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
-import { isToday, isYesterday } from '../../util/is-today.util';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
 import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
@@ -203,8 +202,9 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           tasks?.length &&
           tasks.reduce((acc, task) => {
             if (
-              task.subTaskIds.length ||
-              (!task.timeSpentOnDay && !(task.timeSpentOnDay[dayStr] > 0))
+              task.subTaskIds?.length ||
+              !task.timeSpentOnDay ||
+              !(task.timeSpentOnDay[dayStr] > 0)
             ) {
               return acc;
             }
@@ -221,7 +221,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       ([tasks, dayStr]: [Task[], string]): number =>
         tasks?.length &&
         tasks.reduce((acc, task) => {
-          if (task.subTaskIds.length) {
+          if (task.subTaskIds?.length) {
             return acc;
           }
           return (
@@ -501,14 +501,17 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             t.timeSpentOnDay[yesterdayStr] &&
             t.timeSpentOnDay[yesterdayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
-          (t.isDone && t.doneOn && (isToday(t.doneOn) || isYesterday(t.doneOn)));
+          (t.isDone &&
+            t.doneOn &&
+            (this._dateService.isToday(t.doneOn) ||
+              this._dateService.isYesterday(t.doneOn)));
       } else {
         return (t: Task) =>
           (t.timeSpentOnDay &&
             t.timeSpentOnDay[dayStr] &&
             t.timeSpentOnDay[dayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
-          (t.isDone && t.doneOn && isToday(t.doneOn));
+          (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
       }
     })();
 
@@ -534,8 +537,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
           !!(task as Task).parentId
             ? (
                 taskState.entities[(task as Task).parentId as string] as Task
-              ).tagIds.includes(activeId)
-            : (task as Task).tagIds.includes(activeId),
+              )?.tagIds?.includes(activeId)
+            : (task as Task).tagIds?.includes(activeId),
         ) as Task[];
       }
       // return filteredTasks;
@@ -543,7 +546,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
       return filteredTasks
         .filter((task) => !task.parentId)
         .map((task) =>
-          task.subTaskIds.length
+          task.subTaskIds?.length
             ? {
                 ...task,
                 subTasks: task.subTaskIds

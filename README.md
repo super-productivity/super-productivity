@@ -492,9 +492,9 @@ You can provide the default values for WebDAV settings in the "Sync" section of 
 
 ## Custom themes (desktop only)
 
-In addition to color coding your projects and tags and to the dark and light theme you can also load completely custom CSS to restyle everything. To load a custom theme you simply need to put them into a new file named `styles.css` directly in the [user data folder](#user-data-folder).
+The app ships with several built-in themes (Arc, Catppuccin Mocha, Cyberpunk, Dark Base, Dracula, Everforest, Glass, Nord Polar Night, Nord Snow Storm, Rainbow) that you can select from the settings. You can also color-code individual projects and tags with custom primary, accent, and warn colors.
 
-There is a great set of [themes available for download in this repository](https://github.com/super-productivity/super-productivity-themes/tree/main/dist) as well as some [info on how to create your own custom themes](https://github.com/super-productivity/super-productivity-themes).
+In addition, you can load completely custom CSS to restyle everything. To load a custom theme, simply put your styles into a new file named `styles.css` directly in the [user data folder](#user-data-folder). Your custom CSS will override the default styles, giving you full control over the app's appearance.
 
 ## Custom WebDAV Syncing
 

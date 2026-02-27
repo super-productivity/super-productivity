@@ -18,6 +18,7 @@ describe('TrelloApiService', () => {
     apiKey: 'test-api-key',
     token: 'test-token',
     boardId: '5f1a1a1a1a1a1a1a1a1a1a1a',
+    filterUsername: null,
   };
 
   beforeEach(() => {
@@ -224,6 +225,92 @@ describe('TrelloApiService', () => {
       expect(req.request.urlWithParams).toContain('query=test');
       expect(req.request.urlWithParams).toContain('%26');
       req.flush({ cards: [] });
+    });
+  });
+
+  describe('getCurrentMemberId$', () => {
+    it('should call the correct endpoint and return the ID', (done) => {
+      service.getCurrentMemberId$('testuser', mockCfg).subscribe((id) => {
+        expect(id).toBe('member123');
+        done();
+      });
+
+      const req = httpMock.expectOne((request) =>
+        request.url.includes('/members/testuser'),
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({ id: 'member123' });
+    });
+
+    it('should throw an error and log if resolution fails', (done) => {
+      service.getCurrentMemberId$('invalid_user', mockCfg).subscribe({
+        next: () => fail('Should have failed with error'),
+        error: (err) => {
+          expect(err.message).toContain('Trello failed to resolve username');
+          expect(snackService.open).toHaveBeenCalledWith(
+            jasmine.objectContaining({
+              type: 'ERROR',
+              msg: jasmine.stringMatching(/Trello failed to resolve username/),
+            }),
+          );
+          done();
+        },
+      });
+
+      const req = httpMock.expectOne((request) =>
+        request.url.includes('/members/invalid_user'),
+      );
+      req.error(new ProgressEvent('error'));
+    });
+  });
+
+  describe('findAutoImportIssues$', () => {
+    it('should drop cards if filterUsername is set and ID resolved', (done) => {
+      const filterCfg = { ...mockCfg, filterUsername: 'testuser' };
+
+      service.findAutoImportIssues$(filterCfg).subscribe((issues) => {
+        expect(issues.length).toBe(1);
+        expect(issues[0].id).toBe('s1');
+        done();
+      });
+
+      // First resolves the member ID
+      const memberReq = httpMock.expectOne((request) =>
+        request.url.includes('/members/testuser'),
+      );
+      memberReq.flush({ id: 'member123' });
+
+      // Then fetches the cards
+      const boardReq = httpMock.expectOne((request) => request.url.includes('/boards/'));
+      boardReq.flush([
+        {
+          id: '1',
+          shortLink: 's1',
+          members: [{ id: 'member123' }],
+          dateLastActivity: '2023-01-01',
+        },
+        {
+          id: '2',
+          shortLink: 's2',
+          members: [{ id: 'other' }],
+          dateLastActivity: '2023-01-01',
+        },
+      ]);
+    });
+
+    it('should keep all cards if filterUsername is null', (done) => {
+      const cards = [
+        { id: '1', members: [{ id: 'member123' }], dateLastActivity: '2023-01-01' },
+        { id: '2', members: [{ id: 'other' }], dateLastActivity: '2023-01-01' },
+      ] as any;
+
+      service.findAutoImportIssues$(mockCfg).subscribe((issues) => {
+        expect(issues.length).toBe(2);
+        done();
+      });
+
+      const boardReq = httpMock.expectOne((request) => request.url.includes('/boards/'));
+      boardReq.flush(cards);
     });
   });
 });

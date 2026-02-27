@@ -1,5 +1,5 @@
 import { environment } from '../../../environments/environment';
-import { TRACKING_INTERVAL } from '../../app.constants';
+
 import { getDefaultVoice } from '../voice-reminder/getAvailableVoices';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
@@ -170,7 +170,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     trackTimeSound: null,
   },
   timeTracking: {
-    trackingInterval: TRACKING_INTERVAL,
     defaultEstimate: 0,
     defaultEstimateSubTasks: 0,
     isNotifyWhenTimeEstimateExceeded: true,

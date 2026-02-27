@@ -50,6 +50,9 @@ export interface FocusModeState {
 
   // Internal flag: tracks if break resume is in progress
   _isResumingBreak: boolean;
+
+  // Flag: when true, timer won't auto-stop at duration — user must manually complete
+  isManualSessionCompletion: boolean;
 }
 
 // Mode strategy interface

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import {
   DEFAULT_PROFILE_ID,
   DEFAULT_PROFILE_NAME,
@@ -7,22 +7,34 @@ import {
 } from './user-profile.model';
 import { Log } from '../../core/log';
 import { CompleteBackup } from '../../op-log/sync-exports';
+import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
+
+const PROFILE_META_KEY = 'sp_profile_meta';
+const PROFILE_DATA_PREFIX = 'sp_profile_data_';
 
 /**
- * Service for managing profile storage
- * uses unified localStorage for all platforms (Electron, Android, Web)
- * Simplifies code and removes Electron IPC complexity
+ * Service for managing profile storage.
+ * Metadata (small JSON) stays in localStorage for fast synchronous startup access.
+ * Profile data (large CompleteBackup blobs) is stored in IndexedDB to avoid
+ * localStorage's 5-10 MB quota limit.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class UserProfileStorageService {
+  private readonly _opLogStore = inject(OperationLogStoreService);
+  private _migrationPromise: Promise<void> | null = null;
+
   /**
-   * Load profile metadata from storage
+   * Load profile metadata from localStorage
    */
   async loadProfileMetadata(): Promise<ProfileMetadata | null> {
     try {
-      return await this._loadProfileMetadataWeb();
+      if (typeof localStorage === 'undefined') {
+        return null;
+      }
+      const data = localStorage.getItem(PROFILE_META_KEY);
+      return data ? JSON.parse(data) : null;
     } catch (error) {
       Log.err('UserProfileStorageService: Failed to load profile metadata', error);
       return null;
@@ -30,11 +42,14 @@ export class UserProfileStorageService {
   }
 
   /**
-   * Save profile metadata to storage
+   * Save profile metadata to localStorage
    */
   async saveProfileMetadata(metadata: ProfileMetadata): Promise<void> {
     try {
-      await this._saveProfileMetadataWeb(metadata);
+      if (typeof localStorage === 'undefined') {
+        return;
+      }
+      localStorage.setItem(PROFILE_META_KEY, JSON.stringify(metadata));
     } catch (error) {
       Log.err('UserProfileStorageService: Failed to save profile metadata', error);
       throw error;
@@ -42,11 +57,13 @@ export class UserProfileStorageService {
   }
 
   /**
-   * Load profile data (complete backup) for a specific profile
+   * Load profile data (complete backup) for a specific profile from IndexedDB.
+   * On first call, migrates any existing localStorage profile data to IndexedDB.
    */
   async loadProfileData(profileId: string): Promise<CompleteBackup<any> | null> {
     try {
-      return await this._loadProfileDataWeb(profileId);
+      await this._migrateFromLocalStorageIfNeeded();
+      return await this._opLogStore.loadProfileData(profileId);
     } catch (error) {
       Log.err(
         `UserProfileStorageService: Failed to load profile data for ${profileId}`,
@@ -57,11 +74,12 @@ export class UserProfileStorageService {
   }
 
   /**
-   * Save profile data (complete backup) for a specific profile
+   * Save profile data (complete backup) for a specific profile to IndexedDB
    */
   async saveProfileData(profileId: string, data: CompleteBackup<any>): Promise<void> {
     try {
-      await this._saveProfileDataWeb(profileId, data);
+      await this._migrateFromLocalStorageIfNeeded();
+      await this._opLogStore.saveProfileData(profileId, data);
     } catch (error) {
       Log.err(
         `UserProfileStorageService: Failed to save profile data for ${profileId}`,
@@ -72,11 +90,12 @@ export class UserProfileStorageService {
   }
 
   /**
-   * Delete profile data from storage
+   * Delete profile data from IndexedDB
    */
   async deleteProfileData(profileId: string): Promise<void> {
     try {
-      await this._deleteProfileDataWeb(profileId);
+      await this._migrateFromLocalStorageIfNeeded();
+      await this._opLogStore.deleteProfileData(profileId);
     } catch (error) {
       Log.err(
         `UserProfileStorageService: Failed to delete profile data for ${profileId}`,
@@ -104,50 +123,55 @@ export class UserProfileStorageService {
     };
   }
 
-  private async _loadProfileMetadataWeb(): Promise<ProfileMetadata | null> {
+  /**
+   * One-time migration: moves profile data from localStorage to IndexedDB,
+   * then removes the localStorage entries.
+   */
+  private _migrateFromLocalStorageIfNeeded(): Promise<void> {
     if (typeof localStorage === 'undefined') {
-      return null;
+      return Promise.resolve();
     }
-    const key = `sp_profile_meta`;
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
+    if (!this._migrationPromise) {
+      this._migrationPromise = this._doMigration();
+    }
+    return this._migrationPromise;
   }
 
-  private async _saveProfileMetadataWeb(metadata: ProfileMetadata): Promise<void> {
-    if (typeof localStorage === 'undefined') {
+  private async _doMigration(): Promise<void> {
+    const keysToMigrate: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PROFILE_DATA_PREFIX)) {
+        keysToMigrate.push(key);
+      }
+    }
+
+    if (keysToMigrate.length === 0) {
       return;
     }
-    const key = `sp_profile_meta`;
-    localStorage.setItem(key, JSON.stringify(metadata));
-  }
 
-  private async _loadProfileDataWeb(
-    profileId: string,
-  ): Promise<CompleteBackup<any> | null> {
-    if (typeof localStorage === 'undefined') {
-      return null;
-    }
-    const key = `sp_profile_data_${profileId}`;
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
-  }
+    Log.log(
+      `UserProfileStorageService: Migrating ${keysToMigrate.length} profile(s) from localStorage to IndexedDB`,
+    );
 
-  private async _saveProfileDataWeb(
-    profileId: string,
-    data: CompleteBackup<any>,
-  ): Promise<void> {
-    if (typeof localStorage === 'undefined') {
-      return;
+    for (const key of keysToMigrate) {
+      const profileId = key.substring(PROFILE_DATA_PREFIX.length);
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const data: CompleteBackup<any> = JSON.parse(raw);
+          await this._opLogStore.saveProfileData(profileId, data);
+          localStorage.removeItem(key);
+          Log.log(
+            `UserProfileStorageService: Migrated profile "${profileId}" to IndexedDB`,
+          );
+        }
+      } catch (error) {
+        Log.err(
+          `UserProfileStorageService: Failed to migrate profile "${profileId}"`,
+          error,
+        );
+      }
     }
-    const key = `sp_profile_data_${profileId}`;
-    localStorage.setItem(key, JSON.stringify(data));
-  }
-
-  private async _deleteProfileDataWeb(profileId: string): Promise<void> {
-    if (typeof localStorage === 'undefined') {
-      return;
-    }
-    const key = `sp_profile_data_${profileId}`;
-    localStorage.removeItem(key);
   }
 }

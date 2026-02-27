@@ -30,7 +30,6 @@ import {
   arrayMoveToEnd,
   arrayMoveToStart,
 } from '../../../util/array-move';
-import { unique } from '../../../util/unique';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
 import {
   addTag,
@@ -40,8 +39,6 @@ import {
   updateTag,
   updateTagOrder,
 } from './tag.actions';
-import { PlannerActions } from '../../planner/store/planner.actions';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Log } from '../../../core/log';
 
 export const TAG_FEATURE_NAME = 'tag';
@@ -220,73 +217,8 @@ export const tagReducer = createReducer<TagState>(
   ),
 
   // NOTE: transferTask is now handled in planner-shared.reducer.ts
-
-  on(PlannerActions.planTaskForDay, (state, { task, day, isAddToTop }) => {
-    const todayStr = getDbDateStr();
-    const todayTag = state.entities[TODAY_TAG.id] as Tag;
-
-    if (day === todayStr) {
-      // Always remove first, then add in correct position (handles reordering)
-      const taskIdsWithoutCurrent = todayTag.taskIds.filter((id) => id !== task.id);
-      return tagAdapter.updateOne(
-        {
-          id: todayTag.id,
-          changes: {
-            taskIds: unique(
-              isAddToTop
-                ? [task.id, ...taskIdsWithoutCurrent]
-                : [...taskIdsWithoutCurrent, task.id],
-            ),
-          },
-        },
-        state,
-      );
-    } else if (todayTag.taskIds.includes(task.id)) {
-      // Moving away from today, remove from today's list
-      return tagAdapter.updateOne(
-        {
-          id: todayTag.id,
-          changes: {
-            taskIds: todayTag.taskIds.filter((id) => id !== task.id),
-          },
-        },
-        state,
-      );
-    }
-
-    return state;
-  }),
-
-  on(PlannerActions.moveBeforeTask, (state, { fromTask, toTaskId }) => {
-    const todayTag = state.entities[TODAY_TAG.id] as Tag;
-    if (todayTag.taskIds.includes(toTaskId)) {
-      const taskIds = todayTag.taskIds.filter((id) => id !== fromTask.id);
-      const targetIndex = taskIds.indexOf(toTaskId);
-      taskIds.splice(targetIndex, 0, fromTask.id);
-
-      return tagAdapter.updateOne(
-        {
-          id: todayTag.id,
-          changes: {
-            taskIds: unique(taskIds),
-          },
-        },
-        state,
-      );
-    } else if (todayTag.taskIds.includes(fromTask.id)) {
-      return tagAdapter.updateOne(
-        {
-          id: todayTag.id,
-          changes: {
-            taskIds: todayTag.taskIds.filter((id) => id !== fromTask.id),
-          },
-        },
-        state,
-      );
-    }
-
-    return state;
-  }),
+  // NOTE: planTaskForDay is handled in planner-shared.reducer.ts (meta-reducer with offset-aware todayStr)
+  // NOTE: moveBeforeTask is handled in planner-shared.reducer.ts (meta-reducer)
 
   // REGULAR ACTIONS
   // --------------------

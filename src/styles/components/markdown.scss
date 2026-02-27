@@ -13,14 +13,23 @@
     padding-top: 0;
   }
 
+  > *:last-child {
+    margin-bottom: 0;
+  }
+
   img {
     max-width: 100%;
     height: auto;
     display: block;
   }
 
-  ul {
-    margin: 0 var(--s);
+  table {
+    margin-bottom: var(--s2);
+  }
+
+  ul,
+  ol {
+    margin: 0 var(--s) var(--s2);
     padding-left: var(--s2);
     padding-inline-start: 20px;
   }
@@ -29,7 +38,11 @@
     padding-left: var(--s2);
   }
 
-  ul ul {
+  ul ul,
+  ul ol,
+  ol ul,
+  ol ol {
+    margin-bottom: 0;
     padding-top: 0;
     padding-left: var(--s2);
     padding-inline-start: var(--s2);

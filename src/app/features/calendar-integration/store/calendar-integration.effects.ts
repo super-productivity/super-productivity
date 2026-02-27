@@ -18,7 +18,7 @@ import { distinctUntilChangedObject } from '../../../util/distinct-until-changed
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
 import { IssueProviderCalendar } from '../../issue/issue.model';
 import { IssueService } from '../../issue/issue.service';
-import { isToday } from '../../../util/is-today.util';
+import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { Log } from '../../../core/log';
 import {
@@ -40,6 +40,7 @@ export class CalendarIntegrationEffects {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _issueService = inject(IssueService);
+  private _dateService = inject(DateService);
 
   /**
    * Poll external calendar providers for events and auto-import them as tasks.
@@ -88,7 +89,7 @@ export class CalendarIntegrationEffects {
                           );
                         allEventsToday.forEach((calEv) => {
                           if (
-                            isToday(calEv.start) &&
+                            this._dateService.isToday(calEv.start) &&
                             !matchesAnyCalendarEventId(calEv, allIssueIds)
                           ) {
                             this._issueService.addTaskFromIssue({

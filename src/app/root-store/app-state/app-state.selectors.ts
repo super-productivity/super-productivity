@@ -9,3 +9,8 @@ export const selectTodayStr = createSelector(
   selectAppStateState,
   (state: fromAppState.AppState) => state.todayStr,
 );
+
+export const selectStartOfNextDayDiffMs = createSelector(
+  selectAppStateState,
+  (state: fromAppState.AppState) => state.startOfNextDayDiffMs,
+);

@@ -8,6 +8,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { Log } from '../../../core/log';
 import { expandAnimation } from '../../../ui/animations/expand.ani';
 import { from, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -129,6 +130,11 @@ export class FocusModeMainComponent {
   mode = this.focusModeService.mode;
   mainState = this.focusModeService.mainState;
   currentTask = toSignal(this.taskService.currentTask$);
+
+  // Quantize progress to 0.1% to reduce SVG repaints (~33% fewer updates)
+  quantizedProgress = computed(
+    () => Math.round((this.focusModeService.progress() || 0) * 10) / 10,
+  );
 
   readonly parentTask = toSignal(
     this.taskService.currentTask$.pipe(
@@ -290,7 +296,8 @@ export class FocusModeMainComponent {
     ) {
       const t = this.currentTask();
       if (!t) {
-        throw new Error('Task is not loaded');
+        Log.warn('changeTaskNotes: currentTask is null, skipping update');
+        return;
       }
       this.taskService.update(t.id, { notes: $event });
     }
@@ -332,7 +339,8 @@ export class FocusModeMainComponent {
     if (isChanged) {
       const t = this.currentTask();
       if (!t) {
-        throw new Error('No task data');
+        Log.warn('updateTaskTitleIfChanged: currentTask is null, skipping update');
+        return;
       }
       this.taskService.update(t.id, { title: newTitle });
     }
@@ -363,7 +371,12 @@ export class FocusModeMainComponent {
     if (shouldSkipPreparation) {
       const duration =
         this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();
-      this._store.dispatch(startFocusSession({ duration }));
+      this._store.dispatch(
+        startFocusSession({
+          duration,
+          isManualSessionCompletion: !!config?.isManualBreakStart,
+        }),
+      );
       return;
     }
 
@@ -373,7 +386,12 @@ export class FocusModeMainComponent {
   onCountdownComplete(): void {
     // For Flowtime mode, duration must be 0 to count indefinitely
     const duration = this.mode() === FocusModeMode.Flowtime ? 0 : this.displayDuration();
-    this._store.dispatch(startFocusSession({ duration }));
+    this._store.dispatch(
+      startFocusSession({
+        duration,
+        isManualSessionCompletion: !!this.focusModeConfig()?.isManualBreakStart,
+      }),
+    );
     // Main UI state transitions are now handled by the store
   }
 

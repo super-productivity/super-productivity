@@ -42,7 +42,9 @@ import {
   CLICKUP_CONFIG_FORM_SECTION,
 } from './providers/clickup/clickup.const';
 import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.const';
+import { DEFAULT_NEXTCLOUD_DECK_CFG } from './providers/nextcloud-deck/nextcloud-deck.const';
 import { AZURE_DEVOPS_CONFIG_FORM_SECTION } from './providers/azure-devops/azure-devops-cfg-form.const';
+import { NEXTCLOUD_DECK_CONFIG_FORM_SECTION } from './providers/nextcloud-deck/nextcloud-deck.const';
 
 export const DELAY_BEFORE_ISSUE_POLLING = 8000;
 
@@ -58,6 +60,7 @@ export const TRELLO_TYPE: IssueProviderKey = 'TRELLO';
 export const LINEAR_TYPE: IssueProviderKey = 'LINEAR';
 export const CLICKUP_TYPE: IssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: IssueProviderKey = 'AZURE_DEVOPS';
+export const NEXTCLOUD_DECK_TYPE: IssueProviderKey = 'NEXTCLOUD_DECK';
 
 export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
   GITLAB_TYPE,
@@ -72,6 +75,7 @@ export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
   LINEAR_TYPE,
   CLICKUP_TYPE,
   AZURE_DEVOPS_TYPE,
+  NEXTCLOUD_DECK_TYPE,
 ] as const;
 
 export const ISSUE_PROVIDER_ICON_MAP = {
@@ -87,6 +91,7 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [LINEAR_TYPE]: 'linear',
   [CLICKUP_TYPE]: 'clickup',
   [AZURE_DEVOPS_TYPE]: 'azure_devops',
+  [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
 } as const;
 
 export const ISSUE_PROVIDER_HUMANIZED = {
@@ -102,6 +107,7 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [LINEAR_TYPE]: 'Linear',
   [CLICKUP_TYPE]: 'ClickUp',
   [AZURE_DEVOPS_TYPE]: 'Azure DevOps',
+  [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
 } as const;
 
 export const DEFAULT_ISSUE_PROVIDER_CFGS = {
@@ -117,6 +123,7 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [LINEAR_TYPE]: DEFAULT_LINEAR_CFG,
   [CLICKUP_TYPE]: DEFAULT_CLICKUP_CFG,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_INITIAL_CFG,
+  [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
 } as const;
 
 export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
@@ -132,6 +139,7 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [LINEAR_TYPE]: LINEAR_CONFIG_FORM_SECTION,
   [CLICKUP_TYPE]: CLICKUP_CONFIG_FORM_SECTION,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
+  [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
 } as const;
 
 const DEFAULT_ISSUE_STRS: { ISSUE_STR: string; ISSUES_STR: string } = {
@@ -159,6 +167,7 @@ export const ISSUE_STR_MAP: { [key: string]: { ISSUE_STR: string; ISSUES_STR: st
     [LINEAR_TYPE]: DEFAULT_ISSUE_STRS,
     [CLICKUP_TYPE]: DEFAULT_ISSUE_STRS,
     [AZURE_DEVOPS_TYPE]: DEFAULT_ISSUE_STRS,
+    [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,
   } as const;
 
 export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<

@@ -16,9 +16,12 @@ import { selectProjectFeatureState } from '../../project/store/project.selectors
 import { selectNoteTodayOrder } from '../../note/store/note.reducer';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { Log } from '../../../core/log';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 import { Tag } from '../../tag/tag.model';
-import { selectMiscConfig } from '../../config/store/global-config.reducer';
+import {
+  selectStartOfNextDayDiffMs,
+  selectTodayStr,
+} from '../../../root-store/app-state/app-state.selectors';
 
 export const WORK_CONTEXT_FEATURE_NAME = 'workContext';
 
@@ -45,9 +48,9 @@ const computeOrderedTaskIdsForToday = (
       }
     | undefined
   >,
+  todayStr: string,
   startOfNextDayDiffMs: number = 0,
 ): string[] => {
-  const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const storedOrder = todayTag?.taskIds || [];
 
   // IMPORTANT: Implements dueDay/dueWithTime mutual exclusivity pattern
@@ -62,9 +65,7 @@ const computeOrderedTaskIdsForToday = (
     if (task) {
       // Check dueWithTime first (takes priority - mutual exclusivity)
       if (task.dueWithTime) {
-        if (
-          getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === todayStr
-        ) {
+        if (isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs)) {
           tasksForToday.push(taskId);
         }
         // If dueWithTime is set but not for today, skip (don't check dueDay)
@@ -144,16 +145,17 @@ export const selectActiveWorkContext = createSelector(
   selectTagFeatureState,
   selectTaskFeatureState,
   selectNoteTodayOrder,
-  selectMiscConfig,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
   (
     { activeId, activeType },
     projectState,
     tagState,
     taskState,
     todayOrder,
-    miscConfig,
+    todayStr,
+    startOfNextDayDiffMs,
   ): WorkContext => {
-    const startOfNextDayDiffMs = (miscConfig.startOfNextDay || 0) * 60 * 60 * 1000;
     if (activeType === WorkContextType.TAG) {
       const tag = selectTagById.projector(tagState, { id: activeId });
 
@@ -161,7 +163,12 @@ export const selectActiveWorkContext = createSelector(
       // Regular tags use task.tagIds for membership (board-style pattern)
       const orderedTaskIds =
         activeId === TODAY_TAG.id
-          ? computeOrderedTaskIdsForToday(tag, taskState.entities, startOfNextDayDiffMs)
+          ? computeOrderedTaskIdsForToday(
+              tag,
+              taskState.entities,
+              todayStr,
+              startOfNextDayDiffMs,
+            )
           : computeOrderedTaskIdsForTag(activeId, tag, taskState.entities);
 
       return {
@@ -186,6 +193,7 @@ export const selectActiveWorkContext = createSelector(
         const orderedTaskIds = computeOrderedTaskIdsForToday(
           tag,
           taskState.entities,
+          todayStr,
           startOfNextDayDiffMs,
         );
         return {
@@ -324,13 +332,14 @@ export const selectDoneBacklogTaskIdsForActiveContext = createSelector(
 export const selectTodayTaskIds = createSelector(
   selectTagFeatureState,
   selectTaskFeatureState,
-  selectMiscConfig,
-  (tagState, taskState, miscConfig): string[] => {
-    const startOfNextDayDiffMs = (miscConfig.startOfNextDay || 0) * 60 * 60 * 1000;
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (tagState, taskState, todayStr, startOfNextDayDiffMs): string[] => {
     const todayTag = tagState.entities[TODAY_TAG.id];
     return computeOrderedTaskIdsForToday(
       todayTag,
       taskState.entities,
+      todayStr,
       startOfNextDayDiffMs,
     );
   },
@@ -392,19 +401,18 @@ export const selectTimelineTasks = createSelector(
 export const selectTodayTagRepair = createSelector(
   selectTagFeatureState,
   selectTaskFeatureState,
-  selectMiscConfig,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
   (
     tagState,
     taskState,
-    miscConfig,
+    todayStr,
+    startOfNextDayDiffMs,
   ): { needsRepair: boolean; repairedTaskIds: string[] } | null => {
     const todayTag = tagState.entities[TODAY_TAG.id];
     if (!todayTag) {
       return null;
     }
-
-    const startOfNextDayDiffMs = (miscConfig.startOfNextDay || 0) * 60 * 60 * 1000;
-    const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
     const storedTaskIds = todayTag.taskIds;
 
     // First pass: find all tasks (including subtasks) that are "due today"
@@ -415,9 +423,7 @@ export const selectTodayTagRepair = createSelector(
       if (task) {
         // Check dueWithTime first (takes priority)
         if (task.dueWithTime) {
-          if (
-            getDbDateStr(new Date(task.dueWithTime - startOfNextDayDiffMs)) === todayStr
-          ) {
+          if (isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs)) {
             allTasksWithDueToday.add(task.id);
           }
           // If dueWithTime is set but not for today, skip (don't check dueDay)

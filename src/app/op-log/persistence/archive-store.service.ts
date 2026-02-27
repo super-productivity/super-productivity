@@ -9,7 +9,10 @@ import {
   ArchiveStoreEntry,
 } from './db-keys.const';
 import { runDbUpgrade } from './db-upgrade';
-import { ARCHIVE_STORE_NOT_INITIALIZED } from './op-log-errors.const';
+import {
+  ARCHIVE_STORE_NOT_INITIALIZED,
+  isConnectionClosingError,
+} from './op-log-errors.const';
 import { Log } from '../../core/log';
 import {
   IDB_OPEN_RETRIES,
@@ -70,7 +73,15 @@ export class ArchiveStoreService {
    * all stores.
    */
   private async _init(): Promise<void> {
-    this._db = await this._openDbWithRetry();
+    const db = await this._openDbWithRetry();
+    db.addEventListener('close', () => {
+      Log.warn(
+        '[ArchiveStore] IndexedDB connection closed by browser. Will re-open on next access.',
+      );
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
+    this._db = db;
   }
 
   private async _openDbWithRetry(): Promise<IDBPDatabase<ArchiveDBSchema>> {
@@ -108,6 +119,27 @@ export class ArchiveStoreService {
     return this._db;
   }
 
+  /**
+   * Wraps an operation with retry logic for iOS "connection is closing" errors.
+   * If the operation fails because iOS closed the connection, invalidates the
+   * cached db reference and retries once after re-opening.
+   *
+   * @see https://github.com/johannesjo/super-productivity/issues/6643
+   */
+  private async _withRetryOnClose<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (e) {
+      if (isConnectionClosingError(e)) {
+        Log.warn('[ArchiveStore] Connection closing error detected, re-opening...', e);
+        this._db = undefined;
+        this._initPromise = undefined;
+        return await fn();
+      }
+      throw e;
+    }
+  }
+
   // ============================================================
   // Archive Storage
   // ============================================================
@@ -117,9 +149,11 @@ export class ArchiveStoreService {
    * @returns The archive data, or undefined if not found.
    */
   async loadArchiveYoung(): Promise<ArchiveModel | undefined> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
-    return entry?.data;
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
+      return entry?.data;
+    });
   }
 
   /**
@@ -127,11 +161,13 @@ export class ArchiveStoreService {
    * @param data The archive data to save.
    */
   async saveArchiveYoung(data: ArchiveModel): Promise<void> {
-    await this._ensureInit();
-    await this.db.put(STORE_NAMES.ARCHIVE_YOUNG, {
-      id: SINGLETON_KEY,
-      data,
-      lastModified: Date.now(),
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      await this.db.put(STORE_NAMES.ARCHIVE_YOUNG, {
+        id: SINGLETON_KEY,
+        data,
+        lastModified: Date.now(),
+      });
     });
   }
 
@@ -140,9 +176,11 @@ export class ArchiveStoreService {
    * @returns The archive data, or undefined if not found.
    */
   async loadArchiveOld(): Promise<ArchiveModel | undefined> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
-    return entry?.data;
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
+      return entry?.data;
+    });
   }
 
   /**
@@ -150,11 +188,13 @@ export class ArchiveStoreService {
    * @param data The archive data to save.
    */
   async saveArchiveOld(data: ArchiveModel): Promise<void> {
-    await this._ensureInit();
-    await this.db.put(STORE_NAMES.ARCHIVE_OLD, {
-      id: SINGLETON_KEY,
-      data,
-      lastModified: Date.now(),
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      await this.db.put(STORE_NAMES.ARCHIVE_OLD, {
+        id: SINGLETON_KEY,
+        data,
+        lastModified: Date.now(),
+      });
     });
   }
 
@@ -163,9 +203,11 @@ export class ArchiveStoreService {
    * Used to determine if migration from legacy 'pf' database is needed.
    */
   async hasArchiveYoung(): Promise<boolean> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
-    return !!entry;
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const entry = await this.db.get(STORE_NAMES.ARCHIVE_YOUNG, SINGLETON_KEY);
+      return !!entry;
+    });
   }
 
   /**
@@ -173,9 +215,11 @@ export class ArchiveStoreService {
    * Used to determine if migration from legacy 'pf' database is needed.
    */
   async hasArchiveOld(): Promise<boolean> {
-    await this._ensureInit();
-    const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
-    return !!entry;
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const entry = await this.db.get(STORE_NAMES.ARCHIVE_OLD, SINGLETON_KEY);
+      return !!entry;
+    });
   }
 
   /**
@@ -191,23 +235,25 @@ export class ArchiveStoreService {
     archiveYoung: ArchiveModel,
     archiveOld: ArchiveModel,
   ): Promise<void> {
-    await this._ensureInit();
-    const tx = this.db.transaction(
-      [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
-      'readwrite',
-    );
-    const now = Date.now();
-    await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
-      id: SINGLETON_KEY,
-      data: archiveYoung,
-      lastModified: now,
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const tx = this.db.transaction(
+        [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
+        'readwrite',
+      );
+      const now = Date.now();
+      await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).put({
+        id: SINGLETON_KEY,
+        data: archiveYoung,
+        lastModified: now,
+      });
+      await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
+        id: SINGLETON_KEY,
+        data: archiveOld,
+        lastModified: now,
+      });
+      await tx.done;
     });
-    await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).put({
-      id: SINGLETON_KEY,
-      data: archiveOld,
-      lastModified: now,
-    });
-    await tx.done;
   }
 
   /**
@@ -215,13 +261,15 @@ export class ArchiveStoreService {
    * @internal
    */
   async _clearAllDataForTesting(): Promise<void> {
-    await this._ensureInit();
-    const tx = this.db.transaction(
-      [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
-      'readwrite',
-    );
-    await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
-    await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
-    await tx.done;
+    return this._withRetryOnClose(async () => {
+      await this._ensureInit();
+      const tx = this.db.transaction(
+        [STORE_NAMES.ARCHIVE_YOUNG, STORE_NAMES.ARCHIVE_OLD],
+        'readwrite',
+      );
+      await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
+      await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
+      await tx.done;
+    });
   }
 }

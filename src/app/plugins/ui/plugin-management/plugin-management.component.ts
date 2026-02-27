@@ -111,6 +111,8 @@ export class PluginManagementComponent {
     uk: 'Ukrainian',
     zh: 'Chinese (Simplified)',
     'zh-tw': 'Chinese (Traditional)',
+    ro: 'Romanian',
+    'ro-md': 'Romanian (Moldova)',
   } as const;
   /* eslint-enable @typescript-eslint/naming-convention */
 
@@ -291,6 +293,7 @@ export class PluginManagementComponent {
       this.uploadError.set(null);
 
       await this._pluginCacheService.clearCache();
+      this._pluginService.clearUploadedPluginsFromMemory();
 
       PluginLog.log('Plugin cache cleared successfully');
     } catch (error) {

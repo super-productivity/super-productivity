@@ -30,7 +30,7 @@ export class LocalDateStrPipe implements PipeTransform {
 
     const d = dateStrToUtcDate(value);
     // Use the configured locale if available, otherwise fall back to default
-    const locale = this._dateTimeFormatService.currentLocale;
+    const locale = this._dateTimeFormatService.currentLocale();
     return formatMonthDay(d, locale);
   }
 }

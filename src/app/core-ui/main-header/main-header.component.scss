@@ -367,31 +367,24 @@ page-title {
   left: 50%;
   transform: translate(-50%, -50%);
 
-  // Icon sizing (increased from 10px to 15px)
+  // Icon sizing
   font-size: 15px;
   width: 15px;
   height: 15px;
   line-height: 15px;
 
-  // Colored outline using multiple text-shadows for better visibility
-  text-shadow:
-    -1px -1px 0 var(--c-bg),
-    1px -1px 0 var(--c-bg),
-    -1px 1px 0 var(--c-bg),
-    1px 1px 0 var(--c-bg),
-    -2px -2px 0 var(--c-bg),
-    2px -2px 0 var(--c-bg),
-    -2px 2px 0 var(--c-bg),
-    2px 2px 0 var(--c-bg),
-    0 -2px 0 var(--c-bg),
-    0 2px 0 var(--c-bg),
-    -2px 0 0 var(--c-bg),
-    2px 0 0 var(--c-bg);
+  // Solid circle background for clean outline
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+  border-radius: 50%;
+  padding: 3px;
 
   // Ensure it sits above sync icon
   z-index: 1;
 
-  // Fallback for Windows High Contrast Mode where text-shadow is suppressed
+  // Fallback for Windows High Contrast Mode
   @media (forced-colors: active) {
     outline: 2px solid CanvasText;
     outline-offset: -2px;

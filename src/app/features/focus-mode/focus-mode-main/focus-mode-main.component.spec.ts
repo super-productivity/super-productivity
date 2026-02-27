@@ -314,13 +314,12 @@ describe('FocusModeMainComponent', () => {
       });
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.changeTaskNotes('New notes')).toThrowError(
-        'Task is not loaded',
-      );
+      expect(() => component.changeTaskNotes('New notes')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
     it('should handle whitespace differences in comparison', () => {
@@ -427,7 +426,21 @@ describe('FocusModeMainComponent', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 900000 }),
+        actions.startFocusSession({ duration: 900000, isManualSessionCompletion: false }),
+      );
+    });
+
+    it('should dispatch startFocusSession with isManualSessionCompletion: true when isManualBreakStart is enabled', () => {
+      component.displayDuration.set(900000);
+      focusModeServiceSpy.focusModeConfig.and.returnValue({
+        isSkipPreparation: true,
+        isManualBreakStart: true,
+      });
+
+      component.startSession();
+
+      expect(mockStore.dispatch).toHaveBeenCalledWith(
+        actions.startFocusSession({ duration: 900000, isManualSessionCompletion: true }),
       );
     });
 
@@ -440,7 +453,7 @@ describe('FocusModeMainComponent', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 0 }),
+        actions.startFocusSession({ duration: 0, isManualSessionCompletion: false }),
       );
     });
 
@@ -479,13 +492,12 @@ describe('FocusModeMainComponent', () => {
       expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).toThrowError(
-        'No task data',
-      );
+      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
   });
 
@@ -969,7 +981,10 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 1500000 }),
+        actions.startFocusSession({
+          duration: 1500000,
+          isManualSessionCompletion: false,
+        }),
       );
     });
   });

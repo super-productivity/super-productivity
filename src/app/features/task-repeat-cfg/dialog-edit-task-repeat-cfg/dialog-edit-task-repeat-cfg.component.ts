@@ -123,7 +123,11 @@ export class DialogEditTaskRepeatCfgComponent {
     const date = isDBDateStr(this._data.targetDate)
       ? dateStrToUtcDate(this._data.targetDate)
       : new Date(this._data.targetDate);
-    const formattedDate = formatMonthDay(date, this._dateTimeFormatService.currentLocale);
+
+    const formattedDate = formatMonthDay(
+      date,
+      this._dateTimeFormatService.currentLocale(),
+    );
 
     return this._translateService.instant(T.F.TASK_REPEAT.F.REMOVE_FOR_DATE, {
       date: formattedDate,
@@ -182,7 +186,7 @@ export class DialogEditTaskRepeatCfgComponent {
   }
 
   private _initializeFormConfig(): void {
-    const _locale = this._dateTimeFormatService.currentLocale;
+    const _locale = this._dateTimeFormatService.currentLocale();
     const today = new Date();
     const weekdayStr = today.toLocaleDateString(_locale, {
       weekday: 'long',
@@ -319,7 +323,7 @@ export class DialogEditTaskRepeatCfgComponent {
         data: {
           message: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.MSG, {
             date: new Date(targetDate).toLocaleDateString(
-              this._dateTimeFormatService.currentLocale,
+              this._dateTimeFormatService.currentLocale(),
             ),
           }),
           okTxt: this._translateService.instant(T.F.TASK_REPEAT.D_DELETE_INSTANCE.OK),

@@ -53,3 +53,25 @@ export const IDB_OPEN_ERROR_MSG =
  * Used for heuristic error detection to show platform-specific guidance.
  */
 export const IDB_BACKING_STORE_PATTERN = 'backing store';
+
+// ============================================================================
+// Connection Closing Errors (Issue #6643)
+// ============================================================================
+
+/**
+ * Detects IndexedDB "connection is closing" errors.
+ *
+ * On iOS/Capacitor, the OS can close IndexedDB connections when the app goes
+ * to background or the OS reclaims resources. This leaves cached IDBDatabase
+ * references stale, causing all subsequent operations to fail with:
+ *   "Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing."
+ *
+ * @see https://github.com/johannesjo/super-productivity/issues/6643
+ */
+export const isConnectionClosingError = (e: unknown): boolean => {
+  if (e instanceof DOMException) {
+    const msg = e.message.toLowerCase();
+    return msg.includes('connection is closing') || msg.includes('database is closing');
+  }
+  return false;
+};

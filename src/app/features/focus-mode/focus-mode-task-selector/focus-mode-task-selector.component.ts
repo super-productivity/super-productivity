@@ -71,9 +71,10 @@ export class FocusModeTaskSelectorComponent implements AfterViewInit {
   }
 
   onKeyDown(event: KeyboardEvent): void {
-    // Only handle Escape to close the overlay
+    // Only handle Escape to close the task selector
     // Let the autocomplete and input handle all other keys naturally
     if (event.key === 'Escape') {
+      event.stopPropagation();
       this.close();
     }
   }

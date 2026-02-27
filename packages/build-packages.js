@@ -79,12 +79,23 @@ async function getPlugins() {
         const hasRealBuildScript =
           buildScript && !buildScript.includes("echo 'No build needed");
 
+        // Read manifest.json to check for additional files (e.g., config schema)
+        const files = ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'];
+        const manifestPath = path.join(pluginPath, 'manifest.json');
+        try {
+          const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+          if (manifest.jsonSchemaCfg) {
+            files.push(manifest.jsonSchemaCfg);
+          }
+        } catch {
+          // No manifest.json yet or invalid — will be caught later during copy
+        }
+
         plugins.push({
           name: entry.name,
           path: `packages/plugin-dev/${entry.name}`,
           buildCommand: hasRealBuildScript ? 'npm run build' : undefined,
-          // Standard files to copy for bundled plugins
-          files: ['manifest.json', 'plugin.js', 'index.html', 'icon.svg'],
+          files,
           sourcePath: hasRealBuildScript ? 'dist' : undefined,
         });
       } catch (e) {

@@ -153,8 +153,8 @@ describe('runDbUpgrade', () => {
 
       // Version 2 upgrade doesn't create any stores (only version 3+ run)
       // Version 3 only adds an index, doesn't create stores
-      // Version 4 creates archive stores
-      expect(db.createObjectStore).toHaveBeenCalledTimes(2); // archive_young and archive_old
+      // Version 4 creates archive stores, version 5 creates profile_data
+      expect(db.createObjectStore).toHaveBeenCalledTimes(3); // archive_young, archive_old, profile_data
       expect(db.createObjectStore).not.toHaveBeenCalledWith(
         STORE_NAMES.OPS,
         jasmine.anything(),
@@ -182,6 +182,19 @@ describe('runDbUpgrade', () => {
       runDbUpgrade(db, 3, tx);
 
       expect(db.createObjectStore).toHaveBeenCalledWith(STORE_NAMES.ARCHIVE_OLD, {
+        keyPath: 'id',
+      });
+    });
+  });
+
+  describe('version 5 upgrade (from version 4)', () => {
+    it('should create profile_data store', () => {
+      const preExisting = new Map([[STORE_NAMES.OPS, { store: createMockStore() }]]);
+      const { db, tx } = createMocks(preExisting);
+
+      runDbUpgrade(db, 4, tx);
+
+      expect(db.createObjectStore).toHaveBeenCalledWith(STORE_NAMES.PROFILE_DATA, {
         keyPath: 'id',
       });
     });
@@ -220,8 +233,14 @@ describe('runDbUpgrade', () => {
         jasmine.anything(),
       );
 
-      // Total: 6 stores created
-      expect(db.createObjectStore).toHaveBeenCalledTimes(6);
+      // Version 5 store
+      expect(db.createObjectStore).toHaveBeenCalledWith(
+        STORE_NAMES.PROFILE_DATA,
+        jasmine.anything(),
+      );
+
+      // Total: 7 stores created
+      expect(db.createObjectStore).toHaveBeenCalledTimes(7);
     });
 
     it('should create all indexes on ops store when upgrading from version 0', () => {

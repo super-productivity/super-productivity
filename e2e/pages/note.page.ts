@@ -128,8 +128,8 @@ export class NotePage extends BasePage {
    * Edits a note's content
    */
   async editNote(note: Locator, newContent: string): Promise<void> {
-    // Click on note to open edit dialog
-    await note.click();
+    // Click specifically on the markdown content area which has the editFullscreen handler
+    await note.locator('.markdown-preview').click();
 
     // Wait for dialog
     await this.noteDialog.waitFor({ state: 'visible', timeout: 5000 });

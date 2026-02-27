@@ -49,15 +49,13 @@
   </span>
 </button>
 
-@if (isForProject || contextId !== TODAY_TAG_ID) {
-  <button
-    (click)="openSettings()"
-    mat-menu-item
-  >
-    <mat-icon>settings</mat-icon>
-    <span class="text">{{ T.MH.SETTINGS | translate }}</span>
-  </button>
-}
+<button
+  (click)="openSettings()"
+  mat-menu-item
+>
+  <mat-icon>settings</mat-icon>
+  <span class="text">{{ T.MH.SETTINGS | translate }}</span>
+</button>
 
 @if (!isForProject && contextId !== TODAY_TAG_ID) {
   <button

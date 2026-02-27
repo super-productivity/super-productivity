@@ -40,7 +40,6 @@ import { SuperSyncStatusService } from '../sync/super-sync-status.service';
  */
 @Injectable()
 export class OperationLogEffects {
-  private clientId?: string;
   private compactionFailures = 0;
   /** Circuit breaker: prevents recursive quota exceeded handling */
   private isHandlingQuotaExceeded = false;
@@ -94,16 +93,15 @@ export class OperationLogEffects {
   );
 
   private async writeOperation(action: PersistentAction): Promise<void> {
-    if (!this.clientId) {
-      // Load existing client ID, or generate a new one if this is first use
-      this.clientId =
-        (await this.clientIdService.loadClientId()) ??
-        (await this.clientIdService.generateNewClientId());
-    }
-    if (!this.clientId) {
+    // Always read from ClientIdService (which has its own in-memory cache).
+    // Do NOT cache locally — BackupService.generateNewClientId() updates the
+    // service cache, and a local cache here would go stale after backup import.
+    const clientId =
+      (await this.clientIdService.loadClientId()) ??
+      (await this.clientIdService.generateNewClientId());
+    if (!clientId) {
       throw new Error('Failed to load or generate clientId - cannot persist operation');
     }
-    const clientId = this.clientId;
 
     // Validate that at least one entity identifier exists for non-bulk operations
     // Bulk operations with entityType 'ALL' don't need specific entity IDs

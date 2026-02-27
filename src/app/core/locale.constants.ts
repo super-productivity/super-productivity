@@ -22,6 +22,8 @@ import localeUk from '@angular/common/locales/uk';
 import localeId from '@angular/common/locales/id';
 import localeFi from '@angular/common/locales/fi';
 import localeSv from '@angular/common/locales/sv';
+import localeRo from '@angular/common/locales/ro';
+import localeRoMD from '@angular/common/locales/ro-MD';
 
 /**
  * All of available app languages
@@ -53,11 +55,13 @@ export enum LanguageCode {
   uk = 'uk',
   zh = 'zh', // Chinese (Simplified)
   zh_tw = 'zh-tw', // Chinese (Traditional)
+  ro = 'ro',
+  ro_md = 'ro-md', // Romanian (Moldova)
 }
 
 /**
- * We're assuming that the other language speakers are likely to speak english
- * and as english offers most likely the best experience, we use it as default
+ * We're assuming that the other language speakers are likely to speak English
+ * and as English offers most likely the best experience, we use it as default
  */
 export const AUTO_SWITCH_LNGS: LanguageCode[] = [
   LanguageCode.zh,
@@ -92,6 +96,8 @@ export const DateTimeLocales = {
   cs_cz: `${LanguageCode.cs}-cz`,
   sk_sk: `${LanguageCode.sk}-sk`,
   uk_ua: `${LanguageCode.uk}-ua`,
+  ro_ro: `${LanguageCode.ro}-ro`,
+  ro_md: `${LanguageCode.ro}-md`,
 } as const;
 
 export type DateTimeLocale = (typeof DateTimeLocales)[keyof typeof DateTimeLocales];
@@ -136,6 +142,9 @@ export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
   sv: localeSv,
   tr: localeTr,
   zh: localeZh,
+  ro: localeRo,
+  ro_ro: localeRo,
+  ro_md: localeRoMD,
 };
 
 export const DEFAULT_LANGUAGE = LanguageCode.en;

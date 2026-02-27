@@ -16,26 +16,21 @@
       <h3 class="mat-caption">
         {{
           T.F.TASK.D_TIME_FOR_DAY.ADD_ENTRY_FOR
-            | translate: { date: (newEntry.date | localeDate: 'dd-MM-yyyy') || '' }
+            | translate
+              : {
+                  date: newEntry.date
+                    ? (newEntry.date | localeDate: dateTimeFormatService.dateFormat().raw)
+                    : dateTimeFormatService.dateFormat().humanReadable,
+                }
         }}
       </h3>
-      <mat-form-field>
-        <mat-label>{{ T.F.TASK.D_TIME_FOR_DAY.DATE | translate }}</mat-label>
-        <input
-          [(ngModel)]="newEntry.date"
-          [matDatepicker]="myDatepicker"
-          matInput
-          name="date"
-          required
-          type="text"
-        />
-        <mat-error>{{ T.V.E_DATETIME | translate }}</mat-error>
-        <mat-datepicker-toggle
-          [for]="myDatepicker"
-          matPrefix
-        ></mat-datepicker-toggle>
-        <mat-datepicker #myDatepicker></mat-datepicker>
-      </mat-form-field>
+
+      <date-picker-input
+        [(ngModel)]="newEntry.date"
+        [ngModelOptions]="{ standalone: true }"
+        [label]="T.F.TASK.D_TIME_FOR_DAY.DATE | translate"
+        [required]="true"
+      />
 
       <div class="wrap-time">
         <input-duration-slider
@@ -60,6 +55,7 @@
         color="primary"
         mat-stroked-button
         type="submit"
+        [disabled]="!newEntry.timeSpent || !newEntry.date"
       >
         <mat-icon>save</mat-icon>
         {{ T.G.SAVE | translate }}

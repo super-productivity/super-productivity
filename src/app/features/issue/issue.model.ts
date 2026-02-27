@@ -32,6 +32,11 @@ import {
   AzureDevOpsIssue,
   AzureDevOpsIssueReduced,
 } from './providers/azure-devops/azure-devops-issue/azure-devops-issue.model';
+import { NextcloudDeckCfg } from './providers/nextcloud-deck/nextcloud-deck.model';
+import {
+  NextcloudDeckIssue,
+  NextcloudDeckIssueReduced,
+} from './providers/nextcloud-deck/nextcloud-deck-issue.model';
 
 export interface BaseIssueProviderCfg {
   isEnabled: boolean;
@@ -50,7 +55,8 @@ export type IssueProviderKey =
   | 'REDMINE'
   | 'LINEAR'
   | 'CLICKUP'
-  | 'AZURE_DEVOPS';
+  | 'AZURE_DEVOPS'
+  | 'NEXTCLOUD_DECK';
 
 export type IssueIntegrationCfg =
   | JiraCfg
@@ -64,7 +70,8 @@ export type IssueIntegrationCfg =
   | RedmineCfg
   | LinearCfg
   | ClickUpCfg
-  | AzureDevOpsCfg;
+  | AzureDevOpsCfg
+  | NextcloudDeckCfg;
 
 export enum IssueLocalState {
   OPEN = 'OPEN',
@@ -86,6 +93,7 @@ export interface IssueIntegrationCfgs {
   LINEAR?: LinearCfg;
   CLICKUP?: ClickUpCfg;
   AZURE_DEVOPS?: AzureDevOpsCfg;
+  NEXTCLOUD_DECK?: NextcloudDeckCfg;
 }
 
 export type IssueData =
@@ -100,7 +108,8 @@ export type IssueData =
   | TrelloIssue
   | LinearIssue
   | ClickUpTask
-  | AzureDevOpsIssue;
+  | AzureDevOpsIssue
+  | NextcloudDeckIssue;
 
 export type IssueDataReduced =
   | GithubIssueReduced
@@ -114,7 +123,8 @@ export type IssueDataReduced =
   | TrelloIssueReduced
   | LinearIssueReduced
   | ClickUpTaskReduced
-  | AzureDevOpsIssueReduced;
+  | AzureDevOpsIssueReduced
+  | NextcloudDeckIssueReduced;
 
 export type IssueDataReducedMap = {
   [K in IssueProviderKey]: K extends 'JIRA'
@@ -141,7 +151,9 @@ export type IssueDataReducedMap = {
                         ? ClickUpTaskReduced
                         : K extends 'AZURE_DEVOPS'
                           ? AzureDevOpsIssueReduced
-                          : never;
+                          : K extends 'NEXTCLOUD_DECK'
+                            ? NextcloudDeckIssueReduced
+                            : never;
 };
 
 // TODO: add issue model to the IssueDataReducedMap
@@ -230,6 +242,10 @@ export interface IssueProviderAzureDevOps extends IssueProviderBase, AzureDevOps
   issueProviderKey: 'AZURE_DEVOPS';
 }
 
+export interface IssueProviderNextcloudDeck extends IssueProviderBase, NextcloudDeckCfg {
+  issueProviderKey: 'NEXTCLOUD_DECK';
+}
+
 export type IssueProvider =
   | IssueProviderJira
   | IssueProviderGithub
@@ -242,7 +258,8 @@ export type IssueProvider =
   | IssueProviderTrello
   | IssueProviderLinear
   | IssueProviderClickUp
-  | IssueProviderAzureDevOps;
+  | IssueProviderAzureDevOps
+  | IssueProviderNextcloudDeck;
 
 export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
   ? IssueProviderJira
@@ -268,4 +285,6 @@ export type IssueProviderTypeMap<T extends IssueProviderKey> = T extends 'JIRA'
                       ? IssueProviderClickUp
                       : T extends 'AZURE_DEVOPS'
                         ? IssueProviderAzureDevOps
-                        : never;
+                        : T extends 'NEXTCLOUD_DECK'
+                          ? IssueProviderNextcloudDeck
+                          : never;

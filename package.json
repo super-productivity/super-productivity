@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "17.1.8",
+  "version": "17.2.1",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -22,7 +22,7 @@
     "assemble:android:prod": "cd android && ./gradlew assembleRelease && cd ..",
     "assemble:android:stage": "cd android && ./gradlew assembleDebug && cd ..",
     "prebuild": "npm run env && node ./tools/git-version.js && npm run build:packages",
-    "prepare": "husky && ts-patch install && npm run shared-schema:build && npm run plugin-api:build",
+    "prepare": "husky && ts-patch install && npm run env && npm run shared-schema:build && npm run plugin-api:build",
     "build": "npm run buildAllElectron:noTests:prod",
     "build:packages": "node ./packages/build-packages.js",
     "buildAllElectron:noTests:prod": "npm run lint && npm run buildFrontend:prod:es6 && npm run electron:build",
@@ -49,7 +49,7 @@
     "dist:win:appx": "npm run buildAllElectron:prod && electron-builder --win --config=build/electron-builder.appx.yaml",
     "dist:win:only": "electron-builder --win",
     "dist:win:store": "git pull && npm run && copy electron-builder.win-store.yaml electron-builder.yaml && npm run dist:win && git checkout electron-builder.yaml || git checkout electron-builder.yaml",
-    "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync",
+    "droid": "npm run buildFrontend:stageWeb:unminified && npx cap sync android",
     "buildFrontend:e2e": "npm run plugins:build && npm run env && ng build",
     "serveFrontend:e2e:prod": "npx http-server .tmp/angular-dist/browser -p 4242 -c-1 --proxy http://localhost:4242?",
     "e2e": "npm run e2e:all -- --grep-invert \"@supersync|@webdav\"",
@@ -280,7 +280,10 @@
     "typia": "^11.0.0"
   },
   "overrides": {
-    "@conventional-changelog/git-client": "^2.5.1"
+    "@conventional-changelog/git-client": "^2.5.1",
+    "app-builder-lib": {
+      "minimatch": "10.1.1"
+    }
   },
   "optionalDependencies": {
     "@lmdb/lmdb-darwin-x64": "^3.2.0",

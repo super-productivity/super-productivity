@@ -153,8 +153,11 @@ export class ImportEncryptionHandlerService {
       await syncProvider.deleteAllData();
 
       // 2. Update sync provider config with new encryption settings BEFORE upload
+      // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
+      // to ensure the currentProviderPrivateCfg$ observable is updated, which is needed
+      // for the settings form to correctly show isEncryptionEnabled state.
       SyncLog.normal(`${LOG_PREFIX}: Updating provider config...`);
-      await syncProvider.setPrivateCfg({
+      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
         ...existingCfg,
         encryptKey: isEncryptionEnabled ? newEncryptKey : undefined,
         isEncryptionEnabled,

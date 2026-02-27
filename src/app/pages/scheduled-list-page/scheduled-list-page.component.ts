@@ -107,7 +107,7 @@ export class ScheduledListPageComponent {
   getRepeatInfoText(repeatCfg: TaskRepeatCfg): string {
     const [key, params] = getTaskRepeatInfoText(
       repeatCfg,
-      this._dateTimeFormatService.currentLocale,
+      this._dateTimeFormatService.currentLocale(),
       this._dateTimeFormatService,
     );
     return this._translateService.instant(key, params);
@@ -118,7 +118,7 @@ export class ScheduledListPageComponent {
   }
 
   getTooltipText(repeatCfg: TaskRepeatCfg): string {
-    const locale = this._dateTimeFormatService.currentLocale;
+    const locale = this._dateTimeFormatService.currentLocale();
     const nextDate = this.getNextOccurrence(repeatCfg);
     const nextFormatted = nextDate ? formatMonthDay(new Date(nextDate), locale) : '';
     const effectiveLastDay = getEffectiveLastTaskCreationDay(repeatCfg);

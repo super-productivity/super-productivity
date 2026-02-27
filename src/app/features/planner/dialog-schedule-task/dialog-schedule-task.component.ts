@@ -33,7 +33,7 @@ import { FormsModule } from '@angular/forms';
 import { millisecondsDiffToRemindOption } from '../../tasks/util/remind-option-to-milliseconds';
 import { expandFadeAnimation } from '../../../ui/animations/expand.ani';
 import { getClockStringFromHours } from '../../../util/get-clock-string-from-hours';
-import { isToday } from '../../../util/is-today.util';
+import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
 import { ReminderService } from '../../reminder/reminder.service';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
@@ -99,6 +99,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   private _reminderService = inject(ReminderService);
   private _translateService = inject(TranslateService);
   private _globalConfigService = inject(GlobalConfigService);
+  private _dateService = inject(DateService);
   private readonly _dateAdapter = inject(DateAdapter);
 
   // Wait for localization config to be loaded before rendering calendar
@@ -122,7 +123,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
   isInitValOnTimeFocus: boolean = true;
 
   isShowEnterMsg = false;
-  todayStr = getDbDateStr();
+  todayStr = this._dateService.todayStr();
   // private _prevSelectedQuickAccessDate: Date | null = null;
   // private _prevQuickAccessAction: number | null = null;
   private _timeCheckVal: string | null = null;
@@ -282,7 +283,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
           id: this.data.task.id,
         }),
       );
-    } else if (this.plannedDayForTask === getDbDateStr()) {
+    } else if (this.plannedDayForTask === this._dateService.todayStr()) {
       // to cover edge cases
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
@@ -325,7 +326,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       this.isInitValOnTimeFocus = false;
 
       if (this.selectedDate) {
-        if (isToday(this.selectedDate as Date)) {
+        if (this._dateService.isToday(this.selectedDate as Date)) {
           this.selectedTime = getClockStringFromHours(new Date().getHours() + 1);
         } else {
           this.selectedTime = DEFAULT_TIME;
@@ -368,7 +369,7 @@ export class DialogScheduleTaskComponent implements AfterViewInit {
       !this.data.task.dueWithTime
     ) {
       const formattedDate =
-        newDay == getDbDateStr()
+        newDay == this._dateService.todayStr()
           ? this._translateService.instant(T.G.TODAY_TAG_TITLE)
           : (this._datePipe.transform(newDay, 'shortDate') as string);
       this._snackService.open({

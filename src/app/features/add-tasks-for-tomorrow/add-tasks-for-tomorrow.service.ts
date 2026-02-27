@@ -14,6 +14,7 @@ import { getDateRangeForDay } from '../../util/get-date-range-for-day';
 import { first, map, switchMap, withLatestFrom } from 'rxjs/operators';
 import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 import { getDbDateStr } from '../../util/get-db-date-str';
+import { DateService } from '../../core/date/date.service';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { selectTodayTaskIds } from '../work-context/store/work-context.selectors';
 import { selectTasksForPlannerDay } from '../planner/store/planner.selectors';
@@ -26,6 +27,7 @@ export class AddTasksForTomorrowService {
   private _store = inject(Store);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _globalTrackingIntervalService = inject(GlobalTrackingIntervalService);
+  private _dateService = inject(DateService);
 
   private _tomorrowDate$ = this._globalTrackingIntervalService.todayDateStr$.pipe(
     map((todayStr) => {
@@ -69,8 +71,8 @@ export class AddTasksForTomorrowService {
   async addAllDueTomorrow(): Promise<'ADDED' | void> {
     const dueRepeatCfgs = await this._repeatableForTomorrow$.pipe(first()).toPromise();
 
-    // eslint-disable-next-line no-mixed-operators
-    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const tomorrow = Date.now() - this._dateService.startOfNextDayDiff + ONE_DAY_MS;
 
     const promises = dueRepeatCfgs.sort(sortRepeatableTaskCfgs).map((repeatCfg) => {
       return this._taskRepeatCfgService.createRepeatableTask(repeatCfg, tomorrow);
@@ -134,10 +136,9 @@ export class AddTasksForTomorrowService {
 
   // NOTE: this gets a lot of interference from tagEffect.preventParentAndSubTaskInTodayList$:
   async addAllDueToday(): Promise<'ADDED' | void> {
-    const todayDate = new Date();
-    // Use current timestamp for today
-    const todayTS = Date.now();
-    const todayStr = getDbDateStr();
+    const todayDate = new Date(Date.now() - this._dateService.startOfNextDayDiff);
+    const todayTS = todayDate.getTime();
+    const todayStr = this._dateService.todayStr();
 
     TaskLog.log('[AddTasksForTomorrow] Starting addAllDueToday', { todayStr });
 

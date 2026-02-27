@@ -55,6 +55,9 @@ export class SimpleCounterService implements OnDestroy {
   private _subscriptions = new Subscription();
   private _visibilityHandler: (() => void) | null = null;
 
+  // Cache for countdown remaining time (survives component destruction/recreation)
+  private _countdownRemaining = new Map<string, number>();
+
   simpleCounters$: Observable<SimpleCounter[]> = this._store$.pipe(
     select(selectAllSimpleCounters),
   );
@@ -96,6 +99,18 @@ export class SimpleCounterService implements OnDestroy {
    */
   flushAccumulatedTime(): void {
     this._flushAccumulatedTime();
+  }
+
+  getCountdownRemaining(id: string): number | undefined {
+    return this._countdownRemaining.get(id);
+  }
+
+  setCountdownRemaining(id: string, remaining: number): void {
+    this._countdownRemaining.set(id, remaining);
+  }
+
+  clearCountdownRemaining(id: string): void {
+    this._countdownRemaining.delete(id);
   }
 
   private _setupStopwatchTracking(): void {
@@ -296,6 +311,7 @@ export class SimpleCounterService implements OnDestroy {
   deleteSimpleCounter(id: string): void {
     // Clean up accumulators to prevent memory leak
     this._stopwatchAccumulator.clearOne(id);
+    this._countdownRemaining.delete(id);
     this._store$.dispatch(deleteSimpleCounter({ id }));
   }
 
@@ -303,6 +319,7 @@ export class SimpleCounterService implements OnDestroy {
     // Clean up accumulators to prevent memory leak
     for (const id of ids) {
       this._stopwatchAccumulator.clearOne(id);
+      this._countdownRemaining.delete(id);
     }
     this._store$.dispatch(deleteSimpleCounters({ ids }));
   }
@@ -311,6 +328,10 @@ export class SimpleCounterService implements OnDestroy {
     // If type is changing, flush the old type's accumulated data first
     if (changes.type !== undefined) {
       this._stopwatchAccumulator.flushOne(id);
+    }
+    // Clear stale countdown cache when duration or type changes
+    if (changes.countdownDuration !== undefined || changes.type !== undefined) {
+      this._countdownRemaining.delete(id);
     }
     this._store$.dispatch(updateSimpleCounter({ simpleCounter: { id, changes } }));
   }

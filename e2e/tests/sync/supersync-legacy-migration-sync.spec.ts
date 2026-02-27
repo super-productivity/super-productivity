@@ -740,7 +740,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       // Verify archive data via IndexedDB (archived tasks aren't visible in UI by default)
       const archiveData = await pageB.evaluate(async () => {
         return new Promise((resolve, reject) => {
-          const dbRequest = indexedDB.open('SUP_OPS', 4);
+          const dbRequest = indexedDB.open('SUP_OPS', 5);
           dbRequest.onsuccess = (event) => {
             const db = (event.target as IDBOpenDBRequest).result;
             const tx = db.transaction('archive_young', 'readonly');

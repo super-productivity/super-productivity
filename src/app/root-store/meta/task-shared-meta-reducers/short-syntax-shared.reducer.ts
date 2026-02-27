@@ -9,9 +9,10 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { unique } from '../../../util/unique';
-import { isToday } from '../../../util/is-today.util';
+import { isTodayWithOffset } from '../../../util/is-today.util';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import {
   ActionHandlerMap,
   addTaskToPlannerDay,
@@ -243,7 +244,13 @@ const handleScheduleWithTime = (
 
   // Handle today tag update
   const todayTag = getTag(updatedState, TODAY_TAG.id);
-  const isScheduledForToday = isToday(dueWithTime);
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const startOfNextDayDiffMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+  const isScheduledForToday = isTodayWithOffset(
+    dueWithTime,
+    todayStr,
+    startOfNextDayDiffMs,
+  );
   const isCurrentlyInToday = todayTag.taskIds.includes(task.id);
 
   if (isScheduledForToday !== isCurrentlyInToday) {
@@ -274,7 +281,7 @@ const handlePlanForDay = (
   isAddToTop: boolean | undefined,
 ): SchedulingResult => {
   let updatedState = state;
-  const todayStr = getDbDateStr();
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const isForToday = day === todayStr;
   const currentTask = state[TASK_FEATURE_NAME].entities[task.id] as Task;
 

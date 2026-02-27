@@ -122,6 +122,33 @@
         "ISSUE_NOT_FOUND": "CalDAV: Task \"{{issueId}}\" seems to be deleted on server."
       }
     },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Nextcloud Base URL",
+        "USERNAME": "Your Nextcloud username",
+        "PASSWORD": "Your Nextcloud app password",
+        "FILTER_BY_ASSIGNEE": "Only import cards assigned to me",
+        "IS_TRANSITION_ISSUES_ENABLED": "Sync completion status and title back to Nextcloud Deck",
+        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
+        "TITLE_TEMPLATE": "Task title template",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Example: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leave empty for card title only."
+      },
+      "FORM_SECTION": {
+        "HELP": "Configure your Nextcloud Deck integration to import cards as tasks. Use an app password for authentication."
+      },
+      "ISSUE_CONTENT": {
+        "DECK_DESCRIPTION": "Deck Description",
+        "STACK": "Stack",
+        "ASSIGNED_USERS": "Assigned Users",
+        "LABELS": "Labels"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Board not found",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Card \"{{issueId}}\" seems to be deleted on server.",
+        "ERR_CREDENTIALS_MISSING": "Enter Nextcloud URL, username, and password first.",
+        "ERR_LOAD_BOARDS": "Failed to load Deck boards. Check your credentials."
+      }
+    },
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Add as Task",
@@ -1535,7 +1562,7 @@
       },
       "D_CONFIRM_UPDATE_INSTANCES": {
         "CANCEL": "Only future tasks",
-        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or just future tasks?",
+        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
         "OK": "Update all instances"
       },
       "D_DELETE_INSTANCE": {
@@ -1547,11 +1574,11 @@
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
         "HEATMAP_LABEL": "Activity",
-        "HELP1": "Recurring tasks are meant for daily chores, e.g. \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
-        "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project and will be automatically marked as completed at the end of the day. They will be handled as different instances. So you can freely add subtasks etc.",
+        "HELP1": "Recurring tasks are for repeating tasks, e.g. 'Organization', 'Daily Meeting', 'Code Review', 'Check Emails', or similar tasks that are likely to occur again and again.",
+        "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project. Each occurance will be handled as a different instance. So you can freely make modifications to each task, such as adding subtasks.",
         "HELP3": "Tasks imported from Jira or Git Issues cannot be recurring.",
-        "HELP4": "The 'Order' field refers to the creation order recurring tasks. It is only in effect for recurring tasks that are created at the same time. A lower value means a task will be higher up the list; a higher number means that it will be further down. A value greater than 0 means items are created at the bottom of normal tasks.",
-        "TAG_LABEL": "Tags to add"
+        "HELP4": "The 'Order' field refers to the creation order for recurring tasks. It only affects recurring tasks created at the same time. A lower value means a task will created higher up the list; a higher number means it will be further down. A value greater than 0 means tasks are created below normal tasks.",
+        "TAG_LABEL": "Tags"
       },
       "F": {
         "C_DAY": "Day",
@@ -1812,7 +1839,6 @@
     "SUBMIT": "Submit",
     "TITLE": "Title",
     "TODAY_TAG_TITLE": "Today",
-    "TRACKING_INTERVAL_DESCRIPTION": "Track time using this interval in milliseconds. You may want to increase this to reduce disk writes. See GitHub issue #2355.",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "Without Project",
     "YESTERDAY": "Yesterday"
@@ -1983,6 +2009,8 @@
       "RU": "Русский",
       "SK": "Slovak",
       "SV": "Svenska",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
       "TIME_LOCALE": "Datetime format locale",
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_DE_DE": "German: 24-hour, DD.MM.YYYY",
@@ -2001,6 +2029,8 @@
       "TIME_LOCALE_CS_CZ": "Czech: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_SK_SK": "Slovak: 24-hour, DD. MM. YYYY",
       "TIME_LOCALE_UK_UA": "Ukrainian: 24-hour, DD.MM.YYYY",
+      "TIME_LOCALE_RO_RO": "Romanian: 24-hour, DD.MM.YYYY",
+      "TIME_LOCALE_RO_MD": "Romanian (Moldova): 24-hour, DD.MM.YYYY",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
@@ -2054,6 +2084,7 @@
       "COUNTDOWN_DURATION": "Show banner X before the actual reminder",
       "DEFAULT_TASK_REMIND_OPTION": "Default remind option selected when creating tasks",
       "DISABLE_REMINDERS": "Disable all reminders",
+      "HELP": "<p><strong>Important:</strong> Reminders use <strong>local notifications</strong>, not push notifications. This means the app needs to have been opened at least once on your device for reminders to be scheduled. Reminders set on another device will only appear after the app syncs on the target device.</p><p>On <strong>iOS</strong>, make sure notifications are enabled for Super Productivity in your device settings under 'Settings' > 'Notifications'.</p>",
       "IS_COUNTDOWN_BANNER_ENABLED": "Show countdown banner before reminders are due",
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "TITLE": "Reminders",
@@ -2117,7 +2148,6 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "Focus app window when reminder is active (desktop only)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Notify when time tracking reminder is shown",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Show tracking reminder on mobile app",
-      "L_TRACKING_INTERVAL": "Time tracking interval (EXPERIMENTAL)",
       "L_TRACKING_REMINDER_MIN_TIME": "Time to wait before showing tracking reminder banner",
       "TITLE": "Time Tracking"
     }

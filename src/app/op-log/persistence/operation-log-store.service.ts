@@ -23,6 +23,7 @@ import {
   BACKUP_KEY,
   OPS_INDEXES,
   ArchiveStoreEntry,
+  ProfileDataStoreEntry,
 } from './db-keys.const';
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
@@ -146,6 +147,14 @@ interface OpLogDB extends DBSchema {
     key: string; // SINGLETON_KEY ('current')
     value: ArchiveStoreEntry;
   };
+  /**
+   * Stores profile data (CompleteBackup) for user profile switching.
+   * Moved from localStorage to avoid 5-10 MB quota limits.
+   */
+  [STORE_NAMES.PROFILE_DATA]: {
+    key: string; // profile ID
+    value: ProfileDataStoreEntry;
+  };
 }
 
 /**
@@ -176,7 +185,15 @@ export class OperationLogStoreService {
   private _vectorClockCache: VectorClock | null = null;
 
   async init(): Promise<void> {
-    this._db = await this._openDbWithRetry();
+    const db = await this._openDbWithRetry();
+    db.addEventListener('close', () => {
+      Log.warn(
+        '[OpLogStore] IndexedDB connection closed by browser. Will re-open on next access.',
+      );
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
+    this._db = db;
   }
 
   /**
@@ -1142,6 +1159,7 @@ export class OperationLogStoreService {
         STORE_NAMES.VECTOR_CLOCK,
         STORE_NAMES.ARCHIVE_YOUNG,
         STORE_NAMES.ARCHIVE_OLD,
+        STORE_NAMES.PROFILE_DATA,
       ],
       'readwrite',
     );
@@ -1151,6 +1169,7 @@ export class OperationLogStoreService {
     await tx.objectStore(STORE_NAMES.VECTOR_CLOCK).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
+    await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
     await tx.done;
     // Invalidate all caches
     this._appliedOpIdsCache = null;
@@ -1454,6 +1473,44 @@ export class OperationLogStoreService {
       }
       throw e;
     }
+  }
+  // ============================================================
+  // Profile Data Storage
+  // ============================================================
+
+  /**
+   * Saves profile data (CompleteBackup) for a specific profile.
+   */
+  async saveProfileData(
+    profileId: string,
+    data: ProfileDataStoreEntry['data'],
+  ): Promise<void> {
+    await this._ensureInit();
+    await this.db.put(STORE_NAMES.PROFILE_DATA, {
+      id: profileId,
+      data,
+      lastModified: Date.now(),
+    });
+  }
+
+  /**
+   * Loads profile data (CompleteBackup) for a specific profile.
+   * Returns null if no data exists for the given profile ID.
+   */
+  async loadProfileData(
+    profileId: string,
+  ): Promise<ProfileDataStoreEntry['data'] | null> {
+    await this._ensureInit();
+    const entry = await this.db.get(STORE_NAMES.PROFILE_DATA, profileId);
+    return entry?.data ?? null;
+  }
+
+  /**
+   * Deletes profile data for a specific profile.
+   */
+  async deleteProfileData(profileId: string): Promise<void> {
+    await this._ensureInit();
+    await this.db.delete(STORE_NAMES.PROFILE_DATA, profileId);
   }
 }
 

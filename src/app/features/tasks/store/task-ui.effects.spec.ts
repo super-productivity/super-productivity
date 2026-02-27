@@ -18,6 +18,7 @@ import { WorkContextType } from '../../work-context/work-context.model';
 import { selectProjectById } from '../../project/store/project.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { Action } from '@ngrx/store';
+import { LayoutService } from '../../../core-ui/layout/layout.service';
 
 describe('TaskUiEffects', () => {
   let effects: TaskUiEffects;
@@ -25,6 +26,7 @@ describe('TaskUiEffects', () => {
   let snackServiceMock: jasmine.SpyObj<SnackService>;
   let taskServiceMock: jasmine.SpyObj<TaskService>;
   let navigateToTaskServiceMock: jasmine.SpyObj<NavigateToTaskService>;
+  let layoutServiceMock: jasmine.SpyObj<LayoutService>;
 
   const createMockTask = (overrides: Partial<Task> = {}): Task =>
     ({
@@ -73,6 +75,7 @@ describe('TaskUiEffects', () => {
       navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
         'navigate',
       ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
 
       const workContextServiceMock = {
         mainListTaskIds$: of(['existing-task-1', 'existing-task-2']),
@@ -89,6 +92,7 @@ describe('TaskUiEffects', () => {
           { provide: SnackService, useValue: snackServiceMock },
           { provide: TaskService, useValue: taskServiceMock },
           { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
@@ -151,6 +155,20 @@ describe('TaskUiEffects', () => {
 
       actions$.next(createAddTaskAction(task));
     });
+
+    it('should close add task bar when Go to task action is clicked', (done) => {
+      const task = createMockTask({ id: 'existing-task-1' });
+
+      effects.taskCreatedSnack$.subscribe(() => {
+        const snackParams = snackServiceMock.open.calls.mostRecent()
+          .args[0] as SnackParams;
+        snackParams.actionFn!();
+        expect(layoutServiceMock.hideAddTaskBar).toHaveBeenCalled();
+        done();
+      });
+
+      actions$.next(createAddTaskAction(task));
+    });
   });
 
   describe('taskCreatedSnack$ with non-visible task', () => {
@@ -161,6 +179,7 @@ describe('TaskUiEffects', () => {
       navigateToTaskServiceMock = jasmine.createSpyObj('NavigateToTaskService', [
         'navigate',
       ]);
+      layoutServiceMock = jasmine.createSpyObj('LayoutService', ['hideAddTaskBar']);
 
       const workContextServiceMock = {
         mainListTaskIds$: of(['existing-task-1', 'existing-task-2']),
@@ -182,6 +201,7 @@ describe('TaskUiEffects', () => {
           { provide: SnackService, useValue: snackServiceMock },
           { provide: TaskService, useValue: taskServiceMock },
           { provide: NavigateToTaskService, useValue: navigateToTaskServiceMock },
+          { provide: LayoutService, useValue: layoutServiceMock },
           { provide: WorkContextService, useValue: workContextServiceMock },
           {
             provide: NotifyService,
@@ -242,6 +262,20 @@ describe('TaskUiEffects', () => {
         const snackParams = snackServiceMock.open.calls.mostRecent()
           .args[0] as SnackParams;
         expect(snackParams.msg).toBe(T.F.TASK.S.CREATED_FOR_PROJECT);
+        done();
+      });
+
+      actions$.next(createAddTaskAction(task));
+    });
+
+    it('should close add task bar when Go to task action is clicked', (done) => {
+      const task = createMockTask({ id: 'new-task-456', projectId: 'project-1' });
+
+      effects.taskCreatedSnack$.subscribe(() => {
+        const snackParams = snackServiceMock.open.calls.mostRecent()
+          .args[0] as SnackParams;
+        snackParams.actionFn!();
+        expect(layoutServiceMock.hideAddTaskBar).toHaveBeenCalled();
         done();
       });
 

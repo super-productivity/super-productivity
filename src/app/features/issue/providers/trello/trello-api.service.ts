@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable, throwError, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
 import { TrelloCfg } from './trello.model';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { SearchResultItem } from '../../issue.model';
@@ -55,6 +55,8 @@ export class TrelloApiService {
   private _http = inject(HttpClient);
   private _snackService = inject(SnackService);
 
+  private _memberIdCache: { [username: string]: string } = {};
+
   testConnection$(cfg: TrelloCfg): Observable<boolean> {
     return this._request$<{ id: string }>(`/boards/${cfg.boardId}`, cfg, {
       fields: 'id',
@@ -96,6 +98,28 @@ export class TrelloApiService {
     cfg: TrelloCfg,
     maxResults: number = 200,
   ): Observable<TrelloIssueReduced[]> {
+    if (cfg.filterUsername) {
+      return this.getCurrentMemberId$(cfg.filterUsername, cfg).pipe(
+        switchMap((memberId) =>
+          this._fetchBoardCards$(cfg, maxResults).pipe(
+            map((cards) =>
+              cards
+                .filter(
+                  (card) =>
+                    card.members && card.members.some((member) => member.id === memberId),
+                )
+                .map((card) => mapTrelloCardReduced(card)),
+            ),
+          ),
+        ),
+        catchError(() =>
+          // Fallback to returning all cards if username resolution fails
+          this._fetchBoardCards$(cfg, maxResults).pipe(
+            map((cards) => cards.map((card) => mapTrelloCardReduced(card))),
+          ),
+        ),
+      );
+    }
     return this._fetchBoardCards$(cfg, maxResults).pipe(
       map((cards) => cards.map((card) => mapTrelloCardReduced(card))),
     );
@@ -107,6 +131,29 @@ export class TrelloApiService {
       filter: 'open',
       fields: 'name,id',
     });
+  }
+
+  getCurrentMemberId$(username: string, cfg: TrelloCfg): Observable<string> {
+    if (this._memberIdCache[username]) {
+      return of(this._memberIdCache[username]);
+    }
+    return this._request$<any>(`/members/${username}`, cfg, {
+      fields: 'id',
+    }).pipe(
+      map((res) => {
+        this._memberIdCache[username] = res.id;
+        return res.id;
+      }),
+      catchError((error) => {
+        const errorMsg = `Trello failed to resolve username "${username}": ${getErrorTxt(error)}`;
+        console.error(errorMsg);
+        this._snackService.open({
+          type: 'ERROR',
+          msg: errorMsg,
+        });
+        return throwError(() => new Error(errorMsg));
+      }),
+    );
   }
 
   getIssueById$(issueId: string, cfg: TrelloCfg): Observable<TrelloIssue> {

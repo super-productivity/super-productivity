@@ -19,7 +19,7 @@
 // Mode selector at the top (Preparation state)
 .focus-mode-select-mode {
   position: absolute;
-  top: var(--s2);
+  top: calc(var(--s2) + var(--safe-area-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-focus-mode-main-selector);

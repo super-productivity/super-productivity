@@ -1,12 +1,14 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { Component, input, NO_ERRORS_SCHEMA } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, Subject } from 'rxjs';
 import { ReactiveFormsModule } from '@angular/forms';
 import { FormlyConfigModule } from '../../../ui/formly-config.module';
+import { CustomDateAdapter } from '../../../core/date-time-format/custom-date-adapter';
 
 import { DialogEditTaskRepeatCfgComponent } from './dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfgService } from '../task-repeat-cfg.service';
@@ -87,13 +89,14 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
 
     await TestBed.configureTestingModule({
       imports: [
         DialogEditTaskRepeatCfgComponent,
         MatDialogModule,
+        MatNativeDateModule,
         NoopAnimationsModule,
         TranslateModule.forRoot(),
         FormlyConfigModule,
@@ -109,6 +112,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         { provide: TagService, useValue: mockTagService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateAdapter, useClass: CustomDateAdapter },
       ],
     })
       .overrideComponent(DialogEditTaskRepeatCfgComponent, {

@@ -238,6 +238,7 @@ export class WorkContextMenuComponent implements OnInit {
 
       this._matDialog.open(DialogWorkContextSettingsComponent, {
         restoreFocus: true,
+        backdropClass: 'cdk-overlay-transparent-backdrop',
         data: {
           isProject: this.isForProject,
           entity,

@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { DateService } from '../../core/date/date.service';
-import { LayoutService } from '../../core-ui/layout/layout.service';
 import { PlannerActions } from './store/planner.actions';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -11,6 +10,7 @@ import { PlannerPlanViewComponent } from './planner-plan-view/planner-plan-view.
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { PlannerCalendarNavComponent } from './planner-calendar-nav/planner-calendar-nav.component';
 import { PlannerService } from './planner.service';
+import { LayoutService } from '../../core-ui/layout/layout.service';
 
 @Component({
   selector: 'planner',

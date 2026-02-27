@@ -1457,7 +1457,7 @@ describe('taskSharedCrudMetaReducer', () => {
     });
 
     describe('convertToMainTask action', () => {
-      it('should remove parent from tag when converting sub-task to main task with same tag', () => {
+      it('should keep parent tags when converting sub-task to main task with same tag', () => {
         // Setup: parent and sub-task exist, parent is in tag
         const testState = createStateWithExistingTasks(
           ['parent-task', 'sub-task'],
@@ -1487,14 +1487,14 @@ describe('taskSharedCrudMetaReducer', () => {
         expectStateUpdate(
           {
             ...expectTaskUpdate('parent-task', {
-              tagIds: [], // Tag removed from parent
+              tagIds: ['tag1'], // Parent keeps its tag
             }),
             ...expectTaskUpdate('sub-task', {
               parentId: undefined, // No longer a sub-task
               tagIds: ['tag1'], // Inherited parent's tag
             }),
             ...expectTagUpdate('tag1', {
-              taskIds: ['sub-task'], // Only converted task in tag
+              taskIds: ['sub-task', 'parent-task'], // Both tasks in tag
             }),
           },
           action,

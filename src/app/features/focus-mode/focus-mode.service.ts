@@ -1,13 +1,13 @@
 import { computed, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Store } from '@ngrx/store';
-import { interval } from 'rxjs';
 import { filter, tap } from 'rxjs/operators';
 import * as actions from './store/focus-mode.actions';
 import * as selectors from './store/focus-mode.selectors';
 import { GlobalConfigService } from '../config/global-config.service';
 import { selectFocusModeConfig } from '../config/store/global-config.reducer';
 import { FocusModeMode } from './focus-mode.model';
+import { GlobalTrackingIntervalService } from '../../core/global-tracking-interval/global-tracking-interval.service';
 
 @Injectable({
   providedIn: 'root',
@@ -15,6 +15,7 @@ import { FocusModeMode } from './focus-mode.model';
 export class FocusModeService {
   private _store = inject(Store);
   private _globalConfigService = inject(GlobalConfigService);
+  private _globalTrackingInterval = inject(GlobalTrackingIntervalService);
 
   // State signals
   currentScreen = this._store.selectSignal(selectors.selectCurrentScreen);
@@ -60,9 +61,9 @@ export class FocusModeService {
 
   // Single timer that updates the store at 1-second intervals for smooth UI
   constructor() {
-    // Use a fixed 1-second interval for focus mode timer
-    // This is independent of the global tracking interval (which controls disk writes)
-    interval(1000)
+    // Reuse the shared global 1-second interval to coalesce both ticks
+    // into the same event loop turn, reducing change detection overhead
+    this._globalTrackingInterval.globalInterval$
       .pipe(
         filter(() => this.isRunning() === true),
         tap(() => this._store.dispatch(actions.tick())),

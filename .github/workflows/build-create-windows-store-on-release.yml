@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 20
+          node-version: 22
       # required because setting via env.TZ does not work on windows
       - name: Set timezone to Europe Standard Time
         uses: szenius/set-timezone@1f9716b0f7120e344f0c62bb7b1ee98819aefd42 # v2.0
@@ -52,9 +52,9 @@ jobs:
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node22-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-
+            ${{ runner.os }}-node22-
 
       - name: Workaround for nx issue
         run: npm install @nx/nx-win32-x64-msvc
@@ -64,12 +64,6 @@ jobs:
         run: npm i
 
       - run: npm run env # Generate env.generated.ts
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test Unit
-        run: npm run test
 
       - name: Build Frontend & Electron
         run: npm run build

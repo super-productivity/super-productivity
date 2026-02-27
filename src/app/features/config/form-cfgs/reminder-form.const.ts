@@ -5,7 +5,7 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 
 export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
   title: T.GCF.REMINDER.TITLE,
-  // help: T.GCF.REMINDER.HELP,
+  help: T.GCF.REMINDER.HELP,
   key: 'reminder',
   items: [
     {

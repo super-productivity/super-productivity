@@ -200,7 +200,7 @@ export class ReminderModule {
 
   @throttle(60000)
   private _showNotification(reminders: TaskWithReminderData[]): void {
-    // Skip on Android - we use native notifications with snooze button instead
+    // Skip on native platforms (iOS/Android) - native scheduled notifications handle this
     if (IS_NATIVE_PLATFORM) {
       return;
     }

@@ -45,7 +45,7 @@ export class ScheduleMonthComponent {
       const date = new Date(sundayDate);
       date.setDate(sundayDate.getDate() + dayIndex);
       // 'EEE' format gives abbreviated day name (e.g., 'Mon', 'Tue')
-      headers.push(formatDate(date, 'EEE', this._dateTimeFormatService.currentLocale));
+      headers.push(formatDate(date, 'EEE', this._dateTimeFormatService.currentLocale()));
     }
 
     return headers;

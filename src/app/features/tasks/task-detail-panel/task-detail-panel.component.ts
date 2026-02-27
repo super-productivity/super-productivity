@@ -187,7 +187,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
         }
         const [key, params] = getTaskRepeatInfoText(
           repeatCfg,
-          this._dateTimeFormatService.currentLocale,
+          this._dateTimeFormatService.currentLocale(),
           this._dateTimeFormatService,
         );
         return this._translateService.instant(key, params);
@@ -368,7 +368,13 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       skip(1), // Skip initial emission
       takeUntilDestroyed(this._destroyRef),
     )
-    .subscribe(() => this._focusFirst());
+    .subscribe(() => {
+      // Only auto-focus panel content when focus is already inside the panel,
+      // to avoid stealing focus from the main task list during navigation (#6578)
+      if (document.activeElement?.closest('task-detail-panel')) {
+        this._focusFirst();
+      }
+    });
   // -------
 
   private _focusTimeout?: number;

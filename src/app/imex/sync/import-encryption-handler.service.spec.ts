@@ -43,21 +43,19 @@ describe('ImportEncryptionHandlerService', () => {
   };
 
   beforeEach(() => {
-    mockSyncProvider = jasmine.createSpyObj('SyncProvider', [
-      'deleteAllData',
-      'setPrivateCfg',
-    ]);
+    mockSyncProvider = jasmine.createSpyObj('SyncProvider', ['deleteAllData']);
     mockSyncProvider.id = SyncProviderId.SuperSync;
     mockSyncProvider.deleteAllData.and.resolveTo({ success: true });
-    mockSyncProvider.setPrivateCfg.and.resolveTo();
     mockSyncProvider.privateCfg = {
       load: jasmine.createSpy('load').and.resolveTo(mockExistingCfg),
     } as any;
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'getActiveProvider',
+      'setProviderConfig',
     ]);
     mockProviderManager.getActiveProvider.and.returnValue(mockSyncProvider as any);
+    mockProviderManager.setProviderConfig.and.resolveTo();
 
     mockSnapshotUploadService = jasmine.createSpyObj('SnapshotUploadService', [
       'gatherSnapshotData',
@@ -190,13 +188,14 @@ describe('ImportEncryptionHandlerService', () => {
         true,
       );
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: 'new-key',
           isEncryptionEnabled: true,
         }),
       );
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledBefore(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledBefore(
         mockSnapshotUploadService.uploadSnapshot,
       );
     });
@@ -293,7 +292,8 @@ describe('ImportEncryptionHandlerService', () => {
 
       await service.handleImportEncryptionIfNeeded(importedData);
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: 'imported-encryption-key',
           isEncryptionEnabled: true,

@@ -17,7 +17,7 @@ import { GlobalTrackingIntervalService } from '../../../core/global-tracking-int
 import { merge, of, Subject, Subscription } from 'rxjs';
 import { DateService } from 'src/app/core/date/date.service';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { distinctUntilChanged, filter, map, scan, switchMap } from 'rxjs/operators';
+import { distinctUntilChanged, filter, map, scan, switchMap, tap } from 'rxjs/operators';
 import { BannerService } from '../../../core/banner/banner.service';
 import { BannerId } from '../../../core/banner/banner.model';
 import { MatIconButton } from '@angular/material/button';
@@ -78,20 +78,34 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
 
   countdownTime$ = this._countdownDuration$.pipe(
     switchMap((countdownDuration) =>
-      merge(of(true), this._resetCountdown$).pipe(
-        switchMap(() =>
-          this._globalTrackingIntervalService.tick$.pipe(
+      merge(of(false), this._resetCountdown$.pipe(map(() => true))).pipe(
+        switchMap((isManualReset) => {
+          const id = this.simpleCounter()?.id;
+          const cached = id
+            ? this._simpleCounterService.getCountdownRemaining(id)
+            : undefined;
+          // Use cached remaining time on component init (survives component recreation),
+          // but only if it's valid (not exceeding configured duration)
+          const initial =
+            !isManualReset && cached !== undefined && cached <= countdownDuration
+              ? cached
+              : countdownDuration;
+
+          return this._globalTrackingIntervalService.tick$.pipe(
             scan((acc, tick) => {
               if (!this.simpleCounter()?.isOn) {
                 return acc;
               }
-
               const newVal = acc - tick.duration;
               return newVal < 0 ? 0 : newVal;
-            }, countdownDuration),
-            // }, 10000),
-          ),
-        ),
+            }, initial),
+            tap((remaining) => {
+              if (id) {
+                this._simpleCounterService.setCountdownRemaining(id, remaining);
+              }
+            }),
+          );
+        }),
         distinctUntilChanged(),
       ),
     ),
@@ -139,6 +153,10 @@ export class SimpleCounterButtonComponent implements OnDestroy, OnInit {
   countUpAndNextRepeatCountdownSession(): void {
     this._bannerService.dismiss(BannerId.SimpleCounterCountdownComplete);
     this.toggleCounter();
+    const id = this.simpleCounter()?.id;
+    if (id) {
+      this._simpleCounterService.clearCountdownRemaining(id);
+    }
     this._resetCountdown$.next(undefined);
     this.isTimeUp.set(false);
   }

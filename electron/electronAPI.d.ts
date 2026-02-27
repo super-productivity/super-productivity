@@ -194,6 +194,12 @@ export interface ElectronAPI {
     focusModeMode?: string,
   );
 
+  updateTodayTasks(
+    tasks: { id: string; title: string; timeEstimate: number; timeSpent: number }[],
+  ): void;
+
+  onSwitchTask(listener: (taskId: string) => void): void;
+
   exec(command: string): void;
 
   pluginExecNodeScript(

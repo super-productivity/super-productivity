@@ -7,7 +7,7 @@ describe('LocaleDatePipe', () => {
 
   beforeEach(() => {
     const spy = jasmine.createSpyObj('DateTimeFormatService', ['formatTime'], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
 
     TestBed.configureTestingModule({

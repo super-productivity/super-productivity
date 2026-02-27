@@ -79,17 +79,5 @@ export const TIME_TRACKING_FORM_CFG: ConfigFormSection<TimeTrackingConfig> = {
         description: T.G.DURATION_DESCRIPTION,
       },
     },
-    {
-      key: 'trackingInterval',
-      type: 'input',
-      defaultValue: 0,
-      templateOptions: {
-        label: T.GCF.TIME_TRACKING.L_TRACKING_INTERVAL,
-        description: T.G.TRACKING_INTERVAL_DESCRIPTION,
-        type: 'number',
-        min: 1000,
-        max: 100_000,
-      },
-    },
   ],
 };

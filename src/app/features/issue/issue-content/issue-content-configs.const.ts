@@ -16,6 +16,7 @@ import { TRELLO_ISSUE_CONTENT_CONFIG } from '../providers/trello/trello-issue-co
 import { LINEAR_ISSUE_CONTENT_CONFIG } from '../providers/linear/linear-issue-content.const';
 import { CLICKUP_ISSUE_CONTENT_CONFIG } from '../providers/clickup/clickup-issue-content.const';
 import { AZURE_DEVOPS_ISSUE_CONTENT_CONFIG } from '../providers/azure-devops/azure-devops-issue/azure-devops-issue-content.const';
+import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
 
 // Re-export types for backwards compatibility
 export { IssueFieldType, IssueFieldConfig, IssueCommentConfig, IssueContentConfig };
@@ -32,6 +33,7 @@ export const ISSUE_CONTENT_CONFIGS: Record<IssueProviderKey, IssueContentConfig<
   LINEAR: LINEAR_ISSUE_CONTENT_CONFIG,
   CLICKUP: CLICKUP_ISSUE_CONTENT_CONFIG,
   AZURE_DEVOPS: AZURE_DEVOPS_ISSUE_CONTENT_CONFIG,
+  NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
   ICAL: {
     issueType: 'ICAL',
     fields: [],

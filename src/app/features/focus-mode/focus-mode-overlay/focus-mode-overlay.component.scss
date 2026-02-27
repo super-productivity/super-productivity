@@ -55,8 +55,8 @@ main {
 
 .close-btn {
   position: absolute;
-  top: var(--s);
-  right: var(--s);
+  top: calc(var(--s) + var(--safe-area-top));
+  right: calc(var(--s) + var(--safe-area-right));
   width: 56px;
   height: 56px;
   z-index: var(--z-focus-mode-close-btn);
@@ -99,7 +99,7 @@ main {
 
 .focus-mode-select-mode {
   position: absolute;
-  top: var(--s3);
+  top: calc(var(--s3) + var(--safe-area-top));
   left: 50%;
   transform: translateX(-50%);
   width: min(100%, 560px);

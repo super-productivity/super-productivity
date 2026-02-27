@@ -6,12 +6,13 @@
  */
 
 import { ArchiveModel } from '../../features/time-tracking/time-tracking.model';
+import { CompleteBackup } from '../sync-exports';
 
 /** Database name */
 export const DB_NAME = 'SUP_OPS';
 
 /** Current database schema version */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 /** Object store names */
 export const STORE_NAMES = {
@@ -27,6 +28,8 @@ export const STORE_NAMES = {
   ARCHIVE_YOUNG: 'archive_young' as const,
   /** Archive old - older archived tasks (>= 21 days) */
   ARCHIVE_OLD: 'archive_old' as const,
+  /** Profile data - stores complete backups for user profile switching */
+  PROFILE_DATA: 'profile_data' as const,
 } as const;
 
 /** Common key used for singleton entries */
@@ -48,5 +51,14 @@ export const OPS_INDEXES = {
 export interface ArchiveStoreEntry {
   id: typeof SINGLETON_KEY;
   data: ArchiveModel;
+  lastModified: number;
+}
+
+/**
+ * Entry stored in the profile_data object store.
+ */
+export interface ProfileDataStoreEntry {
+  id: string;
+  data: CompleteBackup<any>;
   lastModified: number;
 }

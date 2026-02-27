@@ -15,7 +15,7 @@ import { WorkContextThemeCfg } from '../work-context.model';
 import { ProjectService } from '../../project/project.service';
 import { TagService } from '../../tag/tag.service';
 import { buildWorkContextSettingsFormCfg } from './work-context-settings-form-cfg.const';
-import { removeDebounceFromFormItems } from '../../../util/remove-debounce-from-form-items';
+import { adjustToLiveFormlyForm } from '../../../util/adjust-to-live-formly-form';
 import { MatButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -53,24 +53,40 @@ export class DialogWorkContextSettingsComponent {
   form: UntypedFormGroup = new UntypedFormGroup({});
   fields: FormlyFieldConfig[];
 
+  private _originalEntityData: Project | Tag;
+
   constructor() {
     const entity = this._data.entity;
     this.entityData = {
       ...entity,
       theme: { ...entity.theme },
     } as Project | Tag;
-    this.fields = removeDebounceFromFormItems(
+    this._originalEntityData = {
+      ...entity,
+      theme: { ...entity.theme },
+    } as Project | Tag;
+    this.fields = adjustToLiveFormlyForm(
       buildWorkContextSettingsFormCfg(this._data.isProject),
     );
   }
 
-  submit(): void {
-    if (!this.form.valid) {
-      this.form.markAllAsTouched();
-      return;
+  onModelChange(model: Project | Tag): void {
+    this.entityData = model;
+    if (this.form.valid) {
+      this._applyChanges(model);
     }
+  }
 
-    const data = this.entityData;
+  done(): void {
+    this._matDialogRef.close();
+  }
+
+  cancelEdit(): void {
+    this._applyChanges(this._originalEntityData);
+    this._matDialogRef.close();
+  }
+
+  private _applyChanges(data: Project | Tag): void {
     const theme: WorkContextThemeCfg = { ...data.theme };
     if (this.isProject) {
       const p = data as Project;
@@ -90,10 +106,5 @@ export class DialogWorkContextSettingsComponent {
         theme,
       });
     }
-    this._matDialogRef.close();
-  }
-
-  cancelEdit(): void {
-    this._matDialogRef.close();
   }
 }

@@ -22,8 +22,10 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { unique } from '../../../util/unique';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { OpLog } from '../../../core/log';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 
 /**
  * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
@@ -200,11 +202,11 @@ const syncTagTaskIds = (
 };
 
 /**
- * Updates TODAY_TAG.taskIds when a task's dueDay changes via LWW Update.
+ * Updates TODAY_TAG.taskIds when a task's dueDay or dueWithTime changes via LWW Update.
  *
- * TODAY_TAG is a virtual tag where membership is determined by task.dueDay,
- * not by task.tagIds. When LWW Update recreates a task or changes its dueDay,
- * we must update TODAY_TAG.taskIds accordingly.
+ * TODAY_TAG is a virtual tag where membership is determined by task.dueDay OR
+ * task.dueWithTime (mutually exclusive). When LWW Update recreates a task or
+ * changes either field, we must update TODAY_TAG.taskIds accordingly.
  *
  * See: docs/ai/today-tag-architecture.md
  */
@@ -213,10 +215,21 @@ const syncTodayTagTaskIds = (
   taskId: string,
   oldDueDay: string | undefined,
   newDueDay: string | undefined,
+  oldDueWithTime: number | undefined,
+  newDueWithTime: number | undefined,
 ): RootState => {
-  const todayStr = getDbDateStr();
-  const wasToday = oldDueDay === todayStr;
-  const isNowToday = newDueDay === todayStr;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const offsetMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+
+  const isDueToday = (
+    dueDay: string | undefined,
+    dueWithTime: number | undefined,
+  ): boolean =>
+    dueDay === todayStr ||
+    (!!dueWithTime && isTodayWithOffset(dueWithTime, todayStr, offsetMs));
+
+  const wasToday = isDueToday(oldDueDay, oldDueWithTime);
+  const isNowToday = isDueToday(newDueDay, newDueWithTime);
 
   // No change in TODAY membership
   if (wasToday === isNowToday) {
@@ -513,10 +526,19 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
       updatedState = syncTagTaskIds(updatedState, entityId, oldTagIds, newTagIds);
 
-      // Sync TODAY_TAG.taskIds when dueDay changes (virtual tag based on dueDay)
+      // Sync TODAY_TAG.taskIds when dueDay or dueWithTime changes (virtual tag based on dueDay/dueWithTime)
       const oldDueDay = existingEntity?.dueDay as string | undefined;
       const newDueDay = entityData['dueDay'] as string | undefined;
-      updatedState = syncTodayTagTaskIds(updatedState, entityId, oldDueDay, newDueDay);
+      const oldDueWithTime = existingEntity?.dueWithTime as number | undefined;
+      const newDueWithTime = entityData['dueWithTime'] as number | undefined;
+      updatedState = syncTodayTagTaskIds(
+        updatedState,
+        entityId,
+        oldDueDay,
+        newDueDay,
+        oldDueWithTime,
+        newDueWithTime,
+      );
 
       // Sync parent.subTaskIds when parentId changes
       const oldParentId = existingEntity?.parentId as string | undefined;
