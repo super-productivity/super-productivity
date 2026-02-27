@@ -751,8 +751,7 @@ export class SyncWrapperService {
 
   /**
    * Handles LocalDataConflictError by showing a conflict resolution dialog.
-   * This occurs when file-based sync (Dropbox, WebDAV) detects local unsynced
-   * changes that would be lost if the remote snapshot is applied.
+   * This occurs when sync detects local data that would be overwritten by remote data.
    *
    * User can choose:
    * - USE_LOCAL: Upload local data, overwriting remote (uses forceUploadLocalState)

@@ -503,12 +503,20 @@ export class OperationLogSyncService {
       };
     }
 
-    // SAFETY: Fresh client confirmation
-    // If this is a wholly fresh client (no local data) receiving remote data for the first time,
-    // show a confirmation dialog to prevent accidental data loss scenarios where a fresh client
-    // could overwrite existing remote data.
+    // SAFETY: Fresh client conflict detection
+    // If this is a wholly fresh client receiving remote data for the first time,
+    // check if there's meaningful local data that would be overwritten.
     const isFreshClient = await this.isWhollyFreshClient();
     if (isFreshClient && result.newOps.length > 0) {
+      if (this._hasMeaningfulLocalData()) {
+        // Local data exists — throw conflict error so the full conflict dialog is shown,
+        // letting the user choose between keeping local data or using remote data.
+        OpLog.warn(
+          `OperationLogSyncService: Fresh client has local data and ${result.newOps.length} remote ops. Showing conflict dialog.`,
+        );
+        throw new LocalDataConflictError(0, {});
+      }
+
       OpLog.warn(
         `OperationLogSyncService: Fresh client detected. Requesting confirmation before accepting ${result.newOps.length} remote ops.`,
       );
