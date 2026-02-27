@@ -1183,7 +1183,10 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(1);
       });
 
-      it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {
+      it('should set isLocalUnsyncedImport=true when stored import is local and already synced', async () => {
+        // Local synced imports should ALSO trigger the dialog because this client
+        // created the import (e.g., enableEncryption) and remote ops are being
+        // discarded. The user should decide whether to keep local or remote data.
         const storedImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
           opType: OpType.SyncImport,
@@ -1206,7 +1209,7 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([oldOp]);
 
-        expect(result.isLocalUnsyncedImport).toBe(false);
+        expect(result.isLocalUnsyncedImport).toBe(true);
         expect(result.invalidatedOps.length).toBe(1);
       });
 

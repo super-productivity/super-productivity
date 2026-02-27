@@ -537,21 +537,83 @@ export class OperationLogSyncService {
       );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Check for incoming SYNC_IMPORT with conflicting local ops.
+    // This prevents a deadlock where:
+    // 1. Client A enables encryption → uploads SYNC_IMPORT
+    // 2. Client B downloads SYNC_IMPORT, applies it (replacing state)
+    // 3. Client B uploads its pending local ops (now invalid)
+    // 4. Client A silently filters them → both show "in sync" but no data exchanges
+    //
+    // By checking BEFORE processing, we give the user a choice:
+    // - USE_REMOTE: discard local ops, apply the remote SYNC_IMPORT
+    // - USE_LOCAL: force upload local state (overriding remote)
+    // ─────────────────────────────────────────────────────────────────────────
+    const incomingSyncImport = result.newOps.find((op) =>
+      FULL_STATE_OP_TYPES.has(op.opType),
+    );
+    if (incomingSyncImport) {
+      const pendingLocalOps = await this.opLogStore.getUnsynced();
+      if (pendingLocalOps.length > 0) {
+        OpLog.warn(
+          `OperationLogSyncService: Incoming SYNC_IMPORT from client ${incomingSyncImport.clientId} ` +
+            `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
+        );
+
+        const resolution = await this.syncImportConflictDialogService.showConflictDialog({
+          filteredOpCount: pendingLocalOps.length,
+          localImportTimestamp: incomingSyncImport.timestamp ?? Date.now(),
+          localImportClientId: incomingSyncImport.clientId ?? 'unknown',
+        });
+
+        switch (resolution) {
+          case 'USE_LOCAL':
+            OpLog.normal(
+              'OperationLogSyncService: User chose USE_LOCAL. Force uploading local state.',
+            );
+            await this.forceUploadLocalState(syncProvider);
+            return {
+              serverMigrationHandled: false,
+              localWinOpsCreated: 0,
+              newOpsCount: 0,
+            };
+          case 'USE_REMOTE':
+            OpLog.normal(
+              'OperationLogSyncService: User chose USE_REMOTE. Discarding local ops and downloading remote state.',
+            );
+            await this.forceDownloadRemoteState(syncProvider);
+            return {
+              serverMigrationHandled: false,
+              localWinOpsCreated: 0,
+              newOpsCount: 0,
+            };
+          case 'CANCEL':
+          default:
+            OpLog.normal(
+              'OperationLogSyncService: User cancelled incoming SYNC_IMPORT conflict resolution.',
+            );
+            return {
+              serverMigrationHandled: false,
+              localWinOpsCreated: 0,
+              newOpsCount: 0,
+              cancelled: true,
+            };
+        }
+      }
+    }
+
     const processResult = await this.remoteOpsProcessingService.processRemoteOps(
       result.newOps,
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Handle SYNC_IMPORT conflict: all remote ops filtered by local import
+    // Handle SYNC_IMPORT conflict: all remote ops filtered by STORED local import.
     // This happens when user imports/restores data locally, and other devices
     // have been creating changes without knowledge of that import.
     //
-    // IMPORTANT: We only show the dialog when isLocalUnsyncedImport is true.
-    // This means the filtering import is a LOCAL import that hasn't been synced yet.
-    // If the import is from another client (remote) or already synced, we silently
-    // discard the old ops - no user choice is needed because the import was already
-    // accepted. This prevents the dialog from showing multiple times when old ops
-    // arrive after a remote import was already applied.
+    // We show the dialog when the filtering import was created locally (source='local').
+    // If the import is from another client (source='remote'), we silently
+    // discard the old ops - the import was already accepted from the remote source.
     // ─────────────────────────────────────────────────────────────────────────
     if (
       processResult.allOpsFilteredBySyncImport &&
@@ -560,7 +622,7 @@ export class OperationLogSyncService {
     ) {
       OpLog.warn(
         `OperationLogSyncService: All ${processResult.filteredOpCount} remote ops filtered by local SYNC_IMPORT. ` +
-          `Showing conflict resolution dialog (local unsynced import detected).`,
+          `Showing conflict resolution dialog (local import detected).`,
       );
 
       const resolution = await this.syncImportConflictDialogService.showConflictDialog({
@@ -606,12 +668,13 @@ export class OperationLogSyncService {
       processResult.allOpsFilteredBySyncImport &&
       processResult.filteredOpCount > 0
     ) {
-      // Ops were filtered but it's NOT a local unsynced import (remote or already synced).
-      // This is expected behavior - old ops from before a previously-accepted import are
-      // silently discarded. No dialog needed.
+      // Ops were filtered by a remote import (from another client).
+      // This is expected behavior - old ops from before a previously-accepted
+      // remote import are silently discarded. No dialog needed because the
+      // import was already accepted when it was downloaded.
       OpLog.normal(
         `OperationLogSyncService: ${processResult.filteredOpCount} remote ops silently filtered by ` +
-          `already-accepted SYNC_IMPORT (not showing dialog - import was remote or already synced).`,
+          `remote SYNC_IMPORT (not showing dialog - import came from another client).`,
       );
     }
 

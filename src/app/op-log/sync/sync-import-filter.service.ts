@@ -119,24 +119,21 @@ export class SyncImportFilterService {
       return { validOps: ops, invalidatedOps: [], isLocalUnsyncedImport: false };
     }
 
-    // Determine if the filtering import is a local unsynced import.
+    // Determine if the filtering import was created locally (by this client).
     // This is used to decide whether to show the conflict dialog.
     //
-    // isLocalUnsyncedImport is TRUE only when:
+    // isLocalUnsyncedImport is TRUE when:
     // 1. We're using the stored entry (not a batch import)
     // 2. The stored entry was created locally (source='local')
-    // 3. It hasn't been synced yet (no syncedAt)
     //
-    // When true, the dialog SHOULD show - user must choose between their local
-    // import and the remote data being filtered.
+    // When true, the dialog SHOULD show - this client created the import
+    // (e.g., file import, enableEncryption), and remote ops are being discarded.
+    // The user should decide whether to keep local or remote data.
     //
-    // When false (batch import, remote stored import, or synced local import),
-    // the dialog should NOT show - old ops are silently discarded.
+    // When false (batch import or remote stored import), the dialog should NOT
+    // show - the import came from another client and was already accepted.
     const isLocalUnsyncedImport =
-      usingStoredEntry &&
-      !!storedEntry &&
-      storedEntry.source === 'local' &&
-      !storedEntry.syncedAt;
+      usingStoredEntry && !!storedEntry && storedEntry.source === 'local';
 
     OpLog.normal(
       `SyncImportFilterService: Filtering ops against SYNC_IMPORT from client ${latestImport.clientId} (op: ${latestImport.id})`,
