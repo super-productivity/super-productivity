@@ -182,12 +182,6 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     }
 
-    // Block sync if SuperSync is active without encryption — encryption is mandatory
-    const encryptionRequired = await this._checkSuperSyncEncryptionRequired();
-    if (encryptionRequired) {
-      return 'HANDLED_ERROR';
-    }
-
     // Race condition fix: Check-and-set atomically before starting sync
     if (this._isSyncInProgress$.getValue()) {
       SyncLog.log('Sync already in progress, skipping concurrent sync attempt');
@@ -196,7 +190,7 @@ export class SyncWrapperService {
     this._isSyncInProgress$.next(true);
     // Set SYNCING status so ImmediateUploadService knows not to interfere
     this._providerManager.setSyncStatus('SYNCING');
-    return this._sync().finally(() => {
+    const result = await this._sync().finally(() => {
       this._isSyncInProgress$.next(false);
       // Safeguard: if _sync() threw or completed without setting a final status,
       // reset from SYNCING to UNKNOWN_OR_CHANGED to avoid getting stuck in SYNCING state
@@ -204,6 +198,14 @@ export class SyncWrapperService {
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
       }
     });
+
+    // After successful sync, prompt for encryption if SuperSync is active without it.
+    // This ensures data is downloaded and merged first, preventing data loss.
+    if (result === SyncStatus.InSync) {
+      this._promptSuperSyncEncryptionIfNeeded();
+    }
+
+    return result;
   }
 
   /**
@@ -913,38 +915,30 @@ export class SyncWrapperService {
   private _encryptionRequiredDialog?: MatDialogRef<any, any>;
 
   /**
-   * Checks if the active provider is SuperSync without encryption enabled.
-   * If so, blocks sync and opens the encryption dialog.
-   * Returns true if sync should be blocked.
+   * After a successful sync, checks if SuperSync is active without encryption.
+   * If so, opens the encryption dialog. Data has already been synced, so no data loss.
    */
-  private async _checkSuperSyncEncryptionRequired(): Promise<boolean> {
+  private async _promptSuperSyncEncryptionIfNeeded(): Promise<void> {
     const providerId = await firstValueFrom(this.syncProviderId$.pipe(take(1)));
     if (providerId !== SyncProviderId.SuperSync) {
-      return false;
+      return;
     }
 
     const provider = this._providerManager.getActiveProvider();
     if (!provider) {
-      return false;
+      return;
     }
 
     const cfg = (await provider.privateCfg.load()) as
       | { isEncryptionEnabled?: boolean; encryptKey?: string }
       | undefined;
     if (cfg?.isEncryptionEnabled && cfg?.encryptKey) {
-      return false;
+      return;
     }
 
-    // SuperSync is active without encryption — block sync and prompt
-    SyncLog.log('Sync blocked: encryption required for SuperSync');
-    this._providerManager.setSyncStatus('ERROR');
+    SyncLog.log('SuperSync encryption not enabled — prompting user');
 
     if (!this._encryptionRequiredDialog) {
-      this._snackService.open({
-        msg: T.F.SYNC.S.ENCRYPTION_REQUIRED_FOR_SUPERSYNC,
-        type: 'ERROR',
-      });
-
       const { DialogEnableEncryptionComponent } =
         await import('./dialog-enable-encryption/dialog-enable-encryption.component');
       this._encryptionRequiredDialog = this._matDialog.open(
@@ -962,8 +956,6 @@ export class SyncWrapperService {
         }
       });
     }
-
-    return true;
   }
 
   private _openConflictDialog$(
