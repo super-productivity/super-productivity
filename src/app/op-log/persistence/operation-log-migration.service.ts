@@ -203,16 +203,16 @@ export class OperationLogMigrationService {
     const legacyData = await this.legacyPfDb.loadAllEntityData();
 
     // 2. Validate and repair if needed
-    // Cast to any since LegacyAppData types don't match exactly with validation functions
-    const validationResult = validateFull(legacyData as any);
-    let dataToMigrate: AppDataComplete = legacyData as any;
+    // LegacyAppData has unknown-typed fields; cast through unknown for the validation pipeline
+    const validationResult = validateFull(legacyData as unknown as AppDataComplete);
+    let dataToMigrate = legacyData as unknown as AppDataComplete;
 
     if (!validationResult.isValid) {
       OpLog.warn(
         'OperationLogMigrationService: Legacy data validation failed, attempting repair',
       );
 
-      if (!isDataRepairPossible(legacyData as any)) {
+      if (!isDataRepairPossible(legacyData as unknown as AppDataComplete)) {
         throw new Error('Legacy data is corrupted and cannot be repaired');
       }
 
@@ -220,7 +220,7 @@ export class OperationLogMigrationService {
         'errors' in validationResult.typiaResult
           ? validationResult.typiaResult.errors
           : [];
-      dataToMigrate = dataRepair(legacyData as any, errors);
+      dataToMigrate = dataRepair(legacyData as unknown as AppDataComplete, errors);
 
       // Re-validate after repair to ensure success
       const postRepairValidation = validateFull(dataToMigrate);

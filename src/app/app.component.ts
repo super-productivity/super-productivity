@@ -34,7 +34,7 @@ import { WorkContextService } from './features/work-context/work-context.service
 import { ImexViewService } from './imex/imex-meta/imex-view.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { filter, map, take } from 'rxjs/operators';
+import { filter, map, switchMap, take } from 'rxjs/operators';
 import { isOnline$ } from './util/is-online';
 import { IS_MOBILE } from './util/is-mobile';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
@@ -283,21 +283,24 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       taskId = element.id.substring(2);
 
       // Get task data to determine if it's a sub-task
-      this._taskService.getByIdOnce$(taskId).subscribe((task) => {
-        if (task) {
-          taskTitle = task.title;
-          isSubTask = !!task.parentId;
-          this._markdownPasteService.handleMarkdownPaste(
-            pastedText,
-            taskId,
-            taskTitle,
-            isSubTask,
-          );
-        } else {
-          // Fallback: handle as parent tasks if task not found
-          this._markdownPasteService.handleMarkdownPaste(pastedText, null);
-        }
-      });
+      this._taskService
+        .getByIdOnce$(taskId)
+        .pipe(takeUntilDestroyed(this._destroyRef))
+        .subscribe((task) => {
+          if (task) {
+            taskTitle = task.title;
+            isSubTask = !!task.parentId;
+            this._markdownPasteService.handleMarkdownPaste(
+              pastedText,
+              taskId,
+              taskTitle,
+              isSubTask,
+            );
+          } else {
+            // Fallback: handle as parent tasks if task not found
+            this._markdownPasteService.handleMarkdownPaste(pastedText, null);
+          }
+        });
     } else {
       // Handle as parent tasks since no specific task context
       this._markdownPasteService.handleMarkdownPaste(pastedText, null);
@@ -362,46 +365,51 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       maxWidth: '95vw',
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
-      if (result) {
-        // Get current work context
-        this.workContextService.activeWorkContext$
-          .pipe(take(1))
-          .subscribe((activeContext) => {
-            if (!activeContext) {
-              this._snackService.open({
-                type: 'ERROR',
-                msg: 'No active work context',
-              });
-              return;
-            }
-
-            // Extract the URL from the result object
-            const backgroundUrl = result.url || result;
-            const isDarkMode = this._globalThemeService.isDarkTheme();
-            const contextKey: keyof WorkContextThemeCfg = isDarkMode
-              ? 'backgroundImageDark'
-              : 'backgroundImageLight';
-
-            // Update the theme based on context type
-            if (activeContext.type === 'PROJECT') {
-              this._projectService.update(activeContext.id, {
-                theme: {
-                  ...(activeContext.theme || {}),
-                  [contextKey]: backgroundUrl,
-                },
-              });
-            } else if (activeContext.type === 'TAG') {
-              this._tagService.updateTag(activeContext.id, {
-                theme: {
-                  ...(activeContext.theme || {}),
-                  [contextKey]: backgroundUrl,
-                },
-              });
-            }
+    dialogRef
+      .afterClosed()
+      .pipe(
+        filter((result) => !!result),
+        switchMap((result) =>
+          this.workContextService.activeWorkContext$.pipe(
+            take(1),
+            map((activeContext) => ({ result, activeContext })),
+          ),
+        ),
+        takeUntilDestroyed(this._destroyRef),
+      )
+      .subscribe(({ result, activeContext }) => {
+        if (!activeContext) {
+          this._snackService.open({
+            type: 'ERROR',
+            msg: 'No active work context',
           });
-      }
-    });
+          return;
+        }
+
+        // Extract the URL from the result object
+        const backgroundUrl = result.url || result;
+        const isDarkMode = this._globalThemeService.isDarkTheme();
+        const contextKey: keyof WorkContextThemeCfg = isDarkMode
+          ? 'backgroundImageDark'
+          : 'backgroundImageLight';
+
+        // Update the theme based on context type
+        if (activeContext.type === 'PROJECT') {
+          this._projectService.update(activeContext.id, {
+            theme: {
+              ...(activeContext.theme || {}),
+              [contextKey]: backgroundUrl,
+            },
+          });
+        } else if (activeContext.type === 'TAG') {
+          this._tagService.updateTag(activeContext.id, {
+            theme: {
+              ...(activeContext.theme || {}),
+              [contextKey]: backgroundUrl,
+            },
+          });
+        }
+      });
   }
 
   ngAfterViewInit(): void {

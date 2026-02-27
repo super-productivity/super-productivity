@@ -110,9 +110,10 @@ export class TaskViewCustomizerService {
     }
   }
 
-  customizeUndoneTasks(
-    undoneTasks$: Observable<TaskWithSubTasks[]>,
-  ): Observable<{ list: TaskWithSubTasks[]; grouped?: any }> {
+  customizeUndoneTasks(undoneTasks$: Observable<TaskWithSubTasks[]>): Observable<{
+    list: TaskWithSubTasks[];
+    grouped?: Record<string, TaskWithSubTasks[]>;
+  }> {
     return combineLatest([
       undoneTasks$,
       toObservable(this.selectedSort),
