@@ -212,8 +212,11 @@ export class SyncConfigService {
 
       return of(result);
     }),
-    // Redact sensitive fields (passwords, encryption keys) in all environments
-    tap((v) => SyncLog.log('syncSettingsForm$', redactSensitiveFields(v))),
+    // Keep _lastSettings in sync so Formly modelChange doesn't trigger redundant saves
+    tap((v) => {
+      this._lastSettings = v;
+      SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
+    }),
   );
 
   async updateEncryptionPassword(
@@ -245,9 +248,6 @@ export class SyncConfigService {
     }
 
     await this._providerManager.setProviderConfig(activeProvider.id, newConfig);
-
-    // Ensure global config reflects encryption enabled when password is entered
-    this._globalConfigService.updateSection('sync', { isEncryptionEnabled: true });
 
     // Clear cached encryption keys to force re-derivation with new password
     this._derivedKeyCache.clearCache();

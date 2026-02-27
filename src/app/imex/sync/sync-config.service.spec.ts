@@ -579,6 +579,37 @@ describe('SyncConfigService', () => {
       expect(providerManager.setProviderConfig).toHaveBeenCalledTimes(2);
     });
 
+    it('should deduplicate when syncSettingsForm$ emits before Formly modelChange', async () => {
+      // Mock provider for the test
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue({
+        id: SyncProviderId.WebDAV,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
+        },
+      });
+
+      // Simulate syncSettingsForm$ emission by pushing provider config
+      mockCurrentProviderPrivateCfg$.next({
+        providerId: SyncProviderId.WebDAV,
+        privateCfg: {
+          baseUrl: 'https://example.com',
+          userName: 'user',
+          password: 'pass',
+          syncFolderPath: '/sync',
+          encryptKey: 'key',
+        },
+      });
+
+      // Capture the actual emitted value from syncSettingsForm$
+      const emittedSettings = await service.syncSettingsForm$.pipe(first()).toPromise();
+
+      // Now simulate Formly modelChange with the exact same emitted value
+      await service.updateSettingsFromForm(emittedSettings!);
+
+      // Should NOT have called setProviderConfig since _lastSettings matches
+      expect(providerManager.setProviderConfig).not.toHaveBeenCalled();
+    });
+
     it('should not save private config when no provider is selected', async () => {
       const settings: SyncConfig = {
         isEnabled: false,
@@ -1036,6 +1067,39 @@ describe('SyncConfigService', () => {
       ).calls.mostRecent().args[1];
       expect(callArgs.encryptKey).toBe('newpass');
       expect(callArgs.isEncryptionEnabled).toBeUndefined();
+    });
+
+    it('should not dispatch persistent global config action when updating password', async () => {
+      const globalConfigService = TestBed.inject(
+        GlobalConfigService,
+      ) as jasmine.SpyObj<GlobalConfigService>;
+      globalConfigService.updateSection.calls.reset();
+
+      const mockProvider = {
+        id: SyncProviderId.SuperSync,
+        privateCfg: {
+          load: jasmine.createSpy('load').and.returnValue(
+            Promise.resolve({
+              baseUrl: 'http://test.com',
+              userName: 'test',
+              password: 'test',
+              accessToken: 'token',
+              syncFolderPath: '/',
+              encryptKey: 'oldpass',
+              isEncryptionEnabled: false,
+            }),
+          ),
+        },
+      };
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
+
+      await service.updateEncryptionPassword('newpass', SyncProviderId.SuperSync);
+
+      // Must NOT dispatch a persistent global config update - this caused the
+      // encryption password change cascade bug where other clients couldn't
+      // decrypt the operation and got stuck in a decrypt error loop
+      expect(globalConfigService.updateSection).not.toHaveBeenCalled();
     });
 
     it('should preserve existing config when updating password', async () => {
