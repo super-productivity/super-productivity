@@ -47,38 +47,21 @@
     >
       {{ T.G.CANCEL | translate }}
     </button>
-    @if (isIncomingImport) {
-      <button
-        (click)="close('USE_LOCAL')"
-        mat-stroked-button
-      >
-        <mat-icon>cloud_upload</mat-icon>
-        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
-      </button>
-      <button
-        (click)="close('USE_REMOTE')"
-        color="primary"
-        mat-flat-button
-      >
-        <mat-icon>cloud_download</mat-icon>
-        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
-      </button>
-    } @else {
-      <button
-        (click)="close('USE_REMOTE')"
-        color="primary"
-        mat-stroked-button
-      >
-        <mat-icon>cloud_download</mat-icon>
-        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
-      </button>
-      <button
-        (click)="close('USE_LOCAL')"
-        mat-stroked-button
-      >
-        <mat-icon>cloud_upload</mat-icon>
-        {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
-      </button>
-    }
+    <button
+      (click)="close('USE_REMOTE')"
+      [color]="isIncomingImport ? 'primary' : undefined"
+      mat-stroked-button
+    >
+      <mat-icon>cloud_download</mat-icon>
+      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
+    </button>
+    <button
+      (click)="close('USE_LOCAL')"
+      [color]="isIncomingImport ? undefined : 'primary'"
+      mat-stroked-button
+    >
+      <mat-icon>cloud_upload</mat-icon>
+      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
+    </button>
   </div>
 </mat-dialog-actions>

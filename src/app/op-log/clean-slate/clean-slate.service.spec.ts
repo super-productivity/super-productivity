@@ -66,7 +66,7 @@ describe('CleanSlateService', () => {
 
   describe('createCleanSlate', () => {
     it('should create a clean slate successfully', async () => {
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       // Should create pre-migration backup
       expect(mockPreMigrationBackupService.createPreMigrationBackup).toHaveBeenCalledWith(
@@ -107,7 +107,7 @@ describe('CleanSlateService', () => {
     });
 
     it('should work with MANUAL reason', async () => {
-      await service.createCleanSlate('MANUAL');
+      await service.createCleanSlate('MANUAL', 'PASSWORD_CHANGED');
 
       expect(mockPreMigrationBackupService.createPreMigrationBackup).toHaveBeenCalledWith(
         'MANUAL',
@@ -120,7 +120,7 @@ describe('CleanSlateService', () => {
       );
 
       // Should not throw - backup failure is non-fatal
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeResolved();
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeResolved();
 
       // Should still complete the clean slate
       expect(mockOpLogStore.clearAllOperations).toHaveBeenCalled();
@@ -128,14 +128,14 @@ describe('CleanSlateService', () => {
     });
 
     it('should generate fresh vector clock starting at 1', async () => {
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
       expect(appendedOp.vectorClock).toEqual({ eNewC: 1 });
     });
 
     it('should create operation with valid UUIDv7', async () => {
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       const appendedOp = mockOpLogStore.append.calls.mostRecent().args[0] as Operation;
       // UUIDv7 format: 8-4-4-4-12 characters
@@ -149,7 +149,7 @@ describe('CleanSlateService', () => {
         new Error('State error'),
       );
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'State error' }),
       );
     });
@@ -157,7 +157,7 @@ describe('CleanSlateService', () => {
     it('should throw if client ID generation fails', async () => {
       mockClientIdService.generateNewClientId.and.rejectWith(new Error('ClientID error'));
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'ClientID error' }),
       );
     });
@@ -165,7 +165,7 @@ describe('CleanSlateService', () => {
     it('should throw if operation append fails', async () => {
       mockOpLogStore.append.and.rejectWith(new Error('Append error'));
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'Append error' }),
       );
     });
@@ -175,7 +175,7 @@ describe('CleanSlateService', () => {
     it('should propagate clearAllOperations errors', async () => {
       mockOpLogStore.clearAllOperations.and.rejectWith(new Error('Clear failed'));
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'Clear failed' }),
       );
     });
@@ -183,7 +183,7 @@ describe('CleanSlateService', () => {
     it('should propagate setVectorClock errors', async () => {
       mockOpLogStore.setVectorClock.and.rejectWith(new Error('VectorClock failed'));
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'VectorClock failed' }),
       );
     });
@@ -191,7 +191,7 @@ describe('CleanSlateService', () => {
     it('should propagate saveStateCache errors', async () => {
       mockOpLogStore.saveStateCache.and.rejectWith(new Error('SaveCache failed'));
 
-      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE')).toBeRejectedWith(
+      await expectAsync(service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED')).toBeRejectedWith(
         jasmine.objectContaining({ message: 'SaveCache failed' }),
       );
     });
@@ -208,7 +208,7 @@ describe('CleanSlateService', () => {
         return 1;
       });
 
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       expect(callOrder).toEqual(['clear', 'append']);
     });
@@ -223,7 +223,7 @@ describe('CleanSlateService', () => {
         callOrder.push('setVectorClock');
       });
 
-      await service.createCleanSlate('ENCRYPTION_CHANGE');
+      await service.createCleanSlate('ENCRYPTION_CHANGE', 'PASSWORD_CHANGED');
 
       expect(callOrder).toEqual(['append', 'setVectorClock']);
     });

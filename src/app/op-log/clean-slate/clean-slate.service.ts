@@ -80,7 +80,7 @@ export class CleanSlateService {
    */
   async createCleanSlate(
     reason: PreMigrationReason,
-    syncImportReason: SyncImportReason = 'PASSWORD_CHANGED',
+    syncImportReason: SyncImportReason,
   ): Promise<void> {
     OpLog.normal('[CleanSlate] Starting clean slate process', { reason });
 

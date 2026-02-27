@@ -12,7 +12,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { LocaleDatePipe } from '../../../ui/pipes/locale-date.pipe';
 import { ShortTimePipe } from '../../../ui/pipes/short-time.pipe';
-import { SyncImportReason } from '../../core/operation.types';
+import type { SyncImportReason } from '../../core/operation.types';
 
 export interface SyncImportConflictData {
   filteredOpCount: number;
@@ -47,23 +47,9 @@ export class DialogSyncImportConflictComponent {
 
   T: typeof T = T;
 
-  private static readonly REASON_KEY_MAP: Record<string, string> = {
-    ENCRYPTION_ENABLED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_ENCRYPTION_ENABLED,
-    ENCRYPTION_DISABLED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_ENCRYPTION_DISABLED,
-    PASSWORD_CHANGED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_PASSWORD_CHANGED,
-    FILE_IMPORT: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_FILE_IMPORT,
-    BACKUP_RESTORE: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_BACKUP_RESTORE,
-    FORCE_UPLOAD: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_FORCE_UPLOAD,
-    SERVER_MIGRATION: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_SERVER_MIGRATION,
-    REPAIR: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_REPAIR,
-  };
-
   get reasonKey(): string {
     const reason = this.data.syncImportReason;
-    if (reason && DialogSyncImportConflictComponent.REASON_KEY_MAP[reason]) {
-      return DialogSyncImportConflictComponent.REASON_KEY_MAP[reason];
-    }
-    return T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_UNKNOWN;
+    return `F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_${reason ?? 'UNKNOWN'}`;
   }
 
   get messageKey(): string {

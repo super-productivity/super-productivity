@@ -1029,8 +1029,6 @@
         "USE_LOCAL": "Use My Data",
         "USE_REMOTE": "Use Server Data",
         "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
-        "REASON_ENCRYPTION_ENABLED": "Reason: Encryption was enabled on another device.",
-        "REASON_ENCRYPTION_DISABLED": "Reason: Encryption was disabled on another device.",
         "REASON_PASSWORD_CHANGED": "Reason: The encryption password was changed on another device.",
         "REASON_FILE_IMPORT": "Reason: A data file was imported on another device.",
         "REASON_BACKUP_RESTORE": "Reason: A backup was restored on another device.",

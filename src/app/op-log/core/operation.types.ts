@@ -28,8 +28,6 @@ export type EntityType = SharedEntityType;
  * Used in the conflict dialog to explain WHY the import happened.
  */
 export type SyncImportReason =
-  | 'ENCRYPTION_ENABLED'
-  | 'ENCRYPTION_DISABLED'
   | 'PASSWORD_CHANGED'
   | 'FILE_IMPORT'
   | 'BACKUP_RESTORE'

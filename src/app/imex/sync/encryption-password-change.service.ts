@@ -97,7 +97,10 @@ export class EncryptionPasswordChangeService {
       // STEP 1: Create clean slate locally
       // This generates a new client ID, clears local ops, and creates a fresh SYNC_IMPORT
       SyncLog.normal('EncryptionPasswordChangeService: Creating clean slate...');
-      await this._cleanSlateService.createCleanSlate('ENCRYPTION_CHANGE');
+      await this._cleanSlateService.createCleanSlate(
+        'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
+      );
 
       // STEP 2: Verify the SYNC_IMPORT was stored
       // This catches any IndexedDB timing issues before we proceed

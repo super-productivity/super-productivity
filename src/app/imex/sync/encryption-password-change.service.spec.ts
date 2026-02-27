@@ -114,6 +114,7 @@ describe('EncryptionPasswordChangeService', () => {
       // Should create clean slate
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalledWith(
         'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
       );
 
       // Should update config with new password
@@ -560,6 +561,7 @@ describe('EncryptionPasswordChangeService', () => {
       // Verify clean slate was created (which generates new client ID)
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalledWith(
         'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
       );
     });
   });
