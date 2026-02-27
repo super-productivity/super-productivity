@@ -17,7 +17,6 @@ import type { SyncImportReason } from '../../core/operation.types';
 export interface SyncImportConflictData {
   filteredOpCount: number;
   localImportTimestamp: number;
-  localImportClientId: string;
   syncImportReason?: SyncImportReason;
   scenario: 'INCOMING_IMPORT' | 'LOCAL_IMPORT_FILTERS_REMOTE';
 }
