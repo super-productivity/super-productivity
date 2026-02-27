@@ -260,6 +260,64 @@ export class OperationLogSyncService {
     };
     try {
       if (result.piggybackedOps.length > 0) {
+        // Check for piggybacked SYNC_IMPORT — mirrors the download path check (lines 552-604).
+        // Without this, a SYNC_IMPORT from another client arriving as a piggybacked op
+        // would silently replace local state via processRemoteOps().
+        const piggybackedImport = result.piggybackedOps.find((op) =>
+          FULL_STATE_OP_TYPES.has(op.opType),
+        );
+        if (piggybackedImport) {
+          const pendingOps = await this.opLogStore.getUnsynced();
+          if (pendingOps.length > 0 || this._hasMeaningfulLocalData()) {
+            OpLog.warn(
+              `OperationLogSyncService: Piggybacked SYNC_IMPORT from client ${piggybackedImport.clientId} ` +
+                `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
+            );
+
+            const resolution =
+              await this.syncImportConflictDialogService.showConflictDialog({
+                filteredOpCount: pendingOps.length,
+                localImportTimestamp: piggybackedImport.timestamp ?? Date.now(),
+                syncImportReason: piggybackedImport.syncImportReason,
+                scenario: 'INCOMING_IMPORT',
+              });
+
+            switch (resolution) {
+              case 'USE_LOCAL':
+                OpLog.normal(
+                  'OperationLogSyncService: User chose USE_LOCAL for piggybacked SYNC_IMPORT. Force uploading local state.',
+                );
+                await this.forceUploadLocalState(syncProvider);
+                return {
+                  ...result,
+                  localWinOpsCreated: 0,
+                  permanentRejectionCount: 0,
+                };
+              case 'USE_REMOTE':
+                OpLog.normal(
+                  'OperationLogSyncService: User chose USE_REMOTE for piggybacked SYNC_IMPORT. Force downloading remote state.',
+                );
+                await this.forceDownloadRemoteState(syncProvider);
+                return {
+                  ...result,
+                  localWinOpsCreated: 0,
+                  permanentRejectionCount: 0,
+                };
+              case 'CANCEL':
+              default:
+                OpLog.normal(
+                  'OperationLogSyncService: User cancelled piggybacked SYNC_IMPORT conflict resolution.',
+                );
+                return {
+                  ...result,
+                  localWinOpsCreated: 0,
+                  permanentRejectionCount: 0,
+                  cancelled: true,
+                };
+            }
+          }
+        }
+
         const processResult = await this.remoteOpsProcessingService.processRemoteOps(
           result.piggybackedOps,
         );
@@ -483,6 +541,29 @@ export class OperationLogSyncService {
     }
 
     if (result.newOps.length === 0) {
+      // FIX I.2: Pre-op-log client with meaningful data on empty server.
+      // A client that has tasks/projects in NgRx but no op-log history can't upload
+      // (isWhollyFreshClient blocks upload) and server migration won't trigger
+      // (hasSyncedOps=false). With an empty server, there are no remote ops to
+      // trigger a conflict dialog. Detect this case and create a SYNC_IMPORT
+      // via the migration service so the client is no longer "fresh".
+      const isEmptyServer = result.latestServerSeq === 0;
+      if (isEmptyServer) {
+        const isFresh = await this.isWhollyFreshClient();
+        if (isFresh && this._hasMeaningfulLocalData()) {
+          OpLog.warn(
+            'OperationLogSyncService: Pre-op-log client with meaningful local data on empty server. ' +
+              'Creating SYNC_IMPORT via server migration to seed the server.',
+          );
+          await this.serverMigrationService.handleServerMigration(syncProvider, {
+            syncImportReason: 'SERVER_MIGRATION',
+          });
+          // After SYNC_IMPORT is created, isWhollyFreshClient() returns false
+          // and upload phase will proceed normally.
+          return { serverMigrationHandled: true, localWinOpsCreated: 0, newOpsCount: 0 };
+        }
+      }
+
       OpLog.normal(
         'OperationLogSyncService: No new remote operations to process after download.',
       );
@@ -563,7 +644,6 @@ export class OperationLogSyncService {
         const resolution = await this.syncImportConflictDialogService.showConflictDialog({
           filteredOpCount: pendingLocalOps.length,
           localImportTimestamp: incomingSyncImport.timestamp ?? Date.now(),
-          localImportClientId: incomingSyncImport.clientId ?? 'unknown',
           syncImportReason: incomingSyncImport.syncImportReason,
           scenario: 'INCOMING_IMPORT',
         });
@@ -630,7 +710,6 @@ export class OperationLogSyncService {
       const resolution = await this.syncImportConflictDialogService.showConflictDialog({
         filteredOpCount: processResult.filteredOpCount,
         localImportTimestamp: processResult.filteringImport?.timestamp ?? Date.now(),
-        localImportClientId: processResult.filteringImport?.clientId ?? 'unknown',
         syncImportReason: processResult.filteringImport?.syncImportReason,
         scenario: 'LOCAL_IMPORT_FILTERS_REMOTE',
       });

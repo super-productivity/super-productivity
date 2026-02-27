@@ -189,6 +189,14 @@ export class ImmediateUploadService implements OnDestroy {
         return;
       }
 
+      // If cancelled (piggybacked SYNC_IMPORT conflict dialog), skip post-upload logic
+      if (result.cancelled) {
+        OpLog.verbose(
+          'ImmediateUploadService: Upload cancelled (piggybacked SYNC_IMPORT conflict)',
+        );
+        return;
+      }
+
       // Note: piggybacked ops and rejected ops are already handled by _syncService.uploadPendingOps()
       // We just need to handle the sync status here.
 

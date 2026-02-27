@@ -308,6 +308,15 @@ export class SyncWrapperService {
         );
       }
 
+      // If upload was cancelled (piggybacked SYNC_IMPORT conflict dialog), skip LWW re-upload
+      if (uploadResult?.cancelled) {
+        SyncLog.log(
+          'SyncWrapperService: Upload cancelled by user (piggybacked SYNC_IMPORT). Skipping LWW re-upload.',
+        );
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        return SyncStatus.NotConfigured;
+      }
+
       // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
       let lwwRetries = 0;
       let pendingLwwOps =

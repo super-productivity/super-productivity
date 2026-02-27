@@ -29,6 +29,7 @@ Condensed reference for all SuperSync synchronization scenarios. For full detail
 - **No local pending, has meaningful data**: Conflict dialog with import reason shown, "Use Server Data" recommended
 - **No local pending, no meaningful data**: Apply silently (no dialog)
 - **Has local pending**: Conflict dialog before processing (regardless of meaningful data)
+- **Piggybacked SYNC_IMPORT**: Same conflict dialog as download path — prevents silent state replacement
 - **Local import filters remote ops**: Conflict dialog (local created the import)
 - **Remote import filters remote ops**: Silent filter (import already accepted)
 - **Same-client pruning artifact**: Ops kept (can't conflict with own import)
@@ -73,7 +74,7 @@ Condensed reference for all SuperSync synchronization scenarios. For full detail
 ## I. Setup & Provider Switching
 
 - **New user, empty server**: Setup → encryption prompt → done
-- **Existing local data, empty server**: **Known gap** — fresh client with store data but no ops gets stuck
+- **Existing local data, empty server**: Auto-create SYNC_IMPORT from local state (pre-op-log client fix)
 - **Second client, server has data**: Confirm dialog → download all
 - **Second client with local data**: Full conflict dialog
 - **Re-enable after disable**: Seamless resume from stored lastServerSeq
@@ -87,7 +88,6 @@ Condensed reference for all SuperSync synchronization scenarios. For full detail
 
 ## Known Issues
 
-1. Pre-op-log client with data on empty server gets stuck (I.2)
-2. `syncedAt` is global, not per-provider — ops won't re-upload after switching
-3. Encryption state may show misleading global config after provider switch
-4. No "skip encryption" for SuperSync — Cancel disables sync entirely
+1. `syncedAt` is per-operation, not per-provider — ops won't re-upload after switching
+2. Encryption state may show misleading global config after provider switch
+3. No "skip encryption" for SuperSync — Cancel disables sync entirely

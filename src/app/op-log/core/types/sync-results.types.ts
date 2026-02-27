@@ -103,6 +103,11 @@ export interface UploadResult {
    * - Any piggybacked operation has isPayloadEncrypted: true (server still has encrypted data)
    */
   piggybackHasOnlyUnencryptedData?: boolean;
+  /**
+   * True when upload was cancelled due to piggybacked SYNC_IMPORT conflict dialog.
+   * Callers should skip post-upload logic (LWW re-upload, IN_SYNC status).
+   */
+  cancelled?: boolean;
 }
 
 /**

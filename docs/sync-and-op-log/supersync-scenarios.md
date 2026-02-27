@@ -249,6 +249,25 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Nothing. Ops applied normally.
 
+### D.6: Piggybacked SYNC_IMPORT — Conflict Dialog ✓
+
+**Trigger:** Upload response includes a piggybacked SYNC_IMPORT from another client
+
+**Expected:**
+
+1. Upload completes → server returns piggybacked ops containing SYNC_IMPORT
+2. Check for SYNC_IMPORT in piggybacked ops BEFORE `processRemoteOps()`
+3. If found AND (pending local ops > 0 OR `_hasMeaningfulLocalData()` = true):
+   - **Show conflict dialog** with `scenario: 'INCOMING_IMPORT'` and `syncImportReason` from the piggybacked op
+   - USE_LOCAL → `forceUploadLocalState()` (overrides remote)
+   - USE_REMOTE → `forceDownloadRemoteState()` (clears local, downloads from seq 0)
+   - CANCEL → return with `cancelled: true`, callers skip post-upload logic
+4. If no meaningful local data → `processRemoteOps()` applies silently (no dialog)
+
+**Previously broken:** Piggybacked SYNC_IMPORTs went directly to `processRemoteOps()` without the conflict dialog check that the download path has, silently replacing local state.
+
+**User sees:** Conflict dialog explaining remote import detected. Same UX as download-path SYNC_IMPORT.
+
 ---
 
 ## E. Encryption Scenarios
@@ -537,7 +556,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **User sees:** Setup dialog → encryption prompt → done. Fresh start.
 
-### I.2: First-Time SuperSync Setup — User Has Existing Local Data (Pre-Sync Era)
+### I.2: First-Time SuperSync Setup — User Has Existing Local Data (Pre-Sync Era) ✓
 
 **Trigger:** User has been using Super Productivity offline, then sets up SuperSync for the first time
 
@@ -545,23 +564,16 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 1. Same setup flow as I.1 (config + encryption prompt)
 2. `sync()` fires → download from server
-3. Server is empty → `isWhollyFreshClient()` checks:
-   - Op log empty (no snapshot, lastSeq=0) → true
-   - BUT `_hasMeaningfulLocalData()` = true (tasks/projects/tags exist)
-4. No remote ops to conflict with → upload phase starts
-5. `isWhollyFreshClient()` = true → **upload blocked** ("download first")
-6. Server migration check: `lastServerSeq === 0` AND server empty AND client has ops = false (fresh client has no ops)
-7. **Gap: fresh client with store data but no ops can't upload**
-8. Next sync: server still empty, same situation
+3. Server is empty (`latestServerSeq === 0`) AND `newOps.length === 0`
+4. Pre-op-log detection: `isWhollyFreshClient()` = true AND `_hasMeaningfulLocalData()` = true
+5. `downloadRemoteOps()` calls `serverMigrationService.handleServerMigration()` to create a SYNC_IMPORT from local state
+6. Returns `serverMigrationHandled: true` → upload phase proceeds
+7. SYNC_IMPORT gets uploaded to server → other clients can download it
+8. Status → `IN_SYNC`
 
-**Confirmed gap:** A pre-op-log client with data but empty op log gets stuck:
+**User sees:** Upload takes slightly longer (full state SYNC_IMPORT). No dialog.
 
-- `isWhollyFreshClient()` = true → upload blocked
-- `ServerMigrationService` requires `hasSyncedOps() = true` → migration not triggered for fresh clients
-- Empty server → no remote ops → no conflict dialog
-- Result: client is stuck in a loop — data exists in NgRx store but can't reach the server
-
-This scenario mainly affects users upgrading from a pre-op-log version of the app who set up SuperSync for the first time.
+**Safety:** `handleServerMigration()` internally double-checks the server is still empty and skips if local state is empty, so this is safe against races and false positives.
 
 ### I.3: First-Time SuperSync Setup — Server Already Has Data (Second Client)
 
@@ -866,10 +878,8 @@ This scenario mainly affects users upgrading from a pre-op-log version of the ap
 
 ## Known Issues / Open Questions
 
-1. **Fresh client with pre-op-log data on empty server (I.2):** A client with data in NgRx but empty op log (`isWhollyFreshClient() = true`) faces the upload blocker AND server migration won't trigger (`hasSyncedOps() = false`). With an empty server, there are no remote ops to conflict with, so no dialog appears either. Result: client is stuck — data exists locally but can't reach the server. This scenario mainly affects users upgrading from a pre-op-log version of the app.
+1. **`syncedAt` is per-operation, not per-provider (I.6, I.7, I.11):** Operations have a single `syncedAt` timestamp, not per-provider tracking. When switching providers, ops previously synced to the old provider remain marked synced and won't re-upload individually. This is mitigated by server migration creating a SYNC_IMPORT with full state when connecting to an empty server, but switching to a non-empty server with different data could result in incomplete state.
 
-2. **`syncedAt` is global, not per-provider (I.6, I.7, I.11):** Operations have a single `syncedAt` timestamp, not per-provider tracking. When switching providers, ops previously synced to the old provider remain marked synced and won't re-upload individually. This is mitigated by server migration creating a SYNC_IMPORT with full state when connecting to an empty server, but switching to a non-empty server with different data could result in incomplete state.
+2. **Encryption state leaking across providers (I.9):** When switching from encrypted SuperSync to WebDAV, the global `isEncryptionEnabled` may still be `true` (set by `SyncConfigService.updateSettingsFromForm()` for SuperSync). File-based providers derive encryption from `!!encryptKey`, so this shouldn't cause issues, but the global config may show misleading state.
 
-3. **Encryption state leaking across providers (I.9):** When switching from encrypted SuperSync to WebDAV, the global `isEncryptionEnabled` may still be `true` (set by `SyncConfigService.updateSettingsFromForm()` for SuperSync). File-based providers derive encryption from `!!encryptKey`, so this shouldn't cause issues, but the global config may show misleading state.
-
-4. **No "skip encryption" option for SuperSync (I.14):** The encryption dialog's Cancel button disables sync entirely — there's no way to use SuperSync without encryption. This is by design (encryption is effectively mandatory) but may surprise users who want to test without encryption first.
+3. **No "skip encryption" option for SuperSync (I.14):** The encryption dialog's Cancel button disables sync entirely — there's no way to use SuperSync without encryption. This is by design (encryption is effectively mandatory) but may surprise users who want to test without encryption first.
