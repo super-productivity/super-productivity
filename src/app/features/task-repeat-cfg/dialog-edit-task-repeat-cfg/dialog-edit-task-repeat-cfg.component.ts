@@ -112,7 +112,7 @@ export class DialogEditTaskRepeatCfgComponent {
 
   formGroup1 = signal(new UntypedFormGroup({}));
   formGroup2 = signal(new UntypedFormGroup({}));
-  tagSuggestions = toSignal(this._tagService.tags$, { initialValue: [] });
+  tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
   canRemoveInstance = signal<boolean>(false);
   removeInstanceButtonText = computed(() => {
     if (!this._data.targetDate) {

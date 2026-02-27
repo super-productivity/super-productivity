@@ -98,7 +98,7 @@ interface OpLogDB extends DBSchema {
       [OPS_INDEXES.BY_ID]: string;
       [OPS_INDEXES.BY_SYNCED_AT]: number;
       // PERF: Compound index for efficient queries on remote ops by status
-      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: string;
+      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: [string, string];
     };
   };
   [STORE_NAMES.STATE_CACHE]: {
@@ -453,7 +453,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'] as any,
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -889,7 +889,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'] as any,
+        ['remote', 'failed'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration

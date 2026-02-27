@@ -22,7 +22,7 @@ export class RedmineEffects {
   private readonly _matDialog = inject(MatDialog);
   private readonly _taskService = inject(TaskService);
 
-  postTime$: any = createEffect(
+  postTime$ = createEffect(
     () =>
       this._actions$.pipe(
         ofType(TaskSharedActions.updateTask),
