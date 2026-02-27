@@ -7,6 +7,7 @@ import { Log } from '../../core/log';
 import { TaskComponent } from './task/task.component';
 import { TaskContextMenuComponent } from './task-context-menu/task-context-menu.component';
 import { TaskContextMenuInnerComponent } from './task-context-menu/task-context-menu-inner/task-context-menu-inner.component';
+import { calculateRescheduleDate, RescheduleType } from './task-reschedule.helper';
 
 type TaskId = string;
 
@@ -118,6 +119,34 @@ export class TaskShortcutService {
     }
     if (checkKeyCombo(ev, keys.taskUnschedule)) {
       this._handleTaskShortcut(focusedTaskId, 'unschedule');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskRescheduleToTomorrow)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'tomorrow');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskRescheduleToThisWeek)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'thisWeek');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToNextWeek)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'nextWeek');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToThisMonth)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'thisMonth');
+      ev.preventDefault();
+      return true;
+    }
+    
+    if (checkKeyCombo(ev, keys.taskRescheduleToNextMonth)) {
+      this._handleRescheduleShortcut(focusedTaskId, 'nextMonth');
       ev.preventDefault();
       return true;
     }
@@ -277,6 +306,34 @@ export class TaskShortcutService {
       Log.warn(`Method ${method} not found on task component`, taskComponent);
     }
   }
+
+  /**
+   * Calls a method on the currently focused task component.
+   *
+   * @param taskId - The ID of the task (for validation)
+   * @param rescheduleType - The desired reschedule type for this task
+   */
+  private _handleRescheduleShortcut(
+  taskId: string,
+  rescheduleType: RescheduleType,
+): void {
+  const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
+  if (!taskComponent) {
+    Log.warn(`No focused task component available for ID: ${taskId}`);
+    return;
+  }
+
+  this._closeContextMenuIfOpen(taskComponent);
+
+  if (typeof taskComponent.rescheduleTaskToType === 'function') {
+    taskComponent.rescheduleTaskToType(rescheduleType);
+  } else {
+    Log.warn(
+      `Method rescheduleTaskToType not found on task component`,
+      taskComponent,
+    );
+  }
+}
 
   /**
    * Checks if the context menu is open for the currently focused task.
