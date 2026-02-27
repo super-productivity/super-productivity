@@ -237,6 +237,14 @@ export class ImportEncryptionHandlerService {
       return null;
     }
 
+    // Never let imports disable encryption — encryption is mandatory for SuperSync
+    if (checkResult.currentEnabled && !checkResult.importedEnabled) {
+      SyncLog.normal(
+        'ImportEncryptionHandlerService: Import would disable encryption — skipping',
+      );
+      return null;
+    }
+
     SyncLog.normal('ImportEncryptionHandlerService: Encryption state change detected', {
       from: checkResult.currentEnabled ? 'encrypted' : 'unencrypted',
       to: checkResult.importedEnabled ? 'encrypted' : 'unencrypted',
