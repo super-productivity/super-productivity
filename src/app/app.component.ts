@@ -283,24 +283,21 @@ export class AppComponent implements OnDestroy, AfterViewInit {
       taskId = element.id.substring(2);
 
       // Get task data to determine if it's a sub-task
-      this._taskService
-        .getByIdOnce$(taskId)
-        .pipe(takeUntilDestroyed(this._destroyRef))
-        .subscribe((task) => {
-          if (task) {
-            taskTitle = task.title;
-            isSubTask = !!task.parentId;
-            this._markdownPasteService.handleMarkdownPaste(
-              pastedText,
-              taskId,
-              taskTitle,
-              isSubTask,
-            );
-          } else {
-            // Fallback: handle as parent tasks if task not found
-            this._markdownPasteService.handleMarkdownPaste(pastedText, null);
-          }
-        });
+      this._taskService.getByIdOnce$(taskId).subscribe((task) => {
+        if (task) {
+          taskTitle = task.title;
+          isSubTask = !!task.parentId;
+          this._markdownPasteService.handleMarkdownPaste(
+            pastedText,
+            taskId,
+            taskTitle,
+            isSubTask,
+          );
+        } else {
+          // Fallback: handle as parent tasks if task not found
+          this._markdownPasteService.handleMarkdownPaste(pastedText, null);
+        }
+      });
     } else {
       // Handle as parent tasks since no specific task context
       this._markdownPasteService.handleMarkdownPaste(pastedText, null);
@@ -375,7 +372,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
             map((activeContext) => ({ result, activeContext })),
           ),
         ),
-        takeUntilDestroyed(this._destroyRef),
       )
       .subscribe(({ result, activeContext }) => {
         if (!activeContext) {
