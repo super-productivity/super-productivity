@@ -31,7 +31,7 @@ describe('StateSnapshotService', () => {
     ids: ['task1'],
     entities: { task1: { id: 'task1', title: 'Test Task' } },
     selectedTaskId: 'task1',
-    currentTaskId: 'task1',
+    activeTaskIds: ['task1'],
   };
   const mockProjectState = { ids: [], entities: {} };
   const mockTagState = { ids: [], entities: {} };
@@ -159,10 +159,10 @@ describe('StateSnapshotService', () => {
       expect(snapshot.archiveOld).toEqual(DEFAULT_ARCHIVE);
     });
 
-    it('should clear currentTaskId', () => {
+    it('should clear activeTaskIds', () => {
       const snapshot = service.getStateSnapshot();
 
-      expect((snapshot.task as any).currentTaskId).toBeNull();
+      expect((snapshot.task as any).activeTaskIds).toEqual([]);
     });
 
     it('should include task state with ids and entities', () => {
@@ -212,10 +212,10 @@ describe('StateSnapshotService', () => {
       expect(snapshot.archiveOld).toEqual(DEFAULT_ARCHIVE);
     });
 
-    it('should clear currentTaskId in async version', async () => {
+    it('should clear activeTaskIds in async version', async () => {
       const snapshot = await service.getStateSnapshotAsync();
 
-      expect((snapshot.task as any).currentTaskId).toBeNull();
+      expect((snapshot.task as any).activeTaskIds).toEqual([]);
     });
 
     it('should load both archives in parallel', async () => {

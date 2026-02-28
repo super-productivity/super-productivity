@@ -168,6 +168,8 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.COUNTER_UPDATE_ORDER]: 'SM',
 
   // Task actions (T)
+  [ActionType.TASK_START]: 'TS',
+  [ActionType.TASK_STOP]: 'TP',
   [ActionType.TASK_UPDATE_MULTIPLE_SIMPLE]: 'TU',
   [ActionType.TASK_ADD_SUB]: 'TA',
   [ActionType.TASK_MOVE_SUB]: 'TMS',

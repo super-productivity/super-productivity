@@ -11,6 +11,8 @@ import {
   roundTimeSpentForDay,
   setCurrentTask,
   setSelectedTask,
+  startTask,
+  stopTask,
   toggleStart,
   toggleTaskHideSubTasks,
   unsetCurrentTask,
@@ -85,7 +87,7 @@ const wouldCreateCircularReference = (
 // -------
 export const initialTaskState: TaskState = taskAdapter.getInitialState({
   // TODO maybe at least move those properties to an ui property
-  currentTaskId: null,
+  activeTaskIds: [],
   selectedTaskId: null,
   taskDetailTargetPanel: TaskDetailTargetPanel.Default,
   lastCurrentTaskId: null,
@@ -106,22 +108,31 @@ export const taskReducer = createReducer<TaskState>(
     if (hasOrphans) {
       devError('loadAllData: Found orphaned task IDs in loaded state — sanitizing');
     }
+
+    // Migration for currentTaskId -> activeTaskIds
+    let activeTaskIds = task.activeTaskIds || [];
+    if (activeTaskIds.length === 0 && (task as any).currentTaskId) {
+      activeTaskIds = [(task as any).currentTaskId];
+    }
+
+    const { currentTaskId, ...taskWithoutLegacy } = task as any;
+
     return {
-      ...(hasOrphans ? { ...task, ids: ids.filter((id) => !!task.entities[id]) } : task),
-      currentTaskId: null,
+      ...(hasOrphans
+        ? { ...taskWithoutLegacy, ids: ids.filter((id) => !!task.entities[id]) }
+        : taskWithoutLegacy),
+      activeTaskIds: activeTaskIds,
       selectedTaskId: null,
-      lastCurrentTaskId: task.currentTaskId,
+      lastCurrentTaskId: currentTaskId || null,
       isDataLoaded: true,
     };
   }),
 
   on(TaskSharedActions.deleteProject, (state, { allTaskIds }) => {
+    const activeTaskIds = state.activeTaskIds.filter((id) => !allTaskIds.includes(id));
     return taskAdapter.removeMany(allTaskIds, {
       ...state,
-      currentTaskId:
-        state.currentTaskId && allTaskIds.includes(state.currentTaskId)
-          ? null
-          : state.currentTaskId,
+      activeTaskIds,
     });
   }),
 
@@ -170,37 +181,113 @@ export const taskReducer = createReducer<TaskState>(
 
   // TODO check if working
   on(setCurrentTask, (state, { id }) => {
+    // Legacy behavior: Stop all others, start this one
+    // Or if id is null, stop all.
+    let taskToStartId = id;
+    let newActiveTaskIds: string[] = [];
+
     if (id) {
       const task = getTaskById(id, state);
       const subTaskIds = task.subTaskIds;
-      let taskToStartId = id;
       if (subTaskIds && subTaskIds.length) {
         const undoneTasks = subTaskIds
           .map((tid) => getTaskById(tid, state))
           .filter((ta: Task) => !ta.isDone);
         taskToStartId = undoneTasks.length ? undoneTasks[0].id : subTaskIds[0];
       }
-      return {
-        ...taskAdapter.updateOne(
-          {
-            id: taskToStartId,
-            changes: { isDone: false, doneOn: undefined },
-          },
-          state,
-        ),
-        currentTaskId: taskToStartId,
-        selectedTaskId: state.selectedTaskId && taskToStartId,
-      };
-    } else {
-      return {
-        ...state,
-        currentTaskId: null,
-      };
+      newActiveTaskIds = taskToStartId ? [taskToStartId] : [];
     }
+
+    // Set isCurrent: false for all previously active tasks
+    // Set isCurrent: true for the new active task
+    // We can use updateMany for this.
+
+    const updates: Update<Task>[] = [];
+
+    // Deactivate currently active
+    state.activeTaskIds.forEach((activeId) => {
+      if (activeId !== taskToStartId) {
+        updates.push({
+          id: activeId,
+          changes: { isCurrent: false },
+        });
+      }
+    });
+
+    if (taskToStartId) {
+      updates.push({
+        id: taskToStartId,
+        changes: { isDone: false, doneOn: undefined, isCurrent: true },
+      });
+    }
+
+    return {
+      ...taskAdapter.updateMany(updates, state),
+      activeTaskIds: newActiveTaskIds,
+      selectedTaskId:
+        state.selectedTaskId && taskToStartId ? taskToStartId : state.selectedTaskId,
+    };
   }),
 
   on(unsetCurrentTask, (state) => {
-    return { ...state, currentTaskId: null, lastCurrentTaskId: state.currentTaskId };
+    // Stop all tasks
+    const updates: Update<Task>[] = state.activeTaskIds.map((id) => ({
+      id,
+      changes: { isCurrent: false },
+    }));
+
+    const lastCurrentTaskId =
+      state.activeTaskIds.length > 0 ? state.activeTaskIds[0] : state.lastCurrentTaskId;
+
+    return {
+      ...taskAdapter.updateMany(updates, state),
+      activeTaskIds: [],
+      lastCurrentTaskId: lastCurrentTaskId,
+    };
+  }),
+
+  on(startTask, (state, { id }) => {
+    const task = getTaskById(id, state);
+    const subTaskIds = task.subTaskIds;
+    let taskToStartId = id;
+    if (subTaskIds && subTaskIds.length) {
+      const undoneTasks = subTaskIds
+        .map((tid) => getTaskById(tid, state))
+        .filter((ta: Task) => !ta.isDone);
+      taskToStartId = undoneTasks.length ? undoneTasks[0].id : subTaskIds[0];
+    }
+
+    // Add to activeTaskIds if not present
+    const activeTaskIds = state.activeTaskIds.includes(taskToStartId)
+      ? state.activeTaskIds
+      : [...state.activeTaskIds, taskToStartId];
+
+    return {
+      ...taskAdapter.updateOne(
+        {
+          id: taskToStartId,
+          changes: { isDone: false, doneOn: undefined, isCurrent: true },
+        },
+        state,
+      ),
+      activeTaskIds,
+    };
+  }),
+
+  on(stopTask, (state, { id }) => {
+    // Remove from activeTaskIds
+    const activeTaskIds = state.activeTaskIds.filter((activeId) => activeId !== id);
+
+    return {
+      ...taskAdapter.updateOne(
+        {
+          id,
+          changes: { isCurrent: false },
+        },
+        state,
+      ),
+      activeTaskIds,
+    };
   }),
 
   on(setSelectedTask, (state, { id, taskDetailTargetPanel, isSkipToggle }) => {
@@ -492,7 +579,14 @@ export const taskReducer = createReducer<TaskState>(
     return {
       ...stateCopy,
       // update current task to new sub task if parent was current before
-      ...(state.currentTaskId === parentId ? { currentTaskId: task.id } : {}),
+      ...(state.activeTaskIds.includes(parentId)
+        ? {
+            activeTaskIds: [
+              ...state.activeTaskIds.filter((id) => id !== parentId),
+              task.id,
+            ],
+          }
+        : {}),
       // also add to parent task
       entities: {
         ...stateCopy.entities,
@@ -505,11 +599,33 @@ export const taskReducer = createReducer<TaskState>(
   }),
 
   on(toggleStart, (state) => {
-    if (state.currentTaskId) {
+    if (state.activeTaskIds.length > 0) {
+      // Stop all active tasks
+      const updates: Update<Task>[] = state.activeTaskIds.map((id) => ({
+        id,
+        changes: { isCurrent: false },
+      }));
       return {
-        ...state,
-        lastCurrentTaskId: state.currentTaskId,
+        ...taskAdapter.updateMany(updates, state),
+        activeTaskIds: [],
+        lastCurrentTaskId: state.activeTaskIds[0],
       };
+    } else if (state.lastCurrentTaskId) {
+      // Resume last active
+      const id = state.lastCurrentTaskId;
+      const task = state.entities[id];
+      if (task && !task.isDone) {
+        return {
+          ...taskAdapter.updateOne(
+            {
+              id,
+              changes: { isCurrent: true },
+            },
+            state,
+          ),
+          activeTaskIds: [id],
+        };
+      }
     }
     return state;
   }),

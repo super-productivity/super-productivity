@@ -30,7 +30,7 @@ describe('selectLaterTodayTasksWithSubTasks', () => {
     return {
       entities,
       ids,
-      currentTaskId: null,
+      activeTaskIds: [],
       selectedTaskId: null,
       lastCurrentTaskId: null,
       taskDetailTargetPanel: 'Default' as any,

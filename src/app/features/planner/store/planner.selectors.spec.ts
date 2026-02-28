@@ -376,7 +376,7 @@ describe('Planner Selectors - selectAllTasksDueToday', () => {
   const mockTaskState: TaskState = {
     ids: Object.keys(mockTasks),
     entities: mockTasks,
-    currentTaskId: null,
+    activeTaskIds: [],
     selectedTaskId: null,
     lastCurrentTaskId: null,
     isDataLoaded: true,

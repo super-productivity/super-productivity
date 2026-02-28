@@ -69,6 +69,7 @@ export type TimeTrackingConfig = Readonly<{
   defaultEstimate?: number | null;
   defaultEstimateSubTasks?: number | null;
   isAutoStartNextTask: boolean;
+  isMultiTaskTrackingEnabled: boolean;
   isNotifyWhenTimeEstimateExceeded: boolean;
   isTrackingReminderEnabled: boolean;
   isTrackingReminderShowOnMobile: boolean;

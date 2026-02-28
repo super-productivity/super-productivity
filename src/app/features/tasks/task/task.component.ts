@@ -147,8 +147,34 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isInSubTaskList = input<boolean>(false);
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
-  isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
+  isCurrent = computed(() =>
+    this._taskService.currentTasks().some((t) => t.id === this.task().id),
+  );
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
+
+  liveTimeSpent = computed(() => {
+    const t = this.task();
+    return this.isCurrent()
+      ? t.timeSpent + this.globalTrackingIntervalService.tick().duration
+      : t.timeSpent;
+  });
+
+  liveSubTaskTimeSpent = computed(() => {
+    const t = this.task();
+    const activeIds = this._taskService.activeTaskIds();
+    return (
+      t.subTasks?.reduce((acc, st) => {
+        const isStActive = activeIds.includes(st.id);
+        return (
+          acc +
+          (isStActive
+            ? st.timeSpent + this.globalTrackingIntervalService.tick().duration
+            : st.timeSpent)
+        );
+      }, 0) || 0
+    );
+  });
+
   isShowCloseButton = computed(() => {
     // Only show close button when task is selected AND not on mobile (bottom panel)
     return this.isSelected() && !this.layoutService.isXs();
@@ -442,12 +468,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   startTask(): void {
-    this._taskService.setCurrentId(this.task().id);
+    this._taskService.startTask(this.task().id);
     this.focusSelf();
   }
 
   pauseTask(): void {
-    this._taskService.pauseCurrent();
+    this._taskService.stopTask(this.task().id);
   }
 
   togglePlayPause(): void {

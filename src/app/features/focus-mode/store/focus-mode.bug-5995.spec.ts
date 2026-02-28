@@ -138,7 +138,7 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
                 },
               },
               ids: ['test-task-id'],
-              currentTaskId: null,
+              activeTaskIds: [],
               lastCurrentTaskId: null,
               selectedTaskId: null,
               taskDetailPanelTargetPanel: null,
