@@ -14,6 +14,7 @@ import { EncryptionEnableService } from '../encryption-enable.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { SyncWrapperService } from '../sync-wrapper.service';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { isFileBasedProvider } from '../../../op-log/sync/operation-sync.util';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
@@ -61,6 +62,7 @@ export class DialogEnableEncryptionComponent {
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
   private _snackService = inject(SnackService);
   private _providerManager = inject(SyncProviderManager);
+  private _syncWrapperService = inject(SyncWrapperService);
   private _globalConfigService = inject(GlobalConfigService);
   private _data = inject<EnableEncryptionDialogData | null>(MAT_DIALOG_DATA, {
     optional: true,
@@ -145,7 +147,9 @@ export class DialogEnableEncryptionComponent {
       if (this.providerType === 'file-based') {
         await this._fileBasedEncryptionService.enableEncryption(this.password);
       } else {
-        await this._encryptionEnableService.enableEncryption(this.password);
+        await this._syncWrapperService.runWithSyncBlocked(() =>
+          this._encryptionEnableService.enableEncryption(this.password),
+        );
       }
       this._snackService.open({
         type: 'SUCCESS',

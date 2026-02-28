@@ -30,6 +30,7 @@ import {
 } from './rejected-ops-handler.service';
 import { SyncHydrationService } from '../persistence/sync-hydration.service';
 import { SyncImportConflictDialogService } from './sync-import-conflict-dialog.service';
+import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { getDefaultMainModelData } from '../model/model-config';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
@@ -129,6 +130,7 @@ export class OperationLogSyncService {
   private rejectedOpsHandlerService = inject(RejectedOpsHandlerService);
   private syncHydrationService = inject(SyncHydrationService);
   private syncImportConflictDialogService = inject(SyncImportConflictDialogService);
+  private providerManager = inject(SyncProviderManager);
 
   /**
    * Checks if this client is "wholly fresh" - meaning it has never synced before
@@ -1023,8 +1025,24 @@ export class OperationLogSyncService {
     // Mismatch detected: server has only unencrypted data but local has encryption enabled
     OpLog.warn(
       'OperationLogSyncService: Encryption state mismatch detected. ' +
-        'Server has only unencrypted data but local config has encryption enabled. ' +
-        'Another client must have disabled encryption. Updating local config to match.',
+        'Server has only unencrypted data but local config has encryption enabled.',
+    );
+
+    // SuperSync: encryption is mandatory — never auto-disable it.
+    // An older unencrypted client or stale server must not downgrade encryption.
+    const activeProvider = this.providerManager.getActiveProvider();
+    if (activeProvider?.id === SyncProviderId.SuperSync) {
+      OpLog.warn(
+        'OperationLogSyncService: SuperSync requires encryption — ' +
+          'NOT auto-disabling. Server has stale unencrypted data.',
+      );
+      return;
+    }
+
+    // Non-SuperSync providers: allow auto-disable
+    OpLog.warn(
+      'OperationLogSyncService: Non-SuperSync provider — ' +
+        'updating local config to match server (disabling encryption).',
     );
 
     // Check if provider supports config updates using type guard
@@ -1046,8 +1064,8 @@ export class OperationLogSyncService {
       return;
     }
 
-    // Update config to disable encryption
-    await syncProvider.setPrivateCfg({
+    // Update config via providerManager to ensure currentProviderPrivateCfg$ observable is updated
+    await this.providerManager.setProviderConfig(syncProvider.id, {
       ...existingCfg,
       encryptKey: undefined,
       isEncryptionEnabled: false,

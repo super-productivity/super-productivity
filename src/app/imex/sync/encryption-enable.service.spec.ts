@@ -66,8 +66,17 @@ describe('EncryptionEnableService', () => {
 
     mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
       'setProviderConfig',
+      'getActiveProvider',
     ]);
     mockProviderManager.setProviderConfig.and.resolveTo();
+    // Return a provider with encryption NOT enabled (so the duplicate guard doesn't trigger)
+    mockProviderManager.getActiveProvider.and.returnValue({
+      privateCfg: {
+        load: jasmine
+          .createSpy('load')
+          .and.resolveTo({ isEncryptionEnabled: false, encryptKey: undefined }),
+      },
+    } as any);
 
     TestBed.configureTestingModule({
       providers: [

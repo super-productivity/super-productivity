@@ -202,7 +202,9 @@ export class SyncWrapperService {
     // After successful sync, prompt for encryption if SuperSync is active without it.
     // This ensures data is downloaded and merged first, preventing data loss.
     if (result === SyncStatus.InSync) {
-      this._promptSuperSyncEncryptionIfNeeded();
+      this._promptSuperSyncEncryptionIfNeeded().catch((err) => {
+        SyncLog.err('Error prompting for encryption:', err);
+      });
     }
 
     return result;
@@ -296,7 +298,7 @@ export class SyncWrapperService {
       if (downloadResult.cancelled) {
         SyncLog.log('SyncWrapperService: Sync cancelled by user. Skipping upload phase.');
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-        return SyncStatus.NotConfigured;
+        return 'HANDLED_ERROR';
       }
 
       // 2. Upload pending local ops
@@ -314,7 +316,7 @@ export class SyncWrapperService {
           'SyncWrapperService: Upload cancelled by user (piggybacked SYNC_IMPORT). Skipping LWW re-upload.',
         );
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-        return SyncStatus.NotConfigured;
+        return 'HANDLED_ERROR';
       }
 
       // 3. If LWW created local-win ops, upload them (with retry limit to prevent infinite loops)
@@ -942,7 +944,7 @@ export class SyncWrapperService {
       ', openDialogs=',
       this._matDialog.openDialogs.length,
     );
-    const providerId = await firstValueFrom(this.syncProviderId$.pipe(take(1)));
+    const providerId = await firstValueFrom(this.syncProviderId$);
     if (providerId !== SyncProviderId.SuperSync) {
       return;
     }

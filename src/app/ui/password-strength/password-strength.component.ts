@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../t.const';
 
 export type PasswordStrengthLevel = 'weak' | 'fair' | 'strong';
 
@@ -45,15 +53,15 @@ export type PasswordStrengthLevel = 'weak' | 'fair' | 'strong';
         transition: width 0.3s ease;
 
         &.weak {
-          background: #f44336;
+          background: var(--c-warn);
         }
 
         &.fair {
-          background: #ff9800;
+          background: var(--c-accent);
         }
 
         &.strong {
-          background: #4caf50;
+          background: var(--palette-primary-500);
         }
       }
 
@@ -62,21 +70,23 @@ export type PasswordStrengthLevel = 'weak' | 'fair' | 'strong';
         white-space: nowrap;
 
         &.weak {
-          color: #f44336;
+          color: var(--c-warn);
         }
 
         &.fair {
-          color: #ff9800;
+          color: var(--c-accent);
         }
 
         &.strong {
-          color: #4caf50;
+          color: var(--palette-primary-500);
         }
       }
     `,
   ],
 })
 export class PasswordStrengthComponent {
+  private _translateService = inject(TranslateService);
+
   password = input<string>('');
   minLength = input<number>(8);
 
@@ -110,11 +120,11 @@ export class PasswordStrengthComponent {
   label = computed(() => {
     switch (this.level()) {
       case 'weak':
-        return 'Weak';
+        return this._translateService.instant(T.G.PASSWORD_STRENGTH_WEAK);
       case 'fair':
-        return 'Fair';
+        return this._translateService.instant(T.G.PASSWORD_STRENGTH_FAIR);
       case 'strong':
-        return 'Strong';
+        return this._translateService.instant(T.G.PASSWORD_STRENGTH_STRONG);
     }
   });
 }

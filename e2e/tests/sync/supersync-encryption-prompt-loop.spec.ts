@@ -148,13 +148,11 @@ test.describe('@supersync Encryption Prompt Loop', () => {
       await encryptionDialog.waitFor({ state: 'hidden', timeout: 10000 });
       console.log('[I.14] Cancel clicked, dialog closed');
 
-      // Wait for state to settle
-      await clientA.page.waitForTimeout(2000);
-
       // Verify sync is disabled — the sync button should not show
       // the check/spinner/error state anymore (sync is off)
-      const isSyncEnabled = await clientA.sync.isSyncEnabled();
-      expect(isSyncEnabled).toBe(false);
+      await expect
+        .poll(() => clientA.sync.isSyncEnabled(), { timeout: 10000 })
+        .toBe(false);
 
       console.log('[I.14] ✓ Sync disabled after cancelling encryption prompt');
     } finally {

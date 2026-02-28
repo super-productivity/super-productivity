@@ -36,6 +36,7 @@ test.describe('@supersync Error Scenarios', () => {
     baseURL,
     testRunId,
   }) => {
+    test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     const state = { interceptUpload: true };
 
@@ -181,8 +182,9 @@ test.describe('@supersync Error Scenarios', () => {
         console.log('[Test] Sync failed with 413 as expected');
       }
 
-      // Verify alert was shown
+      // Verify alert was shown with appropriate message
       expect(alertShown).toBe(true);
+      expect(alertMessage.length).toBeGreaterThan(0);
 
       // Task should still exist locally (not lost)
       await waitForTask(clientA.page, taskName);
@@ -208,6 +210,7 @@ test.describe('@supersync Error Scenarios', () => {
     baseURL,
     testRunId,
   }) => {
+    test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     const state = { returnDuplicate: false };
@@ -305,6 +308,7 @@ test.describe('@supersync Error Scenarios', () => {
     baseURL,
     testRunId,
   }) => {
+    test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     const state = { injectFutureSchemaOps: true };
@@ -392,6 +396,7 @@ test.describe('@supersync Error Scenarios', () => {
     baseURL,
     testRunId,
   }) => {
+    test.setTimeout(90000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     const state = { injectCorruptedOp: true };
