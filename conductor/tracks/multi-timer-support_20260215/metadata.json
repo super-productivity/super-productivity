@@ -1,8 +1,0 @@
-{
-  "track_id": "multi-timer-support_20260215",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-15T00:00:00Z",
-  "updated_at": "2026-02-15T00:00:00Z",
-  "description": "Implement Multi-Timer Support in the 'Today' View"
-}
