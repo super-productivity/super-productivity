@@ -30,6 +30,7 @@ import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+import { isOperationSyncCapable } from '../../../op-log/sync/operation-sync.util';
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 
@@ -228,13 +229,39 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       !this._tmpUpdatedCfg.isEncryptionEnabled &&
       !(this._tmpUpdatedCfg.superSync as any)?.isEncryptionEnabled
     ) {
-      const { DialogEnableEncryptionComponent } =
-        await import('../dialog-enable-encryption/dialog-enable-encryption.component');
-      const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
-        data: { providerType: 'supersync', initialSetup: true },
-        disableClose: true,
-      });
-      await firstValueFrom(dialogRef.afterClosed());
+      // Probe server to check if encrypted remote data already exists
+      let hasEncryptedRemoteData = false;
+      try {
+        const provider = this._providerManager.getProviderById(SyncProviderId.SuperSync);
+        if (provider && isOperationSyncCapable(provider)) {
+          const response = await provider.downloadOps(0, undefined, 1);
+          hasEncryptedRemoteData =
+            response.latestSeq > 0 &&
+            response.ops.length > 0 &&
+            response.ops[0].op.isPayloadEncrypted === true;
+        }
+      } catch (e) {
+        SyncLog.warn('Failed to probe server for encrypted data', e);
+      }
+
+      if (hasEncryptedRemoteData) {
+        // Remote data is already encrypted — ask for existing password
+        const { DialogEnterEncryptionPasswordComponent } =
+          await import('../dialog-enter-encryption-password/dialog-enter-encryption-password.component');
+        const dialogRef = this._matDialog.open(DialogEnterEncryptionPasswordComponent, {
+          disableClose: true,
+        });
+        await firstValueFrom(dialogRef.afterClosed());
+      } else {
+        // No encrypted remote data — offer to create a new encryption password
+        const { DialogEnableEncryptionComponent } =
+          await import('../dialog-enable-encryption/dialog-enable-encryption.component');
+        const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
+          data: { providerType: 'supersync', initialSetup: true },
+          disableClose: true,
+        });
+        await firstValueFrom(dialogRef.afterClosed());
+      }
     }
 
     this._matDialogRef.close();
