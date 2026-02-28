@@ -11,6 +11,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { taskAdapter } from './store/task.reducer';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
+import { GlobalConfigService } from '../config/global-config.service';
 
 describe('Multi-Timer Support', () => {
   let taskService: TaskService;
@@ -60,6 +61,7 @@ describe('Multi-Timer Support', () => {
           provide: GlobalTrackingIntervalService,
           useValue: {
             tick$: tickSubject.asObservable(),
+            tick: () => ({ duration: 0, date: '2026-02-15' }),
             todayDateStr: () => '2026-02-15',
             todayDateStr$: of('2026-02-15'),
           },
@@ -76,6 +78,24 @@ describe('Multi-Timer Support', () => {
           provide: ImexViewService,
           useValue: {
             isDataImportInProgress$: of(false),
+          },
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: {
+            cfg: () => ({
+              timeTracking: {
+                isMultiTaskTrackingEnabled: true,
+              },
+            }),
+            cfg$: of({
+              timeTracking: {
+                isMultiTaskTrackingEnabled: true,
+              },
+            }),
+            appFeatures: () => ({
+              isTimeTrackingEnabled: true,
+            }),
           },
         },
       ],
