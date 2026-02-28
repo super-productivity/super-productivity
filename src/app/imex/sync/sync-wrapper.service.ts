@@ -693,6 +693,12 @@ export class SyncWrapperService {
     if (this._passwordDialog) {
       return;
     }
+    // Don't open if any dialog is already visible (e.g. initial config dialog
+    // is still handling encryption setup via server probe + password prompt)
+    if (this._matDialog.openDialogs.length > 0) {
+      SyncLog.log('Dialog already open — skipping missing password prompt');
+      return;
+    }
 
     // Set ERROR status so sync button shows error icon
     this._providerManager.setSyncStatus('ERROR');
@@ -723,6 +729,12 @@ export class SyncWrapperService {
   private _handleDecryptionError(): void {
     // Prevent multiple password dialogs from opening simultaneously
     if (this._passwordDialog) {
+      return;
+    }
+    // Don't open if any dialog is already visible (e.g. initial config dialog
+    // is still handling encryption setup via server probe + password prompt)
+    if (this._matDialog.openDialogs.length > 0) {
+      SyncLog.log('Dialog already open — skipping decryption error prompt');
       return;
     }
 
@@ -923,6 +935,13 @@ export class SyncWrapperService {
   private _encryptionRequiredDialog?: MatDialogRef<any, any>;
 
   /**
+   * Synchronous guard to prevent TOCTOU race in _promptSuperSyncEncryptionIfNeeded.
+   * The async import() between checking _encryptionRequiredDialog and opening the dialog
+   * creates a window where concurrent calls can both pass the guard.
+   */
+  private _isOpeningEncryptionDialog = false;
+
+  /**
    * After a successful sync, checks if SuperSync is active without encryption.
    * If so, opens the encryption dialog. Data has already been synced, so no data loss.
    */
@@ -946,7 +965,17 @@ export class SyncWrapperService {
 
     SyncLog.log('SuperSync encryption not enabled — prompting user');
 
-    if (!this._encryptionRequiredDialog) {
+    // Don't open if ANY dialog is already open. The config dialog's save() method
+    // handles encryption setup (either "enable encryption" or "enter password" based
+    // on a server probe). Opening a competing dialog causes duplicate encryption
+    // prompts and can trigger unwanted clean-slate operations.
+    if (this._matDialog.openDialogs.length > 0) {
+      SyncLog.log('Dialog already open — skipping encryption prompt');
+      return;
+    }
+
+    if (!this._encryptionRequiredDialog && !this._isOpeningEncryptionDialog) {
+      this._isOpeningEncryptionDialog = true;
       const { DialogEnableEncryptionComponent } =
         await import('./dialog-enable-encryption/dialog-enable-encryption.component');
       this._encryptionRequiredDialog = this._matDialog.open(
@@ -956,6 +985,7 @@ export class SyncWrapperService {
           data: { providerType: 'supersync', initialSetup: true },
         },
       );
+      this._isOpeningEncryptionDialog = false;
 
       this._encryptionRequiredDialog.afterClosed().subscribe((result) => {
         this._encryptionRequiredDialog = undefined;

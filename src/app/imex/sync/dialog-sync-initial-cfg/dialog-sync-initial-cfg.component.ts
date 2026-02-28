@@ -6,7 +6,6 @@ import {
   signal,
 } from '@angular/core';
 import {
-  MatDialog,
   MatDialogActions,
   MatDialogContent,
   MatDialogRef,
@@ -25,12 +24,12 @@ import { SyncConfig } from '../../../features/config/global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { SyncConfigService } from '../sync-config.service';
 import { SyncWrapperService } from '../sync-wrapper.service';
-import { firstValueFrom, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
-import { isOperationSyncCapable } from '../../../op-log/sync/operation-sync.util';
+
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 
@@ -53,7 +52,6 @@ import { isOnline } from '../../../util/is-online';
 export class DialogSyncInitialCfgComponent implements AfterViewInit {
   syncConfigService = inject(SyncConfigService);
   syncWrapperService = inject(SyncWrapperService);
-  private _matDialog = inject(MatDialog);
   private _providerManager = inject(SyncProviderManager);
   private _globalConfigService = inject(GlobalConfigService);
 
@@ -66,7 +64,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
   }
   // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
-  // to hide the encryption button/warning (encryption dialog opens automatically after save)
+  // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
   _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
     isEnabled: true,
     syncProvider: null,
@@ -221,47 +219,6 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);
-    }
-
-    // Prompt for encryption when setting up SuperSync for the first time
-    if (
-      providerId === SyncProviderId.SuperSync &&
-      !this._tmpUpdatedCfg.isEncryptionEnabled &&
-      !(this._tmpUpdatedCfg.superSync as any)?.isEncryptionEnabled
-    ) {
-      // Probe server to check if encrypted remote data already exists
-      let hasEncryptedRemoteData = false;
-      try {
-        const provider = this._providerManager.getProviderById(SyncProviderId.SuperSync);
-        if (provider && isOperationSyncCapable(provider)) {
-          const response = await provider.downloadOps(0, undefined, 1);
-          hasEncryptedRemoteData =
-            response.latestSeq > 0 &&
-            response.ops.length > 0 &&
-            response.ops[0].op.isPayloadEncrypted === true;
-        }
-      } catch (e) {
-        SyncLog.warn('Failed to probe server for encrypted data', e);
-      }
-
-      if (hasEncryptedRemoteData) {
-        // Remote data is already encrypted — ask for existing password
-        const { DialogEnterEncryptionPasswordComponent } =
-          await import('../dialog-enter-encryption-password/dialog-enter-encryption-password.component');
-        const dialogRef = this._matDialog.open(DialogEnterEncryptionPasswordComponent, {
-          disableClose: true,
-        });
-        await firstValueFrom(dialogRef.afterClosed());
-      } else {
-        // No encrypted remote data — offer to create a new encryption password
-        const { DialogEnableEncryptionComponent } =
-          await import('../dialog-enable-encryption/dialog-enable-encryption.component');
-        const dialogRef = this._matDialog.open(DialogEnableEncryptionComponent, {
-          data: { providerType: 'supersync', initialSetup: true },
-          disableClose: true,
-        });
-        await firstValueFrom(dialogRef.afterClosed());
-      }
     }
 
     this._matDialogRef.close();

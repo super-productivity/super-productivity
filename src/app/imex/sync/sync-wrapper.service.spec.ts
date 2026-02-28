@@ -17,6 +17,8 @@ import { UserInputWaitStateService } from './user-input-wait-state.service';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
 import {
   AuthFailSPError,
+  DecryptError,
+  DecryptNoPasswordError,
   MissingCredentialsSPError,
   PotentialCorsError,
   SyncProviderId,
@@ -129,7 +131,9 @@ describe('SyncWrapperService', () => {
     });
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
-    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open'], {
+      openDialogs: [],
+    });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => key);
 
@@ -1329,6 +1333,82 @@ describe('SyncWrapperService', () => {
     it('should handle objects with toString()', () => {
       const errorObj = { toString: () => 'Error: timeout occurred' };
       expect(service['_isTimeoutError'](errorObj)).toBe(true);
+    });
+  });
+
+  describe('_handleMissingPasswordDialog - openDialogs guard', () => {
+    it('should not open password dialog when another dialog is already open', async () => {
+      // Simulate a dialog already being open
+      Object.defineProperty(mockMatDialog, 'openDialogs', {
+        value: [{}],
+        writable: true,
+      });
+
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptNoPasswordError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should open password dialog when no other dialog is open', async () => {
+      Object.defineProperty(mockMatDialog, 'openDialogs', { value: [], writable: true });
+
+      const afterClosedSubject = new BehaviorSubject<any>({ password: 'test' });
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => afterClosedSubject.asObservable(),
+      } as any);
+
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptNoPasswordError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockMatDialog.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('_handleDecryptionError - openDialogs guard', () => {
+    it('should not open decrypt error dialog when another dialog is already open', async () => {
+      Object.defineProperty(mockMatDialog, 'openDialogs', {
+        value: [{}],
+        writable: true,
+      });
+
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should open decrypt error dialog when no other dialog is open', async () => {
+      Object.defineProperty(mockMatDialog, 'openDialogs', { value: [], writable: true });
+
+      const afterClosedSubject = new BehaviorSubject<any>({
+        isReSync: false,
+        isForceUpload: false,
+      });
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => afterClosedSubject.asObservable(),
+      } as any);
+
+      mockSyncService.downloadRemoteOps.and.returnValue(
+        Promise.reject(new DecryptError()),
+      );
+
+      const result = await service.sync();
+
+      expect(result).toBe('HANDLED_ERROR');
+      expect(mockMatDialog.open).toHaveBeenCalled();
     });
   });
 
