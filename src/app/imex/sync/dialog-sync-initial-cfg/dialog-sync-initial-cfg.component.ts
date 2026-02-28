@@ -67,7 +67,7 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
   // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
   _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
     isEnabled: true,
-    syncProvider: null,
+    syncProvider: SyncProviderId.SuperSync,
     syncInterval: 300000,
     encryptKey: '',
     isEncryptionEnabled: false,
