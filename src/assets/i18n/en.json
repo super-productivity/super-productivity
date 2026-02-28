@@ -1021,8 +1021,8 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "TITLE": "Sync Conflict Detected",
-        "MSG_INCOMING": "Another device performed a full data replacement. You have {{filteredOpCount}} local changes that may be affected.",
-        "MSG_INCOMING_NO_OPS": "Another device performed a full data replacement. Your current local data will be overwritten.",
+        "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
+        "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
         "MSG_LOCAL_FILTERS": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices that cannot be automatically merged.",
         "IMPORT_DATE": "Import date",
         "FILTERED_CHANGES": "Affected changes",
