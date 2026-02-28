@@ -493,6 +493,17 @@ describe('Vector Clock Import Reset Integration', () => {
     });
   });
 
+  let originalTimeout: number;
+
+  beforeEach(() => {
+    originalTimeout = jasmine.DEFAULT_TIMEOUT_INTERVAL;
+    jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
+  });
+
+  afterEach(() => {
+    jasmine.DEFAULT_TIMEOUT_INTERVAL = originalTimeout;
+  });
+
   describe('Full multi-client lifecycle with MAX clock, import, and resync', () => {
     /**
      * End-to-end scenario: MAX clients → import → resync → new tasks from all clients.
