@@ -135,10 +135,12 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
 
       await component.forceOverwrite();
 
-      expect(mockSnackService.open).toHaveBeenCalledWith({
-        type: 'ERROR',
-        msg: 'Failed to overwrite server data: server error',
-      });
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          translateParams: { message: 'server error' },
+        }),
+      );
       expect(component.isLoading()).toBe(false);
       expect(mockDialogRef.close).not.toHaveBeenCalled();
     });

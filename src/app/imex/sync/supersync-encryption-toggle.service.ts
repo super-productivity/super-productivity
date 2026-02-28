@@ -139,8 +139,10 @@ export class SuperSyncEncryptionToggleService {
       await this._uploadAndFinalize(syncProvider, state, clientId, vectorClock, false);
 
       // Update config AFTER successful upload
+      // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
+      // to ensure the currentProviderPrivateCfg$ observable is updated.
       SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
-      await syncProvider.setPrivateCfg({
+      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
         ...existingCfg,
         encryptKey: undefined,
         isEncryptionEnabled: false,

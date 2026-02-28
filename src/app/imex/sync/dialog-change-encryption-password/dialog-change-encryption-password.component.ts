@@ -19,6 +19,7 @@ import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatDivider } from '@angular/material/divider';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
+import { SyncWrapperService } from '../sync-wrapper.service';
 
 export interface ChangeEncryptionPasswordResult {
   success: boolean;
@@ -60,6 +61,7 @@ export class DialogChangeEncryptionPasswordComponent {
   private _encryptionPasswordChangeService = inject(EncryptionPasswordChangeService);
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
   private _encryptionToggleService = inject(SuperSyncEncryptionToggleService);
+  private _syncWrapperService = inject(SyncWrapperService);
   private _snackService = inject(SnackService);
   private _matDialogRef =
     inject<
@@ -117,7 +119,8 @@ export class DialogChangeEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to change password: ${message}`,
+        msg: T.F.SYNC.S.CHANGE_PASSWORD_FAILED,
+        translateParams: { message },
       });
       this.isLoading.set(false);
     }
@@ -139,7 +142,9 @@ export class DialogChangeEncryptionPasswordComponent {
       if (this.providerType === 'file-based') {
         await this._fileBasedEncryptionService.disableEncryption();
       } else {
-        await this._encryptionToggleService.disableEncryption();
+        await this._syncWrapperService.runWithSyncBlocked(() =>
+          this._encryptionToggleService.disableEncryption(),
+        );
       }
       this._snackService.open({
         type: 'SUCCESS',
@@ -150,7 +155,8 @@ export class DialogChangeEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to disable encryption: ${message}`,
+        msg: T.F.SYNC.S.DISABLE_ENCRYPTION_FAILED,
+        translateParams: { message },
       });
       this.isRemovingEncryption.set(false);
     }

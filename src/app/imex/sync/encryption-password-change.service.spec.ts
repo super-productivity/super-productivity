@@ -43,6 +43,9 @@ describe('EncryptionPasswordChangeService', () => {
       getActiveProvider: jasmine
         .createSpy('getActiveProvider')
         .and.returnValue(mockSyncProvider),
+      setProviderConfig: jasmine
+        .createSpy('setProviderConfig')
+        .and.returnValue(Promise.resolve()),
     };
 
     mockCleanSlateService = jasmine.createSpyObj('CleanSlateService', [
@@ -118,7 +121,8 @@ describe('EncryptionPasswordChangeService', () => {
       );
 
       // Should update config with new password
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true,
@@ -145,7 +149,8 @@ describe('EncryptionPasswordChangeService', () => {
 
       await service.changePassword(TEST_PASSWORD);
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true,
@@ -286,14 +291,15 @@ describe('EncryptionPasswordChangeService', () => {
       );
 
       // Should have set password to new value
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
         }),
       );
 
       // Should NOT revert - only one call to setPrivateCfg
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledTimes(1);
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledTimes(1);
 
       // Should have cleared cache only once (on change, not on revert)
       expect(mockDerivedKeyCache.clearCache).toHaveBeenCalledTimes(1);
@@ -370,8 +376,8 @@ describe('EncryptionPasswordChangeService', () => {
         callOrder.push('createCleanSlate');
       });
 
-      mockSyncProvider.setPrivateCfg.and.callFake(async () => {
-        callOrder.push('setPrivateCfg');
+      mockProviderManager.setProviderConfig.and.callFake(async () => {
+        callOrder.push('setProviderConfig');
       });
 
       mockDerivedKeyCache.clearCache.and.callFake(() => {
@@ -398,7 +404,7 @@ describe('EncryptionPasswordChangeService', () => {
         'getUnsynced(1)', // Check for unsynced user ops
         'createCleanSlate',
         'getUnsynced(2)', // Verify SYNC_IMPORT was stored
-        'setPrivateCfg',
+        'setProviderConfig',
         'clearDerivedKeyCache',
         'clearWrappedProviderCache',
         'uploadPendingOps',
@@ -429,7 +435,8 @@ describe('EncryptionPasswordChangeService', () => {
       await service.changePassword(TEST_PASSWORD);
 
       // Verify BOTH fields are set in the new config
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true, // MUST be true!
@@ -453,7 +460,8 @@ describe('EncryptionPasswordChangeService', () => {
       await service.changePassword(TEST_PASSWORD);
 
       // Verify all other fields are preserved
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           baseUrl: 'https://custom-server.com',
           accessToken: 'my-access-token',
@@ -543,7 +551,7 @@ describe('EncryptionPasswordChangeService', () => {
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalled();
 
       // Should NOT have updated config (failed before reaching that step)
-      expect(mockSyncProvider.setPrivateCfg).not.toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should generate new client ID via clean slate to prevent operation conflicts', async () => {

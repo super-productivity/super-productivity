@@ -48,7 +48,7 @@ import { DialogGetAndEnterAuthCodeComponent } from './dialog-get-and-enter-auth-
 import { DialogConflictResolutionResult } from './sync.model';
 import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { ReminderService } from '../../features/reminder/reminder.service';
-import { DataInitService } from '../../core/data-init/data-init.service';
+
 import { DialogSyncInitialCfgComponent } from './dialog-sync-initial-cfg/dialog-sync-initial-cfg.component';
 import { DialogHandleDecryptErrorComponent } from './dialog-handle-decrypt-error/dialog-handle-decrypt-error.component';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
@@ -61,7 +61,7 @@ import { promiseTimeout } from '../../util/promise-timeout';
 import { devError } from '../../util/dev-error';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
 import { UserInputWaitStateService } from './user-input-wait-state.service';
-import { SYNC_WAIT_TIMEOUT_MS, SYNC_REINIT_DELAY_MS } from './sync.const';
+import { SYNC_WAIT_TIMEOUT_MS } from './sync.const';
 import { SuperSyncStatusService } from '../../op-log/sync/super-sync-status.service';
 import { IS_ELECTRON } from '../../app.constants';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
@@ -78,7 +78,7 @@ export class SyncWrapperService {
   private _translateService = inject(TranslateService);
   private _snackService = inject(SnackService);
   private _matDialog = inject(MatDialog);
-  private _dataInitService = inject(DataInitService);
+
   private _reminderService = inject(ReminderService);
   private _userInputWaitState = inject(UserInputWaitStateService);
   private _superSyncStatusService = inject(SuperSyncStatusService);
@@ -759,23 +759,21 @@ export class SyncWrapperService {
       autoFocus: false,
     });
 
-    this._passwordDialog
-      .afterClosed()
-      .subscribe(({ isReSync, isForceUpload } = {} as any) => {
-        this._passwordDialog = undefined;
+    this._passwordDialog.afterClosed().subscribe((result) => {
+      this._passwordDialog = undefined;
 
-        if (isReSync) {
-          this._suppressEncryptionDialogs = false;
-          this.sync();
-        } else if (isForceUpload) {
-          this._suppressEncryptionDialogs = false;
-          this.forceUpload();
-        } else {
-          // User cancelled — suppress future dialogs so they can navigate to settings
-          this._suppressEncryptionDialogs = true;
-          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-        }
-      });
+      if (result?.isReSync) {
+        this._suppressEncryptionDialogs = false;
+        this.sync();
+      } else if (result?.isForceUpload) {
+        this._suppressEncryptionDialogs = false;
+        this.forceUpload();
+      } else {
+        // User cancelled — suppress future dialogs so they can navigate to settings
+        this._suppressEncryptionDialogs = true;
+        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+      }
+    });
   }
 
   /**
@@ -877,27 +875,6 @@ export class SyncWrapperService {
       return 'HANDLED_ERROR';
     } finally {
       stopWaiting();
-    }
-  }
-
-  private async _reInitAppAfterDataModelChange(
-    downloadedMainModelData?: Record<string, unknown>,
-  ): Promise<void> {
-    SyncLog.log('Starting data re-initialization after sync...');
-
-    try {
-      await Promise.all([
-        // Use reInitFromRemoteSync() which now uses the passed downloaded data
-        // instead of reading from IndexedDB (entity models aren't stored there)
-        this._dataInitService.reInitFromRemoteSync(downloadedMainModelData),
-      ]);
-      // wait an extra frame to potentially avoid follow up problems
-      await promiseTimeout(SYNC_REINIT_DELAY_MS);
-      SyncLog.log('Data re-initialization complete');
-      // Signal that data reload is complete
-    } catch (error) {
-      SyncLog.err('Error during data re-initialization:', error);
-      throw error;
     }
   }
 

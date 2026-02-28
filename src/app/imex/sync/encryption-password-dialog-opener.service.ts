@@ -10,6 +10,7 @@ import {
   EnableEncryptionDialogData,
   EnableEncryptionResult,
 } from './dialog-enable-encryption/dialog-enable-encryption.component';
+import { firstValueFrom } from 'rxjs';
 
 // Module-level reference, set by the service constructor
 let dialogOpenerInstance: EncryptionPasswordDialogOpenerService | null = null;
@@ -60,7 +61,7 @@ export class EncryptionPasswordDialogOpenerService {
       data: { mode, providerType } as ChangeEncryptionPasswordDialogData,
     });
 
-    return dialogRef.afterClosed().toPromise();
+    return firstValueFrom(dialogRef.afterClosed());
   }
 
   openEnableEncryptionDialog(
@@ -72,7 +73,7 @@ export class EncryptionPasswordDialogOpenerService {
       data: { providerType } as EnableEncryptionDialogData,
     });
 
-    return dialogRef.afterClosed().toPromise();
+    return firstValueFrom(dialogRef.afterClosed());
   }
 }
 

@@ -117,7 +117,8 @@ export class DialogEnterEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to overwrite server data: ${message}`,
+        msg: T.F.SYNC.S.OVERWRITE_SERVER_FAILED,
+        translateParams: { message },
       });
     } finally {
       this.isLoading.set(false);

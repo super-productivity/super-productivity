@@ -283,87 +283,91 @@ export class OperationLogSyncService {
       mergedOpsCreated: 0,
       permanentRejectionCount: 0,
     };
-    try {
-      if (result.piggybackedOps.length > 0) {
-        // Check for piggybacked SYNC_IMPORT — mirrors the download path check (lines 552-604).
-        // Without this, a SYNC_IMPORT from another client arriving as a piggybacked op
-        // would silently replace local state via processRemoteOps().
-        const piggybackedImport = result.piggybackedOps.find((op) =>
-          FULL_STATE_OP_TYPES.has(op.opType),
-        );
-        if (piggybackedImport) {
-          const pendingOps = await this.opLogStore.getUnsynced();
-          if (
-            this._hasMeaningfulPendingOps(pendingOps) ||
-            this._hasMeaningfulLocalData()
-          ) {
-            OpLog.warn(
-              `OperationLogSyncService: Piggybacked SYNC_IMPORT from client ${piggybackedImport.clientId} ` +
-                `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
-            );
 
-            const resolution =
-              await this.syncImportConflictDialogService.showConflictDialog({
-                filteredOpCount: pendingOps.length,
-                localImportTimestamp: piggybackedImport.timestamp ?? Date.now(),
-                syncImportReason: piggybackedImport.syncImportReason,
-                scenario: 'INCOMING_IMPORT',
-              });
+    if (result.piggybackedOps.length > 0) {
+      // Check for piggybacked SYNC_IMPORT — mirrors the download path check (lines 552-604).
+      // Without this, a SYNC_IMPORT from another client arriving as a piggybacked op
+      // would silently replace local state via processRemoteOps().
+      const piggybackedImport = result.piggybackedOps.find((op) =>
+        FULL_STATE_OP_TYPES.has(op.opType),
+      );
+      if (piggybackedImport) {
+        const pendingOps = await this.opLogStore.getUnsynced();
+        if (this._hasMeaningfulPendingOps(pendingOps) || this._hasMeaningfulLocalData()) {
+          OpLog.warn(
+            `OperationLogSyncService: Piggybacked SYNC_IMPORT from client ${piggybackedImport.clientId} ` +
+              `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
+          );
 
-            switch (resolution) {
-              case 'USE_LOCAL':
-                OpLog.normal(
-                  'OperationLogSyncService: User chose USE_LOCAL for piggybacked SYNC_IMPORT. Force uploading local state.',
-                );
-                await this.forceUploadLocalState(syncProvider);
-                return {
-                  ...result,
-                  localWinOpsCreated: 0,
-                  permanentRejectionCount: 0,
-                };
-              case 'USE_REMOTE':
-                OpLog.normal(
-                  'OperationLogSyncService: User chose USE_REMOTE for piggybacked SYNC_IMPORT. Force downloading remote state.',
-                );
-                await this.forceDownloadRemoteState(syncProvider);
-                return {
-                  ...result,
-                  localWinOpsCreated: 0,
-                  permanentRejectionCount: 0,
-                };
-              case 'CANCEL':
-              default:
-                OpLog.normal(
-                  'OperationLogSyncService: User cancelled piggybacked SYNC_IMPORT conflict resolution.',
-                );
-                return {
-                  ...result,
-                  localWinOpsCreated: 0,
-                  permanentRejectionCount: 0,
-                  cancelled: true,
-                };
-            }
+          const resolution =
+            await this.syncImportConflictDialogService.showConflictDialog({
+              filteredOpCount: pendingOps.length,
+              localImportTimestamp: piggybackedImport.timestamp ?? Date.now(),
+              syncImportReason: piggybackedImport.syncImportReason,
+              scenario: 'INCOMING_IMPORT',
+            });
+
+          switch (resolution) {
+            case 'USE_LOCAL':
+              OpLog.normal(
+                'OperationLogSyncService: User chose USE_LOCAL for piggybacked SYNC_IMPORT. Force uploading local state.',
+              );
+              await this.forceUploadLocalState(syncProvider);
+              return {
+                ...result,
+                localWinOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
+            case 'USE_REMOTE':
+              OpLog.normal(
+                'OperationLogSyncService: User chose USE_REMOTE for piggybacked SYNC_IMPORT. Force downloading remote state.',
+              );
+              await this.forceDownloadRemoteState(syncProvider);
+              return {
+                ...result,
+                localWinOpsCreated: 0,
+                permanentRejectionCount: 0,
+              };
+            case 'CANCEL':
+            default:
+              OpLog.normal(
+                'OperationLogSyncService: User cancelled piggybacked SYNC_IMPORT conflict resolution.',
+              );
+              return {
+                ...result,
+                localWinOpsCreated: 0,
+                permanentRejectionCount: 0,
+                cancelled: true,
+              };
           }
         }
-
-        const processResult = await this.remoteOpsProcessingService.processRemoteOps(
-          result.piggybackedOps,
-        );
-        localWinOpsCreated = processResult.localWinOpsCreated;
       }
-    } finally {
-      // handleRejectedOps may create merged ops for concurrent modifications
-      // These need to be uploaded, so we add them to localWinOpsCreated
-      // Pass a download callback so the handler can trigger downloads for concurrent mods
-      const downloadCallback = (downloadOptions?: {
-        forceFromSeq0?: boolean;
-      }): Promise<DownloadResultForRejection> =>
-        this.downloadRemoteOps(syncProvider, downloadOptions);
+
+      const processResult = await this.remoteOpsProcessingService.processRemoteOps(
+        result.piggybackedOps,
+      );
+      localWinOpsCreated = processResult.localWinOpsCreated;
+    }
+
+    // STEP 2: Handle server-rejected operations
+    // handleRejectedOps may create merged ops for concurrent modifications.
+    // These need to be uploaded, so we add them to localWinOpsCreated.
+    // Pass a download callback so the handler can trigger downloads for concurrent mods.
+    //
+    // NOTE: This must NOT run after a SYNC_IMPORT conflict dialog resolution (USE_LOCAL,
+    // USE_REMOTE, CANCEL) — those paths return early above to avoid stale rejection handling.
+    const downloadCallback = (downloadOptions?: {
+      forceFromSeq0?: boolean;
+    }): Promise<DownloadResultForRejection> =>
+      this.downloadRemoteOps(syncProvider, downloadOptions);
+    try {
       rejectionResult = await this.rejectedOpsHandlerService.handleRejectedOps(
         result.rejectedOps,
         downloadCallback,
       );
       localWinOpsCreated += rejectionResult.mergedOpsCreated;
+    } catch (rejectionError) {
+      OpLog.err('OperationLogSyncService: Error handling rejected ops', rejectionError);
     }
 
     // Update pending ops status for UI indicator

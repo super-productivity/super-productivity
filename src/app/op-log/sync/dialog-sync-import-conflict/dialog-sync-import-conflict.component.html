@@ -1,5 +1,5 @@
 <h1 mat-dialog-title>
-  <mat-icon class="warning-icon">warning</mat-icon>
+  <mat-icon class="warning-icon" aria-hidden="true">warning</mat-icon>
   {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.TITLE | translate }}
 </h1>
 
@@ -52,7 +52,7 @@
       [color]="isIncomingImport ? 'primary' : undefined"
       mat-stroked-button
     >
-      <mat-icon>cloud_download</mat-icon>
+      <mat-icon aria-hidden="true">cloud_download</mat-icon>
       {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
     </button>
     <button
@@ -60,7 +60,7 @@
       [color]="isIncomingImport ? undefined : 'primary'"
       mat-stroked-button
     >
-      <mat-icon>cloud_upload</mat-icon>
+      <mat-icon aria-hidden="true">cloud_upload</mat-icon>
       {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
     </button>
   </div>

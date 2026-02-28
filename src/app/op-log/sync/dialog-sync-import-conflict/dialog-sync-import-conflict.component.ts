@@ -46,9 +46,21 @@ export class DialogSyncImportConflictComponent {
 
   T: typeof T = T;
 
+  private static readonly _REASON_KEYS: Record<string, string> = {
+    PASSWORD_CHANGED: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_PASSWORD_CHANGED,
+    FILE_IMPORT: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_FILE_IMPORT,
+    BACKUP_RESTORE: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_BACKUP_RESTORE,
+    FORCE_UPLOAD: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_FORCE_UPLOAD,
+    SERVER_MIGRATION: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_SERVER_MIGRATION,
+    REPAIR: T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_REPAIR,
+  };
+
   get reasonKey(): string {
     const reason = this.data.syncImportReason;
-    return `F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_${reason ?? 'UNKNOWN'}`;
+    return (
+      (reason && DialogSyncImportConflictComponent._REASON_KEYS[reason]) ||
+      T.F.SYNC.D_SYNC_IMPORT_CONFLICT.REASON_UNKNOWN
+    );
   }
 
   get messageKey(): string {

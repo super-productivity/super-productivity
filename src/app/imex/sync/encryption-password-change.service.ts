@@ -118,7 +118,7 @@ export class EncryptionPasswordChangeService {
       // STEP 3: Update config with new password BEFORE upload
       // This ensures the upload will use the new password for encryption
       SyncLog.normal('EncryptionPasswordChangeService: Updating encryption config...');
-      await syncProvider.setPrivateCfg({
+      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
         ...existingCfg,
         encryptKey: newPassword,
         isEncryptionEnabled: true,

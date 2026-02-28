@@ -15,9 +15,11 @@ describe('SyncConfigService', () => {
   let providerManager: jasmine.SpyObj<SyncProviderManager>;
   let mockSyncConfig$: BehaviorSubject<SyncConfig>;
   let mockCurrentProviderPrivateCfg$: BehaviorSubject<any>;
+  let originalFetch: typeof globalThis.fetch;
 
   beforeEach(() => {
     // Mock fetch for the sync-config-default-override.json
+    originalFetch = globalThis.fetch;
     // @ts-ignore - fetch might not exist in test environment
     globalThis.fetch = jasmine.createSpy('fetch').and.returnValue(
       Promise.resolve({
@@ -73,6 +75,10 @@ describe('SyncConfigService', () => {
     providerManager = TestBed.inject(
       SyncProviderManager,
     ) as jasmine.SpyObj<SyncProviderManager>;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
   });
 
   describe('updateSettingsFromForm', () => {

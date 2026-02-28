@@ -442,7 +442,7 @@ describe('OperationLogSyncService', () => {
           expect(result?.localWinOpsCreated).toBe(5);
         });
 
-        it('should call handleRejectedOps in finally block even if processRemoteOps throws', async () => {
+        it('should not call handleRejectedOps if processRemoteOps throws', async () => {
           const piggybackedOp: Operation = {
             id: 'piggybacked-1',
             clientId: 'client-B',
@@ -474,8 +474,8 @@ describe('OperationLogSyncService', () => {
             'Processing failed',
           );
 
-          // handleRejectedOps should still be called (via finally block)
-          expect(rejectedOpsHandlerServiceSpy.handleRejectedOps).toHaveBeenCalled();
+          // handleRejectedOps should NOT be called — error propagates before reaching rejection handling
+          expect(rejectedOpsHandlerServiceSpy.handleRejectedOps).not.toHaveBeenCalled();
         });
 
         it('should not call handleRejectedOps when there are no rejected ops', async () => {

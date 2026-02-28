@@ -160,7 +160,8 @@ export class DialogEnableEncryptionComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to enable encryption: ${message}`,
+        msg: T.F.SYNC.S.ENABLE_ENCRYPTION_FAILED,
+        translateParams: { message },
       });
       this.isLoading.set(false);
     }

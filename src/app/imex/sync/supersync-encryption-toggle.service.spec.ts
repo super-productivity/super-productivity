@@ -332,7 +332,8 @@ describe('SuperSyncEncryptionToggleService', () => {
     it('should update config with encryption disabled AFTER successful upload', async () => {
       await service.disableEncryption();
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: undefined,
           isEncryptionEnabled: false,
@@ -340,7 +341,7 @@ describe('SuperSyncEncryptionToggleService', () => {
       );
       // Upload should happen BEFORE config update
       expect(mockSnapshotUploadService.uploadSnapshot).toHaveBeenCalledBefore(
-        mockSyncProvider.setPrivateCfg,
+        mockProviderManager.setProviderConfig,
       );
     });
 
@@ -368,7 +369,8 @@ describe('SuperSyncEncryptionToggleService', () => {
 
       await expectAsync(service.disableEncryption()).toBeRejectedWithError(/CRITICAL/);
 
-      expect(mockSyncProvider.setPrivateCfg).not.toHaveBeenCalled();
+      // disableEncryption updates config AFTER upload — on failure, config should not be updated
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should throw with CRITICAL message on upload failure', async () => {
@@ -408,7 +410,8 @@ describe('SuperSyncEncryptionToggleService', () => {
 
       await service.disableEncryption();
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           baseUrl: 'https://custom-server.com',
           accessToken: 'my-access-token',
@@ -453,8 +456,8 @@ describe('SuperSyncEncryptionToggleService', () => {
         callOrder.push('updateLastServerSeq');
       });
 
-      mockSyncProvider.setPrivateCfg.and.callFake(async () => {
-        callOrder.push('setPrivateCfg');
+      mockProviderManager.setProviderConfig.and.callFake(async () => {
+        callOrder.push('setProviderConfig');
       });
 
       mockWrappedProviderService.clearCache.and.callFake(() => {
@@ -468,7 +471,7 @@ describe('SuperSyncEncryptionToggleService', () => {
         'deleteAllData',
         'uploadSnapshot',
         'updateLastServerSeq',
-        'setPrivateCfg',
+        'setProviderConfig',
         'clearCache',
       ]);
     });

@@ -10,6 +10,7 @@ import { EncryptionPasswordChangeService } from '../encryption-password-change.s
 import { SnackService } from '../../../core/snack/snack.service';
 import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
+import { SyncWrapperService } from '../sync-wrapper.service';
 
 describe('DialogChangeEncryptionPasswordComponent', () => {
   let component: DialogChangeEncryptionPasswordComponent;
@@ -21,6 +22,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
   let mockFileBasedEncryptionService: jasmine.SpyObj<FileBasedEncryptionService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockEncryptionToggleService: jasmine.SpyObj<SuperSyncEncryptionToggleService>;
+  let mockSyncWrapperService: jasmine.SpyObj<SyncWrapperService>;
 
   beforeEach(async () => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -36,6 +38,12 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     mockEncryptionToggleService = jasmine.createSpyObj(
       'SuperSyncEncryptionToggleService',
       ['disableEncryption'],
+    );
+    mockSyncWrapperService = jasmine.createSpyObj('SyncWrapperService', [
+      'runWithSyncBlocked',
+    ]);
+    mockSyncWrapperService.runWithSyncBlocked.and.callFake(
+      async <T>(operation: () => Promise<T>): Promise<T> => operation(),
     );
 
     await TestBed.configureTestingModule({
@@ -58,6 +66,10 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
         {
           provide: SuperSyncEncryptionToggleService,
           useValue: mockEncryptionToggleService,
+        },
+        {
+          provide: SyncWrapperService,
+          useValue: mockSyncWrapperService,
         },
       ],
     }).compileComponents();
@@ -174,7 +186,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: 'Failed to change password: Network error',
+          translateParams: { message: 'Network error' },
         }),
       );
       expect(component.isLoading()).toBe(false);
@@ -193,7 +205,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
       expect(mockSnackService.open).toHaveBeenCalledWith(
         jasmine.objectContaining({
           type: 'ERROR',
-          msg: 'Failed to change password: Unknown error',
+          translateParams: { message: 'Unknown error' },
         }),
       );
     });
