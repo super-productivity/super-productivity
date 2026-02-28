@@ -546,15 +546,16 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 2. `_isInitialSetup = true` → hides encryption button/warning in form (handled separately)
 3. User fills in SuperSync access token
 4. `save()` → strip `_isInitialSetup` flag → save config → auth if needed
-5. Check: SuperSync selected AND encryption not enabled → open `DialogEnableEncryptionComponent` with `initialSetup: true`
-6. User sets password → `enableEncryption()`:
+5. Check: SuperSync selected AND encryption not enabled → **probe server** via `downloadOps(0, undefined, 1)`
+6. Server is empty (`latestSeq === 0` or no ops) → open `DialogEnableEncryptionComponent` with `initialSetup: true`
+7. User sets password → `enableEncryption()`:
    - Check WebCrypto → delete server (empty, no-op) → update config → encrypt snapshot → upload
-7. OR user clicks Cancel → `disableSuperSync()` disables sync entirely (no "skip" option exists)
-8. Dialog closes → `sync()` fires (if sync is still enabled)
-9. `isWhollyFreshClient()` = true → nothing to download from empty server
-10. Status → `IN_SYNC`
+8. OR user clicks Cancel → `disableSuperSync()` disables sync entirely (no "skip" option exists)
+9. Dialog closes → `sync()` fires (if sync is still enabled)
+10. `isWhollyFreshClient()` = true → nothing to download from empty server
+11. Status → `IN_SYNC`
 
-**User sees:** Setup dialog → encryption prompt → done. Fresh start.
+**User sees:** Setup dialog → create-password prompt → done. Fresh start.
 
 ### I.2: First-Time SuperSync Setup — User Has Existing Local Data (Pre-Sync Era) ✓
 
@@ -581,20 +582,22 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Expected:**
 
-1. Client B: setup dialog → encryption prompt
-2. If Client A has encryption: Client B either sets same password or cancels (disabling sync)
-3. `sync()` fires → download remote ops
-4. Two paths depending on whether server sends snapshot or incremental ops:
+1. Client B: setup dialog → `save()` → **probe server** via `downloadOps(0, undefined, 1)`
+2. **If server has encrypted data** (`isPayloadEncrypted === true`):
+   - Open `DialogEnterEncryptionPasswordComponent` (enter existing password)
+   - User enters password → `updateEncryptionPassword()` sets `isEncryptionEnabled = true`
+   - No double-prompt — the correct dialog is shown from the start
+3. **If server has unencrypted data** (or probe fails):
+   - Open `DialogEnableEncryptionComponent` (create new password), same as I.1
+4. `sync()` fires → download remote ops
+5. Two paths depending on whether server sends snapshot or incremental ops:
    - **Snapshot path (file-based):** `isWhollyFreshClient()` = true → show `confirmDialog` with count=1 ("Remote data with 1 changes was found")
    - **Incremental ops path (SuperSync):** `isWhollyFreshClient()` = true → show `confirmDialog` with actual op count ("Remote data with N changes was found")
-5. `_hasMeaningfulLocalData()` = false (brand new client) → simple confirmation, not conflict dialog
-6. If confirmed → apply all remote ops → upload phase (nothing to upload) → `IN_SYNC`
-7. If cancelled → snackbar "Sync cancelled"
-8. If encryption mismatch (server encrypted, client has no password):
-   - Download fails with `DecryptNoPasswordError` → password dialog
-   - User enters password → retry sync → works
+6. `_hasMeaningfulLocalData()` = false (brand new client) → simple confirmation, not conflict dialog
+7. If confirmed → apply all remote ops → upload phase (nothing to upload) → `IN_SYNC`
+8. If cancelled → snackbar "Sync cancelled"
 
-**User sees:** Confirmation dialog → data appears. If encrypted: password prompt first.
+**User sees:** Setup → correct password prompt (enter or create) → confirmation dialog → data appears.
 
 ### I.4: First-Time SuperSync Setup — Server Has Data AND Client Has Local Data
 
@@ -602,7 +605,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 
 **Expected:**
 
-1. Client B: setup → encryption prompt → `sync()`
+1. Client B: setup → server probe → correct encryption prompt (enter or create) → `sync()`
 2. Download remote ops → `isWhollyFreshClient()` = true (empty op log)
 3. `_hasMeaningfulLocalData()` = true (has tasks/projects/tags)
 4. Throw `LocalDataConflictError` → full conflict dialog: USE_LOCAL / USE_REMOTE / CANCEL
@@ -668,7 +671,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. Config updated: `syncProvider = SuperSync`, credentials saved
-2. Encryption prompt (SuperSync-specific, initialSetup mode if first time)
+2. Encryption prompt (SuperSync-specific, server probed to determine create vs enter password dialog)
 3. Op log preserved — all operations stay in IndexedDB
 4. Vector clocks preserved — causality tracking continues
 5. Client ID preserved — same device identifier
@@ -736,7 +739,7 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 1. Config updated: `syncProvider = SuperSync`
 2. WebDAV's `encryptKey` stays in WebDAV privateCfg
 3. SuperSync starts with `isEncryptionEnabled = false` (unless previously configured)
-4. Encryption prompt shows after first sync (initialSetup mode)
+4. Encryption prompt during setup (server probed — create or enter password depending on server state)
 5. User sets new password for SuperSync (can be different from WebDAV password)
 6. Old WebDAV file remains encrypted on WebDAV server
 
@@ -792,20 +795,26 @@ Comprehensive spec of all scenarios that can occur during SuperSync synchronizat
 **Expected:**
 
 1. `DialogSyncInitialCfgComponent.save()` completes config save
-2. Opens `DialogEnableEncryptionComponent` with `initialSetup: true`
-3. User enters password → component calls `enableEncryption(password)`
-4. `enableEncryption()` inside `runWithSyncBlocked()`:
-   - Check WebCrypto available
-   - Gather snapshot data
-   - Delete server data (empty server → no-op)
-   - Update config: `isEncryptionEnabled=true, encryptKey=password`
-   - Encrypt snapshot → upload
-5. Dialog closes with `{ success: true }`
-6. `save()` continues → `this._matDialogRef.close()` → `sync()`
-7. `sync()` completes → `_promptSuperSyncEncryptionIfNeeded()`:
+2. **Probe server** via `downloadOps(0, undefined, 1)` to check for existing encrypted data
+3. **If server is empty or has unencrypted data:**
+   - Opens `DialogEnableEncryptionComponent` with `initialSetup: true` (create new password)
+   - User enters password → component calls `enableEncryption(password)`
+   - `enableEncryption()` inside `runWithSyncBlocked()`:
+     - Check WebCrypto available
+     - Gather snapshot data
+     - Delete server data (empty server → no-op)
+     - Update config: `isEncryptionEnabled=true, encryptKey=password`
+     - Encrypt snapshot → upload
+   - Dialog closes with `{ success: true }`
+4. **If server has encrypted data** (second client joining):
+   - Opens `DialogEnterEncryptionPasswordComponent` (enter existing password)
+   - User enters password → `saveAndSync()` calls `updateEncryptionPassword()` which sets `isEncryptionEnabled = true`
+   - Dialog closes
+5. `save()` continues → `this._matDialogRef.close()` → `sync()`
+6. `sync()` completes → `_promptSuperSyncEncryptionIfNeeded()`:
    - Checks encryption → already enabled → no additional prompt
 
-**User sees:** Setup → password dialog → encrypted sync starts.
+**User sees:** Setup → correct password dialog (create or enter) → encrypted sync starts.
 
 ### I.14: Initial Setup → User Cancels Encryption Dialog
 

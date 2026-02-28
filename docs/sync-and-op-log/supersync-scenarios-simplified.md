@@ -73,9 +73,10 @@ Condensed reference for all SuperSync synchronization scenarios. For full detail
 
 ## I. Setup & Provider Switching
 
-- **New user, empty server**: Setup → encryption prompt → done
+- **New user, empty server**: Setup → probe server (empty) → create-password prompt → done
 - **Existing local data, empty server**: Auto-create SYNC_IMPORT from local state (pre-op-log client fix)
-- **Second client, server has data**: Confirm dialog → download all
+- **Second client, server has encrypted data**: Setup → probe server → enter-password prompt → download all
+- **Second client, server has unencrypted data**: Setup → probe server → create-password prompt → download all
 - **Second client with local data**: Full conflict dialog
 - **Re-enable after disable**: Seamless resume from stored lastServerSeq
 - **Switch accounts**: New lastServerSeq=0, server migration if empty server
