@@ -147,7 +147,9 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   isInSubTaskList = input<boolean>(false);
 
   // Use shared signals from services to avoid creating 600+ subscriptions on initial render
-  isCurrent = computed(() => this._taskService.currentTaskId() === this.task().id);
+  isCurrent = computed(() =>
+    this._taskService.currentTasks().some((t) => t.id === this.task().id),
+  );
   isSelected = computed(() => this._taskService.selectedTaskId() === this.task().id);
   isShowCloseButton = computed(() => {
     // Only show close button when task is selected AND not on mobile (bottom panel)
@@ -442,12 +444,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   startTask(): void {
-    this._taskService.setCurrentId(this.task().id);
+    this._taskService.startTask(this.task().id);
     this.focusSelf();
   }
 
   pauseTask(): void {
-    this._taskService.pauseCurrent();
+    this._taskService.stopTask(this.task().id);
   }
 
   togglePlayPause(): void {
