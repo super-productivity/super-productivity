@@ -1661,7 +1661,7 @@ describe('lwwUpdateMetaReducer', () => {
               dueWithTime: taskDueWithTime,
             }),
           },
-          currentTaskId: null,
+          activeTaskIds: [],
           selectedTaskId: null,
           taskDetailTargetPanel: null,
           isDataLoaded: true,

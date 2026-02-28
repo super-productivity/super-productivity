@@ -137,7 +137,6 @@ export class StateSnapshotService {
           ? null
           : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
         activeTaskIds: [],
-        currentTaskId: null,
       },
       project,
       tag,
@@ -253,7 +252,6 @@ export class StateSnapshotService {
           ? null
           : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
         activeTaskIds: [],
-        currentTaskId: null,
       },
       project,
       tag,
