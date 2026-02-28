@@ -28,6 +28,13 @@ export const SHORT_SYNTAX_FORM_CFG: ConfigFormSection<ShortSyntaxConfig> = {
       },
     },
     {
+      key: 'isEnableLinkRendering',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.SHORT_SYNTAX.IS_ENABLE_LINK_RENDERING,
+      },
+    },
+    {
       key: 'urlBehavior',
       type: 'select',
       templateOptions: {

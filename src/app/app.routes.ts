@@ -12,6 +12,14 @@ import { TagTaskPageComponent } from './pages/tag-task-page/tag-task-page.compon
 
 export const APP_ROUTES: Routes = [
   {
+    path: 'benchmark',
+    loadComponent: () =>
+      import('./pages/task-title-benchmark/task-title-benchmark.component').then(
+        (m) => m.TaskTitleBenchmarkComponent,
+      ),
+    data: { page: 'benchmark' },
+  },
+  {
     path: 'config',
     loadComponent: () =>
       import('./pages/config-page/config-page.component').then(

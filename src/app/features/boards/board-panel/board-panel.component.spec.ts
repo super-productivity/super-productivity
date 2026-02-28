@@ -20,6 +20,7 @@ import { selectAllTasksWithoutHiddenProjects } from '../../tasks/store/task.sele
 import { WorkContextService } from '../../work-context/work-context.service';
 import { ProjectService } from '../../project/project.service';
 import { signal } from '@angular/core';
+import { GlobalConfigService } from '../../config/global-config.service';
 
 describe('BoardPanelComponent - Backlog Feature', () => {
   let component: BoardPanelComponent;
@@ -110,6 +111,10 @@ describe('BoardPanelComponent - Backlog Feature', () => {
         { provide: MatDialog, useValue: {} },
         { provide: WorkContextService, useValue: workContextServiceMock },
         { provide: ProjectService, useValue: projectServiceMock },
+        {
+          provide: GlobalConfigService,
+          useValue: { isLinkRenderingEnabled: signal(true) },
+        },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {
@@ -255,6 +260,10 @@ describe('BoardPanelComponent - Hidden Project Backlog', () => {
         { provide: MatDialog, useValue: {} },
         { provide: WorkContextService, useValue: {} },
         { provide: ProjectService, useValue: { getProjectsWithoutId$: () => of([]) } },
+        {
+          provide: GlobalConfigService,
+          useValue: { isLinkRenderingEnabled: signal(true) },
+        },
       ],
     })
       .overrideComponent(PlannerTaskComponent, {

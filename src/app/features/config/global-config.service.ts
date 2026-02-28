@@ -1,4 +1,4 @@
-import { Injectable, inject, Signal } from '@angular/core';
+import { computed, Injectable, inject, Signal } from '@angular/core';
 import { select, Store } from '@ngrx/store';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { updateGlobalConfigSection } from './store/global-config.actions';
@@ -133,6 +133,9 @@ export class GlobalConfigService {
   readonly shortSyntax: Signal<ShortSyntaxConfig | undefined> = toSignal(
     this.shortSyntax$,
     { initialValue: undefined },
+  );
+  readonly isLinkRenderingEnabled = computed(
+    () => this.shortSyntax()?.isEnableLinkRendering ?? true,
   );
   readonly sound: Signal<SoundConfig | undefined> = toSignal(this.sound$, {
     initialValue: undefined,

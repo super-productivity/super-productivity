@@ -4,6 +4,7 @@
       [resetToLastExternalValueTrigger]="task()"
       (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
       [value]="task().title || ''"
+      [renderLinks]="isLinkRenderingEnabled()"
       class="task-title"
     ></task-title>
     <!--    <button mat-icon-button>-->

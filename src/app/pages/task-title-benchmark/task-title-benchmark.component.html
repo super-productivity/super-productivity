@@ -1,0 +1,69 @@
+<div class="benchmark-container">
+  <mat-card class="controls-card">
+    <mat-card-header>
+      <mat-card-title>Task Title Link Rendering Benchmark</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="stats">
+        <p><strong>Total Tasks:</strong> {{ tasks().length }}</p>
+        <p><strong>No Links:</strong> {{ getTasksByType('no-links') }}</p>
+        <p><strong>URLs:</strong> {{ getTasksByType('url') }}</p>
+        <p><strong>Markdown:</strong> {{ getTasksByType('markdown') }}</p>
+      </div>
+
+      <div class="controls">
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="runBenchmark()"
+          [disabled]="isRunning()"
+        >
+          {{ isRunning() ? 'Running...' : 'Run Benchmark' }}
+        </button>
+
+        <button
+          mat-raised-button
+          (click)="toggleLinkRendering()"
+          [disabled]="isRunning()"
+        >
+          Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}
+        </button>
+      </div>
+
+      @if (isRunning()) {
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+      }
+
+      @if (results()) {
+        <div class="results">
+          <h3>Results</h3>
+          <pre class="results-text">
+Initial Render Time: {{ results()!.renderTimeMs.toFixed(2) }} ms
+Average FPS (scrolling): {{ results()!.avgFps.toFixed(1) }}
+Min FPS: {{ results()!.minFps.toFixed(1) }}
+Max FPS: {{ results()!.maxFps.toFixed(1) }}
+Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}</pre
+          >
+          <button
+            mat-raised-button
+            (click)="copyResults()"
+          >
+            Copy Results
+          </button>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <div class="task-list-container">
+    @for (task of tasks(); track task.id) {
+      <div class="task-item">
+        <task-title
+          [value]="task.title"
+          [readonly]="true"
+          [renderLinks]="linkRenderingEnabled()"
+        ></task-title>
+      </div>
+    }
+  </div>
+</div>

@@ -74,11 +74,7 @@
     ...
     <!-- -->
   } @else {
-    @if (isMonthView()) {
-      {{ title() }}
-    } @else {
-      {{ title() }}
-    }
+    <span [innerHTML]="title() | renderLinks: isLinkRenderingEnabled()"></span>
   }
 </div>
 
