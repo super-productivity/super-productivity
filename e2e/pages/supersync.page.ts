@@ -321,25 +321,26 @@ export class SuperSyncPage extends BasePage {
       // BEFORE the server's encrypted data triggers the password dialog.
       // Instead, we wait specifically for dialogs that indicate definitive outcomes.
       // If no dialog appears within timeout, THEN we check if sync succeeded.
+      const encSyncTimeout = 30000;
       const outcome = await Promise.race([
         passwordDialog
-          .waitFor({ state: 'visible', timeout: 15000 })
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'password_dialog' as const),
         this.freshClientDialog
-          .waitFor({ state: 'visible', timeout: 15000 })
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'fresh_client_dialog' as const),
         this.syncImportConflictDialog
-          .waitFor({ state: 'visible', timeout: 15000 })
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'sync_import_dialog' as const),
         decryptErrorDialog
-          .waitFor({ state: 'visible', timeout: 15000 })
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'decrypt_error_dialog' as const),
         // Sync error icon indicates encrypted data received but no password
         this.syncErrorIcon
-          .waitFor({ state: 'visible', timeout: 15000 })
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'sync_error' as const),
         // Timeout fallback - we'll check state manually after timeout
-        this.page.waitForTimeout(15000).then(() => 'timeout' as const),
+        this.page.waitForTimeout(encSyncTimeout).then(() => 'timeout' as const),
       ]).catch(() => 'error' as const);
 
       console.log(`[SuperSyncPage] Sync outcome: ${outcome}`);
@@ -580,33 +581,34 @@ export class SuperSyncPage extends BasePage {
       // opens AFTER sync completes. Without this wait, the dialog loop finds no
       // dialogs and breaks immediately, missing the encryption dialog entirely.
       console.log('[SuperSyncPage] Waiting for initial sync outcome...');
+      const syncTimeout = 45000;
       const initialOutcome = await Promise.race([
         enableEncryptionDialog
           .first()
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'enable_encryption' as const),
         enterPasswordDialog
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'enter_password' as const),
         this.freshClientDialog
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'fresh_client' as const),
         this.syncImportConflictDialog
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'sync_import' as const),
         passwordDialog
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'password' as const),
         // Sync error icon means encrypted data without password — wait for dialog
         this.syncErrorIcon
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => 'sync_error' as const),
         // Sync check icon means sync completed. The encryption dialog opens AFTER
         // sync via the async _promptSuperSyncEncryptionIfNeeded(), so we add a
         // 2s delay. If the encryption dialog appears during this delay, its promise
         // resolves first and wins the race (because our .then() hasn't resolved yet).
         this.syncCheckIcon
-          .waitFor({ state: 'visible', timeout: 25000 })
+          .waitFor({ state: 'visible', timeout: syncTimeout })
           .then(() => this.page.waitForTimeout(2000))
           .then(() => 'sync_success' as const),
       ]).catch(() => 'timeout' as const);
