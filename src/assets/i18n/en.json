@@ -1044,7 +1044,10 @@
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Close App",
         "BTN_DOWNLOAD_BACKUP": "Download Local Backup",
+        "BTN_FORCE_DOWNLOAD": "Force Download Remote",
         "BTN_FORCE_UPLOAD": "Force Upload Local",
+        "INCOHERENT_P1": "The date of your remote data is from the future",
+        "INCOHERENT_P2": "You should check the time configured on your systems!",
         "P1": "The remote sync data is incoherent!",
         "P2": "Affected model:",
         "T1": "Last sync was incomplete!",

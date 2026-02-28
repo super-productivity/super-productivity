@@ -26,8 +26,10 @@
       <strong> {{ T.F.SYNC.D_INCOMPLETE_SYNC.T6 | translate }} </strong>
     </p>
   } @else {
-    <p><strong>The date of your remote data are from the future</strong></p>
-    <p>You should check the time configured on your systems!</p>
+    <p>
+      <strong>{{ T.F.SYNC.D_INCOMPLETE_SYNC.INCOHERENT_P1 | translate }}</strong>
+    </p>
+    <p>{{ T.F.SYNC.D_INCOMPLETE_SYNC.INCOHERENT_P2 | translate }}</p>
   }
 
   <div style="text-align: center; margin-bottom: 16px">
@@ -71,7 +73,7 @@
         mat-stroked-button
       >
         <mat-icon>file_download</mat-icon>
-        Force Download Remote
+        {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_FORCE_DOWNLOAD | translate }}
       </button>
     }
 

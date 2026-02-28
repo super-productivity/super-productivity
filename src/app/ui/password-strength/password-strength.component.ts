@@ -18,13 +18,17 @@ export type PasswordStrengthLevel = 'weak' | 'fair' | 'strong';
       <div class="strength-bar">
         <div
           class="strength-fill"
-          [class]="level()"
+          [class.weak]="level() === 'weak'"
+          [class.fair]="level() === 'fair'"
+          [class.strong]="level() === 'strong'"
           [style.width.%]="fillPercent()"
         ></div>
       </div>
       <span
         class="strength-label"
-        [class]="level()"
+        [class.weak]="level() === 'weak'"
+        [class.fair]="level() === 'fair'"
+        [class.strong]="level() === 'strong'"
         >{{ label() }}</span
       >
     }
