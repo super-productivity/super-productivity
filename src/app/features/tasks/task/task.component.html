@@ -132,15 +132,15 @@
     <div class="all-controls-wrapper">
       <div
         (click)="estimateTime()"
-        [class.hasNoTimeSpentOrEstimate]="!t.timeSpent && !t.timeEstimate"
+        [class.hasNoTimeSpentOrEstimate]="!liveTimeSpent() && !t.timeEstimate"
         [class.isEditable]="!t.subTasks?.length"
         class="time-wrapper"
       >
         @if (!t.subTasks?.length) {
           <div class="time">
-            @if (t.timeSpent) {
+            @if (liveTimeSpent()) {
               <div class="time-val">
-                <span [innerHTML]="t.timeSpent | msToString"></span>
+                <span [innerHTML]="liveTimeSpent() | msToString"></span>
               </div>
               <div class="separator">/</div>
             }
@@ -149,26 +149,22 @@
               class="time-val"
             ></div>
           </div>
-        }
-        @if (t.subTasks?.length) {
-          @let subTaskTimeSpent = t.subTasks | subTaskTotalTimeSpent;
-          @if (t.timeEstimate || subTaskTimeSpent) {
-            <div class="time">
-              <div class="time-val">
-                <mat-icon
-                  inline="true"
-                  style="margin-top: -6px"
-                  >functions
-                </mat-icon>
-                <span [innerHTML]="subTaskTimeSpent | msToString"></span>
-              </div>
-              <div class="separator">/</div>
-              <div class="time-val">
-                <mat-icon inline="true">hourglass_empty</mat-icon>
-                {{ t.timeEstimate | msToString }}
-              </div>
+        } @else if (liveSubTaskTimeSpent() || t.timeEstimate) {
+          <div class="time">
+            <div class="time-val">
+              <mat-icon
+                inline="true"
+                style="margin-top: -6px"
+                >functions
+              </mat-icon>
+              <span [innerHTML]="liveSubTaskTimeSpent() | msToString"></span>
             </div>
-          }
+            <div class="separator">/</div>
+            <div class="time-val">
+              <mat-icon inline="true">hourglass_empty</mat-icon>
+              {{ t.timeEstimate | msToString }}
+            </div>
+          </div>
         }
       </div>
 

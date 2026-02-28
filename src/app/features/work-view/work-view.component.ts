@@ -63,7 +63,6 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
-import { ActiveTimersDashboardComponent } from '../tasks/active-timers-dashboard/active-timers-dashboard.component';
 
 @Component({
   selector: 'work-view',
@@ -95,7 +94,6 @@ import { ActiveTimersDashboardComponent } from '../tasks/active-timers-dashboard
     CommonModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
-    ActiveTimersDashboardComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {

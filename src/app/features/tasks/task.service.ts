@@ -137,6 +137,10 @@ export class TaskService {
   );
   currentTasks = toSignal(this.currentTasks$, { initialValue: [] as Task[] });
 
+  activeTaskIds = toSignal(this._store.pipe(select(selectActiveTaskIds)), {
+    initialValue: [] as string[],
+  });
+
   currentTaskParentOrCurrent$: Observable<Task | undefined> = this._store.pipe(
     select(selectCurrentTaskParentOrCurrent),
     // NOTE: we can't use share here, as we need the last emitted value
