@@ -31,6 +31,7 @@ import { playDoneSound } from '../util/play-done-sound';
 import { Task } from '../task.model';
 import { EMPTY } from 'rxjs';
 import { selectProjectById } from '../../project/store/project.selectors';
+import { Project } from '../../project/project.model';
 import { Router } from '@angular/router';
 import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
@@ -61,7 +62,11 @@ export class TaskUiEffects {
               .select(selectProjectById, { id: task.projectId as string })
               .pipe(
                 first(),
-                map((project) => ({ project, task, activeContextTaskIds })),
+                map((project) => ({
+                  project: project ?? null,
+                  task,
+                  activeContextTaskIds,
+                })),
               );
           } else {
             return [{ project: null, task, activeContextTaskIds }];
@@ -212,6 +217,7 @@ export class TaskUiEffects {
         switchMap(([{ targetProjectId, task }]) =>
           this._store$.select(selectProjectById, { id: targetProjectId }).pipe(
             first(),
+            filter((project): project is Project => !!project),
             map((project) => ({ project, task })),
           ),
         ),

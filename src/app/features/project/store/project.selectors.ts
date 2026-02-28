@@ -3,6 +3,7 @@ import { createFeatureSelector, createSelector } from '@ngrx/store';
 import { exists } from '../../../util/exists';
 import { PROJECT_FEATURE_NAME, projectAdapter } from './project.reducer';
 import { INBOX_PROJECT } from '../project.const';
+import { devError } from '../../../util/dev-error';
 
 export const selectProjectFeatureState =
   createFeatureSelector<ProjectState>(PROJECT_FEATURE_NAME);
@@ -49,13 +50,15 @@ export const selectAllProjectColorsAndTitles = createSelector(
 // -----------------
 export const selectProjectById = createSelector(
   selectProjectFeatureState,
-  (state: ProjectState, props: { id: string }): Project => {
-    const p = state.entities[props.id];
+  (state: ProjectState, props: { id: string }): Project | undefined => {
     if (!props.id) {
-      throw new Error(`No project id given – ${props.id}`);
+      devError('No project id given');
+      return undefined;
     }
+    const p = state.entities[props.id];
     if (!p) {
-      throw new Error(`Project ${props.id} not found`);
+      devError('Project ' + props.id + ' not found');
+      return undefined;
     }
     return p;
   },

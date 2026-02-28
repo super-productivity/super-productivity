@@ -1,0 +1,54 @@
+
+### Bug Fixes
+
+* **android:** flush pending operations to IndexedDB on app background (36fc85e), closes #6608
+* **android:** flush pending operations to IndexedDB on app background (2090a66), closes #6608
+* **build:** exclude test helpers from production build
+* **build:** generate env.generated.ts during npm install
+* **build:** generate env.generated.ts during npm install
+* **build:** pin app-builder-lib minimatch to 10.1.1
+* **build:** use snapcraft upload instead of deprecated push command
+* **build:** use snapcraft upload instead of deprecated push command
+* **dialog:** pre-fill folder name in edit dialog (#6603)
+* **electron:** handle legacy simpleSettings directory causing EISDIR crash (bbda6b1), closes #4791
+* **electron:** handle legacy simpleSettings directory causing EISDIR crash (c215da0), closes #4791
+* **electron:** use separate tray GUIDs per Windows distribution type (ea4460c), closes #6647
+* **focus-mode:** account for iOS safe area insets on focus mode overlay
+* **focus-mode:** account for iOS safe area insets on focus mode overlay
+* **focus-mode:** keep timer running past duration when manual breaks enabled
+* **focus-mode:** reduce CPU usage during focus mode sessions (#6076)
+* **ios:** enable native notification scheduling for iOS
+* **ios:** enable native notification scheduling for iOS
+* **markdown:** add spacing after tables and lists in note preview (28a86fc), closes #6584
+* **metric:** skip parent tasks in heatmap to prevent double-counting subtask time
+* **persistence:** handle iOS IndexedDB connection closing errors (9698831), closes #6643
+* **plugins:** include config schema in plugin build output (43bf84a), closes #6636
+* profile system bugs (#6614)
+* **project:** prevent crash when looking up deleted project (1c73db9), closes #6653
+* reduce verbosity of error logs (#6605)
+* **reminder:** improve notification messaging for mobile users
+* **reminder:** improve notification messaging for mobile users
+* **settings:** show settings option in Today tag context menu
+* **settings:** use adjustToLiveFormlyForm for live dialog updates
+* **simple-counter:** preserve countdown timer state across focus mode toggle (50afa40), closes #6616
+* **simple-counter:** preserve countdown timer state across focus mode toggle (7f1bceb), closes #6616
+* **sync:** prevent stale client ID after backup import
+* **sync:** prevent stale client ID after backup import
+* **sync:** replace text-shadow hack with solid background on sync status icon
+* **sync:** replace text-shadow hack with solid background on sync status icon
+* **sync:** update encryption state observable after file import
+* **tasks:** clarify flush comment as re-entrant guard not async
+* **tasks:** close add-task bar when clicking Go to task in snackbar (bce7967), closes #6618
+* **tasks:** close add-task bar when clicking Go to task in snackbar (eb2f615), closes #6618
+* **tasks:** keep parent tags when promoting subtask to main task (e733558), closes #6604
+* **tasks:** keep parent tags when promoting subtask to main task (314a97f), closes #6604
+
+
+### Features
+
+* add today's tasks and active timer to tray context menu (#6599)
+* nextcloud deck provider (#6612)
+* **settings:** make work context settings dialog update in real-time
+### Reverts
+
+* **tasks:** remove addTimeSpent batching for simplicity

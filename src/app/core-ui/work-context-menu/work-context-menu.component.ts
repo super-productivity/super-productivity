@@ -102,6 +102,9 @@ export class WorkContextMenuComponent implements OnInit {
 
   async deleteProject(): Promise<void> {
     const project = await this._projectService.getByIdOnce$(this.contextId).toPromise();
+    if (!project) {
+      return;
+    }
     const isConfirmed = await this._matDialog
       .open(DialogConfirmComponent, {
         restoreFocus: true,

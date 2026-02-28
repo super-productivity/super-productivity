@@ -4,7 +4,7 @@ import { Project } from './project.model';
 import { select, Store } from '@ngrx/store';
 import { nanoid } from 'nanoid';
 import { ofType } from '@ngrx/effects';
-import { catchError, map, shareReplay, switchMap, take } from 'rxjs/operators';
+import { map, shareReplay, switchMap, take } from 'rxjs/operators';
 import {
   BreakNr,
   BreakNrCopy,
@@ -35,7 +35,6 @@ import {
   selectUnarchivedProjects,
   selectUnarchivedProjectsWithoutCurrent,
 } from './store/project.selectors';
-import { devError } from '../../util/dev-error';
 import { selectTaskFeatureState } from '../tasks/store/task.selectors';
 import { getTaskById } from '../tasks/store/task.reducer.util';
 import { TimeTrackingService } from '../time-tracking/time-tracking.service';
@@ -77,7 +76,7 @@ export class ProjectService {
 
   archived$: Observable<Project[]> = this._store$.pipe(select(selectArchivedProjects));
 
-  currentProject$: Observable<Project | null> =
+  currentProject$: Observable<Project | null | undefined> =
     this._workContextService.activeWorkContextTypeAndId$.pipe(
       switchMap(({ activeId, activeType }) =>
         activeType === WorkContextType.PROJECT ? this.getByIdLive$(activeId) : of(null),
@@ -145,28 +144,21 @@ export class ProjectService {
     this._store$.dispatch(unarchiveProject({ id: projectId }));
   }
 
-  getByIdOnce$(id: string): Observable<Project> {
+  getByIdOnce$(id: string): Observable<Project | undefined> {
     if (!id) {
       throw new Error('No id given');
     }
     return this._store$.pipe(select(selectProjectById, { id }), take(1));
   }
 
-  getByIdOnceCatchError$(id: string): Observable<Project | null> {
+  getByIdOnceCatchError$(id: string): Observable<Project | undefined> {
     if (!id) {
       throw new Error('No id given');
     }
-    return this._store$.pipe(
-      select(selectProjectById, { id }),
-      take(1),
-      catchError((err) => {
-        devError(err);
-        return of(null);
-      }),
-    );
+    return this._store$.pipe(select(selectProjectById, { id }), take(1));
   }
 
-  getByIdLive$(id: string): Observable<Project> {
+  getByIdLive$(id: string): Observable<Project | undefined> {
     if (!id) {
       throw new Error('No id given');
     }

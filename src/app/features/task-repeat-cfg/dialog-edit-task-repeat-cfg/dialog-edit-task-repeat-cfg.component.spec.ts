@@ -83,6 +83,7 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
     }
 
     mockTagService = jasmine.createSpyObj('TagService', ['addTag'], {
+      tags$: of([]),
       tagsNoMyDayAndNoList$: of([]),
     });
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {

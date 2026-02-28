@@ -52,6 +52,7 @@ import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
+import { _MISSING_PROJECT_ } from '../project/project.const';
 import { IssueProviderService } from './issue-provider.service';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { getCalendarEventIdCandidates } from '../calendar-integration/get-calendar-event-id-candidates';
@@ -710,8 +711,8 @@ export class IssueService {
           translateParams: {
             title: res.task.title,
             contextTitle: res.task.projectId
-              ? (await this._projectService.getByIdOnce$(res.task.projectId).toPromise())
-                  ?.title
+              ? ((await this._projectService.getByIdOnce$(res.task.projectId).toPromise())
+                  ?.title ?? _MISSING_PROJECT_)
               : 'another tag',
           },
         });

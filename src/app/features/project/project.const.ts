@@ -6,6 +6,7 @@ import {
 } from '../work-context/work-context.const';
 
 export const DEFAULT_PROJECT_ICON = 'list_alt';
+export const _MISSING_PROJECT_ = 'missing project';
 
 export const DEFAULT_PROJECT: Project = {
   isHiddenFromMenu: false,

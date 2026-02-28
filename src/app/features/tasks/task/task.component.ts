@@ -38,6 +38,7 @@ import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
 import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
+import { _MISSING_PROJECT_ } from '../../project/project.const';
 import { T } from '../../../t.const';
 import {
   MatMenu,
@@ -975,7 +976,7 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
                     okTxt: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.OK,
                     message: T.F.TASK_REPEAT.D_CONFIRM_MOVE_TO_PROJECT.MSG,
                     translateParams: {
-                      projectName: targetProject.title,
+                      projectName: targetProject?.title ?? _MISSING_PROJECT_,
                       tasksNr:
                         nonArchiveInstancesWithSubTasks.length + archiveInstances.length,
                     },
