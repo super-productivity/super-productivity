@@ -53,8 +53,7 @@ export interface SnapshotUploadResult {
  * Config orchestration (timing, error recovery, encryption settings)
  * remains the responsibility of calling services.
  *
- * @see EncryptionDisableService
- * @see EncryptionEnableService
+ * @see SuperSyncEncryptionToggleService
  * @see ImportEncryptionHandlerService
  */
 @Injectable({

@@ -9,32 +9,29 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { isCryptoSubtleAvailable } from '../../op-log/encryption/encryption';
 import { WebCryptoNotAvailableError } from '../../op-log/core/errors/sync-errors';
 
-const LOG_PREFIX = 'EncryptionEnableService';
+const LOG_PREFIX = 'SuperSyncEncryptionToggleService';
 
 /**
- * Service for enabling encryption for SuperSync.
+ * Service for enabling/disabling encryption for SuperSync.
  *
- * Enable encryption flow:
- * 1. Delete all data on server (unencrypted operations can't be mixed with encrypted)
- * 2. Update local config BEFORE upload (so upload uses the new key)
- * 3. Upload current state as encrypted snapshot
- * 4. Revert config on failure
+ * Both flows follow the same pattern:
+ * 1. Delete all data on server (encrypted and unencrypted ops can't be mixed)
+ * 2. Upload current state as a new snapshot (encrypted or unencrypted)
+ * 3. Update local config accordingly
  */
 @Injectable({
   providedIn: 'root',
 })
-export class EncryptionEnableService {
+export class SuperSyncEncryptionToggleService {
   private _snapshotUploadService = inject(SnapshotUploadService);
   private _encryptionService = inject(OperationEncryptionService);
   private _wrappedProviderService = inject(WrappedProviderService);
   private _providerManager = inject(SyncProviderManager);
 
   /**
-   * Enables encryption by deleting all server data
-   * and uploading a new encrypted snapshot.
-   *
-   * @param encryptKey The encryption key to use
-   * @throws Error if sync provider is not SuperSync or not ready
+   * Enables encryption by deleting all server data and uploading a new encrypted snapshot.
+   * Config is updated BEFORE upload so the upload uses the new key.
+   * On failure, config is reverted.
    */
   async enableEncryption(encryptKey: string): Promise<void> {
     SyncLog.normal(`${LOG_PREFIX}: Starting encryption enable...`);
@@ -43,9 +40,7 @@ export class EncryptionEnableService {
       throw new Error('Encryption key is required');
     }
 
-    // Guard against concurrent calls: if encryption is already enabled
-    // (e.g., another dialog instance already ran enableEncryption), skip
-    // to avoid destructive delete+re-upload of server data.
+    // Guard against concurrent calls
     const activeProvider = this._providerManager.getActiveProvider();
     if (activeProvider) {
       const currentCfg = (await activeProvider.privateCfg.load()) as
@@ -59,8 +54,7 @@ export class EncryptionEnableService {
       }
     }
 
-    // CRITICAL: Check crypto availability BEFORE deleting server data
-    // to prevent data loss if encryption will fail
+    // Check crypto availability BEFORE deleting server data
     if (!isCryptoSubtleAvailable()) {
       throw new WebCryptoNotAvailableError(
         'Cannot enable encryption: WebCrypto API is not available. ' +
@@ -69,19 +63,13 @@ export class EncryptionEnableService {
       );
     }
 
-    // Gather all data needed for upload (validates provider)
     const { syncProvider, existingCfg, state, vectorClock, clientId } =
       await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
 
-    // Delete all server data (unencrypted ops can't be mixed with encrypted)
     SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
     await syncProvider.deleteAllData();
 
-    // Update local config BEFORE upload - enable encryption and set the key
-    // This must happen BEFORE upload so the upload uses the new key
-    // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
-    // to ensure the currentProviderPrivateCfg$ observable is updated, which is needed
-    // for the form to correctly show isEncryptionEnabled state.
+    // Update config BEFORE upload so the upload uses the new key
     SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
     const newConfig = {
       ...existingCfg,
@@ -90,49 +78,30 @@ export class EncryptionEnableService {
     } as SuperSyncPrivateCfg;
     await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, newConfig);
 
-    // Clear cached adapters to ensure new encryption settings take effect
     this._wrappedProviderService.clearCache();
 
-    // Encrypt the snapshot payload
     SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
     const encryptedPayload = await this._encryptionService.encryptPayload(
       state,
       encryptKey,
     );
 
-    // Upload encrypted snapshot
-    SyncLog.normal(`${LOG_PREFIX}: Uploading encrypted snapshot...`);
     try {
-      const result = await this._snapshotUploadService.uploadSnapshot(
+      await this._uploadAndFinalize(
         syncProvider,
         encryptedPayload,
         clientId,
         vectorClock,
-        true, // isPayloadEncrypted = true
+        true,
       );
-
-      if (!result.accepted) {
-        throw new Error(`Snapshot upload failed: ${result.error}`);
-      }
-
-      // Update lastServerSeq
-      await this._snapshotUploadService.updateLastServerSeq(
-        syncProvider,
-        result.serverSeq,
-        LOG_PREFIX,
-      );
-
       SyncLog.normal(`${LOG_PREFIX}: Encryption enabled successfully!`);
     } catch (uploadError) {
-      // CRITICAL: Server data was deleted but new snapshot failed to upload.
-      // Revert local config to unencrypted state
+      // Revert config on failure
       SyncLog.err(
         `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
         uploadError,
       );
 
-      // Use providerManager.setProviderConfig() to update both the stored config
-      // AND the currentProviderPrivateCfg$ observable for proper form state
       const revertConfig = {
         ...existingCfg,
         encryptKey: undefined,
@@ -142,8 +111,6 @@ export class EncryptionEnableService {
         SyncProviderId.SuperSync,
         revertConfig,
       );
-
-      // Clear cached adapters since encryption settings were reverted
       this._wrappedProviderService.clearCache();
 
       throw new Error(
@@ -152,5 +119,72 @@ export class EncryptionEnableService {
           `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
       );
     }
+  }
+
+  /**
+   * Disables encryption by deleting all server data and uploading an unencrypted snapshot.
+   * Config is updated AFTER successful upload for safety.
+   */
+  async disableEncryption(): Promise<void> {
+    SyncLog.normal(`${LOG_PREFIX}: Starting encryption disable...`);
+
+    const { syncProvider, existingCfg, state, vectorClock, clientId } =
+      await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
+
+    SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
+    await syncProvider.deleteAllData();
+
+    SyncLog.normal(`${LOG_PREFIX}: Uploading unencrypted snapshot...`);
+    try {
+      await this._uploadAndFinalize(syncProvider, state, clientId, vectorClock, false);
+
+      // Update config AFTER successful upload
+      SyncLog.normal(`${LOG_PREFIX}: Updating local config...`);
+      await syncProvider.setPrivateCfg({
+        ...existingCfg,
+        encryptKey: undefined,
+        isEncryptionEnabled: false,
+      } as SuperSyncPrivateCfg);
+
+      this._wrappedProviderService.clearCache();
+      SyncLog.normal(`${LOG_PREFIX}: Encryption disabled successfully!`);
+    } catch (uploadError) {
+      SyncLog.err(
+        `${LOG_PREFIX}: Snapshot upload failed after deleting server data!`,
+        uploadError,
+      );
+
+      throw new Error(
+        'CRITICAL: Failed to upload unencrypted snapshot after deleting server data. ' +
+          'Your local data is safe. Please use "Sync Now" to re-upload your data. ' +
+          `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
+      );
+    }
+  }
+
+  private async _uploadAndFinalize(
+    syncProvider: Parameters<SnapshotUploadService['uploadSnapshot']>[0],
+    payload: unknown,
+    clientId: string,
+    vectorClock: Record<string, number>,
+    isPayloadEncrypted: boolean,
+  ): Promise<void> {
+    const result = await this._snapshotUploadService.uploadSnapshot(
+      syncProvider,
+      payload,
+      clientId,
+      vectorClock,
+      isPayloadEncrypted,
+    );
+
+    if (!result.accepted) {
+      throw new Error(`Snapshot upload failed: ${result.error}`);
+    }
+
+    await this._snapshotUploadService.updateLastServerSeq(
+      syncProvider,
+      result.serverSeq,
+      LOG_PREFIX,
+    );
   }
 }

@@ -8,7 +8,7 @@ import {
 } from './dialog-change-encryption-password.component';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { EncryptionDisableService } from '../encryption-disable.service';
+import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { FileBasedEncryptionService } from '../file-based-encryption.service';
 
 describe('DialogChangeEncryptionPasswordComponent', () => {
@@ -20,7 +20,7 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
   let mockEncryptionPasswordChangeService: jasmine.SpyObj<EncryptionPasswordChangeService>;
   let mockFileBasedEncryptionService: jasmine.SpyObj<FileBasedEncryptionService>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
-  let mockEncryptionDisableService: jasmine.SpyObj<EncryptionDisableService>;
+  let mockEncryptionToggleService: jasmine.SpyObj<SuperSyncEncryptionToggleService>;
 
   beforeEach(async () => {
     mockDialogRef = jasmine.createSpyObj('MatDialogRef', ['close']);
@@ -30,12 +30,13 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
     );
     mockFileBasedEncryptionService = jasmine.createSpyObj('FileBasedEncryptionService', [
       'changePassword',
+      'disableEncryption',
     ]);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
-    mockEncryptionDisableService = jasmine.createSpyObj('EncryptionDisableService', [
-      'disableEncryption',
-      'disableEncryptionForFileBased',
-    ]);
+    mockEncryptionToggleService = jasmine.createSpyObj(
+      'SuperSyncEncryptionToggleService',
+      ['disableEncryption'],
+    );
 
     await TestBed.configureTestingModule({
       imports: [
@@ -54,7 +55,10 @@ describe('DialogChangeEncryptionPasswordComponent', () => {
           useValue: mockFileBasedEncryptionService,
         },
         { provide: SnackService, useValue: mockSnackService },
-        { provide: EncryptionDisableService, useValue: mockEncryptionDisableService },
+        {
+          provide: SuperSyncEncryptionToggleService,
+          useValue: mockEncryptionToggleService,
+        },
       ],
     }).compileComponents();
 

@@ -50,10 +50,12 @@ import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-
 import { ReminderService } from '../../features/reminder/reminder.service';
 import { DataInitService } from '../../core/data-init/data-init.service';
 import { DialogSyncInitialCfgComponent } from './dialog-sync-initial-cfg/dialog-sync-initial-cfg.component';
-import { DialogIncompleteSyncComponent } from './dialog-incomplete-sync/dialog-incomplete-sync.component';
 import { DialogHandleDecryptErrorComponent } from './dialog-handle-decrypt-error/dialog-handle-decrypt-error.component';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
-import { DialogIncoherentTimestampsErrorComponent } from './dialog-incoherent-timestamps-error/dialog-incoherent-timestamps-error.component';
+import {
+  DialogSyncErrorComponent,
+  DialogSyncErrorResult,
+} from './dialog-sync-error/dialog-sync-error.component';
 import { SyncLog } from '../../core/log';
 import { promiseTimeout } from '../../util/promise-timeout';
 import { devError } from '../../util/dev-error';
@@ -628,52 +630,35 @@ export class SyncWrapperService {
    * Uses fire-and-forget pattern but logs errors instead of swallowing them.
    */
   private _handleIncoherentTimestampsDialog(): void {
-    const dialogRef = this._matDialog.open(DialogIncoherentTimestampsErrorComponent, {
+    this._openSyncErrorDialog({ type: 'incoherent-timestamps' });
+  }
+
+  private _handleIncompleteSyncDialog(modelId: string | undefined): void {
+    this._openSyncErrorDialog({ type: 'incomplete-sync', modelId });
+  }
+
+  private _openSyncErrorDialog(data: {
+    type: 'incomplete-sync' | 'incoherent-timestamps';
+    modelId?: string;
+  }): void {
+    const dialogRef = this._matDialog.open(DialogSyncErrorComponent, {
+      data,
       disableClose: true,
       autoFocus: false,
     });
 
-    // Use firstValueFrom for proper async handling
     firstValueFrom(dialogRef.afterClosed())
-      .then(async (res) => {
+      .then(async (res: DialogSyncErrorResult) => {
         if (res === 'FORCE_UPDATE_REMOTE') {
           await this.forceUpload();
         } else if (res === 'FORCE_UPDATE_LOCAL') {
-          // Op-log architecture handles this differently
           SyncLog.log(
             'SyncWrapperService: forceDownload called (delegated to op-log sync)',
           );
         }
       })
       .catch((err) => {
-        SyncLog.err('Error handling incoherent timestamps dialog result:', err);
-        this._snackService.open({
-          type: 'ERROR',
-          msg: T.F.SYNC.S.DIALOG_RESULT_ERROR,
-        });
-      });
-  }
-
-  /**
-   * Handle incomplete sync dialog with proper async error handling.
-   * Uses fire-and-forget pattern but logs errors instead of swallowing them.
-   */
-  private _handleIncompleteSyncDialog(modelId: string | undefined): void {
-    const dialogRef = this._matDialog.open(DialogIncompleteSyncComponent, {
-      data: { modelId },
-      disableClose: true,
-      autoFocus: false,
-    });
-
-    // Use firstValueFrom for proper async handling
-    firstValueFrom(dialogRef.afterClosed())
-      .then(async (res) => {
-        if (res === 'FORCE_UPDATE_REMOTE') {
-          await this.forceUpload();
-        }
-      })
-      .catch((err) => {
-        SyncLog.err('Error handling incomplete sync dialog result:', err);
+        SyncLog.err('Error handling sync error dialog result:', err);
         this._snackService.open({
           type: 'ERROR',
           msg: T.F.SYNC.S.DIALOG_RESULT_ERROR,

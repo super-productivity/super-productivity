@@ -10,7 +10,7 @@ import { T } from '../../../t.const';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
-import { EncryptionEnableService } from '../encryption-enable.service';
+import { SuperSyncEncryptionToggleService } from '../supersync-encryption-toggle.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
@@ -58,7 +58,7 @@ export interface EnableEncryptionResult {
   ],
 })
 export class DialogEnableEncryptionComponent {
-  private _encryptionEnableService = inject(EncryptionEnableService);
+  private _encryptionToggleService = inject(SuperSyncEncryptionToggleService);
   private _fileBasedEncryptionService = inject(FileBasedEncryptionService);
   private _snackService = inject(SnackService);
   private _providerManager = inject(SyncProviderManager);
@@ -148,7 +148,7 @@ export class DialogEnableEncryptionComponent {
         await this._fileBasedEncryptionService.enableEncryption(this.password);
       } else {
         await this._syncWrapperService.runWithSyncBlocked(() =>
-          this._encryptionEnableService.enableEncryption(this.password),
+          this._encryptionToggleService.enableEncryption(this.password),
         );
       }
       this._snackService.open({

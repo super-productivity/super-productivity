@@ -335,7 +335,7 @@ export class SyncConfigService {
       {} as Record<string, unknown>,
     );
 
-    // The provider's saved config is the source of truth after EncryptionDisableService runs
+    // The provider's saved config is the source of truth after SuperSyncEncryptionToggleService runs
     // oldConfig is loaded from activeProvider.privateCfg.load()
     // When encryption is explicitly disabled, we must clear encryptKey regardless of form state
     const isEncryptionDisabledInSavedConfig =

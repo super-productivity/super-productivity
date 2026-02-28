@@ -246,4 +246,64 @@ describe('FileBasedEncryptionService', () => {
       expect(mockProvider.setPrivateCfg).not.toHaveBeenCalled();
     });
   });
+
+  describe('disableEncryption', () => {
+    it('should create unencrypted adapter and upload snapshot', async () => {
+      await service.disableEncryption();
+
+      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledWith(
+        mockProvider,
+        jasmine.objectContaining({ isEncrypt: false }),
+        undefined,
+      );
+      expect(mockAdapter.uploadSnapshot).toHaveBeenCalled();
+    });
+
+    it('should update provider config with encryptKey undefined', async () => {
+      await service.disableEncryption();
+
+      expect(mockProvider.setPrivateCfg).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          encryptKey: undefined,
+        }),
+      );
+    });
+
+    it('should update global config to disable encryption', async () => {
+      await service.disableEncryption();
+
+      expect(mockGlobalConfigService.updateSection).toHaveBeenCalledWith('sync', {
+        isEncryptionEnabled: false,
+        encryptKey: '',
+      });
+    });
+
+    it('should clear caches after successful upload', async () => {
+      await service.disableEncryption();
+
+      expect(mockDerivedKeyCache.clearCache).toHaveBeenCalled();
+      expect(mockWrappedProviderService.clearCache).toHaveBeenCalled();
+    });
+
+    it('should NOT update config on upload failure', async () => {
+      mockAdapter.uploadSnapshot.and.resolveTo({
+        accepted: false,
+        error: 'Upload rejected',
+      });
+
+      await expectAsync(service.disableEncryption()).toBeRejectedWithError(
+        /Snapshot upload failed/,
+      );
+
+      expect(mockProvider.setPrivateCfg).not.toHaveBeenCalled();
+    });
+
+    it('should throw when no active provider', async () => {
+      mockProviderManager.getActiveProvider.and.returnValue(null);
+
+      await expectAsync(service.disableEncryption()).toBeRejectedWithError(
+        /No active sync provider/,
+      );
+    });
+  });
 });
