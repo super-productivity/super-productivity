@@ -94,9 +94,7 @@
   font-size: 15px;
   line-height: 1.2;
   max-width: 90%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: break-word;
 
   @media (max-width: 499px) {
     font-size: 12px;
