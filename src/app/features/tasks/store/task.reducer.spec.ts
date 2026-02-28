@@ -41,12 +41,12 @@ describe('Task Reducer', () => {
     ...initialTaskState,
     ids: ['task1', 'task2', 'subTask1', 'subTask2'],
     entities: {
-      task1: { ...task1, subTaskIds: ['subTask1', 'subTask2'] },
+      task1: { ...task1, subTaskIds: ['subTask1', 'subTask2'], isCurrent: true },
       task2,
       subTask1,
       subTask2,
     },
-    currentTaskId: 'task1',
+    activeTaskIds: ['task1'],
   };
 
   const stubWindowConfirm = (returnValue: boolean): void => {
@@ -491,20 +491,58 @@ describe('Task Reducer', () => {
     });
   });
 
-  describe('Current task operations', () => {
-    it('should set current task', () => {
+  describe('Active/Current task operations', () => {
+    it('should set current task (legacy: stops others)', () => {
       const action = fromActions.setCurrentTask({ id: 'task2' });
       const state = taskReducer(stateWithTasks, action);
 
-      expect(state.currentTaskId).toBe('task2');
+      expect(state.activeTaskIds).toEqual(['task2']);
+      expect(state.entities['task2']!.isCurrent).toBe(true);
+      expect(state.entities['task1']!.isCurrent).toBe(false);
     });
 
-    it('should unset current task', () => {
+    it('should unset current task (stops all)', () => {
       const action = fromActions.unsetCurrentTask();
       const state = taskReducer(stateWithTasks, action);
 
-      expect(state.currentTaskId).toBeNull();
+      expect(state.activeTaskIds).toEqual([]);
       expect(state.lastCurrentTaskId).toBe('task1');
+      expect(state.entities['task1']!.isCurrent).toBe(false);
+    });
+
+    it('should start task (append to active)', () => {
+      // Start with no active
+      const state0 = { ...stateWithTasks, activeTaskIds: [] };
+      const action1 = fromActions.startTask({ id: 'task1' });
+      const state1 = taskReducer(state0, action1);
+      expect(state1.activeTaskIds).toEqual(['subTask1']);
+      expect(state1.entities['subTask1']!.isCurrent).toBe(true);
+
+      // Start another
+      const action2 = fromActions.startTask({ id: 'task2' });
+      const state2 = taskReducer(state1, action2);
+      expect(state2.activeTaskIds).toEqual(['subTask1', 'task2']);
+      expect(state2.entities['subTask1']!.isCurrent).toBe(true);
+      expect(state2.entities['task2']!.isCurrent).toBe(true);
+    });
+
+    it('should stop task (remove from active)', () => {
+      const stateMulti: TaskState = {
+        ...stateWithTasks,
+        activeTaskIds: ['task1', 'task2'],
+        entities: {
+          ...stateWithTasks.entities,
+          task1: { ...task1, isCurrent: true },
+          task2: { ...task2, isCurrent: true },
+        },
+      };
+
+      const action = fromActions.stopTask({ id: 'task1' });
+      const state = taskReducer(stateMulti, action);
+
+      expect(state.activeTaskIds).toEqual(['task2']);
+      expect(state.entities['task1']!.isCurrent).toBe(false);
+      expect(state.entities['task2']!.isCurrent).toBe(true);
     });
   });
 
@@ -803,7 +841,7 @@ describe('Task Reducer', () => {
       expect(state.entities['sub2']).toBeUndefined();
     });
 
-    it('should clear currentTaskId if it was an orphan subtask', () => {
+    it('should clear activeTaskIds if it was an orphan subtask', () => {
       const orphanSubTask = createTask('orphan-sub', { parentId: 'task1' });
       const parentWithEmptySubTaskIds = { ...task1, subTaskIds: [] };
 
@@ -814,7 +852,7 @@ describe('Task Reducer', () => {
           task1: parentWithEmptySubTaskIds,
           'orphan-sub': orphanSubTask,
         },
-        currentTaskId: 'orphan-sub', // Current task is the orphan
+        activeTaskIds: ['orphan-sub'], // Current task is the orphan
       };
 
       const action = TaskSharedActions.moveToArchive({
@@ -824,7 +862,7 @@ describe('Task Reducer', () => {
       const state = taskReducer(stateWithOrphanAsCurrent, action);
 
       // Current task should be cleared since orphan subtask was removed
-      expect(state.currentTaskId).toBeNull();
+      expect(state.activeTaskIds).toEqual([]);
     });
   });
 
@@ -890,7 +928,7 @@ describe('Task Reducer', () => {
         entities: {
           'task-remind': taskWithReminder,
         },
-        currentTaskId: null,
+        activeTaskIds: [],
       };
 
       const action = PlannerActions.planTaskForDay({

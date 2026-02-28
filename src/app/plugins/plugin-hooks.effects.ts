@@ -85,7 +85,7 @@ export class PluginHooksEffects {
         map(([action, taskState]) => {
           this.pluginService.dispatchHook(
             PluginHooks.CURRENT_TASK_CHANGE,
-            taskState.currentTaskId,
+            taskState.activeTaskIds[0] || null,
           );
         }),
       ),

@@ -359,10 +359,9 @@ const handleDeleteTasks = (state: RootState, taskIds: string[]): RootState => {
     ...updatedState,
     [TASK_FEATURE_NAME]: {
       ...newTaskState,
-      currentTaskId:
-        newTaskState.currentTaskId && taskIds.includes(newTaskState.currentTaskId)
-          ? null
-          : newTaskState.currentTaskId,
+      activeTaskIds: (newTaskState.activeTaskIds || []).filter(
+        (id) => !taskIds.includes(id),
+      ),
     },
   };
 

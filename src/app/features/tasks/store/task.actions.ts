@@ -23,6 +23,29 @@ export const setSelectedTask = createAction(
 
 export const unsetCurrentTask = createAction('[Task] UnsetCurrentTask');
 
+export const startTask = createAction(
+  '[Task] Start Task',
+  (taskProps: { id: string }) => ({
+    ...taskProps,
+    meta: {
+      isPersistent: true,
+      entityType: 'TASK',
+      entityId: taskProps.id,
+      opType: OpType.Update,
+    } satisfies PersistentActionMeta,
+  }),
+);
+
+export const stopTask = createAction('[Task] Stop Task', (taskProps: { id: string }) => ({
+  ...taskProps,
+  meta: {
+    isPersistent: true,
+    entityType: 'TASK',
+    entityId: taskProps.id,
+    opType: OpType.Update,
+  } satisfies PersistentActionMeta,
+}));
+
 export const __updateMultipleTaskSimple = createAction(
   '[Task] Update multiple Tasks (simple)',
   (taskProps: { taskUpdates: Update<Task>[]; isIgnoreShortSyntax?: boolean }) => ({

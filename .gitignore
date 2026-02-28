@@ -118,3 +118,4 @@ data/
 /.secrets.example
 
 .worktrees/
+conductor/

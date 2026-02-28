@@ -96,7 +96,7 @@ describe('bulkHydrationMetaReducer', () => {
         entities: {
           [TASK_ID]: createMockTask(),
         },
-        currentTaskId: null,
+        activeTaskIds: [],
         selectedTaskId: null,
         taskDetailTargetPanel: null,
         isDataLoaded: true,

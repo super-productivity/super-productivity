@@ -16,7 +16,7 @@ export const createAppDataCompleteMock = (): AppDataComplete => ({
   task: {
     ...createEmptyEntity(),
     ids: [],
-    currentTaskId: null,
+    activeTaskIds: [],
     selectedTaskId: null,
     taskDetailTargetPanel: null,
     lastCurrentTaskId: null,

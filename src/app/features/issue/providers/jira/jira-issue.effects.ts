@@ -24,7 +24,7 @@ import { IssueService } from '../../issue.service';
 import { JIRA_TYPE } from '../../issue.const';
 import { T } from '../../../../t.const';
 import { JiraTransitionOption } from './jira.model';
-import { setCurrentTask } from '../../../tasks/store/task.actions';
+import { setCurrentTask, startTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
 import { DialogJiraAddWorklogComponent } from './jira-view-components/dialog-jira-add-worklog/dialog-jira-add-worklog.component';
 import { selectCurrentTaskParentOrCurrent } from '../../../tasks/store/task.selectors';
@@ -111,9 +111,9 @@ export class JiraIssueEffects {
   checkForReassignment = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(setCurrentTask),
+        ofType(setCurrentTask, startTask),
         // only if a task is started
-        filter(({ id }) => !!id),
+        filter((a) => !!(a as any).id),
         withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
         filter(
           (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>
@@ -200,9 +200,9 @@ export class JiraIssueEffects {
   checkForStartTransition$ = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(setCurrentTask),
+        ofType(setCurrentTask, startTask),
         // only if a task is started
-        filter(({ id }) => !!id),
+        filter((a) => !!(a as any).id),
         withLatestFrom(this._store$.pipe(select(selectCurrentTaskParentOrCurrent))),
         filter(
           (input): input is [(typeof input)[0], Readonly<TaskCopy>] =>

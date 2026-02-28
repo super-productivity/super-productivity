@@ -39,6 +39,14 @@ export class GlobalTrackingIntervalService {
     share(),
   );
 
+  tick = toSignal(this.tick$, {
+    initialValue: {
+      duration: 0,
+      date: this._dateService.todayStr(),
+      timestamp: Date.now(),
+    },
+  });
+
   todayDateStr$: Observable<string> = this._createTodayDateStrObservable();
 
   // Shared signal to avoid creating 200+ subscriptions in task components
