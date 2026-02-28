@@ -43,6 +43,22 @@ export class EncryptionEnableService {
       throw new Error('Encryption key is required');
     }
 
+    // Guard against concurrent calls: if encryption is already enabled
+    // (e.g., another dialog instance already ran enableEncryption), skip
+    // to avoid destructive delete+re-upload of server data.
+    const activeProvider = this._providerManager.getActiveProvider();
+    if (activeProvider) {
+      const currentCfg = (await activeProvider.privateCfg.load()) as
+        | { isEncryptionEnabled?: boolean; encryptKey?: string }
+        | undefined;
+      if (currentCfg?.isEncryptionEnabled && currentCfg?.encryptKey) {
+        SyncLog.normal(
+          `${LOG_PREFIX}: Encryption is already enabled, skipping duplicate enableEncryption call`,
+        );
+        return;
+      }
+    }
+
     // CRITICAL: Check crypto availability BEFORE deleting server data
     // to prevent data loss if encryption will fail
     if (!isCryptoSubtleAvailable()) {

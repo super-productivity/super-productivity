@@ -693,12 +693,6 @@ export class SyncWrapperService {
     if (this._passwordDialog) {
       return;
     }
-    // Don't open if any dialog is already visible (e.g. initial config dialog
-    // is still handling encryption setup via server probe + password prompt)
-    if (this._matDialog.openDialogs.length > 0) {
-      SyncLog.log('Dialog already open — skipping missing password prompt');
-      return;
-    }
 
     // Set ERROR status so sync button shows error icon
     this._providerManager.setSyncStatus('ERROR');
@@ -729,12 +723,6 @@ export class SyncWrapperService {
   private _handleDecryptionError(): void {
     // Prevent multiple password dialogs from opening simultaneously
     if (this._passwordDialog) {
-      return;
-    }
-    // Don't open if any dialog is already visible (e.g. initial config dialog
-    // is still handling encryption setup via server probe + password prompt)
-    if (this._matDialog.openDialogs.length > 0) {
-      SyncLog.log('Dialog already open — skipping decryption error prompt');
       return;
     }
 
@@ -946,6 +934,14 @@ export class SyncWrapperService {
    * If so, opens the encryption dialog. Data has already been synced, so no data loss.
    */
   private async _promptSuperSyncEncryptionIfNeeded(): Promise<void> {
+    SyncLog.log(
+      '_promptSuperSyncEncryptionIfNeeded called, _isOpeningEncryptionDialog=',
+      this._isOpeningEncryptionDialog,
+      ', _encryptionRequiredDialog=',
+      !!this._encryptionRequiredDialog,
+      ', openDialogs=',
+      this._matDialog.openDialogs.length,
+    );
     const providerId = await firstValueFrom(this.syncProviderId$.pipe(take(1)));
     if (providerId !== SyncProviderId.SuperSync) {
       return;
@@ -960,10 +956,18 @@ export class SyncWrapperService {
       | { isEncryptionEnabled?: boolean; encryptKey?: string }
       | undefined;
     if (cfg?.isEncryptionEnabled && cfg?.encryptKey) {
+      SyncLog.log('SuperSync encryption already enabled, skipping');
       return;
     }
 
-    SyncLog.log('SuperSync encryption not enabled — prompting user');
+    SyncLog.log(
+      'SuperSync encryption not enabled — prompting user, openDialogs=',
+      this._matDialog.openDialogs.length,
+      ', _isOpeningEncryptionDialog=',
+      this._isOpeningEncryptionDialog,
+      ', _encryptionRequiredDialog=',
+      !!this._encryptionRequiredDialog,
+    );
 
     // Don't open if ANY dialog is already open. The config dialog's save() method
     // handles encryption setup (either "enable encryption" or "enter password" based
@@ -976,8 +980,17 @@ export class SyncWrapperService {
 
     if (!this._encryptionRequiredDialog && !this._isOpeningEncryptionDialog) {
       this._isOpeningEncryptionDialog = true;
+      SyncLog.log('Opening encryption dialog (guard passed)');
       const { DialogEnableEncryptionComponent } =
         await import('./dialog-enable-encryption/dialog-enable-encryption.component');
+
+      // Double-check after async import: another call might have opened a dialog
+      if (this._encryptionRequiredDialog || this._matDialog.openDialogs.length > 0) {
+        SyncLog.log('Dialog appeared during import — aborting');
+        this._isOpeningEncryptionDialog = false;
+        return;
+      }
+
       this._encryptionRequiredDialog = this._matDialog.open(
         DialogEnableEncryptionComponent,
         {
@@ -993,6 +1006,13 @@ export class SyncWrapperService {
           this.sync();
         }
       });
+    } else {
+      SyncLog.log(
+        'Skipping encryption dialog — guard blocked: _encryptionRequiredDialog=',
+        !!this._encryptionRequiredDialog,
+        ', _isOpeningEncryptionDialog=',
+        this._isOpeningEncryptionDialog,
+      );
     }
   }
 

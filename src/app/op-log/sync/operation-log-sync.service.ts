@@ -2,7 +2,12 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import { OpType, VectorClock, FULL_STATE_OP_TYPES } from '../core/operation.types';
+import {
+  OperationLogEntry,
+  OpType,
+  VectorClock,
+  FULL_STATE_OP_TYPES,
+} from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import {
   OperationSyncCapable,
@@ -186,6 +191,24 @@ export class OperationLogSyncService {
   }
 
   /**
+   * Checks if any of the given ops represent meaningful user data.
+   * Meaningful = TASK/PROJECT/TAG/NOTE creates/updates, or full-state ops.
+   * Config-only ops (e.g., GLOBAL_CONFIG updates) are NOT meaningful.
+   */
+  private _hasMeaningfulPendingOps(ops: OperationLogEntry[]): boolean {
+    const USER_ENTITY_TYPES = ['TASK', 'PROJECT', 'TAG', 'NOTE'];
+    return ops.some((entry) => {
+      if (FULL_STATE_OP_TYPES.has(entry.op.opType as OpType)) {
+        return true;
+      }
+      return (
+        USER_ENTITY_TYPES.includes(entry.op.entityType) &&
+        (entry.op.opType === OpType.Create || entry.op.opType === OpType.Update)
+      );
+    });
+  }
+
+  /**
    * Upload pending local operations to remote storage.
    * Any piggybacked operations received during upload are automatically processed.
    *
@@ -268,7 +291,10 @@ export class OperationLogSyncService {
         );
         if (piggybackedImport) {
           const pendingOps = await this.opLogStore.getUnsynced();
-          if (pendingOps.length > 0 || this._hasMeaningfulLocalData()) {
+          if (
+            this._hasMeaningfulPendingOps(pendingOps) ||
+            this._hasMeaningfulLocalData()
+          ) {
             OpLog.warn(
               `OperationLogSyncService: Piggybacked SYNC_IMPORT from client ${piggybackedImport.clientId} ` +
                 `with ${pendingOps.length} pending local ops. Showing conflict dialog.`,
@@ -410,23 +436,7 @@ export class OperationLogSyncService {
         // Only throw LocalDataConflictError if unsynced ops contain meaningful user data.
         // Fresh clients may have initial state ops (settings, etc.), but these shouldn't
         // trigger a conflict dialog - we should just download the remote data.
-        //
-        // Meaningful user data = task/project/tag CREATE/UPDATE operations
-        // These are entities the user explicitly created/modified and would lose if overwritten.
-        // Also includes full-state ops (backup import, sync import, repair) which represent
-        // explicit user actions that should trigger conflict resolution.
-        const USER_ENTITY_TYPES = ['TASK', 'PROJECT', 'TAG', 'NOTE'];
-        const hasMeaningfulUserData = unsyncedOps.some((entry) => {
-          // Full-state ops are always meaningful - they represent explicit user actions
-          if (FULL_STATE_OP_TYPES.has(entry.op.opType as OpType)) {
-            return true;
-          }
-          // Regular ops: meaningful if they modify user entities
-          return (
-            USER_ENTITY_TYPES.includes(entry.op.entityType) &&
-            (entry.op.opType === OpType.Create || entry.op.opType === OpType.Update)
-          );
-        });
+        const hasMeaningfulUserData = this._hasMeaningfulPendingOps(unsyncedOps);
 
         if (hasMeaningfulUserData) {
           // Client has meaningful user data - show conflict dialog
@@ -635,7 +645,10 @@ export class OperationLogSyncService {
     );
     if (incomingSyncImport) {
       const pendingLocalOps = await this.opLogStore.getUnsynced();
-      if (pendingLocalOps.length > 0 || this._hasMeaningfulLocalData()) {
+      if (
+        this._hasMeaningfulPendingOps(pendingLocalOps) ||
+        this._hasMeaningfulLocalData()
+      ) {
         OpLog.warn(
           `OperationLogSyncService: Incoming SYNC_IMPORT from client ${incomingSyncImport.clientId} ` +
             `with ${pendingLocalOps.length} pending local ops. Showing conflict dialog.`,
