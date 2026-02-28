@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Implement Multi-Timer Support in the "Today" View**
-      _Link: [./tracks/multi-timer-support_20260215/](./tracks/multi-timer-support_20260215/)_
+- [~] **Track: Implement Multi-Timer Support in the "Today" View**
+  _Link: [./tracks/multi-timer-support_20260215/](./tracks/multi-timer-support_20260215/)_

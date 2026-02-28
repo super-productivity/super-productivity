@@ -67,7 +67,7 @@ const createLegacyBackup = (
         attachments: [],
       },
     },
-    currentTaskId: null,
+    activeTaskIds: [],
     selectedTaskId: null,
     __modelVersion: 3.6,
   },
@@ -117,7 +117,7 @@ const createLegacyBackup = (
  * Creates a minimal modern v17-era backup.
  */
 const createModernBackup = (): Record<string, any> => ({
-  task: { ids: [], entities: {}, currentTaskId: null, selectedTaskId: null },
+  task: { ids: [], entities: {}, activeTaskIds: [], selectedTaskId: null },
   project: {
     ids: [INBOX_PROJECT.id],
     entities: { [INBOX_PROJECT.id]: { ...INBOX_PROJECT } },
@@ -474,7 +474,7 @@ describe('migrate-legacy-backup', () => {
 
     it('should handle backup with no tasks gracefully', () => {
       const data = createLegacyBackup({
-        task: { ids: [], entities: {}, currentTaskId: null, __modelVersion: 3.6 },
+        task: { ids: [], entities: {}, activeTaskIds: [], __modelVersion: 3.6 },
         taskArchive: { ids: [], entities: {}, __modelVersion: 3.6 },
         project: {
           ids: ['proj-1'],

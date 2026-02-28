@@ -31,7 +31,7 @@ describe('StateSnapshotService', () => {
     ids: ['task1'],
     entities: { task1: { id: 'task1', title: 'Test Task' } },
     selectedTaskId: 'task1',
-    currentTaskId: 'task1',
+    activeTaskIds: ['task1'],
   };
   const mockProjectState = { ids: [], entities: {} };
   const mockTagState = { ids: [], entities: {} };

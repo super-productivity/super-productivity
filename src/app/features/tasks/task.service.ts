@@ -29,6 +29,8 @@ import {
   roundTimeSpentForDay,
   setCurrentTask,
   setSelectedTask,
+  startTask,
+  stopTask,
   toggleStart,
   toggleTaskHideSubTasks,
   unsetCurrentTask,
@@ -42,6 +44,7 @@ import {
   selectCurrentTask,
   selectCurrentTaskId,
   selectCurrentTaskParentOrCurrent,
+  selectCurrentTasks,
   selectIsTaskDataLoaded,
   selectMainTasksWithoutTag,
   selectSelectedTask,
@@ -127,6 +130,12 @@ export class TaskService {
     select(selectCurrentTask),
     // NOTE: we can't use share here, as we need the last emitted value
   );
+
+  currentTasks$: Observable<Task[]> = this._store.pipe(
+    select(selectCurrentTasks),
+    // NOTE: we can't use share here, as we need the last emitted value
+  );
+  currentTasks = toSignal(this.currentTasks$, { initialValue: [] as Task[] });
 
   currentTaskParentOrCurrent$: Observable<Task | undefined> = this._store.pipe(
     select(selectCurrentTaskParentOrCurrent),
@@ -222,18 +231,22 @@ export class TaskService {
     // time tracking with batch sync
     this._timeTrackingService.tick$
       .pipe(
-        withLatestFrom(this.currentTask$, this._imexMetaService.isDataImportInProgress$),
+        withLatestFrom(this.currentTasks$, this._imexMetaService.isDataImportInProgress$),
       )
-      .subscribe(([tick, currentTask, isImportInProgress]) => {
-        if (currentTask?.id && !isImportInProgress) {
-          // Update local state immediately (existing behavior)
-          this.addTimeSpent(currentTask, tick.duration, tick.date);
+      .subscribe(([tick, currentTasks, isImportInProgress]) => {
+        if (currentTasks.length > 0 && !isImportInProgress) {
+          currentTasks.forEach((currentTask) => {
+            if (currentTask.id) {
+              // Update local state immediately (existing behavior)
+              this.addTimeSpent(currentTask, tick.duration, tick.date);
 
-          // Accumulate for batch sync
-          this._timeAccumulator.accumulate(currentTask.id, tick.duration, tick.date);
+              // Accumulate for batch sync
+              this._timeAccumulator.accumulate(currentTask.id, tick.duration, tick.date);
 
-          // Track contexts for TIME_TRACKING sync
-          this._trackContextsForSync(currentTask, tick.date);
+              // Track contexts for TIME_TRACKING sync
+              this._trackContextsForSync(currentTask, tick.date);
+            }
+          });
 
           // Check if it's time to sync (every 5 minutes)
           if (this._timeAccumulator.shouldFlush()) {
@@ -334,6 +347,14 @@ export class TaskService {
     taskDetailTargetPanel: TaskDetailTargetPanel = TaskDetailTargetPanel.Default,
   ): void {
     this._store.dispatch(setSelectedTask({ id, taskDetailTargetPanel }));
+  }
+
+  startTask(id: string): void {
+    this._store.dispatch(startTask({ id }));
+  }
+
+  stopTask(id: string): void {
+    this._store.dispatch(stopTask({ id }));
   }
 
   async setSelectedIdToParentAndSwitchContextIfNecessary(task: TaskCopy): Promise<void> {

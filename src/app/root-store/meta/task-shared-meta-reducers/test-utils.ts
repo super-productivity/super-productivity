@@ -48,7 +48,7 @@ export const createBaseState = (): RootState => {
     [TASK_FEATURE_NAME]: {
       ids: [],
       entities: {},
-      currentTaskId: null,
+      activeTaskIds: [],
       selectedTaskId: null,
       taskDetailTargetPanel: null,
       lastCurrentTaskId: null,
