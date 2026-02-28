@@ -49,6 +49,7 @@ import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
 import { EncryptionPasswordDialogOpenerService } from './app/imex/sync/encryption-password-dialog-opener.service';
+import { DataInitService } from './app/core/data-init/data-init.service';
 import { EffectsModule } from '@ngrx/effects';
 import { StoreDevtoolsModule } from '@ngrx/store-devtools';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -218,6 +219,16 @@ bootstrapApplication(AppComponent, {
         };
       },
       deps: [OperationCaptureService],
+      multi: true,
+    },
+    // Ensure DataInitService is instantiated at bootstrap.
+    // Its constructor triggers reInit() → hydrateStore() → loadAllData into NgRx.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_dataInit: DataInitService) => {
+        return () => {};
+      },
+      deps: [DataInitService],
       multi: true,
     },
     // Initialize encryption password dialog opener for static form config functions
