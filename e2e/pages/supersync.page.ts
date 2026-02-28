@@ -246,9 +246,10 @@ export class SuperSyncPage extends BasePage {
     // Define locators for dialogs we might see
     const configDialog = this.page.locator('dialog-sync-initial-cfg');
     const passwordDialog = this.page.locator('dialog-enter-encryption-password');
+    const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
 
-    // Wait for config dialog to close OR password dialog to appear
-    // (password dialog appearing means config dialog closed and sync started)
+    // Wait for config dialog to close, password dialog to appear, or
+    // mandatory encryption setup dialog to appear (SuperSync requires encryption)
     const configDialogClosed = await Promise.race([
       configDialog
         .waitFor({ state: 'hidden', timeout: 15000 })
@@ -256,9 +257,36 @@ export class SuperSyncPage extends BasePage {
       passwordDialog
         .waitFor({ state: 'visible', timeout: 15000 })
         .then(() => 'password_appeared'),
+      enableEncryptionDialog
+        .first()
+        .waitFor({ state: 'visible', timeout: 15000 })
+        .then(() => 'enable_encryption_appeared'),
     ]).catch(() => 'timeout');
 
-    if (configDialogClosed === 'timeout') {
+    if (configDialogClosed === 'enable_encryption_appeared') {
+      // Mandatory encryption setup dialog appeared — fill password and confirm.
+      // The config dialog AND the sync-wrapper may both open instances, so handle
+      // all of them in a loop, always targeting the topmost (highest index) one.
+      const defaultPw = config.password || 'e2e-default-encryption-pw';
+      console.log('[SuperSyncPage] Mandatory encryption dialog appeared after save');
+      for (let round = 0; round < 3; round++) {
+        const encCount = await enableEncryptionDialog.count();
+        if (encCount === 0) break;
+        console.log(
+          `[SuperSyncPage] Handling encryption dialog (${encCount} open, round ${round})`,
+        );
+        const topDialog = enableEncryptionDialog.nth(encCount - 1);
+        await topDialog.locator('input[type="password"]').first().fill(defaultPw);
+        await topDialog.locator('input[type="password"]').nth(1).fill(defaultPw);
+        await topDialog.locator('button[mat-flat-button]').click();
+        await expect(enableEncryptionDialog).toHaveCount(encCount - 1, {
+          timeout: 15000,
+        });
+      }
+      // After all encryption dialogs close, the config dialog save handler
+      // continues and closes the config dialog
+      await configDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+    } else if (configDialogClosed === 'timeout') {
       // Neither happened - try pressing Escape to close any stuck dialog
       console.log(
         '[SuperSyncPage] Config dialog did not close after save, trying Escape',
@@ -544,7 +572,6 @@ export class SuperSyncPage extends BasePage {
       // Encryption is mandatory for SuperSync, so even when the caller doesn't
       // explicitly set isEncryptionEnabled, we must handle encryption dialogs.
       const defaultPassword = config.password || 'e2e-default-encryption-pw';
-      const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
       const enterPasswordDialog = this.page.locator('dialog-enter-encryption-password');
 
       // Handle dialogs in a loop — multiple can appear in sequence
@@ -572,24 +599,20 @@ export class SuperSyncPage extends BasePage {
         }
 
         // Client A: mandatory encryption setup dialog
+        // Use .last() because sync-wrapper may open a second instance on top
         const enableEncVisible = await enableEncryptionDialog
           .isVisible()
           .catch(() => false);
         if (enableEncVisible) {
           console.log('[SuperSyncPage] Mandatory encryption dialog — setting password');
-          const pwInput = enableEncryptionDialog
-            .locator('input[type="password"]')
-            .first();
-          const confirmPwInput = enableEncryptionDialog
-            .locator('input[type="password"]')
-            .nth(1);
+          const firstEncDlg = enableEncryptionDialog.last();
+          const pwInput = firstEncDlg.locator('input[type="password"]').first();
+          const confirmPwInput = firstEncDlg.locator('input[type="password"]').nth(1);
           await pwInput.fill(defaultPassword);
           await confirmPwInput.fill(defaultPassword);
-          const setPasswordBtn = enableEncryptionDialog.locator(
-            'button[mat-flat-button]',
-          );
+          const setPasswordBtn = firstEncDlg.locator('button[mat-flat-button]');
           await setPasswordBtn.click();
-          await enableEncryptionDialog.waitFor({
+          await firstEncDlg.waitFor({
             state: 'hidden',
             timeout: 10000,
           });
