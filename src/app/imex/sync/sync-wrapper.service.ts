@@ -116,6 +116,13 @@ export class SyncWrapperService {
   private _isEncryptionOperationInProgress$ = new BehaviorSubject(false);
 
   /**
+   * When true, encryption-related dialogs (missing password, decrypt error) are suppressed.
+   * Set after the user cancels a dialog so they can navigate to settings to change the password
+   * without being blocked by recurring auto-sync dialogs. Cleared when encryption config changes.
+   */
+  private _suppressEncryptionDialogs = false;
+
+  /**
    * Observable for UI: true when all local changes have been uploaded.
    * Used for all sync providers to show the single checkmark indicator.
    */
@@ -142,6 +149,14 @@ export class SyncWrapperService {
    */
   get isEncryptionOperationInProgress(): boolean {
     return this._isEncryptionOperationInProgress$.getValue();
+  }
+
+  /**
+   * Clears the suppression flag so encryption dialogs can appear again.
+   * Called after the user changes the encryption password via settings.
+   */
+  clearEncryptionDialogSuppression(): void {
+    this._suppressEncryptionDialogs = false;
   }
 
   // Expose shared user input wait state for other services (e.g., SyncTriggerService)
@@ -691,6 +706,12 @@ export class SyncWrapperService {
    * Opens a simple dialog to prompt for the password, then re-syncs.
    */
   private _handleMissingPasswordDialog(): void {
+    // Suppress dialog if user previously cancelled (so they can navigate to settings)
+    if (this._suppressEncryptionDialogs) {
+      this._providerManager.setSyncStatus('ERROR');
+      return;
+    }
+
     // Prevent multiple password dialogs from opening simultaneously
     if (this._passwordDialog) {
       return;
@@ -710,19 +731,28 @@ export class SyncWrapperService {
       this._passwordDialog = undefined;
 
       if (result?.password) {
-        // Password was entered and saved, re-sync
+        // Password was entered and saved — clear suppression and re-sync
+        this._suppressEncryptionDialogs = false;
         this.sync();
       } else if (result?.forceOverwrite) {
         // Force overwrite succeeded; reflect synced status
+        this._suppressEncryptionDialogs = false;
         this._providerManager.setSyncStatus('IN_SYNC');
       } else {
-        // User cancelled - set status to unknown
+        // User cancelled — suppress future dialogs so they can navigate to settings
+        this._suppressEncryptionDialogs = true;
         this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
       }
     });
   }
 
   private _handleDecryptionError(): void {
+    // Suppress dialog if user previously cancelled (so they can navigate to settings)
+    if (this._suppressEncryptionDialogs) {
+      this._providerManager.setSyncStatus('ERROR');
+      return;
+    }
+
     // Prevent multiple password dialogs from opening simultaneously
     if (this._passwordDialog) {
       return;
@@ -744,20 +774,23 @@ export class SyncWrapperService {
       autoFocus: false,
     });
 
-    this._passwordDialog.afterClosed().subscribe(({ isReSync, isForceUpload }) => {
-      this._passwordDialog = undefined;
+    this._passwordDialog
+      .afterClosed()
+      .subscribe(({ isReSync, isForceUpload } = {} as any) => {
+        this._passwordDialog = undefined;
 
-      if (isReSync) {
-        this.sync();
-      }
-      if (isForceUpload) {
-        this.forceUpload();
-      }
-      // Reset status if user cancelled without taking action
-      if (!isReSync && !isForceUpload) {
-        this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
-      }
-    });
+        if (isReSync) {
+          this._suppressEncryptionDialogs = false;
+          this.sync();
+        } else if (isForceUpload) {
+          this._suppressEncryptionDialogs = false;
+          this.forceUpload();
+        } else {
+          // User cancelled — suppress future dialogs so they can navigate to settings
+          this._suppressEncryptionDialogs = true;
+          this._providerManager.setSyncStatus('UNKNOWN_OR_CHANGED');
+        }
+      });
   }
 
   /**

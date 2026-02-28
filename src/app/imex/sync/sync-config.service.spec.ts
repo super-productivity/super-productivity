@@ -8,6 +8,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { first } from 'rxjs/operators';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { SyncWrapperService } from './sync-wrapper.service';
 
 describe('SyncConfigService', () => {
   let service: SyncConfigService;
@@ -54,12 +55,17 @@ describe('SyncConfigService', () => {
       'clearCache',
     ]);
 
+    const syncWrapperServiceSpy = jasmine.createSpyObj('SyncWrapperService', [
+      'clearEncryptionDialogSuppression',
+    ]);
+
     TestBed.configureTestingModule({
       providers: [
         SyncConfigService,
         { provide: SyncProviderManager, useValue: providerManagerSpy },
         { provide: GlobalConfigService, useValue: globalConfigServiceSpy },
         { provide: WrappedProviderService, useValue: wrappedProviderServiceSpy },
+        { provide: SyncWrapperService, useValue: syncWrapperServiceSpy },
       ],
     });
 
