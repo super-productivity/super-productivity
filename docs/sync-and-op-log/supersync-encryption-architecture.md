@@ -235,6 +235,34 @@ privateCfg: {
 | **Forward Secrecy** | Each operation uses random IV         |
 | **Wrong Password**  | Decryption fails, operation rejected  |
 
+## Initial Setup — Password Dialog Selection
+
+During initial SuperSync setup, the app determines which encryption dialog to show by **probing the server** before opening any dialog:
+
+```
+DialogSyncInitialCfgComponent.save()
+    │
+    ▼
+Save config + auth
+    │
+    ▼
+Probe server: downloadOps(0, undefined, 1)
+    │
+    ├─── Server has encrypted ops ──► DialogEnterEncryptionPasswordComponent
+    │    (isPayloadEncrypted=true)      (enter existing password)
+    │
+    ├─── Server empty or ───────────► DialogEnableEncryptionComponent
+    │    unencrypted ops                (create new password)
+    │
+    └─── Probe fails ───────────────► DialogEnableEncryptionComponent
+         (network/auth error)           (fallback; sync error handling
+                                         catches mismatches later)
+```
+
+This prevents a confusing double-prompt when a second client joins: without the probe, the app would always show "create password", then immediately fail during sync and show "enter password".
+
+**Safety nets:** If the probe gives wrong results (e.g. race condition), the existing `_handleMissingPasswordDialog()` and `_promptSuperSyncEncryptionIfNeeded()` in `sync-wrapper.service.ts` will catch mismatches during the subsequent sync.
+
 ## Wrong Password Handling
 
 ```
