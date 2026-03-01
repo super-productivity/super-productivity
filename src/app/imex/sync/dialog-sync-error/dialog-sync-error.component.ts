@@ -6,7 +6,6 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { FormsModule } from '@angular/forms';
 import { download } from '../../../util/download';
 
 import { IS_ELECTRON } from '../../../app.constants';
@@ -17,37 +16,36 @@ import { BackupService } from '../../../op-log/backup/backup.service';
 import { T } from '../../../t.const';
 import { Log } from '../../../core/log';
 
-export interface DialogIncompleteSyncData {
-  modelId: string;
+export type DialogSyncErrorType = 'incomplete-sync' | 'incoherent-timestamps';
+
+export interface DialogSyncErrorData {
+  type: DialogSyncErrorType;
+  modelId?: string;
 }
 
+export type DialogSyncErrorResult =
+  | 'FORCE_UPDATE_REMOTE'
+  | 'FORCE_UPDATE_LOCAL'
+  | undefined;
+
 @Component({
-  selector: 'dialog-incoherent-timestamps-error',
-  imports: [
-    MatDialogContent,
-    TranslateModule,
-    FormsModule,
-    MatIcon,
-    MatDialogActions,
-    MatButton,
-  ],
-  templateUrl: './dialog-incoherent-timestamps-error.component.html',
-  styleUrl: './dialog-incoherent-timestamps-error.component.scss',
+  selector: 'dialog-sync-error',
+  imports: [MatDialogContent, TranslateModule, MatIcon, MatDialogActions, MatButton],
+  templateUrl: './dialog-sync-error.component.html',
+  styleUrl: './dialog-sync-error.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DialogIncoherentTimestampsErrorComponent {
-  private _matDialogRef =
-    inject<MatDialogRef<DialogIncoherentTimestampsErrorComponent>>(MatDialogRef);
+export class DialogSyncErrorComponent {
+  private _matDialogRef = inject<MatDialogRef<DialogSyncErrorComponent>>(MatDialogRef);
   private _backupService = inject(BackupService);
 
-  data = inject<DialogIncompleteSyncData>(MAT_DIALOG_DATA);
+  data = inject<DialogSyncErrorData>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
   IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
 
   constructor() {
-    const _matDialogRef = this._matDialogRef;
-    _matDialogRef.disableClose = true;
+    this._matDialogRef.disableClose = true;
   }
 
   async downloadBackup(): Promise<void> {
@@ -57,10 +55,9 @@ export class DialogIncoherentTimestampsErrorComponent {
     } catch (e) {
       Log.error(e);
     }
-    // download('super-productivity-backup.json', privacyExport(data));
   }
 
-  close(res?: 'FORCE_UPDATE_REMOTE' | 'FORCE_UPDATE_LOCAL'): void {
+  close(res?: DialogSyncErrorResult): void {
     this._matDialogRef.close(res);
   }
 

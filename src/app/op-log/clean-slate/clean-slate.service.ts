@@ -8,7 +8,7 @@ import {
   PreMigrationReason,
 } from './pre-migration-backup.service';
 import { OpLog } from '../../core/log';
-import { Operation, OpType } from '../core/operation.types';
+import { Operation, OpType, SyncImportReason } from '../core/operation.types';
 import { ActionType } from '../core/action-types.enum';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 
@@ -78,7 +78,10 @@ export class CleanSlateService {
    * @param reason - Why the clean slate is being created
    * @throws If state snapshot cannot be retrieved or operations cannot be stored
    */
-  async createCleanSlate(reason: PreMigrationReason): Promise<void> {
+  async createCleanSlate(
+    reason: PreMigrationReason,
+    syncImportReason: SyncImportReason,
+  ): Promise<void> {
     OpLog.normal('[CleanSlate] Starting clean slate process', { reason });
 
     // 1. Create pre-migration backup (placeholder for now)
@@ -114,6 +117,7 @@ export class CleanSlateService {
       vectorClock: newVectorClock,
       timestamp: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason,
     };
 
     OpLog.normal('[CleanSlate] Created SYNC_IMPORT operation', {

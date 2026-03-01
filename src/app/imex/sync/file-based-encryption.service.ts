@@ -38,13 +38,19 @@ export class FileBasedEncryptionService {
     await this._applyEncryption(newPassword, 'change');
   }
 
+  async disableEncryption(): Promise<void> {
+    await this._applyEncryption(undefined, 'disable');
+  }
+
   private async _applyEncryption(
-    encryptKey: string,
-    action: 'enable' | 'change',
+    encryptKey: string | undefined,
+    action: 'enable' | 'change' | 'disable',
   ): Promise<void> {
     SyncLog.normal(`${LOG_PREFIX}: Starting ${action} for file-based provider...`);
 
-    if (!encryptKey) {
+    const isDisable = action === 'disable';
+
+    if (!isDisable && !encryptKey) {
       throw new Error('Encryption password is required');
     }
 
@@ -75,15 +81,15 @@ export class FileBasedEncryptionService {
     const existingCfg = await provider.privateCfg.load();
 
     const baseCfg = this._providerManager.getEncryptAndCompressCfg();
-    const encryptedCfg = {
+    const adapterCfg = {
       ...baseCfg,
-      isEncrypt: true,
+      isEncrypt: !isDisable,
     };
 
     const adapter = this._fileBasedAdapter.createAdapter(
       provider,
-      encryptedCfg,
-      encryptKey,
+      adapterCfg,
+      isDisable ? undefined : encryptKey,
     );
 
     const result = await adapter.uploadSnapshot(
@@ -92,7 +98,7 @@ export class FileBasedEncryptionService {
       'recovery',
       vectorClock,
       CURRENT_SCHEMA_VERSION,
-      true,
+      !isDisable,
       uuidv7(),
     );
 
@@ -100,15 +106,26 @@ export class FileBasedEncryptionService {
       throw new Error(`Snapshot upload failed: ${result.error}`);
     }
 
-    const newConfig = {
-      ...existingCfg,
-      encryptKey,
-    };
-    await this._providerManager.setProviderConfig(provider.id, newConfig);
-
-    this._globalConfigService.updateSection('sync', {
-      isEncryptionEnabled: true,
-    });
+    if (isDisable) {
+      // Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
+      // to ensure the currentProviderPrivateCfg$ observable is updated
+      await this._providerManager.setProviderConfig(provider.id, {
+        ...existingCfg,
+        encryptKey: undefined,
+      });
+      this._globalConfigService.updateSection('sync', {
+        isEncryptionEnabled: false,
+        encryptKey: '',
+      });
+    } else {
+      await this._providerManager.setProviderConfig(provider.id, {
+        ...existingCfg,
+        encryptKey,
+      });
+      this._globalConfigService.updateSection('sync', {
+        isEncryptionEnabled: true,
+      });
+    }
 
     this._derivedKeyCache.clearCache();
     this._wrappedProviderService.clearCache();

@@ -14,7 +14,7 @@ import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
-import { ActionType, Operation, OpType } from '../core/operation.types';
+import { ActionType, Operation, OpType, SyncImportReason } from '../core/operation.types';
 import { uuidv7 } from '../../util/uuid-v7';
 import { OpLog } from '../../core/log';
 import { SYSTEM_TAG_IDS } from '../../features/tag/tag.const';
@@ -134,7 +134,7 @@ export class ServerMigrationService {
    */
   async handleServerMigration(
     syncProvider: OperationSyncCapable,
-    options?: { skipServerEmptyCheck?: boolean },
+    options?: { skipServerEmptyCheck?: boolean; syncImportReason?: SyncImportReason },
   ): Promise<void> {
     // Double-check server is still empty (in case another client just uploaded)
     // This is called inside the upload lock, but network timing could still race
@@ -241,6 +241,7 @@ export class ServerMigrationService {
       vectorClock: newClock,
       timestamp: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: options?.syncImportReason ?? 'SERVER_MIGRATION',
     };
 
     // Append to operation log - will be uploaded via snapshot endpoint

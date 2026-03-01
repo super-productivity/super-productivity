@@ -5,18 +5,12 @@ h1 {
 }
 
 .warning-icon {
-  color: var(--palette-warn-500);
+  color: var(--text-color-secondary);
 }
 
 .message {
   margin-bottom: 16px;
   line-height: 1.5;
-}
-
-.explanation {
-  margin-bottom: 16px;
-  color: var(--text-color-secondary);
-  font-size: 0.9em;
 }
 
 .import-info {
@@ -43,6 +37,17 @@ h1 {
       font-weight: 700;
     }
   }
+}
+
+.reason {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  margin-bottom: 12px;
+}
+
+.recommendation {
+  font-weight: 500;
+  margin-bottom: 16px;
 }
 
 .wrap-buttons {

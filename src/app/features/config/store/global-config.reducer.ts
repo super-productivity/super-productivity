@@ -118,6 +118,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     // These settings should remain local to each client:
     // - syncProvider: Each client can use different providers (Dropbox, WebDAV, etc.)
     // - isEnabled: Each client independently controls whether sync is enabled
+    // - isEncryptionEnabled: Encryption state must not be overwritten by imports
     //
     // If oldState.sync.syncProvider is null, we're on first load (using initialGlobalConfigState)
     // and should use the incoming values (from snapshot). Otherwise, preserve local values.
@@ -130,6 +131,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     const isEnabled = hasLocalSettings
       ? oldState.sync.isEnabled
       : incomingSyncConfig.isEnabled;
+
+    const isEncryptionEnabled = hasLocalSettings
+      ? oldState.sync.isEncryptionEnabled
+      : incomingSyncConfig.isEncryptionEnabled;
 
     return {
       ...appDataComplete.globalConfig,
@@ -152,6 +157,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...incomingSyncConfig,
         syncProvider,
         isEnabled,
+        isEncryptionEnabled,
       },
     };
   }),

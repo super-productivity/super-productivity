@@ -1,5 +1,9 @@
 <h1 mat-dialog-title>
-  {{ textKeys.ENABLE_ENCRYPTION_TITLE | translate }}
+  @if (initialSetup) {
+    {{ textKeys.SETUP_ENCRYPTION_TITLE | translate }}
+  } @else {
+    {{ textKeys.ENABLE_ENCRYPTION_TITLE | translate }}
+  }
 </h1>
 
 @if (!canProceed()) {
@@ -21,7 +25,91 @@
       {{ T.G.CLOSE | translate }}
     </button>
   </mat-dialog-actions>
+} @else if (initialSetup) {
+  <!-- Simplified dialog for initial SuperSync setup -->
+  <mat-dialog-content>
+    <div class="info-box">
+      <mat-icon aria-hidden="true">enhanced_encryption</mat-icon>
+      <div>
+        <p [innerHTML]="textKeys.ENCRYPTION_SETUP_INTRO | translate"></p>
+        <p>{{ textKeys.SETUP_ENCRYPTION_PASSWORD_WARNING | translate }}</p>
+      </div>
+    </div>
+
+    <div class="password-fields">
+      <mat-form-field appearance="outline">
+        <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          [type]="showPassword() ? 'text' : 'password'"
+          [(ngModel)]="password"
+          [ngModelOptions]="{ standalone: true }"
+          autocomplete="new-password"
+        />
+        <button
+          mat-icon-button
+          matSuffix
+          type="button"
+          [attr.aria-label]="T.G.TOGGLE_PASSWORD_VISIBILITY | translate"
+          (click)="showPassword.set(!showPassword())"
+        >
+          <mat-icon aria-hidden="true">{{
+            showPassword() ? 'visibility_off' : 'visibility'
+          }}</mat-icon>
+        </button>
+      </mat-form-field>
+
+      <password-strength [password]="password" />
+
+      <mat-form-field appearance="outline">
+        <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
+        <input
+          matInput
+          [type]="showPassword() ? 'text' : 'password'"
+          [(ngModel)]="confirmPassword"
+          [ngModelOptions]="{ standalone: true }"
+          autocomplete="new-password"
+        />
+      </mat-form-field>
+
+      @if (passwordError) {
+        <div class="password-error">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ passwordError | translate }}</span>
+        </div>
+      }
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button
+      mat-button
+      type="button"
+      [disabled]="isLoading()"
+      (click)="disableSuperSync()"
+    >
+      {{ textKeys.SETUP_DISABLE_SUPERSYNC_BTN | translate }}
+    </button>
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="isLoading() || !isPasswordValid"
+      (click)="confirm()"
+    >
+      @if (isLoading()) {
+        <mat-spinner
+          diameter="20"
+          [attr.aria-label]="T.G.PROCESSING | translate"
+        ></mat-spinner>
+      } @else {
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        {{ textKeys.SETUP_ENCRYPTION_BTN | translate }}
+      }
+    </button>
+  </mat-dialog-actions>
 } @else {
+  <!-- Full dialog for enabling encryption on existing setup -->
   <mat-dialog-content>
     <div class="warning-box">
       <mat-icon aria-hidden="true">warning</mat-icon>
@@ -33,18 +121,33 @@
         <mat-label>{{ T.F.SYNC.FORM.L_ENCRYPTION_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
+        <button
+          mat-icon-button
+          matSuffix
+          type="button"
+          [attr.aria-label]="T.G.TOGGLE_PASSWORD_VISIBILITY | translate"
+          (click)="showPassword.set(!showPassword())"
+        >
+          <mat-icon aria-hidden="true">{{
+            showPassword() ? 'visibility_off' : 'visibility'
+          }}</mat-icon>
+        </button>
       </mat-form-field>
+
+      <password-strength [password]="password" />
 
       <mat-form-field appearance="outline">
         <mat-label>{{ textKeys.L_CONFIRM_PASSWORD | translate }}</mat-label>
         <input
           matInput
-          type="password"
+          [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
       </mat-form-field>
@@ -91,13 +194,11 @@
       @if (isLoading()) {
         <mat-spinner
           diameter="20"
-          aria-label="Processing"
+          [attr.aria-label]="T.G.PROCESSING | translate"
         ></mat-spinner>
       } @else {
-        <ng-container>
-          <mat-icon aria-hidden="true">lock</mat-icon>
-          {{ textKeys.BTN_ENABLE_ENCRYPTION | translate }}
-        </ng-container>
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        {{ textKeys.BTN_ENABLE_ENCRYPTION | translate }}
       }
     </button>
   </mat-dialog-actions>

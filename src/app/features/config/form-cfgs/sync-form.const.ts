@@ -10,7 +10,6 @@ import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
 import {
   closeAllDialogs,
-  openDisableEncryptionDialog,
   openDisableEncryptionDialogForFileBased,
   openEnableEncryptionDialog,
   openEnableEncryptionDialogForFileBased,
@@ -308,7 +307,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             },
           },
         },
+        // Hide disable encryption for SuperSync — encryption is mandatory
         {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
           type: 'btn',
           className: 'e2e-disable-encryption-btn',
           templateOptions: {
@@ -316,22 +318,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             btnType: 'primary',
             btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
-              const isSuperSync =
-                field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync;
-              const result = isSuperSync
-                ? await openDisableEncryptionDialog()
-                : await openDisableEncryptionDialogForFileBased();
+              const result = await openDisableEncryptionDialogForFileBased();
               if (
                 result?.success &&
                 result?.encryptionRemoved &&
                 field?.parent?.parent?.model
               ) {
                 field.parent.parent.model.isEncryptionEnabled = false;
-                // Also clear encryptKey if we're in file-based provider context
-                if (!isSuperSync && field?.parent?.parent?.model) {
+                if (field?.parent?.parent?.model) {
                   field.parent.parent.model.encryptKey = '';
                 }
-                // Close the parent settings dialog
                 closeAllDialogs();
               }
               return result?.success ? true : false;
@@ -415,6 +411,41 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
           },
         },
+        // Encryption encouragement warning (shown when encryption is NOT enabled)
+        // Hidden during initial setup (encryption dialog opens automatically after save)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
+            field?.parent?.parent?.model?._isInitialSetup === true,
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            class: 'encryption-warning',
+            text: T.F.SYNC.FORM.SUPER_SYNC.ENCRYPTION_ENCOURAGED,
+          },
+        },
+        // Enable encryption button for SuperSync (shown when encryption is disabled)
+        // Hidden during initial setup (encryption dialog opens automatically after save)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
+            field?.parent?.parent?.model?._isInitialSetup === true,
+          type: 'btn',
+          className: 'e2e-enable-encryption-btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
+            btnType: 'primary',
+            onClick: async (field: FormlyFieldConfig) => {
+              const result = await openEnableEncryptionDialog();
+              if (result?.success && field?.model) {
+                field.model.isEncryptionEnabled = true;
+              }
+              return result?.success ? true : false;
+            },
+          },
+        },
         // Advanced settings for SuperSync
         {
           type: 'collapsible',
@@ -422,27 +453,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
           props: { label: T.G.ADVANCED_CFG },
           fieldGroup: [
-            // Enable encryption button for SuperSync (shown when encryption is disabled)
-            {
-              // Note: Using (m, v, field) signature for btn type fields to ensure
-              // hideExpression works correctly with the btn component.
-              // Using ?? false to ensure button stays hidden if field is undefined.
-              hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-                field?.model?.isEncryptionEnabled ?? false,
-              type: 'btn',
-              className: 'e2e-enable-encryption-btn',
-              templateOptions: {
-                text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
-                btnType: 'primary',
-                onClick: async (field: FormlyFieldConfig) => {
-                  const result = await openEnableEncryptionDialog();
-                  if (result?.success && field?.model) {
-                    field.model.isEncryptionEnabled = true;
-                  }
-                  return result?.success ? true : false;
-                },
-              },
-            },
             // Server URL
             {
               key: 'baseUrl',

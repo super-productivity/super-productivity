@@ -29,6 +29,7 @@ import { first, skip } from 'rxjs/operators';
 import { toSyncProviderId } from '../../../op-log/sync-exports';
 import { SyncLog } from '../../../core/log';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
+
 import { GlobalConfigService } from '../../../features/config/global-config.service';
 import { isOnline } from '../../../util/is-online';
 
@@ -62,15 +63,18 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
   private _getFields(includeEnabledToggle: boolean): FormlyFieldConfig[] {
     return SYNC_FORM.items!.filter((f) => includeEnabledToggle || f.key !== 'isEnabled');
   }
-  _tmpUpdatedCfg: SyncConfig = {
+  // Note: _isInitialSetup flag is checked by sync-form.const.ts hideExpressions
+  // to hide the encryption button/warning (encryption is handled by _promptSuperSyncEncryptionIfNeeded after sync)
+  _tmpUpdatedCfg: SyncConfig & { _isInitialSetup?: boolean } = {
     isEnabled: true,
-    syncProvider: null,
+    syncProvider: SyncProviderId.SuperSync,
     syncInterval: 300000,
     encryptKey: '',
     isEncryptionEnabled: false,
     localFileSync: {},
     webDav: {},
     superSync: {},
+    _isInitialSetup: true,
   };
 
   private _matDialogRef =
@@ -203,12 +207,15 @@ export class DialogSyncInitialCfgComponent implements AfterViewInit {
       ...this.form.value,
     };
 
+    // Strip _isInitialSetup before saving — it's only for form hideExpressions
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _isInitialSetup, ...cfgWithoutFlag } = this._tmpUpdatedCfg;
     const configToSave = {
-      ...this._tmpUpdatedCfg,
+      ...cfgWithoutFlag,
       isEnabled: this._tmpUpdatedCfg.isEnabled || !this.isWasEnabled(),
     };
 
-    await this.syncConfigService.updateSettingsFromForm(configToSave, true);
+    await this.syncConfigService.updateSettingsFromForm(configToSave as SyncConfig, true);
     const providerId = toSyncProviderId(this._tmpUpdatedCfg.syncProvider);
     if (providerId && this._tmpUpdatedCfg.isEnabled) {
       await this.syncWrapperService.configuredAuthForSyncProviderIfNecessary(providerId);

@@ -129,7 +129,9 @@ describe('SyncWrapperService', () => {
     });
 
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
-    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
+    mockMatDialog = jasmine.createSpyObj('MatDialog', ['open'], {
+      openDialogs: [],
+    });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => key);
 

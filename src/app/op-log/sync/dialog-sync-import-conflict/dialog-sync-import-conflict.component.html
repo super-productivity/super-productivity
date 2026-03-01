@@ -1,19 +1,22 @@
 <h1 mat-dialog-title>
-  <mat-icon class="warning-icon">warning</mat-icon>
+  <mat-icon class="warning-icon" aria-hidden="true">warning</mat-icon>
   {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.TITLE | translate }}
 </h1>
 
 <mat-dialog-content>
   <p class="message">
-    {{
-      T.F.SYNC.D_SYNC_IMPORT_CONFLICT.MESSAGE
-        | translate: { filteredOpCount: data.filteredOpCount }
-    }}
+    {{ messageKey | translate: { filteredOpCount: data.filteredOpCount } }}
   </p>
 
-  <p class="explanation">
-    {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.EXPLANATION | translate }}
+  <p class="reason">
+    {{ reasonKey | translate }}
   </p>
+
+  @if (isIncomingImport) {
+    <p class="recommendation">
+      {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.RECOMMEND_SERVER | translate }}
+    </p>
+  }
 
   <div class="import-info">
     <div class="info-row">
@@ -25,12 +28,14 @@
         {{ data.localImportTimestamp | shortTime }}
       </span>
     </div>
-    <div class="info-row">
-      <span class="label"
-        >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FILTERED_CHANGES | translate }}:</span
-      >
-      <span class="value highlight">{{ data.filteredOpCount }}</span>
-    </div>
+    @if (data.filteredOpCount > 0) {
+      <div class="info-row">
+        <span class="label"
+          >{{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.FILTERED_CHANGES | translate }}:</span
+        >
+        <span class="value highlight">{{ data.filteredOpCount }}</span>
+      </div>
+    }
   </div>
 </mat-dialog-content>
 
@@ -44,17 +49,18 @@
     </button>
     <button
       (click)="close('USE_REMOTE')"
-      color="primary"
+      [color]="isIncomingImport ? 'primary' : undefined"
       mat-stroked-button
     >
-      <mat-icon>cloud_download</mat-icon>
+      <mat-icon aria-hidden="true">cloud_download</mat-icon>
       {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_REMOTE | translate }}
     </button>
     <button
       (click)="close('USE_LOCAL')"
+      [color]="isIncomingImport ? undefined : 'primary'"
       mat-stroked-button
     >
-      <mat-icon>cloud_upload</mat-icon>
+      <mat-icon aria-hidden="true">cloud_upload</mat-icon>
       {{ T.F.SYNC.D_SYNC_IMPORT_CONFLICT.USE_LOCAL | translate }}
     </button>
   </div>

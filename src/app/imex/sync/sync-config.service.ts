@@ -14,6 +14,7 @@ import { SyncLog } from '../../core/log';
 import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
+import { SyncWrapperService } from './sync-wrapper.service';
 
 // Maps sync providers to their corresponding form field in SyncConfig
 // Dropbox is null because it doesn't store settings in the form (uses OAuth)
@@ -92,6 +93,7 @@ export class SyncConfigService {
   private _globalConfigService = inject(GlobalConfigService);
   private _derivedKeyCache = inject(DerivedKeyCacheService);
   private _wrappedProvider = inject(WrappedProviderService);
+  private _syncWrapper = inject(SyncWrapperService);
 
   private _lastSettings: SyncConfig | null = null;
 
@@ -212,8 +214,11 @@ export class SyncConfigService {
 
       return of(result);
     }),
-    // Redact sensitive fields (passwords, encryption keys) in all environments
-    tap((v) => SyncLog.log('syncSettingsForm$', redactSensitiveFields(v))),
+    // Keep _lastSettings in sync so Formly modelChange doesn't trigger redundant saves
+    tap((v) => {
+      this._lastSettings = v;
+      SyncLog.log('syncSettingsForm$', redactSensitiveFields(v));
+    }),
   );
 
   async updateEncryptionPassword(
@@ -246,13 +251,12 @@ export class SyncConfigService {
 
     await this._providerManager.setProviderConfig(activeProvider.id, newConfig);
 
-    // Ensure global config reflects encryption enabled when password is entered
-    this._globalConfigService.updateSection('sync', { isEncryptionEnabled: true });
-
     // Clear cached encryption keys to force re-derivation with new password
     this._derivedKeyCache.clearCache();
     // Clear cached adapters to force recreation with new encryption settings
     this._wrappedProvider.clearCache();
+    // Allow encryption dialogs to appear again after password change
+    this._syncWrapper.clearEncryptionDialogSuppression();
   }
 
   async updateSettingsFromForm(newSettings: SyncConfig, isForce = false): Promise<void> {
@@ -331,7 +335,7 @@ export class SyncConfigService {
       {} as Record<string, unknown>,
     );
 
-    // The provider's saved config is the source of truth after EncryptionDisableService runs
+    // The provider's saved config is the source of truth after SuperSyncEncryptionToggleService runs
     // oldConfig is loaded from activeProvider.privateCfg.load()
     // When encryption is explicitly disabled, we must clear encryptKey regardless of form state
     const isEncryptionDisabledInSavedConfig =

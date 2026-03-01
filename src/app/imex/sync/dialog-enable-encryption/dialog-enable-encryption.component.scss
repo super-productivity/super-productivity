@@ -1,3 +1,25 @@
 @use '../dialog-encryption-common' as *;
 
 @include dialog-encryption-common-classes;
+
+.info-box {
+  margin-bottom: 24px;
+}
+
+.password-fields {
+  margin-bottom: 16px;
+
+  mat-form-field {
+    width: 100%;
+  }
+}
+
+.password-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-warn);
+  font-size: 13px;
+  margin-top: -4px;
+  margin-bottom: 8px;
+}

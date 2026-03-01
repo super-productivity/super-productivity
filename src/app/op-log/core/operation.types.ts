@@ -23,6 +23,18 @@ export enum OpType {
  */
 export type EntityType = SharedEntityType;
 
+/**
+ * Reason for a full-state operation (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+ * Used in the conflict dialog to explain WHY the import happened.
+ */
+export type SyncImportReason =
+  | 'PASSWORD_CHANGED'
+  | 'FILE_IMPORT'
+  | 'BACKUP_RESTORE'
+  | 'FORCE_UPLOAD'
+  | 'SERVER_MIGRATION'
+  | 'REPAIR';
+
 export interface Operation {
   /**
    * Unique identifier for the operation.
@@ -99,6 +111,13 @@ export interface Operation {
    * Allows the system to migrate or transform payloads if the data structure changes in the future.
    */
   schemaVersion: number;
+
+  /**
+   * Optional reason for full-state operations (SYNC_IMPORT, BACKUP_IMPORT, REPAIR).
+   * Used in the conflict dialog to explain why the import was created.
+   * Old operations without this field gracefully show a generic message.
+   */
+  syncImportReason?: SyncImportReason;
 }
 
 export interface OperationLogEntry {
