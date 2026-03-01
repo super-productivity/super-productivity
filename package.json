@@ -277,7 +277,7 @@
     "tslib": "^2.7.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.52.0",
-    "typia": "^11.0.0"
+    "typia": "^11.0.3"
   },
   "overrides": {
     "@conventional-changelog/git-client": "^2.5.1",
