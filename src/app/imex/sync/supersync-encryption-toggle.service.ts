@@ -14,10 +14,8 @@ const LOG_PREFIX = 'SuperSyncEncryptionToggleService';
 /**
  * Service for enabling/disabling encryption for SuperSync.
  *
- * Both flows follow the same pattern:
- * 1. Delete all data on server (encrypted and unencrypted ops can't be mixed)
- * 2. Upload current state as a new snapshot (encrypted or unencrypted)
- * 3. Update local config accordingly
+ * Enable flow: encrypt first, then delete, then upload (fail-early on encryption errors)
+ * Disable flow: delete, then upload unencrypted, then update config
  */
 @Injectable({
   providedIn: 'root',
@@ -29,9 +27,11 @@ export class SuperSyncEncryptionToggleService {
   private _providerManager = inject(SyncProviderManager);
 
   /**
-   * Enables encryption by deleting all server data and uploading a new encrypted snapshot.
-   * Config is updated BEFORE upload so the upload uses the new key.
-   * On failure, config is reverted.
+   * Enables encryption:
+   * 1. Encrypt snapshot (fail-early before any destructive action)
+   * 2. Delete all server data
+   * 3. Update config BEFORE upload so the upload uses the new key
+   * 4. Upload encrypted snapshot (reverts config on failure)
    */
   async enableEncryption(encryptKey: string): Promise<void> {
     SyncLog.normal(`${LOG_PREFIX}: Starting encryption enable...`);
@@ -66,6 +66,13 @@ export class SuperSyncEncryptionToggleService {
     const { syncProvider, existingCfg, state, vectorClock, clientId } =
       await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
 
+    // Encrypt BEFORE deleting server data to fail early if encryption fails
+    SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
+    const encryptedPayload = await this._encryptionService.encryptPayload(
+      state,
+      encryptKey,
+    );
+
     SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
     await syncProvider.deleteAllData();
 
@@ -79,12 +86,6 @@ export class SuperSyncEncryptionToggleService {
     await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, newConfig);
 
     this._wrappedProviderService.clearCache();
-
-    SyncLog.normal(`${LOG_PREFIX}: Encrypting snapshot...`);
-    const encryptedPayload = await this._encryptionService.encryptPayload(
-      state,
-      encryptKey,
-    );
 
     try {
       await this._uploadAndFinalize(

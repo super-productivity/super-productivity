@@ -259,14 +259,18 @@ describe('FileBasedEncryptionService', () => {
       expect(mockAdapter.uploadSnapshot).toHaveBeenCalled();
     });
 
-    it('should update provider config with encryptKey undefined', async () => {
+    it('should use providerManager.setProviderConfig for disable', async () => {
       await service.disableEncryption();
 
-      expect(mockProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.WebDAV,
         jasmine.objectContaining({
           encryptKey: undefined,
         }),
       );
+
+      // Should NOT call setPrivateCfg directly
+      expect(mockProvider.setPrivateCfg).not.toHaveBeenCalled();
     });
 
     it('should update global config to disable encryption', async () => {
@@ -295,7 +299,7 @@ describe('FileBasedEncryptionService', () => {
         /Snapshot upload failed/,
       );
 
-      expect(mockProvider.setPrivateCfg).not.toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should throw when no active provider', async () => {

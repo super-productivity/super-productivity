@@ -194,7 +194,7 @@ export class OperationLogSyncService {
 
   /**
    * Checks if any of the given ops represent meaningful user data.
-   * Meaningful = TASK/PROJECT/TAG/NOTE creates/updates, or full-state ops.
+   * Meaningful = TASK/PROJECT/TAG/NOTE creates/updates/deletes, or full-state ops.
    * Config-only ops (e.g., GLOBAL_CONFIG updates) are NOT meaningful.
    */
   private _hasMeaningfulPendingOps(ops: OperationLogEntry[]): boolean {
@@ -205,7 +205,9 @@ export class OperationLogSyncService {
       }
       return (
         USER_ENTITY_TYPES.includes(entry.op.entityType) &&
-        (entry.op.opType === OpType.Create || entry.op.opType === OpType.Update)
+        (entry.op.opType === OpType.Create ||
+          entry.op.opType === OpType.Update ||
+          entry.op.opType === OpType.Delete)
       );
     });
   }

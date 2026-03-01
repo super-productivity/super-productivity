@@ -43,13 +43,14 @@
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
         <button
           mat-icon-button
           matSuffix
           type="button"
-          aria-label="Toggle password visibility"
+          [attr.aria-label]="T.G.TOGGLE_PASSWORD_VISIBILITY | translate"
           (click)="showPassword.set(!showPassword())"
         >
           <mat-icon aria-hidden="true">{{
@@ -66,6 +67,7 @@
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
       </mat-form-field>
@@ -98,7 +100,7 @@
       @if (isLoading()) {
         <mat-spinner
           diameter="20"
-          aria-label="Processing"
+          [attr.aria-label]="T.G.PROCESSING | translate"
         ></mat-spinner>
       } @else {
         <mat-icon aria-hidden="true">lock</mat-icon>
@@ -121,13 +123,14 @@
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="password"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
         <button
           mat-icon-button
           matSuffix
           type="button"
-          aria-label="Toggle password visibility"
+          [attr.aria-label]="T.G.TOGGLE_PASSWORD_VISIBILITY | translate"
           (click)="showPassword.set(!showPassword())"
         >
           <mat-icon aria-hidden="true">{{
@@ -144,6 +147,7 @@
           matInput
           [type]="showPassword() ? 'text' : 'password'"
           [(ngModel)]="confirmPassword"
+          [ngModelOptions]="{ standalone: true }"
           autocomplete="new-password"
         />
       </mat-form-field>
@@ -190,7 +194,7 @@
       @if (isLoading()) {
         <mat-spinner
           diameter="20"
-          aria-label="Processing"
+          [attr.aria-label]="T.G.PROCESSING | translate"
         ></mat-spinner>
       } @else {
         <mat-icon aria-hidden="true">lock</mat-icon>

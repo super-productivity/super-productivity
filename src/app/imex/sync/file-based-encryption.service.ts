@@ -107,7 +107,9 @@ export class FileBasedEncryptionService {
     }
 
     if (isDisable) {
-      await provider.setPrivateCfg({
+      // Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
+      // to ensure the currentProviderPrivateCfg$ observable is updated
+      await this._providerManager.setProviderConfig(provider.id, {
         ...existingCfg,
         encryptKey: undefined,
       });

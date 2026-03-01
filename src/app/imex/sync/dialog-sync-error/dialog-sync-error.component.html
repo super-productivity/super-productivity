@@ -3,6 +3,7 @@
     <mat-icon
       color="warn"
       style="font-size: 48px; height: 48px; width: 48px"
+      aria-hidden="true"
       >error
     </mat-icon>
   </div>
@@ -39,7 +40,7 @@
       mat-stroked-button
       type="button"
     >
-      <mat-icon>file_download</mat-icon>
+      <mat-icon aria-hidden="true">file_download</mat-icon>
       {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_DOWNLOAD_BACKUP | translate }}
     </button>
   </div>
@@ -61,7 +62,7 @@
         color="primary"
         mat-stroked-button
       >
-        <mat-icon>power_settings_new</mat-icon>
+        <mat-icon aria-hidden="true">power_settings_new</mat-icon>
         {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_CLOSE_APP | translate }}
       </button>
     }
@@ -72,7 +73,7 @@
         color="warn"
         mat-stroked-button
       >
-        <mat-icon>file_download</mat-icon>
+        <mat-icon aria-hidden="true">file_download</mat-icon>
         {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_FORCE_DOWNLOAD | translate }}
       </button>
     }
@@ -82,7 +83,7 @@
       color="warn"
       mat-stroked-button
     >
-      <mat-icon>file_upload</mat-icon>
+      <mat-icon aria-hidden="true">file_upload</mat-icon>
       {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_FORCE_UPLOAD | translate }}
     </button>
   </div>

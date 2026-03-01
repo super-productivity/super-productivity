@@ -6,7 +6,6 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { FormsModule } from '@angular/forms';
 import { download } from '../../../util/download';
 
 import { IS_ELECTRON } from '../../../app.constants';
@@ -31,14 +30,7 @@ export type DialogSyncErrorResult =
 
 @Component({
   selector: 'dialog-sync-error',
-  imports: [
-    MatDialogContent,
-    TranslateModule,
-    FormsModule,
-    MatIcon,
-    MatDialogActions,
-    MatButton,
-  ],
+  imports: [MatDialogContent, TranslateModule, MatIcon, MatDialogActions, MatButton],
   templateUrl: './dialog-sync-error.component.html',
   styleUrl: './dialog-sync-error.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

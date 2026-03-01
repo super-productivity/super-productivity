@@ -562,6 +562,36 @@ export class SyncWrapperService {
     });
   }
 
+  private async _forceDownload(): Promise<void> {
+    SyncLog.log('SyncWrapperService: forceDownload called - downloading remote state');
+
+    await this.runWithSyncBlocked(async () => {
+      try {
+        const rawProvider = this._providerManager.getActiveProvider();
+        const syncCapableProvider =
+          await this._wrappedProvider.getOperationSyncCapable(rawProvider);
+
+        if (!syncCapableProvider) {
+          SyncLog.warn(
+            'SyncWrapperService: Cannot force download - provider not available',
+          );
+          return;
+        }
+
+        await this._opLogSyncService.forceDownloadRemoteState(syncCapableProvider);
+        this._providerManager.setSyncStatus('IN_SYNC');
+        SyncLog.log('SyncWrapperService: Force download complete');
+      } catch (error) {
+        SyncLog.err('SyncWrapperService: Force download failed:', error);
+        const errStr = getSyncErrorStr(error);
+        this._snackService.open({
+          msg: errStr,
+          type: 'ERROR',
+        });
+      }
+    });
+  }
+
   async configuredAuthForSyncProviderIfNecessary(
     providerId: SyncProviderId,
     force = false,
@@ -652,9 +682,7 @@ export class SyncWrapperService {
         if (res === 'FORCE_UPDATE_REMOTE') {
           await this.forceUpload();
         } else if (res === 'FORCE_UPDATE_LOCAL') {
-          SyncLog.log(
-            'SyncWrapperService: forceDownload called (delegated to op-log sync)',
-          );
+          await this._forceDownload();
         }
       })
       .catch((err) => {
@@ -906,18 +934,25 @@ export class SyncWrapperService {
     return T.F.SYNC.S.ERROR_PERMISSION;
   }
 
-  private lastConflictDialog?: MatDialogRef<any, any>;
+  private lastConflictDialog?: MatDialogRef<
+    DialogSyncConflictComponent,
+    DialogConflictResolutionResult
+  >;
 
   /**
    * Reference to any open password-related dialog (enter password or decrypt error).
    * Used to prevent multiple simultaneous password dialogs from opening.
+   * Uses Record<string, unknown> because dialog components are dynamically imported.
    */
-  private _passwordDialog?: MatDialogRef<any, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _passwordDialog?: MatDialogRef<any, Record<string, unknown>>;
 
   /**
    * Reference to the encryption-required dialog to prevent multiple opens.
+   * Uses Record<string, unknown> because dialog component is dynamically imported.
    */
-  private _encryptionRequiredDialog?: MatDialogRef<any, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private _encryptionRequiredDialog?: MatDialogRef<any, Record<string, unknown>>;
 
   /**
    * Synchronous guard to prevent TOCTOU race in _promptSuperSyncEncryptionIfNeeded.
@@ -1025,7 +1060,10 @@ export class SyncWrapperService {
       disableClose: true,
       data: conflictData,
     });
-    return this.lastConflictDialog.afterClosed();
+    // disableClose: true ensures the dialog always closes with a result
+    return this.lastConflictDialog
+      .afterClosed()
+      .pipe(filter((r): r is DialogConflictResolutionResult => r !== undefined));
   }
 
   /**

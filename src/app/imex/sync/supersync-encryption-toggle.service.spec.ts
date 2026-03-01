@@ -297,10 +297,10 @@ describe('SuperSyncEncryptionToggleService', () => {
 
       expect(callOrder).toEqual([
         'gatherSnapshotData',
+        'encryptPayload',
         'deleteAllData',
         'setProviderConfig',
         'clearCache',
-        'encryptPayload',
         'uploadSnapshot',
         'updateLastServerSeq',
       ]);

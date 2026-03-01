@@ -39,6 +39,17 @@ h1 {
   }
 }
 
+.reason {
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  margin-bottom: 12px;
+}
+
+.recommendation {
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
 .wrap-buttons {
   display: flex;
   gap: 8px;
