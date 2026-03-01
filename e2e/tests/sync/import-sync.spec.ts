@@ -28,6 +28,9 @@ const generateTestRunId = (workerIndex: number): string => {
   return `${Date.now()}-${workerIndex}`;
 };
 
+/** Default encryption password used by setupSuperSync's mandatory encryption dialog */
+const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
+
 base.describe('@importsync @supersync Import + Sync E2E', () => {
   let serverHealthy: boolean | null = null;
 
@@ -90,10 +93,10 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await importPage.importBackupFile(backupPath);
         console.log('[Import Test] Client A imported backup successfully');
 
-        // Reload page after import to ensure UI reflects the imported state
-        // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-        // Use goto instead of reload - more reliable with service workers
-        await clientA.page.goto(clientA.page.url(), {
+        // Navigate to tasks view after import to ensure UI reflects the imported state.
+        // Use explicit URL instead of page.url() because after import the page may be on
+        // the settings/import route, and the imported state may redirect to /#/config.
+        await clientA.page.goto('/#/tag/TODAY/tasks', {
           waitUntil: 'domcontentloaded',
           timeout: 30000,
         });
@@ -117,7 +120,13 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         // ============ PHASE 3: Client B Downloads via Sync ============
         console.log('[Import Test] Phase 3: Client B syncing from server');
         clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-        await clientB.sync.setupSuperSync(syncConfig);
+        // Client B must use explicit encryption config to enter the password dialog
+        // instead of the enable-encryption dialog (which would wipe server data).
+        await clientB.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+        });
         await clientB.sync.syncAndWait();
         console.log('[Import Test] Client B sync complete');
 
@@ -267,9 +276,15 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await clientA.sync.syncAndWait();
         console.log(`[Merge Test] Client A created and synced: ${existingTaskA}`);
 
-        // Client B gets the task
+        // Client B gets the task.
+        // Must use explicit encryption config so Client B enters the password dialog
+        // instead of the enable-encryption dialog (which would wipe Client A's data).
         clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
-        await clientB.sync.setupSuperSync(syncConfig);
+        await clientB.sync.setupSuperSync({
+          ...syncConfig,
+          isEncryptionEnabled: true,
+          password: ENCRYPTION_PASSWORD,
+        });
         await clientB.sync.syncAndWait();
         await waitForTask(clientB.page, existingTaskA);
 
@@ -295,10 +310,10 @@ base.describe('@importsync @supersync Import + Sync E2E', () => {
         await importPage.importBackupFile(backupPath);
         console.log('[Merge Test] Client A imported backup');
 
-        // Reload page after import to ensure UI reflects the imported state
-        // (bulk state updates from BACKUP_IMPORT may not trigger component re-renders)
-        // Use goto instead of reload - more reliable with service workers
-        await clientA.page.goto(clientA.page.url(), {
+        // Navigate to tasks view after import.
+        // Use explicit URL instead of page.url() because after import the page may be on
+        // the settings/import route, and the imported state may redirect to /#/config.
+        await clientA.page.goto('/#/tag/TODAY/tasks', {
           waitUntil: 'domcontentloaded',
           timeout: 30000,
         });

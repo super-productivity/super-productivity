@@ -1184,6 +1184,8 @@ describe('SyncImportFilterService', () => {
       });
 
       it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {
+        // Once synced, the import is established — old straggler ops should be
+        // silently discarded without showing the conflict dialog.
         const storedImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
           opType: OpType.SyncImport,

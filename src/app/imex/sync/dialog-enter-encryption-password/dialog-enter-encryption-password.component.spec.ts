@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password.component';
 import { SyncConfigService } from '../sync-config.service';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
@@ -72,5 +73,92 @@ describe('DialogEnterEncryptionPasswordComponent', () => {
     expect(component.isLoading()).toBe(false);
     expect(mockSnackService.open).toHaveBeenCalled();
     expect(mockDialogRef.close).not.toHaveBeenCalled();
+  });
+
+  describe('forceOverwrite', () => {
+    it('should return early when passwordVal is empty', async () => {
+      component.passwordVal = '';
+
+      await component.forceOverwrite();
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should return early when isLoading is true', async () => {
+      component.passwordVal = 'password123';
+      component.isLoading.set(true);
+
+      await component.forceOverwrite();
+
+      expect(mockMatDialog.open).not.toHaveBeenCalled();
+    });
+
+    it('should return early when user cancels the confirm dialog', async () => {
+      component.passwordVal = 'password123';
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(false),
+      } as any);
+
+      await component.forceOverwrite();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      expect(mockEncryptionPasswordChangeService.changePassword).not.toHaveBeenCalled();
+    });
+
+    it('should call changePassword and close with forceOverwrite on confirm', async () => {
+      component.passwordVal = 'password123';
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
+      mockEncryptionPasswordChangeService.changePassword.and.returnValue(
+        Promise.resolve(),
+      );
+
+      await component.forceOverwrite();
+
+      expect(mockEncryptionPasswordChangeService.changePassword).toHaveBeenCalledWith(
+        'password123',
+        { allowUnsyncedOps: true },
+      );
+      expect(mockDialogRef.close).toHaveBeenCalledWith({ forceOverwrite: true });
+      expect(component.isLoading()).toBe(false);
+    });
+
+    it('should show error snackbar and reset loading on changePassword failure', async () => {
+      component.passwordVal = 'password123';
+      mockMatDialog.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as any);
+      mockEncryptionPasswordChangeService.changePassword.and.returnValue(
+        Promise.reject(new Error('server error')),
+      );
+
+      await component.forceOverwrite();
+
+      expect(mockSnackService.open).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          type: 'ERROR',
+          translateParams: { message: 'server error' },
+        }),
+      );
+      expect(component.isLoading()).toBe(false);
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cancel', () => {
+    it('should close with empty object', () => {
+      component.cancel();
+
+      expect(mockDialogRef.close).toHaveBeenCalledWith({});
+    });
+
+    it('should not close when loading', () => {
+      component.isLoading.set(true);
+
+      component.cancel();
+
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
+    });
   });
 });
