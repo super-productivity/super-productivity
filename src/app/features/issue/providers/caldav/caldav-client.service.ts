@@ -424,10 +424,12 @@ export class CaldavClientService {
     if (updates.completed !== oldCompleted) {
       if (updates.completed) {
         todo.updatePropertyWithValue('completed', now);
-        todo.updatePropertyWithValue('status', 'COMPLETED');
         todo.updatePropertyWithValue('percent-complete', '100');
+        todo.updatePropertyWithValue('status', CaldavIssueStatus.COMPLETED);
       } else {
         todo.removeProperty('completed');
+        todo.removeProperty('percent-complete');
+        todo.updatePropertyWithValue('status', CaldavIssueStatus.NEEDS_ACTION);
       }
       changeObserved = true;
     }
