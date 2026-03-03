@@ -424,6 +424,8 @@ export class CaldavClientService {
     if (updates.completed !== oldCompleted) {
       if (updates.completed) {
         todo.updatePropertyWithValue('completed', now);
+        todo.updatePropertyWithValue('status', 'COMPLETED');
+        todo.updatePropertyWithValue('percent-complete', '100');
       } else {
         todo.removeProperty('completed');
       }
