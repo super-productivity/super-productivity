@@ -136,7 +136,7 @@
     "shared-schema:build": "cd packages/shared-schema && npm run build",
     "plugin-api:build:watch": "cd packages/plugin-api && npm run build:watch",
     "vite-plugin:build": "cd packages/vite-plugin && npm run build",
-    "plugins:build": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
+    "plugins:build": "npm run plugin-api:build && npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all",
     "plugins:build:silent": "npm run vite-plugin:build && cd packages/plugin-dev && npm run build:all:silent"
   },
   "resolutions": {
