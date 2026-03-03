@@ -49,6 +49,68 @@ describe('InlineMarkdownComponent', () => {
     component = fixture.componentInstance;
   });
 
+  describe('keypressHandler', () => {
+    let mockTextareaEl: {
+      nativeElement: {
+        selectionEnd: number;
+        selectionStart: number;
+        setSelectionRange: jasmine.Spy;
+        value: string;
+      };
+    };
+    beforeEach(() => {
+      component.model = 'Hello world';
+      fixture.detectChanges();
+      component['isShowEdit'].set(true);
+      mockTextareaEl = {
+        nativeElement: {
+          selectionStart: 0,
+          selectionEnd: 0,
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
+          value: 'Hello world',
+        },
+      };
+      spyOn(component, 'resizeTextareaToFit'); // skip resize logic
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component.changed, 'emit');
+    });
+
+    it('should wrap selected text with ** on Ctrl+B', () => {
+      mockTextareaEl.nativeElement.selectionStart = 6;
+      mockTextareaEl.nativeElement.selectionEnd = 11;
+      const ev = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true });
+      component.keypressHandler(ev);
+      expect(mockTextareaEl.nativeElement.value).toBe('Hello **world**');
+      expect(component.changed.emit).toHaveBeenCalledWith('Hello **world**');
+    });
+
+    it('should wrap selected text with _ on Ctrl + I', () => {
+      mockTextareaEl.nativeElement.selectionStart = 6;
+      mockTextareaEl.nativeElement.selectionEnd = 11;
+      const ev = new KeyboardEvent('keydown', { key: 'i', ctrlKey: true });
+      component.keypressHandler(ev);
+      expect(mockTextareaEl.nativeElement.value).toBe('Hello _world_');
+      expect(component.changed.emit).toHaveBeenCalledWith('Hello _world_');
+    });
+
+    it('should insert ** at cursor and pace cursor between pairs of ** when pressing Ctrl + B with no selection', () => {
+      mockTextareaEl.nativeElement.selectionStart = 5;
+      mockTextareaEl.nativeElement.selectionEnd = 5;
+      const ev = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true });
+      component.keypressHandler(ev);
+      expect(mockTextareaEl.nativeElement.value).toBe('Hello**** world');
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(7, 7);
+    });
+
+    fit('should insert _ at cursor and pace cursor between pairs of _ when pressing Ctrl + I with no selection', () => {
+      mockTextareaEl.nativeElement.selectionStart = 5;
+      mockTextareaEl.nativeElement.selectionEnd = 5;
+      const ev = new KeyboardEvent('keydown', { key: 'i', ctrlKey: true });
+      component.keypressHandler(ev);
+      expect(mockTextareaEl.nativeElement.value).toBe('Hello__ world');
+      expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(6, 6);
+    });
+  });
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
