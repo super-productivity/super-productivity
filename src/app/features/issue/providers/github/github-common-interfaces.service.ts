@@ -87,8 +87,7 @@ export class GithubCommonInterfacesService extends BaseIssueProviderService<Gith
     const commentsByOthers =
       filterUserName && filterUserName.length > 1
         ? issue.comments.filter(
-            (comment) =>
-              comment.user.login.toLowerCase() !== filterUserName,
+            (comment) => comment.user.login.toLowerCase() !== filterUserName,
           )
         : issue.comments;
 

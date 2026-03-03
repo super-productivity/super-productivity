@@ -90,7 +90,7 @@ test.describe('@supersync Max Retry Rejection', () => {
             accepted: false,
             error: 'Concurrent modification detected',
             errorCode: 'CONFLICT_CONCURRENT',
-            // eslint-disable-next-line @typescript-eslint/naming-convention
+
             existingClock: { phantom_server_client: 99999 },
           }));
 

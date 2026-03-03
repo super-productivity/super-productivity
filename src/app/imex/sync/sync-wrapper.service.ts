@@ -978,14 +978,14 @@ export class SyncWrapperService {
    * Used to prevent multiple simultaneous password dialogs from opening.
    * Uses Record<string, unknown> because dialog components are dynamically imported.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private _passwordDialog?: MatDialogRef<any, Record<string, unknown>>;
 
   /**
    * Reference to the encryption-required dialog to prevent multiple opens.
    * Uses Record<string, unknown> because dialog component is dynamically imported.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   private _encryptionRequiredDialog?: MatDialogRef<any, Record<string, unknown>>;
 
   /**
