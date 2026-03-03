@@ -115,6 +115,33 @@
         "ISSUE_NOT_FOUND": "CalDav: La tarea \"{{issueId}}\" parece estar eliminada en el servidor."
       }
     },
+        "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "URL base de Nextcloud",
+        "USERNAME": "Tu nombre de usuario de Nextcloud",
+        "PASSWORD": "Tu contraseña de aplicación de Nextcloud",
+        "FILTER_BY_ASSIGNEE": "Importar solo las tarjetas asignadas a mí",
+        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizar el estado de finalización y el título con Nextcloud Deck",
+        "POLL_INTERVAL_MINUTES": "Intervalo de sondeo (minutos)",
+        "TITLE_TEMPLATE": "Plantilla de título de tarea",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Ejemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Déjalo en blanco para usar solo el título de la tarjeta."
+      },
+      "FORM_SECTION": {
+        "HELP": "Configura tu integración de Nextcloud Deck para importar tarjetas como tareas. Usa una contraseña de aplicación para la autenticación."
+      },
+      "ISSUE_CONTENT": {
+        "DECK_DESCRIPTION": "Descripción de Deck",
+        "STACK": "Pila",
+        "ASSIGNED_USERS": "Usuarios asignados",
+        "LABELS": "Etiquetas"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Tablero no encontrado",
+        "CARD_NOT_FOUND": "Nextcloud Deck: La tarjeta \"{{issueId}}\" parece haber sido eliminada en el servidor.",
+        "ERR_CREDENTIALS_MISSING": "Introduce primero la URL, el nombre de usuario y la contraseña de Nextcloud.",
+        "ERR_LOAD_BOARDS": "No se pudieron cargar los tableros de Deck. Comprueba tus credenciales."
+      }
+    },
     "CALENDARS": {
       "BANNER": {
         "ADD_AS_TASK": "Agregar como tarea",
@@ -491,6 +518,11 @@
         "TRANSITION_SUCCESS": "Jira: Establecida incidencia {{issueKey}} a <strong>{{chosenTransition}}</strong>",
         "TRANSITIONS_LOADED": "Jira: Transiciones cargadas. Usa los selectores de abajo para asignarlas"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+    "PASTE_SUCCESS": "Imagen pegada con éxito",
+    "SIZE_EXCEEDED": "El tamaño ({{actualSize}}) excede el límite ({{maxSize}})",
+    "STORAGE_QUOTA_EXCEEDED": "Cuota excedida. Libera espacio."
     },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "¿Agregar la lista de markdown pegada a las notas de la subtarea \"{{parentTaskTitle}}\"?",
@@ -1154,7 +1186,12 @@
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} cambio(s) locales no guardados descartados - la sincronización descargó datos más nuevos",
         "FINISH_DAY_SYNC_ERROR": "Error de sincronización al finalizar el día. Inténtalo de nuevo.",
         "SERVER_MIGRATION_VALIDATION_FAILED": "No se pudieron migrar datos al servidor - validación local fallida. Intenta importar una copia de seguridad.",
-        "MIGRATION_FAILED": "Algunos datos no pudieron migrarse y se omitieron. Esto puede indicar corrupción o un error."
+        "MIGRATION_FAILED": "Algunos datos no pudieron migrarse y se omitieron. Esto puede indicar corrupción o un error.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "La sincronización registró {{originalSize}} dispositivos/navegadores, superando el límite de {{maxSize}}. Se eliminaron las entradas inactivas. Considera un reinicio de sincronización si tienes problemas.",
+      "ENABLE_ENCRYPTION_FAILED": "Error al habilitar el cifrado: {{message}}",
+      "DISABLE_ENCRYPTION_FAILED": "Error al deshabilitar el cifrado: {{message}}",
+      "CHANGE_PASSWORD_FAILED": "Error al cambiar la contraseña: {{message}}",
+      "OVERWRITE_SERVER_FAILED": "Error al sobrescribir los datos del servidor: {{message}}"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Limpiar todo",
@@ -2220,16 +2257,28 @@
   "PM": {
     "TITLE": "Métricas del Proyecto"
   },
-  "PS": {
-    "GLOBAL_SETTINGS": "Ajustes Globales",
-    "NO_PLUGINS_INSTALLED": "No hay plugins instalados actualmente",
-    "PLUGINS": "Plugins",
-    "PRIVACY_POLICY": "Política de Privacidad",
-    "PROJECT_SETTINGS": "Ajustes Específicos del Proyecto",
-    "PROVIDE_FEEDBACK": "Proporcionar Feedback",
-    "SYNC_EXPORT": "Sincronizar y Exportar",
-    "TAG_SETTINGS": "Ajustes Específicos de Etiqueta"
-  },
+    "PS": {
+      "GLOBAL_SETTINGS": "Ajustes globales",
+      "NO_PLUGINS_INSTALLED": "Actualmente no hay plugins instalados",
+      "PLUGINS": "Plugins",
+      "PRIVACY_POLICY": "Política de privacidad",
+      "FAILED_TO_COPY_TO_CLIPBOARD": "Error al copiar al portapapeles",
+      "PROJECT_SETTINGS": "Ajustes específicos del proyecto",
+      "PROVIDE_FEEDBACK": "Enviar comentarios",
+      "RELOAD": "Recargar",
+      "SYNC_EXPORT": "Sincronizar y exportar",
+      "TABS": {
+        "GENERAL": "General",
+        "TASKS": "Tareas",
+        "TIME_TRACKING": "Tiempo y seguimiento",
+        "PRODUCTIVITY": "Productividad",
+        "PLUGINS": "Plugins",
+        "SYNC_BACKUP": "Sincronización y copia de seguridad"
+      },
+      "TAG_SETTINGS": "Ajustes específicos de etiqueta",
+      "TOGGLE_DARK_MODE": "Alternar modo oscuro",
+      "UPDATE_APP": "Actualizar aplicación"
+    },
   "SCHEDULE": {
     "LAST": "Último:",
     "NEXT": "Siguiente",
