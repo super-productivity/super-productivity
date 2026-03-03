@@ -86,10 +86,7 @@ main {
 .pomodoro-info-wrapper {
   text-align: center;
   max-width: 500px;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  @include center;
 }
 
 .pomodoro-info-msg {

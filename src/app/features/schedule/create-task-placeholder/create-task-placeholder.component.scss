@@ -130,9 +130,7 @@
       }
 
       span {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        @include truncateText();
         max-width: 120px;
 
         @include mq(xs, max) {

@@ -110,7 +110,9 @@ test.describe('@webdav @encryption WebDAV Encryption + USE_LOCAL Conflict', () =
     await passwordInput.fill(ENCRYPTION_PASSWORD);
 
     // Click "Save & Sync" button
-    const saveAndSyncBtn = passwordDialog.locator('button[mat-flat-button]');
+    const saveAndSyncBtn = passwordDialog.locator(
+      'button[mat-flat-button][color="primary"]',
+    );
     await saveAndSyncBtn.click();
     console.log('[Test] Entered password and clicked Save & Sync');
 

@@ -2,7 +2,7 @@
 
 :host {
   //border: 1px solid var(--c-light-20);
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: 8px;
   min-height: 200px;
   min-width: 280px;
@@ -105,17 +105,14 @@ header {
 }
 
 .time-badge {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  top: 50%;
+  @include center;
   margin-top: 10px;
   font-size: 12px;
   z-index: 10;
   line-height: 1;
   text-align: center;
   padding: 1px 2px 0;
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;
 

@@ -126,7 +126,7 @@
   }
 
   tr:first-of-type td {
-    border: 1px solid var(--extra-border-color);
+    @include extraBorder();
   }
 
   th {

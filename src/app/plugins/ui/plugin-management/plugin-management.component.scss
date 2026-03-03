@@ -122,7 +122,7 @@ mat-error {
       gap: 8px;
       padding: 12px;
       background-color: var(--primary-50, rgba(63, 81, 181, 0.08));
-      border-radius: 4px;
+      border-radius: var(--card-border-radius);
       margin-top: 16px;
       margin-bottom: 0;
 
@@ -139,7 +139,7 @@ mat-error {
   gap: 8px;
   padding: 12px;
   border-color: var(--c-primary);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   margin-bottom: 16px;
   border-width: 2px;
   border-style: solid;
@@ -178,7 +178,7 @@ mat-error {
 .community-plugin-item {
   padding: 16px;
   border: 1px solid var(--c-border);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   background: var(--c-bg-card);
 
   .plugin-name {

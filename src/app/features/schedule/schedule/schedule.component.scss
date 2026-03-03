@@ -53,8 +53,8 @@ header {
   top: 0;
   left: 0;
   right: 0;
-  border-top: 1px solid var(--extra-border-color);
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-top');
+  @include extraBorder('-bottom');
   box-shadow: var(--whiteframe-shadow-1dp);
   z-index: 10;
   color: var(--text-color);
@@ -68,7 +68,7 @@ header {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   background: var(--bg-lighter);
   flex-wrap: nowrap;
   //min-height: 48px;
@@ -96,7 +96,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
 }
 
 .days {
@@ -112,7 +112,7 @@ header {
 .day {
   line-height: 32px;
   font-size: 18px;
-  border-left: 1px solid var(--extra-border-color);
+  @include extraBorder('-left');
 
   @include mq(xs, max) {
     font-size: 14px;

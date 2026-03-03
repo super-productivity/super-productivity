@@ -38,8 +38,8 @@
 
   // Folder header drop zone styling
   &.folder-header-drop-zone {
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: var(--card-border-radius);
+    transition: var(--transition-standard);
 
     &.drop-target-active {
       background: var(--palette-primary-50);
@@ -170,7 +170,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        border-radius: 4px;
+        border-radius: var(--card-border-radius);
         border: 2px dashed transparent;
         pointer-events: none;
         transition: border-color 0.2s ease;
@@ -187,7 +187,7 @@
   &.drag-placeholder {
     opacity: 0.4;
     background: var(--sidenav-hover-bg);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     // Minimize repaint
     transform: translateZ(0);
   }

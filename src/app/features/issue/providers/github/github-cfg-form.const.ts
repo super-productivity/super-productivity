@@ -7,13 +7,71 @@ import { IssueProviderGithub } from '../../issue.model';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../../common-issue-form-stuff.const';
 import { GithubCfg } from './github.model';
 
-export const DEFAULT_GITHUB_CFG: GithubCfg = {
+export const DEFAULT_GITHUB_CFG: GithubCfg = Object.freeze({
   isEnabled: false,
   repo: null,
   token: null,
   filterUsernameForIssueUpdates: null,
   backlogQuery: 'sort:updated state:open assignee:@me',
-};
+  isAutoCreateIssues: false,
+  twoWaySync: Object.freeze({
+    isDone: 'pullOnly' as const,
+    title: 'pullOnly' as const,
+    notes: 'off' as const,
+  }),
+});
+
+const SYNC_DIRECTION_OPTIONS = [
+  { value: 'off', label: T.F.GITHUB.FORM.TWO_WAY_SYNC_OFF },
+  { value: 'pullOnly', label: T.F.GITHUB.FORM.TWO_WAY_SYNC_PULL_ONLY },
+  { value: 'pushOnly', label: T.F.GITHUB.FORM.TWO_WAY_SYNC_PUSH_ONLY },
+  { value: 'both', label: T.F.GITHUB.FORM.TWO_WAY_SYNC_BOTH },
+];
+
+const TWO_WAY_SYNC_FORM_FIELDS: LimitedFormlyFieldConfig<IssueProviderGithub>[] = [
+  {
+    type: 'collapsible',
+    props: { label: T.F.GITHUB.FORM.TWO_WAY_SYNC_SECTION },
+    fieldGroup: [
+      {
+        key: 'twoWaySync.isDone',
+        type: 'select',
+        props: {
+          label: T.F.GITHUB.FORM.TWO_WAY_SYNC_STATUS,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.title',
+        type: 'select',
+        props: {
+          label: T.F.GITHUB.FORM.TWO_WAY_SYNC_TITLE,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'twoWaySync.notes',
+        type: 'select',
+        props: {
+          label: T.F.GITHUB.FORM.TWO_WAY_SYNC_NOTES,
+          options: SYNC_DIRECTION_OPTIONS,
+        },
+      },
+      {
+        key: 'isAutoCreateIssues',
+        type: 'checkbox',
+        expressions: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'props.disabled': '!model.defaultProjectId',
+        },
+        props: {
+          label: T.F.GITHUB.FORM.AUTO_CREATE_ISSUES,
+          description: T.F.GITHUB.FORM.AUTO_CREATE_ISSUES_DESCRIPTION,
+        },
+      },
+    ],
+  },
+];
 
 export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[] = [
   {
@@ -32,12 +90,13 @@ export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[]
     props: {
       label: T.F.GITHUB.FORM.TOKEN,
       required: true,
-      placeholder: 'ghp_... (classic token)',
+      placeholder: 'ghp_... or github_pat_...',
       type: 'password',
     },
     validators: {
       token: {
-        expression: (c: { value: string | undefined }) => c.value?.startsWith('ghp_'),
+        expression: (c: { value: string | undefined }) =>
+          !!c.value && (c.value.startsWith('ghp_') || c.value.startsWith('github_pat_')),
         message: T.F.GITHUB.FORM.INVALID_TOKEN_MESSAGE,
       },
     },
@@ -87,6 +146,7 @@ export const GITHUB_CONFIG_FORM: LimitedFormlyFieldConfig<IssueProviderGithub>[]
       },
     ],
   },
+  ...TWO_WAY_SYNC_FORM_FIELDS,
 ];
 
 export const GITHUB_CONFIG_FORM_SECTION: ConfigFormSection<IssueProviderGithub> = {

@@ -73,7 +73,7 @@
   text-align: center;
   font-size: 30px;
   line-height: 1.5;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   border: 1px solid transparent;
   margin: 0;
   padding: 4px;
@@ -207,18 +207,12 @@
 .clock-time {
   font-size: 24px;
   font-weight: bold;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  @include center;
 }
 
 .duration-slider-overlay-wrapper {
-  position: absolute;
-  top: 50%;
+  @include center;
   width: 200px;
-  left: 50%;
-  transform: translate(-50%, -50%);
 }
 
 .duration-slider-overlay {
@@ -234,10 +228,7 @@
 
 // ========== CLOCK WRAPPER (In Progress state) ==========
 .clock-wrapper {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  @include center;
   width: 100%;
   height: 100%;
   display: grid;
@@ -397,7 +388,7 @@
 }
 
 .notes-panel {
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   margin: auto;
   padding: var(--s2);
   width: 100%;

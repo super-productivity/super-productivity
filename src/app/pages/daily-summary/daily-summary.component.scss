@@ -176,7 +176,7 @@ $summary-point-inner-margin: var(--s);
 
       //background: var(--bg);
       //box-shadow: var(--whiteframe-shadow-1dp);
-      border: 1px solid var(--extra-border-color);
+      @include extraBorder();
 
       &,
       > * {

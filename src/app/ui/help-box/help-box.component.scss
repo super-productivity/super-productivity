@@ -12,7 +12,7 @@
     position: relative;
     padding: var(--s);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     background-color: var(--color-bg-info);
   }
 

@@ -3,6 +3,7 @@ import {
   TASK_REPEAT_WEEKDAY_MAP,
   TaskRepeatCfg,
 } from '../task-repeat-cfg.model';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 /**
  * Returns partial TaskRepeatCfg updates based on the quick setting.
@@ -57,6 +58,7 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
+        startDate: getDbDateStr(),
       };
     }
 
@@ -64,6 +66,7 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'YEARLY',
         repeatEvery: 1,
+        startDate: getDbDateStr(),
       };
     }
 

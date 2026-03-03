@@ -8,8 +8,8 @@
   top: 0;
   left: 0;
   right: 0;
-  border-top: 1px solid var(--extra-border-color);
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-top');
+  @include extraBorder('-bottom');
   box-shadow: var(--whiteframe-shadow-1dp);
   z-index: 10;
   color: var(--text-color);
@@ -276,9 +276,7 @@
     cursor: pointer;
     display: flex;
     width: 100%;
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
+    @include truncateText();
     box-sizing: border-box;
 
     @include mq(xs, max) {
@@ -290,7 +288,7 @@
     &:hover {
       opacity: 0.8;
       transform: scale(1.02);
-      transition: all 0.2s ease;
+      transition: var(--transition-standard);
     }
   }
 }

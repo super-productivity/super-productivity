@@ -4,7 +4,7 @@
   gap: 8px;
   padding: 16px;
   background: var(--c-dark-10);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 }
 
 .heatmap-label {
@@ -37,12 +37,12 @@
 
   &::-webkit-scrollbar-track {
     background: var(--c-dark-10);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
   }
 
   &::-webkit-scrollbar-thumb {
     background: var(--c-dark-20);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
 
     &:hover {
       background: var(--c-dark-30);

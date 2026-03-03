@@ -44,7 +44,7 @@
   .task-tracking-info {
     background: transparent;
     margin-top: var(--s-sm);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     padding: var(--s-sm);
 
     &:hover {

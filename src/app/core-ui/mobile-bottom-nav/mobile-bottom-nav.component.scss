@@ -36,7 +36,7 @@
     height: var(--bottom-nav-height);
     min-width: 64px;
     border-radius: 16px;
-    transition: all 0.2s ease;
+    transition: var(--transition-standard);
 
     &:hover {
       background-color: var(--mat-surface-container-high);
@@ -76,7 +76,7 @@
     margin-right: 8px;
     margin-bottom: 24px;
     box-shadow: var(--mat-fab-container-elevation-shadow);
-    transition: all 0.2s ease;
+    transition: var(--transition-standard);
 
     &:hover {
       transform: scale(1.05);

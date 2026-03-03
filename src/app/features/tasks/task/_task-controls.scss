@@ -230,12 +230,9 @@
 
 .check-done {
   opacity: 0.5;
-  position: absolute;
-  left: 50%;
-  top: 50%;
+  @include center;
   display: block;
   z-index: var(--z-check-done);
-  transform: translate(-50%, -50%);
   transition: var(--transition-standard);
   border-radius: 50%;
 
@@ -365,10 +362,7 @@ progress-bar {
 
   > * {
     pointer-events: none;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
   }
 
   .type-ico-wrapper {
@@ -424,10 +418,7 @@ progress-bar {
 
 //
 .play-icon-indicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  @include center;
   color: var(--c-accent);
 
   height: var(--play-icon-size);
@@ -580,17 +571,14 @@ progress-bar {
 
 .repeat-date-badge,
 .time-badge {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  top: 50%;
+  @include center;
   margin-top: 10px;
   font-size: 12px;
   z-index: 10;
   line-height: 1;
   text-align: center;
   padding: 1px 2px 0;
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;
   background: #fff;

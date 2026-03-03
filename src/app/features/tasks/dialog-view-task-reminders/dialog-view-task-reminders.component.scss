@@ -11,7 +11,7 @@
 .task {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   padding: var(--s);
   padding-left: 0;
 

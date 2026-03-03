@@ -39,11 +39,9 @@
       color: inherit;
       font: inherit;
       letter-spacing: inherit;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
       // smooth collapse/expand for title
       display: inline-block;
-      white-space: nowrap;
       max-width: 100%;
       transition:
         opacity var(--transition-duration-m, 0.25s) var(--ani-standard-timing),
@@ -169,7 +167,7 @@ button[mat-menu-item].nav-link.active {
   color: var(--sidenav-text);
   text-decoration: none;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: var(--transition-standard);
   cursor: pointer;
   background: transparent;
   border: none;

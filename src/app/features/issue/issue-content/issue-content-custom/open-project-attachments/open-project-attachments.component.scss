@@ -23,7 +23,7 @@
         color: var(--palette-primary-main);
         text-decoration: none;
         padding: 8px;
-        border-radius: 4px;
+        border-radius: var(--card-border-radius);
         transition: background-color 0.2s;
 
         &:hover {

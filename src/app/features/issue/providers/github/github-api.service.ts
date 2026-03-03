@@ -102,10 +102,16 @@ export class GithubApiService {
     cfg: GithubCfg,
     isSearchAllGithub: boolean = false,
   ): Observable<GithubIssueReduced[]> {
+    // Fine-grained PATs require is:issue in the query
+    const queryWithType =
+      searchText.includes('is:issue') || searchText.includes('is:pull-request')
+        ? searchText
+        : `is:issue ${searchText}`;
+
     // Build the full query string
     const fullQuery = isSearchAllGithub
-      ? searchText
-      : `${searchText} repo:${cfg.repo || ''}`;
+      ? queryWithType
+      : `${queryWithType} repo:${cfg.repo || ''}`;
 
     // Use HttpParams to properly handle encoding, but we need custom encoding for parentheses
     const params = new HttpParams({ encoder: new CustomHttpParamEncoder() }).set(
@@ -124,6 +130,32 @@ export class GithubApiService {
         return res && res.items ? res.items.map(mapGithubIssue) : [];
       }),
     );
+  }
+
+  createIssue$(title: string, cfg: GithubCfg): Observable<GithubIssue> {
+    return this._sendRequest$(
+      {
+        url: `${BASE}repos/${cfg.repo}/issues`,
+        method: 'POST',
+        data: { title },
+      },
+      cfg,
+    ).pipe(map((issue) => mapGithubIssue(issue)));
+  }
+
+  updateIssue$(
+    issueId: number,
+    changes: { state?: string; title?: string; body?: string },
+    cfg: GithubCfg,
+  ): Observable<GithubIssue> {
+    return this._sendRequest$(
+      {
+        url: `${BASE}repos/${cfg.repo}/issues/${issueId}`,
+        method: 'PATCH',
+        data: changes,
+      },
+      cfg,
+    ).pipe(map((issue) => mapGithubIssue(issue)));
   }
 
   graphQl$(cfg: GithubCfg, query: string): Observable<unknown> {

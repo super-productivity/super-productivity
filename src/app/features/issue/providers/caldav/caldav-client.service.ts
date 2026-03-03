@@ -275,15 +275,12 @@ export class CaldavClientService {
     );
   }
 
-  updateState$(
+  updateFields$(
     caldavCfg: CaldavCfg,
     issueId: string,
-    completed: boolean,
-    summary: string,
+    fields: { completed?: boolean; summary?: string; note?: string },
   ): Observable<void> {
-    return from(
-      this._updateTask(caldavCfg, issueId, { completed: completed, summary: summary }),
-    ).pipe(
+    return from(this._updateTask(caldavCfg, issueId, fields)).pipe(
       catchError((err) => throwError({ [HANDLED_ERROR_PROP_STR]: 'Caldav: ' + err })),
     );
   }
@@ -376,7 +373,7 @@ export class CaldavClientService {
   private async _updateTask(
     cfg: CaldavCfg,
     uid: string,
-    updates: { completed: boolean; summary: string },
+    updates: { completed?: boolean; summary?: string; note?: string },
   ): Promise<void> {
     const cal = await this._getCalendar(cfg);
 
@@ -434,10 +431,20 @@ export class CaldavClientService {
       changeObserved = true;
     }
 
-    const oldSummary = todo.getFirstPropertyValue('summary');
-    if (updates.summary !== oldSummary) {
-      todo.updatePropertyWithValue('summary', updates.summary);
-      changeObserved = true;
+    if (updates.summary !== undefined) {
+      const oldSummary = todo.getFirstPropertyValue('summary');
+      if (updates.summary !== oldSummary) {
+        todo.updatePropertyWithValue('summary', updates.summary);
+        changeObserved = true;
+      }
+    }
+
+    if (updates.note !== undefined) {
+      const oldNote = (todo.getFirstPropertyValue('description') as string) || '';
+      if (updates.note !== oldNote) {
+        todo.updatePropertyWithValue('description', updates.note);
+        changeObserved = true;
+      }
     }
 
     if (!changeObserved) {

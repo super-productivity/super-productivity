@@ -164,10 +164,7 @@
   }
 
   > * {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
   }
 
   .type-ico-wrapper {
@@ -217,17 +214,14 @@
 }
 
 .repeat-date-badge {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  top: 50%;
+  @include center;
   margin-top: 10px;
   font-size: 10px;
   z-index: 10;
   line-height: 1;
   text-align: center;
   padding: 1px 2px 0;
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: var(--card-border-radius);
 
   // avoid affecting drag handle

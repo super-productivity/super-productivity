@@ -1,4 +1,5 @@
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('getQuickSettingUpdates', () => {
   describe('DAILY', () => {
@@ -127,9 +128,9 @@ describe('getQuickSettingUpdates', () => {
       expect(result!.repeatEvery).toBe(1);
     });
 
-    it('should NOT set startDate (fixes #5594)', () => {
+    it('should set startDate to today (fixes #6699)', () => {
       const result = getQuickSettingUpdates('MONTHLY_CURRENT_DATE');
-      expect(result!.startDate).toBeUndefined();
+      expect(result!.startDate).toBe(getDbDateStr());
     });
   });
 
@@ -141,9 +142,9 @@ describe('getQuickSettingUpdates', () => {
       expect(result!.repeatEvery).toBe(1);
     });
 
-    it('should NOT set startDate (fixes #5594)', () => {
+    it('should set startDate to today (fixes #6699)', () => {
       const result = getQuickSettingUpdates('YEARLY_CURRENT_DATE');
-      expect(result!.startDate).toBeUndefined();
+      expect(result!.startDate).toBe(getDbDateStr());
     });
   });
 

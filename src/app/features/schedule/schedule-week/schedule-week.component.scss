@@ -132,7 +132,7 @@
 
   position: sticky;
   top: 0;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   box-shadow: var(--whiteframe-shadow-1dp);
   z-index: 10;
   color: var(--text-color);
@@ -159,7 +159,7 @@
 .day {
   line-height: 32px;
   font-size: 18px;
-  border-left: 1px solid var(--extra-border-color);
+  @include extraBorder('-left');
 
   @include mq(xs, max) {
     font-size: 14px;
@@ -261,7 +261,7 @@
   border-top: 4px solid var(--c-warn);
   border: 2px solid var(--c-warn);
   box-shadow: var(--whiteframe-shadow-6dp);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   background: var(--bg);
 
   @media (min-height: 1000px) {
@@ -406,7 +406,7 @@
     padding: 12px 16px;
     border-radius: 8px;
     box-shadow: var(--whiteframe-shadow-12dp);
-    border: 1px solid var(--extra-border-color);
+    @include extraBorder();
     font-size: 14px;
     white-space: nowrap;
 

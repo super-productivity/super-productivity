@@ -210,19 +210,19 @@ page-title {
 
 .panel-btn {
   position: relative;
-  transition: all 0.2s;
+  transition: var(--transition-standard);
   overflow: visible !important;
 
   &.isActive {
     background: transparent;
 
     .mat-icon {
-      transition: all 0.2s;
+      transition: var(--transition-standard);
       transform: rotate(45deg);
     }
 
     &::after {
-      border-radius: 4px;
+      border-radius: var(--card-border-radius);
       box-shadow: 0 -2px 3px var(--separator-alpha);
       background: var(--sidenav-bg);
       content: '';

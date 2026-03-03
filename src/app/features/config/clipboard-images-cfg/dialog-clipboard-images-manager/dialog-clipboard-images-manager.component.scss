@@ -37,7 +37,7 @@
 .summary {
   padding: 16px;
   background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   margin-bottom: 16px;
   display: flex;
   justify-content: space-between;
@@ -83,7 +83,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   overflow: hidden;
   background: rgba(0, 0, 0, 0.02);
 

@@ -6,6 +6,7 @@ import { BaseIssueProviderService } from '../../base/base-issue-provider.service
 import { IssueData, SearchResultItem } from '../../issue.model';
 import { CaldavIssue, CaldavIssueReduced } from './caldav-issue.model';
 import { CaldavClientService } from './caldav-client.service';
+import { CaldavSyncAdapterService } from './caldav-sync-adapter.service';
 import { CaldavCfg } from './caldav.model';
 import { truncate } from '../../../../util/truncate';
 import { isCaldavEnabled } from './is-caldav-enabled.util';
@@ -16,6 +17,7 @@ import { CALDAV_POLL_INTERVAL } from './caldav.const';
 })
 export class CaldavCommonInterfacesService extends BaseIssueProviderService<CaldavCfg> {
   private readonly _caldavClientService = inject(CaldavClientService);
+  private readonly _caldavSyncAdapter = inject(CaldavSyncAdapterService);
 
   readonly providerKey = 'CALDAV' as const;
   readonly pollInterval: number = CALDAV_POLL_INTERVAL;
@@ -44,6 +46,9 @@ export class CaldavCommonInterfacesService extends BaseIssueProviderService<Cald
       notes: issueData.note,
       dueWithTime: issueData.start,
       related_to: issueData.related_to,
+      issueLastSyncedValues: this._caldavSyncAdapter.extractSyncValues(
+        issueData as unknown as Record<string, unknown>,
+      ),
     };
   }
 

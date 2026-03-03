@@ -338,10 +338,27 @@ jobs:
             Write-Error "No signed executables found in SignPath output directory"
             exit 1
           }
+          # Build a map of original filenames for matching
+          # SignPath may replace spaces with dots in filenames, so we normalize
+          # spaces, dots, and hyphens to find the corresponding original file
+          $originals = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
           $signed | ForEach-Object {
-            Move-Item -Force $_.FullName .tmp/app-builds/
+            $signedName = $_.Name
+            $normalizedSigned = $signedName -replace '[.\-\s]', ''
+            $match = $originals | Where-Object { ($_.Name -replace '[.\-\s]', '') -eq $normalizedSigned }
+            if ($match -is [array]) {
+              Write-Error "Ambiguous match for $signedName — matched multiple originals: $($match.Name -join ', ')"
+              exit 1
+            }
+            if ($match) {
+              Write-Host "Replacing $($match.Name) with signed version (was: $signedName)"
+              Move-Item -Force $_.FullName $match.FullName
+            } else {
+              Write-Error "No matching original found for signed file: $signedName"
+              exit 1
+            }
           }
-          Write-Host "Signed executables:"
+          Write-Host "Final executables:"
           Get-ChildItem -Path .tmp/app-builds -Filter *.exe | Format-Table -AutoSize
 
       - name: Verify code signatures

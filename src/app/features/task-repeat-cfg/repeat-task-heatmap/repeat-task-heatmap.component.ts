@@ -19,6 +19,7 @@ import {
   HeatmapComponent,
 } from '../../../ui/heatmap/heatmap.component';
 import { T } from '../../../t.const';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
@@ -111,7 +112,7 @@ export class RepeatTaskHeatmapComponent {
     // Initialize all days in the past year
     const currentDate = new Date(oneYearAgo);
     while (currentDate <= now) {
-      const dateStr = this._getDateStr(currentDate);
+      const dateStr = getDbDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
         dateStr,
@@ -183,13 +184,6 @@ export class RepeatTaskHeatmapComponent {
     };
   }
 
-  private _getDateStr(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
   private _buildWeeksGrid(
     dayMap: Map<string, DayData>,
     startDate: Date,
@@ -215,7 +209,7 @@ export class RepeatTaskHeatmapComponent {
       const week: WeekData = { days: [] };
 
       for (let i = 0; i < 7; i++) {
-        const dateStr = this._getDateStr(currentDate);
+        const dateStr = getDbDateStr(currentDate);
         const dayData = dayMap.get(dateStr);
 
         if (currentDate >= startDate && currentDate <= endDate) {

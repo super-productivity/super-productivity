@@ -28,10 +28,7 @@
   }
 
   .mat-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -46,10 +43,7 @@
   }
 
   .habit-initial {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -78,10 +72,7 @@
   .check-ico {
     //color: var(--c-primary);
     opacity: 1 !important;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
     font-size: 32px;
     width: 32px;
     height: 32px;

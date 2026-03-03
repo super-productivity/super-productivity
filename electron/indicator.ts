@@ -146,15 +146,7 @@ function initListeners(): void {
   });
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    const suf = shouldUseDarkColors ? '-d' : '-l';
-    if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
-      const f = Math.min(Math.round(progress * 15), 15);
-      const t = DIR + `running-anim${suf}/${f || 0}.png`;
-      setTrayIcon(tray, t);
-    } else {
-      const t = DIR + `running${suf}.png`;
-      setTrayIcon(tray, t);
-    }
+    setTrayIcon(tray, getRunningIconPath(progress));
 
     // Also update the context menu and tray title during the progress bar tick
     // This perfectly synchronizes the text "blinking" with the pie chart animation
@@ -313,6 +305,14 @@ function initListeners(): void {
           }
           _lastTrayMsg = trayMsg;
         }
+
+        // Set running icon immediately so it doesn't wait for the next tracking interval tick
+        if (currentTask && currentTask.title && !_lastIsFocusModeEnabled) {
+          const progress = currentTask.timeEstimate
+            ? currentTask.timeSpent / currentTask.timeEstimate
+            : undefined;
+          setTrayIcon(tray, getRunningIconPath(progress));
+        }
       }
     },
   );
@@ -432,6 +432,16 @@ function createContextMenu(msg?: string): Menu {
   template.push({ label: 'Quit', click: _quitApp });
 
   return Menu.buildFromTemplate(template);
+}
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function getRunningIconPath(progress?: number): string {
+  const suf = shouldUseDarkColors ? '-d' : '-l';
+  if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
+    const f = Math.min(Math.round(progress * 15), 15);
+    return DIR + `running-anim${suf}/${f || 0}.png`;
+  }
+  return DIR + `running${suf}.png`;
 }
 
 let curIco: string;

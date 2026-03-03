@@ -24,7 +24,7 @@
   margin-bottom: 24px;
   padding: 16px;
   background: rgba(0, 0, 0, 0.03);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 
   .total-info {
     .label {

@@ -66,6 +66,7 @@ export interface IssueFieldsForTask {
   issueAttachmentNr?: number;
   issueTimeTracked?: IssueTaskTimeTracked;
   issuePoints?: number;
+  issueLastSyncedValues?: Record<string, unknown>;
 }
 
 // Extend the plugin Task type with app-specific fields

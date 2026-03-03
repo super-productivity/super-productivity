@@ -15,7 +15,7 @@
   position: relative;
   user-select: none;
   -webkit-user-select: none; /* Safari */
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   //z-index: var(--z-task-title);
   z-index: 4;
   border: 1px solid transparent;

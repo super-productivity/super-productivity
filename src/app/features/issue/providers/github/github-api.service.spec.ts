@@ -48,7 +48,9 @@ describe('GithubApiService', () => {
           request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
         );
 
-        expect(req.request.urlWithParams).toContain('q=bug%20fix%20repo%3Aowner%2Frepo');
+        expect(req.request.urlWithParams).toContain(
+          'q=is%3Aissue%20bug%20fix%20repo%3Aowner%2Frepo',
+        );
         req.flush({ items: [] });
       });
 
@@ -104,8 +106,8 @@ describe('GithubApiService', () => {
           request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
         );
 
-        // Should not contain repo qualifier
-        expect(req.request.urlWithParams).toContain('q=javascript');
+        // Should not contain repo qualifier but should have is:issue
+        expect(req.request.urlWithParams).toContain('q=is%3Aissue%20javascript');
         expect(req.request.urlWithParams).not.toContain('repo%3A');
         req.flush({ items: [] });
       });
@@ -135,7 +137,9 @@ describe('GithubApiService', () => {
           request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
         );
 
-        expect(req.request.urlWithParams).toContain('q=%20repo%3Aowner%2Frepo');
+        expect(req.request.urlWithParams).toContain(
+          'q=is%3Aissue%20%20repo%3Aowner%2Frepo',
+        );
         req.flush({ items: [] });
       });
 
@@ -235,6 +239,35 @@ describe('GithubApiService', () => {
         req.flush({ items: [] });
       });
 
+      it('should not duplicate is:issue when already in search text', () => {
+        const searchText = 'is:issue state:open assignee:@me';
+        service.searchIssueForRepoNoMap$(searchText, mockCfg).subscribe();
+
+        const req = httpMock.expectOne((request) =>
+          request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
+        );
+
+        // Should contain exactly one is:issue, not is:issue is:issue
+        const decodedUrl = decodeURIComponent(req.request.urlWithParams);
+        const matches = decodedUrl.match(/is:issue/g);
+        expect(matches?.length).toBe(1);
+        req.flush({ items: [] });
+      });
+
+      it('should not add is:issue when is:pull-request is in search text', () => {
+        const searchText = 'is:pull-request state:open';
+        service.searchIssueForRepoNoMap$(searchText, mockCfg).subscribe();
+
+        const req = httpMock.expectOne((request) =>
+          request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
+        );
+
+        const decodedUrl = decodeURIComponent(req.request.urlWithParams);
+        expect(decodedUrl).not.toContain('is:issue');
+        expect(decodedUrl).toContain('is:pull-request');
+        req.flush({ items: [] });
+      });
+
       it('should not truncate query - specific test for issue #4913', () => {
         // This test specifically checks for the truncation bug where "sort" became "rt"
         const searchText = 'sort:updated state:open (author:@me OR assignee:@me)';
@@ -244,8 +277,8 @@ describe('GithubApiService', () => {
           request.url.startsWith(`${GITHUB_API_BASE_URL}search/issues`),
         );
 
-        // Critical: ensure the query starts with "sort" and is not truncated to "rt"
-        expect(req.request.urlWithParams).toContain('q=sort%3A');
+        // Critical: ensure the query starts with "is:issue sort" and is not truncated
+        expect(req.request.urlWithParams).toContain('q=is%3Aissue%20sort%3A');
         expect(req.request.urlWithParams).not.toContain('q=rt%3A');
 
         // Also verify the full query structure is intact

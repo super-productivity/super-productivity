@@ -27,7 +27,7 @@
   padding: 16px;
   margin-bottom: 16px;
   background: rgba(0, 0, 0, 0.03);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 
   .arrow-icon {
     color: var(--c-dark-40);

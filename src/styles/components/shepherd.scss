@@ -89,7 +89,7 @@
   padding: 0 4px;
   color: var(--c-primary);
   font-weight: bold;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 }
 
 .shepherd-title,

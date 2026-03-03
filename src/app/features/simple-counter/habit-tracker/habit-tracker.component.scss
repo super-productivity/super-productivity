@@ -133,7 +133,7 @@
 
   &.cdk-drag-preview {
     box-sizing: border-box;
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     box-shadow:
       0 5px 5px -3px rgba(0, 0, 0, 0.2),
       0 8px 10px 1px rgba(0, 0, 0, 0.14),
@@ -220,9 +220,7 @@
     display: block;
     font-size: 13px;
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    @include truncateText();
     min-width: 0;
 
     @media (max-width: 600px) {
@@ -238,7 +236,7 @@
 
   .add-habit-btn {
     opacity: 0.6;
-    transition: all 0.2s ease;
+    transition: var(--transition-standard);
     background-color: transparent !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     padding: 2px 16px;
@@ -332,7 +330,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: var(--transition-standard);
 
   @media (max-width: 600px) {
     width: 30px;

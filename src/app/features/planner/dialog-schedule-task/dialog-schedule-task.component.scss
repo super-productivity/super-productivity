@@ -86,10 +86,7 @@ mat-dialog-content {
 
   &:after {
     @include materialIcon('wb_sunny');
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
     color: var(--text-color);
   }
 }
@@ -97,21 +94,21 @@ mat-dialog-content {
 .quick-access {
   display: flex;
   justify-content: space-evenly;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   height: 48px;
 
   > button {
     height: 48px;
     flex-grow: 1;
-    border-radius: 4px !important;
+    border-radius: var(--card-border-radius) !important;
 
     ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: 4px !important;
+      border-radius: var(--card-border-radius) !important;
     }
   }
 
   button + button {
-    border-left: 1px solid var(--extra-border-color);
+    @include extraBorder('-left');
   }
 }
 

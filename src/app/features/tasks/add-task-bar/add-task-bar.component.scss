@@ -137,9 +137,7 @@
   line-height: 38px;
   border-top: 1px dashed var(--extra-border-color);
   color: var(--text-color-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+  @include truncateText();
 
   &.bold {
     opacity: 1;
@@ -229,9 +227,7 @@
 
       .option-title {
         flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        @include truncateText();
       }
 
       .issue-id {

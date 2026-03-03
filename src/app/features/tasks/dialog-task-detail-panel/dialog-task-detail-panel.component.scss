@@ -3,7 +3,7 @@
 :host {
   mat-dialog-content {
     padding: 0;
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     max-width: 450px;
     max-height: 75vh;
     min-width: 340px;

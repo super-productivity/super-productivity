@@ -34,8 +34,8 @@
       align-items: center;
       padding: 16px;
       border: 1px solid rgba(0, 0, 0, 0.12);
-      border-radius: 4px;
-      transition: all 0.2s;
+      border-radius: var(--card-border-radius);
+      transition: var(--transition-standard);
 
       &:hover {
         background: rgba(0, 0, 0, 0.02);

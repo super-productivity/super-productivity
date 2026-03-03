@@ -149,14 +149,14 @@ jobs:
 
   # Job 3: SuperSync E2E tests (sharded)
   e2e-supersync:
-    name: E2E Tests (SuperSync ${{ matrix.shard }}/2)
+    name: E2E Tests (SuperSync ${{ matrix.shard }}/4)
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -188,7 +188,7 @@ jobs:
           echo "✓ SuperSync server ready!"
 
       - name: Run SuperSync E2E Tests
-        run: npm run e2e:all -- --grep "@supersync" --shard=${{ matrix.shard }}/2
+        run: npm run e2e:all -- --grep "@supersync" --shard=${{ matrix.shard }}/4
 
       - name: Stop Docker Services
         if: always()

@@ -10,12 +10,14 @@ import { GithubIssue, GithubIssueReduced } from './github-issue.model';
 import { truncate } from '../../../../util/truncate';
 import { getTimestamp } from '../../../../util/get-timestamp';
 import { GITHUB_POLL_INTERVAL } from './github.const';
+import { GithubSyncAdapterService } from './github-sync-adapter.service';
 
 @Injectable({
   providedIn: 'root',
 })
 export class GithubCommonInterfacesService extends BaseIssueProviderService<GithubCfg> {
   private readonly _githubApiService = inject(GithubApiService);
+  private readonly _githubSyncAdapter = inject(GithubSyncAdapterService);
 
   readonly providerKey = 'GITHUB' as const;
   readonly pollInterval: number = GITHUB_POLL_INTERVAL;
@@ -46,6 +48,9 @@ export class GithubCommonInterfacesService extends BaseIssueProviderService<Gith
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updated_at).getTime(),
       isDone: issue.state === 'closed',
+      issueLastSyncedValues: this._githubSyncAdapter.extractSyncValues(
+        issue as unknown as Record<string, unknown>,
+      ),
     };
   }
 

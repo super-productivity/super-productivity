@@ -24,7 +24,7 @@ help-section {
 
 :host::ng-deep .repeat-config-container {
   display: block;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   margin-left: var(--s2);
   margin-bottom: var(--s5);
 }

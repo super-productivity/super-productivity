@@ -9,7 +9,7 @@
 .row {
   display: flex;
   margin-bottom: var(--s3);
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   padding: 8px;
   box-shadow: var(--whiteframe-shadow-2dp);
   border-radius: 8px;

@@ -8,7 +8,7 @@
 input {
   width: 100%;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   padding: 8px 12px;
   font-size: 14px;
   line-height: 1.4;
@@ -37,7 +37,7 @@ input {
   .mat-mdc-autocomplete-panel {
     max-height: 200px;
     border: 1px solid var(--border-color);
-    border-radius: 4px;
+    border-radius: var(--card-border-radius);
     box-shadow: var(--whiteframe-shadow-3dp);
     background: var(--bg-color);
 
@@ -66,9 +66,7 @@ input {
       }
 
       .mat-mdc-option-text {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        @include truncateText();
         color: inherit;
       }
     }

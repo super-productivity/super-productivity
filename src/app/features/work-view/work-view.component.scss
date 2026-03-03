@@ -273,10 +273,7 @@ finish-day-btn,
 
   .no-tasks-label {
     font-size: 17px;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    @include center;
     text-align: center;
     font-weight: 400;
     color: #333;
@@ -315,7 +312,7 @@ finish-day-btn,
 }
 
 :host collapsible.isExpanded ::ng-deep .collapsible-header {
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
 }
 
 .overdue-tasks {

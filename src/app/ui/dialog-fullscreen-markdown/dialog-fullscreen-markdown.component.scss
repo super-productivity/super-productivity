@@ -25,7 +25,7 @@
   gap: 2px;
   padding: var(--s) var(--s2);
   background-color: var(--bg-lightest);
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   position: relative;
   z-index: 1;
   color: var(--text-color);

@@ -42,7 +42,7 @@
 .comment {
   display: flex;
   padding: 12px 0;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   border-bottom: 1px dashed var(--extra-border-color);
 
   &:last-child {

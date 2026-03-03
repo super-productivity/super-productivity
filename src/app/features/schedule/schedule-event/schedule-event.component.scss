@@ -120,7 +120,7 @@
   }
 
   &.CalendarEvent {
-    border-left: 1px solid var(--extra-border-color);
+    @include extraBorder('-left');
   }
 
   &.ScheduledRepeatProjection .ico {
@@ -194,7 +194,7 @@
   height: 13px;
   text-align: center;
   padding: 1px;
-  border: 1px solid var(--extra-border-color);
+  @include extraBorder();
   border-radius: var(--card-border-radius);
   color: var(--text-color);
   background: var(--bg-lighter);

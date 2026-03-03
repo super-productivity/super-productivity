@@ -90,7 +90,7 @@ reflection-note {
   display: flex;
   flex-direction: column;
   gap: var(--s);
-  transition: all 0.3s ease;
+  transition: var(--transition-standard);
   border: 2px solid var(--card-bg);
 
   .label {
@@ -135,7 +135,7 @@ reflection-note {
   display: flex;
   flex-direction: column;
   gap: var(--s);
-  transition: all 0.3s ease;
+  transition: var(--transition-standard);
   // to prevent too much jumping
   min-height: 126px;
 

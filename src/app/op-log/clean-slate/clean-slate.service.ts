@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { uuidv7 } from 'uuidv7';
+import { uuidv7 } from '../../util/uuid-v7';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { ClientIdService } from '../../core/util/client-id.service';

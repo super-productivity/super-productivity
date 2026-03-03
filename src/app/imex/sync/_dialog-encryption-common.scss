@@ -17,7 +17,7 @@
   margin-bottom: 16px;
   background: rgba(255, 152, 0, 0.1);
   border: 1px solid rgba(255, 152, 0, 0.3);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 
   mat-icon {
     color: var(--color-warning);
@@ -38,7 +38,7 @@
   padding: 16px;
   background: rgba(33, 150, 243, 0.1);
   border: 1px solid rgba(33, 150, 243, 0.3);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 
   mat-icon {
     color: #2196f3;
@@ -130,7 +130,7 @@
 @mixin dialog-note-warn {
   padding: 12px;
   background: rgba(255, 152, 0, 0.08);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   color: rgba(0, 0, 0, 0.8);
 
   mat-icon {
