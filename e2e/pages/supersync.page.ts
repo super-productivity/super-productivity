@@ -345,6 +345,12 @@ export class SuperSyncPage extends BasePage {
         decryptErrorDialog
           .waitFor({ state: 'visible', timeout: encSyncTimeout })
           .then(() => 'decrypt_error_dialog' as const),
+        // Mandatory encryption dialog (disableClose:true) opened by sync wrapper
+        // after successful sync when SuperSync has no encryption configured
+        enableEncryptionDialog
+          .first()
+          .waitFor({ state: 'visible', timeout: encSyncTimeout })
+          .then(() => 'enable_encryption_dialog' as const),
         // Sync error icon indicates encrypted data received but no password
         this.syncErrorIcon
           .waitFor({ state: 'visible', timeout: encSyncTimeout })
@@ -369,6 +375,16 @@ export class SuperSyncPage extends BasePage {
         // Decryption error - this shouldn't happen with correct password
         console.log('[SuperSyncPage] Decrypt error dialog appeared - unexpected');
         throw new Error('Decrypt error dialog appeared - password may be incorrect');
+      } else if (outcome === 'enable_encryption_dialog') {
+        // Mandatory encryption dialog appeared (disableClose:true) - Client A
+        // Handle it directly since ensureOverlaysClosed cannot dismiss it
+        console.log(
+          '[SuperSyncPage] Mandatory encryption dialog appeared - handling directly',
+        );
+        await this._fillAndConfirmEncryptionDialog(
+          enableEncryptionDialog,
+          config.password!,
+        );
       } else if (outcome === 'fresh_client_dialog') {
         // Fresh client dialog - server has no encrypted data yet
         // This means we're Client A (first client)
@@ -863,6 +879,25 @@ export class SuperSyncPage extends BasePage {
    * Prerequisites: SuperSync must already be configured without encryption
    */
   async enableEncryption(password: string): Promise<void> {
+    const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
+
+    // Check if the mandatory encryption dialog is already open.
+    // The sync wrapper opens this dialog with disableClose:true when SuperSync
+    // is configured without encryption, so ensureOverlaysClosed() cannot dismiss it.
+    const isEncDialogAlreadyOpen = await enableEncryptionDialog
+      .isVisible()
+      .catch(() => false);
+
+    if (isEncDialogAlreadyOpen) {
+      console.log(
+        '[SuperSyncPage] Mandatory encryption dialog already open - handling directly',
+      );
+      await this._fillAndConfirmEncryptionDialog(enableEncryptionDialog, password);
+      await this._waitForEncryptionSyncComplete();
+      return;
+    }
+
+    // No encryption dialog open - open settings and enable encryption manually
     // Open sync settings via right-click
     // Use noWaitAfter to prevent blocking on Angular hash navigation
     await this.syncBtn.click({ button: 'right', noWaitAfter: true });
@@ -876,20 +911,7 @@ export class SuperSyncPage extends BasePage {
     // The listener is async and needs time to load provider config and update the form
     await this.page.waitForTimeout(1000);
 
-    // Expand "Advanced settings" collapsible to access encryption fields
-    const advancedCollapsible = this.page.locator(
-      '.collapsible-header:has-text("Advanced")',
-    );
-    await advancedCollapsible.waitFor({ state: 'visible', timeout: 5000 });
-
-    // Check if already expanded
-    const isExpanded = await this.enableEncryptionBtn.isVisible().catch(() => false);
-    if (!isExpanded) {
-      await advancedCollapsible.click();
-      await this.enableEncryptionBtn.waitFor({ state: 'visible', timeout: 3000 });
-    }
-
-    // Check if already enabled
+    // Check if already enabled (button is visible at top level for SuperSync, not inside Advanced)
     const isEnabled = await this.disableEncryptionBtn.isVisible().catch(() => false);
     if (isEnabled) {
       // Already enabled - just close the dialog
@@ -900,38 +922,50 @@ export class SuperSyncPage extends BasePage {
       return;
     }
 
+    // Check if the enable encryption button is visible (for SuperSync it's at the top level)
+    let enableBtnVisible = await this.enableEncryptionBtn.isVisible().catch(() => false);
+
+    if (!enableBtnVisible) {
+      // Try expanding "Advanced settings" collapsible
+      const advancedCollapsible = this.page.locator(
+        '.collapsible-header:has-text("Advanced")',
+      );
+      const advancedExists = await advancedCollapsible.isVisible().catch(() => false);
+      if (advancedExists) {
+        await advancedCollapsible.click();
+        enableBtnVisible = await this.enableEncryptionBtn
+          .waitFor({ state: 'visible', timeout: 3000 })
+          .then(() => true)
+          .catch(() => false);
+      }
+    }
+
+    if (!enableBtnVisible) {
+      throw new Error(
+        'Enable encryption button not visible after checking top level and Advanced section',
+      );
+    }
+
     // Enable encryption by clicking the "Enable Encryption" button which opens a dialog
-    await this.enableEncryptionBtn.waitFor({ state: 'visible', timeout: 5000 });
     await this.enableEncryptionBtn.click();
 
     // Wait for the Enable Encryption dialog to appear
-    const enableEncryptionDialog = this.page.locator('dialog-enable-encryption');
     await enableEncryptionDialog.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Fill in the password fields
-    const passwordInput = enableEncryptionDialog
-      .locator('input[type="password"]')
-      .first();
-    const confirmPasswordInput = enableEncryptionDialog
-      .locator('input[type="password"]')
-      .nth(1);
-    await passwordInput.fill(password);
-    await confirmPasswordInput.fill(password);
+    await this._fillAndConfirmEncryptionDialog(enableEncryptionDialog, password);
 
-    // Click the confirm button (has mat-flat-button and text includes "Enable")
-    const confirmBtn = enableEncryptionDialog.locator(
-      'button[mat-flat-button]:has-text("Enable")',
-    );
-    await confirmBtn.click();
+    // Close the "Configure Sync" dialog if still open
+    const configDialogCount = await this.page.locator('mat-dialog-container').count();
+    if (configDialogCount > 0) {
+      const configDialog = this.page.locator('mat-dialog-container').first();
+      const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
+      const hasCancelBtn = await cancelBtn.isVisible().catch(() => false);
+      if (hasCancelBtn) {
+        await cancelBtn.click();
+      }
+    }
 
-    await this.page.waitForTimeout(500);
-
-    // Close the "Configure Sync" dialog
-    const configDialog = this.page.locator('mat-dialog-container').first();
-    const cancelBtn = configDialog.locator('button').filter({ hasText: /cancel/i });
-    await cancelBtn.click();
-
-    // Wait for dialog to close
+    // Wait for all dialogs to close
     await expect(this.page.locator('mat-dialog-container')).toHaveCount(0, {
       timeout: 10000,
     });
@@ -940,7 +974,44 @@ export class SuperSyncPage extends BasePage {
     // This handles backdrop removal and any lingering dialogs
     await this.ensureOverlaysClosed();
 
-    // Wait for clean slate sync to complete
+    await this._waitForEncryptionSyncComplete();
+  }
+
+  /**
+   * Fill in the encryption dialog password fields and click confirm.
+   */
+  private async _fillAndConfirmEncryptionDialog(
+    dialog: Locator,
+    password: string,
+  ): Promise<void> {
+    const passwordInput = dialog.locator('input[type="password"]').first();
+    const confirmPasswordInput = dialog.locator('input[type="password"]').nth(1);
+    await passwordInput.fill(password);
+    await confirmPasswordInput.fill(password);
+
+    // Click the confirm button (has mat-flat-button and text includes "Enable")
+    const confirmBtn = dialog.locator('button[mat-flat-button]:has-text("Enable")');
+    await confirmBtn.click();
+
+    await this.page.waitForTimeout(500);
+
+    // Wait for the encryption dialog to close
+    await dialog.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+
+    // Wait for any remaining dialogs to close
+    await expect(this.page.locator('mat-dialog-container'))
+      .toHaveCount(0, {
+        timeout: 10000,
+      })
+      .catch(() => {});
+
+    await this.ensureOverlaysClosed();
+  }
+
+  /**
+   * Wait for the clean slate sync to complete after enabling/disabling encryption.
+   */
+  private async _waitForEncryptionSyncComplete(): Promise<void> {
     const spinnerAppeared = await this.syncSpinner
       .waitFor({ state: 'visible', timeout: 5000 })
       .then(() => true)

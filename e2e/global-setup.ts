@@ -36,13 +36,18 @@ const globalSetup = async (config: FullConfig): Promise<void> => {
   process.env.NODE_ENV = 'test';
   console.log(`Running tests with ${config.workers} workers`);
 
-  // Build plugins before starting tests (skip if already built in CI)
+  // Build plugins before starting tests (skip if already built)
+  // Check both the dev path (src/assets/) and the CI pre-built path (.tmp/angular-dist/)
   const pluginManifestPath = path.join(
     process.cwd(),
     'src/assets/bundled-plugins/api-test-plugin/manifest.json',
   );
+  const ciBuildManifestPath = path.join(
+    process.cwd(),
+    '.tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json',
+  );
 
-  if (fs.existsSync(pluginManifestPath)) {
+  if (fs.existsSync(pluginManifestPath) || fs.existsSync(ciBuildManifestPath)) {
     console.log('Plugins already built, skipping...');
   } else {
     console.log('Building bundled plugins...');
