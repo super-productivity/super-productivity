@@ -288,7 +288,7 @@ describe('ScheduleService', () => {
         icalEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
-        currentTaskId: null,
+        activeTaskIds: [],
       };
 
       // Act
@@ -307,7 +307,7 @@ describe('ScheduleService', () => {
         icalEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
-        currentTaskId: null,
+        activeTaskIds: [],
       };
 
       // Act
@@ -326,7 +326,7 @@ describe('ScheduleService', () => {
         icalEvents: [],
         plannerDayMap: null,
         timelineCfg: null,
-        currentTaskId: null,
+        activeTaskIds: [],
       };
 
       // Act
@@ -348,7 +348,7 @@ describe('ScheduleService', () => {
         icalEvents: [],
         plannerDayMap: {},
         timelineCfg: null,
-        currentTaskId: null,
+        activeTaskIds: [],
       };
 
       // Act

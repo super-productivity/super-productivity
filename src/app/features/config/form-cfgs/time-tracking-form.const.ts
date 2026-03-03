@@ -32,6 +32,13 @@ export const TIME_TRACKING_FORM_CFG: ConfigFormSection<TimeTrackingConfig> = {
       },
     },
     {
+      key: 'isMultiTaskTrackingEnabled',
+      type: 'checkbox',
+      templateOptions: {
+        label: 'Enable tracking of multiple tasks at once',
+      },
+    },
+    {
       key: 'isNotifyWhenTimeEstimateExceeded',
       type: 'checkbox',
       templateOptions: {

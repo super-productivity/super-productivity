@@ -172,6 +172,7 @@ function initListeners(): void {
         _lastIsFocusModeEnabled || false,
         _lastCurrentFocusSessionTime || 0,
         _lastFocusModeMode,
+        isTrayShowCurrentTask,
       );
 
       const todayTasksStr = JSON.stringify(
@@ -259,6 +260,7 @@ function initListeners(): void {
             isFocusModeEnabled || false,
             currentFocusSessionTime || 0,
             focusModeMode,
+            isTrayShowCurrentTask,
           )
         : '';
 
@@ -349,6 +351,7 @@ function createIndicatorMessage(
   isFocusModeEnabled: boolean,
   currentFocusSessionTime: number,
   focusModeMode: string | undefined,
+  isTrayShowCurrentTask: boolean = false,
 ): string {
   if (task && task.title) {
     let timeStr = '';
@@ -357,27 +360,19 @@ function createIndicatorMessage(
       // Priority 1: Focus mode with countdown/pomodoro (show countdown)
       if (isFocusModeEnabled && focusModeMode && focusModeMode !== 'Flowtime') {
         timeStr = getProgressMessage(currentFocusSessionTime);
-        return timeStr;
-      }
-
-      // Priority 2: Flowtime mode (show nothing or task estimate)
-      if (isFocusModeEnabled && focusModeMode === 'Flowtime') {
+      } else if (isFocusModeEnabled && focusModeMode === 'Flowtime') {
+        // Priority 2: Flowtime mode (show nothing or task estimate)
         if (task.timeEstimate) {
           const restOfTime = Math.max(task.timeEstimate - task.timeSpent, 0);
           timeStr = getProgressMessage(task.timeSpent, restOfTime, '-');
-          return timeStr;
+        } else {
+          timeStr = getProgressMessage(task.timeSpent);
         }
-        return getProgressMessage(task.timeSpent);
-      }
-
-      // Priority 3: Legacy pomodoro (if still used)
-      if (isPomodoroEnabled) {
+      } else if (isPomodoroEnabled) {
+        // Priority 3: Legacy pomodoro (if still used)
         timeStr = getProgressMessage(currentPomodoroSessionTime);
-        return timeStr;
-      }
-
-      // Priority 4: Normal task time (no focus mode)
-      if (task.timeEstimate) {
+      } else if (task.timeEstimate) {
+        // Priority 4: Normal task time (no focus mode)
         let restOfTime = task.timeEstimate - task.timeSpent;
         const prefix = restOfTime >= 0 ? '-' : '+';
         restOfTime = Math.abs(restOfTime);
@@ -385,11 +380,18 @@ function createIndicatorMessage(
       } else if (task.timeSpent) {
         timeStr = getProgressMessage(task.timeSpent);
       }
-      return timeStr;
+    } else {
+      // Fallback if no countdown is supposed to be shown, but we have a running task
+      timeStr = getProgressMessage(task.timeSpent);
     }
 
-    // Fallback if no countdown is supposed to be shown, but we have a running task
-    return getProgressMessage(task.timeSpent);
+    if (isTrayShowCurrentTask && task.title) {
+      const title =
+        task.title.length > 20 ? task.title.substring(0, 17) + '...' : task.title;
+      return `${title} ${timeStr}`;
+    }
+
+    return timeStr;
   }
 
   return '';

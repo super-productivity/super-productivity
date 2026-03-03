@@ -84,7 +84,7 @@ describe('Task Reducer - transferTask action', () => {
         task2: createTask('task2', { dueDay: '2025-01-16' }),
         task3: createTask('task3', { dueDay: undefined }),
       },
-      currentTaskId: null,
+      activeTaskIds: [],
       selectedTaskId: null,
       taskDetailTargetPanel: null,
       lastCurrentTaskId: null,

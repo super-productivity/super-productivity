@@ -46,7 +46,7 @@ interface TestLegacyData {
   task: {
     ids: string[];
     entities: Record<string, unknown>;
-    currentTaskId: null;
+    activeTaskIds: [];
     selectedTaskId: null;
     lastCurrentTaskId: null;
     isDataLoaded: boolean;
@@ -76,7 +76,7 @@ describe('Legacy Archive Subtasks Integration', () => {
     task: {
       ids: [],
       entities: {},
-      currentTaskId: null,
+      activeTaskIds: [],
       selectedTaskId: null,
       lastCurrentTaskId: null,
       isDataLoaded: false,

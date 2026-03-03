@@ -87,6 +87,7 @@ export interface TaskCopy
   // Override required fields that are optional in plugin type
   projectId: string;
   timeSpentOnDay: TimeSpentOnDay;
+  isCurrent?: boolean;
 
   // Additional app-specific fields
 
@@ -180,6 +181,7 @@ export const DEFAULT_TASK: Omit<TaskCopy, 'projectId'> = {
   timeSpent: 0,
   timeEstimate: 0,
   isDone: false,
+  isCurrent: false,
   title: '',
   tagIds: [],
   created: Date.now(),
@@ -192,7 +194,7 @@ export interface TaskState extends EntityState<Task> {
   ids: string[];
 
   // additional entities state properties
-  currentTaskId: string | null;
+  activeTaskIds: string[];
   selectedTaskId: string | null;
   taskDetailTargetPanel?: TaskDetailTargetPanel | null;
   lastCurrentTaskId: string | null;

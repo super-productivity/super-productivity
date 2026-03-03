@@ -291,8 +291,7 @@ export const deleteTaskHelper = (
 ): TaskState => {
   let stateCopy: TaskState = taskAdapter.removeOne(taskToDelete.id, state);
 
-  let currentTaskId =
-    state.currentTaskId === taskToDelete.id ? null : state.currentTaskId;
+  let activeTaskIds = state.activeTaskIds.filter((id) => id !== taskToDelete.id);
 
   // PARENT TASK side effects
   // also delete from parent task if any
@@ -331,14 +330,13 @@ export const deleteTaskHelper = (
 
   if (allSubTaskIds.length > 0) {
     stateCopy = taskAdapter.removeMany(allSubTaskIds, stateCopy);
-    // unset current if one of them is the current task
-    currentTaskId =
-      !!currentTaskId && allSubTaskIds.includes(currentTaskId) ? null : currentTaskId;
+    // Remove subtasks from activeTaskIds
+    activeTaskIds = activeTaskIds.filter((id) => !allSubTaskIds.includes(id));
   }
 
   return {
     ...stateCopy,
-    currentTaskId,
+    activeTaskIds,
   };
 };
 

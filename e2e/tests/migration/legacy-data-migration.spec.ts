@@ -389,7 +389,7 @@ test.describe('@migration Legacy Data Migration', () => {
       // Seed minimal but valid data - app should still migrate successfully
       // even with minimal data
       const minimalData = {
-        task: { ids: [], entities: {}, currentTaskId: null },
+        task: { ids: [], entities: {}, activeTaskIds: [] },
         project: {
           ids: ['INBOX_PROJECT'],
           entities: {

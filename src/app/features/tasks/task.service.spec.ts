@@ -133,7 +133,7 @@ describe('TaskService', () => {
                 ['task-1']: createMockTask('task-1'),
                 ['task-2']: createMockTask('task-2'),
               },
-              currentTaskId: null,
+              activeTaskIds: [],
               selectedTaskId: null,
               taskDetailTargetPanel: null,
               isDataLoaded: true,

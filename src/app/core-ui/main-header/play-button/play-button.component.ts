@@ -25,6 +25,8 @@ import { TaskService } from '../../../features/tasks/task.service';
 import { animationFrameScheduler, Subscription } from 'rxjs';
 import { distinctUntilChanged, observeOn } from 'rxjs/operators';
 import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.service';
+import { Router } from '@angular/router';
+import { TODAY_TAG } from '../../../features/tag/tag.const';
 
 @Component({
   selector: 'play-button',
@@ -40,7 +42,12 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
           matTooltip="{{ T.MH.SHOW_TRACKED_TASK | translate }}"
           matTooltipPosition="below"
         >
-          <div class="title">{{ task.title }}</div>
+          <div class="title">
+            {{ task.title }}
+            @if (activeTaskCount() > 1) {
+              <span class="other-tasks-count">(+{{ activeTaskCount() - 1 }})</span>
+            }
+          </div>
           @if (currentTaskContext(); as taskContext) {
             <tag
               @expandFadeHorizontal
@@ -194,6 +201,12 @@ import { NavigateToTaskService } from '../../navigate-to-task/navigate-to-task.s
           overflow: hidden;
         }
 
+        .other-tasks-count {
+          font-weight: bold;
+          margin-left: 4px;
+          opacity: 0.8;
+        }
+
         .project {
           max-width: 130px;
           padding-right: 0;
@@ -218,6 +231,7 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   private _renderer = inject(Renderer2);
   private _cd = inject(ChangeDetectorRef);
   private _navigateToTaskService = inject(NavigateToTaskService);
+  private _router = inject(Router);
 
   readonly T = T;
   readonly taskService = inject(TaskService);
@@ -228,12 +242,16 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   readonly hasTrackableTasks = input<boolean>(true);
   readonly circleSvg = viewChild<ElementRef<SVGCircleElement>>('circleSvg');
 
+  readonly activeTaskCount = computed(() => this.taskService.activeTaskIds().length);
+
   readonly isDisabled = computed(
     () => !this.currentTaskId() && !this.hasTrackableTasks(),
   );
-  readonly tooltipText = computed(() =>
-    this.isDisabled() ? T.MH.NO_TASKS_TO_TRACK : T.MH.TOGGLE_TRACK_TIME,
-  );
+  readonly tooltipText = computed(() => {
+    if (this.isDisabled()) return T.MH.NO_TASKS_TO_TRACK;
+    if (this.activeTaskCount() > 1) return 'Multiple tasks running. Click to pause all.';
+    return T.MH.TOGGLE_TRACK_TIME;
+  });
 
   private _subs = new Subscription();
   private circumference = 10 * 2 * Math.PI; // ~62.83
@@ -273,9 +291,13 @@ export class PlayButtonComponent implements OnInit, OnDestroy {
   }
 
   navigateToCurrentTask(): void {
-    const taskId = this.currentTaskId();
-    if (taskId) {
-      this._navigateToTaskService.navigate(taskId);
+    if (this.activeTaskCount() > 1) {
+      this._router.navigate(['/tag', TODAY_TAG.id, 'tasks']);
+    } else {
+      const taskId = this.currentTaskId();
+      if (taskId) {
+        this._navigateToTaskService.navigate(taskId);
+      }
     }
   }
 

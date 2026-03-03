@@ -136,7 +136,7 @@ export class StateSnapshotService {
         selectedTaskId: environment.production
           ? null
           : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
-        currentTaskId: null,
+        activeTaskIds: [],
       },
       project,
       tag,
@@ -251,7 +251,7 @@ export class StateSnapshotService {
         selectedTaskId: environment.production
           ? null
           : ((task as { selectedTaskId?: string | null })?.selectedTaskId ?? null),
-        currentTaskId: null,
+        activeTaskIds: [],
       },
       project,
       tag,

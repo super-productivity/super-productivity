@@ -27,7 +27,7 @@ describe('ValidateStateService', () => {
   let mockTranslateService: jasmine.SpyObj<TranslateService>;
 
   const createEmptyState = (): Record<string, unknown> => ({
-    task: { ids: [], entities: {}, currentTaskId: null },
+    task: { ids: [], entities: {}, activeTaskIds: [] },
     project: { ids: [], entities: {} },
     tag: { ids: [], entities: {} },
     note: { ids: [], entities: {}, todayOrder: [] },

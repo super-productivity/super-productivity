@@ -148,6 +148,8 @@ export enum ActionType {
   COUNTER_UPDATE_ORDER = '[SimpleCounter] Update SimpleCounter Order',
 
   // Task actions (T)
+  TASK_START = '[Task] Start Task',
+  TASK_STOP = '[Task] Stop Task',
   TASK_UPDATE_MULTIPLE_SIMPLE = '[Task] Update multiple Tasks (simple)',
   TASK_ADD_SUB = '[Task] Add SubTask',
   TASK_MOVE_SUB = '[Task] Move sub task',

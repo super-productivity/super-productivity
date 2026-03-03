@@ -50,7 +50,7 @@ describe('ProjectService', () => {
         projectId: 'project-1',
       }),
     },
-    currentTaskId: null,
+    activeTaskIds: [],
     selectedTaskId: null,
     isDataLoaded: true,
     lastCurrentTaskId: null,

@@ -114,14 +114,15 @@ export class TaskInternalEffects {
         }),
       ),
       mergeMap(({ action, state, isAutoStartNextTask, todaysTaskIds }) => {
-        const currentId = state.currentTaskId;
+        const currentId = state.activeTaskIds[0] || null;
         let nextId: 'NO_UPDATE' | string | null;
 
         switch (action.type) {
           case toggleStart.type: {
-            nextId = state.currentTaskId
-              ? null
-              : this._findNextTask(state, todaysTaskIds);
+            nextId =
+              state.activeTaskIds.length > 0
+                ? null
+                : this._findNextTask(state, todaysTaskIds);
             break;
           }
 
@@ -150,7 +151,7 @@ export class TaskInternalEffects {
           // QUICK FIX FOR THE ISSUE
           // TODO better solution
           case TaskSharedActions.deleteTask.type: {
-            nextId = state.currentTaskId;
+            nextId = state.activeTaskIds[0] || null;
             break;
           }
           default:

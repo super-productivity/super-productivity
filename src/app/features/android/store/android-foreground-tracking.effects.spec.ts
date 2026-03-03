@@ -270,7 +270,7 @@ describe('AndroidForegroundTrackingEffects - saveTimeTrackingImmediately logic',
       {
         ...taskState,
         selectedTaskId: isProduction ? null : taskState.selectedTaskId,
-        currentTaskId: null,
+        activeTaskIds: [],
       },
       { isUpdateRevAndLastUpdate: true },
     );
@@ -303,7 +303,7 @@ describe('AndroidForegroundTrackingEffects - saveTimeTrackingImmediately logic',
       {
         entities: { task1: { id: 'task-1', timeSpent: 60000 } },
         selectedTaskId: null,
-        currentTaskId: null,
+        activeTaskIds: [],
       },
       { isUpdateRevAndLastUpdate: true },
     );
@@ -355,7 +355,7 @@ describe('AndroidForegroundTrackingEffects - saveTimeTrackingImmediately logic',
       {
         entities: {},
         selectedTaskId: 'task-1', // preserved in non-production
-        currentTaskId: null,
+        activeTaskIds: [],
       },
       { isUpdateRevAndLastUpdate: true },
     );

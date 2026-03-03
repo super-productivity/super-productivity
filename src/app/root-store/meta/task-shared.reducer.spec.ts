@@ -205,7 +205,7 @@ describe('taskSharedMetaReducer', () => {
       [TASK_FEATURE_NAME]: {
         ids: [],
         entities: {},
-        currentTaskId: null,
+        activeTaskIds: [],
         selectedTaskId: null,
         taskDetailTargetPanel: null,
         lastCurrentTaskId: null,
@@ -661,7 +661,7 @@ describe('taskSharedMetaReducer', () => {
         ['task1', 'task2', 'other-task'],
         [],
       );
-      testState[TASK_FEATURE_NAME].currentTaskId = 'task1';
+      testState[TASK_FEATURE_NAME].activeTaskIds = ['task1'];
 
       const action = TaskSharedActions.deleteTasks({
         taskIds: ['task1', 'task2'],
@@ -672,7 +672,7 @@ describe('taskSharedMetaReducer', () => {
           ...expectTaskEntityNotExists('task1'),
           ...expectTaskEntityNotExists('task2'),
           [TASK_FEATURE_NAME]: jasmine.objectContaining({
-            currentTaskId: null, // Should be reset when current task is deleted
+            activeTaskIds: [], // Should be reset when current task is deleted
             entities: jasmine.objectContaining({
               'other-task': jasmine.anything(),
             }),
@@ -692,7 +692,7 @@ describe('taskSharedMetaReducer', () => {
         ['task1', 'task2', 'current-task'],
         [],
       );
-      testState[TASK_FEATURE_NAME].currentTaskId = 'current-task';
+      testState[TASK_FEATURE_NAME].activeTaskIds = ['current-task'];
 
       const action = TaskSharedActions.deleteTasks({
         taskIds: ['task1', 'task2'],
@@ -701,7 +701,7 @@ describe('taskSharedMetaReducer', () => {
       expectStateUpdate(
         {
           [TASK_FEATURE_NAME]: jasmine.objectContaining({
-            currentTaskId: 'current-task', // Should be preserved
+            activeTaskIds: ['current-task'], // Should be preserved
           }),
         },
         action,

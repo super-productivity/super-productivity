@@ -96,16 +96,23 @@ export const flattenTasks = (tasksIN: TaskWithSubTasks[]): TaskWithSubTasks[] =>
 const { selectEntities, selectAll } = taskAdapter.getSelectors();
 export const selectTaskFeatureState = createFeatureSelector<TaskState>(TASK_FEATURE_NAME);
 export const selectTaskEntities = createSelector(selectTaskFeatureState, selectEntities);
+
+export const selectActiveTaskIds = createSelector(
+  selectTaskFeatureState,
+  (state) => state.activeTaskIds,
+);
+
 export const selectCurrentTaskId = createSelector(
   selectTaskFeatureState,
-  (state) => state.currentTaskId,
+  (state) => state.activeTaskIds[0] || null,
 );
+
 export const selectIsTaskDataLoaded = createSelector(
   selectTaskFeatureState,
   (state) => state.isDataLoaded,
 );
 export const selectCurrentTask = createSelector(selectTaskFeatureState, (s) =>
-  s.currentTaskId ? (s.entities[s.currentTaskId] ?? null) : null,
+  s.activeTaskIds.length > 0 ? (s.entities[s.activeTaskIds[0]] ?? null) : null,
 );
 export const selectLastCurrentTask = createSelector(selectTaskFeatureState, (s) =>
   s.lastCurrentTaskId ? (s.entities[s.lastCurrentTaskId] ?? null) : null,
@@ -114,8 +121,9 @@ export const selectLastCurrentTask = createSelector(selectTaskFeatureState, (s) 
 export const selectCurrentTaskOrParentWithData = createSelector(
   selectTaskFeatureState,
   (s): TaskWithSubTasks | null => {
-    if (!s.currentTaskId) return null;
-    const currentTask = s.entities[s.currentTaskId];
+    const currentTaskId = s.activeTaskIds[0];
+    if (!currentTaskId) return null;
+    const currentTask = s.entities[currentTaskId];
     if (!currentTask) return null;
 
     // If current task has a parent, return the parent with its subtasks
@@ -266,8 +274,9 @@ export const selectSelectedTask = createSelector(
 export const selectCurrentTaskParentOrCurrent = createSelector(
   selectTaskFeatureState,
   (s): Task | undefined => {
-    if (!s.currentTaskId) return undefined;
-    const currentTask = s.entities[s.currentTaskId];
+    const currentTaskId = s.activeTaskIds[0];
+    if (!currentTaskId) return undefined;
+    const currentTask = s.entities[currentTaskId];
     if (!currentTask) return undefined;
 
     // If current task has a parent, return the parent
@@ -291,6 +300,10 @@ export const selectAllTasks = createSelector(
     }
     return all;
   },
+);
+
+export const selectCurrentTasks = createSelector(selectAllTasks, (tasks) =>
+  tasks.filter((t) => t.isCurrent),
 );
 
 export const selectAllTasksWithSubTasks = createSelector(

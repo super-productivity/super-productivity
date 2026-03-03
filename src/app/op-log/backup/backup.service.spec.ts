@@ -21,7 +21,7 @@ describe('BackupService', () => {
 
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const createMinimalValidBackup = () => ({
-    task: { ids: [], entities: {}, currentTaskId: null, selectedTaskId: null },
+    task: { ids: [], entities: {}, activeTaskIds: [], selectedTaskId: null },
     project: {
       ids: ['INBOX_PROJECT'],
       entities: {

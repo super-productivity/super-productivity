@@ -45,7 +45,7 @@ describe('TaskInternalEffects', () => {
     return {
       ids,
       entities,
-      currentTaskId,
+      activeTaskIds: currentTaskId ? [currentTaskId] : [],
       selectedTaskId: null,
       taskDetailTargetPanel: null,
       lastCurrentTaskId: null,

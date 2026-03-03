@@ -163,7 +163,7 @@ describe('Task Selectors', () => {
   const mockTaskState: TaskState = {
     ids: Object.keys(mockTasks),
     entities: mockTasks,
-    currentTaskId: 'task1',
+    activeTaskIds: ['task1'],
     selectedTaskId: 'task2',
     lastCurrentTaskId: 'task3',
     isDataLoaded: true,
