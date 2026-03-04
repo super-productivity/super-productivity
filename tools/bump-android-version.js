@@ -80,20 +80,27 @@ const outputDir = path.join(
 );
 const outputFilePath = path.join(outputDir, `${versionCodeDroid}.txt`);
 
-// Get commit messages between previous tag and HEAD
-const currentTag = execFileSync('git', ['describe', '--tags', '--abbrev=0', 'HEAD'], {
-  encoding: 'utf8',
-}).trim();
-const prevTag = execFileSync(
-  'git',
-  ['describe', '--tags', '--abbrev=0', `${currentTag}~1`],
-  { encoding: 'utf8' },
-).trim();
-const gitLog = execFileSync(
-  'git',
-  ['log', `${prevTag}...HEAD`, '--no-merges', '--pretty=format:- %s'],
-  { encoding: 'utf8' },
-);
+// Get commit messages since the last tag.
+// During `npm version`, the new tag does not exist yet, so
+// `git describe --tags --abbrev=0 HEAD` gives us the previous release tag,
+// which is exactly the start of the range we want.
+let gitLog;
+try {
+  const lastTag = execFileSync('git', ['describe', '--tags', '--abbrev=0', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+  gitLog = execFileSync(
+    'git',
+    ['log', `${lastTag}...HEAD`, '--no-merges', '--pretty=format:- %s'],
+    { encoding: 'utf8' },
+  );
+} catch (err) {
+  console.warn(`Could not generate changelog from git tags: ${err.message}`);
+  console.warn('Falling back to last 20 commits');
+  gitLog = execFileSync('git', ['log', '-20', '--no-merges', '--pretty=format:- %s'], {
+    encoding: 'utf8',
+  });
+}
 // Strip conventional-commit prefixes (e.g. "feat(tasks): " → "")
 let latestChanges = gitLog.replace(/^- \w+(\([^)]*\))?!?:\s*/gm, '- ');
 // Truncate to 500 chars at line boundaries for Play Store limit
@@ -103,7 +110,7 @@ for (const line of lines) {
   if ((truncated + line + '\n').length > 500) break;
   truncated += line + '\n';
 }
-latestChanges = truncated.trimEnd();
+latestChanges = truncated.trimEnd() || 'Bug fixes and improvements';
 
 // Ensure the output directory exists
 if (!fs.existsSync(outputDir)) {
