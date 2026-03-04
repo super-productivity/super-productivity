@@ -134,6 +134,10 @@
     transition: none !important;
   }
 
+  :host-context(body.isNativeMobile) &.mobile {
+    top: var(--safe-area-top);
+  }
+
   // Position right
   &.position-right {
     left: auto;
@@ -202,7 +206,7 @@
 
   @media (max-width: 600px) {
     padding-top: var(--safe-area-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: calc(var(--safe-area-bottom) + var(--bottom-nav-height));
   }
 
   :host-context(.isMac.isElectron) & {
