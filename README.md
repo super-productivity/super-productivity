@@ -382,6 +382,10 @@ Recently support for Super Productivity has been growing! A big thank you to all
 
 _(If you are, intend to or have been a sponsor and want to be shown here, [please let me know](mailto:contact@super-productivity.com)!)_
 
+### Code Signing
+
+Windows binaries are signed. Free code signing is provided by [SignPath.io](https://signpath.io?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity), certificate by [SignPath Foundation](https://signpath.org?utm_source=foundation&utm_medium=github&utm_campaign=super-productivity).
+
 ## Running the development server
 
 If you don't want or cannot use Codespaces for any reason, here are the instructions for local development.
