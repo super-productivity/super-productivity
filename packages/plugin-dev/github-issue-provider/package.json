@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "GitHub issue provider plugin",
   "scripts": {
-    "build": "tsc --noEmit && node scripts/build.js"
+    "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "esbuild": "^0.25.11",

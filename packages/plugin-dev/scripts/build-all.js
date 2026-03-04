@@ -285,7 +285,10 @@ async function buildPlugin(plugin) {
     return { plugin: plugin.name, success: true, duration };
   } catch (error) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    log(`❌ ${plugin.name} - Build failed: ${error.message} (${duration}s)`, colors.red);
+    log(`❌ ${plugin.name} - Build failed (${duration}s)`, colors.red);
+    if (error.stdout) {
+      log(`  stdout: ${error.stdout}`, colors.red);
+    }
     if (error.stderr) {
       log(`  stderr: ${error.stderr}`, colors.red);
     }
