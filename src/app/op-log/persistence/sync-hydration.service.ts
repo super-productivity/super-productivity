@@ -278,7 +278,7 @@ export class SyncHydrationService {
       await this.opLogStore.setVectorClock(clockForStorage);
       OpLog.normal('SyncHydrationService: Updated vector clock store after sync');
 
-      // 10. Dispatch loadAllData to update NgRx
+      // 11. Dispatch loadAllData to update NgRx
       this.store.dispatch(loadAllData({ appDataComplete: dataToLoad }));
       OpLog.normal('SyncHydrationService: Dispatched loadAllData with synced data');
     } catch (e) {

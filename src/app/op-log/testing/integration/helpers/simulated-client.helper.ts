@@ -289,10 +289,12 @@ export class SimulatedClient {
         minimalClock[importClientId] = fullStateOp.op.vectorClock[importClientId];
       }
       if (this.clientId !== importClientId) {
-        // Preserve our own counter from the import's clock (or 0 if not present)
-        const ownCounterInImport = fullStateOp.op.vectorClock[this.clientId] ?? 0;
-        const ownCounterCurrent = this.testClient.getCurrentClock()[this.clientId] ?? 0;
-        minimalClock[this.clientId] = Math.max(ownCounterInImport, ownCounterCurrent);
+        // Use the import's knowledge of our counter (matching real mergeRemoteOpClocks
+        // which starts from fullStateOp.vectorClock, not the local clock).
+        const ownCounterInImport = fullStateOp.op.vectorClock[this.clientId];
+        if (ownCounterInImport !== undefined) {
+          minimalClock[this.clientId] = ownCounterInImport;
+        }
       }
       this.testClient.setVectorClock(minimalClock);
     }
