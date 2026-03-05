@@ -2309,13 +2309,12 @@ describe('OperationLogStoreService', () => {
       await service.mergeRemoteOpClocks([syncImportOp]);
 
       const clock = await service.getVectorClock();
-      // Old entries (clientB, clientC, localClient) should be gone.
-      // clientA gets the import's value (80), not the old higher value (100),
-      // because the import's clock replaces the old clock entirely.
+      // After SYNC_IMPORT, the working clock is reset to minimal:
+      // only the import client's entry + the receiving client's entry.
+      // The full import clock is preserved in the stored operation for filtering.
+      // Old entries (clientA, clientB, clientC, clientD, localClient) are dropped.
       expect(clock).toEqual({
         clientX: 1,
-        clientA: 80,
-        clientD: 30,
       });
     });
   });

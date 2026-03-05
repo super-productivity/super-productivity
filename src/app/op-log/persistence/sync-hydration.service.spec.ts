@@ -283,18 +283,22 @@ describe('SyncHydrationService', () => {
       );
     });
 
-    it('should update vector clock store after sync', async () => {
+    it('should update vector clock store after sync with minimal clock', async () => {
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
       mockOpLogStore.loadStateCache.and.resolveTo({ vectorClock: { remote: 3 } } as any);
 
       await service.hydrateFromRemoteSync({});
 
+      // After SYNC_IMPORT, the working clock is reset to minimal (only own entry).
+      // The full merged clock is stored in the SYNC_IMPORT operation for filtering.
       expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
         jasmine.objectContaining({
           localClient: 6,
-          remote: 3,
         }),
       );
+      // Remote entries should NOT be in the minimal working clock
+      const setClockArg = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(setClockArg['remote']).toBeUndefined();
     });
 
     it('should dispatch loadAllData with synced data', async () => {

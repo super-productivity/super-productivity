@@ -211,6 +211,30 @@ export class SyncImportFilterService {
         validOps.push(op);
       } else if (
         comparison === VectorClockComparison.CONCURRENT &&
+        op.clientId !== latestImport.clientId &&
+        (op.vectorClock[latestImport.clientId] ?? 0) >=
+          (importClockForComparison[latestImport.clientId] ?? 0) &&
+        (importClockForComparison[latestImport.clientId] ?? 0) > 0
+      ) {
+        // Op was created by a DIFFERENT client with knowledge of the import.
+        // The SYNC_IMPORT incremented the importing client's counter, so any op whose
+        // clock includes that counter value (or higher) must have received the import
+        // (directly or transitively). CONCURRENT here is a clock-reset artifact: after
+        // receiving a SYNC_IMPORT, clients reset their working clock to minimal (only
+        // the import client's entry + own entry), so post-import ops lack entries for
+        // old/dead client IDs that are still in the import's stored clock.
+        //
+        // NOTE: Ops from the import client itself are handled by the same-client check
+        // above (which requires strictly greater counter, not equal).
+        OpLog.normal(
+          `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) despite CONCURRENT ` +
+            `- op has import client ${latestImport.clientId} counter ` +
+            `${op.vectorClock[latestImport.clientId]} >= import counter ` +
+            `${importClockForComparison[latestImport.clientId]} (post-import via clock reset).`,
+        );
+        validOps.push(op);
+      } else if (
+        comparison === VectorClockComparison.CONCURRENT &&
         importClockForComparison[op.clientId] === undefined &&
         Object.keys(importClockForComparison).length < MAX_VECTOR_CLOCK_SIZE
       ) {

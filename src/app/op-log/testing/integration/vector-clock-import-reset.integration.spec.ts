@@ -41,11 +41,10 @@ const isLikelyPruningArtifact = (
  * 3. All clients re-sync and then create new tasks
  * 4. New tasks from all clients should be accepted (not filtered as pre-import)
  *
- * This validates that:
- * - The import's vector clock carries forward the importing client's causal knowledge
- * - Post-import operations from all clients are recognized as post-import (GREATER_THAN)
- * - The SyncImportFilterService correctly keeps post-import ops even when clocks grow back to MAX
- * - Pruning artifacts are handled correctly for new clients joining after import
+ * KEY BEHAVIOR: After a SYNC_IMPORT, working clocks are reset to minimal
+ * (only import client + own client entries). Post-import ops are recognized
+ * by the import-client-counter exception in SyncImportFilterService, not by
+ * carrying forward the full accumulated clock.
  */
 describe('Vector Clock Import Reset Integration', () => {
   let storeService: OperationLogStoreService;
@@ -77,18 +76,20 @@ describe('Vector Clock Import Reset Integration', () => {
     );
   };
 
-  describe('Vector clock grows back to MAX after import', () => {
+  describe('Vector clock resets to minimal after import', () => {
     /**
-     * Test: After a SYNC_IMPORT, the vector clock grows back to MAX as clients resume syncing.
+     * Test: After a SYNC_IMPORT, client working clocks are reset to minimal.
      *
-     * Demonstrates WHY the vector clock grows back:
-     * 1. The import operation inherits the importing client's accumulated causal knowledge
-     * 2. Each client that syncs after the import merges the import's clock and adds its own entry
-     * 3. After MAX clients have synced, the clock is back at MAX_VECTOR_CLOCK_SIZE
+     * Previously, clocks would carry forward ALL accumulated client IDs from the
+     * import (including dead/stale ones). Now, working clocks are reset to only
+     * contain the import client's entry + the receiving client's entry.
+     *
+     * Note: If all original clients remain active (creating ops and syncing),
+     * clocks will naturally regrow to include all active clients. The key improvement
+     * is that DEAD client IDs (from reinstalls, etc.) are dropped.
      */
-    it('should demonstrate vector clock growing back to MAX after import', async () => {
-      // Use MAX_VECTOR_CLOCK_SIZE clients to fill the clock
-      const numClients = MAX_VECTOR_CLOCK_SIZE;
+    it('should reset working clocks to minimal immediately after receiving import', async () => {
+      const numClients = 5; // Use a small number for clarity
       const clients = createClients(numClients, storeService);
 
       // Phase 1: Each client creates a task and syncs, building up the clock
@@ -108,7 +109,7 @@ describe('Vector Clock Import Reset Integration', () => {
         await clients[i].sync(server);
       }
 
-      // Verify clocks have grown: client-000 should know about multiple clients
+      // Verify clocks have grown: client-000 should know about all clients
       const preImportClock = clients[0].getCurrentClock();
       const preImportClockSize = Object.keys(preImportClock).length;
       expect(preImportClockSize).toBeGreaterThanOrEqual(numClients);
@@ -134,65 +135,150 @@ describe('Vector Clock Import Reset Integration', () => {
       );
       await clients[0].sync(server);
 
-      // The import's clock should carry the importing client's knowledge of all clients
+      // The import's op clock should carry the importing client's knowledge of all clients
       const importClockSize = Object.keys(importOp.vectorClock).length;
       expect(importClockSize).toBeGreaterThanOrEqual(numClients);
+
+      // The importing client's working clock should be reset to minimal (just own entry)
+      const importerClock = clients[0].getCurrentClock();
+      expect(Object.keys(importerClock).length)
+        .withContext('Importing client clock should be minimal (1 entry: own)')
+        .toBe(1);
 
       // Phase 3: All other clients sync to receive the import
       for (let i = 1; i < numClients; i++) {
         await clients[i].sync(server);
       }
 
-      // Phase 4: Each client creates a new task post-import and syncs
-      for (let i = 0; i < numClients; i++) {
-        await clients[i].createLocalOp(
+      // After receiving the import, working clocks should be MINIMAL (reset)
+      for (let i = 1; i < numClients; i++) {
+        const postImportClock = clients[i].getCurrentClock();
+        const clockSize = Object.keys(postImportClock).length;
+        expect(clockSize)
+          .withContext(
+            `Client ${i} clock should be minimal (2 entries: import client + own), ` +
+              `got ${clockSize}: ${JSON.stringify(postImportClock)}`,
+          )
+          .toBeLessThanOrEqual(2);
+      }
+    });
+
+    /**
+     * Test: Dead client IDs are dropped after SYNC_IMPORT.
+     *
+     * Scenario: Several clients sync, then some go offline permanently (dead).
+     * After SYNC_IMPORT, the dead clients' IDs should NOT appear in working clocks.
+     */
+    it('should drop dead client IDs after import', async () => {
+      // Create 5 clients: 2 "alive" + 3 "dead"
+      const aliveClients = [
+        new SimulatedClient('client-alive-a', storeService),
+        new SimulatedClient('client-alive-b', storeService),
+      ];
+      const deadClients = [
+        new SimulatedClient('client-dead-1', storeService),
+        new SimulatedClient('client-dead-2', storeService),
+        new SimulatedClient('client-dead-3', storeService),
+      ];
+      const allClients = [...aliveClients, ...deadClients];
+
+      // All clients create tasks and sync
+      for (const client of allClients) {
+        await client.createLocalOp(
           'TASK',
-          `task-post-${i}`,
+          `task-${client.clientId}`,
           OpType.Create,
           '[Task] Add Task',
-          createMinimalTaskPayload(`task-post-${i}`, {
-            title: `Post-import Task ${i}`,
-          }),
+          createMinimalTaskPayload(`task-${client.clientId}`),
         );
-        await clients[i].sync(server);
+        await client.sync(server);
+      }
+      // Convergence
+      for (const client of allClients) {
+        await client.sync(server);
       }
 
-      // Verify: post-import ops should have clocks >= the import's clock
-      const serverOps = server.getAllOps();
-      const postImportOps = serverOps.filter((sop) =>
-        sop.op.entityId?.startsWith('task-post-'),
+      // Verify all clocks have entries for all clients
+      const preImportClock = aliveClients[0].getCurrentClock();
+      expect(Object.keys(preImportClock).length).toBe(5);
+
+      // Client alive-a performs import
+      await aliveClients[0].createLocalOp(
+        'ALL',
+        uuidv7(),
+        OpType.SyncImport,
+        '[SP_ALL] Load(import) all data',
+        {
+          appDataComplete: {
+            task: {
+              ids: ['import-task'],
+              entities: { 'import-task': createMinimalTaskPayload('import-task') },
+            },
+          },
+        },
       );
-      expect(postImportOps.length).toBe(numClients);
+      await aliveClients[0].sync(server);
 
-      // Every post-import op should be GREATER_THAN or EQUAL to the import's clock
-      for (const postOp of postImportOps) {
-        const comparison = compareVectorClocks(
-          postOp.op.vectorClock,
-          importOp.vectorClock,
-        );
-        expect(comparison)
-          .withContext(
-            `Post-import op from ${postOp.op.clientId} should be GREATER_THAN import, got ${comparison}`,
-          )
-          .toBe(VectorClockComparison.GREATER_THAN);
-      }
+      // Only alive clients resync (dead clients are gone)
+      await aliveClients[1].sync(server);
 
-      // The last client's clock should be back near MAX size
-      const lastClientClock = clients[numClients - 1].getCurrentClock();
-      const lastClockSize = Object.keys(lastClientClock).length;
-      expect(lastClockSize).toBeGreaterThanOrEqual(numClients);
+      // Alive clients create new ops and sync
+      await aliveClients[0].createLocalOp(
+        'TASK',
+        'post-a',
+        OpType.Create,
+        '[Task] Add Task',
+        createMinimalTaskPayload('post-a'),
+      );
+      await aliveClients[0].sync(server);
+
+      await aliveClients[1].createLocalOp(
+        'TASK',
+        'post-b',
+        OpType.Create,
+        '[Task] Add Task',
+        createMinimalTaskPayload('post-b'),
+      );
+      await aliveClients[1].sync(server);
+
+      // Converge
+      await aliveClients[0].sync(server);
+      await aliveClients[1].sync(server);
+
+      // Working clocks should only contain alive client IDs (dead ones are dropped)
+      const finalClockA = aliveClients[0].getCurrentClock();
+      const finalClockB = aliveClients[1].getCurrentClock();
+
+      expect(Object.keys(finalClockA).length)
+        .withContext(
+          `Alive client A should have 2 entries (alive clients only), ` +
+            `got: ${JSON.stringify(finalClockA)}`,
+        )
+        .toBe(2);
+      expect(finalClockA['client-dead-1']).toBeUndefined();
+      expect(finalClockA['client-dead-2']).toBeUndefined();
+      expect(finalClockA['client-dead-3']).toBeUndefined();
+
+      expect(Object.keys(finalClockB).length)
+        .withContext(
+          `Alive client B should have 2 entries (alive clients only), ` +
+            `got: ${JSON.stringify(finalClockB)}`,
+        )
+        .toBe(2);
+      expect(finalClockB['client-dead-1']).toBeUndefined();
+      expect(finalClockB['client-dead-2']).toBeUndefined();
+      expect(finalClockB['client-dead-3']).toBeUndefined();
     });
   });
 
-  describe('SyncImportFilterService keeps post-import ops after clock regrowth', () => {
+  describe('SyncImportFilterService keeps post-import ops with minimal clocks', () => {
     /**
      * Core test: Multiple clients at MAX vector clock → import on one client → resync →
      * new tasks from all clients should pass the SyncImportFilterService filter.
      *
-     * This is the primary scenario the user asked about:
-     * - Start with MAX_VECTOR_CLOCK_SIZE clients all synced
-     * - One client imports a file
-     * - After resync, new tasks added on ALL clients must survive filtering
+     * After the clock reset fix, post-import ops have minimal clocks and appear
+     * CONCURRENT with the import (missing entries for old clients). The
+     * import-client-counter exception recognizes them as post-import.
      */
     it('should keep new tasks from all clients after import and resync', async () => {
       const numClients = MAX_VECTOR_CLOCK_SIZE;
@@ -264,10 +350,7 @@ describe('Vector Clock Import Reset Integration', () => {
       }
 
       // Phase 5: Verify using SyncImportFilterService
-      // Set up the service with the import stored in the op log
       const filterService = TestBed.inject(SyncImportFilterService);
-
-      // The filter should keep all post-import ops
       const result = await filterService.filterOpsInvalidatedBySyncImport(postImportOps);
 
       expect(result.invalidatedOps.length)
@@ -358,12 +441,19 @@ describe('Vector Clock Import Reset Integration', () => {
       );
       expect(comparisonC).toBe(VectorClockComparison.CONCURRENT);
 
-      // Verify: post-import op from B should be GREATER_THAN the import
+      // Verify: post-import op from B should be CONCURRENT with the import
+      // (B's clock was reset to minimal after receiving import, so it's missing
+      // entries that the import has — but it has the import client's counter)
       const comparisonB = compareVectorClocks(
         postImportOpB.vectorClock,
         importOp.vectorClock,
       );
-      expect(comparisonB).toBe(VectorClockComparison.GREATER_THAN);
+      // With minimal clocks, B's op is CONCURRENT (missing old entries)
+      // but should still be kept by the import-client-counter exception
+      expect(
+        comparisonB === VectorClockComparison.GREATER_THAN ||
+          comparisonB === VectorClockComparison.CONCURRENT,
+      ).toBe(true);
 
       // Use SyncImportFilterService
       const filterService = TestBed.inject(SyncImportFilterService);
@@ -373,7 +463,7 @@ describe('Vector Clock Import Reset Integration', () => {
       ]);
 
       // Pre-import op from C should be KEPT (unknown client - import has no entry for C)
-      // Post-import op from B should also be kept (GREATER_THAN)
+      // Post-import op from B should also be kept (import-client-counter exception)
       expect(result.invalidatedOps.length).toBe(0);
       expect(result.validOps.length).toBe(2);
       expect(result.validOps.find((op) => op.entityId === 'taskC-pre')).toBeDefined();
@@ -497,22 +587,15 @@ describe('Vector Clock Import Reset Integration', () => {
     /**
      * End-to-end scenario: MAX clients → import → resync → new tasks from all clients.
      *
-     * This is the complete integration test covering the full lifecycle:
-     * 1. Create MAX_VECTOR_CLOCK_SIZE clients
-     * 2. Each client creates multiple tasks and syncs (clocks grow to MAX)
-     * 3. Client 0 imports a file (resets state)
-     * 4. All clients resync to receive the import
-     * 5. All clients create new tasks
-     * 6. All clients sync new tasks
-     * 7. Verify: all new tasks are on the server and their vector clocks
-     *    correctly show GREATER_THAN relative to the import
+     * After the clock reset fix, post-import ops have minimal clocks but are
+     * correctly recognized as post-import by SyncImportFilterService via the
+     * import-client-counter exception.
      */
     it('should handle full lifecycle: MAX clock → import → resync → new tasks sync correctly', async () => {
       const numClients = MAX_VECTOR_CLOCK_SIZE;
       const clients = createClients(numClients, storeService);
 
       // === Phase 1: Build up clocks to MAX ===
-      // Multiple rounds of create-and-sync to ensure clocks accumulate all client IDs
       for (let round = 0; round < 3; round++) {
         for (let i = 0; i < numClients; i++) {
           await clients[i].createLocalOp(
@@ -534,7 +617,7 @@ describe('Vector Clock Import Reset Integration', () => {
 
       // Snapshot: count server ops before import
       const preImportServerOpCount = server.getAllOps().length;
-      expect(preImportServerOpCount).toBe(numClients * 3); // 3 rounds × numClients
+      expect(preImportServerOpCount).toBe(numClients * 3);
 
       // === Phase 2: Client 0 imports ===
       const importOp = await clients[0].createLocalOp(
@@ -596,32 +679,39 @@ describe('Vector Clock Import Reset Integration', () => {
           .toBeDefined();
       }
 
-      // === Phase 7: Verify vector clock relationships ===
+      // === Phase 7: Verify post-import ops have the import client's counter ===
+      // Post-import ops should have the import client's counter value, which
+      // allows SyncImportFilterService to recognize them as post-import.
       const newTaskOpsOnServer = allServerOps.filter((sop) =>
         sop.op.entityId?.startsWith('new-task-from-client-'),
       );
       expect(newTaskOpsOnServer.length).toBe(numClients);
 
+      const importClientId = importOp.clientId;
+      const importClientCounter = importOp.vectorClock[importClientId];
       for (const serverOp of newTaskOpsOnServer) {
-        const comparison = compareVectorClocks(
-          serverOp.op.vectorClock,
-          importOp.vectorClock,
-        );
-        expect(comparison)
+        const opImportCounter = serverOp.op.vectorClock[importClientId] ?? 0;
+        expect(opImportCounter)
           .withContext(
-            `Op for ${serverOp.op.entityId} from ${serverOp.op.clientId} ` +
-              `should be GREATER_THAN import. ` +
-              `Op clock keys: ${Object.keys(serverOp.op.vectorClock).length}, ` +
-              `Import clock keys: ${importClockEntries}`,
+            `Op for ${serverOp.op.entityId} from ${serverOp.op.clientId} should have ` +
+              `import client counter >= ${importClientCounter}, got ${opImportCounter}`,
           )
-          .toBe(VectorClockComparison.GREATER_THAN);
+          .toBeGreaterThanOrEqual(importClientCounter);
       }
 
-      // === Phase 8: Verify clocks have grown back toward MAX ===
-      // The last client to sync should have a clock with entries for all clients
+      // === Phase 8: Verify clocks are bounded ===
+      // With all MAX clients still active, clocks will naturally regrow to include
+      // all active client IDs. The key improvement is that DEAD client IDs
+      // (from reinstalls, etc.) are dropped. With all clients active, the clock
+      // size equals the number of active clients (bounded by MAX_VECTOR_CLOCK_SIZE).
       const finalClock = clients[numClients - 1].getCurrentClock();
       const finalClockSize = Object.keys(finalClock).length;
-      expect(finalClockSize).toBeGreaterThanOrEqual(numClients);
+      expect(finalClockSize)
+        .withContext(
+          `Final clock should be bounded at MAX (${MAX_VECTOR_CLOCK_SIZE}), ` +
+            `got ${finalClockSize}`,
+        )
+        .toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
     });
 
     /**
@@ -747,16 +837,30 @@ describe('Vector Clock Import Reset Integration', () => {
       );
       await clientB.sync(server);
 
-      // Verify round 2 tasks are GREATER_THAN the import
+      // Verify round 2 tasks are on the server and have the import client's counter
       const round2Ops = server
         .getAllOps()
         .filter((o) => o.op.entityId?.startsWith('round2-'));
       expect(round2Ops.length).toBe(2);
 
+      const importClientId = importOp.clientId;
+      const importClientCounter = importOp.vectorClock[importClientId];
       for (const op of round2Ops) {
-        const cmp = compareVectorClocks(op.op.vectorClock, importOp.vectorClock);
-        expect(cmp).toBe(VectorClockComparison.GREATER_THAN);
+        const opImportCounter = op.op.vectorClock[importClientId] ?? 0;
+        expect(opImportCounter)
+          .withContext(
+            `Round 2 op from ${op.op.clientId} should have import client counter >= ${importClientCounter}`,
+          )
+          .toBeGreaterThanOrEqual(importClientCounter);
       }
+
+      // Verify clocks only contain active client IDs (3 clients)
+      const finalClockA = clientA.getCurrentClock();
+      expect(Object.keys(finalClockA).length)
+        .withContext(
+          'Client A clock should only have active clients after import + convergence',
+        )
+        .toBeLessThanOrEqual(3); // A + B + C
     });
   });
 });
