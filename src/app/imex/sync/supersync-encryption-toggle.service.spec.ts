@@ -97,7 +97,7 @@ describe('SuperSyncEncryptionToggleService', () => {
       });
     });
 
-    it('should revert config on failure while preserving auth credentials', async () => {
+    it('should revert config on failure using pre-captured config (preserving auth credentials)', async () => {
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
         new Error('Upload failed'),
       );
@@ -106,7 +106,7 @@ describe('SuperSyncEncryptionToggleService', () => {
         /CRITICAL/,
       );
 
-      // Should revert config to disable encryption while keeping baseUrl/accessToken
+      // Should revert using the config captured BEFORE the destructive call
       expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.SuperSync,
         jasmine.objectContaining({
@@ -152,12 +152,14 @@ describe('SuperSyncEncryptionToggleService', () => {
       });
     });
 
-    it('should revert config to re-enable encryption on failure', async () => {
-      // After shared method runs, config is already set to isEncryptionEnabled: false
-      (mockSyncProvider.privateCfg.load as jasmine.Spy).and.resolveTo({
+    it('should revert config to original state (including encryption key) on failure', async () => {
+      // Set up initial state: encryption is enabled with a key
+      const encryptedCfg: SuperSyncPrivateCfg = {
         ...mockExistingCfg,
-        isEncryptionEnabled: false,
-      });
+        isEncryptionEnabled: true,
+        encryptKey: 'original-key',
+      };
+      (mockSyncProvider.privateCfg.load as jasmine.Spy).and.resolveTo(encryptedCfg);
 
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
         new Error('Upload failed'),
@@ -165,12 +167,10 @@ describe('SuperSyncEncryptionToggleService', () => {
 
       await expectAsync(service.disableEncryption()).toBeRejectedWithError(/CRITICAL/);
 
-      // Should revert config to re-enable encryption
+      // Should restore the original config including the encryption key
       expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
         SyncProviderId.SuperSync,
-        jasmine.objectContaining({
-          isEncryptionEnabled: true,
-        }),
+        encryptedCfg,
       );
     });
 

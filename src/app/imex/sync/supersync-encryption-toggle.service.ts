@@ -34,18 +34,17 @@ export class SuperSyncEncryptionToggleService {
       throw new Error('Encryption key is required');
     }
 
-    // Guard against concurrent calls
-    const activeProvider = this._providerManager.getActiveProvider();
-    if (activeProvider) {
-      const currentCfg = (await activeProvider.privateCfg.load()) as
-        | { isEncryptionEnabled?: boolean; encryptKey?: string }
-        | undefined;
-      if (currentCfg?.isEncryptionEnabled && currentCfg?.encryptKey) {
-        SyncLog.normal(
-          `${LOG_PREFIX}: Encryption is already enabled, skipping duplicate enableEncryption call`,
-        );
-        return;
-      }
+    // Capture existing config BEFORE destructive call so we can revert on failure.
+    // Also serves as guard against duplicate enable calls.
+    const existingCfg = (await this._providerManager
+      .getActiveProvider()
+      ?.privateCfg.load()) as SuperSyncPrivateCfg | undefined;
+
+    if (existingCfg?.isEncryptionEnabled && existingCfg?.encryptKey) {
+      SyncLog.normal(
+        `${LOG_PREFIX}: Encryption is already enabled, skipping duplicate enableEncryption call`,
+      );
+      return;
     }
 
     try {
@@ -60,12 +59,9 @@ export class SuperSyncEncryptionToggleService {
       // Revert config on failure (server data is already deleted at this point)
       SyncLog.err(`${LOG_PREFIX}: Failed after deleting server data!`, error);
 
-      // Best-effort revert: load current cfg to preserve auth credentials (baseUrl, accessToken, etc.)
-      const currentCfg = await this._providerManager
-        .getActiveProvider()
-        ?.privateCfg.load();
+      // Best-effort revert: restore original config (preserves auth credentials and original encryption state)
       await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
-        ...currentCfg,
+        ...existingCfg,
         encryptKey: undefined,
         isEncryptionEnabled: false,
       } as SuperSyncPrivateCfg);
@@ -84,6 +80,12 @@ export class SuperSyncEncryptionToggleService {
   async disableEncryption(): Promise<void> {
     SyncLog.normal(`${LOG_PREFIX}: Starting encryption disable...`);
 
+    // Capture existing config BEFORE destructive call so we can revert on failure
+    // (including the encryption key, which deleteAndReuploadWithNewEncryption clears)
+    const existingCfg = (await this._providerManager
+      .getActiveProvider()
+      ?.privateCfg.load()) as SuperSyncPrivateCfg | undefined;
+
     try {
       await this._snapshotUploadService.deleteAndReuploadWithNewEncryption({
         encryptKey: undefined,
@@ -98,15 +100,12 @@ export class SuperSyncEncryptionToggleService {
         uploadError,
       );
 
-      // Best-effort revert: re-enable encryption since disable failed
-      const currentCfg = (await this._providerManager
-        .getActiveProvider()
-        ?.privateCfg.load()) as SuperSyncPrivateCfg | undefined;
-      if (currentCfg && !currentCfg.isEncryptionEnabled) {
-        await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
-          ...currentCfg,
-          isEncryptionEnabled: true,
-        } as SuperSyncPrivateCfg);
+      // Best-effort revert: restore original config (including encryption key)
+      if (existingCfg) {
+        await this._providerManager.setProviderConfig(
+          SyncProviderId.SuperSync,
+          existingCfg,
+        );
       }
 
       throw new Error(

@@ -1288,8 +1288,9 @@ describe('lwwUpdateMetaReducer', () => {
       expect(projectA.taskIds).not.toContain(SUBTASK_ID);
     });
 
-    it('should handle subtask becoming orphan (parentId removed via LWW)', () => {
-      // Subtask loses its parent via LWW update
+    it('should handle subtask becoming orphan (parentId removed via LWW, same project)', () => {
+      // Subtask loses its parent via LWW update but stays in same project.
+      // Since oldProjectId === newProjectId, syncProjectTaskIds returns early — no taskIds change.
       const state = {
         [TASK_FEATURE_NAME]: {
           ids: [SUBTASK_ID],
@@ -1322,7 +1323,7 @@ describe('lwwUpdateMetaReducer', () => {
         type: '[TASK] LWW Update',
         id: SUBTASK_ID,
         parentId: null, // Parent removed - becomes top-level task
-        projectId: PROJECT_A,
+        projectId: PROJECT_A, // Same project — no project change
         title: 'Now a top-level task',
         meta: { isPersistent: true, entityType: 'TASK', entityId: SUBTASK_ID },
       };
@@ -1335,15 +1336,65 @@ describe('lwwUpdateMetaReducer', () => {
 
       // Task should now be a top-level task
       expect(subtask.parentId).toBeNull();
-      // Since it's no longer a subtask and wasn't before in project.taskIds,
-      // and it's changing projectId (even though it's the same), it should be added
-      // Actually - it WAS a subtask (existingEntity.parentId exists) so isSubTask = true
-      // Therefore it still won't be added
+      // projectId didn't change (same project), so syncProjectTaskIds exits early
       expect(projectA.taskIds).not.toContain(SUBTASK_ID);
     });
 
-    it('should recognize task as subtask based on existing parentId even if new data has no parentId', () => {
-      // This tests the isSubTask check: (entityData['parentId'] || existingEntity?.parentId)
+    it('should add promoted subtask to new project.taskIds when parentId is cleared and projectId changes', () => {
+      // Subtask is promoted to main task AND moves to a new project via LWW update.
+      // With the 'parentId' in entityData check, the task is correctly treated as
+      // a main task (not subtask), so it SHOULD be added to the new project's taskIds.
+      const PROJECT_B = 'project-b';
+      const state = {
+        [TASK_FEATURE_NAME]: {
+          ids: [SUBTASK_ID],
+          entities: {
+            [SUBTASK_ID]: createMockTask({
+              id: SUBTASK_ID,
+              parentId: PARENT_TASK,
+              projectId: PROJECT_A,
+            }),
+          },
+          currentTaskId: null,
+          selectedTaskId: null,
+          taskDetailTargetPanel: null,
+          isDataLoaded: true,
+          lastCurrentTaskId: null,
+        },
+        [PROJECT_FEATURE_NAME]: {
+          ids: [PROJECT_A, PROJECT_B],
+          entities: {
+            [PROJECT_A]: createMockProject({ id: PROJECT_A, taskIds: [] }),
+            [PROJECT_B]: createMockProject({ id: PROJECT_B, taskIds: [] }),
+          },
+        },
+        [TAG_FEATURE_NAME]: {
+          ids: [],
+          entities: {},
+        },
+      } as Partial<RootState>;
+
+      const action = {
+        type: '[TASK] LWW Update',
+        id: SUBTASK_ID,
+        parentId: null, // Promoted to main task
+        projectId: PROJECT_B, // Moved to different project
+        title: 'Promoted and moved task',
+        meta: { isPersistent: true, entityType: 'TASK', entityId: SUBTASK_ID },
+      };
+
+      reducer(state, action);
+
+      const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
+      const projectB = updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_B] as Project;
+
+      // Task is now a main task (parentId cleared), so it should be added to new project
+      expect(projectB.taskIds).toContain(SUBTASK_ID);
+    });
+
+    it('should recognize task as subtask based on existing parentId when new data has no parentId key', () => {
+      // When the LWW update payload doesn't include parentId at all,
+      // fall back to existingEntity.parentId to determine subtask status.
       const state = {
         [TASK_FEATURE_NAME]: {
           ids: [SUBTASK_ID],
@@ -1386,8 +1437,8 @@ describe('lwwUpdateMetaReducer', () => {
       const updatedState = mockReducer.calls.mostRecent().args[0] as Partial<RootState>;
       const projectA = updatedState[PROJECT_FEATURE_NAME]?.entities[PROJECT_A] as Project;
 
-      // Should still be treated as subtask because existingEntity has parentId
-      // Therefore NOT added to project.taskIds
+      // parentId is not in the payload, so we fall back to existingEntity.parentId.
+      // Still treated as subtask, therefore NOT added to project.taskIds
       expect(projectA.taskIds).not.toContain(SUBTASK_ID);
     });
   });

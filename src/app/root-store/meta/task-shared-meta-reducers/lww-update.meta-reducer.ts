@@ -21,7 +21,6 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
-import { unique } from '../../../util/unique';
 import { OpLog } from '../../../core/log';
 import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { getDbDateStr } from '../../../util/get-db-date-str';
@@ -98,7 +97,7 @@ const syncProjectTaskIds = (
         {
           id: newProjectId,
           changes: {
-            taskIds: unique([...newProject.taskIds, taskId]),
+            taskIds: [...newProject.taskIds, taskId],
           },
         },
         projectState,
@@ -181,7 +180,7 @@ const syncTagTaskIds = (
           {
             id: tagId,
             changes: {
-              taskIds: unique([...tag.taskIds, taskId]),
+              taskIds: [...tag.taskIds, taskId],
             },
           },
           tagState,
@@ -251,7 +250,7 @@ const syncTodayTagTaskIds = (
         {
           id: TODAY_TAG.id,
           changes: {
-            taskIds: unique([...todayTag.taskIds, taskId]),
+            taskIds: [...todayTag.taskIds, taskId],
           },
         },
         tagState,
@@ -334,7 +333,7 @@ const syncParentSubTaskIds = (
         {
           id: newParentId,
           changes: {
-            subTaskIds: unique([...newParent.subTaskIds, taskId]),
+            subTaskIds: [...newParent.subTaskIds, taskId],
           },
         },
         taskState,
@@ -567,7 +566,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       // Sync project.taskIds when projectId changes
       const oldProjectId = existingEntity?.projectId as string | undefined;
       const newProjectId = entityData['projectId'] as string | undefined;
-      const isSubTask = !!(entityData['parentId'] || existingEntity?.parentId);
+      // Use the NEW parentId to decide subtask status: if the LWW update
+      // clears parentId (promoting to main task), we should add it to project.taskIds.
+      // Fall back to existing only when the LWW update doesn't include parentId at all.
+      const isSubTask = !!('parentId' in entityData
+        ? entityData['parentId']
+        : existingEntity?.parentId);
 
       updatedState = syncProjectTaskIds(
         updatedState,

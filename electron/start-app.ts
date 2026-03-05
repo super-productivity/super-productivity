@@ -51,18 +51,8 @@ let mainWin: BrowserWindow;
 let idleTimeHandler: IdleTimeHandler;
 
 export const startApp = (): void => {
-  // Initialize protocol handling
+  // Initialize protocol handling (registers second-instance listener for URL forwarding)
   initializeProtocolHandling(IS_DEV, app, () => mainWin);
-
-  // Handle single instance lock (not needed on macOS - OS handles it natively,
-  // and the singleton socket is blocked by the App Store sandbox)
-  if (!IS_MAC) {
-    const gotTheLock = app.requestSingleInstanceLock();
-    if (!gotTheLock) {
-      app.quit();
-      return;
-    }
-  }
 
   // LOAD IPC STUFF
   initIpcInterfaces();
