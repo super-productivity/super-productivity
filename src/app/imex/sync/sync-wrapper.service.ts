@@ -456,12 +456,23 @@ export class SyncWrapperService {
           }
         }
 
-        this._snackService.open({
-          msg: T.F.SYNC.S.INCOMPLETE_CFG,
-          type: 'ERROR',
-          actionFn: async () => this._matDialog.open(DialogSyncInitialCfgComponent),
-          actionStr: T.F.SYNC.S.BTN_CONFIGURE,
-        });
+        // Show different messages for server rejection vs missing credentials
+        if (error instanceof AuthFailSPError) {
+          this._snackService.open({
+            msg: T.F.SYNC.S.AUTH_TOKEN_REJECTED,
+            translateParams: { reason: error.message },
+            type: 'ERROR',
+            actionFn: async () => this._matDialog.open(DialogSyncInitialCfgComponent),
+            actionStr: T.F.SYNC.S.BTN_CONFIGURE,
+          });
+        } else {
+          this._snackService.open({
+            msg: T.F.SYNC.S.INCOMPLETE_CFG,
+            type: 'ERROR',
+            actionFn: async () => this._matDialog.open(DialogSyncInitialCfgComponent),
+            actionStr: T.F.SYNC.S.BTN_CONFIGURE,
+          });
+        }
         return 'HANDLED_ERROR';
       } else if (error instanceof SyncInvalidTimeValuesError) {
         // Handle async dialog result properly to avoid silent error swallowing

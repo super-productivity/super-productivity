@@ -36,10 +36,10 @@ export const authenticate = async (
   }
   const token = authHeader.split(' ')[1];
 
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return reply.code(401).send({ error: 'Invalid token' });
+  const result = await verifyToken(token);
+  if (!result.valid) {
+    return reply.code(401).send({ error: result.reason });
   }
 
-  req.user = payload;
+  req.user = { userId: result.userId, email: result.email };
 };

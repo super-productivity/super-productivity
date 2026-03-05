@@ -233,9 +233,11 @@ async function refreshToken() {
 
   // Show confirmation dialog
   const confirmed = confirm(
-    'Are you sure you want to refresh your token?\n\n' +
-      'This will invalidate your current token. You will need to update ' +
-      'the token in Super Productivity and any other devices using this account.',
+    'Are you sure you want to REVOKE your current token?\n\n' +
+      'This will disconnect ALL devices using this account. ' +
+      'You will need to copy the new token and paste it into Super Productivity on every device.\n\n' +
+      'Note: If you just need to see your token again, simply log in again — ' +
+      'this does NOT revoke existing tokens.',
   );
 
   if (!confirmed) return;
@@ -265,9 +267,13 @@ async function refreshToken() {
 
     // Visual feedback
     const originalText = refreshBtn.innerText;
-    refreshBtn.innerText = 'Refreshed!';
+    refreshBtn.innerText = 'Replaced!';
     refreshBtn.classList.add('success');
-    showMessage('Token refreshed! Old token is now invalid.', 'success');
+    showMessage(
+      'Token replaced! All previous tokens are now invalid. ' +
+        'Copy this new token and update it on all your devices.',
+      'success',
+    );
 
     setTimeout(() => {
       refreshBtn.innerText = originalText;

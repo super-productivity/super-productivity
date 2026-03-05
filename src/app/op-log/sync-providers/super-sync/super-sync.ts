@@ -382,11 +382,29 @@ export class SuperSyncProvider
 
   /**
    * Check HTTP response status and throw AuthFailSPError for auth failures.
+   * Extracts the server's rejection reason from the response body if available.
    */
   private _checkHttpStatus(status: number, body?: string): void {
     if (status === 401 || status === 403) {
-      throw new AuthFailSPError(`Authentication failed (HTTP ${status})`, body);
+      const reason = this._extractServerErrorReason(body);
+      throw new AuthFailSPError(reason || `Authentication failed (HTTP ${status})`, body);
     }
+  }
+
+  /**
+   * Extracts the "error" field from a JSON response body, if present.
+   */
+  private _extractServerErrorReason(body?: string): string | undefined {
+    if (!body) return undefined;
+    try {
+      const parsed = JSON.parse(body);
+      if (typeof parsed?.error === 'string') {
+        return parsed.error;
+      }
+    } catch {
+      // Not JSON — ignore
+    }
+    return undefined;
   }
 
   /**

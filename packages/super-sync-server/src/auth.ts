@@ -103,9 +103,11 @@ export const replaceToken = async (
   return { token, user: { id: userId, email } };
 };
 
-export const verifyToken = async (
-  token: string,
-): Promise<{ userId: number; email: string } | null> => {
+export type TokenVerificationResult =
+  | { valid: true; userId: number; email: string }
+  | { valid: false; reason: string };
+
+export const verifyToken = async (token: string): Promise<TokenVerificationResult> => {
   try {
     const payload = await new Promise<{
       userId: number;
@@ -126,16 +128,16 @@ export const verifyToken = async (
 
     if (!user) {
       Logger.warn(`Token verification failed: User ${payload.userId} not found in DB`);
-      return null;
+      return { valid: false, reason: 'User not found' };
     }
 
     if (!user.isVerified) {
       Logger.warn(`Token verification failed: User ${payload.userId} is not verified`);
-      return null;
+      return { valid: false, reason: 'Account not verified' };
     }
 
     // Check token version - if it doesn't match, the token has been revoked
-    // (e.g., user changed password). Tokens without version are treated as version 0.
+    // (e.g., user used "Revoke & Replace Token"). Tokens without version are treated as version 0.
     const tokenVersion = payload.tokenVersion ?? 0;
     const currentVersion = user.tokenVersion ?? 0;
     if (tokenVersion !== currentVersion) {
@@ -143,12 +145,18 @@ export const verifyToken = async (
         `Token verification failed: Token version mismatch for user ${payload.userId} ` +
           `(token: ${tokenVersion}, current: ${currentVersion})`,
       );
-      return null;
+      return {
+        valid: false,
+        reason: 'Token was revoked. Please log in again to get a new token.',
+      };
     }
 
-    return { userId: payload.userId, email: payload.email };
+    return { valid: true, userId: payload.userId, email: payload.email };
   } catch (err) {
-    return null;
+    if (err instanceof Error && err.name === 'TokenExpiredError') {
+      return { valid: false, reason: 'Token expired. Please log in again to get a new token.' };
+    }
+    return { valid: false, reason: 'Invalid token' };
   }
 };
 

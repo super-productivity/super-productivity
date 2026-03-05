@@ -70,8 +70,8 @@ describe('authenticate', () => {
     expect(reply._body).toEqual({ error: 'Missing or invalid Authorization header' });
   });
 
-  it('should return 401 when verifyToken returns null', async () => {
-    mockVerifyToken.mockResolvedValue(null);
+  it('should return 401 with reason when verifyToken returns invalid', async () => {
+    mockVerifyToken.mockResolvedValue({ valid: false, reason: 'Token was revoked. Please log in again to get a new token.' });
     const req = createMockRequest('Bearer invalid-token');
     const reply = createMockReply();
 
@@ -79,11 +79,11 @@ describe('authenticate', () => {
 
     expect(mockVerifyToken).toHaveBeenCalledWith('invalid-token');
     expect(reply._statusCode).toBe(401);
-    expect(reply._body).toEqual({ error: 'Invalid token' });
+    expect(reply._body).toEqual({ error: 'Token was revoked. Please log in again to get a new token.' });
   });
 
   it('should set req.user when token is valid', async () => {
-    const userPayload = { userId: 42, email: 'user@test.com' };
+    const userPayload = { valid: true, userId: 42, email: 'user@test.com' };
     mockVerifyToken.mockResolvedValue(userPayload);
     const req = createMockRequest('Bearer valid-token');
     const reply = createMockReply();
@@ -91,7 +91,7 @@ describe('authenticate', () => {
     const result = await authenticate(req, reply);
 
     expect(mockVerifyToken).toHaveBeenCalledWith('valid-token');
-    expect(req.user).toEqual(userPayload);
+    expect(req.user).toEqual({ userId: 42, email: 'user@test.com' });
     // Should return undefined (not sending a reply) when auth succeeds
     expect(result).toBeUndefined();
   });
@@ -99,7 +99,7 @@ describe('authenticate', () => {
   it('should extract token correctly when extra spaces exist after Bearer', async () => {
     // Note: "Bearer  two-spaces" splits on ' ' giving ['Bearer', '', 'two-spaces']
     // split(' ')[1] would be '', which verifyToken would reject
-    mockVerifyToken.mockResolvedValue(null);
+    mockVerifyToken.mockResolvedValue({ valid: false, reason: 'Invalid token' });
     const req = createMockRequest('Bearer  extra-space-token');
     const reply = createMockReply();
 

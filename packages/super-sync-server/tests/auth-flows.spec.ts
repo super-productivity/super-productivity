@@ -315,9 +315,11 @@ describe('Authentication Flows', () => {
 
       // Verify the token is valid and contains tokenVersion
       const verified = await verifyToken(result.token);
-      expect(verified).not.toBeNull();
-      expect(verified!.userId).toBe(1);
-      expect(verified!.email).toBe(email);
+      expect(verified.valid).toBe(true);
+      if (verified.valid) {
+        expect(verified.userId).toBe(1);
+        expect(verified.email).toBe(email);
+      }
     });
   });
 
@@ -338,22 +340,28 @@ describe('Authentication Flows', () => {
       const loginResult = await loginUser(email, password);
       const verified = await verifyToken(loginResult.token);
 
-      expect(verified).not.toBeNull();
-      expect(verified!.userId).toBe(1);
-      expect(verified!.email).toBe(email);
+      expect(verified.valid).toBe(true);
+      if (verified.valid) {
+        expect(verified.userId).toBe(1);
+        expect(verified.email).toBe(email);
+      }
     });
 
     it('should reject token after version increment (revoked)', async () => {
       const loginResult = await loginUser(email, password);
 
       // Token should be valid initially
-      expect(await verifyToken(loginResult.token)).not.toBeNull();
+      expect((await verifyToken(loginResult.token)).valid).toBe(true);
 
       // Revoke all tokens
       revokeAllTokens(1);
 
       // Token should now be invalid
-      expect(await verifyToken(loginResult.token)).toBeNull();
+      const result = await verifyToken(loginResult.token);
+      expect(result.valid).toBe(false);
+      if (!result.valid) {
+        expect(result.reason).toContain('revoked');
+      }
     });
 
     it('should reject token for deleted user', async () => {
@@ -364,13 +372,13 @@ describe('Authentication Flows', () => {
       db.prepare('DELETE FROM users WHERE id = ?').run(1);
 
       // Token should now be invalid
-      expect(await verifyToken(loginResult.token)).toBeNull();
+      expect((await verifyToken(loginResult.token)).valid).toBe(false);
     });
 
     it('should reject malformed tokens', async () => {
-      expect(await verifyToken('not.a.valid.token')).toBeNull();
-      expect(await verifyToken('completely-invalid')).toBeNull();
-      expect(await verifyToken('')).toBeNull();
+      expect((await verifyToken('not.a.valid.token')).valid).toBe(false);
+      expect((await verifyToken('completely-invalid')).valid).toBe(false);
+      expect((await verifyToken('')).valid).toBe(false);
     });
   });
 
@@ -396,22 +404,22 @@ describe('Authentication Flows', () => {
 
       // Verify new token is valid
       const verified = await verifyToken(result.token);
-      expect(verified).not.toBeNull();
+      expect(verified.valid).toBe(true);
     });
 
     it('should invalidate all previous tokens after replacement', async () => {
       // Login to get initial token
       const loginResult = await loginUser(email, password);
-      expect(await verifyToken(loginResult.token)).not.toBeNull();
+      expect((await verifyToken(loginResult.token)).valid).toBe(true);
 
       // Replace token
       const newResult = replaceToken(1, email);
 
       // Old token should be invalid
-      expect(await verifyToken(loginResult.token)).toBeNull();
+      expect((await verifyToken(loginResult.token)).valid).toBe(false);
 
       // New token should be valid
-      expect(await verifyToken(newResult.token)).not.toBeNull();
+      expect((await verifyToken(newResult.token)).valid).toBe(true);
     });
 
     it('should increment token version in database', () => {
