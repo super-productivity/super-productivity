@@ -224,6 +224,11 @@ export class SyncImportFilterService {
         // the import client's entry + own entry), so post-import ops lack entries for
         // old/dead client IDs that are still in the import's stored clock.
         //
+        // ASSUMPTION: This relies on the SYNC_IMPORT op persisting in the op log for
+        // filtering. Transitive propagation (client C learns import counter from client B
+        // without directly receiving the import) is safe because the filter only runs
+        // against ops that coexist with the SYNC_IMPORT in the log.
+        //
         // NOTE: Ops from the import client itself are handled by the same-client check
         // above (which requires strictly greater counter, not equal).
         OpLog.normal(

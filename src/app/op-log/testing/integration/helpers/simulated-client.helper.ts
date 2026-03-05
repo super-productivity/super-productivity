@@ -1,5 +1,6 @@
 import {
   ActionType,
+  FULL_STATE_OP_TYPES,
   Operation,
   OperationLogEntry,
   OpType,
@@ -79,11 +80,7 @@ export class SimulatedClient {
     // After creating a SYNC_IMPORT locally, reset the working clock to minimal.
     // This matches the real behavior in SyncHydrationService.hydrateFromRemoteSync()
     // where the working clock is reset to only the importing client's entry.
-    if (
-      opType === OpType.SyncImport ||
-      opType === OpType.BackupImport ||
-      (opType as string) === 'REPAIR'
-    ) {
+    if (FULL_STATE_OP_TYPES.has(opType)) {
       const minimalClock: Record<string, number> = {};
       minimalClock[this.clientId] = op.vectorClock[this.clientId];
       this.testClient.setVectorClock(minimalClock);
@@ -274,11 +271,8 @@ export class SimulatedClient {
     // Check if any op is a full-state operation (SYNC_IMPORT / BACKUP_IMPORT / REPAIR).
     // If so, reset the clock to minimal (import client + own client) instead of merging,
     // matching the real behavior in OperationLogStoreService.mergeRemoteOpClocks().
-    const fullStateOp = serverOps.find(
-      (sop) =>
-        sop.op.opType === OpType.SyncImport ||
-        sop.op.opType === OpType.BackupImport ||
-        (sop.op.opType as string) === 'REPAIR',
+    const fullStateOp = serverOps.find((sop) =>
+      FULL_STATE_OP_TYPES.has(sop.op.opType as OpType),
     );
 
     if (fullStateOp) {

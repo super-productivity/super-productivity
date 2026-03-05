@@ -450,10 +450,11 @@ describe('Vector Clock Import Reset Integration', () => {
       );
       // With minimal clocks, B's op is CONCURRENT (missing old entries)
       // but should still be kept by the import-client-counter exception
-      expect(
-        comparisonB === VectorClockComparison.GREATER_THAN ||
-          comparisonB === VectorClockComparison.CONCURRENT,
-      ).toBe(true);
+      expect([VectorClockComparison.GREATER_THAN, VectorClockComparison.CONCURRENT])
+        .withContext(
+          `Post-import op from B should be GREATER_THAN or CONCURRENT, got ${comparisonB}`,
+        )
+        .toContain(comparisonB);
 
       // Use SyncImportFilterService
       const filterService = TestBed.inject(SyncImportFilterService);
