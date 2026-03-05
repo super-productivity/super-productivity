@@ -50,6 +50,7 @@ test.describe('@supersync Encryption Prompt Loop', () => {
       // This lets us observe the encryption prompt behavior
       await clientA.sync.setupSuperSync({
         ...syncConfig,
+        isEncryptionEnabled: false,
         waitForInitialSync: false,
       });
 
@@ -117,6 +118,7 @@ test.describe('@supersync Encryption Prompt Loop', () => {
       // Set up SuperSync WITHOUT waiting for initial sync and WITHOUT encryption
       await clientA.sync.setupSuperSync({
         ...syncConfig,
+        isEncryptionEnabled: false,
         waitForInitialSync: false,
       });
 

@@ -39,7 +39,7 @@ test.describe('@supersync SuperSync Advanced', () => {
     testRunId,
   }, testInfo) => {
     // Increase timeout for this test as creating/syncing 50 tasks takes time
-    testInfo.setTimeout(120000);
+    testInfo.setTimeout(180000);
     let clientA: SimulatedE2EClient | null = null;
     let clientB: SimulatedE2EClient | null = null;
     const TASK_COUNT = 50;

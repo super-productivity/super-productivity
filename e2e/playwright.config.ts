@@ -150,8 +150,9 @@ export default defineConfig({
   /* Folder for test artifacts such as screenshots, videos, traces, etc. */
   outputDir: path.join(__dirname, '..', '.tmp', 'e2e-test-results', 'test-results'),
 
-  /* Global timeout for each test - increased for Angular app stability */
-  timeout: 90 * 1000,
+  /* Global timeout for each test - increased for Angular app stability
+   * and mandatory encryption handling overhead in SuperSync tests */
+  timeout: 180 * 1000,
 
   /* Global timeout for each assertion - increased for slow rendering */
   expect: {

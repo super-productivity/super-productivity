@@ -180,6 +180,8 @@ export const getSuperSyncConfig = (user: TestUser): SuperSyncConfig => {
   return {
     baseUrl: SUPERSYNC_BASE_URL,
     accessToken: user.token,
+    isEncryptionEnabled: true,
+    password: 'e2e-default-encryption-pw',
   };
 };
 

@@ -86,29 +86,31 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
       await waitForTask(clientA.page, encryptedTask);
       console.log('[DisableEncryption] Client A data preserved after clean slate');
 
-      // ============ PHASE 3: Client A creates new unencrypted task ============
+      // ============ PHASE 3: Client A creates new task and syncs ============
+      // Note: After disabling encryption, the mandatory encryption prompt
+      // (_promptSuperSyncEncryptionIfNeeded) fires during syncAndWait() and
+      // re-enables encryption automatically. This is expected behavior.
       const unencryptedTask = `UnencryptedTask-${uniqueId}`;
       await clientA.workView.addTask(unencryptedTask);
       await clientA.sync.syncAndWait();
-      console.log(`[DisableEncryption] Client A created unencrypted: ${unencryptedTask}`);
+      console.log(`[DisableEncryption] Client A created and synced: ${unencryptedTask}`);
 
-      // ============ PHASE 4: Fresh Client B joins without encryption ============
-      console.log(
-        '[DisableEncryption] Phase 4: Fresh Client B joining without encryption',
-      );
+      // ============ PHASE 4: Fresh Client B joins with encryption ============
+      console.log('[DisableEncryption] Phase 4: Fresh Client B joining with encryption');
 
-      // CRITICAL: Use a FRESH client (new browser context) that directly sets up
-      // without encryption. This avoids triggering the "disable encryption" dialog
-      // which would cause a clean slate and overwrite Client A's data.
-      // This simulates a "new device joining" scenario.
+      // Since encryption is mandatory for SuperSync, Client B must join with
+      // encryption using the same password. The mandatory encryption prompt
+      // re-enabled encryption on Client A after the disable, so the server
+      // has encrypted data.
       clientB = await createSimulatedClient(browser, baseURL!, 'B', testRunId);
       await clientB.sync.setupSuperSync({
         ...baseConfig,
-        isEncryptionEnabled: false,
+        isEncryptionEnabled: true,
+        password: encryptionPassword,
       });
-      console.log('[DisableEncryption] Client B set up without encryption');
+      console.log('[DisableEncryption] Client B set up with encryption');
 
-      // Client B syncs to receive Client A's unencrypted data
+      // Client B syncs to receive Client A's data
       await clientB.sync.syncAndWait();
       console.log('[DisableEncryption] Client B synced');
 
@@ -116,8 +118,8 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
       await waitForTask(clientB.page, encryptedTask);
       await waitForTask(clientB.page, unencryptedTask);
 
-      // ============ PHASE 5: Verify encryption is disabled for both clients ============
-      console.log('[DisableEncryption] Phase 5: Verifying encryption is disabled');
+      // ============ PHASE 5: Verify sync works for both clients ============
+      console.log('[DisableEncryption] Phase 5: Verifying sync works');
 
       // Verify no sync errors on either client
       const hasErrorA = await clientA.sync.hasSyncError();
@@ -160,7 +162,12 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
    * - Client B can sync after providing correct password
    * - Both clients have same encrypted data
    */
-  test('Enabling encryption triggers clean slate and other clients require password', async ({
+  // SKIPPED: Encryption is now mandatory for SuperSync. The mandatory encryption
+  // prompt (_promptSuperSyncEncryptionIfNeeded) fires after every sync, so clients
+  // cannot operate without encryption. The "enable encryption on unencrypted data"
+  // scenario no longer exists. Encryption functionality is still verified by the
+  // "Disabling encryption" test which tests the disable → mandatory re-enable flow.
+  test.skip('Enabling encryption triggers clean slate and other clients require password', async ({
     browser,
     baseURL,
     testRunId,
@@ -465,7 +472,10 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
    * to match the new encryption state. Any local-only changes on the old device
    * are lost because they were never synced.
    */
-  test('Concurrent changes are overwritten by encryption state change', async ({
+  // SKIPPED: Encryption is now mandatory for SuperSync. This test starts without
+  // encryption and then enables it, which is no longer possible since the mandatory
+  // encryption prompt forces encryption during initial setup.
+  test.skip('Concurrent changes are overwritten by encryption state change', async ({
     browser,
     baseURL,
     testRunId,
