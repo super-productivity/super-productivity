@@ -100,7 +100,7 @@ describe('InlineMarkdownComponent', () => {
       component.keypressHandler(ev);
       expect(mockTextareaEl.nativeElement.value).toBe('Hello**** world');
       expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(7, 7);
-    });
+    it('should insert _ at cursor and pace cursor between pairs of _ when pressing Ctrl + I with no selection', () => {
 
     fit('should insert _ at cursor and pace cursor between pairs of _ when pressing Ctrl + I with no selection', () => {
       mockTextareaEl.nativeElement.selectionStart = 5;
