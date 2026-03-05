@@ -212,7 +212,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.changed.emit(result.text);
     }
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'i')) {
-    if (ev.ctrlKey && (ev.key === 'b' || ev.key === 'i')) {
       ev.preventDefault();
       const marker = ev.key === 'b' ? '**' : '_';
       this._wrapSelectionWithMarker(marker);
