@@ -4,6 +4,7 @@
 @if (isShowCountdown()) {
   <focus-mode-countdown
     @fade
+    [isShowCountdown]="!!focusModeConfig()?.isShowCountdown"
     (countdownComplete)="onCountdownComplete()"
   ></focus-mode-countdown>
 }

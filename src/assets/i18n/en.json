@@ -1955,6 +1955,7 @@
       "L_IS_PLAY_TICK": "Play ticking sound during focus sessions",
       "L_MANUAL_BREAK_START": "Manually start breaks (Pomodoro)",
       "L_PAUSE_TRACKING_DURING_BREAK": "Pause task tracking during breaks",
+      "L_SHOW_COUNTDOWN": "Show full 5-second countdown before launch",
       "L_SKIP_PREPARATION_SCREEN": "Skip preparation screen (rocket animation)",
       "L_START_IN_BACKGROUND": "Start focus sessions with banner only (no overlay)",
       "L_SYNC_SESSION_WITH_TRACKING": "Sync focus sessions with time tracking",

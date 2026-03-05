@@ -4,6 +4,7 @@ import {
   DestroyRef,
   OnInit,
   inject,
+  input,
   output,
   signal,
 } from '@angular/core';
@@ -30,6 +31,7 @@ const COUNTDOWN_DURATION = 5 as const;
 })
 export class FocusModeCountdownComponent implements OnInit {
   readonly countdownComplete = output<void>();
+  readonly isShowCountdown = input<boolean>(false);
 
   readonly T = T;
   countdownValue = signal<number>(COUNTDOWN_DURATION);
@@ -39,7 +41,19 @@ export class FocusModeCountdownComponent implements OnInit {
   private readonly _destroyRef = inject(DestroyRef);
 
   ngOnInit(): void {
-    this.startCountdown();
+    if (this.isShowCountdown()) {
+      this.startCountdown();
+    } else {
+      this.startQuickLaunch();
+    }
+  }
+
+  private startQuickLaunch(): void {
+    this.countdownValue.set(0);
+    this.rocketState.set('launch');
+    window.setTimeout(() => {
+      this.countdownComplete.emit();
+    }, 900);
   }
 
   private startCountdown(): void {

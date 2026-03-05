@@ -215,6 +215,7 @@ export type DominaModeConfig = Readonly<{
 
 export type FocusModeConfig = Readonly<{
   isSkipPreparation: boolean;
+  isShowCountdown?: boolean;
   isPlayTick?: boolean;
   isPauseTrackingDuringBreak?: boolean;
   isSyncSessionWithTracking?: boolean;

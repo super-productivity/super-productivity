@@ -28,6 +28,13 @@ export const FOCUS_MODE_FORM_CFG: ConfigFormSection<FocusModeConfig> = {
       },
     },
     {
+      key: 'isShowCountdown',
+      type: 'checkbox',
+      templateOptions: {
+        label: T.GCF.FOCUS_MODE.L_SHOW_COUNTDOWN,
+      },
+    },
+    {
       key: 'isPlayTick',
       type: 'checkbox',
       templateOptions: {
