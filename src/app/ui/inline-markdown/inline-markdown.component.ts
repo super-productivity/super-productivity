@@ -211,7 +211,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.resizeTextareaToFit();
       this.changed.emit(result.text);
     }
-    // Handle bold/italic shortcuts
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'i')) {
     if (ev.ctrlKey && (ev.key === 'b' || ev.key === 'i')) {
       ev.preventDefault();
       const marker = ev.key === 'b' ? '**' : '_';
