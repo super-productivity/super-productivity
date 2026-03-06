@@ -1185,7 +1185,7 @@
           "L_USER_NAME": "Nutzername",
           "S_FILL_ALL_FIELDS": "Bitte füllen Sie zuerst alle WebDAV-Felder aus",
           "S_TEST_FAIL": "Verbindungstest fehlgeschlagen: {{error}} - Ziel-URL: {{url}}",
-          "S_TEST_SUCCESS": "Verbindungstest erfolgreich! Ziel-URL: {{url}}"
+          "S_TEST_SUCCESS": "Verbindungstest erfolgreich! Ziel-URL: {{url}}",
           "CONDITIONAL_HEADER_WARNING_TITLE": "Reduzierte Synchronisationssicherheit",
           "CONDITIONAL_HEADER_WARNING_MSG": "Ihr WebDAV-Server unterstützt keine bedingten Header (If-Unmodified-Since). Das bedeutet, dass Super Productivity während des Uploads keine gleichzeitigen Änderungen von anderen Geräten erkennen kann. Die Synchronisierung funktioniert weiterhin, aber es besteht ein geringes Risiko von Datenkonflikten, wenn Sie Änderungen auf mehreren Geräten gleichzeitig vornehmen."
         }
