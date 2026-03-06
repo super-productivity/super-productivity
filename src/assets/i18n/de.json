@@ -824,7 +824,7 @@
         "SCOPE": "Umfang",
         "SCOPE_ALL": "Alle",
         "SCOPE_ASSIGNED": "Mir zugewiesen",
-        "SCOPE_CREATED": "Von mir erstellt"
+        "SCOPE_CREATED": "Von mir erstellt",
         "IS_SHOW_TIME_TRACKING_DIALOG": "Dialogfeld zur Zeiterfassung anzeigen, um an Redmine zu melden",
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Erfordert die Aktivierung des Zeiterfassungsmoduls für das Redmine-Projekt.",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Dialogfeld zur Zeiterfassung anzeigen, wenn Unteraufgaben abgeschlossen sind"
