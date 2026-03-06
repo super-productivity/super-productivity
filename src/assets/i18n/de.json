@@ -502,7 +502,7 @@
         "TIMED_OUT": "Jira: Zeitüberschreitung bei der Anforderung",
         "TRANSITION": "Jira: Setzen Sie das Issue \"{{issueKey}}\" auf \"{{name}}\".",
         "TRANSITION_SUCCESS": "Jira: Setzen Sie das Issue {{issueKey}} auf <strong>{{chosenTransition}}</strong>.",
-        "TRANSITIONS_LOADED": "Jira: Übergänge geladen. Verwenden Sie die unten stehenden Auswahlmöglichkeiten, um sie zuzuweisen"
+        "TRANSITIONS_LOADED": "Jira: Übergänge geladen. Verwenden Sie die unten stehenden Auswahlmöglichkeiten, um sie zuzuweisen",
         "UNABLE_TO_REASSIGN": "Jira: Das Ticket kann Ihnen nicht neu zugewiesen werden, da Sie keinen Benutzernamen angegeben haben. Bitte gehen Sie zu den Einstellungen."
       },
       "STEPPER": {
