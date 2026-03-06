@@ -1245,7 +1245,7 @@
         "LOCAL_CHANGES_DISCARDED": "{{count}} lokale Änderung(en) verworfen – Element(e) wurde(n) auf einem anderen Gerät gelöscht",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} nicht gespeicherte lokale Änderung(en) verworfen – Synchronisierung heruntergeladener neuerer Daten",
         "FINISH_DAY_SYNC_ERROR": "Synchronisierungsfehler beim Abschluss des Tages. Bitte versuchen Sie es erneut.",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "Die Daten konnten nicht auf den Server migriert werden – die lokale Datenvalidierung ist fehlgeschlagen. Versuchen Sie bitte, eine Sicherungskopie zu importieren."
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Die Daten konnten nicht auf den Server migriert werden – die lokale Datenvalidierung ist fehlgeschlagen. Versuchen Sie bitte, eine Sicherungskopie zu importieren.",
         "MIGRATION_FAILED": "Einige Synchronisierungsdaten konnten nicht migriert werden und wurden übersprungen. Dies kann auf eine Datenbeschädigung oder einen Fehler hinweisen.",
         "VECTOR_CLOCK_LIMIT_REACHED": "Sync hat {{originalSize}} Geräte/Browser verfolgt und damit das Limit von {{maxSize}} überschritten. Inaktive Geräteeinträge wurden entfernt. Wenn Probleme auftreten, sollten Sie eine Synchronisierung zurücksetzen."
       },
