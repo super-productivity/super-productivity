@@ -161,6 +161,15 @@
 
     @if (isEdit) {
       <button
+        (click)="duplicate()"
+        color="primary"
+        mat-button
+        type="button"
+      >
+        <mat-icon>content_copy</mat-icon>
+        {{ T.G.DUPLICATE | translate }}
+      </button>
+      <button
         (click)="remove()"
         color="warn"
         mat-button
