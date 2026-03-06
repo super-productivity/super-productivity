@@ -175,7 +175,7 @@ export class DialogEditIssueProviderComponent {
   }
 
   duplicate(): void {
-    const providerData = { ...this.issueProvider } as IssueProvider;
+    const providerData = structuredClone(this.model) as IssueProvider;
     this._matDialogRef.close();
     this._matDialog.open(DialogEditIssueProviderComponent, {
       restoreFocus: true,
