@@ -937,7 +937,7 @@
         "FOLLOW_LINK_MOBILE": "Bitte tippen Sie auf die Schaltfläche unten, um die Autorisierung durchzuführen. Sie werden automatisch zurück zur App weitergeleitet.",
         "GET_AUTH_CODE": "Autorisierungscode anfordern",
         "L_AUTH_CODE": "Geben Sie den Auth-Code ein",
-        "TITLE": "Login: {{provider}}"
+        "TITLE": "Login: {{provider}}",
         "WAITING_FOR_AUTH": "Warten auf Authentifizierung..."
       },
       "D_CONFLICT": {
