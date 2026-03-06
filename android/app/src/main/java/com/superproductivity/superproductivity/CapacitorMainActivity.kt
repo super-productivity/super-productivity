@@ -18,7 +18,9 @@ import com.anggrayudi.storage.SimpleStorageHelper
 import com.getcapacitor.BridgeActivity
 import com.superproductivity.superproductivity.plugins.SafBridgePlugin
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
+import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import androidx.core.app.NotificationManagerCompat
 import com.superproductivity.superproductivity.util.printWebViewVersion
 import com.superproductivity.superproductivity.webview.JavaScriptInterface
 import com.superproductivity.superproductivity.webview.WebHelper
@@ -203,6 +205,27 @@ class CapacitorMainActivity : BridgeActivity() {
             FocusModeForegroundService.ACTION_COMPLETE -> {
                 Log.d("SP_FOCUS", "Complete action received from focus mode notification")
                 callJSInterfaceFunctionIfExists("next", "onFocusComplete$")
+                return
+            }
+            ReminderNotificationHelper.ACTION_REMINDER_DONE -> {
+                val relatedId = intent.getStringExtra(ReminderNotificationHelper.EXTRA_RELATED_ID) ?: return
+                val notifId = intent.getIntExtra(ReminderNotificationHelper.EXTRA_NOTIFICATION_ID, -1)
+                Log.d("SP_REMINDER", "Done action received for task: $relatedId")
+                // Dismiss the notification
+                if (notifId != -1) {
+                    NotificationManagerCompat.from(this).cancel(notifId)
+                }
+                callJSInterfaceFunctionIfExists("next", "onReminderMarkDone$", "\"$relatedId\"")
+                return
+            }
+            ReminderNotificationHelper.ACTION_REMINDER_OPEN -> {
+                val relatedId = intent.getStringExtra(ReminderNotificationHelper.EXTRA_RELATED_ID) ?: return
+                val notifId = intent.getIntExtra(ReminderNotificationHelper.EXTRA_NOTIFICATION_ID, -1)
+                Log.d("SP_REMINDER", "Open action received for task: $relatedId")
+                if (notifId != -1) {
+                    NotificationManagerCompat.from(this).cancel(notifId)
+                }
+                callJSInterfaceFunctionIfExists("next", "onReminderOpenTask$", "\"$relatedId\"")
                 return
             }
         }

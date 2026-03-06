@@ -58,6 +58,25 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
               description: T.GCF.REMINDER.USE_ALARM_STYLE_REMINDERS_DESCRIPTION,
             },
           },
+          {
+            key: 'notifyOnDueDate' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.REMINDER.NOTIFY_ON_DUE_DATE,
+              description: T.GCF.REMINDER.NOTIFY_ON_DUE_DATE_DESCRIPTION,
+            },
+          },
+          {
+            key: 'dueDateNotificationHour' as const,
+            type: 'input',
+            hideExpression: (m: any) => !m.notifyOnDueDate,
+            templateOptions: {
+              type: 'number',
+              label: T.GCF.REMINDER.DUE_DATE_NOTIFICATION_HOUR,
+              min: 0,
+              max: 23,
+            },
+          },
         ]
       : []),
   ],

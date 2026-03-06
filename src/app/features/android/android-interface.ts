@@ -94,6 +94,10 @@ export interface AndroidInterface {
   onPauseTracking$: Subject<void>;
   onMarkTaskDone$: Subject<void>;
 
+  // Reminder notification action callbacks
+  onReminderMarkDone$: Subject<string>; // emits relatedId (task ID)
+  onReminderOpenTask$: Subject<string>; // emits relatedId (task ID)
+
   // Focus mode notification action callbacks
   onFocusPause$: Subject<void>;
   onFocusResume$: Subject<void>;
@@ -119,6 +123,8 @@ if (IS_ANDROID_WEB_VIEW) {
   androidInterface.onPause$ = new Subject();
   androidInterface.onPauseTracking$ = new Subject();
   androidInterface.onMarkTaskDone$ = new Subject();
+  androidInterface.onReminderMarkDone$ = new Subject();
+  androidInterface.onReminderOpenTask$ = new Subject();
   androidInterface.onFocusPause$ = new Subject();
   androidInterface.onFocusResume$ = new Subject();
   androidInterface.onFocusSkip$ = new Subject();

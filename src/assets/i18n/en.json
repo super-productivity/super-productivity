@@ -2131,7 +2131,10 @@
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "TITLE": "Reminders",
       "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders."
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders.",
+      "NOTIFY_ON_DUE_DATE": "Notify on due date (even without time set)",
+      "NOTIFY_ON_DUE_DATE_DESCRIPTION": "Send a notification for tasks due today, even if no specific time was set.",
+      "DUE_DATE_NOTIFICATION_HOUR": "Default hour for due date notifications (0-23)"
     },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",

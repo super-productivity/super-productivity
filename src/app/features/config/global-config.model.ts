@@ -194,6 +194,10 @@ export type ReminderConfig = Readonly<{
   isFocusWindow?: boolean;
   // Android only: use alarm-style notifications (louder, more intrusive)
   useAlarmStyleReminders?: boolean;
+  // Android only: send notification for tasks due today even without a specific time
+  notifyOnDueDate?: boolean;
+  // Default time (hour, 0-23) to send due-date notifications
+  dueDateNotificationHour?: number;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{
