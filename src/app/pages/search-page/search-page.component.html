@@ -31,7 +31,12 @@
           <mat-list-item (click)="navigateToItem(item)">
             <div class="search-result-content">
               <div class="task-info">
-                <div class="task-title">{{ item?.title }}</div>
+                <div
+                  class="task-title"
+                  [ngClass]="{ 'task-archived': item.isArchiveTask }"
+                >
+                  {{ item?.title }}
+                </div>
                 <div class="task-icons">
                   @if (item.ctx) {
                     <tag
