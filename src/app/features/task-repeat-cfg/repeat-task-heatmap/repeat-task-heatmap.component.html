@@ -1,7 +1,19 @@
+@if (formattedTimeSummary(); as summary) {
+  <div class="time-summary">
+    <span>{{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_TOTAL | translate }}: {{ summary.total }}</span>
+    <span
+      >{{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_THIS_WEEK | translate }}: {{ summary.thisWeek }}</span
+    >
+    <span
+      >{{ T.F.TASK_REPEAT.D_EDIT.TIME_SPENT_THIS_MONTH | translate }}:
+      {{ summary.thisMonth }}</span
+    >
+  </div>
+}
 @if (heatmapData(); as data) {
   <heatmap
     [data]="data"
-    [label]="T.F.TASK_REPEAT.D_EDIT.HEATMAP_LABEL | translate"
+    [label]=""
     [showLegend]="false"
     [scrollToEnd]="true"
   />

@@ -1,0 +1,8 @@
+- show done button in reminder and reset detail panel on board switch
+- fix 11 failing supersync import tests
+- wait for store hydration before plugin auto-enable check
+- simplify Pomodoro settings labels
+- fix supersync error scenario tests and skip failing import tests
+- prevent orphaned task references in tags after sync
+- overhaul mobile notification UX for Android and iOS
+- add 30s timeout to lock acquisition to prevent infinite hangs

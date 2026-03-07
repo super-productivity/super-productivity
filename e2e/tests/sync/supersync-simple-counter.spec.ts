@@ -43,6 +43,9 @@ const createSimpleCounter = async (
 
   // Select counter type from mat-select
   const typeSelect = dialog.locator('mat-select').first();
+  await typeSelect.waitFor({ state: 'visible', timeout: 5000 });
+  // Wait for dialog animation to settle before interacting
+  await client.page.waitForTimeout(500);
   await typeSelect.click();
   await client.page.waitForTimeout(300);
   const typeOption = client.page.locator(

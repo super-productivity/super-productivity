@@ -92,18 +92,18 @@ describe('SyncWrapperService', () => {
     ]);
     mockSyncService.downloadRemoteOps.and.returnValue(
       Promise.resolve({
-        newOpsCount: 0,
-        serverMigrationHandled: false,
-        localWinOpsCreated: 0,
+        kind: 'no_new_ops' as const,
       }),
     );
     mockSyncService.uploadPendingOps.and.returnValue(
       Promise.resolve({
+        kind: 'completed' as const,
         uploadedCount: 0,
-        rejectedCount: 0,
-        piggybackedOps: [],
-        rejectedOps: [],
+        piggybackedOpsCount: 0,
         localWinOpsCreated: 0,
+        permanentRejectionCount: 0,
+        hasMorePiggyback: false,
+        rejectedOps: [],
       }),
     );
 
@@ -335,10 +335,7 @@ describe('SyncWrapperService', () => {
     it('should NOT update lastSyncedProviderId when download is cancelled', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
-          newOpsCount: 0,
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
-          cancelled: true,
+          kind: 'cancelled' as const,
         }),
       );
 
@@ -353,16 +350,18 @@ describe('SyncWrapperService', () => {
       const callOrder: string[] = [];
       mockSyncService.downloadRemoteOps.and.callFake(async () => {
         callOrder.push('download');
-        return { newOpsCount: 0, serverMigrationHandled: false, localWinOpsCreated: 0 };
+        return { kind: 'no_new_ops' as const };
       });
       mockSyncService.uploadPendingOps.and.callFake(async () => {
         callOrder.push('upload');
         return {
+          kind: 'completed' as const,
           uploadedCount: 0,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         };
       });
 
@@ -374,18 +373,20 @@ describe('SyncWrapperService', () => {
     it('should re-upload when localWinOpsCreated > 0 from download', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
+          kind: 'ops_processed' as const,
           newOpsCount: 5,
-          serverMigrationHandled: false,
           localWinOpsCreated: 3, // LWW created 3 local-win ops
         }),
       );
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 3,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         }),
       );
 
@@ -398,9 +399,7 @@ describe('SyncWrapperService', () => {
     it('should re-upload when localWinOpsCreated > 0 from upload', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
-          newOpsCount: 0,
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
+          kind: 'no_new_ops' as const,
         }),
       );
       // First upload returns localWinOpsCreated > 0
@@ -409,19 +408,23 @@ describe('SyncWrapperService', () => {
         uploadCallCount++;
         if (uploadCallCount === 1) {
           return {
+            kind: 'completed' as const,
             uploadedCount: 2,
-            rejectedCount: 0,
-            piggybackedOps: [],
-            rejectedOps: [],
+            piggybackedOpsCount: 0,
             localWinOpsCreated: 2, // LWW created ops from piggybacked
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
           };
         }
         return {
+          kind: 'completed' as const,
           uploadedCount: 2,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         };
       });
 
@@ -434,18 +437,20 @@ describe('SyncWrapperService', () => {
     it('should NOT re-upload when no localWinOpsCreated', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
+          kind: 'ops_processed' as const,
           newOpsCount: 5,
-          serverMigrationHandled: false,
           localWinOpsCreated: 0,
         }),
       );
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 3,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         }),
       );
 
@@ -477,11 +482,13 @@ describe('SyncWrapperService', () => {
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too complex"', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 0,
-          rejectedCount: 1,
-          piggybackedOps: [],
-          rejectedOps: [{ opId: 'test-op', error: 'Payload too complex (max depth 50)' }],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'test-op', error: 'Payload too complex (max depth 50)' }],
         }),
       );
 
@@ -495,11 +502,13 @@ describe('SyncWrapperService', () => {
     it('should set ERROR and return HANDLED_ERROR when upload has rejected ops with "Payload too large"', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 0,
-          rejectedCount: 1,
-          piggybackedOps: [],
-          rejectedOps: [{ opId: 'test-op', error: 'Payload too large' }],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'test-op', error: 'Payload too large' }],
         }),
       );
 
@@ -513,11 +522,13 @@ describe('SyncWrapperService', () => {
     it('should set ERROR for non-payload rejected ops', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 0,
-          rejectedCount: 1,
-          piggybackedOps: [],
-          rejectedOps: [{ opId: 'test-op', error: 'Some other rejection' }],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 1,
+          hasMorePiggyback: false,
+          rejectedOps: [{ opId: 'test-op', error: 'Some other rejection' }],
         }),
       );
 
@@ -530,11 +541,13 @@ describe('SyncWrapperService', () => {
     it('should set IN_SYNC when some ops uploaded and none rejected', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 5,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         }),
       );
 
@@ -547,14 +560,16 @@ describe('SyncWrapperService', () => {
     it('should set ERROR when multiple ops rejected', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 3,
-          rejectedCount: 2,
-          piggybackedOps: [],
+          piggybackedOpsCount: 0,
+          localWinOpsCreated: 0,
+          permanentRejectionCount: 2,
+          hasMorePiggyback: false,
           rejectedOps: [
             { opId: 'op1', error: 'Conflict' },
             { opId: 'op2', error: 'Validation failed' },
           ],
-          localWinOpsCreated: 0,
         }),
       );
 
@@ -564,8 +579,10 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('ERROR');
     });
 
-    it('should set IN_SYNC when uploadResult is null (fresh client)', async () => {
-      mockSyncService.uploadPendingOps.and.returnValue(Promise.resolve(null));
+    it('should set IN_SYNC when uploadResult is blocked_fresh_client', async () => {
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({ kind: 'blocked_fresh_client' as const }),
+      );
 
       const result = await service.sync();
 
@@ -573,14 +590,16 @@ describe('SyncWrapperService', () => {
       expect(mockProviderManager.setSyncStatus).toHaveBeenCalledWith('IN_SYNC');
     });
 
-    it('should set IN_SYNC when rejectedCount is 0 even with empty rejectedOps array', async () => {
+    it('should set IN_SYNC when permanentRejectionCount is 0 even with empty rejectedOps array', async () => {
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 0,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         }),
       );
 
@@ -1088,7 +1107,7 @@ describe('SyncWrapperService', () => {
         callOrder.push('sync-download-start');
         await syncPromise;
         callOrder.push('sync-download-end');
-        return { newOpsCount: 0, serverMigrationHandled: false, localWinOpsCreated: 0 };
+        return { kind: 'no_new_ops' as const };
       });
 
       // Start sync
@@ -1415,19 +1434,19 @@ describe('SyncWrapperService', () => {
     it('should stop after MAX_LWW_REUPLOAD_RETRIES when upload always returns localWinOpsCreated', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
-          newOpsCount: 0,
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
+          kind: 'no_new_ops' as const,
         }),
       );
       // Upload always returns localWinOpsCreated: 2 (never resolves)
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve({
+          kind: 'completed' as const,
           uploadedCount: 2,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           localWinOpsCreated: 2,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         }),
       );
 
@@ -1448,9 +1467,7 @@ describe('SyncWrapperService', () => {
     it('should exit early when retry returns localWinOpsCreated: 0', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
-          newOpsCount: 0,
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
+          kind: 'no_new_ops' as const,
         }),
       );
 
@@ -1458,12 +1475,14 @@ describe('SyncWrapperService', () => {
       mockSyncService.uploadPendingOps.and.callFake(async () => {
         uploadCallCount++;
         return {
+          kind: 'completed' as const,
           uploadedCount: 2,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           // First call returns 1, second call returns 0 -> exits loop
           localWinOpsCreated: uploadCallCount <= 1 ? 1 : 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         };
       });
 
@@ -1475,12 +1494,10 @@ describe('SyncWrapperService', () => {
       expect(result).toBe(SyncStatus.InSync);
     });
 
-    it('should treat null reupload result as 0 localWinOpsCreated and exit loop', async () => {
+    it('should treat blocked_fresh_client reupload result as 0 localWinOpsCreated and exit loop', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
-          newOpsCount: 0,
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
+          kind: 'no_new_ops' as const,
         }),
       );
 
@@ -1489,20 +1506,22 @@ describe('SyncWrapperService', () => {
         uploadCallCount++;
         if (uploadCallCount === 1) {
           return {
+            kind: 'completed' as const,
             uploadedCount: 1,
-            rejectedCount: 0,
-            piggybackedOps: [],
-            rejectedOps: [],
+            piggybackedOpsCount: 0,
             localWinOpsCreated: 2,
+            permanentRejectionCount: 0,
+            hasMorePiggyback: false,
+            rejectedOps: [],
           };
         }
-        // Second call returns null (e.g., fresh client scenario)
-        return null;
+        // Second call returns blocked_fresh_client (treated as 0 localWinOpsCreated)
+        return { kind: 'blocked_fresh_client' as const };
       });
 
       const result = await service.sync();
 
-      // 1 initial + 1 retry (returns null -> treated as 0) = 2 total
+      // 1 initial + 1 retry (returns blocked_fresh_client -> treated as 0) = 2 total
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalledTimes(2);
       expect(result).toBe(SyncStatus.InSync);
     });
@@ -1510,8 +1529,8 @@ describe('SyncWrapperService', () => {
     it('should enter while loop when both download and upload produce LWW ops', async () => {
       mockSyncService.downloadRemoteOps.and.returnValue(
         Promise.resolve({
+          kind: 'ops_processed' as const,
           newOpsCount: 5,
-          serverMigrationHandled: false,
           localWinOpsCreated: 2, // download produced LWW ops
         }),
       );
@@ -1520,12 +1539,14 @@ describe('SyncWrapperService', () => {
       mockSyncService.uploadPendingOps.and.callFake(async () => {
         uploadCallCount++;
         return {
+          kind: 'completed' as const,
           uploadedCount: 3,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
+          piggybackedOpsCount: 0,
           // First upload also produces LWW ops, subsequent do not
           localWinOpsCreated: uploadCallCount === 1 ? 1 : 0,
+          permanentRejectionCount: 0,
+          hasMorePiggyback: false,
+          rejectedOps: [],
         };
       });
 

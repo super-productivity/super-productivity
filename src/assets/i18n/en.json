@@ -1272,7 +1272,9 @@
         "AUTH_TOKEN_REJECTED": "Sync token was rejected by the server: {{reason}}. Please get a new token.",
         "INCOMPLETE_OP_SYNC": "Sync incomplete: {{count}} operation file(s) failed to download",
         "TOO_MANY_OPS_TO_DOWNLOAD": "Too many sync operations to download. Some changes may be missing.",
+        "AUTH_SETUP_FAILED": "Failed to set up authentication. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please try the stable version or report this as a bug.",
         "INITIAL_SYNC_ERROR": "Initial Sync failed",
+        "INVALID_AUTH_CODE": "The authorization code was rejected. Please try authenticating again and make sure to copy the code exactly.",
         "INVALID_OPERATION_PAYLOAD": "Invalid operation detected. Changes may not be saved - please reload.",
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
@@ -1298,6 +1300,7 @@
         "RESTORE_SUCCESS": "Data restored successfully",
         "RESTORE_ERROR": "Failed to restore data",
         "TIMEOUT_ERROR": "Sync operation timed out. {{suggestion}}",
+        "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
         "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
@@ -1400,8 +1403,11 @@
         "ADD_ATTACHMENT": "Attachments",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Attachments ({{nr}})",
+        "COMPLETED_ON": "Completed on",
+        "CREATED_ON": "Created on",
         "DUE": "Planned for",
         "FROM_PARENT": "(from parent)",
+        "ISSUE": "Issue Link",
         "LOCAL_ATTACHMENTS": "Local attachments",
         "NOTES": "Note",
         "PARENT": "Parent",
@@ -1611,6 +1617,9 @@
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
         "HEATMAP_LABEL": "Activity",
+        "TIME_SPENT_TOTAL": "Total",
+        "TIME_SPENT_THIS_WEEK": "This week",
+        "TIME_SPENT_THIS_MONTH": "This month",
         "HELP1": "Recurring tasks are for repeating tasks, e.g. 'Organization', 'Daily Meeting', 'Code Review', 'Check Emails', or similar tasks that are likely to occur again and again.",
         "HELP2": "Once configured, a recurring task will be recreated on every day selected below as soon as you open your project. Each occurance will be handled as a different instance. So you can freely make modifications to each task, such as adding subtasks.",
         "HELP3": "Tasks imported from Jira or Git Issues cannot be recurring.",
@@ -1630,8 +1639,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "When enabled, subtasks from the most recent task instance will be recreated with the recurring task",
         "MONDAY": "Monday",
         "NOTES": "Default notes",
-        "ORDER": "Order",
-        "ORDER_DESCRIPTION": "Creation order of recurring tasks. Only affects recurring tasks created at the same time. A lower value means a task will be created higher up the list; a higher number means it will be further down. A value greater than 0 means tasks are created below normal tasks.",
         "QUICK_SETTING": "Recurring Config",
         "Q_CUSTOM": "Custom recurring config",
         "Q_DAILY": "Every day",
@@ -1647,6 +1654,8 @@
         "REPEAT_EVERY": "Recur every",
         "SATURDAY": "Saturday",
         "SCHEDULE_TYPE_LABEL": "Schedule type",
+        "SKIP_OVERDUE": "Skip overdue instances",
+        "SKIP_OVERDUE_DESCRIPTION": "When enabled, if the app is opened after missing a scheduled occurrence (e.g. a weekly task where today is not a scheduled day), the missed instance will be silently skipped instead of being created as an overdue task",
         "START_DATE": "Start date",
         "START_TIME": "Scheduled start time",
         "START_TIME_DESCRIPTION": "E.g. 15:00. Leave blank for an all day task",
@@ -1751,6 +1760,7 @@
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Recurring task",
         "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
+        "VIEW_TASK_DETAILS": "View task details",
         "TASKS": "Tasks",
         "TOTAL_TIME": "Time spent total:",
         "WEEK_NR": "Week {{nr}}",
@@ -2117,10 +2127,10 @@
       "TITLE": "Tasks"
     },
     "POMODORO": {
-      "BREAK_DURATION": "Duration of short breaks",
-      "CYCLES_BEFORE_LONGER_BREAK": "Start longer break after X work sessions",
-      "DURATION": "Duration of work sessions",
-      "LONGER_BREAK_DURATION": "Duration of longer breaks"
+      "BREAK_DURATION": "Short break duration",
+      "CYCLES_BEFORE_LONGER_BREAK": "Start long break after X work sessions",
+      "DURATION": "Work duration",
+      "LONGER_BREAK_DURATION": "Long break duration"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Show banner X before the actual reminder",
@@ -2131,7 +2141,9 @@
       "IS_FOCUS_WINDOW": "Focus application window when reminder is triggered",
       "TITLE": "Reminders",
       "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders."
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders.",
+      "NOTIFY_ON_DUE_DATE": "Show notifications for tasks due today",
+      "DUE_DATE_NOTIFICATION_HOUR": "Hour to show due-date notifications (0-23)"
     },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
@@ -2224,6 +2236,11 @@
       "MONTHS": "{{count}} months ago",
       "YEARS": "{{count}} years ago"
     }
+  },
+  "NOTIFICATION": {
+    "TASK_ALREADY_COMPLETED": "Task already completed",
+    "TASK_MARKED_DONE": "Task marked as done",
+    "EXACT_ALARM_DENIED": "Exact alarm permission denied. Reminders may be delayed by up to 15 minutes."
   },
   "GLOBAL_SNACK": {
     "COPY_TO_CLIPPBOARD": "Copied to clipboard",
@@ -2546,6 +2563,7 @@
     "TIME_ESTIMATED": "Time estimated:",
     "TODAY_REMAINING": "Today remaining:",
     "WITHOUT_BREAK": "Without break:",
+    "RECURRING_TASKS": "Recurring Tasks",
     "WORKING_TODAY": "Working today:",
     "WORKING_TODAY_ARCHIVED": "Time worked today on archived tasks"
   }

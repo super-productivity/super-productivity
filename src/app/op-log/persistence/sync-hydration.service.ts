@@ -252,7 +252,10 @@ export class SyncHydrationService {
       let clockForStorage: Record<string, number>;
       if (createSyncImportOp) {
         clockForStorage = {};
-        clockForStorage[clientId] = newClock[clientId];
+        // Guard against undefined — consistent with mergeRemoteOpClocks() in OperationLogStoreService
+        if (newClock[clientId] !== undefined) {
+          clockForStorage[clientId] = newClock[clientId];
+        }
         OpLog.normal('SyncHydrationService: Reset working clock to minimal after sync', {
           fullClockSize: Object.keys(newClock).length,
           minimalClockSize: Object.keys(clockForStorage).length,

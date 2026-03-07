@@ -36,6 +36,7 @@ import { NumberToMonthPipe } from '../../ui/pipes/number-to-month.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { Log } from '../../core/log';
+import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 
 @Component({
   selector: 'worklog',
@@ -113,6 +114,13 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
         rangeStart,
         rangeEnd,
       },
+    });
+  }
+
+  viewTaskDetails(task: Task): void {
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
     });
   }
 

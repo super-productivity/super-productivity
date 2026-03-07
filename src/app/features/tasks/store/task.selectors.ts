@@ -558,6 +558,20 @@ export const selectAllTasksWithReminder = createSelector(
   },
 );
 
+export const selectUndoneTasksWithDueDayNoReminder = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => {
+    return tasks.filter(
+      (task) =>
+        task &&
+        !task.isDone &&
+        typeof task.dueDay === 'string' &&
+        task.dueDay.length > 0 &&
+        typeof task.remindAt !== 'number',
+    );
+  },
+);
+
 export const selectTasksWithDueTimeUntil = createSelector(
   selectAllTasks,
   (tasks: Task[], props: { end: number }): TaskWithDueTime[] => {

@@ -130,6 +130,14 @@ export class BackupService {
       // 4. Persist to operation log
       await this._persistImportToOperationLog(validatedData);
 
+      // 4b. Reset all sync providers' lastServerSeq to 0.
+      // After a backup import, the client must re-sync from the beginning to ensure
+      // that any ops on the server (which may conflict with the backup) are properly
+      // filtered by the local BACKUP_IMPORT operation.
+      // Without this reset, the sync would start from the old seq and skip server ops,
+      // meaning the BACKUP_IMPORT filter never runs and old ops are not filtered.
+      this._resetAllLastServerSeqs();
+
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
 
@@ -213,6 +221,35 @@ export class BackupService {
     });
 
     OpLog.normal('BackupService: Import persisted to operation log.');
+  }
+
+  /**
+   * Resets all sync providers' lastServerSeq to 0 in localStorage.
+   *
+   * After a backup import, the client must re-sync from the beginning to ensure
+   * that server ops are properly filtered by the local BACKUP_IMPORT operation.
+   * Without this reset, the sync downloads from the old seq, skipping server ops,
+   * so the BACKUP_IMPORT filter never runs.
+   *
+   * We clear all keys matching the SuperSync prefix to handle any active provider.
+   */
+  private _resetAllLastServerSeqs(): void {
+    const PREFIX = 'super_sync_last_server_seq_';
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    if (keysToRemove.length > 0) {
+      OpLog.normal(
+        `BackupService: Reset ${keysToRemove.length} lastServerSeq(s) to 0 after backup import.`,
+      );
+    }
   }
 
   /**

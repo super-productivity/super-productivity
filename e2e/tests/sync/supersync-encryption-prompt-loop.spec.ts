@@ -23,16 +23,11 @@ import {
 
 test.describe('@supersync Encryption Prompt Loop', () => {
   /**
-   * Scenario E.6: Encryption prompt reappears after every unencrypted SuperSync sync
-   *
-   * After a successful sync without encryption, the encryption dialog should
-   * appear with disableClose: true. This dialog appears after EVERY sync until
-   * encryption is enabled.
-   *
-   * We bypass the prompt initially by setting waitForInitialSync: false,
-   * then observe the dialog appearing after sync completes.
+   * Scenario E.6: SKIPPED — Encryption is now mandatory for SuperSync.
+   * The setupSuperSync flow handles encryption during setup, so there is
+   * no "unencrypted sync" scenario to prompt for anymore.
    */
-  test('Encryption prompt reappears after every unencrypted SuperSync sync', async ({
+  test.skip('Encryption prompt reappears after every unencrypted SuperSync sync', async ({
     browser,
     baseURL,
     testRunId,
@@ -96,12 +91,11 @@ test.describe('@supersync Encryption Prompt Loop', () => {
   });
 
   /**
-   * Scenario I.14: Cancelling encryption prompt disables sync entirely
-   *
-   * When the encryption prompt appears and the user clicks Cancel,
-   * sync should be disabled (isEnabled: false) and no further syncs occur.
+   * Scenario I.14: SKIPPED — Encryption is now mandatory for SuperSync.
+   * The encryption dialog is handled during setupSuperSync, so there is
+   * no post-sync prompt to cancel anymore.
    */
-  test('Cancelling encryption prompt disables sync entirely', async ({
+  test.skip('Cancelling encryption prompt disables sync entirely', async ({
     browser,
     baseURL,
     testRunId,

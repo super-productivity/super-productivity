@@ -2,11 +2,11 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ImmediateUploadService } from './immediate-upload.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { OperationLogSyncService } from './operation-log-sync.service';
-import { ActionType, Operation, OpType } from '../core/operation.types';
 import { SyncProviderId } from '../sync-providers/provider.const';
 import { DataInitStateService } from '../../core/data-init/data-init-state.service';
 import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { BehaviorSubject } from 'rxjs';
+import { RejectedOpInfo } from '../core/types/sync-results.types';
 
 describe('ImmediateUploadService', () => {
   let service: ImmediateUploadService;
@@ -16,17 +16,32 @@ describe('ImmediateUploadService', () => {
   let mockSyncWrapperService: { isEncryptionOperationInProgress: boolean };
   let mockProvider: any;
 
-  const createMockOp = (id: string): Operation => ({
-    id,
-    clientId: 'clientA',
-    actionType: '[Task] Add' as ActionType,
-    opType: OpType.Create,
-    entityType: 'TASK',
-    entityId: `task-${id}`,
-    payload: {},
-    vectorClock: { clientA: 1 },
-    timestamp: Date.now(),
-    schemaVersion: 1,
+  const completedResult = (
+    overrides: Partial<{
+      uploadedCount: number;
+      piggybackedOpsCount: number;
+      localWinOpsCreated: number;
+      permanentRejectionCount: number;
+      hasMorePiggyback: boolean;
+      rejectedOps: RejectedOpInfo[];
+    }> = {},
+  ): {
+    kind: 'completed';
+    uploadedCount: number;
+    piggybackedOpsCount: number;
+    localWinOpsCreated: number;
+    permanentRejectionCount: number;
+    hasMorePiggyback: boolean;
+    rejectedOps: RejectedOpInfo[];
+  } => ({
+    kind: 'completed',
+    uploadedCount: 0,
+    piggybackedOpsCount: 0,
+    localWinOpsCreated: 0,
+    permanentRejectionCount: 0,
+    hasMorePiggyback: false,
+    rejectedOps: [],
+    ...overrides,
   });
 
   beforeEach(() => {
@@ -86,12 +101,7 @@ describe('ImmediateUploadService', () => {
   describe('checkmark (IN_SYNC) behavior', () => {
     it('should show checkmark when upload succeeds and no piggybacked ops', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 3,
-          rejectedCount: 0,
-          piggybackedOps: [], // No remote ops = confirmed in sync
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 3 })),
       );
 
       service.initialize();
@@ -102,14 +112,8 @@ describe('ImmediateUploadService', () => {
     }));
 
     it('should NOT show checkmark when piggybacked ops exist', fakeAsync(() => {
-      const piggybackedOp = createMockOp('piggybacked-1');
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 2,
-          rejectedCount: 0,
-          piggybackedOps: [piggybackedOp], // Remote ops exist = may not be fully in sync
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 2, piggybackedOpsCount: 1 })),
       );
 
       service.initialize();
@@ -123,12 +127,7 @@ describe('ImmediateUploadService', () => {
 
     it('should NOT show checkmark when nothing was uploaded', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 0, // Nothing uploaded
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 0 })),
       );
 
       service.initialize();
@@ -154,18 +153,8 @@ describe('ImmediateUploadService', () => {
     });
 
     it('should NOT show checkmark when piggybacked ops exist (multiple)', fakeAsync(() => {
-      const piggybackedOps = [
-        createMockOp('piggybacked-1'),
-        createMockOp('piggybacked-2'),
-        createMockOp('piggybacked-3'),
-      ];
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 5,
-          rejectedCount: 0,
-          piggybackedOps,
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 5, piggybackedOpsCount: 3 })),
       );
 
       service.initialize();
@@ -182,12 +171,7 @@ describe('ImmediateUploadService', () => {
       // Need to re-create the mock with isSyncInProgress = true
       Object.defineProperty(mockProviderManager, 'isSyncInProgress', { value: true });
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -201,12 +185,7 @@ describe('ImmediateUploadService', () => {
       // Set encryption operation in progress (e.g., password change)
       mockSyncWrapperService.isEncryptionOperationInProgress = true;
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -218,14 +197,16 @@ describe('ImmediateUploadService', () => {
 
     it('should handle fresh client (syncService returns null)', fakeAsync(() => {
       // Fresh client handling is now done inside syncService.uploadPendingOps()
-      // which returns null for fresh clients
-      mockSyncService.uploadPendingOps.and.returnValue(Promise.resolve(null));
+      // which returns { kind: 'blocked_fresh_client' } for fresh clients
+      mockSyncService.uploadPendingOps.and.returnValue(
+        Promise.resolve({ kind: 'blocked_fresh_client' as const }),
+      );
 
       service.initialize();
       service.trigger();
       tick(2100);
 
-      // Upload was called, but returned null - no checkmark shown
+      // Upload was called, but returned blocked_fresh_client - no checkmark shown
       expect(mockSyncService.uploadPendingOps).toHaveBeenCalled();
       expect(mockProviderManager.setSyncStatus).not.toHaveBeenCalled();
     }));
@@ -233,12 +214,7 @@ describe('ImmediateUploadService', () => {
     it('should skip upload when provider is not ready', fakeAsync(() => {
       mockProvider.isReady.and.returnValue(Promise.resolve(false));
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -252,12 +228,7 @@ describe('ImmediateUploadService', () => {
       // File-based providers use periodic sync, not immediate upload
       mockProvider.id = SyncProviderId.Dropbox;
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -270,12 +241,7 @@ describe('ImmediateUploadService', () => {
     it('should skip upload for WebDAV (file-based provider)', fakeAsync(() => {
       mockProvider.id = SyncProviderId.WebDAV;
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -288,12 +254,7 @@ describe('ImmediateUploadService', () => {
     it('should skip upload for LocalFile (file-based provider)', fakeAsync(() => {
       mockProvider.id = SyncProviderId.LocalFile;
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -307,12 +268,7 @@ describe('ImmediateUploadService', () => {
   describe('debouncing', () => {
     it('should debounce rapid triggers into single upload', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       service.initialize();
@@ -334,12 +290,7 @@ describe('ImmediateUploadService', () => {
   describe('constructor initialization', () => {
     it('should auto-initialize when data is loaded', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       // Simulate data loading complete
@@ -355,12 +306,7 @@ describe('ImmediateUploadService', () => {
 
     it('should not auto-initialize before data is loaded', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       // Data not loaded (still false)
@@ -373,12 +319,7 @@ describe('ImmediateUploadService', () => {
 
     it('should queue triggers before initialization and replay them when initialized', fakeAsync(() => {
       mockSyncService.uploadPendingOps.and.returnValue(
-        Promise.resolve({
-          uploadedCount: 1,
-          rejectedCount: 0,
-          piggybackedOps: [],
-          rejectedOps: [],
-        }),
+        Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
 
       // Trigger multiple times before initialization (data not loaded)

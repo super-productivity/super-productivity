@@ -63,6 +63,12 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { FinishDayBtnComponent } from './finish-day-btn/finish-day-btn.component';
 import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe';
+import {
+  selectTaskRepeatCfgsByProjectId,
+  selectTaskRepeatCfgsByTagId,
+} from '../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { TaskRepeatCfg } from '../task-repeat-cfg/task-repeat-cfg.model';
+import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview/repeat-cfg-preview.component';
 
 @Component({
   selector: 'work-view',
@@ -94,6 +100,7 @@ import { ScheduledDateGroupPipe } from '../../ui/pipes/scheduled-date-group.pipe
     CommonModule,
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
+    RepeatCfgPreviewComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -140,6 +147,25 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   isDoneHidden = signal(!!localStorage.getItem(LS.DONE_TASKS_HIDDEN));
   isLaterTodayHidden = signal(!!localStorage.getItem(LS.LATER_TODAY_TASKS_HIDDEN));
   isOverdueHidden = signal(!!localStorage.getItem(LS.OVERDUE_TASKS_HIDDEN));
+  isRepeatCfgsHidden = signal(!!localStorage.getItem(LS.REPEAT_CFGS_HIDDEN));
+
+  repeatCfgsForContext = toSignal(
+    this.workContextService.activeWorkContextTypeAndId$.pipe(
+      switchMap(({ activeType, activeId }) =>
+        activeType === 'PROJECT'
+          ? this._store.select(selectTaskRepeatCfgsByProjectId, {
+              projectId: activeId,
+            })
+          : this._store.select(selectTaskRepeatCfgsByTagId, { tagId: activeId }),
+      ),
+    ),
+    { initialValue: [] as TaskRepeatCfg[] },
+  );
+
+  isShowRepeatCfgsPanel = computed(
+    () =>
+      !this.customizerService.isCustomized() && this.repeatCfgsForContext().length > 0,
+  );
 
   isShowOverduePanel = computed(
     () => this.isOnTodayList() && this.overdueTasks().length > 0,
@@ -228,6 +254,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
         localStorage.setItem(LS.OVERDUE_TASKS_HIDDEN, 'true');
       } else {
         localStorage.removeItem(LS.OVERDUE_TASKS_HIDDEN);
+      }
+    });
+
+    effect(() => {
+      const isHidden = this.isRepeatCfgsHidden();
+      if (isHidden) {
+        localStorage.setItem(LS.REPEAT_CFGS_HIDDEN, 'true');
+      } else {
+        localStorage.removeItem(LS.REPEAT_CFGS_HIDDEN);
       }
     });
 

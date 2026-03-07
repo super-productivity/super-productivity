@@ -291,6 +291,20 @@ export class SyncAlreadyInProgressError extends Error {
   }
 }
 
+export class LockAcquisitionTimeoutError extends Error {
+  override name = 'LockAcquisitionTimeoutError';
+
+  constructor(
+    public readonly lockName: string,
+    public readonly timeoutMs: number,
+  ) {
+    super(
+      `Timed out waiting ${timeoutMs}ms to acquire lock "${lockName}". ` +
+        `A previous lock holder may have crashed or stalled.`,
+    );
+  }
+}
+
 export class RevMismatchForModelError extends AdditionalLogErrorBase<string> {
   override name = 'RevMismatchForModelError';
 }

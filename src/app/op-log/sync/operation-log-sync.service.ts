@@ -2,19 +2,15 @@ import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
-import {
-  OperationLogEntry,
-  OpType,
-  VectorClock,
-  FULL_STATE_OP_TYPES,
-} from '../core/operation.types';
+import { OperationLogEntry, OpType, FULL_STATE_OP_TYPES } from '../core/operation.types';
 import { OpLog } from '../../core/log';
 import {
   OperationSyncCapable,
   SyncProviderBase,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
-import { OperationLogUploadService, UploadResult } from './operation-log-upload.service';
+import { OperationLogUploadService } from './operation-log-upload.service';
+import { DownloadOutcome, UploadOutcome } from '../core/types/sync-results.types';
 import { OperationLogDownloadService } from './operation-log-download.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
@@ -248,7 +244,7 @@ export class OperationLogSyncService {
   async uploadPendingOps(
     syncProvider: OperationSyncCapable,
     options?: { skipPiggybackProcessing?: boolean; skipServerMigrationCheck?: boolean },
-  ): Promise<UploadResult | null> {
+  ): Promise<UploadOutcome> {
     // CRITICAL: Ensure all pending write operations have completed before uploading.
     // The effect that writes operations uses concatMap for sequential processing,
     // but if sync is triggered before all operations are written to IndexedDB,
@@ -264,7 +260,7 @@ export class OperationLogSyncService {
         'OperationLogSyncService: Upload blocked - this is a fresh client with no history. ' +
           'Download remote data first before uploading.',
       );
-      return null;
+      return { kind: 'blocked_fresh_client' };
     }
 
     // SERVER MIGRATION CHECK: Passed as callback to execute INSIDE the upload lock.
@@ -332,11 +328,18 @@ export class OperationLogSyncService {
             },
             'OperationLogSyncService (piggybacked SYNC_IMPORT)',
           );
+          if (resolution === 'CANCEL') {
+            return { kind: 'cancelled' };
+          }
+          // USE_LOCAL or USE_REMOTE was handled — report as completed with no further work
           return {
-            ...result,
+            kind: 'completed',
+            uploadedCount: result.uploadedCount,
+            piggybackedOpsCount: result.piggybackedOps.length,
             localWinOpsCreated: 0,
             permanentRejectionCount: 0,
-            cancelled: resolution === 'CANCEL',
+            hasMorePiggyback: false,
+            rejectedOps: [],
           };
         }
       }
@@ -354,10 +357,29 @@ export class OperationLogSyncService {
     //
     // NOTE: This must NOT run after a SYNC_IMPORT conflict dialog resolution (USE_LOCAL,
     // USE_REMOTE, CANCEL) — those paths return early above to avoid stale rejection handling.
-    const downloadCallback = (downloadOptions?: {
+    const downloadCallback = async (downloadOptions?: {
       forceFromSeq0?: boolean;
-    }): Promise<DownloadResultForRejection> =>
-      this.downloadRemoteOps(syncProvider, downloadOptions);
+    }): Promise<DownloadResultForRejection> => {
+      const outcome = await this.downloadRemoteOps(syncProvider, downloadOptions);
+      switch (outcome.kind) {
+        case 'ops_processed':
+          return {
+            newOpsCount: outcome.newOpsCount,
+            allOpClocks: outcome.allOpClocks,
+            snapshotVectorClock: outcome.snapshotVectorClock,
+          };
+        case 'no_new_ops':
+        case 'snapshot_hydrated':
+          return {
+            newOpsCount: 0,
+            allOpClocks: outcome.allOpClocks,
+            snapshotVectorClock: outcome.snapshotVectorClock,
+          };
+        case 'server_migration_handled':
+        case 'cancelled':
+          return { newOpsCount: 0 };
+      }
+    };
     try {
       rejectionResult = await this.rejectedOpsHandlerService.handleRejectedOps(
         result.rejectedOps,
@@ -379,9 +401,13 @@ export class OperationLogSyncService {
     );
 
     return {
-      ...result,
+      kind: 'completed',
+      uploadedCount: result.uploadedCount,
+      piggybackedOpsCount: result.piggybackedOps.length,
       localWinOpsCreated,
       permanentRejectionCount: rejectionResult.permanentRejectionCount,
+      hasMorePiggyback: result.hasMorePiggyback ?? false,
+      rejectedOps: result.rejectedOps,
     };
   }
 
@@ -401,14 +427,7 @@ export class OperationLogSyncService {
   async downloadRemoteOps(
     syncProvider: OperationSyncCapable,
     options?: { forceFromSeq0?: boolean },
-  ): Promise<{
-    serverMigrationHandled: boolean;
-    localWinOpsCreated: number;
-    newOpsCount: number;
-    allOpClocks?: VectorClock[];
-    snapshotVectorClock?: VectorClock;
-    cancelled?: boolean;
-  }> {
+  ): Promise<DownloadOutcome> {
     const result = await this.downloadService.downloadRemoteOps(syncProvider, options);
 
     // Server migration detected: gap on empty server
@@ -419,8 +438,7 @@ export class OperationLogSyncService {
       if (result.latestServerSeq !== undefined) {
         await syncProvider.setLastServerSeq(result.latestServerSeq);
       }
-      // Return with flag indicating migration was handled - caller should upload the SYNC_IMPORT
-      return { serverMigrationHandled: true, localWinOpsCreated: 0, newOpsCount: 0 };
+      return { kind: 'server_migration_handled' };
     }
 
     // FILE-BASED SYNC: Handle full state snapshot from fresh download
@@ -499,11 +517,7 @@ export class OperationLogSyncService {
             this.snackService.open({
               msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED,
             });
-            return {
-              serverMigrationHandled: false,
-              localWinOpsCreated: 0,
-              newOpsCount: 0,
-            };
+            return { kind: 'cancelled' };
           }
 
           OpLog.normal(
@@ -549,9 +563,7 @@ export class OperationLogSyncService {
       OpLog.normal('OperationLogSyncService: Snapshot hydration complete.');
 
       return {
-        serverMigrationHandled: false,
-        localWinOpsCreated: 0,
-        newOpsCount: 0, // Snapshot applied, not incremental ops
+        kind: 'snapshot_hydrated',
         allOpClocks: result.allOpClocks,
         snapshotVectorClock: result.snapshotVectorClock,
       };
@@ -577,7 +589,7 @@ export class OperationLogSyncService {
           });
           // After SYNC_IMPORT is created, isWhollyFreshClient() returns false
           // and upload phase will proceed normally.
-          return { serverMigrationHandled: true, localWinOpsCreated: 0, newOpsCount: 0 };
+          return { kind: 'server_migration_handled' };
         }
       }
 
@@ -591,12 +603,8 @@ export class OperationLogSyncService {
         await syncProvider.setLastServerSeq(result.latestServerSeq);
       }
       return {
-        serverMigrationHandled: false,
-        localWinOpsCreated: 0,
-        newOpsCount: 0,
-        // Include all op clocks from forced download (even though no new ops)
+        kind: 'no_new_ops',
         allOpClocks: result.allOpClocks,
-        // Include snapshot vector clock for superseded op resolution
         snapshotVectorClock: result.snapshotVectorClock,
       };
     }
@@ -627,7 +635,7 @@ export class OperationLogSyncService {
         this.snackService.open({
           msg: T.F.SYNC.S.FRESH_CLIENT_SYNC_CANCELLED,
         });
-        return { serverMigrationHandled: false, localWinOpsCreated: 0, newOpsCount: 0 };
+        return { kind: 'cancelled' };
       }
 
       OpLog.normal(
@@ -676,12 +684,10 @@ export class OperationLogSyncService {
           },
           'OperationLogSyncService (incoming SYNC_IMPORT)',
         );
-        return {
-          serverMigrationHandled: false,
-          localWinOpsCreated: 0,
-          newOpsCount: 0,
-          cancelled: resolution === 'CANCEL',
-        };
+        if (resolution === 'CANCEL') {
+          return { kind: 'cancelled' };
+        }
+        return { kind: 'no_new_ops' };
       }
     }
 
@@ -718,12 +724,10 @@ export class OperationLogSyncService {
         },
         'OperationLogSyncService (local SYNC_IMPORT filters remote)',
       );
-      return {
-        serverMigrationHandled: false,
-        localWinOpsCreated: 0,
-        newOpsCount: 0,
-        cancelled: resolution === 'CANCEL',
-      };
+      if (resolution === 'CANCEL') {
+        return { kind: 'cancelled' };
+      }
+      return { kind: 'no_new_ops' };
     } else if (
       processResult.allOpsFilteredBySyncImport &&
       processResult.filteredOpCount > 0
@@ -757,9 +761,9 @@ export class OperationLogSyncService {
     );
 
     return {
-      serverMigrationHandled: false,
-      localWinOpsCreated: processResult.localWinOpsCreated,
+      kind: 'ops_processed',
       newOpsCount: result.newOps.length,
+      localWinOpsCreated: processResult.localWinOpsCreated,
       allOpClocks: result.allOpClocks,
       snapshotVectorClock: result.snapshotVectorClock,
     };

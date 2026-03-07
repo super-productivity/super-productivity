@@ -231,6 +231,10 @@ describe('taskSharedSchedulingMetaReducer', () => {
   describe('planTasksForToday action', () => {
     it('should add new tasks to the top of Today tag', () => {
       const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
+      // Add task entities that will be planned for today
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -252,6 +256,9 @@ describe('taskSharedSchedulingMetaReducer', () => {
         [],
         ['task1', 'existing-task'],
       );
+      // Add task2 entity (task1 and existing-task already exist from createStateWithExistingTasks)
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -268,6 +275,13 @@ describe('taskSharedSchedulingMetaReducer', () => {
 
     it('should handle parentTaskMap filtering', () => {
       const testState = createStateWithExistingTasks([], [], [], ['parent-task']);
+      // Add task entities for subtask1 and task2
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+      });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('subtask1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['subtask1', 'task2'],
         parentTaskMap: { subtask1: 'parent-task' },
@@ -370,6 +384,27 @@ describe('taskSharedSchedulingMetaReducer', () => {
       );
     });
 
+    it('should skip non-existent task IDs (sync scenario)', () => {
+      const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
+      // Only add task1 as entity — task2 does NOT exist in the store
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1');
+
+      const action = TaskSharedActions.planTasksForToday({
+        taskIds: ['task1', 'non-existent-task'],
+        parentTaskMap: {},
+      });
+
+      metaReducer(testState, action);
+      // non-existent-task should be silently skipped, only task1 added
+      expectStateUpdate(
+        expectTagUpdate('TODAY', { taskIds: ['task1', 'existing-task'] }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
     it('should set dueDay on subtask when added to Today', () => {
       const testState = createStateWithExistingTasks([], [], [], []);
       testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
@@ -402,6 +437,10 @@ describe('taskSharedSchedulingMetaReducer', () => {
           },
         },
       };
+      // Add task entities that will be planned for today
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({ id: 'task1' });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({ id: 'task2' });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},

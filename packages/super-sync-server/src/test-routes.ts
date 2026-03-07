@@ -185,5 +185,71 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
     },
   );
 
+  /**
+   * Get operations for a user (test use only).
+   * Used by E2E tests to verify server-side operation state without docker exec.
+   */
+  fastify.get<{
+    Params: { userId: string };
+    Querystring: { opType?: string; limit?: string };
+  }>(
+    '/user/:userId/ops',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: {
+            userId: { type: 'string' },
+          },
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            opType: { type: 'string' },
+            limit: { type: 'string' },
+          },
+        },
+      },
+      config: {
+        rateLimit: false,
+      },
+    },
+    async (request, reply) => {
+      const userId = parseInt(request.params.userId, 10);
+
+      if (isNaN(userId)) {
+        return reply.status(400).send({ error: 'Invalid userId' });
+      }
+
+      const limit = parseInt(request.query.limit ?? '10', 10);
+      const opType = request.query.opType;
+
+      try {
+        const ops = await prisma.operation.findMany({
+          where: {
+            userId,
+            ...(opType ? { opType } : {}),
+          },
+          orderBy: { serverSeq: 'desc' },
+          take: limit,
+          select: {
+            id: true,
+            opType: true,
+            serverSeq: true,
+          },
+        });
+
+        return reply.send({ ops });
+      } catch (err: unknown) {
+        Logger.error('[TEST] Failed to query ops:', err);
+        return reply.status(500).send({
+          error: 'Failed to query ops',
+          message: (err as Error).message,
+        });
+      }
+    },
+  );
+
   Logger.info('[TEST] Test routes registered at /api/test/*');
 };

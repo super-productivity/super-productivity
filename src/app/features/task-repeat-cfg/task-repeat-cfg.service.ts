@@ -228,6 +228,26 @@ export class TaskRepeatCfgService {
     if (taskRepeatCfg.deletedInstanceDates?.includes(targetDateStr)) {
       return [];
     }
+    // If skipOverdue is enabled, silently skip instances that are in the past (before today).
+    // We still dispatch updateTaskRepeatCfg to advance lastTaskCreationDay so that the same
+    // overdue date is not re-evaluated on every subsequent app open (which would stall progress
+    // permanently for non-daily or every-N-day schedules where today may not be a scheduled day).
+    if (
+      taskRepeatCfg.skipOverdue &&
+      targetDateStr < getDbDateStr(new Date(targetDayDate))
+    ) {
+      return [
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: taskRepeatCfg.id,
+            changes: {
+              lastTaskCreation: targetCreated.getTime(),
+              lastTaskCreationDay: targetDateStr,
+            },
+          },
+        }),
+      ];
+    }
 
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,

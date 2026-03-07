@@ -29,6 +29,10 @@ export interface TaskRepeatCfgCopy {
   lastTaskCreationDay?: string;
   title: string | null;
   tagIds: string[];
+  /**
+   * @deprecated No longer configurable via UI. Kept for backwards compatibility.
+   * order<=0 → task inserted at top; order>0 → task inserted at bottom.
+   */
   order: number;
   defaultEstimate?: number;
   startTime?: string;
@@ -65,6 +69,8 @@ export interface TaskRepeatCfgCopy {
   }[];
   // Exception list for deleted instances (ISO date strings YYYY-MM-DD)
   deletedInstanceDates?: string[];
+  // When true, missed/overdue instances are silently skipped instead of being created
+  skipOverdue?: boolean;
 }
 
 export type TaskRepeatCfg = Readonly<TaskRepeatCfgCopy>;
@@ -101,4 +107,5 @@ export const DEFAULT_TASK_REPEAT_CFG: Omit<TaskRepeatCfgCopy, 'id'> = {
   notes: undefined,
   shouldInheritSubtasks: false,
   disableAutoUpdateSubtasks: false,
+  skipOverdue: false,
 };

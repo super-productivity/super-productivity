@@ -157,3 +157,71 @@ export interface DownloadResultForRejection {
 export type DownloadCallback = (options?: {
   forceFromSeq0?: boolean;
 }) => Promise<DownloadResultForRejection>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Orchestrator-level result types (discriminated unions)
+//
+// These replace the ad-hoc return types from OperationLogSyncService methods.
+// Transport-level types (DownloadResult, UploadResult) remain unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Outcome of OperationLogSyncService.downloadRemoteOps().
+ *
+ * Each variant represents a distinct terminal state — callers switch on `kind`
+ * instead of checking boolean flag combinations.
+ */
+export type DownloadOutcome =
+  | {
+      /** Server was empty/reset — a SYNC_IMPORT was created. Caller must upload. */
+      kind: 'server_migration_handled';
+    }
+  | {
+      /** No new operations on server. */
+      kind: 'no_new_ops';
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+    }
+  | {
+      /** Incremental ops were downloaded and processed. */
+      kind: 'ops_processed';
+      newOpsCount: number;
+      localWinOpsCreated: number;
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+    }
+  | {
+      /** File-based snapshot was hydrated (fresh download from file provider). */
+      kind: 'snapshot_hydrated';
+      allOpClocks?: VectorClock[];
+      snapshotVectorClock?: VectorClock;
+    }
+  | {
+      /** User cancelled a SYNC_IMPORT conflict dialog. */
+      kind: 'cancelled';
+    };
+
+/**
+ * Outcome of OperationLogSyncService.uploadPendingOps().
+ *
+ * Each variant represents a distinct terminal state.
+ */
+export type UploadOutcome =
+  | {
+      /** Upload was blocked because this is a fresh client with no history. */
+      kind: 'blocked_fresh_client';
+    }
+  | {
+      /** Upload completed (ops may have been accepted, rejected, or piggybacked). */
+      kind: 'completed';
+      uploadedCount: number;
+      piggybackedOpsCount: number;
+      localWinOpsCreated: number;
+      permanentRejectionCount: number;
+      hasMorePiggyback: boolean;
+      rejectedOps: RejectedOpInfo[];
+    }
+  | {
+      /** User cancelled a piggybacked SYNC_IMPORT conflict dialog. */
+      kind: 'cancelled';
+    };

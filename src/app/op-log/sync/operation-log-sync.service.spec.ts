@@ -267,7 +267,10 @@ describe('OperationLogSyncService', () => {
 
         const result = await service.uploadPendingOps(mockProvider);
 
-        expect(result?.localWinOpsCreated).toBe(0);
+        expect(result.kind).toBe('completed');
+        if (result.kind === 'completed') {
+          expect(result.localWinOpsCreated).toBe(0);
+        }
       });
 
       it('should return localWinOpsCreated count from piggybacked ops processing', async () => {
@@ -309,7 +312,10 @@ describe('OperationLogSyncService', () => {
 
         const result = await service.uploadPendingOps(mockProvider);
 
-        expect(result?.localWinOpsCreated).toBe(2);
+        expect(result.kind).toBe('completed');
+        if (result.kind === 'completed') {
+          expect(result.localWinOpsCreated).toBe(2);
+        }
       });
 
       describe('rejected ops handling delegation', () => {
@@ -373,9 +379,7 @@ describe('OperationLogSyncService', () => {
 
           const downloadSpy = spyOn(service, 'downloadRemoteOps').and.returnValue(
             Promise.resolve({
-              serverMigrationHandled: false,
-              localWinOpsCreated: 0,
-              newOpsCount: 0,
+              kind: 'no_new_ops' as const,
             }),
           );
 
@@ -439,7 +443,10 @@ describe('OperationLogSyncService', () => {
           const result = await service.uploadPendingOps(mockProvider);
 
           // Total should be 2 + 3 = 5
-          expect(result?.localWinOpsCreated).toBe(5);
+          expect(result.kind).toBe('completed');
+          if (result.kind === 'completed') {
+            expect(result.localWinOpsCreated).toBe(5);
+          }
         });
 
         it('should not call handleRejectedOps if processRemoteOps throws', async () => {
@@ -518,8 +525,7 @@ describe('OperationLogSyncService', () => {
 
         const result = await service.downloadRemoteOps(mockProvider);
 
-        expect(result.localWinOpsCreated).toBe(0);
-        expect(result.newOpsCount).toBe(0);
+        expect(result.kind).toBe('no_new_ops');
       });
 
       it('should return localWinOpsCreated count and newOpsCount from processing remote ops', async () => {
@@ -563,8 +569,11 @@ describe('OperationLogSyncService', () => {
 
         const result = await service.downloadRemoteOps(mockProvider);
 
-        expect(result.localWinOpsCreated).toBe(1);
-        expect(result.newOpsCount).toBe(1);
+        expect(result.kind).toBe('ops_processed');
+        if (result.kind === 'ops_processed') {
+          expect(result.localWinOpsCreated).toBe(1);
+          expect(result.newOpsCount).toBe(1);
+        }
       });
 
       it('should return localWinOpsCreated: 0 and newOpsCount: 0 on server migration', async () => {
@@ -587,9 +596,7 @@ describe('OperationLogSyncService', () => {
 
         const result = await service.downloadRemoteOps(mockProvider);
 
-        expect(result.serverMigrationHandled).toBe(true);
-        expect(result.localWinOpsCreated).toBe(0);
-        expect(result.newOpsCount).toBe(0);
+        expect(result.kind).toBe('server_migration_handled');
       });
 
       describe('lastServerSeq persistence', () => {
@@ -1736,7 +1743,7 @@ describe('OperationLogSyncService', () => {
         mockProvider,
         { syncImportReason: 'SERVER_MIGRATION' },
       );
-      expect(result.serverMigrationHandled).toBe(true);
+      expect(result.kind).toBe('server_migration_handled');
     });
 
     it('should NOT create SYNC_IMPORT when fresh client has no meaningful data on empty server', async () => {
@@ -1764,7 +1771,7 @@ describe('OperationLogSyncService', () => {
       const result = await service.downloadRemoteOps(mockProvider);
 
       expect(serverMigrationServiceSpy.handleServerMigration).not.toHaveBeenCalled();
-      expect(result.serverMigrationHandled).toBe(false);
+      expect(result.kind).not.toBe('server_migration_handled');
     });
 
     it('should NOT create SYNC_IMPORT when server is not empty (latestServerSeq > 0)', async () => {
@@ -1792,7 +1799,7 @@ describe('OperationLogSyncService', () => {
       const result = await service.downloadRemoteOps(mockProvider);
 
       expect(serverMigrationServiceSpy.handleServerMigration).not.toHaveBeenCalled();
-      expect(result.serverMigrationHandled).toBe(false);
+      expect(result.kind).not.toBe('server_migration_handled');
     });
 
     it('should NOT create SYNC_IMPORT when client is not fresh (has op-log history)', async () => {
@@ -1830,7 +1837,7 @@ describe('OperationLogSyncService', () => {
 
       // Should NOT call handleServerMigration - client is not fresh
       expect(serverMigrationServiceSpy.handleServerMigration).not.toHaveBeenCalled();
-      expect(result.serverMigrationHandled).toBe(false);
+      expect(result.kind).not.toBe('server_migration_handled');
     });
   });
 
@@ -1907,7 +1914,7 @@ describe('OperationLogSyncService', () => {
           syncImportReason: 'SERVER_MIGRATION',
         }),
       );
-      expect(result?.cancelled).toBe(true);
+      expect(result.kind).toBe('cancelled');
     });
 
     it('should show conflict dialog when piggybacked ops contain SYNC_IMPORT and client has meaningful data', async () => {
@@ -1948,7 +1955,7 @@ describe('OperationLogSyncService', () => {
       const result = await service.uploadPendingOps(mockProvider);
 
       expect(syncImportConflictDialogServiceSpy.showConflictDialog).toHaveBeenCalled();
-      expect(result?.cancelled).toBe(true);
+      expect(result.kind).toBe('cancelled');
     });
 
     it('should process piggybacked SYNC_IMPORT silently when no meaningful local data', async () => {
@@ -1994,7 +2001,7 @@ describe('OperationLogSyncService', () => {
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         piggybackedSyncImport,
       ]);
-      expect(result?.cancelled).toBeUndefined();
+      expect(result.kind).not.toBe('cancelled');
     });
 
     it('should process piggybacked ops normally when no SYNC_IMPORT present', async () => {
@@ -2034,7 +2041,7 @@ describe('OperationLogSyncService', () => {
       expect(remoteOpsProcessingServiceSpy.processRemoteOps).toHaveBeenCalledWith([
         piggybackedOp,
       ]);
-      expect(result?.cancelled).toBeUndefined();
+      expect(result.kind).not.toBe('cancelled');
     });
 
     it('should call forceUploadLocalState when user chooses USE_LOCAL', async () => {

@@ -52,6 +52,15 @@
                   }
                   @if (item.isArchiveTask) {
                     <mat-icon class="archive-icon">archive</mat-icon>
+                    <button
+                      (click)="viewArchivedTaskDetails(item, $event)"
+                      [title]="T.F.WORKLOG.CMP.VIEW_TASK_DETAILS | translate"
+                      aria-label="view details"
+                      mat-icon-button
+                      class="view-details-btn"
+                    >
+                      <mat-icon>info</mat-icon>
+                    </button>
                   }
                 </div>
               </div>

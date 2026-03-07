@@ -53,27 +53,33 @@ test.describe('@supersync Error Scenarios', () => {
       await waitForTask(clientA.page, taskName);
 
       // Intercept the upload to return a VALIDATION_ERROR rejection
+      // NOTE: With mandatory encryption, POST body is encrypted binary, not JSON.
+      // We forward the request to get real op IDs from the server response,
+      // then return the rejection.
       await clientA.page.route('**/api/sync/ops', async (route) => {
         if (state.interceptUpload && route.request().method() === 'POST') {
           state.interceptUpload = false;
           console.log('[Test] Simulating VALIDATION_ERROR rejection');
 
-          // Get the request body to extract op IDs
-          const body = route.request().postDataJSON();
-          const ops = body?.ops || [];
-          const rejectedOps = ops.map((op: { id: string }) => ({
-            opId: op.id,
-            error: 'Invalid entity structure',
-            errorCode: 'VALIDATION_ERROR',
-          }));
+          // Forward request to server to get real response with op IDs
+          const response = await route.fetch();
+          const realBody = await response.json().catch(() => ({}));
+          // Use a fake op ID since we can't parse encrypted request body
+          const results = [
+            {
+              opId: realBody?.results?.[0]?.opId || 'fake-op-id',
+              accepted: false,
+              error: 'Invalid entity structure',
+              errorCode: 'VALIDATION_ERROR',
+            },
+          ];
 
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              piggybacked: [],
-              rejectedOps,
-              latestSeq: 1,
+              results,
+              latestSeq: realBody?.latestSeq || 1,
             }),
           });
         } else {
@@ -146,16 +152,39 @@ test.describe('@supersync Error Scenarios', () => {
       // Wait for initial sync to complete
       await clientA.sync.syncAndWait();
 
-      // Intercept upload to return 413
+      // Intercept upload to return rejected ops with "Payload too large" error.
+      // The app shows alertDialog only when rejected ops contain this text,
+      // not on raw HTTP 413 responses.
+      // We forward the request to get real op IDs from the server response.
       await clientA.page.route('**/api/sync/ops', async (route) => {
         if (route.request().method() === 'POST') {
-          console.log('[Test] Simulating 413 Payload Too Large');
+          console.log('[Test] Simulating Payload Too Large rejection');
+          const response = await route.fetch();
+          const realBody = await response.json().catch(() => ({}));
+          // Use real op IDs so the app can look up the ops in its local store
+          const realResults = (realBody?.results || []) as Array<{
+            opId: string;
+            accepted: boolean;
+          }>;
+          const rejectedResults = realResults.map((r) => ({
+            opId: r.opId,
+            accepted: false,
+            error: 'Payload too large',
+          }));
+          // Fallback if no results from server
+          if (rejectedResults.length === 0) {
+            rejectedResults.push({
+              opId: 'fake-op-id',
+              accepted: false,
+              error: 'Payload too large',
+            });
+          }
           await route.fulfill({
-            status: 413,
+            status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              error: 'Payload too large',
-              code: 'PAYLOAD_TOO_LARGE',
+              results: rejectedResults,
+              latestSeq: realBody?.latestSeq || 1,
             }),
           });
         } else {
@@ -233,27 +262,31 @@ test.describe('@supersync Error Scenarios', () => {
       await waitForTask(clientA.page, taskName2);
 
       // Intercept the next upload to return DUPLICATE_OPERATION
+      // NOTE: With mandatory encryption, POST body is encrypted binary, not JSON.
+      // We forward the request to get real response, then return the rejection.
       state.returnDuplicate = true;
       await clientA.page.route('**/api/sync/ops', async (route) => {
         if (state.returnDuplicate && route.request().method() === 'POST') {
           state.returnDuplicate = false;
           console.log('[Test] Simulating DUPLICATE_OPERATION rejection');
 
-          const body = route.request().postDataJSON();
-          const ops = body?.ops || [];
-          const rejectedOps = ops.map((op: { id: string }) => ({
-            opId: op.id,
-            error: 'Duplicate operation',
-            errorCode: 'DUPLICATE_OPERATION',
-          }));
+          // Forward request to server to get real response
+          const response = await route.fetch();
+          const realBody = await response.json().catch(() => ({}));
 
           await route.fulfill({
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              piggybacked: [],
-              rejectedOps,
-              latestSeq: 2,
+              results: [
+                {
+                  opId: realBody?.results?.[0]?.opId || 'fake-op-id',
+                  accepted: false,
+                  error: 'Duplicate operation',
+                  errorCode: 'DUPLICATE_OPERATION',
+                },
+              ],
+              latestSeq: realBody?.latestSeq || 2,
             }),
           });
         } else {

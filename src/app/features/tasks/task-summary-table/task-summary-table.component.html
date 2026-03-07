@@ -32,6 +32,14 @@
             style="display: inline-block"
           >
           </inline-input>
+          <button
+            (click)="viewTaskDetails(task)"
+            [title]="T.F.WORKLOG.CMP.VIEW_TASK_DETAILS | translate"
+            class="view-details-btn"
+            mat-icon-button
+          >
+            <mat-icon>info</mat-icon>
+          </button>
         </div>
       </td>
     </ng-container>

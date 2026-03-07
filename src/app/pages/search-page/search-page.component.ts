@@ -28,6 +28,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TagComponent } from '../../features/tag/tag/tag.component';
 import { MatList, MatListItem } from '@angular/material/list';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { Log } from '../../core/log';
 
 const MAX_RESULTS = 50;
@@ -58,6 +60,7 @@ export class SearchPageComponent implements OnInit {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _navigateToTaskService = inject(NavigateToTaskService);
+  private _matDialog = inject(MatDialog);
 
   readonly inputEl = viewChild.required<ElementRef>('inputEl');
 
@@ -181,6 +184,21 @@ export class SearchPageComponent implements OnInit {
   clearSearch(): void {
     this.searchForm.setValue('');
     this.inputEl().nativeElement.focus();
+  }
+
+  async viewArchivedTaskDetails(item: SearchItem, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    let task: Task;
+    try {
+      task = await this._taskService.getByIdFromEverywhere(item.id, true);
+    } catch (e) {
+      Log.warn('Could not load archived task', e);
+      return;
+    }
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
   }
 
   trackByFn(i: number, item: SearchItem): string {

@@ -118,6 +118,7 @@ export class CapacitorReminderService {
           options.reminderType,
           triggerAt,
           useAlarmStyle,
+          useAlarmStyle, // isOngoing: persistent notifications when alarm-style is enabled
         );
 
         Log.log('✅ CapacitorReminderService: Android reminder scheduled successfully', {
@@ -150,9 +151,13 @@ export class CapacitorReminderService {
               id: options.notificationId,
               title: options.title,
               body: `Reminder: ${options.title}`,
-              // Include action type for iOS notification actions (Snooze/Done buttons)
+              // Include action type for iOS notification actions (Done/Snooze buttons)
               actionTypeId: this._platformService.isIOS()
                 ? REMINDER_ACTION_TYPE_ID
+                : undefined,
+              // Group notifications on iOS via thread identifier
+              threadIdentifier: this._platformService.isIOS()
+                ? 'sp_reminders'
                 : undefined,
               schedule: {
                 at: new Date(triggerAt),
@@ -267,19 +272,35 @@ export class CapacitorReminderService {
       return false;
     }
 
-    // On Android 12+, also check exact alarm permission
-    if (IS_ANDROID_WEB_VIEW) {
-      try {
-        const exactAlarmStatus = await LocalNotifications.checkExactNotificationSetting();
-        if (exactAlarmStatus?.exact_alarm !== 'granted') {
-          await LocalNotifications.changeExactNotificationSetting();
-        }
-      } catch (error) {
-        // Non-fatal - exact alarms may not be available on all devices
-        Log.warn('CapacitorReminderService: Exact alarm check failed', error);
-      }
-    }
+    // Note: exact alarm permission is checked once at startup via
+    // askPermissionsIfNotGiven$ in mobile-notification.effects.ts.
+    // We intentionally do NOT check it here to avoid repeatedly
+    // opening the Android settings page on every scheduling cycle.
 
     return true;
+  }
+
+  /**
+   * Check if exact alarm permission is granted (Android 12+).
+   * Returns true on non-Android platforms or if permission is granted.
+   */
+  async ensureExactAlarmPermission(): Promise<boolean> {
+    if (!IS_ANDROID_WEB_VIEW) {
+      return true;
+    }
+
+    try {
+      const exactAlarmStatus = await LocalNotifications.checkExactNotificationSetting();
+      if (exactAlarmStatus?.exact_alarm !== 'granted') {
+        await LocalNotifications.changeExactNotificationSetting();
+        // Re-check after prompting
+        const recheck = await LocalNotifications.checkExactNotificationSetting();
+        return recheck?.exact_alarm === 'granted';
+      }
+      return true;
+    } catch (error) {
+      Log.warn('CapacitorReminderService: Exact alarm check failed', error);
+      return false;
+    }
   }
 }

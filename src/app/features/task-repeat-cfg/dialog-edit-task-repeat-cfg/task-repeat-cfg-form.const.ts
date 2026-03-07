@@ -249,15 +249,6 @@ export const TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS: FormlyFieldConfig[] = [
       updateOn: 'blur',
     },
   },
-  {
-    key: 'order',
-    type: 'input',
-    templateOptions: {
-      label: T.F.TASK_REPEAT.F.ORDER,
-      type: 'number',
-      description: T.F.TASK_REPEAT.F.ORDER_DESCRIPTION,
-    },
-  },
 ];
 
 export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
@@ -289,5 +280,14 @@ export const TASK_REPEAT_CFG_ADVANCED_FORM_CFG: FormlyFieldConfig[] = [
       description: T.F.TASK_REPEAT.F.DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION,
     },
     className: 'sp-formly-child-option',
+  },
+  {
+    key: 'skipOverdue',
+    type: 'checkbox',
+    defaultValue: false,
+    templateOptions: {
+      label: T.F.TASK_REPEAT.F.SKIP_OVERDUE,
+      description: T.F.TASK_REPEAT.F.SKIP_OVERDUE_DESCRIPTION,
+    },
   },
 ];

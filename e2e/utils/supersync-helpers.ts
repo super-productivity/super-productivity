@@ -966,3 +966,38 @@ export const navigateToWorkView = async (client: SimulatedE2EClient): Promise<vo
   await client.page.waitForLoadState('networkidle');
   await client.page.waitForTimeout(UI_SETTLE_STANDARD);
 };
+
+// ============================================================================
+// ENCRYPTION DIALOG HELPERS
+// ============================================================================
+
+/**
+ * Handle the encryption warning dialog that appears when importing a backup
+ * with different encryption settings than the current app state.
+ *
+ * The dialog (dialog-import-encryption-warning) has a warn-colored confirm button.
+ * If the dialog does not appear within the timeout, this is a no-op.
+ *
+ * @param page - The Playwright page
+ * @param label - Optional label for console logging (e.g. "[importBackup]")
+ */
+export const handleEncryptionWarningDialog = async (
+  page: Page,
+  label = '[handleEncryptionWarningDialog]',
+): Promise<void> => {
+  const encryptionWarning = page.locator('dialog-import-encryption-warning');
+  const warningAppeared = await encryptionWarning
+    .waitFor({ state: 'visible', timeout: UI_VISIBLE_TIMEOUT_SHORT })
+    .then(() => true)
+    .catch(() => false);
+
+  if (warningAppeared) {
+    console.log(`${label} Encryption warning dialog appeared - confirming import`);
+    const confirmBtn = encryptionWarning.locator('button[color="warn"]');
+    await confirmBtn.click();
+    await encryptionWarning.waitFor({
+      state: 'hidden',
+      timeout: UI_VISIBLE_TIMEOUT_LONG,
+    });
+  }
+};

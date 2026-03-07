@@ -172,6 +172,20 @@ class CapacitorMainActivity : BridgeActivity() {
     private fun handleIntent(intent: Intent) {
         Log.d("SP_SHARE", "handleIntent action: ${intent.action} type: ${intent.type}")
 
+        // Handle reminder notification tap
+        val reminderTaskId = intent.getStringExtra("REMINDER_TASK_ID")
+        if (reminderTaskId != null) {
+            // Sanitize to prevent JS injection (only allow alphanumeric, dash, underscore)
+            val sanitizedId = reminderTaskId.replace(Regex("[^a-zA-Z0-9_-]"), "")
+            Log.d("SP_REMINDER", "Reminder tap: taskId=$sanitizedId")
+            // Persist for pull-based retrieval (WebView may not be ready on cold start)
+            com.superproductivity.superproductivity.widget.ReminderTapQueue.setTaskId(this, sanitizedId)
+            // Also try push-based delivery (works on warm start)
+            callJSInterfaceFunctionIfExists("next", "onReminderTap$", "'$sanitizedId'")
+            intent.removeExtra("REMINDER_TASK_ID")
+            return
+        }
+
         // Handle tracking notification actions
         when (intent.action) {
             TrackingForegroundService.ACTION_PAUSE -> {

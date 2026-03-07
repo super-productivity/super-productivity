@@ -149,6 +149,14 @@ $this-border-radius: 8px;
   }
 }
 
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .simple-counter-items {
   display: flex;
   flex-wrap: wrap;

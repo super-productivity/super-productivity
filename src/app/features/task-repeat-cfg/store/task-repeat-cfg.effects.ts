@@ -54,7 +54,6 @@ const SCHEDULE_AFFECTING_FIELDS: (keyof TaskRepeatCfgCopy)[] = [
   'friday',
   'saturday',
   'sunday',
-  'order', // controls top/bottom placement of created tasks, which affects rescheduling behavior
   'isPaused',
 ];
 

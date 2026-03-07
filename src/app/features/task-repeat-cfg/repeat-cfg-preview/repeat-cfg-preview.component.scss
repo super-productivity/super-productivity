@@ -1,0 +1,57 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host {
+  display: block;
+  margin-bottom: var(--s-half);
+}
+
+:host > div {
+  display: flex;
+  align-items: center;
+  padding-top: var(--s-quarter);
+  padding-bottom: var(--s-quarter);
+  border: 1px solid var(--extra-border-color);
+  border-radius: var(--task-border-radius);
+  opacity: 0.9;
+  cursor: pointer;
+  min-height: var(--planner-item-height);
+
+  &:hover {
+    border-color: var(--c-primary);
+  }
+
+  mat-icon {
+    margin-left: var(--s);
+    margin-right: var(--s);
+    opacity: 0.8;
+  }
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  margin-left: var(--s);
+  margin-right: var(--s);
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.paused-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+}
+
+:host.isPaused > div {
+  opacity: 0.5;
+}

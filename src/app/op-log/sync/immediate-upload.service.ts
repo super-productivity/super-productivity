@@ -182,27 +182,24 @@ export class ImmediateUploadService implements OnDestroy {
 
       // Use sync service's uploadPendingOps which includes migration detection callback.
       // This ensures SYNC_IMPORT is created when switching to a new/empty server.
-      // Returns null if fresh client (blocked from upload).
       const result = await this._syncService.uploadPendingOps(syncCapableProvider);
-      if (!result) {
-        OpLog.verbose('ImmediateUploadService: Upload returned null (fresh client)');
+      if (result.kind === 'blocked_fresh_client') {
+        OpLog.verbose('ImmediateUploadService: Upload blocked (fresh client)');
         return;
       }
 
-      // If cancelled (piggybacked SYNC_IMPORT conflict dialog), skip post-upload logic
-      if (result.cancelled) {
+      if (result.kind === 'cancelled') {
         OpLog.verbose(
           'ImmediateUploadService: Upload cancelled (piggybacked SYNC_IMPORT conflict)',
         );
         return;
       }
 
-      // Note: piggybacked ops and rejected ops are already handled by _syncService.uploadPendingOps()
-      // We just need to handle the sync status here.
+      // result.kind === 'completed' from here
 
       // If LWW local-wins created new update ops from piggybacked ops,
       // do a follow-up upload to push them to the server immediately
-      if ((result.localWinOpsCreated ?? 0) > 0) {
+      if (result.localWinOpsCreated > 0) {
         OpLog.verbose(
           `ImmediateUploadService: LWW created ${result.localWinOpsCreated} local-win op(s), re-uploading`,
         );
@@ -211,17 +208,17 @@ export class ImmediateUploadService implements OnDestroy {
 
       // Don't show checkmark when piggybacked ops exist - there may be more
       // remote ops pending. Let normal sync cycle confirm full sync state.
-      if (result.piggybackedOps.length > 0) {
+      if (result.piggybackedOpsCount > 0) {
         OpLog.verbose(
           `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, ` +
-            `processed ${result.piggybackedOps.length} piggybacked (checkmark deferred)`,
+            `processed ${result.piggybackedOpsCount} piggybacked (checkmark deferred)`,
         );
         return;
       }
 
       // Show checkmark ONLY when server confirms no pending remote ops
       // (empty piggybackedOps means we're confirmed in sync)
-      if (result.uploadedCount > 0 || (result.localWinOpsCreated ?? 0) > 0) {
+      if (result.uploadedCount > 0 || result.localWinOpsCreated > 0) {
         this._providerManager.setSyncStatus('IN_SYNC');
         OpLog.verbose(
           `ImmediateUploadService: Uploaded ${result.uploadedCount} ops, confirmed in sync`,

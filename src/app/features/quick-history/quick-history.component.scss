@@ -199,6 +199,14 @@ $this-border-radius: 8px;
   }
 }
 
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .no-data {
   text-align: center;
 }

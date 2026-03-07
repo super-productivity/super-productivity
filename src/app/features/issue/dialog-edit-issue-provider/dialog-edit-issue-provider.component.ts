@@ -92,6 +92,7 @@ export class DialogEditIssueProviderComponent {
     issueProvider?: IssueProvider;
     issueProviderKey?: IssueProviderKey;
     calendarContextInfoTarget?: CalendarContextInfoTarget;
+    isDuplicate?: boolean;
   }>(MAT_DIALOG_DATA);
 
   isConnectionWorks = signal(false);
@@ -102,26 +103,28 @@ export class DialogEditIssueProviderComponent {
   issueProviderKey: IssueProviderKey = (this.d.issueProvider?.issueProviderKey ||
     this.d.issueProviderKey) as IssueProviderKey;
   issueProvider?: IssueProvider = this.d.issueProvider;
-  isEdit: boolean = !!this.issueProvider;
+  isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
 
   model: Partial<IssueProvider> = this.isEdit
     ? { ...this.issueProvider }
-    : ({
-        ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
-        ...(this._pluginRegistry.hasProvider(this.issueProviderKey)
-          ? {
-              pluginId:
-                this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId ??
-                this.issueProviderKey.replace('plugin:', ''),
-              pluginConfig: this._getDefaultPluginConfig(),
-            }
-          : DEFAULT_ISSUE_PROVIDER_CFGS[
-              this.issueProviderKey as BuiltInIssueProviderKey
-            ]),
-        id: nanoid(),
-        isEnabled: true,
-        issueProviderKey: this.issueProviderKey,
-      } as IssueProviderTypeMap<IssueProviderKey>);
+    : this.d.isDuplicate && this.issueProvider
+      ? { ...this.issueProvider, id: nanoid(), migratedFromProjectId: undefined }
+      : ({
+          ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
+          ...(this._pluginRegistry.hasProvider(this.issueProviderKey)
+            ? {
+                pluginId:
+                  this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId ??
+                  this.issueProviderKey.replace('plugin:', ''),
+                pluginConfig: this._getDefaultPluginConfig(),
+              }
+            : DEFAULT_ISSUE_PROVIDER_CFGS[
+                this.issueProviderKey as BuiltInIssueProviderKey
+              ]),
+          id: nanoid(),
+          isEnabled: true,
+          issueProviderKey: this.issueProviderKey,
+        } as IssueProviderTypeMap<IssueProviderKey>);
 
   title: string = this._pluginRegistry.hasProvider(this.issueProviderKey)
     ? this._pluginRegistry.getName(this.issueProviderKey) || this.issueProviderKey
@@ -169,6 +172,18 @@ export class DialogEditIssueProviderComponent {
 
   cancel(): void {
     this._matDialogRef.close();
+  }
+
+  duplicate(): void {
+    const providerData = structuredClone(this.model) as IssueProvider;
+    this._matDialogRef.close();
+    this._matDialog.open(DialogEditIssueProviderComponent, {
+      restoreFocus: true,
+      data: {
+        issueProvider: providerData,
+        isDuplicate: true,
+      },
+    });
   }
 
   formlyModelChange(model: Partial<IssueProvider>): void {

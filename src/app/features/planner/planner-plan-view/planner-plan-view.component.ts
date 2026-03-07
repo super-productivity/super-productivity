@@ -66,6 +66,8 @@ export class PlannerPlanViewComponent {
       }
     });
 
+    this._setupScrollBorderDetection();
+
     // Cleanup observers and timers on component destroy
     this._destroyRef.onDestroy(() => {
       this._intersectionObserver?.disconnect();
@@ -143,6 +145,17 @@ export class PlannerPlanViewComponent {
       }
     }, 100);
     this._pendingTimers.push(timer);
+  }
+
+  private _setupScrollBorderDetection(): void {
+    const host = this._elRef.nativeElement as HTMLElement;
+    const onScroll = (): void => {
+      host.classList.toggle('isScrolled', host.scrollTop !== 0);
+    };
+    host.addEventListener('scroll', onScroll, { passive: true });
+    this._destroyRef.onDestroy(() => {
+      host.removeEventListener('scroll', onScroll);
+    });
   }
 
   private _setupVisibleDayObserver(elements: readonly ElementRef[]): void {

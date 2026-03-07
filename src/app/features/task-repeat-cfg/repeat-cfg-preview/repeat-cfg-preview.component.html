@@ -1,0 +1,13 @@
+<div
+  (click)="editTaskRepeatCfg()"
+  [matTooltip]="nextDueTooltip()"
+>
+  <mat-icon svgIcon="repeat"></mat-icon>
+  <div class="title">{{ repeatCfg().title }}</div>
+  <div class="info">
+    @if (repeatCfg().isPaused) {
+      <mat-icon class="paused-icon">pause</mat-icon>
+    }
+    {{ repeatInfoText() }}
+  </div>
+</div>

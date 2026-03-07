@@ -59,7 +59,10 @@ export class SuperSyncEncryptionToggleService {
       // Revert config on failure (server data is already deleted at this point)
       SyncLog.err(`${LOG_PREFIX}: Failed after deleting server data!`, error);
 
-      // Best-effort revert: restore original config (preserves auth credentials and original encryption state)
+      // Best-effort revert: restore pre-enable config.
+      // existingCfg was captured before enabling, so it already has isEncryptionEnabled: false
+      // and no encryptKey. The explicit overrides ensure correctness even if the guard above
+      // was bypassed (e.g., existingCfg was partially set).
       await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
         ...existingCfg,
         encryptKey: undefined,

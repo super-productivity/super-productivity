@@ -597,6 +597,60 @@ describe('taskSharedCrudMetaReducer', () => {
         testState,
       );
     });
+
+    it('should remove task from tags in state even when payload tagIds are stale (sync scenario)', () => {
+      // Scenario: During sync, an LWW Update recreated a task and added it to tag1 and TODAY,
+      // but the deleteTask payload (from the originating client) has empty tagIds because
+      // the task had no tags when it was deleted there.
+      const testState = createStateWithExistingTasks(
+        [],
+        [],
+        ['task1', 'other-task'],
+        ['task1', 'today-task'],
+      );
+
+      // Payload has EMPTY tagIds — simulating a stale payload from the originating client
+      const action = createDeleteAction({
+        tagIds: [],
+        projectId: '',
+      });
+
+      metaReducer(testState, action);
+      expectStateUpdate(
+        expectTagUpdates({
+          tag1: { taskIds: ['other-task'] },
+          TODAY: { taskIds: ['today-task'] },
+        }),
+        action,
+        mockReducer,
+        testState,
+      );
+    });
+
+    it('should remove task from extra tags not in payload (sync divergence)', () => {
+      // Scenario: Payload says task is in tag1, but state also has it in a second tag.
+      // The second tag association was created by an LWW Update on this client.
+      const tag2 = createMockTag({ id: 'tag2', title: 'Extra Tag', taskIds: ['task1'] });
+      const testState = createStateWithExistingTasks([], [], ['task1', 'other-task'], []);
+      // Add tag2 which also contains task1 in its taskIds
+      (testState[TAG_FEATURE_NAME].ids as string[]).push('tag2');
+      testState[TAG_FEATURE_NAME].entities['tag2'] = tag2;
+
+      // Payload only knows about tag1, not tag2
+      const action = createDeleteAction({
+        tagIds: ['tag1'],
+        projectId: '',
+      });
+
+      metaReducer(testState, action);
+
+      // Verify task1 is removed from BOTH tags, even though payload only listed tag1
+      const updatedState = mockReducer.calls.mostRecent().args[0];
+      expect(updatedState[TAG_FEATURE_NAME].entities.tag1.taskIds).toEqual([
+        'other-task',
+      ]);
+      expect(updatedState[TAG_FEATURE_NAME].entities.tag2.taskIds).toEqual([]);
+    });
   });
 
   describe('deleteTasks action', () => {

@@ -45,7 +45,9 @@ test.describe('@supersync @encryption Encryption Enable/Disable', () => {
    * - Both clients have same data including tasks created after A disabled encryption
    * - No encryption errors occur
    */
-  test('Disabling encryption triggers clean slate and other clients adapt', async ({
+  // SKIPPED: Encryption is now mandatory for SuperSync. The "Disable Encryption"
+  // button is hidden when SuperSync is the provider, so this flow is impossible.
+  test.skip('Disabling encryption triggers clean slate and other clients adapt', async ({
     browser,
     baseURL,
     testRunId,

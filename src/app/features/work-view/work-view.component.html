@@ -310,6 +310,31 @@
           </div>
         }
 
+        @if (isShowRepeatCfgsPanel()) {
+          <div
+            @expand
+            class="collapsible-section"
+          >
+            <collapsible
+              [title]="
+                (T.WW.RECURRING_TASKS | translate) +
+                ' (' +
+                repeatCfgsForContext().length +
+                ')'
+              "
+              [isExpanded]="!isRepeatCfgsHidden()"
+              (isExpandedChange)="isRepeatCfgsHidden.set(!$event)"
+              [isIconBefore]="true"
+            >
+              <div class="repeat-cfg-list">
+                @for (repeatCfg of repeatCfgsForContext(); track repeatCfg.id) {
+                  <repeat-cfg-preview [repeatCfg]="repeatCfg"></repeat-cfg-preview>
+                }
+              </div>
+            </collapsible>
+          </div>
+        }
+
         @if (!isPlanningMode() && isOnTodayList()) {
           <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
         }

@@ -42,6 +42,7 @@ export {
   AuthFailSPError,
   NoSyncProviderSetError,
   SyncAlreadyInProgressError,
+  LockAcquisitionTimeoutError,
   CanNotMigrateMajorDownError,
   LockPresentError,
   NoRemoteModelFile,

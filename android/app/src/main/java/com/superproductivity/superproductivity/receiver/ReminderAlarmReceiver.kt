@@ -20,6 +20,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_REMINDER_TYPE = "reminder_type"
         const val EXTRA_USE_ALARM_STYLE = "use_alarm_style"
+        const val EXTRA_IS_ONGOING = "is_ongoing"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -31,6 +32,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Reminder"
         val reminderType = intent.getStringExtra(EXTRA_REMINDER_TYPE) ?: "TASK"
         val useAlarmStyle = intent.getBooleanExtra(EXTRA_USE_ALARM_STYLE, false)
+        val isOngoing = intent.getBooleanExtra(EXTRA_IS_ONGOING, false)
 
         Log.d(TAG, "Alarm triggered: id=$notificationId, title=$title, useAlarmStyle=$useAlarmStyle")
 
@@ -41,7 +43,8 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
             relatedId,
             title,
             reminderType,
-            useAlarmStyle
+            useAlarmStyle,
+            isOngoing
         )
     }
 }

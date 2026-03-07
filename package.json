@@ -1,6 +1,6 @@
 {
   "name": "superProductivity",
-  "version": "17.2.4",
+  "version": "17.3.0",
   "description": "ToDo list and Time Tracking",
   "keywords": [
     "ToDo",
@@ -96,8 +96,9 @@
     "preCheck": "npm run lint && npm run test & npm run int:test && npm run e2e",
     "release": "npm run dist",
     "removeWOFF1": "node ./tools/remove-woff.js",
-    "serveProd": "ng serve --configuration production",
+    "serveProd": "node ./tools/load-env.js --ensure && ng serve --configuration production",
     "start": "npm run electron:build && cross-env NODE_ENV=DEV electron .",
+    "serve": "node ./tools/load-env.js --ensure && ng serve",
     "startFrontend": "npm run env && ng serve",
     "startFrontend:e2e": "npm run env && ng serve --port=4242",
     "startFrontend:prod": "npm run env && ng serve --configuration production",

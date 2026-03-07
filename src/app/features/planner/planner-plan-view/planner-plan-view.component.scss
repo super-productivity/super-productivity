@@ -4,6 +4,10 @@
   overflow: auto;
   display: flex;
   height: 100%;
+
+  &.isScrolled {
+    border-top: 1px solid var(--extra-border-color);
+  }
 }
 
 .days {

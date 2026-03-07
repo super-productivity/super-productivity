@@ -9,7 +9,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { from } from 'rxjs';
-import { filter, first, map, switchMap } from 'rxjs/operators';
+import { filter, first, switchMap } from 'rxjs/operators';
 import { Task } from '../../tasks/task.model';
 import { DateAdapter } from '@angular/material/core';
 import {
@@ -21,6 +21,8 @@ import {
 import { T } from '../../../t.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
+import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-spent.util';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 
 @Component({
   selector: 'repeat-task-heatmap',
@@ -38,14 +40,31 @@ export class RepeatTaskHeatmapComponent {
 
   readonly repeatCfgId = input.required<string>();
 
-  private readonly _rawHeatmapData = toSignal(
+  private readonly _loadedTasks = toSignal(
     toObservable(this.repeatCfgId).pipe(
       filter((id): id is string => !!id),
       switchMap((repeatCfgId) => from(this._loadTasksForRepeatCfg(repeatCfgId))),
-      map((tasks) => this._buildHeatmapData(tasks)),
     ),
     { initialValue: null },
   );
+
+  private readonly _rawHeatmapData = computed(() => {
+    const tasks = this._loadedTasks();
+    return tasks ? this._buildHeatmapData(tasks) : null;
+  });
+
+  readonly formattedTimeSummary = computed(() => {
+    const tasks = this._loadedTasks();
+    if (!tasks || tasks.length === 0) {
+      return null;
+    }
+    const summary = calcRepeatTaskSeriesTimeSpent(tasks);
+    return {
+      total: msToString(summary.total),
+      thisWeek: msToString(summary.thisWeek),
+      thisMonth: msToString(summary.thisMonth),
+    };
+  });
 
   readonly heatmapData = computed<HeatmapData | null>(() => {
     const rawData = this._rawHeatmapData();

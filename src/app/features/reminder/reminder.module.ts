@@ -23,8 +23,9 @@ import { NotifyService } from '../../core/notify/notify.service';
 import { DialogViewTaskRemindersComponent } from '../tasks/dialog-view-task-reminders/dialog-view-task-reminders.component';
 import { throttle } from '../../util/decorators';
 import { SyncTriggerService } from '../../imex/sync/sync-trigger.service';
+import { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 import { LayoutService } from '../../core-ui/layout/layout.service';
-import { merge, of, timer, interval } from 'rxjs';
+import { merge, of, timer, interval, firstValueFrom } from 'rxjs';
 import { TaskService } from '../tasks/task.service';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from 'src/app/t.const';
@@ -38,9 +39,11 @@ import {
   NotificationActionEvent,
 } from '../../core/platform/capacitor-notification.service';
 import { Log } from '../../core/log';
+import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { androidInterface } from '../android/android-interface';
 
-const IOS_SNOOZE_MINUTES = 10;
-const MINUTES_TO_MILLISECONDS = 60 * 1000;
+const SNOOZE_10M_MS = 10 * 60 * 1000;
+const SNOOZE_1H_MS = 60 * 60 * 1000;
 
 @NgModule({
   declarations: [],
@@ -58,13 +61,15 @@ export class ReminderModule {
   private readonly _store = inject(Store);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _capacitorReminderService = inject(CapacitorReminderService);
+  private readonly _syncWrapperService = inject(SyncWrapperService);
 
   constructor() {
     // Initialize reminder service (runs migration in background)
     this._reminderService.init();
 
-    // Initialize iOS notification actions
+    // Initialize platform-specific notification actions
     this._initIOSNotificationActions();
+    this._initAndroidNotificationActions();
 
     this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
       .pipe(
@@ -133,14 +138,6 @@ export class ReminderModule {
         // On Android:
         // - Future reminders: Native AlarmManager handles them (skip dialog)
         // - Overdue reminders: No native notification exists (show dialog)
-        // This is because android.effects.ts only schedules future reminders.
-        // TODO: Native Android reminder notification actions (snooze/done buttons) currently
-        // work entirely in the background without notifying TypeScript. This means:
-        // 1. Snooze: Works correctly (native code reschedules the alarm)
-        // 2. Done: Works for dismissing the notification, but the reminder isn't removed from
-        //    app state. The reminder will be cancelled when the task is marked done in the app.
-        // To fully fix: Add onReminderDone$ subject to android-interface.ts and wire it up
-        // in the Kotlin ReminderBroadcastReceiver to call dismissReminderOnly action.
         if (
           IS_ANDROID_NATIVE &&
           futureReminders.length > 0 &&
@@ -246,7 +243,7 @@ export class ReminderModule {
   }
 
   /**
-   * Handle iOS notification action (Snooze or Done).
+   * Handle iOS notification action (Done, Snooze 10m, Snooze 1h).
    */
   private async _handleIOSNotificationAction(
     event: NotificationActionEvent,
@@ -262,11 +259,16 @@ export class ReminderModule {
       taskId,
     });
 
-    if (event.actionId === NOTIFICATION_ACTION.SNOOZE) {
-      // Snooze: Reschedule the reminder for 10 minutes later
-      const task = await this._taskService.getByIdOnce$(taskId).toPromise();
+    if (
+      event.actionId === NOTIFICATION_ACTION.SNOOZE_10M ||
+      event.actionId === NOTIFICATION_ACTION.SNOOZE_1H
+    ) {
+      const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
       if (task) {
-        const snoozeMs = IOS_SNOOZE_MINUTES * MINUTES_TO_MILLISECONDS;
+        const snoozeMs =
+          event.actionId === NOTIFICATION_ACTION.SNOOZE_10M
+            ? SNOOZE_10M_MS
+            : SNOOZE_1H_MS;
         const newRemindAt = Date.now() + snoozeMs;
         this._store.dispatch(
           TaskSharedActions.reScheduleTaskWithTime({
@@ -278,17 +280,121 @@ export class ReminderModule {
         );
         Log.log('ReminderModule: Task snoozed via iOS notification', {
           taskId,
-          newRemindAt: new Date(newRemindAt).toISOString(),
+          snoozeMs,
         });
       }
     } else if (event.actionId === NOTIFICATION_ACTION.DONE) {
-      // Done: Dismiss the reminder only (don't mark task as done)
-      this._store.dispatch(
-        TaskSharedActions.dismissReminderOnly({
-          id: taskId,
-        }),
-      );
-      Log.log('ReminderModule: Reminder dismissed via iOS notification', { taskId });
+      await this._handleDoneAction(taskId);
+    } else {
+      // Tap on notification body (actionId is 'tap' in Capacitor)
+      await this._handleTapAction(taskId);
     }
+  }
+
+  /**
+   * Initialize Android notification action handling.
+   * Subscribes to reminder tap and done events from the native bridge.
+   */
+  private _initAndroidNotificationActions(): void {
+    if (!IS_ANDROID_WEB_VIEW) {
+      return;
+    }
+
+    androidInterface.onReminderTap$.subscribe((taskId: string) => {
+      this._handleTapAction(taskId);
+    });
+
+    androidInterface.onReminderDone$.subscribe((taskId: string) => {
+      this._handleDoneAction(taskId);
+    });
+
+    androidInterface.onReminderSnooze$.subscribe(
+      (event: { taskId: string; newRemindAt: number }) => {
+        this._handleSnoozeAction(event.taskId, event.newRemindAt);
+      },
+    );
+  }
+
+  /**
+   * Handle notification tap: sync, then navigate to task or show "already done".
+   */
+  private async _handleTapAction(taskId: string): Promise<void> {
+    Log.log('ReminderModule: Handling notification tap', { taskId });
+    try {
+      await this._syncWrapperService.sync();
+    } catch {
+      // Continue even if sync fails
+    }
+
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (!task || task.isDone) {
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.NOTIFICATION.TASK_ALREADY_COMPLETED,
+      });
+      return;
+    }
+
+    this._store.dispatch(TaskSharedActions.dismissReminderOnly({ id: taskId }));
+    try {
+      this._taskService.focusTask(taskId);
+    } catch (e) {
+      Log.warn('ReminderModule: Could not focus task after notification tap', e);
+    }
+  }
+
+  /**
+   * Handle "Done" action: sync, then mark task done or show "already done".
+   */
+  private async _handleDoneAction(taskId: string): Promise<void> {
+    Log.log('ReminderModule: Handling done action', { taskId });
+    try {
+      await this._syncWrapperService.sync();
+    } catch {
+      // Continue even if sync fails
+    }
+
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (!task || task.isDone) {
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.NOTIFICATION.TASK_ALREADY_COMPLETED,
+      });
+      return;
+    }
+
+    this._taskService.setDone(taskId);
+    this._snackService.open({
+      type: 'SUCCESS',
+      msg: T.NOTIFICATION.TASK_MARKED_DONE,
+    });
+  }
+
+  /**
+   * Handle snooze from Android notification: update NgRx state to match native alarm.
+   */
+  private async _handleSnoozeAction(taskId: string, newRemindAt: number): Promise<void> {
+    Log.log('ReminderModule: Handling snooze action from Android', {
+      taskId,
+      newRemindAt,
+    });
+    try {
+      await this._syncWrapperService.sync();
+    } catch {
+      // Continue even if sync fails
+    }
+
+    const task = await firstValueFrom(this._taskService.getByIdOnce$(taskId));
+    if (!task || task.isDone) {
+      return;
+    }
+    this._store.dispatch(
+      TaskSharedActions.reScheduleTaskWithTime({
+        task,
+        remindAt: newRemindAt,
+        dueWithTime: task.dueWithTime ?? newRemindAt,
+        isMoveToBacklog: false,
+      }),
+    );
   }
 }

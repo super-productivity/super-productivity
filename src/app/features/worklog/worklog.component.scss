@@ -247,6 +247,14 @@
   }
 }
 
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .repeat-task-icon {
   vertical-align: middle;
   margin-right: 4px;

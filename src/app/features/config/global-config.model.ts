@@ -194,6 +194,8 @@ export type ReminderConfig = Readonly<{
   isFocusWindow?: boolean;
   // Android only: use alarm-style notifications (louder, more intrusive)
   useAlarmStyleReminders?: boolean;
+  notifyOnDueDate?: boolean;
+  dueDateNotificationHour?: number;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{

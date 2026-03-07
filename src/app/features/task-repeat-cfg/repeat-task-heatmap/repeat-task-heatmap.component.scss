@@ -3,3 +3,11 @@
   max-width: 500px;
   margin-bottom: 16px;
 }
+
+.time-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  margin-bottom: 8px;
+}

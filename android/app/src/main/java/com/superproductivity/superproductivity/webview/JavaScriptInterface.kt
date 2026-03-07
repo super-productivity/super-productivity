@@ -16,6 +16,9 @@ import com.superproductivity.superproductivity.app.LaunchDecider
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
 import com.superproductivity.superproductivity.service.TrackingForegroundService
+import com.superproductivity.superproductivity.widget.ReminderDoneQueue
+import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
+import com.superproductivity.superproductivity.widget.ReminderTapQueue
 import com.superproductivity.superproductivity.widget.ShareIntentQueue
 import com.superproductivity.superproductivity.widget.WidgetTaskQueue
 
@@ -198,7 +201,8 @@ class JavaScriptInterface(
         title: String,
         reminderType: String,
         triggerAtMs: Long,
-        useAlarmStyle: Boolean
+        useAlarmStyle: Boolean,
+        isOngoing: Boolean
     ) {
         safeCall("Failed to schedule native reminder") {
             ReminderNotificationHelper.scheduleReminder(
@@ -209,7 +213,8 @@ class JavaScriptInterface(
                 title,
                 reminderType,
                 triggerAtMs,
-                useAlarmStyle
+                useAlarmStyle,
+                isOngoing
             )
         }
     }
@@ -247,6 +252,24 @@ class JavaScriptInterface(
             }
         }
         return data
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderTapQueue(): String? {
+        return ReminderTapQueue.getAndClear(activity)
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderDoneQueue(): String? {
+        return ReminderDoneQueue.getAndClear(activity)
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun getReminderSnoozeQueue(): String? {
+        return ReminderSnoozeQueue.getAndClear(activity)
     }
 
     fun callJavaScriptFunction(script: String) {

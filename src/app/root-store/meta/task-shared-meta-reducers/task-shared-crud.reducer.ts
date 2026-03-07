@@ -311,26 +311,29 @@ const handleDeleteTask = (
     });
   }
 
-  // Update tags - collect all affected tags and tasks to remove
-  // Include TODAY_TAG.id explicitly since it's not stored in task.tagIds by design
-  const potentialTagIds = [
-    TODAY_TAG.id,
-    ...task.tagIds,
-    ...(task.subTasks || []).flatMap((st) => st.tagIds || []),
-  ];
-
-  // Only include tags that actually exist in the state to prevent errors
-  const affectedTagIds = unique(
-    potentialTagIds.filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]),
-  );
-
+  // Update tags - find affected tags from CURRENT STATE, not payload.
+  // During sync, the receiving client may have different tag associations
+  // (e.g. an LWW Update recreated the task with different tags), so we must
+  // iterate all tags to ensure complete cleanup. This matches handleDeleteTasks.
   const taskIdsToRemove = [task.id, ...(task.subTaskIds || [])];
+  const taskIdsToRemoveSet = new Set(taskIdsToRemove);
+
+  const affectedTagIds = (updatedState[TAG_FEATURE_NAME].ids as string[]).filter(
+    (tagId) => {
+      const tag = updatedState[TAG_FEATURE_NAME].entities[tagId];
+      if (!tag) return false;
+      return tag.taskIds.some((taskId) => taskIdsToRemoveSet.has(taskId));
+    },
+  );
 
   const tagUpdates = affectedTagIds.map(
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIdsToRemove),
+        taskIds: removeTasksFromList(
+          getTag(updatedState, tagId).taskIds,
+          taskIdsToRemove,
+        ),
       },
     }),
   );
