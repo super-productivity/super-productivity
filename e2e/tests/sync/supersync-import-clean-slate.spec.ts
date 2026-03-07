@@ -214,7 +214,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
 
       // Configure sync WITHOUT waiting for initial sync
       // (initial sync will show sync-import-conflict dialog since we have a local BackupImport)
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog = clientA.sync.syncImportConflictDialog;
@@ -313,12 +317,13 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Clean Slate] ✓ Client B: All pre-import tasks are GONE');
 
       // Verify both clients have imported tasks
-      const importedTask1OnA = clientA.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
-      const importedTask1OnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTask1OnA = clientA.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
+      const importedTask1OnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
 
       await expect(importedTask1OnA).toBeVisible({ timeout: 5000 });
       await expect(importedTask1OnB).toBeVisible({ timeout: 5000 });
@@ -407,7 +412,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       await waitForAppReady(clientA.page, { ensureRoute: false });
 
       // Configure sync WITHOUT waiting for initial sync
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog2 = clientA.sync.syncImportConflictDialog;
@@ -461,9 +470,10 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Late Joiner] ✓ Task-B-Local is GONE (not replayed)');
 
       // Verify imported task is present
-      const importedTaskOnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTaskOnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
       await expect(importedTaskOnB).toBeVisible({ timeout: 5000 });
       console.log('[Late Joiner] ✓ Client B has imported tasks');
 
@@ -564,7 +574,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       await waitForAppReady(clientA.page, { ensureRoute: false });
 
       // Configure sync WITHOUT waiting for initial sync
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog3 = clientA.sync.syncImportConflictDialog;
@@ -641,9 +655,10 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       );
 
       // Verify imported task is present on B
-      const importedTaskOnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTaskOnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
       await expect(importedTaskOnB).toBeVisible({ timeout: 5000 });
       console.log('[Pending Invalidation] ✓ Client B has imported tasks');
 
@@ -729,7 +744,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       await waitForAppReady(clientB.page, { ensureRoute: false });
 
       // Configure sync WITHOUT waiting for initial sync
-      await clientB.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for sync import conflict dialog or sync completion
       const syncImportDialog = clientB.sync.syncImportConflictDialog;
