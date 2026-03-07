@@ -2127,10 +2127,10 @@
       "TITLE": "Tasks"
     },
     "POMODORO": {
-      "BREAK_DURATION": "Duration of short breaks",
-      "CYCLES_BEFORE_LONGER_BREAK": "Start longer break after X work sessions",
-      "DURATION": "Duration of work sessions",
-      "LONGER_BREAK_DURATION": "Duration of longer breaks"
+      "BREAK_DURATION": "Short break duration",
+      "CYCLES_BEFORE_LONGER_BREAK": "Start long break after X work sessions",
+      "DURATION": "Work duration",
+      "LONGER_BREAK_DURATION": "Long break duration"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Show banner X before the actual reminder",
