@@ -14,6 +14,7 @@ import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/c
 import { ProjectService } from '../../features/project/project.service';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { LegacyPfDbService } from '../persistence/legacy-pf-db.service';
+import { DataInitStateService } from '../data-init/data-init-state.service';
 import { of } from 'rxjs';
 import { signal } from '@angular/core';
 import { LS } from '../persistence/storage-keys.const';
@@ -100,6 +101,10 @@ describe('StartupService', () => {
     // Default: no legacy data (fresh install)
     legacyPfDbServiceSpy.hasUsableEntityData.and.returnValue(Promise.resolve(false));
 
+    const dataInitStateServiceSpy = {
+      isAllDataLoadedInitially$: of(true),
+    };
+
     TestBed.configureTestingModule({
       providers: [
         StartupService,
@@ -120,6 +125,7 @@ describe('StartupService', () => {
         { provide: ProjectService, useValue: projectServiceSpy },
         { provide: TrackingReminderService, useValue: trackingReminderServiceSpy },
         { provide: LegacyPfDbService, useValue: legacyPfDbServiceSpy },
+        { provide: DataInitStateService, useValue: dataInitStateServiceSpy },
         provideMockStore({
           selectors: [
             { selector: selectSyncConfig, value: { syncProvider: null } },
