@@ -160,7 +160,7 @@
           {{ T.F.TASK.D_REMINDER_VIEW.COMPLETE_ALL | translate }}
         </button>
       }
-      @if (!isMultiple && (isSingleOnToday$ | async)) {
+      @if (!isMultiple) {
         <button
           (click)="markSingleAsDone()"
           [disabled]="isDisableControls"
