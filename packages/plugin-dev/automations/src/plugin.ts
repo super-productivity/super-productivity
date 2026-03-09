@@ -51,6 +51,7 @@ plugin.registerHook('taskUpdate' as any, (payload: TaskUpdatePayload) => {
   automationManager.onTaskEvent({
     type: 'taskUpdated',
     task: payload.task,
+    changes: payload.changes,
     previousTaskState: undefined, // TODO: How to get previous state? Payload changes only has partial.
   });
 });
