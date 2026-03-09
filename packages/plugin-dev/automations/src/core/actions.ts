@@ -37,6 +37,39 @@ export const ActionAddTag: IAutomationAction = {
   },
 };
 
+export const ActionMoveToProject: IAutomationAction = {
+  id: 'moveToProject',
+  name: 'Move to Project',
+  execute: async (ctx, event, value) => {
+    if (!event.task || !value) {
+      ctx.plugin.log.warn(
+        `[Automation] Cannot move task to project "${value}" without task context.`,
+      );
+      return;
+    }
+    const projects = await ctx.dataCache.getProjects();
+    const project = projects.find((p) => p.title === value || p.id === value);
+
+    if (!project) {
+      ctx.plugin.log.warn(
+        `[Automation] Project "${value}" not found in: ${projects.map((p) => p.title).join(', ')}`,
+      );
+      return;
+    }
+
+    if (event.task.projectId === project.id) {
+      ctx.plugin.log.info(`[Automation] Task already in project "${project.title}"`);
+      return;
+    }
+
+    ctx.plugin.log.info(
+      `[Automation] Calling ctx.plugin.updateTask for task ${event.task.id} to project ${project.id}`,
+    );
+    await ctx.plugin.updateTask(event.task.id, { projectId: project.id });
+    ctx.plugin.log.info(`[Automation] Action: Moved task to project "${project.title}"`);
+  },
+};
+
 export const ActionDisplaySnack: IAutomationAction = {
   id: 'displaySnack',
   name: 'Display Snack',

@@ -2,17 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ActionCreateTask,
   ActionAddTag,
+  ActionMoveToProject,
   ActionDisplaySnack,
   ActionDisplayDialog,
   ActionWebhook,
 } from './actions';
 import { AutomationContext } from './definitions';
 import { TaskEvent } from '../types';
-import { PluginAPI } from '@super-productivity/plugin-api';
 import { DataCache } from './data-cache';
 
 describe('Actions', () => {
-  let mockPlugin: PluginAPI;
+  let mockPlugin: any;
   let mockContext: AutomationContext;
   let mockDataCache: DataCache;
 
@@ -20,6 +20,7 @@ describe('Actions', () => {
     mockPlugin = {
       addTask: vi.fn(),
       updateTask: vi.fn(),
+      moveTaskToProject: vi.fn(),
       getAllTags: vi.fn(),
       showSnack: vi.fn(),
       openDialog: vi.fn(),
@@ -28,7 +29,7 @@ describe('Actions', () => {
         warn: vi.fn(),
         error: vi.fn(),
       },
-    } as unknown as PluginAPI;
+    };
 
     mockDataCache = {
       getProjects: vi.fn(),
@@ -96,6 +97,58 @@ describe('Actions', () => {
 
       await ActionAddTag.execute(mockContext, event, 'Urgent');
       expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ActionMoveToProject', () => {
+    it('should move task to project if it exists', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'Project A');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', { projectId: 'p1' });
+      expect(mockPlugin.moveTaskToProject).not.toHaveBeenCalled();
+    });
+
+    it('should warn if project not found', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'NonExistent');
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(expect.stringContaining('not found'));
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+      expect(mockPlugin.moveTaskToProject).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing if task already in project', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p1' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'Project A');
+      expect(mockPlugin.updateTask).not.toHaveBeenCalled();
+      expect(mockPlugin.moveTaskToProject).not.toHaveBeenCalled();
+      expect(mockPlugin.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('already in project'),
+      );
+    });
+
+    it('should move task to project if ID is used instead of title', async () => {
+      (mockDataCache.getProjects as any).mockResolvedValue([{ id: 'p1', title: 'Project A' }]);
+      const event = {
+        task: { id: 'task1', projectId: 'p2' },
+      } as unknown as TaskEvent;
+
+      await ActionMoveToProject.execute(mockContext, event, 'p1');
+
+      expect(mockPlugin.updateTask).toHaveBeenCalledWith('task1', { projectId: 'p1' });
+      expect(mockPlugin.moveTaskToProject).not.toHaveBeenCalled();
     });
   });
 
