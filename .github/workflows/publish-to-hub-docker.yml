@@ -37,7 +37,7 @@ jobs:
           ssh://git@github.com/
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v2
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
