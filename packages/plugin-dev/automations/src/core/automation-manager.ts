@@ -26,6 +26,8 @@ export class AutomationManager {
   private dataCache: DataCache;
   private pendingDialogs: Set<string> = new Set();
   private lastExecutionTimes: Map<string, number> = new Map();
+  private tasksCreatedTimes: Map<string, number> = new Map();
+  private tasksProcessedForCreatedTrigger: Set<string> = new Set();
   private clearTimeCheck?: () => void;
 
   constructor(private plugin: PluginAPI) {
@@ -50,6 +52,7 @@ export class AutomationManager {
 
     // Conditions
     globalRegistry.registerCondition(Conditions.ConditionTitleContains);
+    globalRegistry.registerCondition(Conditions.ConditionTitleStartsWith);
     globalRegistry.registerCondition(Conditions.ConditionProjectIs);
     globalRegistry.registerCondition(Conditions.ConditionHasTag);
     globalRegistry.registerCondition(Conditions.ConditionWeekdayIs);
@@ -57,6 +60,7 @@ export class AutomationManager {
     // Actions
     globalRegistry.registerAction(Actions.ActionCreateTask);
     globalRegistry.registerAction(Actions.ActionAddTag);
+    globalRegistry.registerAction(Actions.ActionMoveToProject);
     globalRegistry.registerAction(Actions.ActionDisplaySnack);
     globalRegistry.registerAction(Actions.ActionDisplayDialog);
     globalRegistry.registerAction(Actions.ActionWebhook);
@@ -140,7 +144,12 @@ export class AutomationManager {
       this.plugin.log.warn(`[Automation] Event ${event.type} received without task data`);
       return;
     }
-    this.plugin.log.info(`[Automation] Event received: ${event.type}`, event.task.title);
+    const nowTs = Date.now();
+
+    // Track task creation
+    if (event.type === 'taskCreated' && event.task.id) {
+      this.tasksCreatedTimes.set(event.task.id, nowTs);
+    }
 
     try {
       const rules = await this.ruleRegistry.getEnabledRules();
@@ -148,11 +157,53 @@ export class AutomationManager {
       for (const rule of rules) {
         try {
           const triggerImpl = globalRegistry.getTrigger(rule.trigger.type);
-          // If trigger not found or doesn't match, skip
-          if (!triggerImpl || !triggerImpl.matches(event, rule.trigger.value)) continue;
+          // If trigger not found, skip
+          if (!triggerImpl) {
+            this.plugin.log.warn(
+              `[Automation] Trigger implementation not found for rule "${rule.name}" with type "${rule.trigger.type}"`,
+            );
+            continue;
+          }
+
+          // SPECIAL HANDLING for 'taskCreated' trigger:
+          // Sometimes creation happens with an empty title first, then an immediate update with the real title.
+          // We allow 'taskCreated' trigger to also match 'taskUpdated' if it's within a 3s window of creation
+          // AND it hasn't been successfully triggered for this task yet.
+          let isMatchingTrigger = triggerImpl.matches(event, rule.trigger.value);
+          const isFreshTask =
+            event.task.id &&
+            this.tasksCreatedTimes.has(event.task.id) &&
+            nowTs - this.tasksCreatedTimes.get(event.task.id)! < 3000;
+
+          if (
+            !isMatchingTrigger &&
+            rule.trigger.type === 'taskCreated' &&
+            event.type === 'taskUpdated' &&
+            isFreshTask &&
+            !this.tasksProcessedForCreatedTrigger.has(event.task.id + rule.id)
+          ) {
+            isMatchingTrigger = true;
+          }
+
+          if (!isMatchingTrigger) {
+            // Only log if it was specifically a taskUpdated event to avoid noise for other event types
+            if (event.type === 'taskUpdated' && rule.trigger.type === 'taskUpdated') {
+              this.plugin.log.debug(
+                `[Automation] Rule "${rule.name}" trigger "${rule.trigger.type}" did NOT match event`,
+              );
+            }
+            continue;
+          }
 
           const matches = await this.conditionEvaluator.allConditionsMatch(rule.conditions, event);
-          if (!matches) continue;
+          if (!matches) {
+            if (event.type === 'taskUpdated' || event.type === 'taskCreated') {
+              this.plugin.log.info(
+                `[Automation] Rule "${rule.name}" matched trigger but conditions did NOT match`,
+              );
+            }
+            continue;
+          }
 
           // Check rate limit
           if (!this.rateLimiter.check(rule.id)) {
@@ -194,6 +245,9 @@ export class AutomationManager {
           }
 
           this.plugin.log.info(`[Automation] Rule matched: ${rule.name}`);
+          if (rule.trigger.type === 'taskCreated' && event.task.id) {
+            this.tasksProcessedForCreatedTrigger.add(event.task.id + rule.id);
+          }
           await this.actionExecutor.executeAll(rule.actions, event);
         } catch (e) {
           this.plugin.log.error(`[Automation] Error processing rule ${rule.name}: ${e}`);
