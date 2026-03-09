@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { Action, ActionType } from '../../types';
 import { Dialog } from './Dialog';
 
@@ -7,6 +7,7 @@ interface ActionDialogProps {
   onClose: () => void;
   onSave: (action: Action) => void;
   initialAction?: Action;
+  projects?: any[];
   allowedTypes?: ActionType[];
 }
 
@@ -16,6 +17,7 @@ export function ActionDialog(props: ActionDialogProps) {
   const allTypes: ActionType[] = [
     'createTask',
     'addTag',
+    'moveToProject',
     'displaySnack',
     'displayDialog',
     'webhook',
@@ -40,6 +42,8 @@ export function ActionDialog(props: ActionDialogProps) {
         return 'e.g. "Follow up task"';
       case 'addTag':
         return 'e.g. "review-needed"';
+      case 'moveToProject':
+        return 'e.g. "Project A"';
       case 'displaySnack':
         return 'e.g. "Task completed!"';
       case 'displayDialog':
@@ -80,12 +84,24 @@ export function ActionDialog(props: ActionDialogProps) {
       </label>
       <label>
         Value
-        <input
-          type="text"
-          value={action().value}
-          onInput={(e) => setAction({ ...action(), value: e.currentTarget.value })}
-          placeholder={getPlaceholder()}
-        />
+        {action().type === 'moveToProject' && props.projects?.length ? (
+          <select
+            value={action().value}
+            onChange={(e) => setAction({ ...action(), value: e.currentTarget.value })}
+          >
+            <option value="">Select Project</option>
+            {props.projects.map((p) => (
+              <option value={p.title}>{p.title}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={action().value}
+            onInput={(e) => setAction({ ...action(), value: e.currentTarget.value })}
+            placeholder={getPlaceholder()}
+          />
+        )}
       </label>
       {action().type === 'webhook' && (
         <p
