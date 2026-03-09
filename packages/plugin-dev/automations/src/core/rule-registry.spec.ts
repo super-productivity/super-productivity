@@ -12,6 +12,8 @@ describe('RuleRegistry', () => {
       loadSyncedData: vi.fn().mockResolvedValue(null),
       persistDataSynced: vi.fn(),
       log: {
+        info: vi.fn(),
+        warn: vi.fn(),
         error: vi.fn(),
       },
     } as unknown as PluginAPI;
@@ -25,6 +27,7 @@ describe('RuleRegistry', () => {
     await new Promise(process.nextTick);
 
     expect(await registry.getRules()).toEqual([]);
+    expect(registry.getInitializationError()).toBeNull();
   });
 
   it('should load existing rules', async () => {
@@ -35,6 +38,25 @@ describe('RuleRegistry', () => {
         isEnabled: true,
         trigger: { type: 'taskCompleted' },
         conditions: [],
+        actions: [],
+      },
+    ];
+    (mockPlugin.loadSyncedData as any).mockResolvedValue(JSON.stringify(rules));
+
+    registry = new RuleRegistry(mockPlugin);
+    await new Promise(process.nextTick);
+
+    expect(await registry.getRules()).toEqual(rules);
+  });
+
+  it('should load existing rules with regex-enabled conditions', async () => {
+    const rules: AutomationRule[] = [
+      {
+        id: 'r1',
+        name: 'Rule 1',
+        isEnabled: true,
+        trigger: { type: 'taskCompleted' },
+        conditions: [{ type: 'titleContains', value: '^bug', isRegex: true }],
         actions: [],
       },
     ];
