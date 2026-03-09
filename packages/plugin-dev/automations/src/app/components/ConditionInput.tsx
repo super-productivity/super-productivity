@@ -7,7 +7,13 @@ interface ConditionInputProps {
 }
 
 export function ConditionInput(props: ConditionInputProps) {
-  const types: ConditionType[] = ['titleContains', 'projectIs', 'hasTag'];
+  const types: ConditionType[] = [
+    'titleContains',
+    'titleStartsWith',
+    'projectIs',
+    'hasTag',
+    'weekdayIs',
+  ];
 
   return (
     <div class="grid" style={{ 'margin-bottom': '0.5rem' }}>
