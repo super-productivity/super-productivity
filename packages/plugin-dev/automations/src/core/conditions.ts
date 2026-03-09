@@ -1,11 +1,54 @@
+import { Condition } from '../types';
 import { IAutomationCondition } from './definitions';
+
+const matchesTitleWithRegex = (
+  ctx: Parameters<IAutomationCondition['check']>[0],
+  title: string,
+  pattern: string,
+  shouldMatchFromStart = false,
+): boolean => {
+  try {
+    const regex = new RegExp(pattern, 'i');
+    if (!shouldMatchFromStart) {
+      return regex.test(title);
+    }
+
+    const match = regex.exec(title);
+    return match?.index === 0;
+  } catch (error) {
+    ctx.plugin.log.warn(`[Automation] Invalid regex pattern for condition: ${pattern}`, error);
+    return false;
+  }
+};
+
+const isRegexCondition = (condition?: Condition): boolean => Boolean(condition?.isRegex);
 
 export const ConditionTitleContains: IAutomationCondition = {
   id: 'titleContains',
   name: 'Title contains',
-  check: async (ctx, event, value) => {
+  check: async (ctx, event, value, condition) => {
     if (!event.task || !value) return false;
+    if (isRegexCondition(condition)) {
+      return matchesTitleWithRegex(ctx, event.task.title, value);
+    }
     return event.task.title.toLowerCase().includes(value.toLowerCase());
+  },
+};
+
+export const ConditionTitleStartsWith: IAutomationCondition = {
+  id: 'titleStartsWith',
+  name: 'Title starts with',
+  check: async (ctx, event, value, condition) => {
+    if (!event.task || !value) return false;
+    const matches = isRegexCondition(condition)
+      ? matchesTitleWithRegex(ctx, event.task.title, value, true)
+      : event.task.title.toLowerCase().startsWith(value.toLowerCase());
+    if (!matches) {
+      ctx.plugin.log.debug(
+        `[Automation] titleStartsWith condition failed: "${event.task.title}" does not start with "${value}"`,
+      );
+    }
+    return matches;
   },
 };
 

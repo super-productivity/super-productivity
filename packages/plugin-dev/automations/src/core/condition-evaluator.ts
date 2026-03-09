@@ -29,6 +29,6 @@ export class ConditionEvaluator {
     }
 
     const context: AutomationContext = { plugin: this.plugin, dataCache: this.dataCache };
-    return conditionImpl.check(context, event, condition.value);
+    return conditionImpl.check(context, event, condition.value, condition);
   }
 }

@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ConditionTitleContains, ConditionProjectIs, ConditionHasTag } from './conditions';
+import {
+  ConditionTitleContains,
+  ConditionTitleStartsWith,
+  ConditionProjectIs,
+  ConditionHasTag,
+} from './conditions';
 import { AutomationContext } from './definitions';
-import { TaskEvent } from '../types';
+import { Condition, TaskEvent } from '../types';
 import { DataCache } from './data-cache';
 
 describe('Conditions', () => {
@@ -13,6 +18,12 @@ describe('Conditions', () => {
     mockPlugin = {
       getAllProjects: vi.fn(),
       getAllTags: vi.fn(),
+      log: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
     };
 
     mockDataCache = {
@@ -47,6 +58,94 @@ describe('Conditions', () => {
     it('should return false when task is missing', async () => {
       const event = { task: undefined } as unknown as TaskEvent;
       expect(await ConditionTitleContains.check(mockContext, event, 'milk')).toBe(false);
+    });
+
+    it('should support regex matching when enabled', async () => {
+      const event = {
+        task: { title: 'Bug: broken sync' },
+      } as unknown as TaskEvent;
+      const regexCondition: Condition = {
+        type: 'titleContains',
+        value: '^bug:\\s+broken',
+        isRegex: true,
+      };
+
+      expect(
+        await ConditionTitleContains.check(
+          mockContext,
+          event,
+          regexCondition.value,
+          regexCondition,
+        ),
+      ).toBe(true);
+    });
+
+    it('should fail closed for invalid regex patterns', async () => {
+      const event = {
+        task: { title: 'Bug: broken sync' },
+      } as unknown as TaskEvent;
+      const regexCondition: Condition = { type: 'titleContains', value: '[', isRegex: true };
+
+      expect(
+        await ConditionTitleContains.check(
+          mockContext,
+          event,
+          regexCondition.value,
+          regexCondition,
+        ),
+      ).toBe(false);
+      expect(mockPlugin.log.warn).toHaveBeenCalled();
+    });
+  });
+
+  describe('ConditionTitleStartsWith', () => {
+    it('should return true when title starts with value (case insensitive)', async () => {
+      const event = {
+        task: { title: 'Buy Milk' },
+      } as unknown as TaskEvent;
+
+      expect(await ConditionTitleStartsWith.check(mockContext, event, 'buy')).toBe(true);
+      expect(await ConditionTitleStartsWith.check(mockContext, event, 'BUY')).toBe(true);
+    });
+
+    it('should return false when title does not start with value', async () => {
+      const event = {
+        task: { title: 'Buy Milk' },
+      } as unknown as TaskEvent;
+
+      expect(await ConditionTitleStartsWith.check(mockContext, event, 'milk')).toBe(false);
+    });
+
+    it('should return false when task is missing', async () => {
+      const event = { task: undefined } as unknown as TaskEvent;
+      expect(await ConditionTitleStartsWith.check(mockContext, event, 'buy')).toBe(false);
+    });
+
+    it('should support regex matching anchored to the start when enabled', async () => {
+      const event = {
+        task: { title: 'Bug: broken sync' },
+      } as unknown as TaskEvent;
+      const regexCondition: Condition = {
+        type: 'titleStartsWith',
+        value: 'bug:\\s+broken',
+        isRegex: true,
+      };
+
+      expect(
+        await ConditionTitleStartsWith.check(
+          mockContext,
+          event,
+          regexCondition.value,
+          regexCondition,
+        ),
+      ).toBe(true);
+      expect(
+        await ConditionTitleStartsWith.check(mockContext, event, 'broken', {
+          type: 'titleStartsWith',
+          value: 'broken',
+          isRegex: true,
+        }),
+      ).toBe(false);
     });
   });
 
