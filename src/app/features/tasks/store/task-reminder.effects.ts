@@ -16,6 +16,7 @@ import {
 } from '../../../util/is-android-web-view';
 import { androidInterface } from '../../android/android-interface';
 import { generateNotificationId } from '../../android/android-notification-id.util';
+import { PlannerActions } from '../../planner/store/planner.actions';
 
 @Injectable()
 export class TaskReminderEffects {
@@ -156,6 +157,32 @@ export class TaskReminderEffects {
           } catch (e) {
             console.error('Failed to cancel native reminder:', e);
           }
+        }),
+      ),
+    { dispatch: false },
+  );
+
+  // Cancel native Android reminders when reminder dialog actions are taken
+  // (snooze, add to today, plan for tomorrow)
+  cancelNativeReminderOnDialogAction$ = createEffect(
+    () =>
+      this._localActions$.pipe(
+        ofType(
+          TaskSharedActions.reScheduleTaskWithTime,
+          TaskSharedActions.planTasksForToday,
+          PlannerActions.planTaskForDay,
+        ),
+        filter(() => this._isAndroidWebView),
+        tap((action) => {
+          const ids = 'taskIds' in action ? action.taskIds : [action.task.id];
+          ids.forEach((id) => {
+            try {
+              const notificationId = generateNotificationId(id);
+              androidInterface.cancelNativeReminder?.(notificationId);
+            } catch (e) {
+              console.error('Failed to cancel native reminder:', e);
+            }
+          });
         }),
       ),
     { dispatch: false },

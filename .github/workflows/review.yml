@@ -1,10 +1,8 @@
 name: Code review
 
 # Using pull_request_target to grant write permissions for fork PRs.
-# This is safe because:
-# 1. We use a trusted action from Anthropic
-# 2. The action only reads PR content and posts comments
-# 3. No code from the PR is executed
+# SECURITY: Only users with write access can trigger reviews (no allowed_non_write_users).
+# This prevents secret exfiltration via malicious hooks in forked PRs.
 on:
   pull_request_target:
     types: [opened, synchronize, ready_for_review, reopened]
@@ -35,7 +33,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
 
     steps:
       - name: Checkout PR head
@@ -46,13 +43,10 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@220272d38887a1caed373da96a9ffdb0919c26cc # v1
+        uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Allow all PR authors regardless of repository permissions
-          # This is safe because pull_request_target runs in the base repo context
-          allowed_non_write_users: '*'
           # Allow common dependency management bots to trigger reviews
           allowed_bots: 'dependabot[bot],renovate[bot]'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'

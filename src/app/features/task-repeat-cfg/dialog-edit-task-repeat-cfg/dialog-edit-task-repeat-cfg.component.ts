@@ -169,7 +169,9 @@ export class DialogEditTaskRepeatCfgComponent {
         : undefined;
       return {
         ...DEFAULT_TASK_REPEAT_CFG,
-        startDate: getDbDateStr(this._data.task.dueWithTime || undefined),
+        startDate:
+          this._data.task.dueDay ??
+          getDbDateStr(this._data.task.dueWithTime || undefined),
         startTime,
         remindAt: startTime
           ? (this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??

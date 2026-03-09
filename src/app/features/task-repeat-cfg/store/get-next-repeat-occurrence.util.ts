@@ -116,6 +116,7 @@ export const getNextRepeatOccurrence = (
 
       // Handle Feb 29 for non-leap years
       const setYearlyDate = (date: Date): void => {
+        date.setDate(1);
         date.setMonth(monthOfMonthRepeat);
         if (monthOfMonthRepeat === 1 && dayOfMonthRepeat === 29) {
           // February 29 - check if leap year

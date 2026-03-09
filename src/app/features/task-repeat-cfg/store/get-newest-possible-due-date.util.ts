@@ -131,8 +131,9 @@ export const getNewestPossibleDueDate = (
       const nrOfYearsToCheck = taskRepeatCfg.repeatEvery;
       const dayOfMonthRepeat = startDateDate.getDate();
       const monthOfMonthRepeat = startDateDate.getMonth();
-      checkDate.setDate(dayOfMonthRepeat);
+      checkDate.setDate(1);
       checkDate.setMonth(monthOfMonthRepeat);
+      checkDate.setDate(dayOfMonthRepeat);
 
       if (today.getMonth() < monthOfMonthRepeat) {
         checkDate.setFullYear(checkDate.getFullYear() - 1);

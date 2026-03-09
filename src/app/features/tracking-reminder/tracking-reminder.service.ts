@@ -79,7 +79,9 @@ export class TrackingReminderService {
   ]).pipe(
     map(
       ([isEnabled, timer, screen]) =>
-        isEnabled && (timer.purpose !== null || screen === FocusScreen.SessionDone),
+        isEnabled &&
+        ((timer.isRunning && timer.purpose !== null) ||
+          screen === FocusScreen.SessionDone),
     ),
     distinctUntilChanged(),
   );
