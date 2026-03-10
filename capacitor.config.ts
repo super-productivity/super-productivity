@@ -19,7 +19,7 @@ const config: CapacitorConfig = {
     },
   },
   android: {
-    adjustMarginsForEdgeToEdge: 'force',
+    adjustMarginsForEdgeToEdge: 'auto',
   },
   ios: {
     // Content inset for safe areas (notch, home indicator)
