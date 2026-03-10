@@ -1,8 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   ElementRef,
   HostListener,
+  input,
   Input,
   OnDestroy,
   output,
@@ -13,24 +15,30 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
+import { RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
  * Click to edit, Enter/Escape to save. Removes newlines and short syntax.
+ * Renders URLs as clickable links when not editing.
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule],
+  imports: [TranslateModule, RenderLinksPipe],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     ['[class.is-focused]']: 'isFocused()',
     ['[class.is-editing]']: 'isEditing()',
+    ['[class.is-readonly]']: 'readonly()',
   },
 })
 export class TaskTitleComponent implements OnDestroy {
   T: typeof T = T;
+
+  readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
+  readonly renderLinks = input<boolean>(true); // When true, renders URLs and markdown as clickable links
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {
@@ -64,6 +72,27 @@ export class TaskTitleComponent implements OnDestroy {
   readonly tmpValue = signal(''); // Current editing value
   readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textAreaElement');
 
+  /**
+   * Fast pre-check: does the title contain URL or markdown hints?
+   * Used to choose between innerHTML (pipe handles link rendering) and plain text interpolation.
+   * False positives (e.g. text with "://" but no valid URL) are handled gracefully by the pipe.
+   *
+   * NOTE: The hint strings ('://', 'www.', '](') intentionally mirror the pre-check inside
+   * RenderLinksPipe.transform(). This duplication is deliberate: it avoids calling the pipe
+   * at all for plain-text tasks (the common case). If the pipe's pre-check hints ever change,
+   * update this computed signal to match.
+   */
+  readonly hasUrlsOrMarkdown = computed<boolean>(() => {
+    if (!this.renderLinks()) {
+      return false; // ~0 cost when disabled
+    }
+    const text = this.tmpValue();
+    if (!text) {
+      return false;
+    }
+    return text.includes('://') || text.includes('www.') || text.includes('](');
+  });
+
   readonly valueEdited = output<{
     newVal: string;
     wasChanged: boolean;
@@ -76,18 +105,41 @@ export class TaskTitleComponent implements OnDestroy {
 
   constructor() {}
 
-  // Click anywhere to enter edit mode
+  // Click anywhere to enter edit mode (except links)
   @HostListener('mousedown', ['$event'])
   onMouseDown(event: MouseEvent): void {
-    event.stopPropagation();
     const target = event.target as HTMLElement | null;
-    if (event.button !== 0 || target?.tagName === 'TEXTAREA') {
+    // Don't enter edit mode if readonly, clicking a link, or clicking textarea
+    if (
+      this.readonly() ||
+      event.button !== 0 ||
+      target?.tagName === 'TEXTAREA' ||
+      target?.tagName === 'A'
+    ) {
+      // Let event propagate for drag-and-drop, link clicks, etc.
       return;
     }
+    // Only stop propagation when entering edit mode
+    // This prevents parent click handlers while allowing drag in readonly mode
+    event.stopPropagation();
     this.focusInput();
   }
 
+  // Stop click events from propagating when clicking links
+  // This prevents parent components (board, planner) from handling the click
+  @HostListener('click', ['$event'])
+  onClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement | null;
+    // If clicking on a link or any element inside a link, stop propagation
+    if (target?.tagName === 'A' || target?.closest('a')) {
+      event.stopPropagation();
+    }
+  }
+
   focusInput(): void {
+    if (this.readonly()) {
+      return; // Don't allow focusing in readonly mode
+    }
     this._isEditing.set(true);
     if (this._focusTimeoutId) {
       window.clearTimeout(this._focusTimeoutId);

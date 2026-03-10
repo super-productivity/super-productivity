@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { GlobalConfigService } from '../../features/config/global-config.service';
 import { T } from '../../t.const';
 import { MatDialog } from '@angular/material/dialog';
 import { TaskCopy } from '../../features/tasks/task.model';
@@ -63,6 +64,9 @@ export class ScheduledListPageComponent {
   private _translateService = inject(TranslateService);
   private _taskRepeatCfgService = inject(TaskRepeatCfgService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
+  private _globalConfigService = inject(GlobalConfigService);
+
+  readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
 
   T: typeof T = T;
   TODAY_TAG: Tag = TODAY_TAG;

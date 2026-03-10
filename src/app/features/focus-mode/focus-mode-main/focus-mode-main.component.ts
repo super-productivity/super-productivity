@@ -144,6 +144,8 @@ export class FocusModeMainComponent {
     ),
   );
 
+  readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
+
   readonly parentTaskTitle = computed(() => {
     const parent = this.parentTask();
     if (!parent) {
