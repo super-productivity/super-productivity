@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ActionCreateTask,
+  ActionDeleteTask,
   ActionAddTag,
   ActionMoveToProject,
   ActionDisplaySnack,
@@ -19,6 +20,7 @@ describe('Actions', () => {
   beforeEach(() => {
     mockPlugin = {
       addTask: vi.fn(),
+      deleteTask: vi.fn(),
       updateTask: vi.fn(),
       moveTaskToProject: vi.fn(),
       getAllTags: vi.fn(),
@@ -53,6 +55,28 @@ describe('Actions', () => {
       const event = {} as TaskEvent;
       await ActionCreateTask.execute(mockContext, event, '');
       expect(mockPlugin.addTask).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ActionDeleteTask', () => {
+    it('should delete the triggering task', async () => {
+      const event = { task: { id: 'task1', title: 'Delete me' } } as TaskEvent;
+
+      await ActionDeleteTask.execute(mockContext, event, '');
+
+      expect(mockPlugin.deleteTask).toHaveBeenCalledWith('task1');
+      expect(mockPlugin.log.info).toHaveBeenCalledWith(
+        expect.stringContaining('Deleted task "Delete me"'),
+      );
+    });
+
+    it('should warn if task context is missing', async () => {
+      await ActionDeleteTask.execute(mockContext, { task: undefined } as TaskEvent, '');
+
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('without task context'),
+      );
+      expect(mockPlugin.deleteTask).not.toHaveBeenCalled();
     });
   });
 

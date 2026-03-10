@@ -74,6 +74,7 @@ export class RuleRegistry {
     ]);
     const validActions = new Set([
       'createTask',
+      'deleteTask',
       'addTag',
       'moveToProject',
       'displaySnack',

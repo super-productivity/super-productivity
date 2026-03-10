@@ -29,6 +29,7 @@ export interface Condition {
 
 export type ActionType =
   | 'createTask'
+  | 'deleteTask'
   | 'addTag'
   | 'moveToProject'
   | 'displaySnack'
@@ -37,7 +38,7 @@ export type ActionType =
 
 export interface Action {
   type: ActionType;
-  value: string; // For createTask: title; For addTag: tagId/title
+  value: string; // For createTask: title; For addTag/moveToProject: tag/project identifier; For deleteTask: unused
 }
 
 export interface AutomationRule {

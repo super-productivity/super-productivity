@@ -61,7 +61,22 @@ export function RuleEditor(props: RuleEditorProps) {
     if (isTimeBased()) {
       return ['createTask', 'displaySnack', 'displayDialog', 'webhook'];
     }
-    return ['createTask', 'addTag', 'moveToProject', 'displaySnack', 'displayDialog', 'webhook'];
+    return [
+      'createTask',
+      'deleteTask',
+      'addTag',
+      'moveToProject',
+      'displaySnack',
+      'displayDialog',
+      'webhook',
+    ];
+  };
+
+  const formatActionLabel = (action: Action) => {
+    if (action.type === 'deleteTask') {
+      return 'deleteTask';
+    }
+    return `${action.type}: ${action.value}`;
   };
 
   // Condition handlers
@@ -282,9 +297,7 @@ export function RuleEditor(props: RuleEditorProps) {
                 >
                   {(action, i) => (
                     <tr>
-                      <td>
-                        {action.type}: {action.value}
-                      </td>
+                      <td>{formatActionLabel(action)}</td>
                       <td style={{ 'text-align': 'right' }}>
                         <button
                           class="btn-outline"

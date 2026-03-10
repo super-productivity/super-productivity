@@ -59,6 +59,7 @@ export class AutomationManager {
 
     // Actions
     globalRegistry.registerAction(Actions.ActionCreateTask);
+    globalRegistry.registerAction(Actions.ActionDeleteTask);
     globalRegistry.registerAction(Actions.ActionAddTag);
     globalRegistry.registerAction(Actions.ActionMoveToProject);
     globalRegistry.registerAction(Actions.ActionDisplaySnack);

@@ -22,7 +22,7 @@ describe('RuleRegistry', () => {
   it('should load empty rules initially', async () => {
     registry = new RuleRegistry(mockPlugin);
     // Wait for async load in constructor (implementation detail: constructor is sync but calls async load)
-    // Ideally RuleRegistry should expose an init method or we wait.
+    // Ideally RuleRegistry should expose an init method, or we wait.
     // Since loadRules is called in constructor without await, we need to wait for promises.
     await new Promise(process.nextTick);
 
@@ -58,6 +58,25 @@ describe('RuleRegistry', () => {
         trigger: { type: 'taskCompleted' },
         conditions: [{ type: 'titleContains', value: '^bug', isRegex: true }],
         actions: [],
+      },
+    ];
+    (mockPlugin.loadSyncedData as any).mockResolvedValue(JSON.stringify(rules));
+
+    registry = new RuleRegistry(mockPlugin);
+    await new Promise(process.nextTick);
+
+    expect(await registry.getRules()).toEqual(rules);
+  });
+
+  it('should load existing rules with deleteTask actions', async () => {
+    const rules: AutomationRule[] = [
+      {
+        id: 'r1',
+        name: 'Delete completed task',
+        isEnabled: true,
+        trigger: { type: 'taskCompleted' },
+        conditions: [],
+        actions: [{ type: 'deleteTask', value: '' }],
       },
     ];
     (mockPlugin.loadSyncedData as any).mockResolvedValue(JSON.stringify(rules));

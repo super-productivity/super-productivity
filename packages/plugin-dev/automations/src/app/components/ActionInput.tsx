@@ -9,6 +9,7 @@ interface ActionInputProps {
 export function ActionInput(props: ActionInputProps) {
   const types: ActionType[] = [
     'createTask',
+    'deleteTask',
     'addTag',
     'moveToProject',
     'displaySnack',

@@ -87,7 +87,10 @@ describe('validateRule', () => {
         { type: 'titleStartsWith', value: 'Bug:' },
         { type: 'weekdayIs', value: 'Mon,Fri' },
       ],
-      actions: [{ type: 'moveToProject', value: 'project-1' }],
+      actions: [
+        { type: 'moveToProject', value: 'project-1' },
+        { type: 'deleteTask', value: '' },
+      ],
     };
 
     expect(validateRule(rule)).toBe(true);

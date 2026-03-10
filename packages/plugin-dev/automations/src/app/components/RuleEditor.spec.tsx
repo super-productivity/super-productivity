@@ -165,6 +165,48 @@ describe('RuleEditor', () => {
     expect(regexButton).toBeUndefined();
   });
 
+  it('shows deleteTask for task-based rules', () => {
+    render(() => (
+      <RuleEditor
+        isOpen={true}
+        rule={createRule('taskCreated')}
+        projects={[{ id: 'p1', title: 'Project A' }]}
+        tags={[]}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    ));
+
+    const actionDialog = screen.getByText('Add Action').closest('dialog');
+    expect(actionDialog).not.toBeNull();
+
+    const typeSelect = actionDialog!.querySelector('label select') as HTMLSelectElement | null;
+    expect(typeSelect).not.toBeNull();
+    expect(typeSelect!.querySelector('option[value="deleteTask"]')).not.toBeNull();
+  });
+
+  it('keeps deleteTask unavailable for time-based rules', () => {
+    render(() => (
+      <RuleEditor
+        isOpen={true}
+        rule={createRule('timeBased')}
+        projects={[{ id: 'p1', title: 'Project A' }]}
+        tags={[]}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    ));
+
+    const actionDialog = screen.getByText('Add Action').closest('dialog');
+    expect(actionDialog).not.toBeNull();
+
+    const typeSelect = actionDialog!.querySelector('label select') as HTMLSelectElement | null;
+    expect(typeSelect).not.toBeNull();
+    expect(typeSelect!.querySelector('option[value="deleteTask"]')).toBeNull();
+  });
+
   it('keeps moveToProject unavailable for time-based rules', () => {
     render(() => (
       <RuleEditor

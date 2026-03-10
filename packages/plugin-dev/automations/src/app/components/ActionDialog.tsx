@@ -16,6 +16,7 @@ export function ActionDialog(props: ActionDialogProps) {
 
   const allTypes: ActionType[] = [
     'createTask',
+    'deleteTask',
     'addTag',
     'moveToProject',
     'displaySnack',
@@ -40,6 +41,8 @@ export function ActionDialog(props: ActionDialogProps) {
     switch (action().type) {
       case 'createTask':
         return 'e.g. "Follow up task"';
+      case 'deleteTask':
+        return 'Deletes the task that triggered this rule';
       case 'addTag':
         return 'e.g. "review-needed"';
       case 'moveToProject':
@@ -53,6 +56,14 @@ export function ActionDialog(props: ActionDialogProps) {
       default:
         return '';
     }
+  };
+
+  const handleTypeChange = (type: ActionType) => {
+    setAction({
+      ...action(),
+      type,
+      value: type === 'deleteTask' ? '' : action().value,
+    });
   };
 
   return (
@@ -75,7 +86,7 @@ export function ActionDialog(props: ActionDialogProps) {
         Type
         <select
           value={action().type}
-          onChange={(e) => setAction({ ...action(), type: e.currentTarget.value as ActionType })}
+          onChange={(e) => handleTypeChange(e.currentTarget.value as ActionType)}
         >
           {availableTypes().map((t) => (
             <option value={t}>{t}</option>
@@ -98,6 +109,7 @@ export function ActionDialog(props: ActionDialogProps) {
           <input
             type="text"
             value={action().value}
+            disabled={action().type === 'deleteTask'}
             onInput={(e) => setAction({ ...action(), value: e.currentTarget.value })}
             placeholder={getPlaceholder()}
           />

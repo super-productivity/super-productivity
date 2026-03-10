@@ -13,6 +13,20 @@ export const ActionCreateTask: IAutomationAction = {
   },
 };
 
+export const ActionDeleteTask: IAutomationAction = {
+  id: 'deleteTask',
+  name: 'Delete Task',
+  execute: async (ctx, event) => {
+    if (!event.task?.id) {
+      ctx.plugin.log.warn('[Automation] Cannot delete task without task context.');
+      return;
+    }
+
+    await ctx.plugin.deleteTask(event.task.id);
+    ctx.plugin.log.info(`[Automation] Action: Deleted task "${event.task.title}"`);
+  },
+};
+
 export const ActionAddTag: IAutomationAction = {
   id: 'addTag',
   name: 'Add Tag',

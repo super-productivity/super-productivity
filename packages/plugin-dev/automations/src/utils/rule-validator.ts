@@ -17,6 +17,7 @@ const VALID_CONDITION_TYPES: ConditionType[] = [
 
 const VALID_ACTION_TYPES: ActionType[] = [
   'createTask',
+  'deleteTask',
   'addTag',
   'moveToProject',
   'displaySnack',
