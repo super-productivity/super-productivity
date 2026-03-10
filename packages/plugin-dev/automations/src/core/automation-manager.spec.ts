@@ -147,8 +147,7 @@ describe('AutomationManager', () => {
       expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, event);
     });
 
-    it('should match a taskCreated rule on taskUpdated event if task is fresh', async () => {
-      // 1. Setup Rule with taskCreated trigger
+    it('should not match a taskCreated rule on taskUpdated event after creation', async () => {
       const rule = {
         id: 'r1',
         name: 'Move Rule',
@@ -158,28 +157,27 @@ describe('AutomationManager', () => {
       };
       mockRuleRegistry.getEnabledRules.mockResolvedValue([rule]);
 
-      // 2. Setup trigger mock
       const mockTrigger = { matches: vi.fn().mockImplementation((e) => e.type === 'taskCreated') };
       (globalRegistry.getTrigger as any).mockReturnValue(mockTrigger);
 
-      // 3. Setup condition evaluator mock
       mockConditionEvaluator.allConditionsMatch.mockImplementation(
-        async (conditions: any, event: any) => {
+        async (_conditions: any, event: any) => {
           return event.task?.title.startsWith('MoveMe');
         },
       );
 
-      // 4. Fire taskCreated event with EMPTY title (fails condition)
       const event1 = { type: 'taskCreated', task: { id: 't1', title: '' } } as TaskEvent;
       await manager.onTaskEvent(event1);
       expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
 
-      // 5. Fire taskUpdated event with FULL title (matches condition)
-      const event2 = { type: 'taskUpdated', task: { id: 't1', title: 'MoveMe task' } } as TaskEvent;
+      const event2 = {
+        type: 'taskUpdated',
+        task: { id: 't1', title: 'MoveMe task' },
+        changes: { title: 'MoveMe task' },
+      } as TaskEvent;
       await manager.onTaskEvent(event2);
 
-      // 6. Verify action called (because it's "fresh")
-      expect(mockActionExecutor.executeAll).toHaveBeenCalledWith(rule.actions, event2);
+      expect(mockActionExecutor.executeAll).not.toHaveBeenCalled();
     });
 
     it('should match a taskUpdated event with a taskUpdated trigger', async () => {

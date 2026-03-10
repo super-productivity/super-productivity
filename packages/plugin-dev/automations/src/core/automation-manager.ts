@@ -26,8 +26,6 @@ export class AutomationManager {
   private dataCache: DataCache;
   private pendingDialogs: Set<string> = new Set();
   private lastExecutionTimes: Map<string, number> = new Map();
-  private tasksCreatedTimes: Map<string, number> = new Map();
-  private tasksProcessedForCreatedTrigger: Set<string> = new Set();
   private clearTimeCheck?: () => void;
 
   constructor(private plugin: PluginAPI) {
@@ -145,12 +143,6 @@ export class AutomationManager {
       this.plugin.log.warn(`[Automation] Event ${event.type} received without task data`);
       return;
     }
-    const nowTs = Date.now();
-
-    // Track task creation
-    if (event.type === 'taskCreated' && event.task.id) {
-      this.tasksCreatedTimes.set(event.task.id, nowTs);
-    }
 
     try {
       const rules = await this.ruleRegistry.getEnabledRules();
@@ -166,25 +158,7 @@ export class AutomationManager {
             continue;
           }
 
-          // SPECIAL HANDLING for 'taskCreated' trigger:
-          // Sometimes creation happens with an empty title first, then an immediate update with the real title.
-          // We allow 'taskCreated' trigger to also match 'taskUpdated' if it's within a 3s window of creation
-          // AND it hasn't been successfully triggered for this task yet.
-          let isMatchingTrigger = triggerImpl.matches(event, rule.trigger.value);
-          const isFreshTask =
-            event.task.id &&
-            this.tasksCreatedTimes.has(event.task.id) &&
-            nowTs - this.tasksCreatedTimes.get(event.task.id)! < 3000;
-
-          if (
-            !isMatchingTrigger &&
-            rule.trigger.type === 'taskCreated' &&
-            event.type === 'taskUpdated' &&
-            isFreshTask &&
-            !this.tasksProcessedForCreatedTrigger.has(event.task.id + rule.id)
-          ) {
-            isMatchingTrigger = true;
-          }
+          const isMatchingTrigger = triggerImpl.matches(event, rule.trigger.value);
 
           if (!isMatchingTrigger) {
             // Only log if it was specifically a taskUpdated event to avoid noise for other event types
@@ -246,9 +220,6 @@ export class AutomationManager {
           }
 
           this.plugin.log.info(`[Automation] Rule matched: ${rule.name}`);
-          if (rule.trigger.type === 'taskCreated' && event.task.id) {
-            this.tasksProcessedForCreatedTrigger.add(event.task.id + rule.id);
-          }
           await this.actionExecutor.executeAll(rule.actions, event);
         } catch (e) {
           this.plugin.log.error(`[Automation] Error processing rule ${rule.name}: ${e}`);
