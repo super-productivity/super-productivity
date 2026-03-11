@@ -676,12 +676,24 @@ export class SyncWrapperService {
       SyncLog.err(`Failed to configure auth for provider ${providerId}:`, error);
       const isTokenExchangeError =
         error instanceof HttpNotOkAPIError && error.response?.status === 400;
+      let reason = '';
+      if (isTokenExchangeError && error.body) {
+        try {
+          const parsed = JSON.parse(error.body);
+          reason = parsed.error_description || parsed.error || '';
+        } catch (_) {
+          // ignore parse errors
+        }
+      }
       this._snackService.open({
         msg: isTokenExchangeError
           ? T.F.SYNC.S.INVALID_AUTH_CODE
           : T.F.SYNC.S.AUTH_SETUP_FAILED,
         type: 'ERROR',
         config: { duration: 0 },
+        translateParams: isTokenExchangeError
+          ? { reason: reason || 'unknown' }
+          : undefined,
       });
       return { wasConfigured: false };
     }
