@@ -60,6 +60,31 @@ export function initBackupAdapter(): void {
     log('Reading backup file: ', backupPath);
     return readFileSync(backupPath, { encoding: 'utf8' });
   });
+
+  // LIST_BACKUPS
+  ipcMain.handle(IPC.BACKUP_LIST, (): LocalBackupMeta[] => {
+    if (!existsSync(BACKUP_DIR)) {
+      return [];
+    }
+
+    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
+    if (!files.length) {
+      return [];
+    }
+
+    const filesWithMeta: LocalBackupMeta[] = files.map(
+      (fileName: string): LocalBackupMeta => ({
+        name: fileName,
+        path: path.join(BACKUP_DIR, fileName),
+        folder: BACKUP_DIR,
+        created: statSync(path.join(BACKUP_DIR, fileName)).mtime.getTime(),
+      }),
+    );
+
+    // Sort newest first
+    filesWithMeta.sort((a: LocalBackupMeta, b: LocalBackupMeta) => b.created - a.created);
+    return filesWithMeta;
+  });
 }
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions

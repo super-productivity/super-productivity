@@ -208,6 +208,9 @@
                   "
                   [section]="section"
                 ></config-section>
+                @if (section.key === 'localBackup') {
+                  <backup-list></backup-list>
+                }
               </section>
             }
           </div>

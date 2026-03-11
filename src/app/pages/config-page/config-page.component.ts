@@ -64,6 +64,7 @@ import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
+import { BackupListComponent } from '../../imex/local-backup/backup-list/backup-list.component';
 
 @Component({
   selector: 'config-page',
@@ -82,6 +83,7 @@ import { MatTooltip } from '@angular/material/tooltip';
     MatTabLabel,
     MatIcon,
     MatTooltip,
+    BackupListComponent,
   ],
 })
 export class ConfigPageComponent implements OnInit, OnDestroy {

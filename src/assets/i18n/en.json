@@ -1918,9 +1918,13 @@
       "USER_PROFILES_HINT": "Allows you to create and switch between different user profiles, each with separate settings, tasks, and sync configurations. The profile management button will appear in the top-right corner when enabled. Note: Disabling this feature will hide the UI but preserve your profile data. (Experimental feature. No guarantees. Make sure to have a backup!)"
     },
     "AUTO_BACKUPS": {
+      "BACKUP_DATE": "Date",
+      "BACKUP_LIST_TITLE": "Available Backups",
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LOCATION_INFO": "Backups are saved to:",
+      "NO_BACKUPS": "No backups available.",
+      "RESTORE": "Restore",
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {

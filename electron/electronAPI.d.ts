@@ -31,6 +31,8 @@ export interface ElectronAPI {
 
   loadBackupData(backupPath: string): Promise<string>;
 
+  listBackups(): Promise<LocalBackupMeta[]>;
+
   fileSyncSave(args: {
     filePath: string;
     localRev: string | null;
