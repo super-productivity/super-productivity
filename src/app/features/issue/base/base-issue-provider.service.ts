@@ -113,11 +113,13 @@ export abstract class BaseIssueProviderService<
     }
 
     if (this._wasUpdated(task, issue)) {
+      const taskChanges: Record<string, unknown> = {
+        ...this.getAddTaskData(issue as IssueDataReduced),
+        issueWasUpdated: true,
+      };
+      this._guardDueDateFields(taskChanges, task);
       return {
-        taskChanges: {
-          ...this.getAddTaskData(issue as IssueDataReduced),
-          issueWasUpdated: true,
-        },
+        taskChanges: taskChanges as Partial<Task>,
         issue,
         issueTitle: this._formatIssueTitleForSnack(issue),
       };
@@ -148,5 +150,38 @@ export abstract class BaseIssueProviderService<
           : [],
       ),
     );
+  }
+
+  /**
+   * Prevents poll refresh from overwriting user's local dueDay/dueWithTime
+   * unless the provider's value actually changed since last sync.
+   * Mutates taskChanges in place — only strips due date fields.
+   *
+   * Note: issueLastSyncedValues in taskChanges is intentionally left untouched.
+   * It reflects the provider's current state (not the task's), so future polls
+   * can detect when the provider actually changes the due date.
+   *
+   * CalDAV does not use this guard — it uses etag-based change detection which
+   * only fires when the remote actually changed, making false overwrites impossible.
+   */
+  protected _guardDueDateFields(taskChanges: Record<string, unknown>, task: Task): void {
+    const lastSynced = task.issueLastSyncedValues;
+
+    // No previous sync data: first poll after upgrade or creation.
+    // Allow overwrite so issueLastSyncedValues gets seeded.
+    if (!lastSynced) {
+      return;
+    }
+
+    if ('dueDay' in taskChanges && taskChanges.dueDay === lastSynced['dueDay']) {
+      delete taskChanges.dueDay;
+    }
+
+    if (
+      'dueWithTime' in taskChanges &&
+      taskChanges.dueWithTime === lastSynced['dueWithTime']
+    ) {
+      delete taskChanges.dueWithTime;
+    }
   }
 }

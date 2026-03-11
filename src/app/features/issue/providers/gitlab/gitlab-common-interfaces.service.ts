@@ -58,6 +58,7 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
   }
 
   getAddTaskData(issue: GitlabIssue): Partial<Task> & { title: string } {
+    const dueDay = issue.due_date || undefined;
     return {
       title: this._formatIssueTitle(issue),
       issuePoints: issue.weight,
@@ -65,7 +66,8 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
       issueLastUpdated: new Date(issue.updated_at).getTime(),
       issueId: issue.id,
       isDone: issue.state === 'closed',
-      dueDay: issue.due_date || undefined,
+      dueDay,
+      issueLastSyncedValues: { dueDay },
     };
   }
 
@@ -113,11 +115,13 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
       issueUpdate > (task.issueLastUpdated || 0);
 
     if (wasUpdated) {
+      const taskChanges: Record<string, unknown> = {
+        ...this.getAddTaskData(issue),
+        issueWasUpdated: true,
+      };
+      this._guardDueDateFields(taskChanges, task);
       return {
-        taskChanges: {
-          ...this.getAddTaskData(issue),
-          issueWasUpdated: true,
-        },
+        taskChanges: taskChanges as Partial<Task>,
         issue,
         issueTitle: truncate(this._formatIssueTitle(issue)),
       };

@@ -47,8 +47,8 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
     calEv: ICalIssueReduced,
   ): Partial<Readonly<TaskCopy>> & { title: string } {
     const dueDateFields = calEv.isAllDay
-      ? { dueDay: getDbDateStr(calEv.start) }
-      : { dueWithTime: calEv.start };
+      ? { dueDay: getDbDateStr(calEv.start), dueWithTime: undefined }
+      : { dueWithTime: calEv.start, dueDay: undefined };
 
     return {
       title: calEv.title,
@@ -60,6 +60,10 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
       issueWasUpdated: false,
       issueLastUpdated: new Date().getTime(),
       ...dueDateFields,
+      issueLastSyncedValues: {
+        dueDay: dueDateFields.dueDay,
+        dueWithTime: dueDateFields.dueWithTime,
+      },
     };
   }
 
@@ -144,16 +148,34 @@ export class CalendarCommonInterfacesService extends BaseIssueProviderService<Is
         if (!matchingEvent) continue;
 
         const taskData = this.getAddTaskData(matchingEvent);
+        const lastSynced = task.issueLastSyncedValues;
+
+        // Compare due fields against last synced provider values (not current task values)
+        // to detect actual provider changes without false positives from user edits.
+        // This duplicates the intent of _guardDueDateFields but is needed at the
+        // detection stage to avoid spurious hasChanges / toast notifications.
+        const dueDayChanged = lastSynced
+          ? taskData.dueDay !== lastSynced['dueDay']
+          : taskData.dueDay !== task.dueDay;
+        const dueWithTimeChanged = lastSynced
+          ? taskData.dueWithTime !== lastSynced['dueWithTime']
+          : taskData.dueWithTime !== task.dueWithTime;
+
         const hasChanges =
-          taskData.dueWithTime !== task.dueWithTime ||
-          taskData.dueDay !== task.dueDay ||
+          dueDayChanged ||
+          dueWithTimeChanged ||
           taskData.title !== task.title ||
           taskData.timeEstimate !== task.timeEstimate;
 
         if (hasChanges) {
+          const taskChanges: Record<string, unknown> = {
+            ...taskData,
+            issueWasUpdated: true,
+          };
+          this._guardDueDateFields(taskChanges, task);
           results.push({
             task,
-            taskChanges: { ...taskData, issueWasUpdated: true },
+            taskChanges: taskChanges as Partial<Readonly<Task>>,
             issue: matchingEvent as unknown as IssueData,
           });
         }

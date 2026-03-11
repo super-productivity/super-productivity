@@ -56,15 +56,17 @@ export class OpenProjectCommonInterfacesService extends BaseIssueProviderService
       issue.estimatedTime as string | number | null,
     );
 
+    const dueDay = issue.startDate || undefined;
     return {
       title: formatOpenProjectWorkPackageSubject(issue),
       issuePoints: issue.storyPoints || undefined,
       issueWasUpdated: false,
       // OpenProject returns startDate as YYYY-MM-DD string, use directly
       // to avoid timezone conversion issues
-      dueDay: issue.startDate || undefined,
+      dueDay,
       issueLastUpdated: new Date(issue.updatedAt).getTime(),
       ...(parsedEstimate > 0 ? { timeEstimate: parsedEstimate } : {}),
+      issueLastSyncedValues: { dueDay },
     };
   }
 
