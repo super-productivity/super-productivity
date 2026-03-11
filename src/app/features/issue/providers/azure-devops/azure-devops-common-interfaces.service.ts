@@ -40,11 +40,13 @@ export class AzureDevOpsCommonInterfacesService extends BaseIssueProviderService
   }
 
   getAddTaskData(issue: AzureDevOpsIssueReduced): Partial<Task> & { title: string } {
+    const dueWithTime = issue.due ? new Date(issue.due).getTime() : null;
     return {
       title: issue.summary,
       issueWasUpdated: false,
       issueLastUpdated: new Date(issue.updated).getTime(),
-      dueWithTime: issue.due ? new Date(issue.due).getTime() : null,
+      dueWithTime,
+      issueLastSyncedValues: { dueWithTime },
     };
   }
 

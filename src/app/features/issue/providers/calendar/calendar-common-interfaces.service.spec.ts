@@ -311,7 +311,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Same Title',
         dueWithTime: new Date('2025-01-15T10:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const calendarEvent: CalendarIntegrationEvent = {
         id: 'event-123',
@@ -340,7 +340,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Same Title',
         dueWithTime: new Date('2025-01-15T10:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const task2 = {
         id: 'task-2',
@@ -350,7 +350,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title',
         dueWithTime: new Date('2025-01-15T11:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const calendarEvent1: CalendarIntegrationEvent = {
         id: 'event-1',
@@ -401,7 +401,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title 1',
         dueWithTime: new Date('2025-01-15T10:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const task2 = {
         id: 'task-2',
@@ -411,7 +411,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title 2',
         dueWithTime: new Date('2025-01-15T11:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const task3 = {
         id: 'task-3',
@@ -421,7 +421,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title 3',
         dueWithTime: new Date('2025-01-15T12:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       // Calendar events with updated titles
       const calendarEvent1: CalendarIntegrationEvent = {
@@ -500,7 +500,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title',
         dueWithTime: new Date('2025-01-15T10:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const task2 = {
         id: 'task-2',
@@ -510,7 +510,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title 2',
         dueWithTime: new Date('2025-01-15T11:00:00Z').getTime(),
         timeEstimate: 3600000,
-      } as Task;
+      } as unknown as Task;
 
       const calendarEvent1: CalendarIntegrationEvent = {
         id: 'event-1',
@@ -544,7 +544,7 @@ describe('CalendarCommonInterfacesService', () => {
         issueProviderId: undefined, // Missing provider
         issueType: 'ICAL',
         title: 'Task 1',
-      } as Task;
+      } as unknown as Task;
 
       const taskWithoutIssueId = {
         id: 'task-2',
@@ -552,7 +552,7 @@ describe('CalendarCommonInterfacesService', () => {
         issueProviderId: 'provider-1',
         issueType: 'ICAL',
         title: 'Task 2',
-      } as Task;
+      } as unknown as Task;
 
       const result = await service.getFreshDataForIssueTasks([
         taskWithoutProvider,
@@ -577,7 +577,7 @@ describe('CalendarCommonInterfacesService', () => {
         title: 'Old Title',
         dueWithTime: new Date('2025-01-15T10:00:00Z').getTime(),
         timeEstimate: 3600000, // 1 hour
-      } as Task;
+      } as unknown as Task;
 
       // Event with multiple changes: title, time, and duration
       const calendarEvent: CalendarIntegrationEvent = {
@@ -602,6 +602,113 @@ describe('CalendarCommonInterfacesService', () => {
       );
       expect(result[0].taskChanges.timeEstimate).toBe(7200000);
       expect(result[0].taskChanges.issueWasUpdated).toBe(true);
+    });
+  });
+
+  describe('due date guard on refresh', () => {
+    const mockCalendarCfg = {
+      id: 'provider-1',
+      isEnabled: true,
+      icalUrl: 'https://example.com/calendar.ics',
+    };
+
+    it('should NOT overwrite dueWithTime when provider value has not changed', async () => {
+      const originalStart = new Date('2025-01-15T10:00:00Z').getTime();
+      const task = {
+        id: 'task-1',
+        issueId: 'event-123',
+        issueProviderId: 'provider-1',
+        issueType: 'ICAL',
+        title: 'Old Title',
+        dueWithTime: new Date('2025-01-20T08:00:00Z').getTime(), // User changed
+        timeEstimate: 3600000,
+        issueLastSyncedValues: { dueWithTime: originalStart, dueDay: undefined },
+      } as unknown as Task;
+
+      const calendarEvent: CalendarIntegrationEvent = {
+        id: 'event-123',
+        calProviderId: 'provider-1',
+        title: 'New Title', // Title changed so hasChanges is true
+        start: originalStart, // Same as last synced
+        duration: 3600000,
+      };
+
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of([calendarEvent]),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([task]);
+
+      expect(result.length).toBe(1);
+      expect(result[0].taskChanges.title).toBe('New Title');
+      // dueWithTime should be stripped since provider didn't change it
+      expect(result[0].taskChanges.dueWithTime).toBeUndefined();
+    });
+
+    it('should overwrite dueWithTime when provider value has changed', async () => {
+      const originalStart = new Date('2025-01-15T10:00:00Z').getTime();
+      const newStart = new Date('2025-01-16T14:00:00Z').getTime();
+      const task = {
+        id: 'task-1',
+        issueId: 'event-123',
+        issueProviderId: 'provider-1',
+        issueType: 'ICAL',
+        title: 'Same Title',
+        dueWithTime: new Date('2025-01-20T08:00:00Z').getTime(), // User changed
+        timeEstimate: 3600000,
+        issueLastSyncedValues: { dueWithTime: originalStart, dueDay: undefined },
+      } as unknown as Task;
+
+      const calendarEvent: CalendarIntegrationEvent = {
+        id: 'event-123',
+        calProviderId: 'provider-1',
+        title: 'Same Title',
+        start: newStart, // Provider changed the time
+        duration: 3600000,
+      };
+
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of([calendarEvent]),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([task]);
+
+      expect(result.length).toBe(1);
+      expect(result[0].taskChanges.dueWithTime).toBe(newStart);
+    });
+
+    it('should not detect false changes when user changed dueWithTime but provider did not', async () => {
+      const originalStart = new Date('2025-01-15T10:00:00Z').getTime();
+      const task = {
+        id: 'task-1',
+        issueId: 'event-123',
+        issueProviderId: 'provider-1',
+        issueType: 'ICAL',
+        title: 'Same Title',
+        dueWithTime: new Date('2025-01-20T08:00:00Z').getTime(), // User changed
+        timeEstimate: 3600000,
+        issueLastSyncedValues: { dueWithTime: originalStart, dueDay: undefined },
+      } as unknown as Task;
+
+      const calendarEvent: CalendarIntegrationEvent = {
+        id: 'event-123',
+        calProviderId: 'provider-1',
+        title: 'Same Title',
+        start: originalStart, // Same as last synced
+        duration: 3600000,
+      };
+
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(of(mockCalendarCfg as any));
+      calendarIntegrationServiceSpy.requestEventsForSchedule$.and.returnValue(
+        of([calendarEvent]),
+      );
+
+      const result = await service.getFreshDataForIssueTasks([task]);
+
+      // No actual provider changes → should return empty
+      expect(result).toEqual([]);
     });
   });
 
