@@ -1,0 +1,20 @@
+{
+  "name": "WebDAV Sync Provider",
+  "id": "webdav-sync",
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "minSupVersion": "14.0.0",
+  "description": "Sync via any WebDAV server (Nextcloud, ownCloud, etc.)",
+  "author": "Super Productivity",
+  "permissions": [
+    "syncProvider",
+    "persistDataLocal",
+    "loadLocalData",
+    "showSnack",
+    "openDialog"
+  ],
+  "hooks": [],
+  "iFrame": false,
+  "isSkipMenuEntry": true,
+  "icon": "icon.svg"
+}

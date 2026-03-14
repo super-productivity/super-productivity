@@ -227,6 +227,7 @@ describe('ImmediateUploadService', () => {
     it('should skip upload for Dropbox (file-based provider)', fakeAsync(() => {
       // File-based providers use periodic sync, not immediate upload
       mockProvider.id = SyncProviderId.Dropbox;
+      mockProvider.getFileRev = jasmine.createSpy('getFileRev');
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
@@ -240,6 +241,7 @@ describe('ImmediateUploadService', () => {
 
     it('should skip upload for WebDAV (file-based provider)', fakeAsync(() => {
       mockProvider.id = SyncProviderId.WebDAV;
+      mockProvider.getFileRev = jasmine.createSpy('getFileRev');
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve(completedResult({ uploadedCount: 1 })),
       );
@@ -253,6 +255,7 @@ describe('ImmediateUploadService', () => {
 
     it('should skip upload for LocalFile (file-based provider)', fakeAsync(() => {
       mockProvider.id = SyncProviderId.LocalFile;
+      mockProvider.getFileRev = jasmine.createSpy('getFileRev');
       mockSyncService.uploadPendingOps.and.returnValue(
         Promise.resolve(completedResult({ uploadedCount: 1 })),
       );

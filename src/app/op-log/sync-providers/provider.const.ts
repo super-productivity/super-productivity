@@ -9,6 +9,7 @@ export enum SyncProviderId {
 /**
  * Type-safe conversion from string-based sync provider value to SyncProviderId.
  * Validates that a persisted string value is a valid SyncProviderId at runtime.
+ * Also accepts dynamic plugin provider IDs matching the pattern "plugin:*".
  */
 export const toSyncProviderId = (
   value: string | null | undefined,
@@ -17,7 +18,17 @@ export const toSyncProviderId = (
   if (Object.values(SyncProviderId).includes(value as SyncProviderId)) {
     return value as SyncProviderId;
   }
+  if (isPluginSyncProviderId(value)) {
+    return value as unknown as SyncProviderId;
+  }
   return null;
+};
+
+/**
+ * Checks whether a string is a plugin sync provider ID (matches "plugin:*").
+ */
+export const isPluginSyncProviderId = (value: string): boolean => {
+  return value.startsWith('plugin:');
 };
 
 export enum SyncStatus {

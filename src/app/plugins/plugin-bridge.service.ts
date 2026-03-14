@@ -59,6 +59,11 @@ import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/
 import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { createPluginSyncAdapter } from './issue-provider/plugin-sync-adapter.service';
 import { ISSUE_PROVIDER_TYPES } from '../features/issue/issue.const';
+import { SyncProviderPluginDefinition } from '@super-productivity/plugin-api';
+import { PluginLocalPersistenceService } from './plugin-local-persistence.service';
+import { PluginSyncProviderRegistryService } from './sync-provider/plugin-sync-provider-registry.service';
+import { PluginSyncProviderAdapter } from './sync-provider/plugin-sync-provider-adapter';
+import { SyncProviderManager } from '../op-log/sync-providers/provider-manager.service';
 
 // New imports for simple counters
 import { selectAllSimpleCounters } from '../features/simple-counter/store/simple-counter.reducer';
@@ -107,6 +112,9 @@ export class PluginBridgeService implements OnDestroy {
   private _globalThemeService = inject(GlobalThemeService);
   private _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
   private _pluginHttpService = inject(PluginHttpService);
+  private _pluginLocalPersistenceService = inject(PluginLocalPersistenceService);
+  private _pluginSyncProviderRegistry = inject(PluginSyncProviderRegistryService);
+  private _syncProviderManager = inject(SyncProviderManager);
 
   // Track header buttons registered by plugins
   private readonly _headerButtons = signal<PluginHeaderBtnCfg[]>([]);
@@ -166,6 +174,10 @@ export class PluginBridgeService implements OnDestroy {
     setSimpleCounterDate: (id: string, date: string, value: number) => Promise<void>;
     registerIssueProvider: (definition: IssueProviderPluginDefinition) => void;
     unregisterIssueProvider: () => void;
+    registerSyncProvider: (definition: SyncProviderPluginDefinition) => void;
+    unregisterSyncProvider: () => void;
+    persistDataLocal: (dataStr: string) => Promise<void>;
+    loadLocalData: () => Promise<string | null>;
     log: ReturnType<typeof Log.withContext>;
   } {
     return {
@@ -234,6 +246,16 @@ export class PluginBridgeService implements OnDestroy {
           this._syncAdapterRegistry.unregister(registeredKey);
         }
       },
+
+      // Sync provider registration
+      registerSyncProvider: (definition: SyncProviderPluginDefinition) =>
+        this._registerSyncProvider(pluginId, definition),
+      unregisterSyncProvider: () => this._unregisterSyncProvider(pluginId),
+
+      // Local persistence
+      persistDataLocal: (dataStr: string) =>
+        this._pluginLocalPersistenceService.persistLocalData(pluginId, dataStr),
+      loadLocalData: () => this._pluginLocalPersistenceService.loadLocalData(pluginId),
 
       // Logging
       log: Log.withContext(`${pluginId}`),
@@ -314,6 +336,44 @@ export class PluginBridgeService implements OnDestroy {
     PluginLog.log(
       `Plugin ${pluginId} registered issue provider under '${registeredKey}'`,
     );
+  }
+
+  private _registerSyncProvider(
+    pluginId: string,
+    definition: SyncProviderPluginDefinition,
+  ): void {
+    if (typeof definition?.isReady !== 'function') {
+      throw new Error('SyncProviderPluginDefinition.isReady must be a function');
+    }
+    if (typeof definition?.getFileRev !== 'function') {
+      throw new Error('SyncProviderPluginDefinition.getFileRev must be a function');
+    }
+    if (typeof definition?.downloadFile !== 'function') {
+      throw new Error('SyncProviderPluginDefinition.downloadFile must be a function');
+    }
+    if (typeof definition?.uploadFile !== 'function') {
+      throw new Error('SyncProviderPluginDefinition.uploadFile must be a function');
+    }
+    if (typeof definition?.removeFile !== 'function') {
+      throw new Error('SyncProviderPluginDefinition.removeFile must be a function');
+    }
+
+    this._pluginSyncProviderRegistry.register(pluginId, definition);
+
+    const adapter = new PluginSyncProviderAdapter(pluginId, definition);
+    this._syncProviderManager.registerPluginProvider(adapter);
+
+    PluginLog.log(
+      `Plugin ${pluginId} registered sync provider under 'plugin:${pluginId}'`,
+    );
+  }
+
+  private _unregisterSyncProvider(pluginId: string): void {
+    const registeredKey = this._pluginSyncProviderRegistry.getRegisteredKey(pluginId);
+    this._pluginSyncProviderRegistry.unregister(pluginId);
+    if (registeredKey) {
+      this._syncProviderManager.unregisterPluginProvider(registeredKey);
+    }
   }
 
   private async _downloadFile(filename: string, data: string): Promise<void> {

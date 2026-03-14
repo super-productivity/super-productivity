@@ -19,6 +19,7 @@ import {
   PluginSidePanelBtnCfg,
   Project,
   SnackCfg,
+  SyncProviderPluginDefinition,
   Tag,
   Task,
 } from '@super-productivity/plugin-api';
@@ -147,6 +148,21 @@ export class PluginAPI implements PluginAPIInterface {
   registerIssueProvider(definition: IssueProviderPluginDefinition): void {
     PluginLog.log(`Plugin ${this._pluginId} registering issue provider`);
     this._boundMethods.registerIssueProvider(definition);
+  }
+
+  registerSyncProvider(definition: SyncProviderPluginDefinition): void {
+    PluginLog.log(`Plugin ${this._pluginId} registering sync provider`);
+    this._boundMethods.registerSyncProvider(definition);
+  }
+
+  async persistDataLocal(dataStr: string): Promise<void> {
+    PluginLog.log(`Plugin ${this._pluginId} persisting local data`);
+    return this._boundMethods.persistDataLocal(dataStr);
+  }
+
+  async loadLocalData(): Promise<string | null> {
+    PluginLog.log(`Plugin ${this._pluginId} loading local data`);
+    return this._boundMethods.loadLocalData();
   }
 
   showIndexHtmlAsView(): void {
@@ -530,6 +546,9 @@ export class PluginAPI implements PluginAPIInterface {
 
     // Unregister issue provider if one was registered
     this._boundMethods.unregisterIssueProvider();
+
+    // Unregister sync provider if one was registered
+    this._boundMethods.unregisterSyncProvider();
 
     // Notify bridge service to clean up its registrations
     // This is handled by the plugin runner calling unregisterPluginHooks

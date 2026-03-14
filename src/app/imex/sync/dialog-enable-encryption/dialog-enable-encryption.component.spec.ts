@@ -193,6 +193,7 @@ describe('DialogEnableEncryptionComponent', () => {
     it('should set canProceed=true when provider is WebDAV', () => {
       mockProviderManager.getActiveProvider.and.returnValue({
         id: SyncProviderId.WebDAV,
+        getFileRev: () => Promise.resolve({ rev: '' }),
       } as any);
       createComponent({ initialSetup: false, providerType: 'file-based' });
 

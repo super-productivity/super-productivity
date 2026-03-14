@@ -27,6 +27,10 @@ describe('WrappedProviderService', () => {
     if (supportsOperationSync) {
       (provider as any).supportsOperationSync = true;
     }
+    // Add getFileRev for file-based providers so duck-typing check works
+    if (!supportsOperationSync) {
+      (provider as any).getFileRev = jasmine.createSpy('getFileRev');
+    }
     return provider;
   };
 

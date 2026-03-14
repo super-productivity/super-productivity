@@ -124,17 +124,14 @@ describe('FileBasedEncryptionService', () => {
     });
 
     it('should throw for non-file-based provider (SuperSync)', async () => {
-      const superSyncProvider: SyncProviderServiceInterface<SyncProviderId> = {
+      // SuperSync mock should NOT have getFileRev - duck-typing check uses it to
+      // determine file-based providers. SuperSync uses operation-based sync instead.
+      const superSyncProvider = {
         id: SyncProviderId.SuperSync,
         maxConcurrentRequests: 1,
-        privateCfg: {} as never,
+        supportsOperationSync: true,
         isReady: jasmine.createSpy('isReady').and.resolveTo(true),
-        setPrivateCfg: jasmine.createSpy('setPrivateCfg'),
-        getFileRev: jasmine.createSpy('getFileRev'),
-        downloadFile: jasmine.createSpy('downloadFile'),
-        uploadFile: jasmine.createSpy('uploadFile'),
-        removeFile: jasmine.createSpy('removeFile'),
-      };
+      } as any;
       mockProviderManager.getActiveProvider.and.returnValue(superSyncProvider);
 
       await expectAsync(service.enableEncryption('my-password')).toBeRejectedWithError(

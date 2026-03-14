@@ -3,15 +3,9 @@ import {
   SyncProviderBase,
   OperationSyncCapable,
   SyncOperation,
+  isFileSyncProvider,
 } from '../sync-providers/provider.interface';
 import { SyncProviderId } from '../sync-providers/provider.const';
-
-/** Provider IDs that use file-based operation sync (WebDAV, Dropbox, LocalFile) */
-const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
-  SyncProviderId.WebDAV,
-  SyncProviderId.Dropbox,
-  SyncProviderId.LocalFile,
-]);
 
 /**
  * Type guard to check if a provider supports operation-based sync (API sync).
@@ -28,12 +22,13 @@ export const isOperationSyncCapable = (
 
 /**
  * Type guard to check if a provider uses file-based operation sync.
- * File-based providers (WebDAV, Dropbox, LocalFile) use file storage for sync.
+ * Uses duck-typing (checks for getFileRev method) so plugin sync providers
+ * are automatically recognized without hardcoding their IDs.
  */
 export const isFileBasedProvider = (
   provider: SyncProviderBase<SyncProviderId>,
 ): boolean => {
-  return FILE_BASED_PROVIDER_IDS.has(provider.id);
+  return isFileSyncProvider(provider);
 };
 
 const VALID_OP_TYPES = new Set<string>(Object.values(OpType));

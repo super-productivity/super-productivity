@@ -323,6 +323,11 @@ export const createPluginApiScript = (config: PluginIframeConfig): string => {
           persistDataSynced: (data) => callApi('persistDataSynced', [data]),
           loadPersistedData: () => callApi('loadPersistedData'),
           loadSyncedData: () => callApi('loadPersistedData'), // Alias
+          persistDataLocal: (data) => callApi('persistDataLocal', [data]),
+          loadLocalData: () => callApi('loadLocalData'),
+
+          // Sync provider registration
+          registerSyncProvider: (definition) => callApi('registerSyncProvider', [definition]),
 
           // Registration methods
           registerHook: (hook, handler) => callApi('registerHook', [hook, handler]),

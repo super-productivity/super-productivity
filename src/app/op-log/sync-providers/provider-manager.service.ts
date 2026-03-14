@@ -45,6 +45,9 @@ export class SyncProviderManager {
   // Lazily loaded providers (cached after first load)
   private _providers: SyncProviderBase<SyncProviderId>[] | null = null;
 
+  // Dynamically registered plugin providers
+  private _pluginProviders = new Map<string, SyncProviderBase<SyncProviderId>>();
+
   /** Counter to detect stale provider activations */
   private _activeProviderSetupId = 0;
 
@@ -169,21 +172,62 @@ export class SyncProviderManager {
   }
 
   /**
-   * Gets a sync provider by ID
+   * Gets a sync provider by ID (checks both built-in and plugin providers)
    */
   async getProviderById(
     providerId: SyncProviderId,
   ): Promise<SyncProviderBase<SyncProviderId> | undefined> {
+    // Check plugin providers first (no async needed)
+    const pluginProvider = this._pluginProviders.get(providerId as unknown as string);
+    if (pluginProvider) {
+      return pluginProvider;
+    }
     const providers = await this._ensureProviders();
     return providers.find((p) => p.id === providerId);
   }
 
   /**
-   * Gets all available sync providers
+   * Gets all available sync providers (built-in + plugin)
    */
   async getAllProviders(): Promise<SyncProviderBase<SyncProviderId>[]> {
     const providers = await this._ensureProviders();
-    return [...providers];
+    return [...providers, ...this._pluginProviders.values()];
+  }
+
+  /**
+   * Registers a plugin-provided sync provider adapter.
+   * If it matches the currently selected provider ID, triggers readiness check.
+   */
+  registerPluginProvider(adapter: SyncProviderBase<SyncProviderId>): void {
+    const key = adapter.id as unknown as string;
+    this._pluginProviders.set(key, adapter);
+    SyncLog.normal(`SyncProviderManager: Registered plugin provider ${key}`);
+
+    // If this is the currently selected provider, activate it
+    if (this._activeProviderId$.getValue() === adapter.id) {
+      this._setActiveProvider(adapter.id);
+    }
+  }
+
+  /**
+   * Unregisters a plugin-provided sync provider.
+   * If it was the active provider, sets ready to false.
+   */
+  unregisterPluginProvider(pluginProviderId: string): void {
+    const adapter = this._pluginProviders.get(pluginProviderId);
+    if (!adapter) {
+      return;
+    }
+    this._pluginProviders.delete(pluginProviderId);
+    SyncLog.normal(
+      `SyncProviderManager: Unregistered plugin provider ${pluginProviderId}`,
+    );
+
+    // If this was the active provider, deactivate
+    if (this._activeProvider?.id === adapter.id) {
+      this._activeProvider = null;
+      this._isProviderReady$.next(false);
+    }
   }
 
   /**

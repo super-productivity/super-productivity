@@ -59,6 +59,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogDisableProfilesConfirmationComponent } from '../../features/user-profile/dialog-disable-profiles-confirmation/dialog-disable-profiles-confirmation.component';
 import { DialogRestorePointComponent } from '../../imex/sync/dialog-restore-point/dialog-restore-point.component';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
+import { PluginSyncProviderRegistryService } from '../../plugins/sync-provider/plugin-sync-provider-registry.service';
 import { DialogConfirmComponent } from '../../ui/dialog-confirm/dialog-confirm.component';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { MatTab, MatTabGroup, MatTabLabel } from '@angular/material/tabs';
@@ -95,6 +96,9 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   private readonly _userProfileService = inject(UserProfileService);
   private readonly _matDialog = inject(MatDialog);
   private readonly _translateService = inject(TranslateService);
+  private readonly _pluginSyncProviderRegistry = inject(
+    PluginSyncProviderRegistryService,
+  );
 
   readonly configService = inject(GlobalConfigService);
   readonly syncSettingsService = inject(SyncConfigService);
@@ -268,13 +272,32 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   }
 
   private async _buildSyncFormConfig(): Promise<typeof SYNC_FORM> {
-    // Pre-load dropbox provider for use in the form config
-    const dropboxProvider = await this._providerManager.getProviderById(
-      SyncProviderId.Dropbox,
-    );
+    // Pre-load dropbox provider so lazy-loading is done before first use
+    await this._providerManager.getProviderById(SyncProviderId.Dropbox);
+
+    // Get plugin sync providers to add to the dropdown
+    const pluginSyncProviders = this._pluginSyncProviderRegistry.getAvailableProviders();
 
     // Deep clone the SYNC_FORM items to avoid mutating the original
     const items = SYNC_FORM.items!.map((item) => {
+      // Add plugin sync providers to the dropdown options
+      if (item.key === 'syncProvider' && item.templateOptions?.options) {
+        const existingOptions = item.templateOptions.options as Array<{
+          label: string;
+          value: string;
+        }>;
+        const pluginOptions = pluginSyncProviders.map((p) => ({
+          label: `${p.label} (Plugin)`,
+          value: p.registeredKey,
+        }));
+        return {
+          ...item,
+          templateOptions: {
+            ...item.templateOptions,
+            options: [...existingOptions, ...pluginOptions],
+          },
+        };
+      }
       // Find the WebDAV fieldGroup and add the Test Connection button
       if (item.key === 'webDav' && item.fieldGroup) {
         return {
@@ -515,10 +538,22 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       return item;
     });
 
+    // Add a message for plugin sync providers
+    const pluginProviderInfoFields = pluginSyncProviders.map((p) => ({
+      hideExpression: (m: Record<string, unknown>) => m.syncProvider !== p.registeredKey,
+      resetOnHide: false,
+      type: 'tpl' as const,
+      templateOptions: {
+        tag: 'p',
+        text: `Sync configuration for "${p.label}" is managed by the plugin. Open the plugin settings to configure credentials.`,
+      },
+    }));
+
     return {
       ...SYNC_FORM,
       items: [
         ...items,
+        ...pluginProviderInfoFields,
         {
           hideExpression: (m: Record<string, unknown>, _v: unknown, field: unknown) =>
             !m.isEnabled || !(field as { form?: { valid?: boolean } })?.form?.valid,

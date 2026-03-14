@@ -1,4 +1,8 @@
-import { isOperationSyncCapable, syncOpToOperation } from './operation-sync.util';
+import {
+  isOperationSyncCapable,
+  isFileBasedProvider,
+  syncOpToOperation,
+} from './operation-sync.util';
 import {
   SyncProviderServiceInterface,
   OperationSyncCapable,
@@ -39,6 +43,41 @@ describe('operation-sync utility', () => {
       const provider = {} as unknown as SyncProviderServiceInterface<SyncProviderId>;
 
       expect(isOperationSyncCapable(provider)).toBeFalse();
+    });
+  });
+
+  describe('isFileBasedProvider', () => {
+    it('should return true for providers with getFileRev method', () => {
+      const provider = {
+        id: SyncProviderId.Dropbox,
+        getFileRev: jasmine.createSpy(),
+        downloadFile: jasmine.createSpy(),
+        uploadFile: jasmine.createSpy(),
+        removeFile: jasmine.createSpy(),
+      } as unknown as SyncProviderServiceInterface<SyncProviderId>;
+
+      expect(isFileBasedProvider(provider)).toBeTrue();
+    });
+
+    it('should return true for plugin providers with getFileRev', () => {
+      const provider = {
+        id: 'plugin:my-webdav' as unknown as SyncProviderId,
+        getFileRev: jasmine.createSpy(),
+        downloadFile: jasmine.createSpy(),
+        uploadFile: jasmine.createSpy(),
+        removeFile: jasmine.createSpy(),
+      } as unknown as SyncProviderServiceInterface<SyncProviderId>;
+
+      expect(isFileBasedProvider(provider)).toBeTrue();
+    });
+
+    it('should return false for providers without getFileRev', () => {
+      const provider = {
+        id: SyncProviderId.SuperSync,
+        supportsOperationSync: true,
+      } as unknown as SyncProviderServiceInterface<SyncProviderId>;
+
+      expect(isFileBasedProvider(provider)).toBeFalse();
     });
   });
 

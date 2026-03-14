@@ -338,6 +338,13 @@ export interface PluginAPI {
 
   registerIssueProvider(definition: IssueProviderPluginDefinition): void;
 
+  registerSyncProvider(definition: SyncProviderPluginDefinition): void;
+
+  // local-only persistence (not synced – for credentials, tokens, etc.)
+  persistDataLocal(dataStr: string): Promise<void>;
+
+  loadLocalData(): Promise<string | null>;
+
   // cross-process communication
   onMessage?(handler: (message: unknown) => Promise<unknown> | unknown): void;
 
@@ -432,6 +439,25 @@ export interface PluginAPI {
   deleteCounter(id: string): Promise<void>;
 
   getAllCounters(): Promise<{ [id: string]: number }>;
+}
+
+export interface SyncProviderPluginDefinition {
+  id: string;
+  label: string;
+  icon?: string;
+  isUploadForcePossible?: boolean;
+  maxConcurrentRequests?: number;
+  isReady(): Promise<boolean>;
+  getFileRev(path: string, localRev: string | null): Promise<{ rev: string }>;
+  downloadFile(path: string): Promise<{ rev: string; dataStr: string }>;
+  uploadFile(
+    path: string,
+    dataStr: string,
+    revToMatch: string | null,
+    isForceOverwrite?: boolean,
+  ): Promise<{ rev: string }>;
+  removeFile(path: string): Promise<void>;
+  listFiles?(path: string): Promise<string[]>;
 }
 
 export interface PluginInstance {

@@ -1,0 +1,6 @@
+{
+  "name": "@super-productivity/plugin-webdav-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebDAV Sync Provider Plugin for Super Productivity"
+}
