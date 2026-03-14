@@ -160,7 +160,7 @@
     "uuidv7": "^1.1.0"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "^21.2.0",
+    "@angular-devkit/build-angular": "^21.2.2",
     "@angular-eslint/builder": "^21.2.0",
     "@angular-eslint/eslint-plugin": "^21.1.0",
     "@angular-eslint/eslint-plugin-template": "^21.1.0",
@@ -170,9 +170,9 @@
     "@angular/cdk": "^21.2.0",
     "@angular/cli": "^21.2.0",
     "@angular/common": "^21.2.0",
-    "@angular/compiler": "^21.2.0",
+    "@angular/compiler": "^21.2.4",
     "@angular/compiler-cli": "^21.2.0",
-    "@angular/core": "^21.2.0",
+    "@angular/core": "^21.2.4",
     "@angular/forms": "^21.2.0",
     "@angular/language-service": "^21.2.0",
     "@angular/material": "^21.2.0",
