@@ -1696,7 +1696,7 @@
         "SORT_NAME": "Name",
         "SORT_PERMANENT": "Sort (permanent)",
         "SORT_SCHEDULED_DATE": "Scheduled Date",
-        "SORT_TEMPORARY": "Sort (temporary)",
+        "SORT": "Sort",
         "TIME_10MIN": "> 10 Minutes",
         "TIME_1HOUR": "> 1 Hour",
         "TIME_2HOUR": "> 2 Hours",
