@@ -9,7 +9,6 @@ import {
 } from '../../utils/supersync-helpers';
 import { ImportPage } from '../../pages/import.page';
 import { expectTaskOnAllClients } from '../../utils/supersync-assertions';
-import { waitForAppReady } from '../../utils/waits';
 
 /**
  * SuperSync Vector Clock Pruning E2E Tests

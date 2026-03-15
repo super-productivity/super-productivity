@@ -269,9 +269,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
 
   private async _buildSyncFormConfig(): Promise<typeof SYNC_FORM> {
     // Pre-load dropbox provider for use in the form config
-    const dropboxProvider = await this._providerManager.getProviderById(
-      SyncProviderId.Dropbox,
-    );
+    await this._providerManager.getProviderById(SyncProviderId.Dropbox);
 
     // Deep clone the SYNC_FORM items to avoid mutating the original
     const items = SYNC_FORM.items!.map((item) => {

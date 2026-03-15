@@ -18,6 +18,7 @@ import {
 import { OpLog } from '../../core/log';
 import { AppDataComplete } from '../model/model-config';
 import { selectSyncConfig } from '../../features/config/store/global-config.reducer';
+import { DEFAULT_GLOBAL_CONFIG } from '../../features/config/default-global-config.const';
 import { SnackService } from '../../core/snack/snack.service';
 import { T } from '../../t.const';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
@@ -74,15 +75,10 @@ export class SyncHydrationService {
     OpLog.normal('SyncHydrationService: Hydrating from remote sync...');
 
     try {
-      // 0. Capture current local-only sync settings BEFORE overwriting
-      // These settings should remain local to each client and not be overwritten by remote data.
-      // FIX: isEnabled was not being preserved, causing sync to appear disabled after reload
-      // when another client had sync disabled.
-      const currentSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
-      const localOnlySettings = {
-        isEnabled: currentSyncConfig.isEnabled,
-        syncProvider: currentSyncConfig.syncProvider,
-      };
+      // 0. Capture ALL local sync settings BEFORE overwriting with remote data.
+      // Sync settings are entirely local-only — each client independently controls
+      // its provider, interval, encryption, etc.
+      const localSyncConfig = await firstValueFrom(this.store.select(selectSyncConfig));
 
       // 1. Write archives to IndexedDB if they were included in the downloaded data.
       // This is critical for file-based sync where archives are bundled with the snapshot.
@@ -228,19 +224,15 @@ export class SyncHydrationService {
         OpLog.normal('SyncHydrationService: Repaired synced data before loading');
       }
 
-      // 7b. Restore local-only sync settings into dataToLoad
-      // This ensures the snapshot and NgRx state have the correct local settings,
-      // not the ones from remote data. Without this, isEnabled could be set to false
-      // if another client had sync disabled, causing sync to appear disabled on reload.
-      if (dataToLoad.globalConfig?.sync) {
+      // 7b. Restore ALL local sync settings into dataToLoad.
+      // Sync settings are entirely local-only — each client independently controls
+      // its provider, interval, encryption, compression, etc.
+      if (dataToLoad.globalConfig) {
         dataToLoad = {
           ...dataToLoad,
           globalConfig: {
             ...dataToLoad.globalConfig,
-            sync: {
-              ...dataToLoad.globalConfig.sync,
-              ...localOnlySettings,
-            },
+            sync: localSyncConfig,
           },
         };
       }
@@ -293,10 +285,7 @@ export class SyncHydrationService {
 
   /**
    * Strips local-only settings from synced data to prevent them from being
-   * overwritten by remote data. These settings should remain local to each client.
-   *
-   * Currently strips:
-   * - globalConfig.sync.syncProvider: Each client chooses its own sync provider
+   * overwritten by remote data. Sync settings are entirely local to each client.
    */
   private _stripLocalOnlySettings(data: unknown): unknown {
     if (!data || typeof data !== 'object') {
@@ -313,17 +302,15 @@ export class SyncHydrationService {
       return data;
     }
 
-    const sync = globalConfig['sync'] as Record<string, unknown>;
-
-    // Return data with syncProvider nulled out
+    // Replace sync with defaults — the real local sync config will be
+    // restored at step 7b. Using defaults (not undefined) ensures the
+    // SYNC_IMPORT payload has a valid GlobalConfigState shape, which is
+    // needed for validation and for replay on fresh installs.
     return {
       ...typedData,
       globalConfig: {
         ...globalConfig,
-        sync: {
-          ...sync,
-          syncProvider: null, // Local-only setting, don't overwrite from remote
-        },
+        sync: DEFAULT_GLOBAL_CONFIG.sync,
       },
     };
   }

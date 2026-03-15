@@ -60,7 +60,10 @@
                   <strong [innerHtml]="month.value.timeSpent | msToString"></strong>
                 </div>
                 @if (isMonthExpanded(year.key, month.key)) {
-                  <div [@expandFade] class="weeks">
+                  <div
+                    [@expandFade]
+                    class="weeks"
+                  >
                     @for (week of month.value.weeks; track trackByForWeek($index, week)) {
                       <div class="week">
                         <div class="week-header">

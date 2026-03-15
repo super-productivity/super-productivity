@@ -11,8 +11,7 @@ const REMINDER_DIALOG_TASK_1 = `${REMINDER_DIALOG_TASK}:first-of-type`;
 const DEADLINE_DIALOG = 'dialog-deadline';
 const SCHEDULE_MAX_WAIT_TIME = 60000;
 
-const DETAIL_PANEL_DEADLINE_ITEM =
-  'task-detail-item:has(mat-icon:text("flag"))';
+const DETAIL_PANEL_DEADLINE_ITEM = 'task-detail-item:has(mat-icon:text("flag"))';
 
 test.describe('Deadline Reminders', () => {
   test('should show reminder dialog when deadline with reminder is reached and dismiss correctly', async ({
@@ -54,7 +53,10 @@ test.describe('Deadline Reminders', () => {
     await remindSelect.waitFor({ state: 'visible', timeout: 5000 });
     await remindSelect.click();
 
-    const atDeadlineOption = page.locator('mat-option').filter({ hasText: 'At deadline' }).first();
+    const atDeadlineOption = page
+      .locator('mat-option')
+      .filter({ hasText: 'At deadline' })
+      .first();
     await atDeadlineOption.waitFor({ state: 'visible', timeout: 5000 });
     await atDeadlineOption.click();
 
@@ -76,10 +78,7 @@ test.describe('Deadline Reminders', () => {
     await expect(page.locator(REMINDER_DIALOG_TASK_1)).toContainText(taskTitle);
 
     // Dismiss by marking the task as done
-    await page
-      .locator(REMINDER_DIALOG)
-      .locator('button:has-text("Done")')
-      .click();
+    await page.locator(REMINDER_DIALOG).locator('button:has-text("Done")').click();
 
     // Wait for the reminder dialog to close
     await page.locator(REMINDER_DIALOG).waitFor({ state: 'hidden', timeout: 10000 });

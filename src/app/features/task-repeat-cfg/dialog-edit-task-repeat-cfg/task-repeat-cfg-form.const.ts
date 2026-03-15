@@ -3,6 +3,7 @@ import { T } from '../../../t.const';
 import { isValidSplitTime } from '../../../util/is-valid-split-time';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { RepeatQuickSetting, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { getQuickSettingUpdates } from './get-quick-setting-updates';
 import { TaskReminderOptionId } from '../../tasks/task.model';
@@ -36,8 +37,13 @@ export const TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG: FormlyFieldConfig[] = [
       // NOTE replaced in component to allow for dynamic translation
       options: [],
       change: (field, event) => {
+        const currentStartDate = field.model?.startDate;
+        const referenceDate = currentStartDate
+          ? dateStrToUtcDate(currentStartDate)
+          : undefined;
         const updatesForQuickSetting = getQuickSettingUpdates(
           event.value as RepeatQuickSetting,
+          referenceDate,
         );
         if (updatesForQuickSetting) {
           // NOTE: for some reason this doesn't update the model value, just the view value :(

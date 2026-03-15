@@ -173,6 +173,47 @@ describe('operationCaptureMetaReducer', () => {
       // Should still return correct state
       expect(wrappedReducer(mockState, action)).toBe(mockModifiedState);
     });
+
+    it('should NOT enqueue GLOBAL_CONFIG operations with entityId "sync"', () => {
+      const wrappedReducer = operationCaptureMetaReducer(mockReducer);
+      const action = createMockAction({
+        type: '[Global Config] Update Global Config Section',
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG' as EntityType,
+          entityId: 'sync',
+          opType: OpType.Update,
+        },
+      });
+
+      const result = wrappedReducer(mockState, action);
+
+      expect(mockCaptureService.enqueue).not.toHaveBeenCalled();
+      // Should still return the correct after-state
+      expect(result).toBe(mockModifiedState);
+    });
+
+    it('should enqueue GLOBAL_CONFIG operations with entityIds other than "sync"', () => {
+      const wrappedReducer = operationCaptureMetaReducer(mockReducer);
+      const otherEntityIds = ['misc', 'tasks', 'keyboard', 'pomodoro'];
+
+      otherEntityIds.forEach((entityId) => {
+        mockCaptureService.enqueue.calls.reset();
+        const action = createMockAction({
+          type: '[Global Config] Update Global Config Section',
+          meta: {
+            isPersistent: true,
+            entityType: 'GLOBAL_CONFIG' as EntityType,
+            entityId,
+            opType: OpType.Update,
+          },
+        });
+
+        wrappedReducer(mockState, action);
+
+        expect(mockCaptureService.enqueue).toHaveBeenCalledWith(action);
+      });
+    });
   });
 
   describe('enqueue ordering', () => {
@@ -369,6 +410,26 @@ describe('operationCaptureMetaReducer', () => {
       // State should still be modified even though operation is buffered
       expect(mockReducer).toHaveBeenCalledWith(mockState, action);
       expect(result).toBe(mockModifiedState);
+    });
+
+    it('should NOT buffer GLOBAL_CONFIG sync operations even during sync replay', () => {
+      const wrappedReducer = operationCaptureMetaReducer(mockReducer);
+      const syncConfigAction = createMockAction({
+        type: '[Global Config] Update Global Config Section',
+        meta: {
+          isPersistent: true,
+          entityType: 'GLOBAL_CONFIG' as EntityType,
+          entityId: 'sync',
+          opType: OpType.Update,
+        },
+      });
+
+      setIsApplyingRemoteOps(true);
+      wrappedReducer(mockState, syncConfigAction);
+
+      // Should NOT be buffered — sync config changes are dropped entirely
+      expect(getDeferredActions()).toEqual([]);
+      expect(mockCaptureService.enqueue).not.toHaveBeenCalled();
     });
   });
 });

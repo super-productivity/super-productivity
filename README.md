@@ -336,6 +336,13 @@ The sources can be [found here](/android).
 
 The development of Super Productivity is driven by a wonderful community of users and contributors. Thank you all so much for your support!
 
+<p>
+  :eyes:
+  <a href='https://github.com/super-productivity/awesome-super-productivity'>
+    Check out our awesome curated list of community-created resources about Super Productivity
+  </a>
+</p>
+
 ### :hearts: Contributing
 
 If you want to get involved, please check out the [CONTRIBUTING.md](CONTRIBUTING.md)

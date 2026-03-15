@@ -375,8 +375,12 @@ export class DialogEditTaskRepeatCfgComponent {
   }
 
   private _getReferenceDate(): Date {
-    if (this._data.task?.dueDay) {
-      return dateStrToUtcDate(this._data.task.dueDay);
+    const task = this._data.task;
+    if (task?.dueDay) {
+      return dateStrToUtcDate(task.dueDay);
+    }
+    if (task?.dueWithTime) {
+      return new Date(task.dueWithTime);
     }
     if (this._data.repeatCfg?.startDate) {
       return dateStrToUtcDate(this._data.repeatCfg.startDate);

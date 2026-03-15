@@ -20,6 +20,11 @@
     "url": "https://github.com/00sapo/sp-autoplan"
   },
   {
+    "name": "Asana Integration",
+    "shortDescription": "Provides 2-way sync between SP tasks and Asana tasks.",
+    "url": "https://codeberg.org/sinenomine/sp-asana"
+  },
+  {
     "name": "Reporter",
     "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
     "url": "https://github.com/dougcooper/sp-reporter"
