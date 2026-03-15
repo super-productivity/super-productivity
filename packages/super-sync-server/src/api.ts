@@ -111,7 +111,7 @@ const SAFE_ERROR_MESSAGES = new Set([
   'If an account with that email exists, a login link has been sent.',
   'Failed to send login email. Please try again later.',
   'Invalid or expired login link',
-  'Too many verification attempts. Please contact support.',
+  'Too many verification attempts. Please try again later or contact support.',
 ]);
 
 // Returns a safe error message for clients (hides internal details)

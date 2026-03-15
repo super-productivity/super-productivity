@@ -85,12 +85,11 @@ export class ReminderService {
         ]),
         distinctUntilChanged((prev, curr) => {
           if (prev.length !== curr.length) return false;
-          return prev.every(
-            (r, i) =>
-              r.id === curr[i].id &&
-              r.remindAt === curr[i].remindAt &&
-              r.title === curr[i].title,
-          );
+          const prevMap = new Map(prev.map((r) => [r.id, r]));
+          return curr.every((r) => {
+            const p = prevMap.get(r.id);
+            return p !== undefined && p.remindAt === r.remindAt && p.title === r.title;
+          });
         }),
       )
       .subscribe((reminders) => {

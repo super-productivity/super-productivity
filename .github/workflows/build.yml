@@ -306,7 +306,6 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: false # Don't publish unsigned; we sign first, then publish
-          args: "--publish never"  # action omits --publish when release=false, so electron-builder defaults to onTag on CI
 
       # --- Code signing (SignPath failure is tolerated; post-signing verification failures will block the release) ---
 
@@ -345,9 +344,9 @@ jobs:
             Write-Error "No signed executables found in SignPath output directory"
             exit 1
           }
-          # Match signed files back to originals by normalizing away dots, hyphens, and spaces.
-          # Filenames no longer contain spaces, but this normalization is kept as a safety net
-          # in case SignPath ever renames files.
+          # Build a map of original filenames for matching
+          # SignPath may replace spaces with dots in filenames, so we normalize
+          # spaces, dots, and hyphens to find the corresponding original file
           $originals = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
           $signed | ForEach-Object {
             $signedName = $_.Name
@@ -390,16 +389,7 @@ jobs:
           $exeFiles = Get-ChildItem -Path $buildDir -Filter "*.exe"
 
           foreach ($exe in $exeFiles) {
-            $isInstaller = $exe.Name -like 'Super-Productivity-Setup*'
             $blockmapPath = "$($exe.FullName).blockmap"
-            if (-not $isInstaller) {
-              Write-Host "Skipping $($exe.Name) — portable target, no blockmap needed"
-              continue
-            }
-            if (-not (Test-Path $blockmapPath)) {
-              Write-Error "Expected blockmap missing for NSIS installer: $($exe.Name)"
-              exit 1
-            }
             Write-Host "Regenerating blockmap for $($exe.Name)..."
             $output = npx --yes app-builder-bin blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
             Write-Host "  blockmap output: $output"

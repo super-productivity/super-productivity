@@ -69,10 +69,12 @@ import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { getDbDateStr } from '../../../util/get-db-date-str';
+import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
@@ -98,6 +100,7 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskAttachmentListComponent,
     TagEditComponent,
     LocaleDatePipe,
+    LocalDateStrPipe,
     MsToStringPipe,
     TranslatePipe,
     IssueIconPipe,
@@ -328,13 +331,7 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       : this.T.F.TASK.ADDITIONAL_INFO.SCHEDULE_TASK;
   });
 
-  isDeadlineOverdue = computed(() => {
-    const t = this.task();
-    if (t.isDone) return false;
-    if (t.deadlineWithTime) return t.deadlineWithTime < Date.now();
-    if (t.deadlineDay) return t.deadlineDay < getDbDateStr();
-    return false;
-  });
+  isDeadlineOverdue = computed(() => isDeadlineOverdueFn(this.task(), getDbDateStr()));
 
   deadlineLabelKey = computed(() => {
     const t = this.task();

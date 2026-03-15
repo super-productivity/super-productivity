@@ -14,7 +14,7 @@ test.describe('Planner Navigation', () => {
     workViewPage,
   }) => {
     // Start at work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
     await expect(page).toHaveURL(/\/tag\/TODAY/);
 
@@ -24,7 +24,7 @@ test.describe('Planner Navigation', () => {
     await expect(page).toHaveURL(/\/(planner|tasks)/);
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
     await expect(page).toHaveURL(/\/tag\/TODAY/);
   });
@@ -40,7 +40,7 @@ test.describe('Planner Navigation', () => {
     await plannerPage.waitForPlannerView();
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Task should still be there

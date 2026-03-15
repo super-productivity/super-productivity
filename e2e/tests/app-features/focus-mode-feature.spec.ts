@@ -43,7 +43,7 @@ test.describe('App Features - Focus Mode', () => {
     await expect(focusModeSwitch).not.toBeChecked();
 
     // Navigate to main view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     // Focus Mode button in main button bar should not be present when feature is disabled
     await expect(mainFocusButton).not.toBeAttached();
     // Focus Mode in the task context menu should not be visible
@@ -66,7 +66,7 @@ test.describe('App Features - Focus Mode', () => {
     await expect(focusModeSwitch).toBeChecked();
 
     // Go back to main view and expect play button to be visible
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await expect(mainFocusButton).toBeAttached();
 
     await firstTask.click({ button: 'right' });

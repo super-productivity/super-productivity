@@ -156,10 +156,9 @@
         <div class="reminder-value">
           {{ task().deadlineWithTime | localeDate: 'short' }}
         </div>
-      }
-      @if (task().deadlineDay) {
+      } @else if (task().deadlineDay) {
         <div class="reminder-value">
-          {{ task().deadlineDay | localeDate: 'shortDate' }}
+          {{ task().deadlineDay | localDateStr: '' }}
         </div>
       }
     </ng-container>

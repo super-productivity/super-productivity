@@ -216,7 +216,8 @@ export const selectUnplannedDeadlineTasksForToday = createSelector(
         (task): task is Task =>
           !!task &&
           !task.isDone &&
-          // Has a date-only deadline for today
+          // Has a date-only deadline for today (time-specific deadlines are excluded
+          // because they have their own reminder mechanism via deadlineRemindAt)
           task.deadlineDay === todayStr &&
           // Not already planned for today (dueDay or dueWithTime)
           task.dueDay !== todayStr &&
@@ -635,9 +636,13 @@ export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
       )
       .sort((a, b) => {
         const aTime =
-          a.deadlineWithTime || new Date(a.deadlineDay + 'T23:59:59').getTime();
+          typeof a.deadlineWithTime === 'number'
+            ? a.deadlineWithTime
+            : dateStrToUtcDate(a.deadlineDay!).getTime();
         const bTime =
-          b.deadlineWithTime || new Date(b.deadlineDay + 'T23:59:59').getTime();
+          typeof b.deadlineWithTime === 'number'
+            ? b.deadlineWithTime
+            : dateStrToUtcDate(b.deadlineDay!).getTime();
         return aTime - bTime;
       });
   },

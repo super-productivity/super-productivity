@@ -54,7 +54,7 @@ test.describe('Planner Basic', () => {
 
   test('should switch between work view and planner', async ({ page, workViewPage }) => {
     // Start in work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Add a task
@@ -66,7 +66,7 @@ test.describe('Planner Basic', () => {
     await plannerPage.waitForPlannerView();
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Task should still be there

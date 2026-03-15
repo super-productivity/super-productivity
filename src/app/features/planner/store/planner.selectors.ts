@@ -11,7 +11,12 @@ import {
   ScheduleItemType,
 } from '../planner.model';
 import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
-import { TaskCopy, TaskWithDueDay, TaskWithDueTime } from '../../tasks/task.model';
+import {
+  TaskCopy,
+  TaskState,
+  TaskWithDueDay,
+  TaskWithDueTime,
+} from '../../tasks/task.model';
 import { TaskRepeatCfg } from '../../task-repeat-cfg/task-repeat-cfg.model';
 import { getDateTimeFromClockString } from '../../../util/get-date-time-from-clock-string';
 import { getTimeLeftForTask } from '../../../util/get-time-left-for-task';
@@ -120,6 +125,9 @@ export const selectPlannerDays = (
           .sort((a, b) => a.localeCompare(b)),
       ];
 
+      // Pre-compute deadline tasks grouped by day (O(N) once, then O(1) per day)
+      const deadlineMap = groupDeadlineTasksByDay(taskState, startOfNextDayDiffMs);
+
       return dayDatesToUse.map((dayDate) =>
         getPlannerDay(
           dayDate,
@@ -130,6 +138,7 @@ export const selectPlannerDays = (
           allPlannedTasks,
           icalEvents,
           unplannedTaskIdsToday,
+          deadlineMap,
           globalConfig.schedule,
           startOfNextDayDiffMs,
         ),
@@ -161,12 +170,13 @@ export const selectPlannerDayMap = createSelector(
 const getPlannerDay = (
   dayDate: string,
   todayStr: string,
-  taskState: any,
+  taskState: TaskState,
   plannerState: any,
   taskRepeatCfgs: TaskRepeatCfg[],
   allPlannedTasks: TaskWithDueTime[],
   icalEvents: ScheduleCalendarMapEntry[],
   unplannedTaskIdsToday: string[] | false,
+  deadlineTasksByDay: Record<string, TaskCopy[]>,
   scheduleConfig?: ScheduleConfig,
   startOfNextDayDiffMs: number = 0,
 ): PlannerDay => {
@@ -197,7 +207,7 @@ const getPlannerDay = (
     startOfNextDayDiffMs,
   );
 
-  const deadlineTasks = getDeadlineTasksForDay(taskState, dayDate, startOfNextDayDiffMs);
+  const deadlineTasks = deadlineTasksByDay[dayDate] || [];
 
   const timeEstimate = getAllTimeSpent(
     normalTasks,
@@ -359,24 +369,27 @@ const getIcalEventsForDay = (
   return { timedEvents, allDayEvents };
 };
 
-const getDeadlineTasksForDay = (
-  taskState: any,
-  dayDate: string,
+/**
+ * Groups all undone deadline tasks by their effective day string.
+ * O(N) single pass — callers can then do O(1) map lookups per day.
+ */
+const groupDeadlineTasksByDay = (
+  taskState: TaskState,
   startOfNextDayDiffMs: number = 0,
-): TaskCopy[] => {
-  const result: TaskCopy[] = [];
+): Record<string, TaskCopy[]> => {
+  const result: Record<string, TaskCopy[]> = {};
   for (const id of taskState.ids) {
     const task = taskState.entities[id] as TaskCopy | undefined;
     if (!task || task.isDone) continue;
 
+    let dayKey: string | undefined;
     if (task.deadlineWithTime) {
-      if (
-        getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs)) === dayDate
-      ) {
-        result.push(task);
-      }
-    } else if (task.deadlineDay === dayDate) {
-      result.push(task);
+      dayKey = getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs));
+    } else if (task.deadlineDay) {
+      dayKey = task.deadlineDay;
+    }
+    if (dayKey) {
+      (result[dayKey] ??= []).push(task);
     }
   }
   return result;

@@ -1,134 +1,45 @@
 @if (tasks$ | async; as tasks) {
   <h1 mat-dialog-title>
-    <mat-icon class="dialog-header-icon">alarm</mat-icon>
-    <span>{{
-      (isMultiple
-        ? T.F.TASK.D_REMINDER_VIEW.DUE_TASKS
-        : T.F.TASK.D_REMINDER_VIEW.DUE_TASK
-      ) | translate
-    }}</span>
+    <mat-icon class="dialog-header-icon">notifications</mat-icon>
+    <span>{{ T.F.TASK.D_REMINDER_VIEW.TASK_REMINDERS | translate }}</span>
   </h1>
   <mat-dialog-content>
-    <div
-      [@standardList]="tasks.length"
-      class="tasks"
-    >
-      @for (task of tasks; track trackById($index, task)) {
-        <div class="task">
-          <div class="title-wrapper">
-            <div
-              class="due-for"
-              [class.emphasized]="(task.dueWithTime || 0) < overdueThreshold"
-            >
-              {{ task.dueWithTime | localeDate: 'short' }}
-            </div>
-            <div class="title">{{ task.title }}</div>
-            <tag-list
-              [isShowProjectTagAlways]="true"
-              [task]="task"
-            ></tag-list>
-          </div>
-          @if (isMultiple) {
-            <div class="actions">
-              <button
-                (click)="markTaskAsDone(task)"
-                [title]="T.F.TASK.D_REMINDER_VIEW.COMPLETE | translate"
-                color=""
-                mat-icon-button
-                type="button"
-              >
-                <mat-icon>check</mat-icon>
-              </button>
-              <button
-                [disabled]="!(task.projectId || task.parentId || task.tagIds.length > 0)"
-                (click)="dismiss(task)"
-                [title]="T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE | translate"
-                class="hide-xs"
-                color=""
-                mat-icon-button
-                type="button"
-              >
-                <mat-icon>event_busy</mat-icon>
-              </button>
-              <button
-                (dblclick)="snooze(task, 10)"
-                [matMenuTriggerFor]="snoozeMenu"
-                [title]="T.F.TASK.D_REMINDER_VIEW.SNOOZE | translate"
-                color=""
-                mat-icon-button
-                type="button"
-              >
-                <mat-icon>snooze</mat-icon>
-              </button>
-              <button
-                (click)="addToToday(task)"
-                [title]="T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY | translate"
-                color=""
-                mat-icon-button
-                type="button"
-              >
-                <mat-icon>wb_sunny</mat-icon>
-              </button>
-              <mat-menu #snoozeMenu="matMenu">
-                <button
-                  (click)="snooze(task, 10)"
-                  mat-menu-item
-                >
-                  <mat-icon>snooze</mat-icon>
-                  {{ T.G.MINUTES | translate: { m: 10 } }}
-                </button>
-                <button
-                  (click)="snooze(task, 30)"
-                  mat-menu-item
-                >
-                  <mat-icon>snooze</mat-icon>
-                  {{ T.G.MINUTES | translate: { m: 30 } }}
-                </button>
-                <button
-                  (click)="snooze(task, 60)"
-                  mat-menu-item
-                >
-                  <mat-icon>snooze</mat-icon>
-                  {{ T.G.MINUTES | translate: { m: 60 } }}
-                </button>
-                <button
-                  (click)="planForTomorrow(task)"
-                  [disabled]="isDisableControls"
-                  mat-menu-item
-                >
-                  <mat-icon>today</mat-icon>
-                  {{ T.F.TASK.D_REMINDER_VIEW.RESCHEDULE_UNTIL_TOMORROW | translate }}
-                </button>
-                <button
-                  [disabled]="
-                    !(task.projectId || task.parentId || task.tagIds.length > 0)
-                  "
-                  (click)="dismiss(task)"
-                  mat-menu-item
-                >
-                  <mat-icon>event_busy</mat-icon>
-                  {{ T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE | translate }}
-                </button>
-                <button
-                  (click)="dismissReminderOnly(task)"
-                  mat-menu-item
-                >
-                  <mat-icon>alarm_off</mat-icon>
-                  {{ T.F.TASK.D_REMINDER_VIEW.DISMISS_REMINDER_KEEP_TODAY | translate }}
-                </button>
-                <button
-                  (click)="editReminder(task)"
-                  mat-menu-item
-                >
-                  <mat-icon>edit</mat-icon>
-                  {{ T.G.EDIT | translate }}
-                </button>
-              </mat-menu>
-            </div>
+    @if (hasDeadlineTasks(tasks)) {
+      <h3 class="section-heading">
+        <mat-icon>flag</mat-icon>
+        {{ T.F.TASK.D_REMINDER_VIEW.DEADLINE_SECTION | translate }}
+      </h3>
+      <div
+        class="tasks"
+        [@standardList]="tasks.length"
+      >
+        @for (task of tasks; track trackById($index, task)) {
+          @if (task.isDeadlineReminder) {
+            <ng-container
+              *ngTemplateOutlet="taskRow; context: { $implicit: task }"
+            ></ng-container>
           }
-        </div>
-      }
-    </div>
+        }
+      </div>
+    }
+    @if (hasScheduleTasks(tasks)) {
+      <h3 class="section-heading">
+        <mat-icon>alarm</mat-icon>
+        {{ T.F.TASK.D_REMINDER_VIEW.DUE_SECTION | translate }}
+      </h3>
+      <div
+        class="tasks"
+        [@standardList]="tasks.length"
+      >
+        @for (task of tasks; track trackById($index, task)) {
+          @if (!task.isDeadlineReminder) {
+            <ng-container
+              *ngTemplateOutlet="taskRow; context: { $implicit: task }"
+            ></ng-container>
+          }
+        }
+      </div>
+    }
   </mat-dialog-content>
   <mat-dialog-actions align="end">
     <div class="wrap-buttons">
@@ -250,11 +161,15 @@
       [disabled]="isDisableControls"
       mat-menu-item
     >
-      <mat-icon>event_busy</mat-icon>
+      <mat-icon>{{ isAllDeadline ? 'alarm_off' : 'event_busy' }}</mat-icon>
       {{
-        (isMultiple
-          ? T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE_ALL
-          : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
+        (isAllDeadline
+          ? isMultiple
+            ? T.F.TASK.D_REMINDER_VIEW.CLEAR_ALL_REMINDERS
+            : T.F.TASK.D_REMINDER_VIEW.CLEAR_REMINDER
+          : isMultiple
+            ? T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE_ALL
+            : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
         ) | translate
       }}
     </button>
@@ -272,4 +187,147 @@
       }}
     </button>
   </mat-menu>
+
+  <ng-template
+    #taskRow
+    let-task
+  >
+    <div class="task">
+      <div class="title-wrapper">
+        <div
+          class="due-for"
+          [class.emphasized]="(task.dueWithTime || 0) < overdueThreshold"
+        >
+          @if (task.isDeadlineReminder && task.deadlineWithTime) {
+            {{ task.deadlineWithTime | localeDate: 'short' }}
+          } @else if (task.isDeadlineReminder && task.deadlineDay) {
+            {{ task.deadlineDay | localDateStr: '' }}
+          } @else {
+            {{ task.dueWithTime | localeDate: 'short' }}
+          }
+        </div>
+        <div class="title">{{ task.title }}</div>
+        <tag-list
+          [isShowProjectTagAlways]="true"
+          [task]="task"
+        ></tag-list>
+      </div>
+      @if (isMultiple) {
+        <div class="actions">
+          <button
+            (click)="markTaskAsDone(task)"
+            [title]="T.F.TASK.D_REMINDER_VIEW.COMPLETE | translate"
+            color=""
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon>check</mat-icon>
+          </button>
+          <button
+            [disabled]="
+              !task.isDeadlineReminder &&
+              !(task.projectId || task.parentId || task.tagIds.length > 0)
+            "
+            (click)="dismiss(task)"
+            [title]="
+              (task.isDeadlineReminder
+                ? T.F.TASK.D_REMINDER_VIEW.CLEAR_REMINDER
+                : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
+              ) | translate
+            "
+            class="hide-xs"
+            color=""
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon>{{
+              task.isDeadlineReminder ? 'alarm_off' : 'event_busy'
+            }}</mat-icon>
+          </button>
+          <button
+            (dblclick)="snooze(task, 10)"
+            [matMenuTriggerFor]="snoozeMenu"
+            [title]="T.F.TASK.D_REMINDER_VIEW.SNOOZE | translate"
+            color=""
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon>snooze</mat-icon>
+          </button>
+          <button
+            (click)="addToToday(task)"
+            [title]="T.F.TASK.D_REMINDER_VIEW.ADD_TO_TODAY | translate"
+            color=""
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon>wb_sunny</mat-icon>
+          </button>
+          <mat-menu #snoozeMenu="matMenu">
+            <button
+              (click)="snooze(task, 10)"
+              mat-menu-item
+            >
+              <mat-icon>snooze</mat-icon>
+              {{ T.G.MINUTES | translate: { m: 10 } }}
+            </button>
+            <button
+              (click)="snooze(task, 30)"
+              mat-menu-item
+            >
+              <mat-icon>snooze</mat-icon>
+              {{ T.G.MINUTES | translate: { m: 30 } }}
+            </button>
+            <button
+              (click)="snooze(task, 60)"
+              mat-menu-item
+            >
+              <mat-icon>snooze</mat-icon>
+              {{ T.G.MINUTES | translate: { m: 60 } }}
+            </button>
+            <button
+              (click)="planForTomorrow(task)"
+              [disabled]="isDisableControls"
+              mat-menu-item
+            >
+              <mat-icon>today</mat-icon>
+              {{ T.F.TASK.D_REMINDER_VIEW.RESCHEDULE_UNTIL_TOMORROW | translate }}
+            </button>
+            <button
+              [disabled]="
+                !task.isDeadlineReminder &&
+                !(task.projectId || task.parentId || task.tagIds.length > 0)
+              "
+              (click)="dismiss(task)"
+              mat-menu-item
+            >
+              <mat-icon>{{
+                task.isDeadlineReminder ? 'alarm_off' : 'event_busy'
+              }}</mat-icon>
+              {{
+                (task.isDeadlineReminder
+                  ? T.F.TASK.D_REMINDER_VIEW.CLEAR_REMINDER
+                  : T.F.TASK.D_REMINDER_VIEW.UNSCHEDULE
+                ) | translate
+              }}
+            </button>
+            <button
+              (click)="dismissReminderOnly(task)"
+              mat-menu-item
+            >
+              <mat-icon>alarm_off</mat-icon>
+              {{ T.F.TASK.D_REMINDER_VIEW.DISMISS_REMINDER_KEEP_TODAY | translate }}
+            </button>
+            <button
+              (click)="editReminder(task)"
+              mat-menu-item
+            >
+              <mat-icon>edit</mat-icon>
+              {{ T.G.EDIT | translate }}
+            </button>
+          </mat-menu>
+        </div>
+      }
+    </div>
+  </ng-template>
 }

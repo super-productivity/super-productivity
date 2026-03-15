@@ -1,7 +1,7 @@
 <div class="quick-access">
   <button
     mat-icon-button
-    (click)="quickAccessBtnClick($event, 1)"
+    (click)="quickAccessBtnClick($event, 'today')"
     [matTooltip]="T.F.TASK.D_DEADLINE.QA_TODAY | translate"
   >
     <mat-icon>wb_sunny</mat-icon>
@@ -9,21 +9,21 @@
 
   <button
     mat-icon-button
-    (click)="quickAccessBtnClick($event, 2)"
+    (click)="quickAccessBtnClick($event, 'tomorrow')"
     [matTooltip]="T.F.TASK.D_DEADLINE.QA_TOMORROW | translate"
   >
     <mat-icon svgIcon="tomorrow"></mat-icon>
   </button>
   <button
     mat-icon-button
-    (click)="quickAccessBtnClick($event, 3)"
+    (click)="quickAccessBtnClick($event, 'nextWeek')"
     [matTooltip]="T.F.TASK.D_DEADLINE.QA_NEXT_WEEK | translate"
   >
     <mat-icon svgIcon="next_week"></mat-icon>
   </button>
   <button
     mat-icon-button
-    (click)="quickAccessBtnClick($event, 4)"
+    (click)="quickAccessBtnClick($event, 'nextMonth')"
     [matTooltip]="T.F.TASK.D_DEADLINE.QA_NEXT_MONTH | translate"
   >
     <mat-icon>bedtime</mat-icon>
@@ -49,8 +49,8 @@
   }
 
   <div class="form-ctrl-wrapper">
-    <mat-form-field class="example-full-width">
-      <mat-label>Time</mat-label>
+    <mat-form-field>
+      <mat-label>{{ T.F.TASK.D_DEADLINE.ADD_TIME | translate }}</mat-label>
       <mat-icon matPrefix>schedule</mat-icon>
       <input
         type="time"

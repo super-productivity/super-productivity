@@ -479,7 +479,6 @@ export class PluginBridgeService implements OnDestroy {
           isDone: (taskData as { isDone?: boolean }).isDone || false,
           tagIds: [], // Subtasks don't have tags
           projectId: taskData.projectId || undefined,
-          dueDay: undefined, // prevent auto-assignment to Today
         },
       });
 

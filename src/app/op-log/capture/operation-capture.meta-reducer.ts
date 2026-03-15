@@ -191,19 +191,6 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
 
     // Only process persistent, non-remote actions
     if (isPersistentAction(action) && !(action as PersistentAction).meta.isRemote) {
-      const persistentAction = action as PersistentAction;
-
-      // Sync settings are local-only — never capture or buffer them as operations.
-      // Each client independently controls its sync provider, interval, etc.
-      // Without this, changing sync settings on one client would generate
-      // sync operations that get applied to other clients.
-      if (
-        persistentAction.meta.entityType === 'GLOBAL_CONFIG' &&
-        persistentAction.meta.entityId === 'sync'
-      ) {
-        return afterState;
-      }
-
       // Buffer actions during sync replay - they'll be processed after sync completes
       // with fresh vector clocks that include the newly-applied remote operations.
       // This prevents superseded operations that would immediately conflict.
@@ -212,7 +199,7 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
           'operationCaptureMetaReducer: Buffering action for post-sync processing',
           { actionType: action.type },
         );
-        bufferDeferredAction(persistentAction);
+        bufferDeferredAction(action as PersistentAction);
         return afterState;
       }
 
@@ -224,6 +211,8 @@ export const operationCaptureMetaReducer = <S, A extends Action = Action>(
         );
       } else {
         try {
+          const persistentAction = action as PersistentAction;
+
           // Enqueue action for effect processing (no state diffing needed)
           operationCaptureService.enqueue(persistentAction);
 

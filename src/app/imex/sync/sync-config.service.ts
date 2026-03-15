@@ -343,28 +343,16 @@ export class SyncConfigService {
     const savedEncryptKey = (oldConfig as { encryptKey?: string })?.encryptKey ?? '';
 
     // Resolve encryptKey based on provider type:
-    // - SuperSync: encryptKey is managed EXCLUSIVELY via dedicated dialogs (EnableEncryption,
-    //   ChangePassword, HandleDecryptError), NEVER via the form. Always preserve savedEncryptKey.
-    //   The form model can carry stale encryptKey values from previous syncSettingsForm$ emissions,
-    //   and using them here would silently corrupt the password.
+    // - SuperSync: encryptKey is managed via dedicated dialogs (EnableEncryption, ChangePassword,
+    //   HandleDecryptError), NOT via the form. Always preserve savedEncryptKey unless disabled.
     // - File-based providers (WebDAV, LocalFile, Dropbox): encryptKey can be set via form,
     //   so use settings.encryptKey as fallback for new configs.
     let resolvedEncryptKey: string;
     if (isEncryptionDisabledInSavedConfig) {
       resolvedEncryptKey = '';
     } else if (providerId === SyncProviderId.SuperSync) {
-      // IMPORTANT: Always use savedEncryptKey for SuperSync — never trust form values.
-      // The form model can contain stale encryption keys from previous observable emissions,
-      // which would silently overwrite the real password and make encrypted data unrecoverable.
-      resolvedEncryptKey = savedEncryptKey;
-      const formEncryptKey = nonEmptyFormValues?.encryptKey as string | undefined;
-      if (formEncryptKey && formEncryptKey !== savedEncryptKey) {
-        SyncLog.warn(
-          'SyncConfigService: Form encryptKey ' +
-            `(length=${formEncryptKey.length}) differs from saved ` +
-            `(length=${savedEncryptKey.length}) — ignoring form value`,
-        );
-      }
+      // For SuperSync, only use form if explicitly provided, otherwise preserve saved
+      resolvedEncryptKey = (nonEmptyFormValues?.encryptKey as string) || savedEncryptKey;
     } else {
       // For file-based providers, use form values with settings.encryptKey as fallback
       resolvedEncryptKey =

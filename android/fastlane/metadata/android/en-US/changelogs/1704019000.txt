@@ -1,2 +1,0 @@
-- use correct route /#/tag/TODAY/tasks instead of /#/tag/TODAY
-- prevent duplicate Windows exe files in releases

@@ -200,6 +200,16 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    clearDeadlineReminder: (taskProps: { taskId: string }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
     // Task Updates
     updateTask: (taskProps: { task: Update<Task>; isIgnoreShortSyntax?: boolean }) => ({
       ...taskProps,

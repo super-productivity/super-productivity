@@ -178,19 +178,7 @@ export class ReminderModule {
           // Dismiss the reminder for the current task
           if (oldest.isDeadlineReminder) {
             // Clear deadlineRemindAt but keep the deadline date
-            firstValueFrom(this._taskService.getByIdOnce$(taskId)).then((task) => {
-              if (task) {
-                this._store.dispatch(
-                  TaskSharedActions.setDeadline({
-                    taskId,
-                    ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
-                    ...(task.deadlineWithTime
-                      ? { deadlineWithTime: task.deadlineWithTime }
-                      : {}),
-                  }),
-                );
-              }
-            });
+            this._store.dispatch(TaskSharedActions.clearDeadlineReminder({ taskId }));
           } else {
             this._store.dispatch(
               TaskSharedActions.dismissReminderOnly({

@@ -4,6 +4,7 @@ import {
   ChangeDetectorRef,
   Component,
   computed,
+  ElementRef,
   inject,
   viewChild,
 } from '@angular/core';
@@ -43,8 +44,11 @@ import { MatSelect } from '@angular/material/select';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatInput } from '@angular/material/input';
 import { GlobalConfigService } from '../../config/global-config.service';
+import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 
 const DEFAULT_TIME = '09:00';
+
+type QuickDeadline = 'today' | 'tomorrow' | 'nextWeek' | 'nextMonth';
 
 @Component({
   selector: 'dialog-deadline',
@@ -79,9 +83,16 @@ export class DialogDeadlineComponent implements AfterViewInit {
   private _dateService = inject(DateService);
   private readonly _dateAdapter = inject(DateAdapter);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _elRef = inject(ElementRef);
 
   readonly isConfigReady = computed(
     () => this._globalConfigService.localization() !== undefined,
+  );
+  private _defaultTaskRemindCfgId = computed(
+    () =>
+      (this._globalConfigService.cfg()?.reminder
+        ?.defaultTaskRemindOption as TaskReminderOptionId) ??
+      DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!,
   );
 
   T: typeof T = T;
@@ -90,7 +101,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
   reminderOptions: TaskReminderOption[] = DEADLINE_REMINDER_OPTIONS;
   task: Task = this.data.task;
 
-  selectedDate: Date | string | null = null;
+  selectedDate: Date | null = null;
   selectedTime: string | null = null;
   selectedReminderCfgId: TaskReminderOptionId = TaskReminderOptionId.DoNotRemind;
 
@@ -116,10 +127,14 @@ export class DialogDeadlineComponent implements AfterViewInit {
           this.task.deadlineWithTime,
           this.task.deadlineRemindAt,
         );
+      } else {
+        this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
       }
     } else if (this.task.deadlineDay) {
       this.hasExistingDeadline = true;
       this.selectedDate = dateStrToUtcDate(this.task.deadlineDay);
+    } else {
+      this.selectedReminderCfgId = this._defaultTaskRemindCfgId();
     }
 
     this.calendar().activeDate = new Date(this.selectedDate || new Date());
@@ -130,15 +145,11 @@ export class DialogDeadlineComponent implements AfterViewInit {
   }
 
   private _focusInitially(): void {
-    if (this.selectedDate) {
-      (
-        document.querySelector('.mat-calendar-body-selected') as HTMLElement
-      )?.parentElement?.focus();
-    } else {
-      (
-        document.querySelector('.mat-calendar-body-today') as HTMLElement
-      )?.parentElement?.focus();
-    }
+    const host = this._elRef.nativeElement as HTMLElement;
+    const selector = this.selectedDate
+      ? '.mat-calendar-body-selected'
+      : '.mat-calendar-body-today';
+    (host.querySelector(selector) as HTMLElement)?.parentElement?.focus();
   }
 
   onKeyDownOnCalendar(ev: KeyboardEvent): void {
@@ -191,13 +202,13 @@ export class DialogDeadlineComponent implements AfterViewInit {
     if (!this.selectedTime && this.isInitValOnTimeFocus) {
       this.isInitValOnTimeFocus = false;
       if (this.selectedDate) {
-        if (this._dateService.isToday(this.selectedDate as Date)) {
-          this.selectedTime = getClockStringFromHours(new Date().getHours() + 1);
+        if (this._dateService.isToday(this.selectedDate!)) {
+          this.selectedTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
         } else {
           this.selectedTime = DEFAULT_TIME;
         }
       } else {
-        this.selectedTime = getClockStringFromHours(new Date().getHours() + 1);
+        this.selectedTime = getClockStringFromHours((new Date().getHours() + 1) % 24);
         this.selectedDate = new Date();
       }
     }
@@ -216,7 +227,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
     if (this.selectedTime) {
       const deadlineTimestamp = getDateTimeFromClockString(
         this.selectedTime,
-        this.selectedDate as Date,
+        this.selectedDate!,
       );
       const deadlineRemindAt =
         this.selectedReminderCfgId !== TaskReminderOptionId.DoNotRemind
@@ -231,7 +242,7 @@ export class DialogDeadlineComponent implements AfterViewInit {
         }),
       );
     } else {
-      const newDay = getDbDateStr(new Date(this.selectedDate));
+      const newDay = getDbDateStr(this.selectedDate!);
       this._store.dispatch(
         TaskSharedActions.setDeadline({
           taskId: this.task.id,
@@ -243,44 +254,34 @@ export class DialogDeadlineComponent implements AfterViewInit {
     this._matDialogRef.close();
   }
 
-  quickAccessBtnClick(eventOrItem: MouseEvent | number, maybeItem?: number): void {
-    if (eventOrItem instanceof MouseEvent) {
-      eventOrItem.stopPropagation();
-    }
+  quickAccessBtnClick(ev: MouseEvent, option: QuickDeadline): void {
+    ev.stopPropagation();
+    this.selectedDate = this._getQuickDate(option);
+    this.submit();
+  }
 
-    const item = typeof eventOrItem === 'number' ? eventOrItem : maybeItem;
-    if (!item) {
-      return;
-    }
-
-    const tDate = new Date();
-    tDate.setMinutes(0, 0, 0);
-
-    switch (item) {
-      case 1:
-        this.selectedDate = tDate;
-        break;
-      case 2:
-        tDate.setDate(tDate.getDate() + 1);
-        this.selectedDate = tDate;
-        break;
-      case 3: {
+  private _getQuickDate(option: QuickDeadline): Date {
+    const d = new Date();
+    d.setMinutes(0, 0, 0);
+    switch (option) {
+      case 'today':
+        return d;
+      case 'tomorrow':
+        d.setDate(d.getDate() + 1);
+        return d;
+      case 'nextWeek': {
         const dayOffset =
           (this._dateAdapter.getFirstDayOfWeek() -
-            this._dateAdapter.getDayOfWeek(tDate) +
+            this._dateAdapter.getDayOfWeek(d) +
             7) %
             7 || 7;
-        tDate.setDate(tDate.getDate() + dayOffset);
-        this.selectedDate = tDate;
-        break;
+        d.setDate(d.getDate() + dayOffset);
+        return d;
       }
-      case 4:
-        tDate.setDate(1);
-        tDate.setMonth(tDate.getMonth() + 1);
-        this.selectedDate = tDate;
-        break;
+      case 'nextMonth':
+        d.setDate(1);
+        d.setMonth(d.getMonth() + 1);
+        return d;
     }
-
-    this.submit();
   }
 }

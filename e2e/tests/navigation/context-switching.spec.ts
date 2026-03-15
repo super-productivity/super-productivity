@@ -241,7 +241,7 @@ test.describe('Context Switching', () => {
     await page.waitForTimeout(300);
 
     // Navigate back to TODAY via URL (more reliable than click)
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
     await expect(page).toHaveURL(/tag\/TODAY/);
   });

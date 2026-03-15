@@ -297,7 +297,7 @@ export const registerWithMagicLink = async (
     if (existingUser) {
       if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
         throw new Error(
-          'Too many verification attempts. Please contact support.',
+          'Too many verification attempts. Please try again later or contact support.',
         );
       }
 

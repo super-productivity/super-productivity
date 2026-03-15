@@ -105,9 +105,6 @@ export class OperationLogUploadService {
         ? await syncProvider.getEncryptKey()
         : undefined;
       const isEncryptionEnabled = !!encryptKey;
-      OpLog.normal(
-        `OperationLogUploadService: Encryption state: enabled=${isEncryptionEnabled}, keyLength=${encryptKey?.length ?? 0}`,
-      );
 
       // Separate full-state operations (backup imports, repairs) from regular ops
       // Full-state ops are uploaded via snapshot endpoint for better efficiency

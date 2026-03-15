@@ -63,7 +63,7 @@ test.describe('Take-a-Break Feature', () => {
     await expect(page.locator('.page-settings').first()).toBeVisible();
 
     // Navigate away
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await expect(page.locator('task-list').first()).toBeVisible();
 
     // Navigate back to settings
@@ -105,7 +105,7 @@ test.describe('Take-a-Break Feature', () => {
     await expect(page.locator('.page-settings')).toBeVisible();
 
     // Navigate back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
 
     // Verify we're back at work view
     await expect(page).toHaveURL(/tag\/TODAY/);

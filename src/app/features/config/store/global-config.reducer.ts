@@ -21,7 +21,6 @@ import {
 } from '../global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { PersistentActionMeta } from '../../../op-log/core/persistent-action.interface';
 import { getHoursFromClockString } from '../../../util/get-hours-from-clock-string';
 
 export const CONFIG_FEATURE_NAME = 'globalConfig';
@@ -113,11 +112,29 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       return oldState;
     }
 
-    // Sync settings are entirely local-only — each client independently controls
-    // its provider, interval, encryption, compression, etc.
+    const incomingSyncConfig = appDataComplete.globalConfig.sync;
+
+    // Preserve local-only sync settings if they're already set.
+    // These settings should remain local to each client:
+    // - syncProvider: Each client can use different providers (Dropbox, WebDAV, etc.)
+    // - isEnabled: Each client independently controls whether sync is enabled
+    // - isEncryptionEnabled: Encryption state must not be overwritten by imports
+    //
     // If oldState.sync.syncProvider is null, we're on first load (using initialGlobalConfigState)
-    // and should use the incoming values (from snapshot/backup). Otherwise, preserve ALL local values.
+    // and should use the incoming values (from snapshot). Otherwise, preserve local values.
     const hasLocalSettings = oldState.sync.syncProvider !== null;
+
+    const syncProvider = hasLocalSettings
+      ? oldState.sync.syncProvider
+      : incomingSyncConfig.syncProvider;
+
+    const isEnabled = hasLocalSettings
+      ? oldState.sync.isEnabled
+      : incomingSyncConfig.isEnabled;
+
+    const isEncryptionEnabled = hasLocalSettings
+      ? oldState.sync.isEncryptionEnabled
+      : incomingSyncConfig.isEncryptionEnabled;
 
     return {
       ...appDataComplete.globalConfig,
@@ -136,24 +153,22 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
-      sync: hasLocalSettings ? oldState.sync : appDataComplete.globalConfig.sync,
-    };
-  }),
-
-  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg, meta }) => {
-    // Ignore remote sync config updates — sync settings are local-only.
-    // This protects against older clients that still capture sync config operations.
-    if (sectionKey === 'sync' && (meta as PersistentActionMeta)?.isRemote) {
-      return state;
-    }
-    return {
-      ...state,
-      [sectionKey]: {
-        ...state[sectionKey],
-        ...sectionCfg,
+      sync: {
+        ...incomingSyncConfig,
+        syncProvider,
+        isEnabled,
+        isEncryptionEnabled,
       },
     };
   }),
+
+  on(updateGlobalConfigSection, (state, { sectionKey, sectionCfg }) => ({
+    ...state,
+    [sectionKey]: {
+      ...state[sectionKey],
+      ...sectionCfg,
+    },
+  })),
 );
 
 export const selectTimelineWorkStartEndHours = createSelector(

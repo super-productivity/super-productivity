@@ -22,75 +22,8 @@ import { GlobalConfigState } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { AppDataComplete } from '../../../op-log/model/model-config';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
-import { updateGlobalConfigSection } from './global-config.actions';
-import { OpType } from '../../../op-log/core/operation.types';
 
 describe('GlobalConfigReducer', () => {
-  describe('updateGlobalConfigSection action', () => {
-    it('should apply local sync config updates', () => {
-      const result = globalConfigReducer(
-        initialGlobalConfigState,
-        updateGlobalConfigSection({
-          sectionKey: 'sync',
-          sectionCfg: { syncInterval: 999 },
-        }),
-      );
-
-      expect(result.sync.syncInterval).toBe(999);
-    });
-
-    it('should ignore remote sync config updates', () => {
-      const state: GlobalConfigState = {
-        ...initialGlobalConfigState,
-        sync: {
-          ...initialGlobalConfigState.sync,
-          syncProvider: SyncProviderId.WebDAV,
-          syncInterval: 300,
-        },
-      };
-
-      const action = {
-        ...updateGlobalConfigSection({
-          sectionKey: 'sync',
-          sectionCfg: { syncInterval: 999 },
-        }),
-        meta: {
-          isPersistent: true,
-          entityType: 'GLOBAL_CONFIG' as const,
-          entityId: 'sync',
-          opType: OpType.Update,
-          isRemote: true,
-        },
-      };
-
-      const result = globalConfigReducer(state, action);
-
-      // Remote sync config should be ignored — local value preserved
-      expect(result.sync.syncInterval).toBe(300);
-      expect(result).toBe(state);
-    });
-
-    it('should apply remote non-sync config updates normally', () => {
-      const action = {
-        ...updateGlobalConfigSection({
-          sectionKey: 'misc',
-          sectionCfg: { isDisableAnimations: true },
-        }),
-        meta: {
-          isPersistent: true,
-          entityType: 'GLOBAL_CONFIG' as const,
-          entityId: 'misc',
-          opType: OpType.Update,
-          isRemote: true,
-        },
-      };
-
-      const result = globalConfigReducer(initialGlobalConfigState, action);
-
-      expect(result.misc.isDisableAnimations).toBe(true);
-    });
-  });
-
   describe('loadAllData action', () => {
     it('should return oldState when appDataComplete.globalConfig is falsy', () => {
       const result = globalConfigReducer(
@@ -242,14 +175,13 @@ describe('GlobalConfigReducer', () => {
       expect(result.sync.syncProvider).toBe(SyncProviderId.WebDAV);
     });
 
-    it('should preserve entire sync config from oldState when it has local settings', () => {
+    it('should update other sync config properties while preserving syncProvider', () => {
       const oldState: GlobalConfigState = {
         ...initialGlobalConfigState,
         sync: {
           ...initialGlobalConfigState.sync,
           syncProvider: SyncProviderId.SuperSync,
           syncInterval: 300000,
-          isCompressionEnabled: false,
         },
       };
 
@@ -270,22 +202,24 @@ describe('GlobalConfigReducer', () => {
         }),
       );
 
-      // Entire sync config preserved from oldState
-      expect(result.sync).toEqual(oldState.sync);
+      // syncProvider preserved
+      expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
+      // Other sync settings updated
+      expect(result.sync.syncInterval).toBe(600000);
+      expect(result.sync.isCompressionEnabled).toBe(true);
     });
 
-    describe('sync config preservation', () => {
-      it('should use sync from snapshot on initial load (no local settings)', () => {
-        // App startup: oldState is initialGlobalConfigState with null syncProvider
-        const oldState = initialGlobalConfigState; // syncProvider is null
+    describe('isEnabled preservation', () => {
+      it('should use isEnabled from snapshot when not sync hydration', () => {
+        // This simulates app startup loading from snapshot (syncProvider is set, not null)
+        const oldState = initialGlobalConfigState; // isEnabled is false
 
         const snapshotConfig: GlobalConfigState = {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: SyncProviderId.SuperSync,
-            isEnabled: true,
-            syncInterval: 600000,
+            syncProvider: SyncProviderId.SuperSync, // Not null = not sync hydration
+            isEnabled: true, // User had sync enabled
           },
         };
 
@@ -296,20 +230,18 @@ describe('GlobalConfigReducer', () => {
           }),
         );
 
-        // Should use snapshot's sync since oldState has no local settings
-        expect(result.sync).toEqual(snapshotConfig.sync);
+        // Should use snapshot's isEnabled since it's not sync hydration
+        expect(result.sync.isEnabled).toBe(true);
       });
 
-      it('should preserve entire sync from oldState during sync hydration', () => {
-        // Sync hydration: oldState has local settings, synced data arrives
+      it('should preserve isEnabled from oldState during sync hydration', () => {
+        // This simulates sync hydration: syncProvider is null (stripped)
         const oldState: GlobalConfigState = {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
             syncProvider: SyncProviderId.SuperSync,
-            isEnabled: true,
-            syncInterval: 300000,
-            isCompressionEnabled: false,
+            isEnabled: true, // User has sync enabled
           },
         };
 
@@ -317,10 +249,8 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: null,
-            isEnabled: false,
-            syncInterval: 600000,
-            isCompressionEnabled: true,
+            syncProvider: null, // Sync hydration indicator
+            isEnabled: false, // Remote client had sync disabled
           },
         };
 
@@ -331,18 +261,20 @@ describe('GlobalConfigReducer', () => {
           }),
         );
 
-        // Entire sync config should be preserved from oldState
-        expect(result.sync).toEqual(oldState.sync);
+        // isEnabled should be preserved from oldState, not overwritten by remote's false
+        expect(result.sync.isEnabled).toBe(true);
+        // syncProvider should also be preserved
+        expect(result.sync.syncProvider).toBe(SyncProviderId.SuperSync);
       });
 
-      it('should preserve sync with isEnabled=false from oldState during sync hydration', () => {
+      it('should preserve isEnabled=false from oldState during sync hydration', () => {
         // User has sync disabled locally, remote has it enabled
         const oldState: GlobalConfigState = {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
             syncProvider: SyncProviderId.SuperSync,
-            isEnabled: false,
+            isEnabled: false, // User has sync disabled locally
           },
         };
 
@@ -350,8 +282,8 @@ describe('GlobalConfigReducer', () => {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: null,
-            isEnabled: true,
+            syncProvider: null, // Sync hydration indicator
+            isEnabled: true, // Remote client had sync enabled
           },
         };
 
@@ -362,21 +294,21 @@ describe('GlobalConfigReducer', () => {
           }),
         );
 
-        // Entire sync config preserved from oldState (isEnabled stays false)
-        expect(result.sync).toEqual(oldState.sync);
+        // isEnabled should stay false (preserved from oldState)
+        expect(result.sync.isEnabled).toBe(false);
       });
 
-      it('should use incoming sync on initial load when both have null syncProvider', () => {
-        // First load: oldState is initial (syncProvider: null)
+      it('should use incoming isEnabled on initial load', () => {
+        // First load: oldState is initial (syncProvider: null, isEnabled: false)
         // Since oldState has no local settings (syncProvider: null), use incoming values
-        const oldState = initialGlobalConfigState; // syncProvider: null
+        const oldState = initialGlobalConfigState; // syncProvider: null, isEnabled: false
 
         const snapshotConfig: GlobalConfigState = {
           ...initialGlobalConfigState,
           sync: {
             ...initialGlobalConfigState.sync,
-            syncProvider: null,
-            isEnabled: true,
+            syncProvider: null, // Could be null in edge cases
+            isEnabled: true, // User had sync enabled
           },
         };
 
@@ -388,7 +320,7 @@ describe('GlobalConfigReducer', () => {
         );
 
         // On initial load (no local settings), use incoming values
-        expect(result.sync).toEqual(snapshotConfig.sync);
+        expect(result.sync.isEnabled).toBe(true);
       });
     });
   });

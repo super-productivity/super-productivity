@@ -7,6 +7,7 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { ActionHandlerMap } from './task-shared-helpers';
+import { isDBDateStr } from '../../../util/get-db-date-str';
 
 // =============================================================================
 // ACTION HANDLERS
@@ -22,13 +23,27 @@ const handleSetDeadline = (
   const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
   if (!currentTask) return state;
 
+  // Input validation
+  if (deadlineDay && !isDBDateStr(deadlineDay)) {
+    console.error('Invalid deadlineDay format:', deadlineDay);
+    return state;
+  }
+  if (deadlineWithTime !== undefined && !Number.isFinite(deadlineWithTime)) {
+    console.error('Invalid deadlineWithTime:', deadlineWithTime);
+    return state;
+  }
+  if (deadlineRemindAt !== undefined && !Number.isFinite(deadlineRemindAt)) {
+    console.error('Invalid deadlineRemindAt:', deadlineRemindAt);
+    return state;
+  }
+
   return {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
         id: taskId,
         changes: {
-          // Mutual exclusivity: if deadlineWithTime is set, clear deadlineDay
+          // Mutual exclusivity: deadlineDay and deadlineWithTime cannot coexist
           deadlineDay: deadlineWithTime ? undefined : deadlineDay,
           deadlineWithTime: deadlineDay ? undefined : deadlineWithTime,
           deadlineRemindAt,
@@ -59,6 +74,24 @@ const handleRemoveDeadline = (state: RootState, taskId: string): RootState => {
   };
 };
 
+const handleClearDeadlineReminder = (state: RootState, taskId: string): RootState => {
+  const currentTask = state[TASK_FEATURE_NAME].entities[taskId] as Task;
+  if (!currentTask) return state;
+
+  return {
+    ...state,
+    [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+      {
+        id: taskId,
+        changes: {
+          deadlineRemindAt: undefined,
+        },
+      },
+      state[TASK_FEATURE_NAME],
+    ),
+  };
+};
+
 // =============================================================================
 // META REDUCER
 // =============================================================================
@@ -78,6 +111,12 @@ const createActionHandlers = (state: RootState, action: Action): ActionHandlerMa
   [TaskSharedActions.removeDeadline.type]: () => {
     const { taskId } = action as ReturnType<typeof TaskSharedActions.removeDeadline>;
     return handleRemoveDeadline(state, taskId);
+  },
+  [TaskSharedActions.clearDeadlineReminder.type]: () => {
+    const { taskId } = action as ReturnType<
+      typeof TaskSharedActions.clearDeadlineReminder
+    >;
+    return handleClearDeadlineReminder(state, taskId);
   },
 });
 

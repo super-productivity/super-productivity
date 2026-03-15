@@ -261,36 +261,6 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       expect(yearlyCall!.params.dayAndMonthStr).toBe(expectedDayAndMonthStr);
     });
 
-    it('should use dueWithTime when task has no dueDay', async () => {
-      // May 1st 2026 at noon local time
-      const may1Noon = new Date(2026, 4, 1, 12, 0, 0).getTime();
-      const taskWithDueWithTime = {
-        ...mockTask,
-        dueDay: undefined,
-        dueWithTime: may1Noon,
-      } as unknown as TaskCopy;
-
-      const fixture = await setupTestBed({ task: taskWithDueWithTime });
-      const translateService = TestBed.inject(TranslateService);
-      const instantCalls: { key: string; params: any }[] = [];
-      spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
-        instantCalls.push({ key, params });
-        return key;
-      });
-
-      (fixture.componentInstance as any)._initializeFormConfig();
-
-      const monthlyCall = instantCalls.find(
-        (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
-      );
-
-      const dueDate = new Date(may1Noon);
-      const expectedDayStr = dueDate.toLocaleDateString('en-US', { day: 'numeric' });
-
-      expect(monthlyCall).toBeDefined();
-      expect(monthlyCall!.params.dateDayStr).toBe(expectedDayStr);
-    });
-
     it('should pass today day/month to translate when task has no due date', async () => {
       const taskNoDueDate = {
         ...mockTask,

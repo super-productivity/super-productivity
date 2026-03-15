@@ -290,11 +290,19 @@ export class TaskUiEffects {
               action: {
                 label: T.F.TASK.B.ADD_ALL_TO_TODAY,
                 fn: () => {
-                  this._store$.dispatch(
-                    TaskSharedActions.planTasksForToday({
-                      taskIds: tasks.map((t) => t.id),
-                    }),
-                  );
+                  // Re-select fresh data to avoid stale closure
+                  this._store$
+                    .select(selectUnplannedDeadlineTasksForToday)
+                    .pipe(first())
+                    .subscribe((currentTasks) => {
+                      if (currentTasks.length > 0) {
+                        this._store$.dispatch(
+                          TaskSharedActions.planTasksForToday({
+                            taskIds: currentTasks.map((t) => t.id),
+                          }),
+                        );
+                      }
+                    });
                 },
               },
               hideWhen$: this._store$

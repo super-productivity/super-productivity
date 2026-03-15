@@ -119,7 +119,7 @@ test.describe('Work View Features', () => {
     await expect(page.locator('.page-settings')).toBeVisible({ timeout: 10000 });
 
     // Navigate back
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Verify task is still there

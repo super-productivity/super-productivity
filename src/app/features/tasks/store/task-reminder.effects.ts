@@ -120,13 +120,7 @@ export class TaskReminderEffects {
             }
 
             this._store.dispatch(
-              TaskSharedActions.setDeadline({
-                taskId: task.id,
-                ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
-                ...(task.deadlineWithTime
-                  ? { deadlineWithTime: task.deadlineWithTime }
-                  : {}),
-              }),
+              TaskSharedActions.clearDeadlineReminder({ taskId: task.id }),
             );
           }
         }),
@@ -206,12 +200,23 @@ export class TaskReminderEffects {
   cancelNativeReminderOnUnschedule$ = createEffect(
     () =>
       this._localActions$.pipe(
-        ofType(TaskSharedActions.unscheduleTask, TaskSharedActions.dismissReminderOnly),
+        ofType(
+          TaskSharedActions.unscheduleTask,
+          TaskSharedActions.dismissReminderOnly,
+          TaskSharedActions.removeDeadline,
+          TaskSharedActions.clearDeadlineReminder,
+        ),
         filter(() => this._isAndroidWebView),
-        tap(({ id }) => {
+        tap((action) => {
+          const taskId = 'id' in action ? action.id : action.taskId;
           try {
-            const notificationId = generateNotificationId(id);
+            const notificationId = generateNotificationId(taskId);
             androidInterface.cancelNativeReminder?.(notificationId);
+            // Also cancel the deadline-specific notification if it exists
+            if ('taskId' in action) {
+              const deadlineNotificationId = generateNotificationId(taskId + '_deadline');
+              androidInterface.cancelNativeReminder?.(deadlineNotificationId);
+            }
           } catch (e) {
             console.error('Failed to cancel native reminder:', e);
           }
@@ -257,8 +262,10 @@ export class TaskReminderEffects {
             const deletedTaskIds = [task.id, ...task.subTaskIds];
             deletedTaskIds.forEach((id) => {
               try {
-                const notificationId = generateNotificationId(id);
-                androidInterface.cancelNativeReminder?.(notificationId);
+                androidInterface.cancelNativeReminder?.(generateNotificationId(id));
+                androidInterface.cancelNativeReminder?.(
+                  generateNotificationId(id + '_deadline'),
+                );
               } catch (e) {
                 console.error('Failed to cancel native reminder:', e);
               }
@@ -278,8 +285,10 @@ export class TaskReminderEffects {
           tap(({ taskIds }) => {
             taskIds.forEach((id) => {
               try {
-                const notificationId = generateNotificationId(id);
-                androidInterface.cancelNativeReminder?.(notificationId);
+                androidInterface.cancelNativeReminder?.(generateNotificationId(id));
+                androidInterface.cancelNativeReminder?.(
+                  generateNotificationId(id + '_deadline'),
+                );
               } catch (e) {
                 console.error('Failed to cancel native reminder:', e);
               }
@@ -299,16 +308,20 @@ export class TaskReminderEffects {
           tap(({ tasks }) => {
             tasks.forEach((task) => {
               try {
-                const notificationId = generateNotificationId(task.id);
-                androidInterface.cancelNativeReminder?.(notificationId);
+                androidInterface.cancelNativeReminder?.(generateNotificationId(task.id));
+                androidInterface.cancelNativeReminder?.(
+                  generateNotificationId(task.id + '_deadline'),
+                );
               } catch (e) {
                 console.error('Failed to cancel native reminder:', e);
               }
               // Also cancel for subtasks
               task.subTaskIds?.forEach((subId) => {
                 try {
-                  const notificationId = generateNotificationId(subId);
-                  androidInterface.cancelNativeReminder?.(notificationId);
+                  androidInterface.cancelNativeReminder?.(generateNotificationId(subId));
+                  androidInterface.cancelNativeReminder?.(
+                    generateNotificationId(subId + '_deadline'),
+                  );
                 } catch (e) {
                   console.error('Failed to cancel native reminder:', e);
                 }

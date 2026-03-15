@@ -26,8 +26,9 @@ import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgTemplateOutlet } from '@angular/common';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { Store } from '@ngrx/store';
@@ -55,9 +56,11 @@ const MINUTES_TO_MILLISECONDS = 1000 * 60;
     MatDialogActions,
     MatButton,
     AsyncPipe,
+    NgTemplateOutlet,
     TranslatePipe,
     TagListComponent,
     LocaleDatePipe,
+    LocalDateStrPipe,
   ],
 })
 export class DialogViewTaskRemindersComponent implements OnDestroy {
@@ -87,12 +90,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         first(),
         map((tasks: Task[]) =>
           tasks
-            .filter(
-              (task) =>
-                !!task &&
-                (typeof task.remindAt === 'number' ||
-                  typeof task.deadlineRemindAt === 'number'),
-            )
+            .filter((task) => !!task)
             .map((task): TaskWithReminderData => {
               const isDeadline = this._deadlineReminderTaskIds.has(task.id);
               const remindAt = isDeadline
@@ -122,6 +120,7 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     takeWhile((isMultiple) => !isMultiple, true),
   );
   isMultiple: boolean = false;
+  isAllDeadline: boolean = this.data.reminders.every((r) => r.isDeadlineReminder);
   // eslint-disable-next-line no-mixed-operators
   overdueThreshold = Date.now() - 30 * 60 * 1000; // 30 minutes
 
@@ -135,6 +134,12 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         // Filter out reminders that were already dismissed in this dialog session
         const filtered = reminders.filter((r) => !this._dismissedReminderIds.has(r.id));
         if (filtered.length > 0) {
+          // Update deadline tracking for newly arriving reminders (W2)
+          filtered
+            .filter((r) => r.isDeadlineReminder)
+            .forEach((r) => this._deadlineReminderTaskIds.add(r.id));
+          // Update isAllDeadline dynamically (W7)
+          this.isAllDeadline = filtered.every((r) => r.isDeadlineReminder);
           this.taskIds$.next(filtered.map((r) => r.id));
         } else {
           this._close();
@@ -160,6 +165,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         isClearScheduledTime: true,
       }),
     );
+    if (task.isDeadlineReminder) {
+      this._clearDeadlineReminder(task);
+    }
     this._removeTaskFromList(task.id);
   }
 
@@ -225,6 +233,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         isShowSnack: true,
       }),
     );
+    if (task.isDeadlineReminder) {
+      this._clearDeadlineReminder(task);
+    }
     this._removeTaskFromList(task.id);
   }
 
@@ -245,6 +256,14 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
           }
         }),
     );
+  }
+
+  hasDeadlineTasks(tasks: TaskWithReminderData[]): boolean {
+    return tasks.some((t) => t.isDeadlineReminder);
+  }
+
+  hasScheduleTasks(tasks: TaskWithReminderData[]): boolean {
+    return tasks.some((t) => !t.isDeadlineReminder);
   }
 
   trackById(i: number, task: Task): string {
@@ -277,7 +296,11 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._subs.add(
       this.tasks$.pipe(first()).subscribe((tasks) => {
         if (tasks.length === 1) {
-          this._taskService.setDone(tasks[0].id);
+          const task = tasks[0];
+          this._taskService.setDone(task.id);
+          if (task.isDeadlineReminder) {
+            this._clearDeadlineReminder(task);
+          }
           this._finalizeBulkAction();
         }
       }),
@@ -299,6 +322,10 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       }),
     );
 
+    selectedTasks
+      .filter((t) => t.isDeadlineReminder)
+      .forEach((t) => this._clearDeadlineReminder(t));
+
     this._finalizeBulkAction();
   }
 
@@ -306,7 +333,12 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     this._prepareForBulkAction();
     const tasks = await this._getTasksFromList();
     tasks.forEach((task) => {
-      if (task.projectId || task.parentId || task.tagIds.length > 0) {
+      if (
+        task.isDeadlineReminder ||
+        task.projectId ||
+        task.parentId ||
+        task.tagIds.length > 0
+      ) {
         this.dismiss(task);
       }
     });
@@ -343,6 +375,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
   markTaskAsDone(task: TaskWithReminderData): void {
     this._taskService.setDone(task.id);
+    if (task.isDeadlineReminder) {
+      this._clearDeadlineReminder(task);
+    }
     this._removeTaskFromList(task.id);
   }
 
@@ -355,16 +390,17 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
     const tasks = await this._getTasksFromList();
     tasks.forEach((task) => {
       this._taskService.setDone(task.id);
+      if (task.isDeadlineReminder) {
+        this._clearDeadlineReminder(task);
+      }
     });
     this._finalizeBulkAction();
   }
 
   private _clearDeadlineReminder(task: TaskWithReminderData): void {
     this._store.dispatch(
-      TaskSharedActions.setDeadline({
+      TaskSharedActions.clearDeadlineReminder({
         taskId: task.id,
-        ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
-        ...(task.deadlineWithTime ? { deadlineWithTime: task.deadlineWithTime } : {}),
       }),
     );
   }

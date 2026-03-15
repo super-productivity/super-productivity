@@ -5,7 +5,27 @@
 }
 
 .tasks {
-  margin-bottom: var(--s2);
+  margin-bottom: var(--s);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s-half);
+  margin: 0;
+
+  & + .tasks + & {
+    margin-top: var(--s3);
+  }
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0.85;
+
+  mat-icon {
+    font-size: 14px;
+    height: 14px;
+    width: 14px;
+  }
 }
 
 .task {
