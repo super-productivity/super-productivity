@@ -505,7 +505,7 @@ describe('TaskViewCustomizerService', () => {
     expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
   });
 
-  describe('sortPermanent', () => {
+  describe('saveSort', () => {
     const createTask = (
       id: string,
       title: string,
@@ -532,51 +532,67 @@ describe('TaskViewCustomizerService', () => {
       service.resetAll();
     });
 
-    it('should persist the sorted order for a project context and reset customizer state', async () => {
+    it('should save the sorted order for a project context as default', async () => {
       const taskA = createTask('a', 'Alpha');
       const taskB = createTask('b', 'Bravo');
+
       mockWorkContextService.activeWorkContextId = 'project-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
-      service.setFilter({
+      service.setSort({
+        type: SORT_OPTION_TYPE.name,
+        order: SORT_ORDER.ASC,
+      } as SortOption);
+
+      const expectedFilter = {
         type: FILTER_OPTION_TYPE.tag,
         preset: 'Tag A',
-      } as FilterOption);
-      service.setGroup({ type: GROUP_OPTION_TYPE.project } as GroupOption);
+      } as FilterOption;
+      service.setFilter(expectedFilter);
 
-      await service.sortPermanent({ type: SORT_OPTION_TYPE.name } as SortOption);
+      const expectedGroup = { type: GROUP_OPTION_TYPE.project } as GroupOption;
+      service.setGroup(expectedGroup);
+
+      await service.saveSort();
 
       expect(projectUpdateSpy).toHaveBeenCalledTimes(1);
       expect(projectUpdateSpy).toHaveBeenCalledWith('project-sort', {
         taskIds: ['a', 'b'],
       });
       expect(tagUpdateSpy).not.toHaveBeenCalled();
+
+      // Sort should set to default after saving, as the order is now persisted in the project
       expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
-      expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
-      expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
+
+      // Filter and group should NOT be reset
+      expect(service.selectedFilter()).toEqual(expectedFilter);
+      expect(service.selectedGroup()).toEqual(expectedGroup);
     });
 
-    it('should persist the sorted order for a tag context', async () => {
+    it('should save the sorted order for a tag context as default', async () => {
       const taskA = createTask('a', 'Alpha', null);
       const taskB = createTask('b', 'Bravo', null);
+
       mockWorkContextService.activeWorkContextId = 'tag-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.TAG;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
       mockWorkContextService.undoneTasks$ = of<TaskWithSubTasks[]>([taskB, taskA]);
 
-      await service.sortPermanent({ type: SORT_OPTION_TYPE.name } as SortOption);
+      service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
+
+      await service.saveSort();
 
       expect(tagUpdateSpy).toHaveBeenCalledTimes(1);
       expect(tagUpdateSpy).toHaveBeenCalledWith('tag-sort', {
         taskIds: ['a', 'b'],
       });
       expect(projectUpdateSpy).not.toHaveBeenCalled();
+      expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
     });
 
-    it('should skip persistence when default sorting is requested but still reset', async () => {
+    it('should skip saving when no tasks available', async () => {
       mockWorkContextService.activeWorkContextId = 'project-sort';
       mockWorkContextService.activeWorkContextType = WorkContextType.PROJECT;
       mockWorkContextService.mainListTasks$ = of<TaskWithSubTasks[]>([]);
@@ -584,13 +600,11 @@ describe('TaskViewCustomizerService', () => {
 
       service.setSort({ type: SORT_OPTION_TYPE.name } as SortOption);
 
-      await service.sortPermanent(null);
+      await service.saveSort();
 
       expect(projectUpdateSpy).not.toHaveBeenCalled();
       expect(tagUpdateSpy).not.toHaveBeenCalled();
       expect(service.selectedSort()).toEqual(DEFAULT_OPTIONS.sort);
-      expect(service.selectedGroup()).toEqual(DEFAULT_OPTIONS.group);
-      expect(service.selectedFilter()).toEqual(DEFAULT_OPTIONS.filter);
     });
   });
 
