@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Здесь вы можете настроить Super Productivity, чтобы отображать открытые проблемы GitHub для определенного репозитория на панели создания задач в представлении ежедневного планирования. Они будут перечислены в качестве предложений и предоставят ссылку на проблему, а также дополнительную информацию о ней.</p><p>Кроме того, вы можете автоматически добавлять и синхронизировать все открытые проблемы в своей невыполненной задаче.</p><p>Чтобы получить доступ к закрытым репозиториям, вы можете предоставить токен доступа. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Более подробную информацию о его возможностях можно найти здесь</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: ошибка сопоставления данных. Корректно ли название репозитория?",
-    "ERR_UNKNOWN": "GitHub: неизвестная ошибка {{statusCode}} {{errorMsg}}",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: неизвестная ошибка {{statusCode}} {{errorMsg}}"
   }
 }

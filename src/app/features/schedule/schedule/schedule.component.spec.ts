@@ -11,6 +11,7 @@ import { of } from 'rxjs';
 import { provideMockStore } from '@ngrx/store/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { SCHEDULE_CONSTANTS } from '../schedule.constants';
+import { GlobalConfigService } from '../../config/global-config.service';
 
 describe('ScheduleComponent', () => {
   let component: ScheduleComponent;
@@ -20,7 +21,7 @@ describe('ScheduleComponent', () => {
   let mockScheduleService: jasmine.SpyObj<ScheduleService>;
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockGlobalTrackingIntervalService: jasmine.SpyObj<GlobalTrackingIntervalService>;
-  let mockDateAdapter: jasmine.SpyObj<DateAdapter<any>>;
+  let mockGlobalConfigService: jasmine.SpyObj<GlobalConfigService>;
 
   beforeEach(async () => {
     // Create mock services
@@ -73,8 +74,10 @@ describe('ScheduleComponent', () => {
       },
     );
 
-    mockDateAdapter = jasmine.createSpyObj('DateAdapter', ['getFirstDayOfWeek']);
-    mockDateAdapter.getFirstDayOfWeek.and.returnValue(0);
+    mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
+      localization: signal({ firstDayOfWeek: 1 }),
+      cfg: signal(undefined),
+    });
 
     await TestBed.configureTestingModule({
       imports: [ScheduleComponent, TranslateModule.forRoot()],
@@ -88,7 +91,8 @@ describe('ScheduleComponent', () => {
           provide: GlobalTrackingIntervalService,
           useValue: mockGlobalTrackingIntervalService,
         },
-        { provide: DateAdapter, useValue: mockDateAdapter },
+        { provide: GlobalConfigService, useValue: mockGlobalConfigService },
+        { provide: DateAdapter, useValue: { getFirstDayOfWeek: () => 1 } },
       ],
     }).compileComponents();
 

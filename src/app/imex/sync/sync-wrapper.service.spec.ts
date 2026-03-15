@@ -81,6 +81,7 @@ describe('SyncWrapperService', () => {
       },
     );
     mockProviderManager.clearAuthCredentials.and.returnValue(Promise.resolve());
+    mockProviderManager.getProviderById.and.returnValue(Promise.resolve(undefined));
     mockProviderManager.getLastSyncedProviderId.and.returnValue(null);
     mockProviderManager.getActiveProvider.and.returnValue({
       id: SyncProviderId.SuperSync,

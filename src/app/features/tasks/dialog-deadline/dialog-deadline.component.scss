@@ -1,0 +1,136 @@
+@use '../../../../styles/_globals.scss' as *;
+
+:host,
+:host * {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:host {
+  flex-direction: column;
+  justify-content: stretch;
+  align-items: stretch;
+  user-select: none;
+  width: 400px;
+  max-width: 100%;
+  display: block;
+
+  :host-context([dir='rtl']) {
+    direction: rtl;
+  }
+
+  mat-form-field {
+    width: 100%;
+  }
+
+  ::ng-deep {
+    .mat-calendar-header {
+      padding-top: 0;
+    }
+
+    .mat-calendar-body-cell-content {
+      background: transparent !important;
+    }
+
+    .mat-calendar-body-cell:focus .mat-calendar-body-cell-content {
+      outline: 2px solid var(--c-accent);
+    }
+
+    .mat-calendar-body-selected {
+      background: var(--c-primary) !important;
+    }
+
+    .mat-calendar-controls {
+      margin-top: 8px;
+      margin-bottom: 8px;
+    }
+  }
+}
+
+.form-ctrl-wrapper {
+  margin: 16px 16px 0;
+}
+
+mat-dialog-content {
+  position: relative;
+  padding: 0 !important;
+  max-height: calc(
+    100vh - 64px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  ) !important;
+}
+
+.press-enter-msg {
+  text-align: center;
+  font-weight: bold;
+  padding: 4px 12px;
+  position: absolute;
+  left: 50%;
+  z-index: 11;
+  box-shadow: var(--whiteframe-shadow-1dp);
+  border-radius: 8px;
+  margin-top: -12px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+
+  background: var(--bg-lighter);
+}
+
+.quick-access {
+  display: flex;
+  justify-content: space-evenly;
+  @include extraBorder('-bottom');
+  height: 48px;
+
+  > button {
+    height: 48px;
+    flex-grow: 1;
+    border-radius: var(--card-border-radius) !important;
+
+    ::ng-deep .mat-mdc-button-persistent-ripple {
+      border-radius: var(--card-border-radius) !important;
+    }
+  }
+
+  button + button {
+    @include extraBorder('-left');
+  }
+}
+
+:host ::ng-deep mat-dialog-actions {
+  padding: 0 0 16px 0 !important;
+}
+
+.deadline-actions {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  margin: 0 auto;
+  padding-bottom: 8px;
+}
+
+.deadline-actions button {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 38px;
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+}
+
+.deadline-actions button:not(:last-child) {
+  margin-right: 2px;
+}
+
+.dialog-cancel-btn {
+  display: block;
+  width: 100%;
+}
+
+.deadline-actions button,
+.dialog-cancel-btn {
+  white-space: normal;
+  word-break: break-word;
+  text-align: center;
+}

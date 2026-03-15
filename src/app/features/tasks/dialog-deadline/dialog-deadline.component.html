@@ -1,0 +1,122 @@
+<div class="quick-access">
+  <button
+    mat-icon-button
+    (click)="quickAccessBtnClick($event, 1)"
+    [matTooltip]="T.F.TASK.D_DEADLINE.QA_TODAY | translate"
+  >
+    <mat-icon>wb_sunny</mat-icon>
+  </button>
+
+  <button
+    mat-icon-button
+    (click)="quickAccessBtnClick($event, 2)"
+    [matTooltip]="T.F.TASK.D_DEADLINE.QA_TOMORROW | translate"
+  >
+    <mat-icon svgIcon="tomorrow"></mat-icon>
+  </button>
+  <button
+    mat-icon-button
+    (click)="quickAccessBtnClick($event, 3)"
+    [matTooltip]="T.F.TASK.D_DEADLINE.QA_NEXT_WEEK | translate"
+  >
+    <mat-icon svgIcon="next_week"></mat-icon>
+  </button>
+  <button
+    mat-icon-button
+    (click)="quickAccessBtnClick($event, 4)"
+    [matTooltip]="T.F.TASK.D_DEADLINE.QA_NEXT_MONTH | translate"
+  >
+    <mat-icon>bedtime</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content>
+  @if (isConfigReady()) {
+    <mat-calendar
+      (keydown)="onKeyDownOnCalendar($event)"
+      [selected]="selectedDate"
+      (selectedChange)="dateSelected($event)"
+    ></mat-calendar>
+  }
+
+  @if (isShowEnterMsg) {
+    <div
+      class="press-enter-msg"
+      @fade
+    >
+      {{ T.DATETIME_SCHEDULE.PRESS_ENTER_AGAIN | translate }}
+    </div>
+  }
+
+  <div class="form-ctrl-wrapper">
+    <mat-form-field class="example-full-width">
+      <mat-label>Time</mat-label>
+      <mat-icon matPrefix>schedule</mat-icon>
+      <input
+        type="time"
+        (focus)="onTimeFocus()"
+        [(ngModel)]="selectedTime"
+        step="60"
+        matInput
+        (keydown)="onTimeKeyDown($event)"
+      />
+      @if (selectedTime) {
+        <mat-icon
+          style="cursor: pointer"
+          matSuffix
+          (click)="onTimeClear($event)"
+          >close
+        </mat-icon>
+      }
+    </mat-form-field>
+
+    @if (selectedTime) {
+      <mat-form-field [@expandFade]>
+        <mat-icon matPrefix>alarm</mat-icon>
+        <mat-label>{{ T.F.TASK.D_DEADLINE.REMIND_AT | translate }}</mat-label>
+        <mat-select
+          [(ngModel)]="selectedReminderCfgId"
+          name="type"
+          required="true"
+        >
+          @for (remindOption of reminderOptions; track remindOption.value) {
+            <mat-option [value]="remindOption.value">
+              {{ remindOption.label | translate }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <mat-dialog-actions align="start">
+      <div class="deadline-actions">
+        @if (hasExistingDeadline) {
+          <button
+            (click)="remove()"
+            color="warn"
+            mat-stroked-button
+          >
+            <mat-icon>flag_circle</mat-icon>
+            {{ T.F.TASK.D_DEADLINE.REMOVE_DEADLINE | translate }}
+          </button>
+        }
+        <button
+          color="primary"
+          mat-stroked-button
+          (click)="submit()"
+        >
+          <mat-icon>flag</mat-icon>
+          {{ T.F.TASK.D_DEADLINE.SET_DEADLINE | translate }}
+        </button>
+      </div>
+      <button
+        class="dialog-cancel-btn"
+        mat-stroked-button
+        color="default"
+        (click)="close()"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+    </mat-dialog-actions>
+  </div>
+</mat-dialog-content>

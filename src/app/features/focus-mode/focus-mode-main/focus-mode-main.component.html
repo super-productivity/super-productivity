@@ -259,20 +259,22 @@
           </a>
         }
 
-        <button
-          (click)="isFocusNotes.set(!isFocusNotes())"
-          [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
-          class="ico-btn show-additional-info-btn"
-          color=""
-          mat-icon-button
-        >
-          @if (!isFocusNotes()) {
-            <mat-icon>chat</mat-icon>
-          }
-          @if (isFocusNotes()) {
-            <mat-icon>expand_less</mat-icon>
-          }
-        </button>
+        @if (ct) {
+          <button
+            (click)="isFocusNotes.set(!isFocusNotes())"
+            [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
+            class="ico-btn show-additional-info-btn"
+            color=""
+            mat-icon-button
+          >
+            @if (!isFocusNotes()) {
+              <mat-icon>chat</mat-icon>
+            }
+            @if (isFocusNotes()) {
+              <mat-icon>expand_less</mat-icon>
+            }
+          </button>
+        }
       </section>
     }
   </div>

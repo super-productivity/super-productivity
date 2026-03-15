@@ -37,7 +37,6 @@ import {
 import { isInputElement } from '../../util/dom-element';
 import { BottomPanelStateService } from '../../core-ui/bottom-panel-state.service';
 import { slideRightPanelAni } from './slide-right-panel-out.ani';
-import { BottomPanelContainerComponent } from '../bottom-panel/bottom-panel-container.component';
 import { MatBottomSheet, MatBottomSheetRef } from '@angular/material/bottom-sheet';
 import { PanelContentService } from '../panels/panel-content.service';
 // Right panel resize constants
@@ -155,7 +154,7 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
   private readonly _boundOnPointerUp = this._handlePointerUp.bind(this);
   private readonly _boundOnWindowResize = this._throttledWindowResize.bind(this);
   private _bottomSheet = inject(MatBottomSheet);
-  private _bottomSheetRef: MatBottomSheetRef<BottomPanelContainerComponent> | null = null;
+  private _bottomSheetRef: MatBottomSheetRef | null = null;
   private _bottomSheetSubscription: Subscription | null = null;
 
   // Track listener state to prevent double attachment/removal
@@ -218,21 +217,29 @@ export class RightPanelComponent implements AfterViewInit, OnDestroy {
         if (hasContent && !this._bottomSheetRef) {
           // Open bottom sheet
 
-          this._bottomSheetRef = this._bottomSheet.open(BottomPanelContainerComponent, {
-            hasBackdrop: true,
-            closeOnNavigation: false,
-            panelClass: 'bottom-panel-sheet',
-            // Let CSS handle positioning and height
-          });
+          import('../bottom-panel/bottom-panel-container.component').then((m) => {
+            // Re-check: conditions may have changed while chunk was loading
+            if (this._bottomSheetRef) {
+              return;
+            }
+            this._bottomSheetRef = this._bottomSheet.open(
+              m.BottomPanelContainerComponent,
+              {
+                hasBackdrop: true,
+                closeOnNavigation: false,
+                panelClass: 'bottom-panel-sheet',
+              },
+            );
 
-          // Handle bottom sheet dismissal
-          this._bottomSheetSubscription = this._bottomSheetRef
-            .afterDismissed()
-            .subscribe(() => {
-              this._bottomSheetRef = null;
-              this._bottomSheetSubscription = null;
-              this.close();
-            });
+            // Handle bottom sheet dismissal
+            this._bottomSheetSubscription = this._bottomSheetRef
+              .afterDismissed()
+              .subscribe(() => {
+                this._bottomSheetRef = null;
+                this._bottomSheetSubscription = null;
+                this.close();
+              });
+          });
         } else if (!hasContent && this._bottomSheetRef) {
           // Close bottom sheet
           this._bottomSheetRef.dismiss();

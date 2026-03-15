@@ -7,7 +7,6 @@ import { MatDialog } from '@angular/material/dialog';
 import { Task } from '../../../tasks/task.model';
 import { RedmineCfg } from './redmine.model';
 import { EMPTY, Observable, of } from 'rxjs';
-import { DialogRedmineTrackTimeComponent } from './dialog-redmine-track-time/dialog-redmine-track-time.component';
 import { RedmineApiService } from './redmine-api.service';
 import { TaskService } from '../../../tasks/task.service';
 import { IssueProviderService } from '../../issue-provider.service';
@@ -81,7 +80,9 @@ export class RedmineEffects {
     this._redmineApiService
       .getById$(issueId, redmineCfg)
       .pipe(take(1))
-      .subscribe((redmineIssue) => {
+      .subscribe(async (redmineIssue) => {
+        const { DialogRedmineTrackTimeComponent } =
+          await import('./dialog-redmine-track-time/dialog-redmine-track-time.component');
         this._matDialog.open(DialogRedmineTrackTimeComponent, {
           restoreFocus: true,
           data: {

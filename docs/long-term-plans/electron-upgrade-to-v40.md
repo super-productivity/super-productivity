@@ -1,5 +1,7 @@
 # Plan: Upgrade Electron from 37.10.3 to 40
 
+> **Status: Planned**
+
 ## Context
 
 Super Productivity ships on Linux as AppImage, deb, snap, rpm, and has a community Flatpak on Flathub. Two previous upgrade attempts (Electron 38 in Oct 2025, Electron 39 in Dec 2025) both failed and were reverted due to **Snap crashes on Wayland**.

@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Editar anexo",
         "LABELS": {
           "IMG": "Imagem",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Selecione um tipo",
         "TYPES": {
@@ -731,8 +731,8 @@
       },
       "FORM_THEME": {
         "HELP": "Configurações de tema para seu projeto.",
-        "L_BACKGROUND_IMAGE_DARK": "Url da imagem de fundo (tema escuro)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Url da imagem de fundo (tema claro)",
+        "L_BACKGROUND_IMAGE_DARK": "URL da imagem de fundo (tema escuro)",
+        "L_BACKGROUND_IMAGE_LIGHT": "URL da imagem de fundo (tema claro)",
         "L_COLOR_ACCENT": "Cor de destaque",
         "L_COLOR_PRIMARY": "Cor primária",
         "L_COLOR_WARN": "Cor de aviso/erro",

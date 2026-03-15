@@ -30,6 +30,11 @@
 
   &-title {
     margin-bottom: var(--s);
+    cursor: pointer;
+
+    .collapsible-expand-icon {
+      vertical-align: middle;
+    }
 
     button {
       margin-left: var(--s);

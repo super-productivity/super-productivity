@@ -294,27 +294,21 @@ test.describe('@supersync SuperSync Advanced', () => {
       // A syncs first (uploads DELETE)
       await clientA.sync.syncAndWait();
 
-      // B syncs (downloads DELETE, has local UPDATE) -> potential conflict
-      // The conflict resolution may show a dialog or auto-resolve
+      // B syncs (downloads DELETE, has local UPDATE) -> conflict resolved by LWW
       await clientB.sync.syncAndWait();
 
-      // Final sync to converge
+      // Final sync roundtrips to ensure convergence
       await clientA.sync.syncAndWait();
       await clientB.sync.syncAndWait();
+      await clientA.sync.syncAndWait();
 
-      // Verify consistent state
-      // Both clients should have the same view (either both have task or neither)
-      const hasTaskA =
-        (await clientA.page.locator(`task:has-text("${taskName}")`).count()) > 0;
-      const hasTaskB =
-        (await clientB.page.locator(`task:has-text("${taskName}")`).count()) > 0;
+      // Delete wins over update in LWW resolution — task should be gone on both
+      const taskOnA = clientA.page.locator(`task:has-text("${taskName}")`);
+      const taskOnB = clientB.page.locator(`task:has-text("${taskName}")`);
+      await expect(taskOnA).not.toBeVisible({ timeout: 5000 });
+      await expect(taskOnB).not.toBeVisible({ timeout: 5000 });
 
-      // State should be consistent (doesn't matter which wins, just that they agree)
-      expect(hasTaskA).toBe(hasTaskB);
-
-      console.log(
-        `[ConflictTest] ✓ Concurrent Delete/Update resolved consistently (task ${hasTaskA ? 'restored' : 'deleted'})`,
-      );
+      console.log('[ConflictTest] ✓ Concurrent Delete/Update resolved: delete wins');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

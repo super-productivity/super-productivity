@@ -216,10 +216,7 @@
 .drag-over-msg {
   pointer-events: none;
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  bottom: 0;
+  inset: 0;
   opacity: 1;
   justify-content: center;
   align-items: center;
@@ -530,7 +527,6 @@ progress-bar {
 .isPreventPointerEventsWhilePanning {
   * {
     user-select: none !important;
-    -webkit-user-select: none !important; /* Safari */
     pointer-events: none !important;
     transition: none !important;
   }
@@ -557,11 +553,19 @@ progress-bar {
 
   .title {
     font-size: 12px;
-    text-overflow: ellipsis;
+    @include truncateText();
   }
 }
 
 .schedule-btn {
+  position: relative;
+
+  &.mat-warn mat-icon {
+    color: var(--c-warn) !important;
+  }
+}
+
+.deadline-btn {
   position: relative;
 
   &.mat-warn mat-icon {

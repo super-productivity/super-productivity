@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { Task } from '../../tasks/task.model';
+import { Task, TaskReminderOptionId } from '../../tasks/task.model';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -25,8 +25,9 @@ import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { UntypedFormGroup } from '@angular/forms';
 import {
   TASK_REPEAT_CFG_ADVANCED_FORM_CFG,
-  TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS,
+  TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG,
 } from './task-repeat-cfg-form.const';
+import { buildRepeatQuickSettingOptions } from './build-repeat-quick-setting-options';
 import { T } from '../../../t.const';
 import { TagService } from '../../tag/tag.service';
 import { unique } from '../../../util/unique';
@@ -49,6 +50,7 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DEFAULT_GLOBAL_CONFIG } from '../../config/default-global-config.const';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
+import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 
 // TASK_REPEAT_CFG_FORM_CFG
 @Component({
@@ -67,6 +69,7 @@ import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-h
     MatButton,
     MatIcon,
     RepeatTaskHeatmapComponent,
+    CollapsibleComponent,
   ],
 })
 export class DialogEditTaskRepeatCfgComponent {
@@ -82,6 +85,7 @@ export class DialogEditTaskRepeatCfgComponent {
     task?: Task;
     repeatCfg?: TaskRepeatCfg;
     targetDate?: string;
+    defaultRemindOption?: TaskReminderOptionId;
   }>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
@@ -105,10 +109,8 @@ export class DialogEditTaskRepeatCfgComponent {
     return this._data.repeatCfg?.id || this._data.task?.repeatCfgId || null;
   });
 
-  TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS = signal<FormlyFieldConfig[]>([]);
-  TASK_REPEAT_CFG_ADVANCED_FORM_CFG = signal<FormlyFieldConfig[]>(
-    TASK_REPEAT_CFG_ADVANCED_FORM_CFG,
-  );
+  essentialFormFields = signal<FormlyFieldConfig[]>([]);
+  advancedFormFields = signal<FormlyFieldConfig[]>(TASK_REPEAT_CFG_ADVANCED_FORM_CFG);
 
   formGroup1 = signal(new UntypedFormGroup({}));
   formGroup2 = signal(new UntypedFormGroup({}));
@@ -169,10 +171,13 @@ export class DialogEditTaskRepeatCfgComponent {
         : undefined;
       return {
         ...DEFAULT_TASK_REPEAT_CFG,
-        startDate: getDbDateStr(this._data.task.dueWithTime || undefined),
+        startDate:
+          this._data.task.dueDay ??
+          getDbDateStr(this._data.task.dueWithTime || undefined),
         startTime,
         remindAt: startTime
-          ? (this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
+          ? (this._data.defaultRemindOption ??
+            this._globalConfigService.cfg()?.reminder.defaultTaskRemindOption ??
             DEFAULT_GLOBAL_CONFIG.reminder.defaultTaskRemindOption!)
           : undefined,
         title: this._data.task.title,
@@ -187,54 +192,50 @@ export class DialogEditTaskRepeatCfgComponent {
 
   private _initializeFormConfig(): void {
     const _locale = this._dateTimeFormatService.currentLocale();
-    const today = new Date();
-    const weekdayStr = today.toLocaleDateString(_locale, {
-      weekday: 'long',
-    });
-    const dateDayStr = today.toLocaleDateString(_locale, {
-      day: 'numeric',
-    });
-    const dayAndMonthStr = today.toLocaleDateString(_locale, {
-      day: 'numeric',
-      month: 'numeric',
-    });
+    const translateService = this._translateService;
 
-    const formConfigBeforeTags = [...TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS];
-    (formConfigBeforeTags[1] as any).templateOptions.options = [
-      {
-        value: 'DAILY',
-        label: this._translateService.instant(T.F.TASK_REPEAT.F.Q_DAILY),
-      },
-      {
-        value: 'MONDAY_TO_FRIDAY',
-        label: this._translateService.instant(T.F.TASK_REPEAT.F.Q_MONDAY_TO_FRIDAY),
-      },
-      {
-        value: 'WEEKLY_CURRENT_WEEKDAY',
-        label: this._translateService.instant(
-          T.F.TASK_REPEAT.F.Q_WEEKLY_CURRENT_WEEKDAY,
-          { weekdayStr },
-        ),
-      },
-      {
-        value: 'MONTHLY_CURRENT_DATE',
-        label: this._translateService.instant(T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE, {
-          dateDayStr,
-        }),
-      },
-      {
-        value: 'YEARLY_CURRENT_DATE',
-        label: this._translateService.instant(T.F.TASK_REPEAT.F.Q_YEARLY_CURRENT_DATE, {
-          dayAndMonthStr,
-        }),
-      },
-      {
-        value: 'CUSTOM',
-        label: this._translateService.instant(T.F.TASK_REPEAT.F.Q_CUSTOM, {}),
-      },
-    ];
+    const buildOptions = (refDate: Date): { value: string; label: string }[] =>
+      buildRepeatQuickSettingOptions(refDate, _locale, translateService);
 
-    this.TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS.set(formConfigBeforeTags);
+    const formConfig = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.map((field) => ({
+      ...field,
+    }));
+
+    // Deep-clone the quickSetting field to avoid mutating the shared constant
+    const quickSettingIdx = formConfig.findIndex((f) => f.key === 'quickSetting');
+    if (quickSettingIdx === -1) {
+      throw new Error(
+        'quickSetting field not found in TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG',
+      );
+    }
+    const quickSettingField: FormlyFieldConfig = {
+      ...formConfig[quickSettingIdx],
+      templateOptions: { ...formConfig[quickSettingIdx].templateOptions },
+    };
+    formConfig[quickSettingIdx] = quickSettingField;
+
+    // Set initial options
+    quickSettingField.templateOptions!.options = buildOptions(this._getReferenceDate());
+
+    // Memoize to avoid rebuilding options on every formly change cycle
+    let lastStartDate: string | undefined;
+    let cachedOptions: { value: string; label: string }[];
+
+    // Update options reactively when startDate changes
+    quickSettingField.expressionProperties = {
+      ...quickSettingField.expressionProperties,
+      ['templateOptions.options']: (model: Record<string, unknown>) => {
+        const sd = model['startDate'] as string | undefined;
+        if (sd !== lastStartDate || !cachedOptions) {
+          lastStartDate = sd;
+          const refDate = sd ? dateStrToUtcDate(sd) : this._getReferenceDate();
+          cachedOptions = buildOptions(refDate);
+        }
+        return cachedOptions;
+      },
+    };
+
+    this.essentialFormFields.set(formConfig);
   }
 
   save(): void {
@@ -373,43 +374,29 @@ export class DialogEditTaskRepeatCfgComponent {
     this.repeatCfgInitial.set({ ...repeatCfg });
   }
 
+  private _getReferenceDate(): Date {
+    if (this._data.task?.dueDay) {
+      return dateStrToUtcDate(this._data.task.dueDay);
+    }
+    if (this._data.repeatCfg?.startDate) {
+      return dateStrToUtcDate(this._data.repeatCfg.startDate);
+    }
+    return new Date();
+  }
+
   private _processQuickSettingForDate<
-    T extends { quickSetting?: string; startDate?: string },
-  >(cfg: T): T {
-    let processedCfg = { ...cfg };
-
-    if (processedCfg.quickSetting === 'WEEKLY_CURRENT_WEEKDAY') {
-      if (!processedCfg.startDate) {
-        // Gracefully fall back to CUSTOM when data is incomplete
-        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
-      }
-      if (new Date(processedCfg.startDate).getDay() !== new Date().getDay()) {
-        processedCfg = { ...processedCfg, quickSetting: 'CUSTOM' };
+    TCfg extends { quickSetting?: string; startDate?: string },
+  >(cfg: TCfg): TCfg {
+    if (
+      cfg.quickSetting === 'WEEKLY_CURRENT_WEEKDAY' ||
+      cfg.quickSetting === 'YEARLY_CURRENT_DATE' ||
+      cfg.quickSetting === 'MONTHLY_CURRENT_DATE'
+    ) {
+      if (!cfg.startDate) {
+        return { ...cfg, quickSetting: 'CUSTOM' };
       }
     }
-    if (processedCfg.quickSetting === 'YEARLY_CURRENT_DATE') {
-      if (!processedCfg.startDate) {
-        // Gracefully fall back to CUSTOM when data is incomplete
-        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
-      }
-      if (
-        new Date(processedCfg.startDate).getDate() !== new Date().getDate() ||
-        new Date(processedCfg.startDate).getMonth() !== new Date().getMonth()
-      ) {
-        processedCfg = { ...processedCfg, quickSetting: 'CUSTOM' };
-      }
-    }
-    if (processedCfg.quickSetting === 'MONTHLY_CURRENT_DATE') {
-      if (!processedCfg.startDate) {
-        // Gracefully fall back to CUSTOM when data is incomplete
-        return { ...processedCfg, quickSetting: 'CUSTOM' } as T;
-      }
-      if (new Date(processedCfg.startDate).getDate() !== new Date().getDate()) {
-        processedCfg = { ...processedCfg, quickSetting: 'CUSTOM' };
-      }
-    }
-
-    return processedCfg;
+    return cfg;
   }
 
   private _checkCanRemoveInstance(): void {

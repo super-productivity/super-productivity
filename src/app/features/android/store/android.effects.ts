@@ -82,6 +82,54 @@ export class AndroidEffects {
       { dispatch: false },
     );
 
+  // Drain reminder done/snooze/tap queues on resume (warm start)
+  checkReminderQueuesOnResume$ =
+    IS_ANDROID_WEB_VIEW &&
+    createEffect(
+      () =>
+        androidInterface.onResume$.pipe(
+          tap(() => {
+            try {
+              const doneQueue = androidInterface.getReminderDoneQueue?.();
+              if (doneQueue) {
+                const taskIds: string[] = JSON.parse(doneQueue);
+                DroidLog.log('Resume: found reminder done queue', taskIds);
+                for (const id of taskIds) {
+                  androidInterface.onReminderDone$.next(id);
+                }
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder done queue on resume', e);
+            }
+
+            try {
+              const snoozeQueue = androidInterface.getReminderSnoozeQueue?.();
+              if (snoozeQueue) {
+                const events: { taskId: string; newRemindAt: number }[] =
+                  JSON.parse(snoozeQueue);
+                DroidLog.log('Resume: found reminder snooze queue', events);
+                for (const event of events) {
+                  androidInterface.onReminderSnooze$.next(event);
+                }
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder snooze queue on resume', e);
+            }
+
+            try {
+              const tapTaskId = androidInterface.getReminderTapQueue?.();
+              if (tapTaskId) {
+                DroidLog.log('Resume: found reminder tap queue', tapTaskId);
+                androidInterface.onReminderTap$.next(tapTaskId);
+              }
+            } catch (e) {
+              DroidLog.err('Failed to process reminder tap queue on resume', e);
+            }
+          }),
+        ),
+      { dispatch: false },
+    );
+
   // Check for pending share data on resume (catches app killed after receiving share)
   checkPendingShareOnResume$ =
     IS_ANDROID_WEB_VIEW &&

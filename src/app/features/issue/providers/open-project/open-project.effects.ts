@@ -2,14 +2,21 @@ import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import { concatMap, filter, map, take, tap, withLatestFrom } from 'rxjs/operators';
+import {
+  concatMap,
+  filter,
+  map,
+  switchMap,
+  take,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
 import { select, Store } from '@ngrx/store';
 import { OPEN_PROJECT_TYPE } from '../../issue.const';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { OpenProjectCfg, OpenProjectTransitionOption } from './open-project.model';
-import { EMPTY, Observable, of, timer } from 'rxjs';
-import { DialogOpenProjectTrackTimeComponent } from './open-project-view-components/dialog-open-project-track-time/dialog-open-project-track-time.component';
+import { EMPTY, from, Observable, of, timer } from 'rxjs';
 import { OpenProjectApiService } from './open-project-api.service';
 import { TaskService } from '../../../tasks/task.service';
 import { selectCurrentTaskParentOrCurrent } from 'src/app/features/tasks/store/task.selectors';
@@ -19,7 +26,6 @@ import { SnackService } from 'src/app/core/snack/snack.service';
 import { OpenProjectWorkPackage } from './open-project-issue.model';
 import { IssueService } from 'src/app/features/issue/issue.service';
 import { T } from 'src/app/t.const';
-import { DialogOpenProjectTransitionComponent } from './open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component';
 import { IssueProviderService } from '../../issue-provider.service';
 import { assertTruthy } from '../../../../util/assert-truthy';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
@@ -163,7 +169,9 @@ export class OpenProjectEffects {
     this._openProjectApiService
       .getById$(workPackageId, openProjectCfg)
       .pipe(take(1))
-      .subscribe((workPackage) => {
+      .subscribe(async (workPackage) => {
+        const { DialogOpenProjectTrackTimeComponent } =
+          await import('./open-project-view-components/dialog-open-project-track-time/dialog-open-project-track-time.component');
         this._matDialog.open(DialogOpenProjectTrackTimeComponent, {
           restoreFocus: true,
           data: {
@@ -261,15 +269,17 @@ export class OpenProjectEffects {
     localState: IssueLocalState,
     task: Task,
   ): Observable<unknown> {
-    return this._matDialog
-      .open(DialogOpenProjectTransitionComponent, {
-        restoreFocus: true,
-        data: {
-          issue,
-          localState,
-          task,
-        },
-      })
-      .afterClosed();
+    return from(
+      import('./open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component'),
+    ).pipe(
+      switchMap(({ DialogOpenProjectTransitionComponent }) =>
+        this._matDialog
+          .open(DialogOpenProjectTransitionComponent, {
+            restoreFocus: true,
+            data: { issue, localState, task },
+          })
+          .afterClosed(),
+      ),
+    );
   }
 }

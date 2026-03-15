@@ -25,6 +25,7 @@ describe('PlannerComponent', () => {
     timeEstimate: 0,
     timeLimit: 0,
     itemsTotal: taskCount,
+    deadlineTasks: [],
     noStartTimeRepeatProjections: [],
     allDayEvents: [],
     scheduledIItems: [],

@@ -37,7 +37,7 @@ test.describe('Context Switching', () => {
 
     // Switch to second project
     await projectPage.navigateToProjectByName(project2);
-    await page.waitForTimeout(500);
+    await workViewPage.waitForTaskList();
 
     // Task from project 1 should not be visible
     await expect(task1).not.toBeVisible();
@@ -49,7 +49,7 @@ test.describe('Context Switching', () => {
 
     // Switch back to project 1
     await projectPage.navigateToProjectByName(project1);
-    await page.waitForTimeout(500);
+    await workViewPage.waitForTaskList();
 
     // Task from project 1 should be visible again
     await expect(task1).toBeVisible();
@@ -92,19 +92,17 @@ test.describe('Context Switching', () => {
     const isExpanded = await tagsGroupBtn.getAttribute('aria-expanded');
     if (isExpanded !== 'true') {
       await tagsGroupBtn.click();
-      await page.waitForTimeout(500);
     }
 
-    // Click on the tag
+    // Click on the tag - wait for it to appear after expansion
     const tagTreeItem = tagPage.tagsGroup
       .locator('[role="treeitem"]')
       .filter({ hasText: tagName })
       .first();
+    await tagTreeItem.waitFor({ state: 'visible', timeout: 5000 });
     await tagTreeItem.click();
-    await page.waitForTimeout(500);
-
-    // Verify URL changed to tag view
     await expect(page).toHaveURL(/tag/);
+    await workViewPage.waitForTaskList();
 
     // Project task should not be visible (unless also assigned to this tag)
     await expect(projectTask).not.toBeVisible();
@@ -131,18 +129,16 @@ test.describe('Context Switching', () => {
     const isExpanded = await tagsGroupBtn.getAttribute('aria-expanded');
     if (isExpanded !== 'true') {
       await tagsGroupBtn.click();
-      await page.waitForTimeout(500);
     }
 
     const tagTreeItem = tagPage.tagsGroup
       .locator('[role="treeitem"]')
       .filter({ hasText: tagName })
       .first();
+    await tagTreeItem.waitFor({ state: 'visible', timeout: 5000 });
     await tagTreeItem.click();
-    await page.waitForTimeout(500);
-
-    // Verify on tag view
     await expect(page).toHaveURL(/tag/);
+    await workViewPage.waitForTaskList();
 
     // Navigate back to TODAY tag by clicking "Today" in sidebar
     const todayNavItem = page.locator(
@@ -245,7 +241,7 @@ test.describe('Context Switching', () => {
     await page.waitForTimeout(300);
 
     // Navigate back to TODAY via URL (more reliable than click)
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await page.waitForSelector('task-list', { state: 'visible', timeout: 15000 });
     await expect(page).toHaveURL(/tag\/TODAY/);
   });

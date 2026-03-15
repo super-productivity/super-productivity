@@ -186,7 +186,8 @@ export class ServerMigrationService {
     // Validate and repair state before creating SYNC_IMPORT
     // This prevents corrupted state (e.g., orphaned menuTree references) from
     // propagating to other clients via the full state import.
-    const validationResult = this.validateStateService.validateAndRepair(currentState);
+    const validationResult =
+      await this.validateStateService.validateAndRepair(currentState);
 
     // If state is invalid and couldn't be repaired, abort - don't propagate corruption
     if (!validationResult.isValid) {

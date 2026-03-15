@@ -579,9 +579,20 @@ export const renameTask = async (
   newName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, oldName);
-  await task.locator('task-title').click();
-  await client.page.waitForSelector('task textarea', { state: 'visible' });
-  await client.page.locator('task textarea').fill(newName);
+  // Click the task-title component to enter edit mode
+  await task.locator('task-title').first().click();
+  await client.page.waitForTimeout(300);
+
+  // Wait for the textarea to appear and be focused
+  const textarea = client.page.locator('task-title textarea');
+  await textarea.first().waitFor({ state: 'visible', timeout: 5000 });
+  await textarea.first().focus();
+  await client.page.waitForTimeout(100);
+
+  // Select all text and delete it, then type new name using keyboard
+  await client.page.keyboard.press('Control+a');
+  await client.page.keyboard.press('Backspace');
+  await client.page.keyboard.type(newName, { delay: 5 });
   await client.page.keyboard.press('Tab');
   await client.page.waitForTimeout(UI_SETTLE_MEDIUM);
 };

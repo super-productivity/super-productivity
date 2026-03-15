@@ -90,6 +90,8 @@ export const ACTION_TYPE_TO_CODE: Record<ActionType, string> = {
   [ActionType.TASK_SHARED_DELETE_ISSUE_PROVIDERS]: 'HIM',
   [ActionType.TASK_SHARED_DELETE_REPEAT_CFG]: 'HRC',
   [ActionType.TASK_SHARED_APPLY_SHORT_SYNTAX]: 'HSS',
+  [ActionType.TASK_SHARED_SET_DEADLINE]: 'HDL',
+  [ActionType.TASK_SHARED_REMOVE_DEADLINE]: 'HXD',
 
   // IssueProvider actions (I)
   [ActionType.ISSUE_PROVIDER_ADD]: 'IA',

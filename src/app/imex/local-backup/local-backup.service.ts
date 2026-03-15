@@ -1,9 +1,9 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { GlobalConfigService } from '../../features/config/global-config.service';
-import { interval, Observable } from 'rxjs';
+import { EMPTY, from, interval, Observable } from 'rxjs';
 import { LocalBackupConfig } from '../../features/config/global-config.model';
-import { filter, map, switchMap, tap } from 'rxjs/operators';
+import { catchError, exhaustMap, filter, map, switchMap } from 'rxjs/operators';
 import { LocalBackupMeta } from './local-backup.model';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../app.constants';
@@ -43,7 +43,14 @@ export class LocalBackupService {
   private _triggerBackupSave$: Observable<unknown> = this._cfg$.pipe(
     filter((cfg) => cfg.isEnabled),
     switchMap(() => interval(DEFAULT_BACKUP_INTERVAL)),
-    tap(() => this._backup()),
+    exhaustMap(() =>
+      from(this._backup()).pipe(
+        catchError((err) => {
+          Log.err('LocalBackupService: Backup failed', err);
+          return EMPTY;
+        }),
+      ),
+    ),
   );
 
   init(): void {
@@ -158,20 +165,16 @@ export class LocalBackupService {
     if (this._platformService.isIOS()) {
       await this._backupIOS(data);
     }
+    Log.log('LocalBackupService: Backup completed successfully');
   }
 
   private async _backupIOS(data: AppDataComplete): Promise<void> {
-    try {
-      await Filesystem.writeFile({
-        path: IOS_BACKUP_FILENAME,
-        data: JSON.stringify(data),
-        directory: Directory.Data,
-        encoding: Encoding.UTF8,
-      });
-      Log.log('iOS backup saved successfully');
-    } catch (error) {
-      Log.err('Failed to save iOS backup', error);
-    }
+    await Filesystem.writeFile({
+      path: IOS_BACKUP_FILENAME,
+      data: JSON.stringify(data),
+      directory: Directory.Data,
+      encoding: Encoding.UTF8,
+    });
   }
 
   private async _importBackup(backupData: string): Promise<void> {

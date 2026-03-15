@@ -14,7 +14,6 @@ import { TaskContextMenuInnerComponent } from './task-context-menu-inner/task-co
   selector: 'task-context-menu',
   imports: [TranslateModule, TaskContextMenuInnerComponent],
   templateUrl: './task-context-menu.component.html',
-  styleUrl: './task-context-menu.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TaskContextMenuComponent {

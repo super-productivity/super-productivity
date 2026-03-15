@@ -14,8 +14,9 @@ import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { IssueLog } from '../../../core/log';
 import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { T } from '../../../t.const';
 import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
+import { getErrorTxt } from '../../../util/get-error-text';
+import { T } from '../../../t.const';
 
 @Injectable()
 export class IssueTwoWaySyncEffects {
@@ -71,14 +72,12 @@ export class IssueTwoWaySyncEffects {
         concatMap(({ fullTask, changes }) =>
           this._pushChanges$(fullTask, changes).pipe(
             catchError((err) => {
-              const errStr = JSON.stringify(err);
               IssueLog.err('Two-way sync push failed', err);
-              if (errStr.includes('admin rights') || errStr.includes('403')) {
-                this._snackService.open({
-                  type: 'ERROR',
-                  msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
-                });
-              }
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
+                translateParams: { errorMsg: getErrorTxt(err) },
+              });
               return EMPTY;
             }),
           ),
@@ -142,6 +141,7 @@ export class IssueTwoWaySyncEffects {
               this._snackService.open({
                 type: 'ERROR',
                 msg: T.F.ISSUE.S.AUTO_CREATE_FAILED,
+                translateParams: { errorMsg: getErrorTxt(err) },
               });
               return EMPTY;
             }),

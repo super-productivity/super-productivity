@@ -16,11 +16,11 @@ import { randomBytes } from 'crypto';
 import { sendPasskeyRecoveryEmail } from './email';
 import { Prisma } from '@prisma/client';
 import { loadConfigFromEnv } from './config';
+import { VERIFICATION_TOKEN_EXPIRY_MS, MAX_VERIFICATION_RESEND_COUNT } from './auth';
 
 // Constants
 const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const RECOVERY_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
-const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // WebAuthn configuration from environment
 const getWebAuthnConfig = (): { rpName: string; rpID: string; origin: string } => {
@@ -184,6 +184,12 @@ export const verifyRegistration = async (
     if (existingUser) {
       if (existingUser.isVerified === 1) {
         throw new Error('An account with this email already exists');
+      }
+
+      if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
+        throw new Error(
+          'Too many verification attempts. Please contact support.',
+        );
       }
 
       // Update existing unverified user with new passkey

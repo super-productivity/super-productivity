@@ -31,10 +31,19 @@
               track trackByKey($index, month)
             ) {
               <div class="month">
-                <h2 class="month-title mat-headline-5">
+                <h2
+                  (click)="toggleMonth(year.key, month.key)"
+                  class="month-title mat-headline-5"
+                >
                   <span [innerHtml]="month.key | numberToMonth"></span>
+                  <mat-icon class="collapsible-expand-icon">{{
+                    isMonthExpanded(year.key, month.key) ? 'expand_less' : 'expand_more'
+                  }}</mat-icon>
                   <button
-                    (click)="exportData(month.value, year.key, month.key)"
+                    (click)="
+                      exportData(month.value, year.key, month.key);
+                      $event.stopPropagation()
+                    "
                     aria-label="export data"
                     class="mat-elevation-z1"
                     color="primary"
@@ -50,203 +59,210 @@
                   {{ T.F.WORKLOG.CMP.TOTAL_TIME | translate }}
                   <strong [innerHtml]="month.value.timeSpent | msToString"></strong>
                 </div>
-                <div class="weeks">
-                  @for (week of month.value.weeks; track trackByForWeek($index, week)) {
-                    <div class="week">
-                      <div class="week-header">
-                        <div class="wrap">
-                          <h3 class="week-title mat-h4">
-                            {{ T.F.WORKLOG.CMP.WEEK_NR | translate: { nr: week.weekNr } }}
-                          </h3>
-                          <div>{{ week.timeSpent | msToString }}</div>
+                @if (isMonthExpanded(year.key, month.key)) {
+                  <div [@expandFade] class="weeks">
+                    @for (week of month.value.weeks; track trackByForWeek($index, week)) {
+                      <div class="week">
+                        <div class="week-header">
+                          <div class="wrap">
+                            <h3 class="week-title mat-h4">
+                              {{
+                                T.F.WORKLOG.CMP.WEEK_NR | translate: { nr: week.weekNr }
+                              }}
+                            </h3>
+                            <div>{{ week.timeSpent | msToString }}</div>
+                          </div>
+                          <button
+                            (click)="
+                              exportData(month.value, year.key, month.key, week.weekNr)
+                            "
+                            [matTooltip]="
+                              week.start +
+                              '.-' +
+                              week.end +
+                              '. Days: ' +
+                              week.daysWorked +
+                              ', Time: ' +
+                              (week.timeSpent | msToString)
+                            "
+                            aria-label="export data"
+                            class="mat-elevation-z1"
+                            color=""
+                            mat-mini-fab
+                          >
+                            <mat-icon>call_made</mat-icon>
+                          </button>
                         </div>
-                        <button
-                          (click)="
-                            exportData(month.value, year.key, month.key, week.weekNr)
-                          "
-                          [matTooltip]="
-                            week.start +
-                            '.-' +
-                            week.end +
-                            '. Days: ' +
-                            week.daysWorked +
-                            ', Time: ' +
-                            (week.timeSpent | msToString)
-                          "
-                          aria-label="export data"
-                          class="mat-elevation-z1"
-                          color=""
-                          mat-mini-fab
-                        >
-                          <mat-icon>call_made</mat-icon>
-                        </button>
-                      </div>
-                      <div class="week-table-wrapper">
-                        <table class="week-table">
-                          <tr>
-                            <th></th>
-                            <td>{{ T.F.WORKLOG.CMP.TASKS | translate }}</td>
-                            <td>{{ T.F.WORKLOG.CMP.WORKED | translate }}</td>
-                            <th></th>
-                          </tr>
-                          @for (
-                            worklogForDay of week.ent | keyvalue: sortWorklogItemsReverse;
-                            track trackByKey($index, worklogForDay)
-                          ) {
-                            <ng-container class="day">
-                              <tr
-                                (click)="
-                                  expanded[worklogForDay.value.dateStr] =
-                                    !expanded[worklogForDay.value.dateStr]
-                                "
-                                [class.isExpanded]="expanded[worklogForDay.value.dateStr]"
-                                class="week-row"
-                              >
-                                <td>
-                                  {{ worklogForDay.value.dayStr }}
-                                  {{ worklogForDay.key }}.
-                                </td>
-                                <td>{{ worklogForDay.value.logEntries.length }}</td>
-                                <td>
-                                  {{ worklogForDay.value.timeSpent | msToClockString }}
-                                </td>
-                                <td>
-                                  @if (!expanded[worklogForDay.value.dateStr]) {
-                                    <mat-icon>list </mat-icon>
-                                  }
-                                  @if (expanded[worklogForDay.value.dateStr]) {
-                                    <mat-icon>close </mat-icon>
-                                  }
-                                </td>
-                              </tr>
-                              <tr>
-                                <td colspan="4">
-                                  @if (expanded[worklogForDay.value.dateStr]) {
-                                    <div
-                                      [@expandFade]
-                                      class="summary-table-wrapper material-table"
-                                    >
-                                      <table class="task-summary-table">
-                                        @for (
-                                          logEntry of worklogForDay.value.logEntries;
-                                          track trackByForLogEntry($index, logEntry)
-                                        ) {
-                                          <tr
-                                            [id]="'t-' + logEntry.task.id"
-                                            tabindex="0"
-                                          >
-                                            <td
-                                              [class.isSubTask]="logEntry.task.parentId"
-                                              class="title"
+                        <div class="week-table-wrapper">
+                          <table class="week-table">
+                            <tr>
+                              <th></th>
+                              <td>{{ T.F.WORKLOG.CMP.TASKS | translate }}</td>
+                              <td>{{ T.F.WORKLOG.CMP.WORKED | translate }}</td>
+                              <th></th>
+                            </tr>
+                            @for (
+                              worklogForDay of week.ent
+                                | keyvalue: sortWorklogItemsReverse;
+                              track trackByKey($index, worklogForDay)
+                            ) {
+                              <ng-container class="day">
+                                <tr
+                                  (click)="
+                                    expanded[worklogForDay.value.dateStr] =
+                                      !expanded[worklogForDay.value.dateStr]
+                                  "
+                                  [class.isExpanded]="
+                                    expanded[worklogForDay.value.dateStr]
+                                  "
+                                  class="week-row"
+                                >
+                                  <td>
+                                    {{ worklogForDay.value.dayStr }}
+                                    {{ worklogForDay.key }}.
+                                  </td>
+                                  <td>{{ worklogForDay.value.logEntries.length }}</td>
+                                  <td>
+                                    {{ worklogForDay.value.timeSpent | msToClockString }}
+                                  </td>
+                                  <td>
+                                    @if (!expanded[worklogForDay.value.dateStr]) {
+                                      <mat-icon>list </mat-icon>
+                                    }
+                                    @if (expanded[worklogForDay.value.dateStr]) {
+                                      <mat-icon>close </mat-icon>
+                                    }
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td colspan="4">
+                                    @if (expanded[worklogForDay.value.dateStr]) {
+                                      <div
+                                        [@expandFade]
+                                        class="summary-table-wrapper material-table"
+                                      >
+                                        <table class="task-summary-table">
+                                          @for (
+                                            logEntry of worklogForDay.value.logEntries;
+                                            track trackByForLogEntry($index, logEntry)
+                                          ) {
+                                            <tr
+                                              [id]="'t-' + logEntry.task.id"
+                                              tabindex="0"
                                             >
-                                              @if (workContextService.isTodayList) {
-                                                <div
-                                                  class="project-color"
-                                                  [title]="
-                                                    allProjectsColorAndTitle[
-                                                      logEntry.task.projectId
-                                                    ]?.title
-                                                  "
-                                                  [style.background]="
-                                                    allProjectsColorAndTitle[
-                                                      logEntry.task.projectId
-                                                    ]?.color
-                                                  "
-                                                ></div>
-                                              }
-                                              @if (logEntry.task.repeatCfgId) {
-                                                <mat-icon
-                                                  [title]="
-                                                    T.F.WORKLOG.CMP.REPEATING_TASK
-                                                      | translate
-                                                  "
-                                                  class="repeat-task-icon"
-                                                  >repeat
-                                                </mat-icon>
-                                              }
-                                              <span
-                                                (click)="viewTaskDetails(logEntry.task)"
-                                                class="task-title task-title-clickable"
-                                                >{{ logEntry.task.title }}</span
+                                              <td
+                                                [class.isSubTask]="logEntry.task.parentId"
+                                                class="title"
                                               >
-                                            </td>
-                                            <td class="worked">
-                                              @if (
-                                                logEntry.task.subTaskIds &&
-                                                logEntry.task.subTaskIds.length > 0
-                                              ) {
-                                                <span
-                                                  >∑
-                                                  {{
-                                                    logEntry.task.timeSpentOnDay[
-                                                      worklogForDay.value.dateStr
-                                                    ] | msToClockString
-                                                  }}</span
-                                                >
-                                              }
-                                              @if (
-                                                !logEntry.task.subTaskIds ||
-                                                !logEntry.task.subTaskIds.length
-                                              ) {
-                                                <inline-input
-                                                  (changed)="
-                                                    updateTimeSpentTodayForTask(
-                                                      logEntry.task,
-                                                      worklogForDay.value.dateStr,
-                                                      $event
-                                                    )
-                                                  "
-                                                  [displayValue]="
-                                                    logEntry.task.timeSpentOnDay[
-                                                      worklogForDay.value.dateStr
-                                                    ] | msToClockString
-                                                  "
-                                                  [type]="'duration'"
-                                                  [value]="
-                                                    logEntry.task.timeSpentOnDay[
-                                                      worklogForDay.value.dateStr
-                                                    ]
-                                                  "
-                                                >
-                                                </inline-input>
-                                              }
-                                            </td>
-                                            <td class="actions">
-                                              @if (
-                                                !logEntry.task?.parentId &&
-                                                !logEntry.isNoRestore
-                                              ) {
-                                                <button
-                                                  (click)="restoreTask(logEntry.task)"
-                                                  [title]="
-                                                    T.F.WORKLOG.CMP
-                                                      .RESTORE_TASK_FROM_ARCHIVE
-                                                      | translate
-                                                  "
-                                                  aria-label="restore"
-                                                  color=""
-                                                  mat-icon-button
-                                                >
+                                                @if (workContextService.isTodayList) {
+                                                  <div
+                                                    class="project-color"
+                                                    [title]="
+                                                      allProjectsColorAndTitle[
+                                                        logEntry.task.projectId
+                                                      ]?.title
+                                                    "
+                                                    [style.background]="
+                                                      allProjectsColorAndTitle[
+                                                        logEntry.task.projectId
+                                                      ]?.color
+                                                    "
+                                                  ></div>
+                                                }
+                                                @if (logEntry.task.repeatCfgId) {
                                                   <mat-icon
-                                                    >settings_backup_restore</mat-icon
+                                                    [title]="
+                                                      T.F.WORKLOG.CMP.REPEATING_TASK
+                                                        | translate
+                                                    "
+                                                    class="repeat-task-icon"
+                                                    >repeat
+                                                  </mat-icon>
+                                                }
+                                                <span
+                                                  (click)="viewTaskDetails(logEntry.task)"
+                                                  class="task-title task-title-clickable"
+                                                  >{{ logEntry.task.title }}</span
+                                                >
+                                              </td>
+                                              <td class="worked">
+                                                @if (
+                                                  logEntry.task.subTaskIds &&
+                                                  logEntry.task.subTaskIds.length > 0
+                                                ) {
+                                                  <span
+                                                    >∑
+                                                    {{
+                                                      logEntry.task.timeSpentOnDay[
+                                                        worklogForDay.value.dateStr
+                                                      ] | msToClockString
+                                                    }}</span
                                                   >
-                                                </button>
-                                              }
-                                            </td>
-                                          </tr>
-                                        }
-                                      </table>
-                                    </div>
-                                  }
-                                </td>
-                              </tr>
-                            </ng-container>
-                          }
-                        </table>
+                                                }
+                                                @if (
+                                                  !logEntry.task.subTaskIds ||
+                                                  !logEntry.task.subTaskIds.length
+                                                ) {
+                                                  <inline-input
+                                                    (changed)="
+                                                      updateTimeSpentTodayForTask(
+                                                        logEntry.task,
+                                                        worklogForDay.value.dateStr,
+                                                        $event
+                                                      )
+                                                    "
+                                                    [displayValue]="
+                                                      logEntry.task.timeSpentOnDay[
+                                                        worklogForDay.value.dateStr
+                                                      ] | msToClockString
+                                                    "
+                                                    [type]="'duration'"
+                                                    [value]="
+                                                      logEntry.task.timeSpentOnDay[
+                                                        worklogForDay.value.dateStr
+                                                      ]
+                                                    "
+                                                  >
+                                                  </inline-input>
+                                                }
+                                              </td>
+                                              <td class="actions">
+                                                @if (
+                                                  !logEntry.task?.parentId &&
+                                                  !logEntry.isNoRestore
+                                                ) {
+                                                  <button
+                                                    (click)="restoreTask(logEntry.task)"
+                                                    [title]="
+                                                      T.F.WORKLOG.CMP
+                                                        .RESTORE_TASK_FROM_ARCHIVE
+                                                        | translate
+                                                    "
+                                                    aria-label="restore"
+                                                    color=""
+                                                    mat-icon-button
+                                                  >
+                                                    <mat-icon
+                                                      >settings_backup_restore</mat-icon
+                                                    >
+                                                  </button>
+                                                }
+                                              </td>
+                                            </tr>
+                                          }
+                                        </table>
+                                      </div>
+                                    }
+                                  </td>
+                                </tr>
+                              </ng-container>
+                            }
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  }
-                </div>
+                    }
+                  </div>
+                }
               </div>
             }
           </div>

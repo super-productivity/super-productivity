@@ -4,7 +4,10 @@ import { ConfigFormSection, SyncConfig } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../../app.constants';
-import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
+import {
+  loadSyncProviders,
+  LocalFileSyncPicker,
+} from '../../../op-log/sync-providers/sync-providers.factory';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
@@ -159,8 +162,12 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'syncFolderPath',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
-            onClick: () => {
-              return fileSyncElectron.pickDirectory();
+            onClick: async () => {
+              const providers = await loadSyncProviders();
+              const localProvider = providers.find(
+                (p) => p.id === SyncProviderId.LocalFile,
+              );
+              return (localProvider as LocalFileSyncPicker | undefined)?.pickDirectory();
             },
           },
           expressions: {
@@ -189,9 +196,13 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'safFolderUri',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
-            onClick: () => {
+            onClick: async () => {
               // NOTE: this actually sets the value in the model
-              return fileSyncDroid.setupSaf();
+              const providers = await loadSyncProviders();
+              const localProvider = providers.find(
+                (p) => p.id === SyncProviderId.LocalFile,
+              );
+              return (localProvider as LocalFileSyncPicker | undefined)?.setupSaf();
             },
           },
           expressions: {

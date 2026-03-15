@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  effect,
   ElementRef,
   forwardRef,
   HostListener,
@@ -15,7 +16,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { TaskService } from '../task.service';
-import { EMPTY, forkJoin, of, Subscription } from 'rxjs';
+import { EMPTY, forkJoin, Subscription } from 'rxjs';
 import {
   HideSubTasksMode,
   TaskCopy,
@@ -29,13 +30,12 @@ import {
   expandInOnlyAnimation,
 } from '../../../ui/animations/expand.ani';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { concatMap, first, switchMap, tap } from 'rxjs/operators';
+import { concatMap, first, tap } from 'rxjs/operators';
 import { fadeAnimation } from '../../../ui/animations/fade.ani';
 import { PanDirective, PanEvent } from '../../../ui/swipe-gesture/pan.directive';
 import { TaskAttachmentService } from '../task-attachment/task-attachment.service';
 import { DialogEditTaskAttachmentComponent } from '../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { swirlAnimation } from '../../../ui/animations/swirl-in-out.ani';
-import { DialogEditTaskRepeatCfgComponent } from '../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { ProjectService } from '../../project/project.service';
 import { Project } from '../../project/project.model';
 import { _MISSING_PROJECT_ } from '../../project/project.const';
@@ -56,8 +56,9 @@ import { DateService } from '../../../core/date/date.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { KeyboardConfig } from '../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { TaskContextMenuComponent } from '../task-context-menu/task-context-menu.component';
-import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ICAL_TYPE } from '../../issue/issue.const';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
 import { MatIcon } from '@angular/material/icon';
@@ -235,6 +236,32 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
           (!task.dueWithTime || !this._dateService.isToday(task.dueWithTime));
   });
 
+  isDeadlineOverdue = computed(() => {
+    const t = this.task();
+    const todayStr = this.globalTrackingIntervalService.todayDateStr();
+    if (t.isDone) return false;
+    if (t.deadlineWithTime) return t.deadlineWithTime < Date.now();
+    if (t.deadlineDay) return t.deadlineDay < todayStr;
+    return false;
+  });
+
+  isDeadlineApproaching = computed(() => {
+    const t = this.task();
+    if (t.isDone || this.isDeadlineOverdue()) return false;
+    const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+    if (t.deadlineWithTime) return t.deadlineWithTime - Date.now() < twoDaysMs;
+    if (t.deadlineDay) {
+      const deadlineDate = new Date(t.deadlineDay + 'T23:59:59');
+      return deadlineDate.getTime() - Date.now() < twoDaysMs;
+    }
+    return false;
+  });
+
+  hasDeadline = computed(() => {
+    const t = this.task();
+    return !!(t.deadlineDay || t.deadlineWithTime);
+  });
+
   isPanHelperVisible = signal(false);
 
   T: typeof T = T;
@@ -262,21 +289,37 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     read: TaskContextMenuComponent,
   });
 
-  private _task$ = toObservable(this.task);
-
   // Lazy-loaded project list - only fetched when project menu opens
   moveToProjectList = signal<Project[] | undefined>(undefined);
   private _loadedProjectListForProjectId: string | null | undefined;
   private _moveToProjectListSub?: Subscription;
 
-  parentTask = toSignal(
-    this._task$.pipe(
-      switchMap((task) =>
-        task.parentId ? this._taskService.getByIdLive$(task.parentId) : of(null),
-      ),
-    ),
-  );
-  parentTitle = computed(() => this.parentTask()?.title ?? null);
+  // Parent title derived directly from task data when available in subtask model.
+  // Falls back to a live store subscription only when needed (non-subtask-list with parentId).
+  private _parentTaskTitle = signal<string | null>(null);
+  parentTitle = computed(() => {
+    const t = this.task();
+    if (!t.parentId || this.isInSubTaskList()) {
+      return null;
+    }
+    return this._parentTaskTitle();
+  });
+
+  isProjectMenuLoaded = signal(false);
+
+  private _parentTitleEffect = effect((onCleanup) => {
+    const t = this.task();
+    const isInSubTaskList = this.isInSubTaskList();
+    if (!t.parentId || isInSubTaskList) {
+      this._parentTaskTitle.set(null);
+      return;
+    }
+    // Only subscribe when this task has a parentId and is NOT in a subtask list
+    const sub = this._taskService.getByIdLive$(t.parentId).subscribe((parent) => {
+      this._parentTaskTitle.set(parent?.title ?? null);
+    });
+    onCleanup(() => sub.unsubscribe());
+  });
 
   private _dragEnterTarget?: HTMLElement;
   private _currentPanTimeout?: number;
@@ -389,7 +432,22 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
       });
   }
 
-  editTaskRepeatCfg(): void {
+  openDeadlineDialog(): void {
+    this._storeNextFocusEl();
+    this._matDialog
+      .open(DialogDeadlineComponent, {
+        autoFocus: false,
+        data: { task: this.task() },
+      })
+      .afterClosed()
+      .subscribe(() => {
+        this.focusSelfOrNextIfNotPossible();
+      });
+  }
+
+  async editTaskRepeatCfg(): Promise<void> {
+    const { DialogEditTaskRepeatCfgComponent } =
+      await import('../../task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component');
     this._matDialog
       .open(DialogEditTaskRepeatCfgComponent, {
         data: {
@@ -531,15 +589,16 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
   }
 
   openProjectMenu(): void {
-    const t = this.task();
-    if (!t.parentId) {
-      // Lazy load project list when menu opens
-      this._loadProjectListIfNeeded();
-      const projectMenuTrigger = this.projectMenuTrigger();
-      if (projectMenuTrigger) {
-        projectMenuTrigger.openMenu();
-      }
+    if (this.task().parentId) {
+      return;
     }
+    this._loadProjectListIfNeeded();
+    if (!this.isProjectMenuLoaded()) {
+      this.isProjectMenuLoaded.set(true);
+      setTimeout(() => this.projectMenuTrigger()?.openMenu());
+      return;
+    }
+    this.projectMenuTrigger()?.openMenu();
   }
 
   _loadProjectListIfNeeded(): void {

@@ -15,7 +15,6 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 @Component({
   selector: 'input-duration-formly',
   templateUrl: './input-duration-formly.component.html',
-  styleUrls: ['./input-duration-formly.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     InputDurationDirective,

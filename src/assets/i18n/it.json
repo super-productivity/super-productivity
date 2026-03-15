@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Modifica allegato",
         "LABELS": {
           "IMG": "Immagine",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Seleziona un tipo",
         "TYPES": {
@@ -230,7 +230,7 @@
       "FORM": {
         "HOST": "Host (es.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Username o nome Organizzazione/Progetto",
-        "REPO_FULL_NAME_DESCRIPTION": "Può essere trovata come parte dell'url mentre visualizzi il progetto nel browser.",
+        "REPO_FULL_NAME_DESCRIPTION": "Può essere trovata come parte dell'URL mentre visualizzi il progetto nel browser.",
         "SCOPE": "Scopo",
         "SCOPE_ALL": "Tutti",
         "SCOPE_ASSIGNED": "Assegnate a me",
@@ -781,7 +781,7 @@
         "API_KEY": "Chiave di accesso API",
         "HOST": "Host (es.: https://redmine.org)",
         "PROJECT_ID": "Identificatore progetto",
-        "PROJECT_ID_DESCRIPTION": "Può essere trovato come parte dell'url, quando si visualizza il progetto nel Browser.",
+        "PROJECT_ID_DESCRIPTION": "Può essere trovato come parte dell'URL, quando si visualizza il progetto nel Browser.",
         "SCOPE": "Scopo",
         "SCOPE_ALL": "Tutti",
         "SCOPE_ASSIGNED": "Assegnate a me",
@@ -1509,7 +1509,7 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "<b>Questo NON funzionerà con la versione Browser di Super Productivity.<br /> <a href=\"https://super-productivity.com/download/\">Scarica la versione desktop</a> per usare questa funzionalità!</b>",
-      "CAL_PATH": "Url della sorgente iCal",
+      "CAL_PATH": "URL della sorgente iCal",
       "CHECK_UPDATES": "Verifica aggiornamenti remoti ogni X tempo",
       "HELP": "Puoi integrare calendari per essere ricordati e aggiungerli come attività con Super Productivity. L'integrazione funziona usando il formato iCal. Affinché questo funzioni, il tuo calendario deve essere accessibile sia da Internet che da file system.",
       "SHOW_BANNER_THRESHOLD": "Mostra una notifica X tempo prima dell'evento (lascia bianco per disabilitare)"

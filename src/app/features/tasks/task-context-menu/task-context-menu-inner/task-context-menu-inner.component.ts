@@ -46,6 +46,7 @@ import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '../../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
 import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { throttle } from '../../../../util/decorators';
@@ -285,6 +286,26 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
       .subscribe((isPlanned) => {
         this.focusRelatedTaskOrNext();
       });
+  }
+
+  openDeadlineDialog(): void {
+    this._matDialog
+      .open(DialogDeadlineComponent, {
+        autoFocus: false,
+        data: { task: this.task },
+      })
+      .afterClosed()
+      .subscribe(() => {
+        this.focusRelatedTaskOrNext();
+      });
+  }
+
+  removeDeadline(): void {
+    this._store.dispatch(
+      TaskSharedActions.removeDeadline({
+        taskId: this.task.id,
+      }),
+    );
   }
 
   updateIssueData(): void {

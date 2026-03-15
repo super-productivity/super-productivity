@@ -17,6 +17,7 @@ import { Project } from '../../project/project.model';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { DEFAULT_FIRST_DAY_OF_WEEK, DEFAULT_LOCALE } from 'src/app/core/locale.constants';
 import { DateAdapter } from '@angular/material/core';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 
 @Component({
   template: `<add-task-bar></add-task-bar>`,
@@ -104,7 +105,20 @@ describe('AddTaskBarComponent Mentions Integration', () => {
     );
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
-    const storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    const storeSpy = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    storeSpy.pipe.and.returnValue(of([]));
+    storeSpy.select.and.returnValue(of([]));
+    const dateTimeFormatServiceSpy = jasmine.createSpyObj(
+      'DateTimeFormatService',
+      ['currentLocale'],
+      {
+        dateFormat: () => ({
+          parse: 'MM/dd/yyyy',
+          display: { dateInput: 'MM/dd/yyyy' },
+        }),
+      },
+    );
+    dateTimeFormatServiceSpy.currentLocale.and.returnValue('en-US');
     const dateAdapter = jasmine.createSpyObj<DateAdapter<Date>>('DateAdapter', [], {
       getFirstDayOfWeek: () => DEFAULT_FIRST_DAY_OF_WEEK,
       setLocale: () => {},
@@ -131,6 +145,7 @@ describe('AddTaskBarComponent Mentions Integration', () => {
         { provide: MatDialog, useValue: matDialogSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: Store, useValue: storeSpy },
+        { provide: DateTimeFormatService, useValue: dateTimeFormatServiceSpy },
       ],
     }).compileComponents();
 

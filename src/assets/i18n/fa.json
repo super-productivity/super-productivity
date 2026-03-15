@@ -627,7 +627,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "برای پروژه OpenProject به ماژول ردیابی زمان نیاز دارد",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "نمایش گفتگوی ردیابی زمان پس از تکمیل وظایف فرعی",
         "PROJECT_ID": "شناسه پروژه",
-        "PROJECT_ID_DESCRIPTION": "هنگام مشاهده پروژه در مرورگر ، می توانید آن را به عنوان بخشی از url پیدا کنید.",
+        "PROJECT_ID_DESCRIPTION": "هنگام مشاهده پروژه در مرورگر ، می توانید آن را به عنوان بخشی از URL پیدا کنید.",
         "SCOPE": "محدوده",
         "SCOPE_ALL": "همه",
         "SCOPE_ASSIGNED": "به من اختصاص داده شده است",

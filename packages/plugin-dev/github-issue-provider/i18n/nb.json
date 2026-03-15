@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne GitHub-problemer for et bestemt repo i oppgavelagerpanelet i den daglige planvisningen. De vil bli oppført som forslag og vil gi en lenke til problemet, samt mer informasjon om det.</p><p> I tillegg kan du automatisk legge til og synkronisere alle åpne problemer i oppgaven din.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Feil under tilordning av data. Er navnet på depotet ditt riktig?",
-    "ERR_UNKNOWN": "GitHub: Ukjent feil {{statusCode}} {{errorMsg}}. Grensen for api-rate overskredet?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Ukjent feil {{statusCode}} {{errorMsg}}. Grensen for api-rate overskredet?"
   }
 }

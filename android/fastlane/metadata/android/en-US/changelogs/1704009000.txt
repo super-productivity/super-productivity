@@ -1,0 +1,9 @@
+- address code review findings from yesterday's changes
+- change settings dialog button from "Close" to "Save"
+- add verification resend cap of 20 attempts
+- add magic link registration to SuperSync server
+- collapse months by default to reduce initial DOM (#6802)
+- defer context menu rendering in planner-task (#6802)
+- reduce DOM nodes and subscriptions per task component (#6802)
+- add canActivateChild to FocusOverlayOpenGuard
+- consolidate lazy route chunks (251 → 151)

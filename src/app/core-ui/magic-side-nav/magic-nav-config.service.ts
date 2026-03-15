@@ -10,7 +10,6 @@ import { ShepherdService } from '../../features/shepherd/shepherd.service';
 import { TourId } from '../../features/shepherd/shepherd-steps.const';
 import { T } from '../../t.const';
 import { LS } from '../../core/persistence/storage-keys.const';
-import { DialogCreateProjectComponent } from '../../features/project/dialogs/create-project/dialog-create-project.component';
 import { getGithubErrorUrl } from '../../core/error-handler/global-error-handler.util';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import {
@@ -498,7 +497,9 @@ export class MagicNavConfigService {
   }
 
   // Simple action handlers
-  private _openCreateProject(): void {
+  private async _openCreateProject(): Promise<void> {
+    const { DialogCreateProjectComponent } =
+      await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
       .open(DialogCreateProjectComponent, { restoreFocus: true })
       .afterClosed()

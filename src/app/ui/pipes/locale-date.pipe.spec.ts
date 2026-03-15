@@ -44,4 +44,12 @@ describe('LocaleDatePipe', () => {
     const result = pipe.transform(date, 'short');
     expect(result).toBeTruthy();
   });
+
+  it('should return null for non-parseable string input instead of throwing', () => {
+    expect(pipe.transform('invalid-date-string' as any)).toBeNull();
+  });
+
+  it('should return null for empty string input instead of throwing', () => {
+    expect(pipe.transform('' as any)).toBeNull();
+  });
 });

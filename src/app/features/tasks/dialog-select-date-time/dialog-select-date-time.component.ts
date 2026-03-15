@@ -42,7 +42,6 @@ export interface DialogSelectDateTimeData {
 @Component({
   selector: 'dialog-select-date-time',
   templateUrl: './dialog-select-date-time.component.html',
-  styleUrls: ['./dialog-select-date-time.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [

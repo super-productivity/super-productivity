@@ -13,12 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+      - name: Generate release body
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_REF_NAME: ${{ github.ref_name }}
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+          {
+            cat build/release-notes.md
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GH_REPOSITORY}/compare/${PREV_TAG}...${GH_REF_NAME}"
+            fi
+          } > /tmp/release-body.md
       - name: Create Draft Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          body_path: /tmp/release-body.md
 
   linux-bin-and-snap-release:
     runs-on: ubuntu-latest
@@ -28,7 +46,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Check out Git repository
@@ -126,7 +144,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Echo is Release
@@ -225,7 +243,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       # required because setting via env.TZ does not work on windows
@@ -288,20 +306,9 @@ jobs:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
           release: false # Don't publish unsigned; we sign first, then publish
+          args: "--publish never"  # action omits --publish when release=false, so electron-builder defaults to onTag on CI
 
-      # Publish unsigned Windows binaries first so the release is never missing Windows assets
-      - name: Publish unsigned Windows binaries to GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            .tmp/app-builds/*.exe
-            .tmp/app-builds/*.blockmap
-            .tmp/app-builds/latest*.yml
-          draft: true
-          prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-
-      # --- Code signing (best-effort: signing failure won't block the release) ---
+      # --- Code signing (SignPath failure is tolerated; post-signing verification failures will block the release) ---
 
       - name: Upload unsigned executables for SignPath
         id: upload-unsigned
@@ -338,9 +345,9 @@ jobs:
             Write-Error "No signed executables found in SignPath output directory"
             exit 1
           }
-          # Build a map of original filenames for matching
-          # SignPath may replace spaces with dots in filenames, so we normalize
-          # spaces, dots, and hyphens to find the corresponding original file
+          # Match signed files back to originals by normalizing away dots, hyphens, and spaces.
+          # Filenames no longer contain spaces, but this normalization is kept as a safety net
+          # in case SignPath ever renames files.
           $originals = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
           $signed | ForEach-Object {
             $signedName = $_.Name
@@ -383,7 +390,16 @@ jobs:
           $exeFiles = Get-ChildItem -Path $buildDir -Filter "*.exe"
 
           foreach ($exe in $exeFiles) {
+            $isInstaller = $exe.Name -like 'Super-Productivity-Setup*'
             $blockmapPath = "$($exe.FullName).blockmap"
+            if (-not $isInstaller) {
+              Write-Host "Skipping $($exe.Name) — portable target, no blockmap needed"
+              continue
+            }
+            if (-not (Test-Path $blockmapPath)) {
+              Write-Error "Expected blockmap missing for NSIS installer: $($exe.Name)"
+              exit 1
+            }
             Write-Host "Regenerating blockmap for $($exe.Name)..."
             $output = npx --yes app-builder-bin blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
             Write-Host "  blockmap output: $output"
@@ -430,7 +446,7 @@ jobs:
             }
           "
 
-      # Overwrite unsigned release assets with signed versions
+      # Only publish signed Windows binaries
       - name: Publish signed Windows binaries to GitHub Release
         if: steps.signpath.outcome == 'success'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0

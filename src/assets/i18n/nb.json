@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Rediger vedlegg",
         "LABELS": {
           "IMG": "Bilde",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Velg en type",
         "TYPES": {
@@ -230,7 +230,7 @@
       "FORM": {
         "HOST": "Vert (f.eks.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Brukernavn eller organisasjonsnavn/prosjekt",
-        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av url-en når du viser prosjektet i nettleseren.",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av URL-en når du viser prosjektet i nettleseren.",
         "SCOPE": "Omfang",
         "SCOPE_ALL": "Alle",
         "SCOPE_ASSIGNED": "Tildelt til meg",
@@ -731,8 +731,8 @@
       },
       "FORM_THEME": {
         "HELP": "Temainnstillinger for prosjektet ditt.",
-        "L_BACKGROUND_IMAGE_DARK": "Url for bakgrunnsbilde (mørkt tema)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Url for bakgrunnsbilde (Light Theme)",
+        "L_BACKGROUND_IMAGE_DARK": "URL for bakgrunnsbilde (mørkt tema)",
+        "L_BACKGROUND_IMAGE_LIGHT": "URL for bakgrunnsbilde (Light Theme)",
         "L_COLOR_ACCENT": "Aksentfarge",
         "L_COLOR_PRIMARY": "Primærfarge",
         "L_COLOR_WARN": "Advarsel / feilfarge",
@@ -945,7 +945,7 @@
           "CORS_INFO": "<strong>Få det til å fungere i nettleseren:<\\/strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https:\\/\\/github.com\\/nextcloud\\/server\\/issues\\/3131'>se denne tråden for mer informasjon<\\/a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>. Bruk på egen risiko!<\\/p>",
           "D_SYNC_FOLDER_PATH": "Sti relativ til WebDAV-serverens rot hvor synkroniseringsfiler vil bli lagret (f.eks. '/super-productivity' eller '/'). Dette er IKKE serverens interne katalogsti.",
           "INFO": "WebDAV-implementeringer varierer dessverre mye. Super Productivity er kjent for å fungere godt med Nextcloud, <strong>men det kan hende det ikke fungerer med din leverandør</strong>.",
-          "L_BASE_URL": "Base Url",
+          "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Passord",
           "L_SYNC_FOLDER_PATH": "Synkroniseringsmappebane",
           "L_TEST_CONNECTION": "Test tilkobling",
@@ -1509,7 +1509,7 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "På grunn av begrensninger på tvers av opprinnelse <b>vil dette sannsynligvis IKKE fungere med nettleserversjonen av Super Productivity.<br /> Vennligst <a href=\"https://super-productivity.com/download/\">last ned skrivebordsversjonen</a> for å bruke denne funksjonen!</b>",
-      "CAL_PATH": "Url til iCal-kilden",
+      "CAL_PATH": "URL til iCal-kilden",
       "CHECK_UPDATES": "Se etter eksterne oppdateringer hver X",
       "HELP": "Du kan integrere kalendere for å bli påminnet og legge dem til som oppgaver i Super Productivity. Integreringen fungerer ved å bruke iCal-formatet. For at dette skal fungere, må kalenderne dine være tilgjengelige enten via Internett eller filsystemet.",
       "SHOW_BANNER_THRESHOLD": "Vis et varsel X før hendelsen (blank for deaktivert)"

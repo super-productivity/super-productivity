@@ -51,7 +51,6 @@ import { DialogConflictResolutionResult } from './sync.model';
 import { DialogSyncConflictComponent } from './dialog-sync-conflict/dialog-sync-conflict.component';
 import { ReminderService } from '../../features/reminder/reminder.service';
 
-import { DialogSyncInitialCfgComponent } from './dialog-sync-initial-cfg/dialog-sync-initial-cfg.component';
 import { DialogHandleDecryptErrorComponent } from './dialog-handle-decrypt-error/dialog-handle-decrypt-error.component';
 import { DialogEnterEncryptionPasswordComponent } from './dialog-enter-encryption-password/dialog-enter-encryption-password.component';
 import {
@@ -449,14 +448,14 @@ export class SyncWrapperService {
             msg: T.F.SYNC.S.AUTH_TOKEN_REJECTED,
             translateParams: { reason: error.message },
             type: 'ERROR',
-            actionFn: async () => this._matDialog.open(DialogSyncInitialCfgComponent),
+            actionFn: () => this._openSyncInitialCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         } else {
           this._snackService.open({
             msg: T.F.SYNC.S.INCOMPLETE_CFG,
             type: 'ERROR',
-            actionFn: async () => this._matDialog.open(DialogSyncInitialCfgComponent),
+            actionFn: () => this._openSyncInitialCfgDialog(),
             actionStr: T.F.SYNC.S.BTN_CONFIGURE,
           });
         }
@@ -627,7 +626,7 @@ export class SyncWrapperService {
     providerId: SyncProviderId,
     force = false,
   ): Promise<{ wasConfigured: boolean }> {
-    const provider = this._providerManager.getProviderById(providerId);
+    const provider = await this._providerManager.getProviderById(providerId);
 
     if (!provider) {
       return { wasConfigured: false };
@@ -693,6 +692,12 @@ export class SyncWrapperService {
    * Handle incoherent timestamps dialog with proper async error handling.
    * Uses fire-and-forget pattern but logs errors instead of swallowing them.
    */
+  private async _openSyncInitialCfgDialog(): Promise<void> {
+    const { DialogSyncInitialCfgComponent } =
+      await import('./dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
+    this._matDialog.open(DialogSyncInitialCfgComponent);
+  }
+
   private _handleIncoherentTimestampsDialog(): void {
     this._openSyncErrorDialog({ type: 'incoherent-timestamps' });
   }

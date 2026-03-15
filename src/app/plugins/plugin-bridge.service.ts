@@ -505,6 +505,7 @@ export class PluginBridgeService implements OnDestroy {
         notes: taskData.notes || '',
         timeEstimate: taskData.timeEstimate || 0,
         isDone: (taskData as { isDone?: boolean }).isDone || false,
+        dueDay: taskData.dueDay ?? undefined,
       };
 
       // Add the task using TaskService

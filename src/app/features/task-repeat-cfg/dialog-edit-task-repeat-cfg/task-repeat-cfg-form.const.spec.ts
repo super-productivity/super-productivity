@@ -1,9 +1,9 @@
-import { TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS } from './task-repeat-cfg-form.const';
+import { TASK_REPEAT_CFG_ADVANCED_FORM_CFG } from './task-repeat-cfg-form.const';
 import { TaskReminderOptionId } from '../../tasks/task.model';
 
 describe('TaskRepeatCfgFormConfig', () => {
   describe('remindAt field', () => {
-    const remindAtField = TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS.flatMap((field) =>
+    const remindAtField = TASK_REPEAT_CFG_ADVANCED_FORM_CFG.flatMap((field) =>
       field.fieldGroup ? field.fieldGroup : [field],
     )
       .flatMap((field) => (field.fieldGroup ? field.fieldGroup : [field]))

@@ -73,7 +73,9 @@
   </div>
 </div>
 
-<task-context-menu
-  #taskContextMenu
-  [task]="task"
-></task-context-menu>
+@if (isContextMenuLoaded()) {
+  <task-context-menu
+    #taskContextMenu
+    [task]="task"
+  ></task-context-menu>
+}

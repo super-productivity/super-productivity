@@ -86,8 +86,7 @@
 
   line-height: 1.5;
   position: relative;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   flex-grow: 1;
   flex-shrink: 1;
 
@@ -101,7 +100,7 @@
   padding-right: 4px;
   padding-top: 4px;
   padding-bottom: 4px;
-  text-overflow: ellipsis;
+  @include truncateText();
   line-height: 1.1;
   font-size: var(--planner-font-size-smaller-mobile);
 

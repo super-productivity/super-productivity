@@ -15,7 +15,6 @@ import {
   FOCUS_MODE_FEATURE_KEY,
   focusModeReducer,
 } from '../features/focus-mode/store/focus-mode.reducer';
-import { FocusModeEffects } from '../features/focus-mode/store/focus-mode.effects';
 import { IDLE_FEATURE_KEY, idleReducer } from '../features/idle/store/idle.reducer';
 import { IdleEffects } from '../features/idle/store/idle.effects';
 import { issueProvidersFeature } from '../features/issue/store/issue-provider.reducer';
@@ -116,7 +115,7 @@ import {
     EffectsModule.forFeature([GlobalConfigEffects]),
 
     StoreModule.forFeature(FOCUS_MODE_FEATURE_KEY, focusModeReducer),
-    EffectsModule.forFeature([FocusModeEffects]),
+    // FocusModeEffects lazy-loaded in main.ts via requestIdleCallback
 
     StoreModule.forFeature(IDLE_FEATURE_KEY, idleReducer),
     EffectsModule.forFeature([IdleEffects]),

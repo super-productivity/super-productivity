@@ -56,6 +56,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _currentPastePlaceholder: string | null = null;
+  private _isFullscreenDialogOpen = false;
   private _resolveGeneration = 0;
 
   readonly isLock = input<boolean>(false);
@@ -161,7 +162,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._hideOverFlowTimeout);
     }
 
-    if (this.isShowEdit()) {
+    if (this.isShowEdit() && !this._isFullscreenDialogOpen) {
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         const currentValue = textareaEl.nativeElement.value;
@@ -224,6 +225,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   untoggleShowEdit(): void {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
     if (!this.isLock()) {
       this.resizeParsedToFit();
       this.isShowEdit.set(false);
@@ -256,18 +260,23 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   openFullScreen(): void {
+    this._isFullscreenDialogOpen = true;
+    // Read directly from textarea since modelCopy may be stale (one-way ngModel binding)
+    const textareaEl = this.textareaEl();
+    const currentContent = textareaEl ? textareaEl.nativeElement.value : this.modelCopy();
     const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
       minWidth: '100vw',
       height: '100vh',
       restoreFocus: true,
       autoFocus: 'textarea',
       data: {
-        content: this.modelCopy(),
+        content: currentContent,
         taskId: this.taskId(),
       },
     });
 
     dialogRef.afterClosed().subscribe((res) => {
+      this._isFullscreenDialogOpen = false;
       // This resets the task note to its default text
       if (res?.action === 'DELETE') {
         this.modelCopy.set('');
@@ -308,6 +317,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   setBlur(ev: Event): void {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
     this.blurred.emit(ev);
   }
 

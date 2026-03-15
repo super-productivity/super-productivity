@@ -58,7 +58,7 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'MONTHLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
+        startDate: referenceDate ? getDbDateStr(referenceDate) : getDbDateStr(),
       };
     }
 
@@ -66,7 +66,7 @@ export const getQuickSettingUpdates = (
       return {
         repeatCycle: 'YEARLY',
         repeatEvery: 1,
-        startDate: getDbDateStr(),
+        startDate: referenceDate ? getDbDateStr(referenceDate) : getDbDateStr(),
       };
     }
 

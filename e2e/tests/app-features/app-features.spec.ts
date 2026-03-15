@@ -10,7 +10,7 @@ const goToConfig = async (page: Page): Promise<void> => {
 
 // Navigate to main view and wait for it to be ready
 const goToMainView = async (page: Page): Promise<void> => {
-  await page.goto('/#/tag/TODAY');
+  await page.goto('/#/tag/TODAY/tasks');
   await waitForAngularStability(page);
 };
 

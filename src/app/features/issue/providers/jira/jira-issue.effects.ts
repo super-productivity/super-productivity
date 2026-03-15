@@ -16,9 +16,8 @@ import { JiraIssueReduced } from './jira-issue.model';
 import { SnackService } from '../../../../core/snack/snack.service';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { TaskService } from '../../../tasks/task.service';
-import { EMPTY, Observable, of, throwError, timer } from 'rxjs';
+import { EMPTY, from, Observable, of, throwError, timer } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogJiraTransitionComponent } from './jira-view-components/dialog-jira-transition/dialog-jira-transition.component';
 import { IssueLocalState, IssueProviderJira } from '../../issue.model';
 import { IssueService } from '../../issue.service';
 import { JIRA_TYPE } from '../../issue.const';
@@ -26,7 +25,6 @@ import { T } from '../../../../t.const';
 import { JiraTransitionOption } from './jira.model';
 import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import { DialogJiraAddWorklogComponent } from './jira-view-components/dialog-jira-add-worklog/dialog-jira-add-worklog.component';
 import { selectCurrentTaskParentOrCurrent } from '../../../tasks/store/task.selectors';
 import { HANDLED_ERROR_PROP_STR } from '../../../../app.constants';
 import { DialogConfirmComponent } from '../../../../ui/dialog-confirm/dialog-confirm.component';
@@ -350,7 +348,9 @@ export class JiraIssueEffects {
     this._jiraApiService
       .getReducedIssueById$(issueId, jiraCfg)
       .pipe(take(1))
-      .subscribe((issue) => {
+      .subscribe(async (issue) => {
+        const { DialogJiraAddWorklogComponent } =
+          await import('./jira-view-components/dialog-jira-add-worklog/dialog-jira-add-worklog.component');
         this._matDialog.open(DialogJiraAddWorklogComponent, {
           restoreFocus: true,
           data: {
@@ -366,16 +366,18 @@ export class JiraIssueEffects {
     localState: IssueLocalState,
     task: Task,
   ): Observable<unknown> {
-    return this._matDialog
-      .open(DialogJiraTransitionComponent, {
-        restoreFocus: true,
-        data: {
-          issue,
-          localState,
-          task,
-        },
-      })
-      .afterClosed();
+    return from(
+      import('./jira-view-components/dialog-jira-transition/dialog-jira-transition.component'),
+    ).pipe(
+      switchMap(({ DialogJiraTransitionComponent }) =>
+        this._matDialog
+          .open(DialogJiraTransitionComponent, {
+            restoreFocus: true,
+            data: { issue, localState, task },
+          })
+          .afterClosed(),
+      ),
+    );
   }
 
   private _getCfgOnce$(issueProviderId: string): Observable<IssueProviderJira> {

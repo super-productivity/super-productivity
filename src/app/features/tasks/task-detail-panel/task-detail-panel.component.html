@@ -139,6 +139,31 @@
       }
     </ng-container>
   </task-detail-item>
+  <task-detail-item
+    (collapseParent)="collapseParent()"
+    (editActionTriggered)="openDeadlineDialog()"
+    (keyPress)="onItemKeyPress($event)"
+    [inputIcon]="task().deadlineWithTime || task().deadlineDay ? 'edit' : 'add'"
+    class="input-item"
+    [class.color-warn]="isDeadlineOverdue()"
+  >
+    <ng-container input-title>
+      <mat-icon>flag</mat-icon>
+      <span>{{ deadlineLabelKey() | translate }}</span>
+    </ng-container>
+    <ng-container input-value>
+      @if (task().deadlineWithTime) {
+        <div class="reminder-value">
+          {{ task().deadlineWithTime | localeDate: 'short' }}
+        </div>
+      }
+      @if (task().deadlineDay) {
+        <div class="reminder-value">
+          {{ task().deadlineDay | localeDate: 'shortDate' }}
+        </div>
+      }
+    </ng-container>
+  </task-detail-item>
 
   @if (task().issueId && task().issueType !== ICAL_TYPE) {
     <task-detail-item

@@ -75,6 +75,9 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
 
   T: typeof T = T;
   isDisableControls: boolean = false;
+  private _deadlineReminderTaskIds = new Set<string>(
+    this.data.reminders.filter((r) => r.isDeadlineReminder).map((r) => r.id),
+  );
   taskIds$: BehaviorSubject<string[]> = new BehaviorSubject(
     this.data.reminders.map((r) => r.id),
   );
@@ -84,13 +87,23 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
         first(),
         map((tasks: Task[]) =>
           tasks
-            .filter((task) => !!task && typeof task.remindAt === 'number')
-            .map(
-              (task): TaskWithReminderData => ({
+            .filter(
+              (task) =>
+                !!task &&
+                (typeof task.remindAt === 'number' ||
+                  typeof task.deadlineRemindAt === 'number'),
+            )
+            .map((task): TaskWithReminderData => {
+              const isDeadline = this._deadlineReminderTaskIds.has(task.id);
+              const remindAt = isDeadline
+                ? (task.deadlineRemindAt as number)
+                : (task.remindAt as number);
+              return {
                 ...task,
-                reminderData: { remindAt: task.remindAt as number },
-              }),
-            ),
+                reminderData: { remindAt },
+                isDeadlineReminder: isDeadline,
+              };
+            }),
         ),
       ),
     ),
@@ -151,6 +164,11 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   }
 
   dismiss(task: TaskWithReminderData): void {
+    if (task.isDeadlineReminder) {
+      this._clearDeadlineReminder(task);
+      this._removeTaskFromList(task.id);
+      return;
+    }
     if (task.projectId || task.parentId || task.tagIds.length > 0) {
       this._store.dispatch(
         TaskSharedActions.unscheduleTask({
@@ -162,25 +180,40 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
   }
 
   dismissReminderOnly(task: TaskWithReminderData): void {
-    this._store.dispatch(
-      TaskSharedActions.dismissReminderOnly({
-        id: task.id,
-      }),
-    );
+    if (task.isDeadlineReminder) {
+      this._clearDeadlineReminder(task);
+    } else {
+      this._store.dispatch(
+        TaskSharedActions.dismissReminderOnly({
+          id: task.id,
+        }),
+      );
+    }
     this._removeTaskFromList(task.id);
   }
 
   snooze(task: TaskWithReminderData, snoozeInMinutes: number): void {
     const snoozeMs = snoozeInMinutes * MINUTES_TO_MILLISECONDS;
     const newRemindAt = Date.now() + snoozeMs;
-    this._store.dispatch(
-      TaskSharedActions.reScheduleTaskWithTime({
-        task,
-        dueWithTime: task.dueWithTime || newRemindAt,
-        remindAt: newRemindAt,
-        isMoveToBacklog: false,
-      }),
-    );
+    if (task.isDeadlineReminder) {
+      this._store.dispatch(
+        TaskSharedActions.setDeadline({
+          taskId: task.id,
+          ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
+          ...(task.deadlineWithTime ? { deadlineWithTime: task.deadlineWithTime } : {}),
+          deadlineRemindAt: newRemindAt,
+        }),
+      );
+    } else {
+      this._store.dispatch(
+        TaskSharedActions.reScheduleTaskWithTime({
+          task,
+          dueWithTime: task.dueWithTime || newRemindAt,
+          remindAt: newRemindAt,
+          isMoveToBacklog: false,
+        }),
+      );
+    }
     this._removeTaskFromList(task.id);
   }
 
@@ -324,6 +357,16 @@ export class DialogViewTaskRemindersComponent implements OnDestroy {
       this._taskService.setDone(task.id);
     });
     this._finalizeBulkAction();
+  }
+
+  private _clearDeadlineReminder(task: TaskWithReminderData): void {
+    this._store.dispatch(
+      TaskSharedActions.setDeadline({
+        taskId: task.id,
+        ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
+        ...(task.deadlineWithTime ? { deadlineWithTime: task.deadlineWithTime } : {}),
+      }),
+    );
   }
 
   private _close(): void {

@@ -20,7 +20,6 @@ import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
   selector: 'context-menu',
   imports: [MatMenu, MatMenuTrigger, MatMenuContent, NgTemplateOutlet],
   templateUrl: './context-menu.component.html',
-  styleUrl: './context-menu.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
 })

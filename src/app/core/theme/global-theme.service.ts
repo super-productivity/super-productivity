@@ -18,7 +18,7 @@ import { DOCUMENT } from '@angular/common';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
-import { ThemeService as NgChartThemeService } from 'ng2-charts';
+
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { WorkContextThemeCfg } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -26,7 +26,8 @@ import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { ChartConfiguration } from 'chart.js';
+import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
+
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { HttpClient } from '@angular/common/http';
@@ -53,7 +54,7 @@ export class GlobalThemeService {
   private _matIconRegistry = inject(MatIconRegistry);
   private readonly _registeredPluginIcons = new Set<string>();
   private _domSanitizer = inject(DomSanitizer);
-  private _chartThemeService = inject(NgChartThemeService);
+
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
@@ -127,7 +128,9 @@ export class GlobalThemeService {
 
   private _setDarkTheme(isDarkTheme: boolean): void {
     this._materialCssVarsService.setDarkTheme(isDarkTheme);
-    this._setChartTheme(isDarkTheme);
+    this._setChartTheme(isDarkTheme).catch((err) => {
+      Log.warn('Failed to set chart theme', err);
+    });
     // this._materialCssVarsService.setDarkTheme(true);
     // this._materialCssVarsService.setDarkTheme(false);
   }
@@ -280,6 +283,12 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isElectron);
       this.document.body.classList.add(BodyClass.isAdvancedFeatures);
       this.document.body.classList.remove(BodyClass.isNoAdvancedFeatures);
+      ipcEnterFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.add(BodyClass.isFullScreen);
+      });
+      ipcLeaveFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.remove(BodyClass.isFullScreen);
+      });
     } else {
       this.document.body.classList.add(BodyClass.isWeb);
       this._chromeExtensionInterfaceService.onReady$.pipe(take(1)).subscribe(() => {
@@ -389,12 +398,13 @@ export class GlobalThemeService {
     }
   }
 
-  private _setChartTheme(isDarkTheme: boolean): void {
-    const overrides: ChartConfiguration['options'] = isDarkTheme
+  private async _setChartTheme(isDarkTheme: boolean): Promise<void> {
+    const { ThemeService } = await import('ng2-charts');
+
+    const chartThemeService = this._environmentInjector.get(ThemeService);
+
+    const overrides: import('chart.js').ChartConfiguration['options'] = isDarkTheme
       ? {
-          // legend: {
-          //   labels: { fontColor: 'white' },
-          // },
           scales: {
             x: {
               ticks: {
@@ -418,7 +428,7 @@ export class GlobalThemeService {
       : {
           scales: {},
         };
-    this._chartThemeService.setColorschemesOptions(overrides);
+    chartThemeService.setColorschemesOptions(overrides);
   }
 
   private _setupCustomThemeEffect(): void {

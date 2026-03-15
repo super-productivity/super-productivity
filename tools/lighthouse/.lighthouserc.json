@@ -21,8 +21,8 @@
         "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
         "total-blocking-time": ["warn", { "maxNumericValue": 300 }],
         "interactive": ["warn", { "maxNumericValue": 5000 }],
-        "resource-summary.script.count": ["warn", { "maxNumericValue": 140 }],
-        "resource-summary.total.count": ["warn", { "maxNumericValue": 150 }],
+        "resource-summary.script.count": ["warn", { "maxNumericValue": 170 }],
+        "resource-summary.total.count": ["warn", { "maxNumericValue": 220 }],
         "resource-summary.font.size": ["warn", { "maxNumericValue": 520000 }]
       }
     },

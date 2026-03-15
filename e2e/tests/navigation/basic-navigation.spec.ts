@@ -52,7 +52,7 @@ test.describe('Basic Navigation', () => {
     await expect(page.locator('.page-settings')).toBeVisible();
 
     // Navigate back to work view
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/\/#\/tag\/TODAY/);
     await expect(page.locator('task-list').first()).toBeVisible();

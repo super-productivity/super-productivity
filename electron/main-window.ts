@@ -259,6 +259,19 @@ export const createWindow = async ({
     }
   });
 
+  // Notify renderer of fullscreen state changes (used for app border visibility)
+  mainWin.on('enter-full-screen', () => {
+    mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
+  });
+  mainWin.on('leave-full-screen', () => {
+    mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
+  });
+  mainWin.webContents.on('did-finish-load', () => {
+    if (mainWin.isFullScreen()) {
+      mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
+    }
+  });
+
   // Listen for theme changes to update title bar overlay color and symbol
   if (isUseCustomWindowTitleBar && !IS_MAC) {
     ipcMain.on(IPC.UPDATE_TITLE_BAR_DARK_MODE, (ev, isDarkMode: boolean) => {

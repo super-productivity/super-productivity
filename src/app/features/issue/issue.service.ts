@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { generateCalendarTaskId } from '../calendar-integration/generate-calendar-task-id';
 import {
   BuiltInIssueProviderKey,
   IssueData,
@@ -500,6 +501,14 @@ export class IssueService {
       )
     ) {
       return undefined;
+    }
+
+    // For calendar events, use deterministic ID to prevent duplicates across devices
+    if (issueProviderKey === ICAL_TYPE) {
+      additional = {
+        ...additional,
+        id: generateCalendarTaskId(issueProviderId, issueDataReduced.id.toString()),
+      };
     }
 
     const {

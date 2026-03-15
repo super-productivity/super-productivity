@@ -93,7 +93,7 @@ describe('ServerMigrationService', () => {
     vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ 'test-client': 5 }),
     );
-    validateStateServiceSpy.validateAndRepair.and.returnValue({
+    validateStateServiceSpy.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     } as any);
@@ -260,7 +260,7 @@ describe('ServerMigrationService', () => {
     });
 
     it('should abort if state validation fails', async () => {
-      validateStateServiceSpy.validateAndRepair.and.returnValue({
+      validateStateServiceSpy.validateAndRepair.and.resolveTo({
         isValid: false,
         wasRepaired: false,
         error: 'Validation failed',
@@ -284,7 +284,7 @@ describe('ServerMigrationService', () => {
         tag: { ids: [], entities: {} },
       };
 
-      validateStateServiceSpy.validateAndRepair.and.returnValue({
+      validateStateServiceSpy.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState,

@@ -173,6 +173,62 @@ export const selectUndoneOverdue = createSelector(
   },
 );
 
+export const selectUndoneOverdueDeadlineTasks = createSelector(
+  selectTaskFeatureState,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!s || !todayStr) return [];
+
+    const today = dateStrToUtcDate(todayStr);
+    today.setHours(0, 0, 0, 0);
+    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
+    return s.ids
+      .map((id) => s.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          !!(
+            (task.deadlineDay && task.deadlineDay < todayStr) ||
+            (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
+          ),
+      );
+  },
+);
+
+export const selectUnplannedDeadlineTasksForToday = createSelector(
+  selectTaskFeatureState,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (taskState, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!taskState || !todayStr) return [];
+
+    const today = dateStrToUtcDate(todayStr);
+    today.setHours(0, 0, 0, 0);
+    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const todayEndMs = todayStartMs + oneDayMs;
+
+    return taskState.ids
+      .map((id) => taskState.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          // Has a date-only deadline for today
+          task.deadlineDay === todayStr &&
+          // Not already planned for today (dueDay or dueWithTime)
+          task.dueDay !== todayStr &&
+          !(
+            task.dueWithTime &&
+            task.dueWithTime >= todayStartMs &&
+            task.dueWithTime < todayEndMs
+          ),
+      );
+  },
+);
+
 // Note: Uses selectTodayTagTaskIds due to circular dependency with work-context.selectors.ts
 // This selector may include stale tasks - for accurate membership use selectTodayTaskIds
 export const selectOverdueTasksOnToday = createSelector(
@@ -555,6 +611,35 @@ export const selectAllTasksWithReminder = createSelector(
     return tasks.filter(
       (task) => task && typeof task.remindAt === 'number' && !task.isDone,
     ) as TaskWithReminder[];
+  },
+);
+
+export const selectAllTasksWithDeadlineReminder = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => {
+    return tasks.filter(
+      (task) => task && typeof task.deadlineRemindAt === 'number' && !task.isDone,
+    );
+  },
+);
+
+export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => {
+    return tasks
+      .filter(
+        (task) =>
+          task &&
+          !task.isDone &&
+          (task.deadlineDay || typeof task.deadlineWithTime === 'number'),
+      )
+      .sort((a, b) => {
+        const aTime =
+          a.deadlineWithTime || new Date(a.deadlineDay + 'T23:59:59').getTime();
+        const bTime =
+          b.deadlineWithTime || new Date(b.deadlineDay + 'T23:59:59').getTime();
+        return aTime - bTime;
+      });
   },
 );
 

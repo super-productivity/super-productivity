@@ -1,5 +1,9 @@
 # E2E Encryption Implementation - Critical Issues Summary
 
+> **Status: Archived — Reference Only**
+>
+> Documents blockers in the rejected device-key approach. Kept for historical context.
+
 ## ⚠️ DO NOT IMPLEMENT WITHOUT ADDRESSING THESE ISSUES
 
 This document summarizes the **critical blockers** identified by 5 independent agent reviews of the device-generated key encryption plan.

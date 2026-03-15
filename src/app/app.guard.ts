@@ -74,6 +74,13 @@ export class FocusOverlayOpenGuard {
   ): Observable<boolean> {
     return this._store.select(selectIsOverlayShown).pipe(map((isShown) => !isShown));
   }
+
+  canActivateChild(
+    childRoute: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot,
+  ): Observable<boolean> {
+    return this.canActivate(childRoute, state);
+  }
 }
 
 @Injectable({ providedIn: 'root' })

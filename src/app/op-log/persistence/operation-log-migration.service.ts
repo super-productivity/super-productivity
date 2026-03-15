@@ -14,9 +14,7 @@ import {
 } from './dialog-legacy-migration/dialog-legacy-migration.component';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
 import { download } from '../../util/download';
-import { validateFull } from '../validation/validation-fn';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
-import { dataRepair } from '../validation/data-repair';
 import { uuidv7 } from '../../util/uuid-v7';
 import { ActionType, Operation, OpType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from './schema-migration.service';
@@ -204,6 +202,7 @@ export class OperationLogMigrationService {
 
     // 2. Validate and repair if needed
     // LegacyAppData has unknown-typed fields; cast through unknown for the validation pipeline
+    const { validateFull } = await import('../validation/validation-fn');
     const validationResult = validateFull(legacyData as unknown as AppDataComplete);
     let dataToMigrate = legacyData as unknown as AppDataComplete;
 
@@ -220,6 +219,7 @@ export class OperationLogMigrationService {
         'errors' in validationResult.typiaResult
           ? validationResult.typiaResult.errors
           : [];
+      const { dataRepair } = await import('../validation/data-repair');
       dataToMigrate = dataRepair(legacyData as unknown as AppDataComplete, errors).data;
 
       // Re-validate after repair to ensure success

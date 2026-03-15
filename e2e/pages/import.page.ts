@@ -1,7 +1,6 @@
 import { type Page, type Locator } from '@playwright/test';
 import { BasePage } from './base.page';
 import * as path from 'path';
-import { handleEncryptionWarningDialog } from '../utils/supersync-helpers';
 
 /**
  * Page object for file import operations.
@@ -142,52 +141,57 @@ export class ImportPage extends BasePage {
    * @param filePath - Absolute path to the backup JSON file
    */
   async importBackupFile(filePath: string): Promise<void> {
-    // Set the file on the hidden input element
+    // Start listening for the import completion signal BEFORE triggering the import.
+    // The "[SP_ALL] Load(import) all data" console message fires when
+    // BackupService.importCompleteBackup() has persisted to IndexedDB and dispatched to NgRx.
+    // We must start listening first because handleFileInput() reads the file asynchronously
+    // via FileReader, and the import may complete before we start listening.
+    const importCompletePromise = this.page.waitForEvent('console', {
+      predicate: (msg) => msg.text().includes('Load(import) all data'),
+      timeout: 60000,
+    });
+
+    // Set the file on the hidden input element.
+    // setInputFiles() triggers the (change) event on the input, which starts the import.
+    // Do NOT dispatch an additional change event — that would trigger the import twice.
     await this.fileInput.setInputFiles(filePath);
 
-    // Dispatch change event to ensure Angular detects the file change
-    // Use evaluate to dispatch directly as the input might be hidden/detached from view
-    try {
-      // Check if element is still attached before dispatching event
-      // If setInputFiles triggered the import immediately, the element might be gone
-      // We use elementHandle with a short timeout to avoid waiting 15s if it's gone
-      const handle = await this.fileInput.elementHandle({ timeout: 1000 });
-      if (handle) {
-        await handle.evaluate((node) => {
-          node.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-      }
-    } catch (e) {
-      // Ignore timeout errors as they indicate the element was removed (import started)
-      const msg = (e as Error).message;
-      if (!msg.includes('Timeout')) {
-        console.log(
-          'Dispatch event failed (maybe import already started/element removed):',
-          msg,
-        );
-      }
+    // Handle encryption warning dialog if it appears.
+    // The dialog may appear several seconds after setInputFiles because FileReader is async.
+    // Race: either the dialog appears (handle it) or the import completes without it.
+    const encryptionWarning = this.page
+      .locator('dialog-import-encryption-warning')
+      .first();
+    const dialogOrImport = await Promise.race([
+      encryptionWarning
+        .waitFor({ state: 'visible', timeout: 15000 })
+        .then(() => 'dialog' as const),
+      importCompletePromise.then(() => 'import_complete' as const),
+    ]);
+
+    if (dialogOrImport === 'dialog') {
+      console.log('[ImportPage] Encryption warning dialog appeared - confirming import');
+      const confirmBtn = encryptionWarning.locator('button[color="warn"]');
+      await confirmBtn.click();
+      await encryptionWarning.waitFor({ state: 'hidden', timeout: 10000 });
+      // Now wait for the import to actually complete
+      await importCompletePromise;
     }
+    // If 'import_complete', the import finished without showing the dialog
 
-    // Handle encryption warning dialog if it appears
-    // When importing a backup with different encryption settings, the app shows
-    // a confirmation dialog (dialog-import-encryption-warning) before proceeding.
-    await handleEncryptionWarningDialog(this.page, '[ImportPage]');
-
-    // Wait for import to be processed
-    // The app navigates to TODAY tag after successful import via Angular router
-    // Poll for URL change since Angular uses hash-based routing
+    // Wait for Angular router navigation to TODAY tag (happens right after dispatch)
     const startTime = Date.now();
-    const timeout = 30000;
+    const timeout = 10000;
     while (Date.now() - startTime < timeout) {
       const url = this.page.url();
       if (url.includes('tag') && url.includes('TODAY')) {
         break;
       }
-      await this.page.waitForTimeout(500);
+      await this.page.waitForTimeout(200);
     }
 
     await this.page.waitForLoadState('networkidle');
-    await this.page.waitForTimeout(1000);
+    await this.page.waitForTimeout(500);
   }
 
   /**

@@ -38,7 +38,6 @@ $this-border-radius: 8px;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .spacer {
     width: calc(var(--s) * 1.5);

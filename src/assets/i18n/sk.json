@@ -230,7 +230,7 @@
       "FORM": {
         "HOST": "Hostiteľ (napr.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Používateľské meno alebo názov organizácie/projektu",
-        "REPO_FULL_NAME_DESCRIPTION": "Možno ho nájsť ako súčasť url adresy pri zobrazení projektu v Prieskumníkovi.",
+        "REPO_FULL_NAME_DESCRIPTION": "Možno ho nájsť ako súčasť URL adresy pri zobrazení projektu v Prieskumníkovi.",
         "SCOPE": "Rozsah pôsobnosti",
         "SCOPE_ALL": "Všetky",
         "SCOPE_ASSIGNED": "Pridelené mne",
@@ -1509,7 +1509,7 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "Vzhľadom na obmedzenia týkajúce sa rôznych pôvodov <b>to pravdepodobne nebude fungovať s verziou prehliadača Super Productivity.<br /> Ak chcete túto funkciu používať, stiahnite si prosím <a href=\"https://super-productivity.com/download/\">verziu pre počítače</a> !</b>",
-      "CAL_PATH": "Url zdroja iCal",
+      "CAL_PATH": "URL zdroja iCal",
       "CHECK_UPDATES": "Kontrola vzdialených aktualizácií každých X",
       "HELP": "V aplikácii Super Productivity môžete integrovať kalendáre, ktoré vám budú pripomínať a pridávať ich ako úlohy. Integrácia funguje pomocou formátu iCal. Aby to fungovalo, musia byť vaše kalendáre prístupné buď cez internet, alebo prostredníctvom súborového systému.",
       "SHOW_BANNER_THRESHOLD": "Zobraziť upozornenie X pred udalosťou (prázdne pre vypnuté)"
@@ -1728,7 +1728,7 @@
       "IS_LOCK_SCREEN": "Lock screen when a break is due (desktop only)",
       "MESSAGE": "Take a break message",
       "MIN_WORKING_TIME": "Trigger take a break notification after X working without one",
-      "MOTIVATIONAL_IMGS": "Motivational image (web url)",
+      "MOTIVATIONAL_IMGS": "Motivational image (web URL)",
       "NOTIFICATION_TITLE": "Take a break!",
       "SNOOZE_TIME": "Snooze time when prompted to take a break",
       "TITLE": "Break Reminder"

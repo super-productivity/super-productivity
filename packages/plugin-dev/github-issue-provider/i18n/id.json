@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Di sini Anda dapat mengonfigurasi SuperProductivity untuk membuat daftar open GitHub issues untuk repositori tertentu di panel pembuatan tugas dalam tampilan perencanaan harian. Mereka akan dicantumkan sebagai saran dan akan memberikan tautan ke masalah tersebut serta informasi lebih lanjut tentangnya.</p> <p>Selain itu, Anda dapat secara otomatis menambahkan dan menyinkronkan semua masalah yang terbuka ke backlog tugas Anda.</p><p>Untuk mencapai batas penggunaan dan untuk mengakses, Anda dapat memberikan token akses. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Info lebih lanjut tentang cakupannya dapat ditemukan di sini</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Kesalahan saat memetakan data. Apakah nama repositori Anda sudah benar?",
-    "ERR_UNKNOWN": "GitHub: Error tidak diketahui {{statusCode}} {{errorMsg}}. Batas kecepatan API terlampaui?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Error tidak diketahui {{statusCode}} {{errorMsg}}. Batas kecepatan API terlampaui?"
   }
 }

@@ -35,17 +35,30 @@ import { PluginLog } from '../../../core/log';
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      @for (button of dialogData.buttons || defaultButtons; track button.label) {
-        <button
-          mat-button
-          [color]="button.color || 'primary'"
-          (click)="onButtonClick(button)"
-        >
-          @if (button.icon) {
-            <mat-icon>{{ button.icon }}</mat-icon>
-          }
-          {{ button.label }}
-        </button>
+      @for (button of dialogData.buttons || defaultButtons; track $index) {
+        @if (button.raised) {
+          <button
+            mat-raised-button
+            [color]="button.color || 'primary'"
+            (click)="onButtonClick(button)"
+          >
+            @if (button.icon) {
+              <mat-icon>{{ button.icon }}</mat-icon>
+            }
+            {{ button.label }}
+          </button>
+        } @else {
+          <button
+            mat-button
+            [color]="button.color || 'primary'"
+            (click)="onButtonClick(button)"
+          >
+            @if (button.icon) {
+              <mat-icon>{{ button.icon }}</mat-icon>
+            }
+            {{ button.label }}
+          </button>
+        }
       }
     </mat-dialog-actions>
   `,
@@ -53,8 +66,9 @@ import { PluginLog } from '../../../core/log';
     `
       mat-dialog-content {
         min-width: 300px;
-        max-width: 600px;
-        max-height: 400px;
+        max-width: 900px;
+        width: 70vw;
+        max-height: 70vh;
         overflow-y: auto;
       }
 
@@ -64,6 +78,35 @@ import { PluginLog } from '../../../core/log';
 
       mat-icon {
         margin-right: 8px;
+      }
+
+      /* Default styles for native form elements injected by plugins */
+      :host ::ng-deep select,
+      :host ::ng-deep textarea,
+      :host ::ng-deep input {
+        background: var(--bg-darker);
+        color: var(--text-color);
+        border: 1px solid var(--divider-color);
+        border-radius: 4px;
+        padding: 8px;
+        font-family: var(--font-primary-stack);
+        font-size: 14px;
+      }
+
+      :host ::ng-deep select:focus,
+      :host ::ng-deep textarea:focus,
+      :host ::ng-deep input:focus {
+        outline: none;
+        border-color: var(--c-primary);
+      }
+
+      :host ::ng-deep select option {
+        background: var(--bg-darker);
+        color: var(--text-color);
+      }
+
+      :host ::ng-deep textarea {
+        resize: vertical;
       }
     `,
   ],

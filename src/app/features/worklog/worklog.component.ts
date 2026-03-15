@@ -76,6 +76,10 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
 
   T: typeof T = T;
   expanded: { [key: string]: boolean } = {};
+  expandedMonths: { [key: string]: boolean } = (() => {
+    const now = new Date();
+    return { [`${now.getFullYear()}-${now.getMonth() + 1}`]: true };
+  })();
   allProjectsColorAndTitle: { [key: string]: { title: string; color: string } } = {};
 
   private _subs: Subscription = new Subscription();
@@ -86,6 +90,11 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
         const { dateStr } = params as SearchQueryParams;
         if (!!dateStr) {
           this.expanded[dateStr] = true;
+          // Auto-expand the month containing this day
+          const parts = dateStr.split('-');
+          if (parts.length === 3) {
+            this.expandedMonths[+parts[0] + '-' + +parts[1]] = true;
+          }
         }
       }),
     );
@@ -151,6 +160,15 @@ export class WorklogComponent implements AfterViewInit, OnDestroy {
           this._router.navigate(['/active/tasks']);
         }
       });
+  }
+
+  toggleMonth(yearKey: string, monthKey: string): void {
+    const key = yearKey + '-' + monthKey;
+    this.expandedMonths[key] = !this.isMonthExpanded(yearKey, monthKey);
+  }
+
+  isMonthExpanded(yearKey: string, monthKey: string): boolean {
+    return !!this.expandedMonths[yearKey + '-' + monthKey];
   }
 
   sortWorklogItems = <T extends KeyValue<string, unknown>>(a: T, b: T): number =>

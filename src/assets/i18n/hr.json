@@ -28,7 +28,7 @@
         "EDIT_ATTACHMENT": "Uredi prilog",
         "LABELS": {
           "IMG": "Slika",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Odaberi vrstu",
         "TYPES": {
@@ -172,7 +172,7 @@
       "FORM": {
         "HOST": "Host računalo (npr.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Korisničko ime ili ime organizacije/projekta",
-        "REPO_FULL_NAME_DESCRIPTION": "Može se pronaći kao dio url-a prilikom pregledavanja projekta u pregledniku.",
+        "REPO_FULL_NAME_DESCRIPTION": "Može se pronaći kao dio URL-a prilikom pregledavanja projekta u pregledniku.",
         "SCOPE": "Opseg",
         "SCOPE_ALL": "Sve",
         "SCOPE_ASSIGNED": "Meni dodijeljeno",
@@ -521,7 +521,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Zahtijeva aktiviranje modula za praćenje vremena za OpenProject projekt",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Prikaži dijaloški okvir za praćenje vremena kad se podzadaci završe",
         "PROJECT_ID": "ID projekta",
-        "PROJECT_ID_DESCRIPTION": "Može se pronaći kao dio url-a kad se projekt prikazuje u pregledniku.",
+        "PROJECT_ID_DESCRIPTION": "Može se pronaći kao dio URL-a kad se projekt prikazuje u pregledniku.",
         "SCOPE": "Opseg",
         "SCOPE_ALL": "Sve",
         "SCOPE_ASSIGNED": "Meni dodijeljeno",
@@ -590,8 +590,8 @@
       },
       "FORM_THEME": {
         "HELP": "Postavke teme za tvoj projekt.",
-        "L_BACKGROUND_IMAGE_DARK": "Url slike pozadine (tamna tema)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Url slike pozadine (svijetla tema)",
+        "L_BACKGROUND_IMAGE_DARK": "URL slike pozadine (tamna tema)",
+        "L_BACKGROUND_IMAGE_LIGHT": "URL slike pozadine (svijetla tema)",
         "L_COLOR_ACCENT": "Boja isticanja",
         "L_COLOR_PRIMARY": "Primarna boja",
         "L_COLOR_WARN": "Boja upozorenja/greške",
@@ -621,7 +621,7 @@
         "API_KEY": "Ključ za pritup API-u",
         "HOST": "Host računalo (npr.: https://redmine.org)",
         "PROJECT_ID": "Identifikator projekta",
-        "PROJECT_ID_DESCRIPTION": "Može se pronaći kao dio url-a kad se projekt prikazuje u pregledniku.",
+        "PROJECT_ID_DESCRIPTION": "Može se pronaći kao dio URL-a kad se projekt prikazuje u pregledniku.",
         "SCOPE": "Opseg",
         "SCOPE_ALL": "Sve",
         "SCOPE_ASSIGNED": "Dodijeljeno meni",
@@ -759,7 +759,7 @@
         "TITLE": "Sinkronizacija",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Omogućavanje rada na mobilnom uređaju i u pregledniku:</strong> da bi ovo radilo na mobilnom uređaju ili pregledniku, Super Productivity moraš staviti na popis dopuštenih za CORS zahtjeve za tvoju Nextcloud instancu. To može negativno utjecati na sigurnost! <a href='https://github.com/nextcloud/server/issues/3131'>Pogledaj ovu razgovor za daljnje informacija</a>. Jedan od pristupa da bi ovo radilo na mobilnom uređaju je stavljanje adrese „https://app.super-productivity.com” na popis dopuštenih putem Nextcloud programa <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword <a>. Koristi na vlastitu odgovornost!</p>",
-          "L_BASE_URL": "Osnovni Url",
+          "L_BASE_URL": "Osnovni URL",
           "L_PASSWORD": "Lozinka",
           "L_SYNC_FOLDER_PATH": "Sync folder chemen",
           "L_USER_NAME": "Korisničko ime"
@@ -1205,7 +1205,7 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "<b>Ovo vjerojatno NEĆE funkcionirati s verzijom preglednika Super Productivity.<br/> Za korištenje ove funkcije <a href=\"https://super-productivity.com/download/\">preuzmi desktop verziju</a>!</b>",
-      "CAL_PATH": "Url iCal izvora",
+      "CAL_PATH": "URL iCal izvora",
       "CHECK_UPDATES": "Traži eksterna aktualiziranja svakih X",
       "HELP": "Kalendare za podsjetnik možeš integrirati i dodati ih kao zadatke unutar Super Productivity. Integracija radi pomoću iCal formata. Da bi ovo funkcioniralo, tvoji kalendari moraju biti dostupni putem interneta ili putem sustava datoteka.",
       "SHOW_BANNER_THRESHOLD": "Prikaži obavijest X prije događaja (prazno za deaktivirano)"
@@ -1382,7 +1382,7 @@
       "IS_LOCK_SCREEN": "Zaključaj ekran kad dođe vrijeme pauze (samo desktop računala)",
       "MESSAGE": "Poruka za pauziranje",
       "MIN_WORKING_TIME": "Uključi obavijest za pauziranje nakon određenog vremena sprovedenog radom bez pauze",
-      "MOTIVATIONAL_IMGS": "Motivacijska slika (web url)",
+      "MOTIVATIONAL_IMGS": "Motivacijska slika (web URL)",
       "NOTIFICATION_TITLE": "Pauziraj!",
       "SNOOZE_TIME": "Odgodi mjerenje vremena kad te program zatraži da pauziraš",
       "TITLE": "Podsjetnik za pauzu"

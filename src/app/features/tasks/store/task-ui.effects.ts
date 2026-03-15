@@ -16,7 +16,11 @@ import {
   throttleTime,
   withLatestFrom,
 } from 'rxjs/operators';
-import { selectCurrentTask, selectCurrentTaskId } from './task.selectors';
+import {
+  selectCurrentTask,
+  selectCurrentTaskId,
+  selectUnplannedDeadlineTasksForToday,
+} from './task.selectors';
 import { NotifyService } from '../../../core/notify/notify.service';
 import { TaskService } from '../task.service';
 import { selectConfigFeatureState } from '../../config/store/global-config.reducer';
@@ -268,4 +272,38 @@ export class TaskUiEffects {
       ),
     });
   }
+
+  deadlineTodayBanner$ = createEffect(
+    () =>
+      this._store$.select(selectUnplannedDeadlineTasksForToday).pipe(
+        skipWhileApplyingRemoteOps(),
+        distinctUntilChanged(
+          (a, b) => a.length === b.length && a.every((t, i) => t.id === b[i].id),
+        ),
+        tap((tasks) => {
+          if (tasks.length > 0) {
+            this._bannerService.open({
+              id: BannerId.DeadlinesToday,
+              ico: 'flag',
+              msg: T.F.TASK.B.DEADLINES_TODAY,
+              translateParams: { count: tasks.length },
+              action: {
+                label: T.F.TASK.B.ADD_ALL_TO_TODAY,
+                fn: () => {
+                  this._store$.dispatch(
+                    TaskSharedActions.planTasksForToday({
+                      taskIds: tasks.map((t) => t.id),
+                    }),
+                  );
+                },
+              },
+              hideWhen$: this._store$
+                .select(selectUnplannedDeadlineTasksForToday)
+                .pipe(filter((t) => t.length === 0)),
+            });
+          }
+        }),
+      ),
+    { dispatch: false },
+  );
 }

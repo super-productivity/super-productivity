@@ -1770,7 +1770,7 @@
       "IS_LOCK_SCREEN": "Zablokuj ekran, gdy pora na przerwę (tylko desktop)",
       "MESSAGE": "Take a break message",
       "MIN_WORKING_TIME": "Trigger take a break notification after X working without one",
-      "MOTIVATIONAL_IMGS": "Motivational image (web url)",
+      "MOTIVATIONAL_IMGS": "Motivational image (web URL)",
       "NOTIFICATION_TITLE": "Zrób sobie przerwę!",
       "SNOOZE_TIME": "Snooze time when prompted to take a break",
       "TITLE": "Break Reminder"

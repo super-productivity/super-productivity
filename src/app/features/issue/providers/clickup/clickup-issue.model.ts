@@ -12,7 +12,7 @@ export type ClickUpStatus = Readonly<{
 export type ClickUpUser = Readonly<{
   id: number;
   username?: string | null;
-  color: string;
+  color: string | null;
   email: string;
   profilePicture: string | null;
   initials?: string; // Present in assignees but not always creator
@@ -70,7 +70,7 @@ export type ClickUpUserResponse = Readonly<{
   user: {
     id: number;
     username?: string | null;
-    color: string;
+    color: string | null;
     profilePicture: string | null;
   };
 }>;

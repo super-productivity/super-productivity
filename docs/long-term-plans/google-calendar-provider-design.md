@@ -1,5 +1,7 @@
 # Google Calendar Provider — Design Document
 
+> **Status: Planned**
+
 ## Overview
 
 Add a Google Calendar provider (`GOOGLE_CALENDAR`) to Super Productivity with two-way event sync via the Google Calendar REST API. Authentication uses a hybrid approach: an auth proxy by default with an option for user-provided OAuth credentials.

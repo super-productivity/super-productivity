@@ -1,6 +1,7 @@
 export { taskSharedCrudMetaReducer } from './task-shared-crud.reducer';
 export { taskSharedLifecycleMetaReducer } from './task-shared-lifecycle.reducer';
 export { taskSharedSchedulingMetaReducer } from './task-shared-scheduling.reducer';
+export { taskSharedDeadlineMetaReducer } from './task-shared-deadline.reducer';
 export { projectSharedMetaReducer } from './project-shared.reducer';
 export { tagSharedMetaReducer } from './tag-shared.reducer';
 export { plannerSharedMetaReducer } from './planner-shared.reducer';

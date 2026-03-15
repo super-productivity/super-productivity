@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 GitHub 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。<a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>更多關於範圍的資訊可以在這裡找到</a>。",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub：對應資料時發生錯誤。您的程式碼庫名稱是否正確？",
-    "ERR_UNKNOWN": "GitHub：未知錯誤 {{statusCode}} {{errorMsg}}。是否超過 API 使用限制？",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub：未知錯誤 {{statusCode}} {{errorMsg}}。是否超過 API 使用限制？"
   }
 }

@@ -82,8 +82,7 @@
     .title {
       flex: 0 1 auto;
       column-width: auto;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
     }
 
     .ico-wrapper {
@@ -292,8 +291,7 @@
 
 .title {
   font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   flex: 1 1 auto;
   padding: 6px;
   font-weight: 400;

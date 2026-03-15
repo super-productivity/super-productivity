@@ -317,9 +317,9 @@ test.describe('@supersync @encryption Wrong Password Error Handling', () => {
         // Client B's task should still exist
         await waitForTask(clientB.page, taskB);
 
-        // Client A syncs and should get Client B's data
-        await clientA.sync.syncAndWait();
-        // After overwrite, A might have B's task (depends on implementation)
+        // NOTE: We don't sync Client A here because the server now has data
+        // encrypted with newPassword, but Client A only knows password2.
+        // Client A would get a DecryptError dialog. That's a different test scenario.
         console.log('[Overwrite] Force upload completed');
       } else {
         console.log('[Overwrite] Note: Overwrite button not found in current UI');

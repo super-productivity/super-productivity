@@ -173,14 +173,31 @@ export class ReminderModule {
               // show for longer
               duration: 20000,
             },
-            ico: 'alarm',
+            ico: oldest.isDeadlineReminder ? 'flag' : 'alarm',
           });
           // Dismiss the reminder for the current task
-          this._store.dispatch(
-            TaskSharedActions.dismissReminderOnly({
-              id: taskId,
-            }),
-          );
+          if (oldest.isDeadlineReminder) {
+            // Clear deadlineRemindAt but keep the deadline date
+            firstValueFrom(this._taskService.getByIdOnce$(taskId)).then((task) => {
+              if (task) {
+                this._store.dispatch(
+                  TaskSharedActions.setDeadline({
+                    taskId,
+                    ...(task.deadlineDay ? { deadlineDay: task.deadlineDay } : {}),
+                    ...(task.deadlineWithTime
+                      ? { deadlineWithTime: task.deadlineWithTime }
+                      : {}),
+                  }),
+                );
+              }
+            });
+          } else {
+            this._store.dispatch(
+              TaskSharedActions.dismissReminderOnly({
+                id: taskId,
+              }),
+            );
+          }
         } else {
           this._matDialog
             .open(DialogViewTaskRemindersComponent, {

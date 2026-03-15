@@ -109,8 +109,7 @@
       flex: 1;
       display: flex;
       align-items: center;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
     }
 
     &-description {
@@ -201,8 +200,7 @@
   display: flex;
   align-items: center;
   margin: 0 var(--s3);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   min-width: 90px;
   flex: 1;
 

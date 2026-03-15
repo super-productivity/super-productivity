@@ -105,7 +105,7 @@ export type PomodoroConfig = Readonly<{
   duration?: number | null;
   breakDuration?: number | null;
   longerBreakDuration?: number | null;
-  cyclesBeforeLongerBreak: number;
+  cyclesBeforeLongerBreak?: number | null;
 }>;
 
 // NOTE: needs to be writable due to how we use it

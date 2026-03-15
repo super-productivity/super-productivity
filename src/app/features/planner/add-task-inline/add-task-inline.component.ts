@@ -11,7 +11,6 @@ import { TaskCopy } from '../../tasks/task.model';
   selector: 'add-task-inline',
   imports: [AddTaskBarComponent, MatIcon, TranslatePipe, MatButton],
   templateUrl: './add-task-inline.component.html',
-  styleUrl: './add-task-inline.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
 })

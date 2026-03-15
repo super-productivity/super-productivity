@@ -446,24 +446,23 @@ test.describe('@supersync SuperSync E2E', () => {
    * perform various actions in sequence, syncing between each step.
    *
    * Chain of operations:
-   * 1. Client A: Create task "Project X"
+   * 1. Client A: Create parent task "Project X"
    * 2. Sync A → Server → Sync B
-   * 3. Client B: Rename task to "Project X - Planning"
-   * 4. Client B: Add subtask "Research"
-   * 5. Sync B → Server → Sync A
-   * 6. Client A: Mark "Research" as done
-   * 7. Client A: Add subtask "Implementation"
-   * 8. Sync A → Server → Sync B
-   * 9. Client B: Add subtask "Testing"
-   * 10. Client B: Mark parent "Project X - Planning" as done
-   * 11. Sync B → Server → Sync A
-   * 12. Verify final state matches on both clients
+   * 3. Client B: Add subtask "Research" under "Project X"
+   * 4. Sync B → Server → Sync A
+   * 5. Client A: Mark "Research" as done
+   * 6. Client A: Add subtask "Implementation"
+   * 7. Sync A → Server → Sync B
+   * 8. Client B: Add subtask "Testing"
+   * 9. Client B: Mark "Testing" as done
+   * 10. Sync B → Server → Sync A
+   * 11. Verify final state matches on both clients
    *
    * Expected: Both clients have identical final state with:
-   * - Parent task "Project X - Planning" (done)
+   * - Parent task "Project X"
    *   - "Research" (done)
    *   - "Implementation" (not done)
-   *   - "Testing" (not done)
+   *   - "Testing" (done)
    */
   test('4.1 Complex chain of actions syncs correctly', async ({
     browser,
@@ -479,7 +478,6 @@ test.describe('@supersync SuperSync E2E', () => {
       const syncConfig = getSuperSyncConfig(user);
 
       // ============ PHASE 1: Initial Setup ============
-      // Set up both clients
       clientA = await createSimulatedClient(browser, baseURL!, 'A', testRunId);
       await clientA.sync.setupSuperSync(syncConfig);
 
@@ -487,103 +485,78 @@ test.describe('@supersync SuperSync E2E', () => {
       await clientB.sync.setupSuperSync(syncConfig);
 
       // ============ PHASE 2: Client A Creates Initial Task ============
-      const initialTaskName = `ProjectX-${uniqueId}`;
-      await clientA.workView.addTask(initialTaskName);
-      console.log(`[Chain Test] Client A created task: ${initialTaskName}`);
+      const parentTaskName = `ProjectX-${uniqueId}`;
+      await clientA.workView.addTask(parentTaskName);
+      console.log(`[Chain Test] Client A created task: ${parentTaskName}`);
 
-      // Sync: A → Server
+      // Sync: A → Server → B
       await clientA.sync.syncAndWait();
-
-      // Sync: Server → B
       await clientB.sync.syncAndWait();
 
       // Verify B has the task
-      await waitForTask(clientB.page, initialTaskName);
+      await waitForTask(clientB.page, parentTaskName);
       console.log('[Chain Test] Client B received initial task');
 
-      // ============ PHASE 3: Client B Renames and Adds Subtask ============
-      const renamedTaskName = `ProjectX-Planning-${uniqueId}`;
-      await renameTask(clientB, initialTaskName, renamedTaskName);
-      console.log(`[Chain Test] Client B renamed task to: ${renamedTaskName}`);
-
-      // Add first subtask "Research"
+      // ============ PHASE 3: Client B Adds First Subtask ============
       const subtask1Name = `Research-${uniqueId}`;
-      const renamedTaskLocatorB = getTaskElement(clientB, renamedTaskName);
-      await clientB.workView.addSubTask(renamedTaskLocatorB, subtask1Name);
+      const parentTaskLocatorB = getTaskElement(clientB, parentTaskName);
+      await clientB.workView.addSubTask(parentTaskLocatorB, subtask1Name);
       console.log(`[Chain Test] Client B added subtask: ${subtask1Name}`);
 
-      // Sync: B → Server
+      // Sync: B → Server → A
       await clientB.sync.syncAndWait();
-
-      // Sync: Server → A
       await clientA.sync.syncAndWait();
 
-      // Wait for DOM to settle
-      await clientA.page.waitForLoadState('domcontentloaded');
-
-      // Verify A has the renamed task and subtask
-      await waitForTask(clientA.page, renamedTaskName);
-      await expandTask(clientA, renamedTaskName);
+      // Verify A has the parent task with subtask
+      await expandTask(clientA, parentTaskName);
       await waitForTask(clientA.page, subtask1Name);
-      console.log('[Chain Test] Client A received rename and subtask');
-
-      const parentTaskA = getTaskElement(clientA, renamedTaskName);
+      console.log('[Chain Test] Client A received subtask from B');
 
       // ============ PHASE 4: Client A Marks Subtask Done and Adds Another ============
-      // Mark Research subtask as done
       await markSubtaskDone(clientA, subtask1Name);
       console.log(`[Chain Test] Client A marked ${subtask1Name} as done`);
 
-      // Add second subtask "Implementation"
       const subtask2Name = `Implementation-${uniqueId}`;
-      await clientA.workView.addSubTask(parentTaskA, subtask2Name);
+      const parentTaskLocatorA = getTaskElement(clientA, parentTaskName);
+      await clientA.workView.addSubTask(parentTaskLocatorA, subtask2Name);
       console.log(`[Chain Test] Client A added subtask: ${subtask2Name}`);
 
-      // Sync: A → Server
+      // Sync: A → Server → B
       await clientA.sync.syncAndWait();
-
-      // Sync: Server → B
       await clientB.sync.syncAndWait();
 
-      // Wait for DOM to settle
-      await clientB.page.waitForLoadState('domcontentloaded');
-
       // Verify B has the updates
-      await expandTask(clientB, renamedTaskName);
+      await expandTask(clientB, parentTaskName);
       await waitForTask(clientB.page, subtask2Name);
       console.log('[Chain Test] Client B received done status and new subtask');
 
-      // ============ PHASE 5: Client B Adds Subtask and Marks It Done ============
-      // Add third subtask "Testing"
+      // ============ PHASE 5: Client B Adds Third Subtask and Marks It Done ============
       const subtask3Name = `Testing-${uniqueId}`;
       await clientB.workView.addSubTask(
-        getTaskElement(clientB, renamedTaskName),
+        getTaskElement(clientB, parentTaskName),
         subtask3Name,
       );
       console.log(`[Chain Test] Client B added subtask: ${subtask3Name}`);
 
-      // Mark the Testing subtask as done
       await markSubtaskDone(clientB, subtask3Name);
       console.log(`[Chain Test] Client B marked ${subtask3Name} as done`);
 
-      // Sync: B → Server
+      // Sync: B → Server → A
       await clientB.sync.syncAndWait();
-
-      // Sync: Server → A
       await clientA.sync.syncAndWait();
 
       // ============ PHASE 6: Final Verification ============
       console.log('[Chain Test] Verifying final state...');
 
       // Both clients should have the parent task
-      const finalParentA = getParentTaskElement(clientA, renamedTaskName);
-      const finalParentB = getParentTaskElement(clientB, renamedTaskName);
+      const finalParentA = getParentTaskElement(clientA, parentTaskName);
+      const finalParentB = getParentTaskElement(clientB, parentTaskName);
       await expect(finalParentA).toBeVisible({ timeout: 10000 });
       await expect(finalParentB).toBeVisible({ timeout: 10000 });
 
       // Expand parents to see subtasks
-      await expandTask(clientA, renamedTaskName);
-      await expandTask(clientB, renamedTaskName);
+      await expandTask(clientA, parentTaskName);
+      await expandTask(clientB, parentTaskName);
 
       // Verify all three subtasks exist on both clients
       // Research (done - marked by Client A in Phase 4)

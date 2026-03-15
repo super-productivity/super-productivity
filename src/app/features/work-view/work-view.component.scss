@@ -91,7 +91,6 @@ h2 {
   justify-content: center;
   padding: 5px 0;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .item {
     margin: 0 calc(1.5 * var(--s));
@@ -235,8 +234,7 @@ finish-day-btn,
 
     button {
       min-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
       margin-left: var(--s);
       margin-bottom: var(--s);
 

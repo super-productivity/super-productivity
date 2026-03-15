@@ -204,7 +204,6 @@
   align-items: stretch;
   flex-wrap: nowrap;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   justify-content: space-between;
   min-height: var(--task-first-line-min-height);
   touch-action: pan-y;

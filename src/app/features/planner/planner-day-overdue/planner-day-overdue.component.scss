@@ -71,7 +71,8 @@
 }
 
 .normal-tasks,
-.scheduled {
+.scheduled,
+.deadlines {
   margin-top: 4px;
   display: flex;
   flex-direction: column;
@@ -84,7 +85,8 @@
 }
 
 .normal-tasks-items,
-.scheduled-items {
+.scheduled-items,
+.deadline-items {
   min-height: var(--planner-item-height);
   flex-grow: 1;
 }

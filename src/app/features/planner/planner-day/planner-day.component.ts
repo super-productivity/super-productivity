@@ -21,6 +21,7 @@ import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { MatIcon } from '@angular/material/icon';
 import { PlannerTaskComponent } from '../planner-task/planner-task.component';
 import { PlannerRepeatProjectionComponent } from '../planner-repeat-projection/planner-repeat-projection.component';
+import { PlannerDeadlineTaskComponent } from '../planner-deadline-task/planner-deadline-task.component';
 import { AddTaskInlineComponent } from '../add-task-inline/add-task-inline.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { NgClass } from '@angular/common';
@@ -43,6 +44,7 @@ import { ProgressBarComponent } from '../../../ui/progress-bar/progress-bar.comp
     PlannerTaskComponent,
     CdkDrag,
     PlannerRepeatProjectionComponent,
+    PlannerDeadlineTaskComponent,
     AddTaskInlineComponent,
     NgClass,
     PlannerCalendarEventComponent,

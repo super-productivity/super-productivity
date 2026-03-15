@@ -9,6 +9,7 @@ import {
   input,
   OnDestroy,
   OnInit,
+  signal,
   viewChild,
 } from '@angular/core';
 import { TaskCopy } from '../../tasks/task.model';
@@ -66,6 +67,7 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   readonly T = T;
   readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
   parentTitle: string | null = null;
+  isContextMenuLoaded = signal(false);
 
   moveToProjectList$!: Observable<Project[]>;
 
@@ -133,6 +135,13 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   }
 
   openContextMenu(event: TouchEvent | MouseEvent): void {
+    if (!this.isContextMenuLoaded()) {
+      this.isContextMenuLoaded.set(true);
+      setTimeout(() => {
+        this.taskContextMenu()?.open(event);
+      });
+      return;
+    }
     this.taskContextMenu()?.open(event);
   }
 

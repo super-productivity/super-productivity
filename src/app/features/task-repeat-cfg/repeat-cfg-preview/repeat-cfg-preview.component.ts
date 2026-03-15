@@ -11,7 +11,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { DialogEditTaskRepeatCfgComponent } from '../dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { getTaskRepeatInfoText } from '../../tasks/task-detail-panel/get-task-repeat-info-text.util';
 import { T } from '../../../t.const';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
 import { MatIcon } from '@angular/material/icon';
 import { MatTooltip } from '@angular/material/tooltip';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
@@ -23,7 +23,7 @@ import { formatMonthDay } from '../../../util/format-month-day.util';
   templateUrl: './repeat-cfg-preview.component.html',
   styleUrl: './repeat-cfg-preview.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIcon, TranslatePipe, MatTooltip],
+  imports: [MatIcon, MatTooltip],
 })
 export class RepeatCfgPreviewComponent {
   private _matDialog = inject(MatDialog);

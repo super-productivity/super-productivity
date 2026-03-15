@@ -103,6 +103,9 @@ export class OperationLogDownloadService implements OnDestroy {
     let encryptKey = syncProvider.getEncryptKey
       ? await syncProvider.getEncryptKey()
       : undefined;
+    OpLog.normal(
+      `OperationLogDownloadService: Encryption state: keyLength=${encryptKey?.length ?? 0}`,
+    );
 
     await this.lockService.request(LOCK_NAMES.DOWNLOAD, async () => {
       const lastServerSeq = forceFromSeq0 ? 0 : await syncProvider.getLastServerSeq();
@@ -188,6 +191,9 @@ export class OperationLogDownloadService implements OnDestroy {
           encryptKey = syncProvider.getEncryptKey
             ? await syncProvider.getEncryptKey()
             : undefined;
+          OpLog.normal(
+            `OperationLogDownloadService: Re-fetched encryption key after gap: keyLength=${encryptKey?.length ?? 0}`,
+          );
 
           // NOTE: Don't persist lastServerSeq=0 here - caller will persist the final value
           // after ops are stored in IndexedDB. This ensures localStorage and IndexedDB stay in sync.
@@ -234,6 +240,10 @@ export class OperationLogDownloadService implements OnDestroy {
         // Decrypt encrypted operations if we have an encryption key
         const hasEncryptedOps = syncOps.some((op) => op.isPayloadEncrypted);
         if (hasEncryptedOps) {
+          const encryptedCount = syncOps.filter((op) => op.isPayloadEncrypted).length;
+          OpLog.normal(
+            `OperationLogDownloadService: Decrypting ${encryptedCount}/${syncOps.length} encrypted ops with keyLength=${encryptKey?.length ?? 0}`,
+          );
           if (!encryptKey) {
             // No encryption key available - throw error to let sync wrapper show password dialog
             OpLog.error(

@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy GitHubu pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p><p>Pro překročení omezení použití a k přístupu můžete poskytnout přístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Více informací o jeho rozsahu naleznete zde</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Chyba při mapování dat. Je název vašeho repozitáře správný?",
-    "ERR_UNKNOWN": "GitHub: Neznámá chyba {{statusCode}} {{errorMsg}}. Bylo překročeno omezení volání API?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Neznámá chyba {{statusCode}} {{errorMsg}}. Bylo překročeno omezení volání API?"
   }
 }

@@ -14,7 +14,6 @@
   display: block;
   position: relative;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   --header-nav-button-gap: var(--s-half);
   --header-button-size: 40px;
 }

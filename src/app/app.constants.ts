@@ -44,6 +44,7 @@ export enum BodyClass {
 
   isAndroidKeyboardShown = 'isAndroidKeyboardShown',
   isAndroidKeyboardHidden = 'isAndroidKeyboardHidden',
+  isFullScreen = 'isFullScreen',
   isAddTaskBarOpen = 'isAddTaskBarOpen',
 
   // iOS-specific classes

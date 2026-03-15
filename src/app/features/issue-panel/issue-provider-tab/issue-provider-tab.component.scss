@@ -1,3 +1,5 @@
+@use '../../../../styles/_globals.scss' as *;
+
 $pad: 12px;
 
 :host {
@@ -32,12 +34,7 @@ header {
 .title,
 .default-project {
   font-style: italic;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.title {
-  white-space: nowrap;
+  @include truncateText();
 }
 
 .default-project {

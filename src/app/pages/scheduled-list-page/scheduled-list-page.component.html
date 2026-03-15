@@ -133,4 +133,49 @@
   } @else {
     <full-page-spinner></full-page-spinner>
   }
+  @if (tasksWithDeadlines$ | async; as tasksWithDeadlines) {
+    @if (tasksWithDeadlines.length) {
+      <section
+        class="component-wrapper"
+        style="margin-top: 24px"
+      >
+        <h2>{{ T.SCHEDULE.TASKS_WITH_DEADLINES | translate }}</h2>
+        <div
+          [@standardList]="tasksWithDeadlines.length"
+          class="tasks"
+        >
+          @for (task of tasksWithDeadlines; track task.id) {
+            <planner-task [task]="task">
+              <div
+                (click)="editDeadline(task, $event)"
+                class="due-date"
+                mat-ripple
+              >
+                <div class="date-and-time-left">
+                  @if (task.deadlineWithTime) {
+                    <div class="date hide-xs">
+                      {{ task.deadlineWithTime | localeDate: 'EE, d MMM, ' }}
+                      {{ task.deadlineWithTime | shortTime }}
+                    </div>
+                    <div class="date show-xs-only">
+                      {{ task.deadlineWithTime | localeDate: 'd MMM, ' }},
+                      {{ task.deadlineWithTime | shortTime }}
+                    </div>
+                    <div class="time-left">
+                      ({{ task.deadlineWithTime | humanizeTimestamp }})
+                    </div>
+                  } @else if (task.deadlineDay) {
+                    <div class="date">
+                      {{ task.deadlineDay | localeDate: 'EE, d MMM' }}
+                    </div>
+                  }
+                </div>
+                <mat-icon>flag</mat-icon>
+              </div>
+            </planner-task>
+          }
+        </div>
+      </section>
+    }
+  }
 </div>

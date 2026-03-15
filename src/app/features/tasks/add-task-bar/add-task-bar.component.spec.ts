@@ -147,7 +147,10 @@ describe('AddTaskBarComponent', () => {
     };
   };
 
-  const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-']);
+  const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [
+    'currentLocale',
+  ]);
+  mockDateTimeFormatService.currentLocale.and.returnValue('en-US');
 
   beforeEach(async () => {
     // Create spies
@@ -184,7 +187,9 @@ describe('AddTaskBarComponent', () => {
       shortSyntax$: of({}),
       localization: () => ({ timeLocale: DEFAULT_LOCALE }),
     });
-    mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch']);
+    mockStore = jasmine.createSpyObj('Store', ['select', 'dispatch', 'pipe']);
+    mockStore.pipe.and.returnValue(of([]));
+    mockStore.select.and.returnValue(of([]));
     mockMatDialog = jasmine.createSpyObj('MatDialog', ['open']);
     mockSnackService = jasmine.createSpyObj('SnackService', ['open']);
     mockAddTaskBarIssueSearchService = jasmine.createSpyObj(

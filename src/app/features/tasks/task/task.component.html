@@ -28,12 +28,6 @@
   class="inner-wrapper"
   (touchstart)="onTouchStart($event)"
 >
-  <div
-    #projectMenuTriggerEl
-    [matMenuTriggerFor]="projectMenu"
-    style="visibility: hidden"
-  ></div>
-
   <div class="box"></div>
 
   <div
@@ -122,10 +116,12 @@
           class="task-title"
         ></task-title>
 
-        <tag-list
-          [task]="t"
-          [isShowProjectTagNever]="isInSubTaskList()"
-        ></tag-list>
+        @if (t.tagIds?.length || t.projectId) {
+          <tag-list
+            [task]="t"
+            [isShowProjectTagNever]="isInSubTaskList()"
+          ></tag-list>
+        }
       </div>
     </div>
 
@@ -244,6 +240,27 @@
             </div>
           </button>
         }
+        @if (hasDeadline()) {
+          <button
+            (click)="openDeadlineDialog()"
+            title="Deadline"
+            class="ico-btn deadline-btn"
+            [color]="isDeadlineOverdue() ? 'warn' : ''"
+            mat-icon-button
+          >
+            <mat-icon>flag</mat-icon>
+            <div class="time-badge">
+              @if (t.deadlineWithTime) {
+                {{ t.deadlineWithTime | shortPlannedAt }}
+              } @else if (t.deadlineDay) {
+                {{
+                  t.deadlineDay
+                    | localDateStr: globalTrackingIntervalService.todayDateStr()
+                }}
+              }
+            </div>
+          </button>
+        }
 
         <div>
           @if (isShowToggleButton()) {
@@ -325,24 +342,31 @@
   ></task-context-menu>
 }
 
-<mat-menu
-  #projectMenu="matMenu"
-  (closed)="focusSelf()"
-  (menuOpened)="_loadProjectListIfNeeded()"
->
-  <ng-template matMenuContent>
-    @if (moveToProjectList()) {
-      @for (project of moveToProjectList(); track trackByProjectId($index, project)) {
-        <button
-          (click)="moveTaskToProject(project.id)"
-          mat-menu-item
-        >
-          {{ project.title }}
-        </button>
+@if (isProjectMenuLoaded()) {
+  <div
+    #projectMenuTriggerEl
+    [matMenuTriggerFor]="projectMenu"
+    style="position: absolute; visibility: hidden; pointer-events: none"
+  ></div>
+  <mat-menu
+    #projectMenu="matMenu"
+    (closed)="focusSelf()"
+    (menuOpened)="_loadProjectListIfNeeded()"
+  >
+    <ng-template matMenuContent>
+      @if (moveToProjectList()) {
+        @for (project of moveToProjectList(); track trackByProjectId($index, project)) {
+          <button
+            (click)="moveTaskToProject(project.id)"
+            mat-menu-item
+          >
+            {{ project.title }}
+          </button>
+        }
       }
-    }
-  </ng-template>
-</mat-menu>
+    </ng-template>
+  </mat-menu>
+}
 
 @if (isTagMenuVisible()) {
   <tag-toggle-menu-list

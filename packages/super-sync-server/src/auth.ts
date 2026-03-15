@@ -2,7 +2,9 @@ import { prisma } from './db';
 import * as jwt from 'jsonwebtoken';
 import { Logger } from './logger';
 import { randomBytes } from 'crypto';
-import { sendLoginMagicLinkEmail } from './email';
+import { sendLoginMagicLinkEmail, sendVerificationEmail } from './email';
+import { loadConfigFromEnv } from './config';
+import { Prisma } from '@prisma/client';
 
 // Auth constants
 const MIN_JWT_SECRET_LENGTH = 32;
@@ -12,7 +14,8 @@ const MIN_JWT_SECRET_LENGTH = 32;
 // once a JWT is issued, it represents a verified session.
 export const JWT_EXPIRY = '365d';
 
-const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const MAX_VERIFICATION_RESEND_COUNT = 20;
 const LOGIN_MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 export const getJwtSecret = (): string => {
@@ -262,4 +265,114 @@ export const verifyLoginMagicLink = async (
   Logger.info(`User logged in via magic link (ID: ${user.id})`);
 
   return { token: jwtToken, user: { id: user.id, email: user.email } };
+};
+
+/**
+ * Register a new user via magic link (email-only, no passkey required).
+ * Sends a verification email. User can then log in via magic link after verifying.
+ */
+export const registerWithMagicLink = async (
+  email: string,
+  termsAcceptedAt?: number,
+): Promise<{ message: string }> => {
+  const normalizedEmail = email.toLowerCase();
+
+  // Check if email already exists and is verified
+  const existingUser = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (existingUser?.isVerified === 1) {
+    throw new Error('An account with this email already exists');
+  }
+
+  const verificationToken = randomBytes(32).toString('hex');
+  const tokenExpiresAt = BigInt(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS);
+  const acceptedAt = termsAcceptedAt !== undefined ? BigInt(termsAcceptedAt) : undefined;
+
+  try {
+    // In TEST_MODE with autoVerifyUsers, skip email and auto-verify
+    const config = loadConfigFromEnv();
+
+    if (existingUser) {
+      if (existingUser.verificationResendCount >= MAX_VERIFICATION_RESEND_COUNT) {
+        throw new Error(
+          'Too many verification attempts. Please contact support.',
+        );
+      }
+
+      if (!config.testMode?.autoVerifyUsers) {
+        // Send email BEFORE updating DB to avoid invalidating the old token on failure
+        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        if (!emailSent) {
+          throw new Error('Failed to send verification email. Please try again later.');
+        }
+      }
+
+      // Update existing unverified user with new verification token
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          verificationToken,
+          verificationTokenExpiresAt: tokenExpiresAt,
+          verificationResendCount: { increment: 1 },
+          ...(acceptedAt !== undefined && { termsAcceptedAt: acceptedAt }),
+        },
+      });
+
+      Logger.info(
+        `Updated verification token for unverified user (ID: ${existingUser.id})`,
+      );
+    } else {
+      // Create new user (no passkey, no password)
+      await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash: null,
+          verificationToken,
+          verificationTokenExpiresAt: tokenExpiresAt,
+          termsAcceptedAt: acceptedAt ?? BigInt(Date.now()),
+        },
+      });
+
+      Logger.info(`Created new magic-link user for ${normalizedEmail}`);
+
+      if (!config.testMode?.autoVerifyUsers) {
+        // Send verification email; clean up new user on failure
+        const emailSent = await sendVerificationEmail(normalizedEmail, verificationToken);
+        if (!emailSent) {
+          await prisma.user.deleteMany({
+            where: { email: normalizedEmail, isVerified: 0 },
+          });
+          Logger.info(`Cleaned up failed magic-link registration for new user`);
+          throw new Error('Failed to send verification email. Please try again later.');
+        }
+      }
+    }
+
+    if (config.testMode?.autoVerifyUsers) {
+      await prisma.user.update({
+        where: { email: normalizedEmail },
+        data: {
+          isVerified: 1,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+        },
+      });
+      Logger.info(`[TEST_MODE] Auto-verified magic-link user: ${normalizedEmail}`);
+      return {
+        message: 'Registration successful. Your account has been automatically verified.',
+      };
+    }
+
+    Logger.info(`Magic-link registration initiated for ${normalizedEmail}`);
+    return {
+      message: 'Registration successful. Please check your email to verify your account.',
+    };
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      throw new Error('An account with this email already exists');
+    }
+    throw err;
+  }
 };

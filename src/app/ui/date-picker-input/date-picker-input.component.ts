@@ -17,6 +17,7 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import { getDbDateStr } from 'src/app/util/get-db-date-str';
+import { dateStrToUtcDate } from 'src/app/util/date-str-to-utc-date';
 
 type DateValue = Date | null;
 
@@ -75,8 +76,16 @@ export class DatePickerInputComponent implements ControlValueAccessor {
   }
 
   writeValue(value: unknown): void {
-    if (!value || !(value instanceof Date)) this.innerValue = null;
-    else this.innerValue = this.toDate(value);
+    if (!value) {
+      this.innerValue = null;
+    } else if (value instanceof Date) {
+      this.innerValue = value;
+    } else if (typeof value === 'string') {
+      const parsed = dateStrToUtcDate(value);
+      this.innerValue = isNaN(parsed.getTime()) ? null : parsed;
+    } else {
+      this.innerValue = null;
+    }
   }
 
   onValueChange(value: DateValue): void {

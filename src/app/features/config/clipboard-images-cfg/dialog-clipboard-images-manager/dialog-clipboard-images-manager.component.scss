@@ -1,3 +1,5 @@
+@use '../../../../../styles/_globals.scss' as *;
+
 ::ng-deep .mat-mdc-dialog-container {
   .mat-mdc-dialog-content {
     padding: 20px 24px;
@@ -106,9 +108,7 @@
 .image-id {
   font-size: 14px;
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateText();
 }
 
 .image-details {

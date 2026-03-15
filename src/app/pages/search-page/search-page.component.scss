@@ -54,6 +54,10 @@
               font-weight: 500;
             }
 
+            .task-archived {
+              text-decoration: line-through;
+            }
+
             .task-icons {
               display: flex;
               align-items: center;

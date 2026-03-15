@@ -45,6 +45,7 @@ export interface DialogButtonCfg {
   icon?: string;
   onClick: () => void | Promise<void>;
   color?: 'primary' | 'warn';
+  raised?: boolean;
 }
 
 export interface DialogCfg {
@@ -454,6 +455,8 @@ export interface PluginCreateTaskData {
   timeEstimate?: number;
   parentId?: string | null;
   isDone?: boolean;
+  /** Due date as ISO date string (YYYY-MM-DD) */
+  dueDay?: string | null;
 }
 
 export interface PluginShortcutCfg {

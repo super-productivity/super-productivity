@@ -397,7 +397,7 @@
         "ERR_GENERIC": "{{issueProviderName}} Error: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Request failed because of a client side network error",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Not properly configured",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync: Insufficient permissions to update issue. Check your credentials.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}",
         "IMPORTED_MULTIPLE_ISSUES": "{{issueProviderName}}: Imported {{nr}} new {{issuesStr}}",
         "IMPORTED_SINGLE_ISSUE": "{{issueProviderName}}: Imported {{issueStr}} \"{{issueTitle}}\"",
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: No update required",
@@ -407,7 +407,7 @@
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}",
         "CONNECTION_SUCCESS": "Connection works!",
         "CONNECTION_FAILED": "Connection failed",
-        "AUTO_CREATE_FAILED": "Failed to auto-create issue",
+        "AUTO_CREATE_FAILED": "Auto-create issue failed: {{errorMsg}}",
         "PLUGIN_NOT_INSTALLED": "Required plugin \"{{pluginName}}\" is not installed."
       },
       "DIALOG": {
@@ -759,7 +759,8 @@
       "EDIT_REPEATED_TASK": "Edit recurring task \"{{taskName}}\"",
       "NO_TASKS": "No tasks",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "No scheduled items"
+        "NO_SCHEDULED_ITEMS": "No scheduled items",
+        "NO_DEADLINES": "No deadlines"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Removed plan date for task \"{{taskTitle}}\"",
@@ -1414,6 +1415,9 @@
         "REMINDER": "Reminder",
         "REPEAT": "Recur",
         "SCHEDULE_TASK": "Schedule Task",
+        "DEADLINE": "Deadline",
+        "DEADLINE_DUE_BY": "Due by",
+        "DEADLINE_OVERDUE": "Overdue!",
         "SUB_TASKS": "Subtasks ({{nr}})",
         "TIME": "Duration",
         "TITLE_PLACEHOLDER": "Enter a title"
@@ -1439,11 +1443,15 @@
         "TOOLTIP_CLEAR_DATE": "Clear date",
         "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
+        "REPEAT_BUTTON": "Repeat",
+        "TOOLTIP_CLEAR_REPEAT": "Clear repeat setting",
         "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
       },
       "B": {
+        "ADD_ALL_TO_TODAY": "Add all to today",
         "ADD_HALF_HOUR": "Add 1/2 hour",
+        "DEADLINES_TODAY": "{{count}} task(s) due today not yet planned",
         "ESTIMATE_EXCEEDED": "Time estimate exceeded for \"{{title}}\""
       },
       "CMP": {
@@ -1467,6 +1475,9 @@
         "OPEN_TIME": "Time tracking",
         "REMOVE_FROM_MY_DAY": "Remove from Today",
         "SCHEDULE": "Schedule task",
+        "SET_DEADLINE": "Set deadline",
+        "EDIT_DEADLINE": "Edit deadline",
+        "REMOVE_DEADLINE": "Remove deadline",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide additional info",
         "TOGGLE_DONE": "Toggle completion status",
@@ -1523,6 +1534,23 @@
         "SCHEDULE": "Schedule",
         "UNSCHEDULE": "Unschedule"
       },
+      "D_DEADLINE": {
+        "SET_DEADLINE": "Set deadline",
+        "REMOVE_DEADLINE": "Remove deadline",
+        "ADD_TIME": "Add time",
+        "REMIND_AT": "Remind at",
+        "RO_NEVER": "Never",
+        "RO_AT_DEADLINE": "At deadline",
+        "RO_5M": "5 minutes before",
+        "RO_10M": "10 minutes before",
+        "RO_15M": "15 minutes before",
+        "RO_30M": "30 minutes before",
+        "RO_1H": "1 hour before",
+        "QA_TODAY": "Today",
+        "QA_TOMORROW": "Tomorrow",
+        "QA_NEXT_WEEK": "Next week",
+        "QA_NEXT_MONTH": "Next month"
+      },
       "D_SELECT_DATE_AND_TIME": {
         "DATE": "Date",
         "TIME": "Time",
@@ -1560,6 +1588,8 @@
         "REMINDER_ADDED": "Scheduled <strong>\"{{title}}\"</strong> at <strong>{{date}}</strong>",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
+        "DEADLINE_SET": "Deadline set for {{date}}",
+        "DEADLINE_REMOVED": "Deadline removed",
         "TASK_ALREADY_EXISTS": "Task <strong>{{title}}</strong> already exists",
         "TASK_CREATED": "Created task \"{{taskTitle}}\""
       },
@@ -1612,6 +1642,7 @@
         "MSG": "Remove the recurring task instance on {{date}}? This will prevent the task from being created on this date only.",
         "OK": "Remove Instance"
       },
+      "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu.",
       "D_EDIT": {
         "ADD": "Add Recurring Task Config",
         "ADVANCED_CFG": "Advanced configuration",
@@ -2127,10 +2158,10 @@
       "TITLE": "Tasks"
     },
     "POMODORO": {
-      "BREAK_DURATION": "Duration of short breaks",
-      "CYCLES_BEFORE_LONGER_BREAK": "Start longer break after X work sessions",
-      "DURATION": "Duration of work sessions",
-      "LONGER_BREAK_DURATION": "Duration of longer breaks"
+      "BREAK_DURATION": "Short break duration",
+      "CYCLES_BEFORE_LONGER_BREAK": "Start long break after X work sessions",
+      "DURATION": "Work duration",
+      "LONGER_BREAK_DURATION": "Long break duration"
     },
     "REMINDER": {
       "COUNTDOWN_DURATION": "Show banner X before the actual reminder",
@@ -2495,7 +2526,9 @@
     "REPEATED_TASKS": "Recurring Tasks",
     "SCHEDULED_TASKS": "Scheduled Tasks",
     "SCHEDULED_TASKS_WITH_TIME": "Scheduled Tasks with Start Time",
-    "START_TASK": "Start task and remove reminder"
+    "START_TASK": "Start task and remove reminder",
+    "TASKS_WITH_DEADLINES": "Tasks with Deadlines",
+    "NO_DEADLINES": "There are currently no tasks with deadlines. You can set a deadline via the task's context menu or detail panel."
   },
   "Share Chart": "",
   "Share Heatmap": "",
@@ -2556,7 +2589,7 @@
     "LATER_TODAY": "Later Today",
     "MOVE_DONE_TO_ARCHIVE": "Move completed tasks to archive",
     "NO_DONE_TASKS": "There are currently no completed tasks",
-    "NO_PLANNED_TASKS": "no tasks planned",
+    "NO_PLANNED_TASKS": "No tasks planned",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
     "READY_TO_WORK": "Ready to work!",
     "RESET_BREAK_TIMER": "Reset without break timer",

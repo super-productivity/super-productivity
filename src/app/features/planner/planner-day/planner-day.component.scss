@@ -87,15 +87,16 @@
 }
 
 .normal-tasks,
-.scheduled {
+.scheduled,
+.deadlines {
   margin-top: 4px;
   display: flex;
   flex-direction: column;
 }
 
-.scheduled {
+.scheduled,
+.deadlines {
   flex-grow: 1;
-  /* Additional styles if needed */
   margin-top: 16px;
 
   @include mq(xs, max) {
@@ -106,12 +107,18 @@
 }
 
 .normal-tasks-items,
-.scheduled-items {
+.deadline-items {
   min-height: var(--planner-item-height);
   flex-grow: 1;
 }
 
-.normal-tasks-items > * {
+.scheduled-items {
+  min-height: calc(var(--planner-item-height) * 0.5);
+  flex-grow: 1;
+}
+
+.normal-tasks-items > *,
+.deadline-items > * {
   margin-bottom: 8px;
 }
 

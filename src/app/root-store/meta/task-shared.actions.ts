@@ -174,6 +174,32 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    // Task Deadlines
+    setDeadline: (taskProps: {
+      taskId: string;
+      deadlineDay?: string;
+      deadlineWithTime?: number;
+      deadlineRemindAt?: number;
+    }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    removeDeadline: (taskProps: { taskId: string }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
     // Task Updates
     updateTask: (taskProps: { task: Update<Task>; isIgnoreShortSyntax?: boolean }) => ({
       ...taskProps,

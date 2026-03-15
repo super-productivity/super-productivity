@@ -228,7 +228,7 @@ export class SyncConfigService {
     syncProviderId?: SyncProviderId,
   ): Promise<void> {
     const activeProvider = syncProviderId
-      ? this._providerManager.getProviderById(syncProviderId)
+      ? await this._providerManager.getProviderById(syncProviderId)
       : this._providerManager.getActiveProvider();
     if (!activeProvider) {
       // During initial sync setup, no provider exists yet to store the key.
@@ -283,7 +283,7 @@ export class SyncConfigService {
     // This ensures sync services see isEncryptionEnabled=true when SuperSync encryption is enabled
     // Note: We need to check the SAVED private config because Formly doesn't include hidden fields
     if (providerId === SyncProviderId.SuperSync) {
-      const activeProvider = this._providerManager.getProviderById(providerId);
+      const activeProvider = await this._providerManager.getProviderById(providerId);
       const savedPrivateCfg = activeProvider
         ? await activeProvider.privateCfg.load()
         : null;
@@ -305,7 +305,7 @@ export class SyncConfigService {
     const prop = PROP_MAP_TO_FORM[providerId];
 
     // Load existing config to preserve OAuth tokens and other settings
-    const activeProvider = this._providerManager.getProviderById(providerId);
+    const activeProvider = await this._providerManager.getProviderById(providerId);
     const oldConfig = activeProvider ? await activeProvider.privateCfg.load() : {};
 
     // Form fields contain provider-specific settings, but Dropbox uses OAuth tokens
@@ -343,16 +343,28 @@ export class SyncConfigService {
     const savedEncryptKey = (oldConfig as { encryptKey?: string })?.encryptKey ?? '';
 
     // Resolve encryptKey based on provider type:
-    // - SuperSync: encryptKey is managed via dedicated dialogs (EnableEncryption, ChangePassword,
-    //   HandleDecryptError), NOT via the form. Always preserve savedEncryptKey unless disabled.
+    // - SuperSync: encryptKey is managed EXCLUSIVELY via dedicated dialogs (EnableEncryption,
+    //   ChangePassword, HandleDecryptError), NEVER via the form. Always preserve savedEncryptKey.
+    //   The form model can carry stale encryptKey values from previous syncSettingsForm$ emissions,
+    //   and using them here would silently corrupt the password.
     // - File-based providers (WebDAV, LocalFile, Dropbox): encryptKey can be set via form,
     //   so use settings.encryptKey as fallback for new configs.
     let resolvedEncryptKey: string;
     if (isEncryptionDisabledInSavedConfig) {
       resolvedEncryptKey = '';
     } else if (providerId === SyncProviderId.SuperSync) {
-      // For SuperSync, only use form if explicitly provided, otherwise preserve saved
-      resolvedEncryptKey = (nonEmptyFormValues?.encryptKey as string) || savedEncryptKey;
+      // IMPORTANT: Always use savedEncryptKey for SuperSync — never trust form values.
+      // The form model can contain stale encryption keys from previous observable emissions,
+      // which would silently overwrite the real password and make encrypted data unrecoverable.
+      resolvedEncryptKey = savedEncryptKey;
+      const formEncryptKey = nonEmptyFormValues?.encryptKey as string | undefined;
+      if (formEncryptKey && formEncryptKey !== savedEncryptKey) {
+        SyncLog.warn(
+          'SyncConfigService: Form encryptKey ' +
+            `(length=${formEncryptKey.length}) differs from saved ` +
+            `(length=${savedEncryptKey.length}) — ignoring form value`,
+        );
+      }
     } else {
       // For file-based providers, use form values with settings.encryptKey as fallback
       resolvedEncryptKey =

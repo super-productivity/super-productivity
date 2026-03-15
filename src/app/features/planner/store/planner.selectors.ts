@@ -197,6 +197,8 @@ const getPlannerDay = (
     startOfNextDayDiffMs,
   );
 
+  const deadlineTasks = getDeadlineTasksForDay(taskState, dayDate, startOfNextDayDiffMs);
+
   const timeEstimate = getAllTimeSpent(
     normalTasks,
     repeatProjectionsForDay,
@@ -229,6 +231,7 @@ const getPlannerDay = (
       ...scheduledTaskItems,
     ].sort((a, b) => a.start - b.start),
     tasks: normalTasks,
+    deadlineTasks,
     noStartTimeRepeatProjections,
     allDayEvents,
     timeEstimate,
@@ -354,4 +357,27 @@ const getIcalEventsForDay = (
     });
   });
   return { timedEvents, allDayEvents };
+};
+
+const getDeadlineTasksForDay = (
+  taskState: any,
+  dayDate: string,
+  startOfNextDayDiffMs: number = 0,
+): TaskCopy[] => {
+  const result: TaskCopy[] = [];
+  for (const id of taskState.ids) {
+    const task = taskState.entities[id] as TaskCopy | undefined;
+    if (!task || task.isDone) continue;
+
+    if (task.deadlineWithTime) {
+      if (
+        getDbDateStr(new Date(task.deadlineWithTime - startOfNextDayDiffMs)) === dayDate
+      ) {
+        result.push(task);
+      }
+    } else if (task.deadlineDay === dayDate) {
+      result.push(task);
+    }
+  }
+  return result;
 };

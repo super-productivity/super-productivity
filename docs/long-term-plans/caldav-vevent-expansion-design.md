@@ -1,5 +1,7 @@
 # CalDAV VEVENT Expansion — Design Document
 
+> **Status: Planned**
+
 ## Overview
 
 Extend the existing CalDAV provider to support VEVENT (calendar events) alongside VTODO (tasks). This gives self-hosted calendar users (Nextcloud, Radicale, Baikal, Fastmail) two-way event sync with no new auth infrastructure — the same basic auth that already works for VTODOs.

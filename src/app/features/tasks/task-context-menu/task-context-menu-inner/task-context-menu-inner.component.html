@@ -78,6 +78,28 @@
         <mat-icon>event_busy</mat-icon>
       </button>
     }
+    <button
+      mat-icon-button
+      tabindex="0"
+      (click)="openDeadlineDialog()"
+      [matTooltip]="
+        task.deadlineWithTime || task.deadlineDay
+          ? (T.F.TASK.CMP.EDIT_DEADLINE | translate)
+          : (T.F.TASK.CMP.SET_DEADLINE | translate)
+      "
+    >
+      <mat-icon>flag</mat-icon>
+    </button>
+    @if (task.deadlineWithTime || task.deadlineDay) {
+      <button
+        mat-icon-button
+        tabindex="0"
+        (click)="removeDeadline()"
+        [matTooltip]="T.F.TASK.CMP.REMOVE_DEADLINE | translate"
+      >
+        <mat-icon>flag_circle</mat-icon>
+      </button>
+    }
   </div>
 
   @if (

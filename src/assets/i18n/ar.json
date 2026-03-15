@@ -627,7 +627,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "يتطلب وحدة تتبع الوقت ليتم تمكينها لمشروع OpenProject",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "إظهار مربع حوار تتبع الوقت عند اكتمال المهام الفرعية",
         "PROJECT_ID": "معرف المشروع",
-        "PROJECT_ID_DESCRIPTION": "يمكن العثور عليها كجزء من عنوان url عند عرض المشروع في المتصفح.",
+        "PROJECT_ID_DESCRIPTION": "يمكن العثور عليها كجزء من عنوان URL عند عرض المشروع في المتصفح.",
         "SCOPE": "نطاق",
         "SCOPE_ALL": "الكل",
         "SCOPE_ASSIGNED": "تعيين لي",
@@ -909,7 +909,7 @@
         "WEB_DAV": {
           "CORS_INFO": "<strong>تجريبي !!</strong> لإنجاز هذا العمل ، تحتاج إلى تعطيل أو تقييد CORS لمثال Nextcloud الخاص بك ، والذي قد يكون له تداعيات أمنية سلبية! يرجى <a href='https://github.com/nextcloud/server/issues/3131'>الرجوع إلى هذا الموضوع</a> لمزيد من المعلومات. استخدام على مسؤوليتك الخاصة!",
           "INFO": "تطبيقات WebDAV تختلف بشكل كبير للأسف. من المعروف أن Super Productivity يعمل بشكل جيد مع Nextcloud <strong>لكنه قد لا يعمل مع مزود الخدمة</strong>.",
-          "L_BASE_URL": "عنوان Url الأساسي",
+          "L_BASE_URL": "عنوان URL الأساسي",
           "L_PASSWORD": "كلمه السر",
           "L_SYNC_FOLDER_PATH": "مزامنة مسار المجلد",
           "L_USER_NAME": "اسم المستخدم"

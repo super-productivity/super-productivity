@@ -130,6 +130,10 @@
     mat-icon {
       flex-shrink: 0; // Prevent icon from shrinking
       margin-right: 4px;
+
+      &.repeat-icon {
+        transform: rotate(45deg);
+      }
     }
 
     &.has-value {
@@ -208,11 +212,6 @@
           @include truncateText();
           min-width: 0;
           font-size: 0.9em;
-        }
-
-        // Last visible tag gets truncated with ellipsis if needed
-        &:last-child .tag-title {
-          text-overflow: ellipsis;
         }
       }
     }

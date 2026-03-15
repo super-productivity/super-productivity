@@ -219,7 +219,11 @@ object ReminderNotificationHelper {
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(title)
-            .setContentText(if (reminderType == "TASK") "Task reminder" else "Note reminder")
+            .setContentText(when (reminderType) {
+                "TASK" -> "Task reminder"
+                "DUE_DATE" -> "Due date reminder"
+                else -> "Task reminder"
+            })
             .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
             .addAction(0, "Done", donePendingIntent)

@@ -48,7 +48,7 @@
         "EDIT_ATTACHMENT": "Ubah lampiran",
         "LABELS": {
           "IMG": "Gambar",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Pilih tipe",
         "TYPES": {
@@ -230,7 +230,7 @@
       "FORM": {
         "HOST": "Host (contoh: https://try.gitea.io)",
         "REPO_FULL_NAME": "Nama pengguna atau nama/proyek Organisasi",
-        "REPO_FULL_NAME_DESCRIPTION": "Dapat ditemukan sebagai bagian dari url, saat melihat proyek di Browser.",
+        "REPO_FULL_NAME_DESCRIPTION": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
         "SCOPE": "Cakupan",
         "SCOPE_ALL": "Semua",
         "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
@@ -656,7 +656,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Membutuhkan modul pelacakan waktu untuk diaktifkan untuk proyek OpenProject",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tampilkan dialog pelacakan waktu ketika sub tugas selesai",
         "PROJECT_ID": "ID Proyek",
-        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari url, saat melihat proyek di Browser.",
+        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
         "SCOPE": "Cakupan",
         "SCOPE_ALL": "Semua",
         "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
@@ -731,8 +731,8 @@
       },
       "FORM_THEME": {
         "HELP": "Pengaturan tema untuk proyek Anda.",
-        "L_BACKGROUND_IMAGE_DARK": "Url Gambar Latar Belakang (Tema Terang)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Url Gambar Latar Belakang (Tema Gelap)",
+        "L_BACKGROUND_IMAGE_DARK": "URL Gambar Latar Belakang (Tema Terang)",
+        "L_BACKGROUND_IMAGE_LIGHT": "URL Gambar Latar Belakang (Tema Gelap)",
         "L_COLOR_ACCENT": "Warna Aksen",
         "L_COLOR_PRIMARY": "Warna Primer",
         "L_COLOR_WARN": "Warna Perhatian/Error",
@@ -781,7 +781,7 @@
         "API_KEY": "Akses kunci API",
         "HOST": "Host (contoh.: https://redmine.org)",
         "PROJECT_ID": "Pengidentifikasi Proyek",
-        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari url, saat melihat proyek di Browser.",
+        "PROJECT_ID_DESCRIPTION": "Dapat ditemukan sebagai bagian dari URL, saat melihat proyek di Browser.",
         "SCOPE": "Cakupan",
         "SCOPE_ALL": "Semua",
         "SCOPE_ASSIGNED": "Ditugaskan kepada saya",
@@ -945,7 +945,7 @@
           "CORS_INFO": "<strong>Membuatnya berfungsi di browser:</strong> Agar ini berfungsi di browser, Anda perlu memasukkan Super Productivity untuk permintaan CORS ke whitelist untuk instans Nextcloud Anda. Ini dapat memiliki implikasi keamanan negatif! Silahkan <a href='https://github.com/nextcloud/server/issues/3131'>lihat utas ini untuk informasi lebih lanjut</a>. Salah satu pendekatan untuk membuat ini berfungsi di seluler adalah memasukkannya ke whitelist \"https://app.super-productivity.com\" lewat nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Gunakan dengan risiko Anda sendiri!</p>",
           "D_SYNC_FOLDER_PATH": "Jalur relatif terhadap root server WebDAV tempat file sinkronisasi akan disimpan (misalnya, ' /super-productivity' atau '/'). Ini BUKAN jalur direktori internal server Anda.",
           "INFO": "Implementasi WebDAV sangat bervariasi sayangnya. Super Productivity dikenal bekerja dengan baik dengan Nextcloud, <strong>tetapi mungkin tidak bekerja dengan penyedia Anda</strong>.",
-          "L_BASE_URL": "Url Dasar",
+          "L_BASE_URL": "URL Dasar",
           "L_PASSWORD": "Kata Sandi",
           "L_SYNC_FOLDER_PATH": "Jalur folder sinkronisasi",
           "L_TEST_CONNECTION": "Uji koneksi",
@@ -1509,7 +1509,7 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "Karena pembatasan asal silang <b>, ini kemungkinan TIDAK akan berfungsi dengan Super Productivity versi Browser.<br /> Silakan <a href=\"https://super-productivity.com/download/\">unduh versi desktop</a> untuk menggunakan fitur ini!</b>",
-      "CAL_PATH": "Url sumber iCal",
+      "CAL_PATH": "URL sumber iCal",
       "CHECK_UPDATES": "Periksa pembaruan jarak jauh setiap X",
       "HELP": "Anda dapat mengintegrasikan kalender untuk diingatkan dan menambahkannya sebagai tugas dalam Super Productivity. Integrasi ini bekerja dengan menggunakan format iCal. Agar dapat berfungsi, kalender Anda harus dapat diakses melalui internet atau sistem file.",
       "SHOW_BANNER_THRESHOLD": "Tampilkan pemberitahuan X sebelum acara (kosong untuk dinonaktifkan)"
@@ -1728,7 +1728,7 @@
       "IS_LOCK_SCREEN": "Kunci layar saat jeda (khusus desktop)",
       "MESSAGE": "Pesan istirahat",
       "MIN_WORKING_TIME": "Pemicu pemberitahuan istirahat setelah X bekerja tanpa satu",
-      "MOTIVATIONAL_IMGS": "Gambar motivasi (gunakan url web)",
+      "MOTIVATIONAL_IMGS": "Gambar motivasi (gunakan URL web)",
       "NOTIFICATION_TITLE": "Istirahat!",
       "SNOOZE_TIME": "Tunda waktu saat diminta untuk istirahat",
       "TITLE": "Pengingat istirahat"

@@ -108,6 +108,7 @@ export class PluginService implements OnDestroy {
       'assets/bundled-plugins/ai-productivity-prompts',
       'assets/bundled-plugins/automations',
       'assets/bundled-plugins/github-issue-provider',
+      'assets/bundled-plugins/brain-dump',
     ];
 
     // Only load manifests for discovery
@@ -197,6 +198,7 @@ export class PluginService implements OnDestroy {
       'assets/bundled-plugins/procrastination-buster',
       'assets/bundled-plugins/automations',
       'assets/bundled-plugins/github-issue-provider',
+      'assets/bundled-plugins/brain-dump',
     ];
 
     // KISS: No preloading - just load plugins directly

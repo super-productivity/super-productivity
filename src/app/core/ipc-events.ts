@@ -24,6 +24,13 @@ export const ipcSuspend$: Observable<unknown> = IS_ELECTRON
   ? ipcEvent$(IPC.SUSPEND).pipe()
   : EMPTY;
 
+export const ipcEnterFullScreen$: Observable<unknown> = IS_ELECTRON
+  ? ipcEvent$(IPC.ENTER_FULL_SCREEN).pipe()
+  : EMPTY;
+export const ipcLeaveFullScreen$: Observable<unknown> = IS_ELECTRON
+  ? ipcEvent$(IPC.LEAVE_FULL_SCREEN).pipe()
+  : EMPTY;
+
 export const ipcShowAddTaskBar$: Observable<unknown> = IS_ELECTRON
   ? ipcEvent$(IPC.SHOW_ADD_TASK_BAR).pipe()
   : EMPTY;

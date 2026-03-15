@@ -16,6 +16,12 @@ import { uuidv7 } from '../../../util/uuid-v7';
 import { SyncImportFilterService } from '../../sync/sync-import-filter.service';
 
 /**
+ * Timeout for tests with MAX_VECTOR_CLOCK_SIZE (20) clients doing multiple rounds.
+ * These are heavy tests that exceed Jasmine's default 2000ms in the full suite.
+ */
+const HEAVY_TEST_TIMEOUT = 10000;
+
+/**
  * Local copy of isLikelyPruningArtifact logic for testing.
  * Cannot import the function directly from the service file because Angular's
  * webpack build only exposes class exports from .service.ts files.
@@ -280,87 +286,94 @@ describe('Vector Clock Import Reset Integration', () => {
      * CONCURRENT with the import (missing entries for old clients). The
      * import-client-counter exception recognizes them as post-import.
      */
-    it('should keep new tasks from all clients after import and resync', async () => {
-      const numClients = MAX_VECTOR_CLOCK_SIZE;
-      const clients = createClients(numClients, storeService);
+    it(
+      'should keep new tasks from all clients after import and resync',
+      async () => {
+        const numClients = MAX_VECTOR_CLOCK_SIZE;
+        const clients = createClients(numClients, storeService);
 
-      // Phase 1: Build up vector clocks to MAX by having all clients create tasks and sync
-      for (let round = 0; round < 2; round++) {
+        // Phase 1: Build up vector clocks to MAX by having all clients create tasks and sync
+        for (let round = 0; round < 2; round++) {
+          for (let i = 0; i < numClients; i++) {
+            await clients[i].createLocalOp(
+              'TASK',
+              `task-round${round}-${i}`,
+              OpType.Create,
+              '[Task] Add Task',
+              createMinimalTaskPayload(`task-round${round}-${i}`),
+            );
+            await clients[i].sync(server);
+          }
+        }
+
+        // Final sync pass to ensure all clients have downloaded everything
         for (let i = 0; i < numClients; i++) {
-          await clients[i].createLocalOp(
-            'TASK',
-            `task-round${round}-${i}`,
-            OpType.Create,
-            '[Task] Add Task',
-            createMinimalTaskPayload(`task-round${round}-${i}`),
-          );
           await clients[i].sync(server);
         }
-      }
 
-      // Final sync pass to ensure all clients have downloaded everything
-      for (let i = 0; i < numClients; i++) {
-        await clients[i].sync(server);
-      }
+        // Verify clocks are at MAX
+        const preClock = clients[0].getCurrentClock();
+        expect(Object.keys(preClock).length).toBeGreaterThanOrEqual(numClients);
 
-      // Verify clocks are at MAX
-      const preClock = clients[0].getCurrentClock();
-      expect(Object.keys(preClock).length).toBeGreaterThanOrEqual(numClients);
-
-      // Phase 2: Client 0 imports
-      await clients[0].createLocalOp(
-        'ALL',
-        uuidv7(),
-        OpType.SyncImport,
-        '[SP_ALL] Load(import) all data',
-        {
-          appDataComplete: {
-            task: {
-              ids: ['fresh-import-task'],
-              entities: {
-                'fresh-import-task': createMinimalTaskPayload('fresh-import-task', {
-                  title: 'Fresh Import',
-                }),
+        // Phase 2: Client 0 imports
+        await clients[0].createLocalOp(
+          'ALL',
+          uuidv7(),
+          OpType.SyncImport,
+          '[SP_ALL] Load(import) all data',
+          {
+            appDataComplete: {
+              task: {
+                ids: ['fresh-import-task'],
+                entities: {
+                  'fresh-import-task': createMinimalTaskPayload('fresh-import-task', {
+                    title: 'Fresh Import',
+                  }),
+                },
               },
             },
           },
-        },
-      );
-      await clients[0].sync(server);
-
-      // Phase 3: All other clients sync to receive the import
-      for (let i = 1; i < numClients; i++) {
-        await clients[i].sync(server);
-      }
-
-      // Phase 4: All clients create new post-import tasks and sync
-      const postImportOps: Operation[] = [];
-      for (let i = 0; i < numClients; i++) {
-        const op = await clients[i].createLocalOp(
-          'TASK',
-          `task-new-${i}`,
-          OpType.Create,
-          '[Task] Add Task',
-          createMinimalTaskPayload(`task-new-${i}`, {
-            title: `New Task from client ${i}`,
-          }),
         );
-        postImportOps.push(op);
-        await clients[i].sync(server);
-      }
+        await clients[0].sync(server);
 
-      // Phase 5: Verify using SyncImportFilterService
-      const filterService = TestBed.inject(SyncImportFilterService);
-      const result = await filterService.filterOpsInvalidatedBySyncImport(postImportOps);
+        // Phase 3: All other clients sync to receive the import
+        for (let i = 1; i < numClients; i++) {
+          await clients[i].sync(server);
+        }
 
-      expect(result.invalidatedOps.length)
-        .withContext(
-          `Expected 0 invalidated ops but got ${result.invalidatedOps.length}: ` +
-            result.invalidatedOps.map((op) => `${op.clientId}:${op.entityId}`).join(', '),
-        )
-        .toBe(0);
-      expect(result.validOps.length).toBe(numClients);
-    });
+        // Phase 4: All clients create new post-import tasks and sync
+        const postImportOps: Operation[] = [];
+        for (let i = 0; i < numClients; i++) {
+          const op = await clients[i].createLocalOp(
+            'TASK',
+            `task-new-${i}`,
+            OpType.Create,
+            '[Task] Add Task',
+            createMinimalTaskPayload(`task-new-${i}`, {
+              title: `New Task from client ${i}`,
+            }),
+          );
+          postImportOps.push(op);
+          await clients[i].sync(server);
+        }
+
+        // Phase 5: Verify using SyncImportFilterService
+        const filterService = TestBed.inject(SyncImportFilterService);
+        const result =
+          await filterService.filterOpsInvalidatedBySyncImport(postImportOps);
+
+        expect(result.invalidatedOps.length)
+          .withContext(
+            `Expected 0 invalidated ops but got ${result.invalidatedOps.length}: ` +
+              result.invalidatedOps
+                .map((op) => `${op.clientId}:${op.entityId}`)
+                .join(', '),
+          )
+          .toBe(0);
+        expect(result.validOps.length).toBe(numClients);
+      },
+      HEAVY_TEST_TIMEOUT,
+    );
 
     /**
      * Verify that pre-import ops from unknown clients (never communicated with import
@@ -592,128 +605,132 @@ describe('Vector Clock Import Reset Integration', () => {
      * correctly recognized as post-import by SyncImportFilterService via the
      * import-client-counter exception.
      */
-    it('should handle full lifecycle: MAX clock → import → resync → new tasks sync correctly', async () => {
-      const numClients = MAX_VECTOR_CLOCK_SIZE;
-      const clients = createClients(numClients, storeService);
+    it(
+      'should handle full lifecycle: MAX clock → import → resync → new tasks sync correctly',
+      async () => {
+        const numClients = MAX_VECTOR_CLOCK_SIZE;
+        const clients = createClients(numClients, storeService);
 
-      // === Phase 1: Build up clocks to MAX ===
-      for (let round = 0; round < 3; round++) {
+        // === Phase 1: Build up clocks to MAX ===
+        for (let round = 0; round < 3; round++) {
+          for (let i = 0; i < numClients; i++) {
+            await clients[i].createLocalOp(
+              'TASK',
+              `task-r${round}-c${i}`,
+              OpType.Create,
+              '[Task] Add Task',
+              createMinimalTaskPayload(`task-r${round}-c${i}`, {
+                title: `Round ${round} Client ${i}`,
+              }),
+            );
+            await clients[i].sync(server);
+          }
+        }
+        // Final convergence sync
         for (let i = 0; i < numClients; i++) {
-          await clients[i].createLocalOp(
-            'TASK',
-            `task-r${round}-c${i}`,
-            OpType.Create,
-            '[Task] Add Task',
-            createMinimalTaskPayload(`task-r${round}-c${i}`, {
-              title: `Round ${round} Client ${i}`,
-            }),
-          );
           await clients[i].sync(server);
         }
-      }
-      // Final convergence sync
-      for (let i = 0; i < numClients; i++) {
-        await clients[i].sync(server);
-      }
 
-      // Snapshot: count server ops before import
-      const preImportServerOpCount = server.getAllOps().length;
-      expect(preImportServerOpCount).toBe(numClients * 3);
+        // Snapshot: count server ops before import
+        const preImportServerOpCount = server.getAllOps().length;
+        expect(preImportServerOpCount).toBe(numClients * 3);
 
-      // === Phase 2: Client 0 imports ===
-      const importOp = await clients[0].createLocalOp(
-        'ALL',
-        uuidv7(),
-        OpType.SyncImport,
-        '[SP_ALL] Load(import) all data',
-        {
-          appDataComplete: {
-            task: {
-              ids: ['imported-main-task'],
-              entities: {
-                'imported-main-task': createMinimalTaskPayload('imported-main-task', {
-                  title: 'The Imported State',
-                }),
+        // === Phase 2: Client 0 imports ===
+        const importOp = await clients[0].createLocalOp(
+          'ALL',
+          uuidv7(),
+          OpType.SyncImport,
+          '[SP_ALL] Load(import) all data',
+          {
+            appDataComplete: {
+              task: {
+                ids: ['imported-main-task'],
+                entities: {
+                  'imported-main-task': createMinimalTaskPayload('imported-main-task', {
+                    title: 'The Imported State',
+                  }),
+                },
               },
             },
           },
-        },
-      );
-      await clients[0].sync(server);
-
-      // Import clock should have entries for all clients (inherited from pre-import syncing)
-      const importClockEntries = Object.keys(importOp.vectorClock).length;
-      expect(importClockEntries).toBeGreaterThanOrEqual(numClients);
-
-      // === Phase 3: All other clients resync (download the import) ===
-      for (let i = 1; i < numClients; i++) {
-        await clients[i].sync(server);
-      }
-
-      // === Phase 4: All clients create new tasks ===
-      const newTaskIds: string[] = [];
-      for (let i = 0; i < numClients; i++) {
-        const taskId = `new-task-from-client-${i}`;
-        newTaskIds.push(taskId);
-        await clients[i].createLocalOp(
-          'TASK',
-          taskId,
-          OpType.Create,
-          '[Task] Add Task',
-          createMinimalTaskPayload(taskId, {
-            title: `New task from client ${i} after import`,
-          }),
         );
-      }
+        await clients[0].sync(server);
 
-      // === Phase 5: All clients sync their new tasks ===
-      for (let i = 0; i < numClients; i++) {
-        await clients[i].sync(server);
-      }
+        // Import clock should have entries for all clients (inherited from pre-import syncing)
+        const importClockEntries = Object.keys(importOp.vectorClock).length;
+        expect(importClockEntries).toBeGreaterThanOrEqual(numClients);
 
-      // === Phase 6: Verify all new tasks are on the server ===
-      const allServerOps = server.getAllOps();
-      for (const taskId of newTaskIds) {
-        const found = allServerOps.find((sop) => sop.op.entityId === taskId);
-        expect(found)
-          .withContext(`New task ${taskId} should be present on server`)
-          .toBeDefined();
-      }
+        // === Phase 3: All other clients resync (download the import) ===
+        for (let i = 1; i < numClients; i++) {
+          await clients[i].sync(server);
+        }
 
-      // === Phase 7: Verify post-import ops have the import client's counter ===
-      // Post-import ops should have the import client's counter value, which
-      // allows SyncImportFilterService to recognize them as post-import.
-      const newTaskOpsOnServer = allServerOps.filter((sop) =>
-        sop.op.entityId?.startsWith('new-task-from-client-'),
-      );
-      expect(newTaskOpsOnServer.length).toBe(numClients);
+        // === Phase 4: All clients create new tasks ===
+        const newTaskIds: string[] = [];
+        for (let i = 0; i < numClients; i++) {
+          const taskId = `new-task-from-client-${i}`;
+          newTaskIds.push(taskId);
+          await clients[i].createLocalOp(
+            'TASK',
+            taskId,
+            OpType.Create,
+            '[Task] Add Task',
+            createMinimalTaskPayload(taskId, {
+              title: `New task from client ${i} after import`,
+            }),
+          );
+        }
 
-      const importClientId = importOp.clientId;
-      const importClientCounter = importOp.vectorClock[importClientId];
-      for (const serverOp of newTaskOpsOnServer) {
-        const opImportCounter = serverOp.op.vectorClock[importClientId] ?? 0;
-        expect(opImportCounter)
+        // === Phase 5: All clients sync their new tasks ===
+        for (let i = 0; i < numClients; i++) {
+          await clients[i].sync(server);
+        }
+
+        // === Phase 6: Verify all new tasks are on the server ===
+        const allServerOps = server.getAllOps();
+        for (const taskId of newTaskIds) {
+          const found = allServerOps.find((sop) => sop.op.entityId === taskId);
+          expect(found)
+            .withContext(`New task ${taskId} should be present on server`)
+            .toBeDefined();
+        }
+
+        // === Phase 7: Verify post-import ops have the import client's counter ===
+        // Post-import ops should have the import client's counter value, which
+        // allows SyncImportFilterService to recognize them as post-import.
+        const newTaskOpsOnServer = allServerOps.filter((sop) =>
+          sop.op.entityId?.startsWith('new-task-from-client-'),
+        );
+        expect(newTaskOpsOnServer.length).toBe(numClients);
+
+        const importClientId = importOp.clientId;
+        const importClientCounter = importOp.vectorClock[importClientId];
+        for (const serverOp of newTaskOpsOnServer) {
+          const opImportCounter = serverOp.op.vectorClock[importClientId] ?? 0;
+          expect(opImportCounter)
+            .withContext(
+              `Op for ${serverOp.op.entityId} from ${serverOp.op.clientId} should have ` +
+                `import client counter >= ${importClientCounter}, got ${opImportCounter}`,
+            )
+            .toBeGreaterThanOrEqual(importClientCounter);
+        }
+
+        // === Phase 8: Verify clocks are bounded ===
+        // With all MAX clients still active, clocks will naturally regrow to include
+        // all active client IDs. The key improvement is that DEAD client IDs
+        // (from reinstalls, etc.) are dropped. With all clients active, the clock
+        // size equals the number of active clients (bounded by MAX_VECTOR_CLOCK_SIZE).
+        const finalClock = clients[numClients - 1].getCurrentClock();
+        const finalClockSize = Object.keys(finalClock).length;
+        expect(finalClockSize)
           .withContext(
-            `Op for ${serverOp.op.entityId} from ${serverOp.op.clientId} should have ` +
-              `import client counter >= ${importClientCounter}, got ${opImportCounter}`,
+            `Final clock should be bounded at MAX (${MAX_VECTOR_CLOCK_SIZE}), ` +
+              `got ${finalClockSize}`,
           )
-          .toBeGreaterThanOrEqual(importClientCounter);
-      }
-
-      // === Phase 8: Verify clocks are bounded ===
-      // With all MAX clients still active, clocks will naturally regrow to include
-      // all active client IDs. The key improvement is that DEAD client IDs
-      // (from reinstalls, etc.) are dropped. With all clients active, the clock
-      // size equals the number of active clients (bounded by MAX_VECTOR_CLOCK_SIZE).
-      const finalClock = clients[numClients - 1].getCurrentClock();
-      const finalClockSize = Object.keys(finalClock).length;
-      expect(finalClockSize)
-        .withContext(
-          `Final clock should be bounded at MAX (${MAX_VECTOR_CLOCK_SIZE}), ` +
-            `got ${finalClockSize}`,
-        )
-        .toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
-    });
+          .toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+      },
+      HEAVY_TEST_TIMEOUT,
+    );
 
     /**
      * Variant: After import and resync, clients can also sync EACH OTHER's

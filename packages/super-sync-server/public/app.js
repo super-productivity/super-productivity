@@ -29,6 +29,7 @@ const backToLoginFromPasskeyBtn = document.getElementById('back-to-login-from-pa
 const loginPasskeyBtn = document.getElementById('login-passkey-btn');
 const loginMagicLinkBtn = document.getElementById('login-magic-link-btn');
 const registerPasskeyBtn = document.getElementById('register-passkey-btn');
+const registerMagicLinkBtn = document.getElementById('register-magic-link-btn');
 
 // Email inputs (synced across forms)
 const emailInputs = [
@@ -87,6 +88,9 @@ loginMagicLinkBtn.addEventListener('click', requestMagicLink);
 
 // Passkey register button
 registerPasskeyBtn.addEventListener('click', registerWithPasskey);
+
+// Magic link register button
+registerMagicLinkBtn.addEventListener('click', registerWithMagicLink);
 
 // Email input sync - when any email input changes, update all others
 emailInputs.forEach((input) => {
@@ -537,6 +541,58 @@ async function registerWithPasskey() {
     } else {
       showMessage(err.message || 'Passkey registration failed', 'error');
     }
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function registerWithMagicLink() {
+  const email = document.getElementById('register-email').value;
+  const termsAccepted = document.getElementById('register-terms').checked;
+
+  if (!email) {
+    showMessage('Please enter your email address', 'error');
+    return;
+  }
+
+  if (!termsAccepted) {
+    showMessage('You must accept the Terms of Service', 'error');
+    return;
+  }
+
+  setLoading(true);
+  hideMessage();
+
+  try {
+    const res = await fetch(`${API_BASE}/register/magic-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, termsAccepted }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Registration failed');
+    }
+
+    showMessage(
+      data.message ||
+        'Registration successful! Please check your email to verify your account.',
+      'success',
+    );
+
+    // Switch to login tab after delay
+    setTimeout(() => {
+      switchTab('login');
+      document.getElementById('login-email').value = email;
+      showMessage(
+        'Please verify your email, then use "Send Login Link" to log in.',
+        'success',
+      );
+    }, 3000);
+  } catch (err) {
+    showMessage(err.message || 'Registration failed. Please try again.', 'error');
   } finally {
     setLoading(false);
   }

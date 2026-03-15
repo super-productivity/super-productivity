@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>هنا يمكنك تكوين SuperProductivity لسرد مشكلات GitHub المفتوحة لمستودع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات عنها.</p> <p>بالإضافة إلى ذلك ، يمكنك تلقائيًا إضافة جميع المشكلات المفتوحة ومزامنتها إلى تراكم المهام.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "خدمة جيتهاب: حدث خطأ أثناء تحميل البيانات. هل أسم الريبوزيتوري الخاص بك صحيح؟",
-    "ERR_UNKNOWN": "جيثب: خطأ غير معروف {{statusCode}} {{errorMsg}}",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "جيثب: خطأ غير معروف {{statusCode}} {{errorMsg}}"
   }
 }

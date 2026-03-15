@@ -28,7 +28,6 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SimpleCounterButtonComponent } from '../../features/simple-counter/simple-counter-button/simple-counter-button.component';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { DialogSyncInitialCfgComponent } from '../../imex/sync/dialog-sync-initial-cfg/dialog-sync-initial-cfg.component';
 import { LongPressDirective } from '../../ui/longpress/longpress.directive';
 import { isOnline$ } from '../../util/is-online';
 import { Store } from '@ngrx/store';
@@ -212,13 +211,15 @@ export class MainHeaderComponent implements OnDestroy {
     });
   }
 
-  private dialogSyncCfgRef: MatDialogRef<DialogSyncInitialCfgComponent> | null = null;
+  private dialogSyncCfgRef: MatDialogRef<unknown> | null = null;
 
-  setupSync(): void {
+  async setupSync(): Promise<void> {
     // to prevent multiple dialogs on longpress from android
     if (this.dialogSyncCfgRef) {
       return;
     }
+    const { DialogSyncInitialCfgComponent } =
+      await import('../../imex/sync/dialog-sync-initial-cfg/dialog-sync-initial-cfg.component');
     this.dialogSyncCfgRef = this.matDialog.open(DialogSyncInitialCfgComponent);
     this._subs.add(
       this.dialogSyncCfgRef.afterClosed().subscribe(() => {

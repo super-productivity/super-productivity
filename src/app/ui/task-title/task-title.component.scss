@@ -14,7 +14,6 @@
   // needed for z-index to work
   position: relative;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   border-radius: var(--card-border-radius);
   //z-index: var(--z-task-title);
   z-index: 4;
@@ -73,7 +72,6 @@
 
   &:focus {
     user-select: text;
-    -webkit-user-select: text; /* Safari */
     outline: none;
     // NOTE: needed to overwrite color for current task
 

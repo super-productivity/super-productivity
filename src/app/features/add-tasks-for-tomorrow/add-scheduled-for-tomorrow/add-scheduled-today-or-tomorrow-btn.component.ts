@@ -12,7 +12,6 @@ import { AddTasksForTomorrowService } from '../add-tasks-for-tomorrow.service';
   selector: 'add-scheduled-today-or-tomorrow-btn',
   imports: [AsyncPipe, MatButton, MatIcon, TranslateModule],
   templateUrl: './add-scheduled-today-or-tomorrow-btn.component.html',
-  styleUrl: './add-scheduled-today-or-tomorrow-btn.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AddScheduledTodayOrTomorrowBtnComponent {

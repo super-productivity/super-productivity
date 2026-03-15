@@ -53,6 +53,7 @@ import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
@@ -327,6 +328,24 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
       : this.T.F.TASK.ADDITIONAL_INFO.SCHEDULE_TASK;
   });
 
+  isDeadlineOverdue = computed(() => {
+    const t = this.task();
+    if (t.isDone) return false;
+    if (t.deadlineWithTime) return t.deadlineWithTime < Date.now();
+    if (t.deadlineDay) return t.deadlineDay < getDbDateStr();
+    return false;
+  });
+
+  deadlineLabelKey = computed(() => {
+    const t = this.task();
+    if (t.deadlineWithTime || t.deadlineDay) {
+      return this.isDeadlineOverdue()
+        ? this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_OVERDUE
+        : this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_DUE_BY;
+    }
+    return this.T.F.TASK.ADDITIONAL_INFO.DEADLINE;
+  });
+
   // EFFECTS
   // -------
   private _jiraImageHeaders = IS_ELECTRON
@@ -453,6 +472,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   scheduleTask(): void {
     this._matDialog.open(DialogScheduleTaskComponent, {
+      autoFocus: false,
+      restoreFocus: true,
+      data: { task: this.task() },
+    });
+  }
+
+  openDeadlineDialog(): void {
+    this._matDialog.open(DialogDeadlineComponent, {
       autoFocus: false,
       restoreFocus: true,
       data: { task: this.task() },

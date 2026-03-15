@@ -107,12 +107,15 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[VC Pruning] Client A imported backup');
 
-      // Reload page after import
-      await clientA.page.reload({ timeout: 60000 });
-      await waitForAppReady(clientA.page, { ensureRoute: false });
+      // Reload page after import - use goto instead of reload for reliability
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
 
-      // Re-enable sync after import
-      await clientA.sync.setupSuperSync(syncConfig);
+      // Re-enable sync after import - use 'local' to preserve imported data
+      await clientA.sync.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
 
       // Verify imported data is visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
@@ -253,9 +256,12 @@ test.describe('@supersync @pruning Vector Clock Pruning Fix', () => {
       const backupPath = ImportPage.getFixturePath('test-backup.json');
       await importPage.importBackupFile(backupPath);
 
-      await clientA.page.reload({ timeout: 60000 });
-      await waitForAppReady(clientA.page, { ensureRoute: false });
-      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.page.goto(clientA.page.url(), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
+      await clientA.sync.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
       await clientA.sync.syncAndWait();
