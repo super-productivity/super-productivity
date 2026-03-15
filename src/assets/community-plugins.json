@@ -17,6 +17,26 @@
   {
     "name": "AutoPlan",
     "shortDescription": "Smart non-AI plugin for the automatic scheduling of tasks using priorities assigned automatically based on tags, projects, and time estimation.",
-    "url": "https://github.com/00sapo/sp-autoplan"    
+    "url": "https://github.com/00sapo/sp-autoplan"
+  },
+  {
+    "name": "Reporter",
+    "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
+    "url": "https://github.com/dougcooper/sp-reporter"
+  },
+  {
+    "name": "MCP",
+    "shortDescription": "Bridge between the Super Productivity app and MCP (Model Context Protocol) servers for Claude Desktop integration.",
+    "url": "https://github.com/organicmoron/SP-MCP"
+  },
+  {
+    "name": "Dashboard",
+    "shortDescription": "A lightweight dashboard plugin that visualizes time tracked, completed tasks, overdue items, and project breakdowns within a user‑defined date range. It ships as a self-contained HTML/JavaScript widget with no external dependencies and is styled to support light/dark themes.",
+    "url": "https://github.com/dougcooper/sp-dashboard"
+  },
+  {
+    "name": "Invoicer",
+    "shortDescription": "Generate client invoices from tracked time in Super Productivity, with flexible billing periods, itemization levels, and PDF export.",
+    "url": "https://github.com/1jamesthompson1/sp-invoicer"
   }
 ]
