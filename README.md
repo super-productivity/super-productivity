@@ -280,13 +280,21 @@ flatpak run com.super_productivity.SuperProductivity
     <img width='175' alt='Get it on Flathub' src='https://flathub.org/api/badge?locale=en'/>
   </a>
 
-#### Aur - Arch Linux
+#### AUR - Arch Linux
 
-```bash
-git clone https://aur.archlinux.org/superproductivity-bin.git
-cd superproductivity-bin
-makepkg -si
-```
+* With AUR helpers
+    ```bash
+    paru -S superproductivity-bin
+    # or
+    yay -S superproductivity-bin
+    ```
+
+* Without AUR helpers
+    ```bash
+    git clone https://aur.archlinux.org/superproductivity-bin.git
+    cd superproductivity-bin
+    makepkg -si
+    ```
 
 #### AppImage
 
