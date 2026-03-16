@@ -14,6 +14,7 @@ import {
   RedmineIssueResult,
   RedmineSearchResult,
   RedmineSearchResultItem,
+  RedmineTimeEntriesResult,
 } from './redmine-issue.model';
 import { mapRedmineSearchResultItemToSearchResult } from './redmine-issue-map.util';
 import { SearchResultItem } from '../../issue.model';
@@ -101,6 +102,24 @@ export class RedmineApiService {
         },
       },
       cfg,
+    );
+  }
+
+  getTimeEntriesForCurrentUser$(issueId: number, cfg: RedmineCfg): Observable<number> {
+    return this._sendRequest$(
+      {
+        url: `${cfg.host}/time_entries.json`,
+        params: ParamsBuilder.create()
+          .withLimit(100)
+          .withParam('issue_id', String(issueId))
+          .withParam('user_id', 'me')
+          .build(),
+      },
+      cfg,
+    ).pipe(
+      map((res: RedmineTimeEntriesResult) => {
+        return (res?.time_entries ?? []).reduce((sum, entry) => sum + entry.hours, 0);
+      }),
     );
   }
 
@@ -218,6 +237,11 @@ class ParamsBuilder {
 
   onlyIssues(isOnlyIssues: boolean): ParamsBuilder {
     this.params['issues'] = isOnlyIssues ? '1' : '0';
+    return this;
+  }
+
+  withParam(key: string, value: string): ParamsBuilder {
+    this.params[key] = value;
     return this;
   }
 

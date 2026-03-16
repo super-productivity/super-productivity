@@ -117,6 +117,8 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
   };
   timeSpentToday: number;
 
+  timeSpentLoggedDelta: number;
+
   activityId: number = 1;
 
   private _onDestroy$ = new Subject();
@@ -146,6 +148,15 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
     }),
   );
 
+  private _myLoggedHours$: Observable<number> = this._cfgOnce$.pipe(
+    concatMap((cfg) =>
+      this._redmineApiService.getTimeEntriesForCurrentUser$(
+        this.data.redmineIssue.id,
+        cfg,
+      ),
+    ),
+  );
+
   constructor() {
     this._issueProviderIdOnce$.subscribe((v) => IssueLog.log(`_issueProviderIdOnce$`, v));
 
@@ -155,6 +166,12 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
     this.comment = this.data.task.parentId ? this.data.task.title : '';
 
     this.timeSpentToday = this.data.task.timeSpentOnDay[this._dateService.todayStr()];
+    this.timeSpentLoggedDelta = Math.max(0, this.data.task.timeSpent);
+
+    this._myLoggedHours$.pipe(takeUntil(this._onDestroy$)).subscribe((myLoggedHours) => {
+      const loggedMs = myLoggedHours * MS_PER_HOUR;
+      this.timeSpentLoggedDelta = Math.max(0, this.data.task.timeSpent - loggedMs);
+    });
 
     this._cfgOnce$.subscribe((cfg) => {
       if (cfg.timeTrackingDialogDefaultTime) {
@@ -240,7 +257,7 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
       case JiraWorklogExportDefaultTime.TimeToday:
         return this.timeSpentToday;
       case JiraWorklogExportDefaultTime.AllTimeMinusLogged:
-        return this.data.task.timeSpent;
+        return this.timeSpentLoggedDelta;
     }
     return 0;
   }
