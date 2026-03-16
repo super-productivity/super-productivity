@@ -25,11 +25,6 @@
     "url": "https://codeberg.org/sinenomine/sp-asana"
   },
   {
-    "name": "Reporter",
-    "shortDescription": "Generates reports of completed tasks and tasks with work logs within a specified date range.",
-    "url": "https://github.com/dougcooper/sp-reporter"
-  },
-  {
     "name": "MCP",
     "shortDescription": "Bridge between the Super Productivity app and MCP (Model Context Protocol) servers for Claude Desktop integration.",
     "url": "https://github.com/organicmoron/SP-MCP"
