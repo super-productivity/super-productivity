@@ -142,7 +142,7 @@ jobs:
         run: rm -f dist/browser/ngsw.json dist/browser/ngsw-worker.js dist/browser/safety-worker.js dist/browser/worker-basic.min.js
 
       - name: Run Lighthouse CI
-        uses: treosh/lighthouse-ci-action@fcd65974f7c4c2bf0ee9d09b84d2489183c29726 # v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           # Configure Lighthouse CI
           configPath: './tools/lighthouse/.lighthouserc.json'
