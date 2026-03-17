@@ -895,6 +895,7 @@ export class FocusModeEffects {
                 translateParams,
                 timer$,
                 progress$,
+                isKeepVisibleAfterAction: true,
                 isHideDismissBtn: true,
                 ...this._getBannerActions(
                   timer,

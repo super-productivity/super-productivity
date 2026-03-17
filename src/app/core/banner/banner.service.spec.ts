@@ -126,4 +126,46 @@ describe('BannerService', () => {
       expect(service.activeBanner()).toBeNull();
     });
   });
+
+  it('should dismiss the banner after action when isKeepVisibleAfterAction is false or undefined', () => {
+    let actionCalled = false;
+    const banner = {
+      id: BannerId.FocusMode,
+      msg: 'Test message',
+      action: {
+        label: 'Action',
+        icon: 'icon',
+        fn: () => {
+          actionCalled = true;
+        },
+      },
+      // isKeepVisibleAfterAction is undefined
+    };
+    service.open(banner);
+    // Simulate clicking the action
+    service.activeBanner()?.action?.fn();
+    expect(actionCalled).toBeTrue();
+    expect(service.activeBanner()).toBeNull();
+  });
+
+  it('should NOT dismiss the banner after action when isKeepVisibleAfterAction is true', () => {
+    let actionCalled = false;
+    const banner = {
+      id: BannerId.FocusMode,
+      msg: 'Test message',
+      action: {
+        label: 'Action',
+        icon: 'icon',
+        fn: () => {
+          actionCalled = true;
+        },
+      },
+      isKeepVisibleAfterAction: true,
+    };
+    service.open(banner);
+    // Simulate clicking the action
+    service.activeBanner()?.action?.fn();
+    expect(actionCalled).toBeTrue();
+    expect(service.activeBanner()).not.toBeNull();
+  });
 });
