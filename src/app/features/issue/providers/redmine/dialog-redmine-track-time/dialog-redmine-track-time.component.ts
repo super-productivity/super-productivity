@@ -196,8 +196,10 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
 
     this._cfgOnce$.subscribe((cfg) => {
       if (cfg.timeTrackingDialogDefaultTime) {
+        this.selectedDefaultTimeMode = cfg.timeTrackingDialogDefaultTime;
         this.timeSpent = this.getTimeToLogForMode(cfg.timeTrackingDialogDefaultTime);
         this.started = this._fillInStarted(cfg.timeTrackingDialogDefaultTime);
+        this._cdr.markForCheck();
       }
     });
   }
