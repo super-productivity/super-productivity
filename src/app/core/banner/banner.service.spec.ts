@@ -126,4 +126,23 @@ describe('BannerService', () => {
       expect(service.activeBanner()).toBeNull();
     });
   });
+
+  it('should alternate the banner action', () => {
+    const banner1 = {
+      id: BannerId.FocusMode,
+      msg: 'Message 1',
+      action: { label: 'Action 1', icon: 'icon1', fn: () => {} },
+    };
+    const banner2 = {
+      id: BannerId.FocusMode,
+      msg: 'Message 1',
+      action: { label: 'Action 2', icon: 'icon2', fn: () => {} },
+    };
+
+    service.open(banner1);
+    expect(service.activeBanner()?.action?.icon).toBe('icon1');
+
+    service.open(banner2);
+    expect(service.activeBanner()?.action?.icon).toBe('icon2');
+  });
 });
