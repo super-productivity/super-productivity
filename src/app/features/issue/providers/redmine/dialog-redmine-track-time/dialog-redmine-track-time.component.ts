@@ -1,4 +1,10 @@
-import { ChangeDetectionStrategy, Component, inject, OnDestroy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  inject,
+  OnDestroy,
+} from '@angular/core';
 import { RedmineApiService } from '../redmine-api.service';
 import {
   MAT_DIALOG_DATA,
@@ -21,7 +27,14 @@ import { expandFadeAnimation } from '../../../../../ui/animations/expand.ani';
 import { DateService } from 'src/app/core/date/date.service';
 import { IssueProviderService } from '../../../issue-provider.service';
 import { RedmineCfg } from '../redmine.model';
-import { concatMap, map, shareReplay, switchMap, takeUntil } from 'rxjs/operators';
+import {
+  catchError,
+  concatMap,
+  map,
+  shareReplay,
+  switchMap,
+  takeUntil,
+} from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { IssueProviderActions } from '../../../store/issue-provider.actions';
 import { FormsModule } from '@angular/forms';
@@ -97,6 +110,7 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
   private _store = inject(Store);
   private _issueProviderService = inject(IssueProviderService);
   private _taskService = inject(TaskService);
+  private _cdr = inject(ChangeDetectorRef);
   data = inject<{
     redmineIssue: RedmineIssue;
     task: Task;
@@ -155,6 +169,7 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
         cfg,
       ),
     ),
+    catchError(() => of(0)),
   );
 
   constructor() {
@@ -171,6 +186,12 @@ export class DialogRedmineTrackTimeComponent implements OnDestroy {
     this._myLoggedHours$.pipe(takeUntil(this._onDestroy$)).subscribe((myLoggedHours) => {
       const loggedMs = myLoggedHours * MS_PER_HOUR;
       this.timeSpentLoggedDelta = Math.max(0, this.data.task.timeSpent - loggedMs);
+      if (
+        this.selectedDefaultTimeMode === JiraWorklogExportDefaultTime.AllTimeMinusLogged
+      ) {
+        this.timeSpent = this.timeSpentLoggedDelta;
+      }
+      this._cdr.markForCheck();
     });
 
     this._cfgOnce$.subscribe((cfg) => {
