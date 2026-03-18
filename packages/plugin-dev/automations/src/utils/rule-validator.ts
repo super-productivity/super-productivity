@@ -1,4 +1,4 @@
-import { AutomationRule, AutomationTriggerType, ConditionType, ActionType } from '../types';
+import { AutomationTriggerType, ConditionType, ActionType } from '../types';
 
 const VALID_TRIGGER_TYPES: AutomationTriggerType[] = [
   'taskCompleted',
@@ -7,11 +7,19 @@ const VALID_TRIGGER_TYPES: AutomationTriggerType[] = [
   'timeBased',
 ];
 
-const VALID_CONDITION_TYPES: ConditionType[] = ['titleContains', 'projectIs', 'hasTag'];
+const VALID_CONDITION_TYPES: ConditionType[] = [
+  'titleContains',
+  'titleStartsWith',
+  'projectIs',
+  'hasTag',
+  'weekdayIs',
+];
 
 const VALID_ACTION_TYPES: ActionType[] = [
   'createTask',
+  'deleteTask',
   'addTag',
+  'moveToProject',
   'displaySnack',
   'displayDialog',
   'webhook',
@@ -33,6 +41,7 @@ export const validateRule = (rule: any): boolean => {
     if (typeof condition !== 'object' || condition === null) return false;
     if (!VALID_CONDITION_TYPES.includes(condition.type)) return false;
     if (typeof condition.value !== 'string') return false;
+    if (condition.isRegex !== undefined && typeof condition.isRegex !== 'boolean') return false;
   }
 
   // Actions validation

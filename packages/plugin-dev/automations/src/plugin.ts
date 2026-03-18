@@ -1,11 +1,9 @@
 import {
-  AnyTaskUpdatePayload,
   PluginAPI,
   TaskCompletePayload,
   TaskUpdatePayload,
   TaskCreatedPayload,
 } from '@super-productivity/plugin-api';
-import type { PluginHooks } from '@super-productivity/plugin-api';
 
 declare const plugin: PluginAPI;
 
@@ -47,10 +45,10 @@ plugin.registerHook('taskUpdate' as any, (payload: TaskUpdatePayload) => {
     plugin.log.warn('Received taskUpdate hook without task data');
     return;
   }
-  // We no longer need to heuristically detect creation here
   automationManager.onTaskEvent({
     type: 'taskUpdated',
     task: payload.task,
+    changes: payload.changes,
     previousTaskState: undefined, // TODO: How to get previous state? Payload changes only has partial.
   });
 });

@@ -61,6 +61,12 @@ describe('validateRule', () => {
         conditions: [{ type: 'titleContains', value: 123 }],
       }),
     ).toBe(false);
+    expect(
+      validateRule({
+        ...validRule,
+        conditions: [{ type: 'titleContains', value: 'test', isRegex: 'yes' }],
+      }),
+    ).toBe(false);
   });
 
   it('should fail if actions are invalid', () => {
@@ -72,5 +78,30 @@ describe('validateRule', () => {
         actions: [{ type: 'invalid', value: 'test' }],
       }),
     ).toBe(false);
+  });
+
+  it('should validate supported advanced condition and action types', () => {
+    const rule: AutomationRule = {
+      ...validRule,
+      conditions: [
+        { type: 'titleStartsWith', value: 'Bug:' },
+        { type: 'weekdayIs', value: 'Mon,Fri' },
+      ],
+      actions: [
+        { type: 'moveToProject', value: 'project-1' },
+        { type: 'deleteTask', value: '' },
+      ],
+    };
+
+    expect(validateRule(rule)).toBe(true);
+  });
+
+  it('should validate regex-enabled title conditions', () => {
+    const rule: AutomationRule = {
+      ...validRule,
+      conditions: [{ type: 'titleContains', value: '^bug', isRegex: true }],
+    };
+
+    expect(validateRule(rule)).toBe(true);
   });
 });

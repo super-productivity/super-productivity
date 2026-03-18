@@ -95,3 +95,23 @@ figure {
   border-radius: var(--card-border-radius);
   border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
 }
+
+.input-with-toggle {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s);
+}
+
+.input-with-toggle input {
+  flex: 1;
+}
+
+.regex-toggle {
+  white-space: nowrap;
+}
+
+.field-error {
+  display: block;
+  margin-top: var(--s-half);
+  color: var(--color-danger);
+}

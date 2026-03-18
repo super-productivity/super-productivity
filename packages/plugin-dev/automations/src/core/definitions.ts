@@ -1,5 +1,5 @@
 import { PluginAPI } from '@super-productivity/plugin-api';
-import { TaskEvent } from '../types';
+import { Condition, TaskEvent } from '../types';
 import { DataCache } from './data-cache';
 
 export interface AutomationContext {
@@ -19,7 +19,12 @@ export interface IAutomationCondition {
   id: string; // e.g. 'titleContains'
   name: string;
   description?: string;
-  check(context: AutomationContext, event: TaskEvent, value?: string): Promise<boolean>;
+  check(
+    context: AutomationContext,
+    event: TaskEvent,
+    value?: string,
+    condition?: Condition,
+  ): Promise<boolean>;
 }
 
 export interface IAutomationAction {
