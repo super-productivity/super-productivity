@@ -156,6 +156,28 @@ export class DialogFullscreenMarkdownComponent implements OnInit, AfterViewInit 
   keydownHandler(ev: KeyboardEvent): void {
     if (ev.key === 'Enter' && ev.ctrlKey) {
       this.close();
+      return;
+    }
+
+    const textarea = this.textareaEl()?.nativeElement;
+    if (!textarea) {
+      return;
+    }
+    const result = MarkdownToolbar.handleListKeydown(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      ev.key,
+      ev.shiftKey,
+      ev.ctrlKey,
+    );
+    if (result) {
+      ev.preventDefault();
+      this.data.content = result.text;
+      this._contentChanges$.next(result.text);
+      setTimeout(() => {
+        textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+      });
     }
   }
 
