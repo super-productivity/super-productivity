@@ -87,7 +87,7 @@ test.describe('Plugin Lifecycle', () => {
     }).toPass({ timeout: 10000, intervals: [500, 1000] });
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
   });
 
   test('disable plugin and verify cleanup', async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('Plugin Lifecycle', () => {
     expect(disabled).toBe(true);
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     // Wait for navigation and work view to be ready
     await page.locator('.route-wrapper').waitFor({ state: 'visible', timeout: 10000 });
 

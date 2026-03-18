@@ -72,7 +72,7 @@ test.describe('Planner Multiple Days', () => {
     await plannerPage.waitForPlannerView();
 
     // Return to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Tasks should still be present

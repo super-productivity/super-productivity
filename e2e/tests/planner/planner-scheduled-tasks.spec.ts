@@ -53,7 +53,7 @@ test.describe('Planner Scheduled Tasks', () => {
     await plannerPage.waitForPlannerView();
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await workViewPage.waitForTaskList();
 
     // Task should still exist

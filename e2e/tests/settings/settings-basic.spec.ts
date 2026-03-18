@@ -126,7 +126,7 @@ test.describe('Settings', () => {
     await page.waitForLoadState('networkidle');
 
     // Navigate back to work view via URL (more reliable)
-    await page.goto('/#/tag/TODAY/tasks');
+    await page.goto('/#/tag/TODAY');
     await page.waitForLoadState('networkidle');
 
     // Verify we're back at work view

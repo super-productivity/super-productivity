@@ -235,7 +235,7 @@ export class SettingsPage extends BasePage {
    * Navigate back to work view
    */
   async navigateBackToWorkView(): Promise<void> {
-    await this.page.goto('/#/tag/TODAY/tasks');
+    await this.page.goto('/#/tag/TODAY');
     await this.page.waitForLoadState('networkidle');
     await waitForAngularStability(this.page);
   }
