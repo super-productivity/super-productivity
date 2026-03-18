@@ -66,17 +66,19 @@ test.describe('Recurring Task - Future Start Date (#6856)', () => {
     }, futureDateStr);
     await page.waitForTimeout(300);
 
-    // Save the repeat config
+    // Save the repeat config — wait for the button to be enabled first
     const saveBtn = repeatDialog.getByRole('button', { name: /Save/i });
+    await expect(saveBtn).toBeEnabled({ timeout: 5000 });
     await saveBtn.click();
     await repeatDialog.waitFor({ state: 'hidden', timeout: 10000 });
 
-    // 4. Wait for effects to process
-    await page.waitForTimeout(3000);
+    // 4. Wait for effects and persistence to process
+    await page.waitForTimeout(5000);
 
-    // 5. Navigate to today view
-    await page.goto('/#/tag/TODAY/tasks');
+    // 5. Reload and navigate to today view to verify persisted state
     await page.reload();
+    await workViewPage.waitForTaskList();
+    await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
 
     // 6. Assert: task should NOT be visible in today's task list

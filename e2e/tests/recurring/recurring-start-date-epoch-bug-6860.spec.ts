@@ -125,10 +125,11 @@ test.describe('Recurring Task - Start Date Epoch Bug (#6860)', () => {
     await repeatDialog.waitFor({ state: 'visible', timeout: 10000 });
 
     // 4. Type a date directly into the date input field
+    // The app defaults to en-GB locale (DD/MM/YYYY format)
     const dateInput = repeatDialog.getByRole('textbox', { name: /start date/i });
     await expect(dateInput).toBeVisible();
     await dateInput.clear();
-    await dateInput.fill('6/15/2026');
+    await dateInput.fill('15/06/2026');
     // Trigger change by pressing Tab to blur
     await dateInput.press('Tab');
 
