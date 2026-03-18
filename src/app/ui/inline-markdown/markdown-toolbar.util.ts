@@ -661,6 +661,33 @@ export const handleShiftTabKey = (
   return { text: newText, selectionStart: newCursor, selectionEnd: newCursor };
 };
 
+/**
+ * Dispatcher for list-related keyboard shortcuts.
+ * Returns null if the key is not handled (caller should not preventDefault).
+ */
+export const handleListKeydown = (
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  key: string,
+  shiftKey: boolean,
+  ctrlKey: boolean,
+): TextTransformResult | null => {
+  if (ctrlKey) {
+    return null;
+  }
+  if (key === 'Enter' && !shiftKey) {
+    return handleEnterKey(text, selectionStart, selectionEnd);
+  }
+  if (key === 'Tab' && !shiftKey) {
+    return handleTabKey(text, selectionStart, selectionEnd);
+  }
+  if (key === 'Tab' && shiftKey) {
+    return handleShiftTabKey(text, selectionStart, selectionEnd);
+  }
+  return null;
+};
+
 export const insertTable = (
   text: string,
   selectionStart: number,

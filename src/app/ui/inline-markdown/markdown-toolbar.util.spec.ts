@@ -10,6 +10,7 @@ import {
   applyStrikethrough,
   applyTaskList,
   handleEnterKey,
+  handleListKeydown,
   handleShiftTabKey,
   handleTabKey,
   insertImage,
@@ -612,5 +613,66 @@ describe('handleShiftTabKey', () => {
     const result = handleShiftTabKey(text, cursor, cursor);
     expect(result).not.toBeNull();
     expect(result!.text).toBe('line 1\n- task\nline 3');
+  });
+});
+
+describe('handleListKeydown', () => {
+  it('should dispatch Enter to handleEnterKey', () => {
+    const text = '- [ ] task';
+    const result = handleListKeydown(
+      text,
+      text.length,
+      text.length,
+      'Enter',
+      false,
+      false,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('- [ ] task\n- [ ] ');
+  });
+
+  it('should dispatch Tab to handleTabKey', () => {
+    const text = '- [ ] ';
+    const result = handleListKeydown(text, 6, 6, 'Tab', false, false);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('  - [ ] ');
+  });
+
+  it('should dispatch Shift+Tab to handleShiftTabKey', () => {
+    const text = '  - [ ] task';
+    const result = handleListKeydown(text, 8, 8, 'Tab', true, false);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('- [ ] task');
+  });
+
+  it('should return null for Ctrl+Enter', () => {
+    const text = '- [ ] task';
+    const result = handleListKeydown(
+      text,
+      text.length,
+      text.length,
+      'Enter',
+      false,
+      true,
+    );
+    expect(result).toBeNull();
+  });
+
+  it('should return null for unrelated keys', () => {
+    const result = handleListKeydown('- [ ] task', 6, 6, 'a', false, false);
+    expect(result).toBeNull();
+  });
+
+  it('should return null for Shift+Enter', () => {
+    const text = '- [ ] task';
+    const result = handleListKeydown(
+      text,
+      text.length,
+      text.length,
+      'Enter',
+      true,
+      false,
+    );
+    expect(result).toBeNull();
   });
 });
