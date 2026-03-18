@@ -3,7 +3,7 @@
     <color name="primary">#0B77D2</color>
     <color name="primaryDark">#0D47A1</color>
     <color name="accent">#D81B60</color>
-    <color name="statusBar">#000000</color>
+    <color name="statusBar">#f8f8f7</color>
     <color name="navigationBar">#f8f8f7</color>
 
 </resources>
