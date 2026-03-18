@@ -50,6 +50,7 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { throttle } from '../../../util/decorators';
 import { TaskRepeatCfgService } from '../../task-repeat-cfg/task-repeat-cfg.service';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
+import { DialogFullscreenMarkdownComponent } from '../../../ui/dialog-fullscreen-markdown/dialog-fullscreen-markdown.component';
 import { Update } from '@ngrx/entity';
 import { getDbDateStr } from '../../../util/get-db-date-str';
 import { DateService } from '../../../core/date/date.service';
@@ -632,6 +633,29 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     if (!isNextTargetInput) {
       this.focusSelf();
     }
+  }
+
+  openNotesFullscreen(): void {
+    const task = this.task();
+    const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
+      minWidth: '100vw',
+      height: '100vh',
+      restoreFocus: true,
+      autoFocus: 'textarea',
+      data: {
+        content: task.notes || '',
+        taskId: task.id,
+      },
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result?.action === 'DELETE') {
+        this._taskService.update(task.id, { notes: '' });
+      } else if (typeof result === 'string') {
+        this._taskService.update(task.id, { notes: result });
+      }
+      this.focusSelf();
+    });
   }
 
   estimateTime(): void {

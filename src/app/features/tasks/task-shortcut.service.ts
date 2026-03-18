@@ -123,6 +123,11 @@ export class TaskShortcutService {
       ev.preventDefault();
       return true;
     }
+    if (checkKeyCombo(ev, keys.taskOpenNotesFullscreen)) {
+      this._handleTaskShortcut(focusedTaskId, 'openNotesFullscreen');
+      ev.preventDefault();
+      return true;
+    }
     if (checkKeyCombo(ev, keys.taskOpenEstimationDialog)) {
       this._handleTaskShortcut(focusedTaskId, 'estimateTime');
       ev.preventDefault();

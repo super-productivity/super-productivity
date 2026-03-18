@@ -26,6 +26,7 @@ export type KeyboardConfig = Readonly<{
 
   taskEditTitle?: string | null;
   taskToggleDetailPanelOpen?: string | null;
+  taskOpenNotesFullscreen?: string | null;
   taskOpenEstimationDialog?: string | null;
   taskToggleDone?: string | null;
   taskAddSubTask?: string | null;
