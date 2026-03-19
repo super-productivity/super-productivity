@@ -209,6 +209,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
       this.modelCopy.set(result.text);
       this.resizeTextareaToFit();
+      this.changed.emit(result.text);
     }
   }
 
