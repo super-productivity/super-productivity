@@ -14,6 +14,28 @@ permissions:
   contents: read
 
 jobs:
+  # Verify package-lock.json only uses the official npm registry.
+  # Prevents contributors using mirror registries from rewriting all resolved URLs.
+  check-lockfile-registry:
+    name: Check package-lock.json registry
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Reject non-standard registry URLs
+        run: |
+          BAD_COUNT=$(grep '"resolved": "https\?://' package-lock.json | grep -cv 'registry.npmjs.org' || echo 0)
+          if [ "$BAD_COUNT" -gt 0 ]; then
+            echo "::error::package-lock.json contains $BAD_COUNT resolved URLs pointing to a non-standard registry."
+            echo "Examples:"
+            grep '"resolved": "https\?://' package-lock.json | grep -v 'registry.npmjs.org' | head -5
+            echo ""
+            echo "Please delete node_modules and package-lock.json, then run 'npm install' with the default registry (https://registry.npmjs.org/)."
+            exit 1
+          fi
+
   # This job will scan dependency manifest files
   # surfacing known-vulnerable versions of the packages declared or updated.
   # Only runs on pull_request events as the action requires base/head refs
