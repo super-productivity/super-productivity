@@ -30,6 +30,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { applyTaskList } from './markdown-toolbar.util';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -329,6 +330,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     const textareaEl = this.textareaEl();
     let cursorPos: number | undefined;
+    let selectionEnd: number | undefined;
     let currentText: string;
 
     // Read current content from textarea if available, otherwise from modelCopy.
@@ -337,6 +339,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (textareaEl) {
       currentText = textareaEl.nativeElement.value;
       cursorPos = textareaEl.nativeElement.selectionStart;
+      selectionEnd = textareaEl.nativeElement.selectionEnd;
     } else {
       currentText = this.modelCopy() || '';
     }
@@ -361,7 +364,17 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     let cleaned: string;
     let adjustedCursorPos: number | undefined;
 
-    if (cursorPos !== undefined) {
+    // Check if there is selected text to convert to checklist items
+    if (
+      cursorPos !== undefined &&
+      selectionEnd !== undefined &&
+      cursorPos !== selectionEnd
+    ) {
+      // Convert selected text to checklist items
+      const result = applyTaskList(currentText, cursorPos, selectionEnd);
+      cleaned = result.text;
+      adjustedCursorPos = result.selectionEnd;
+    } else if (cursorPos !== undefined) {
       // Path A: Textarea visible — insert after cursor's current line
       let lineEnd = cursorPos;
       while (lineEnd < currentText.length && currentText[lineEnd] !== '\n') {

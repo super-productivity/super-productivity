@@ -1300,6 +1300,114 @@ describe('InlineMarkdownComponent', () => {
       // Assert — new item inserted between A and B
       expect(component.modelCopy()).toBe('- [ ] A\n- [ ] \n- [ ] B');
     });
+
+    it('should convert selected text to checklist items', () => {
+      // Arrange
+      const text = 'Folge 1: 17. Dezember\nFolge 2: 24. Dezember\nFolge 3: 31. Dezember';
+      component.model = text;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(true);
+
+      const mockTextareaEl = {
+        nativeElement: {
+          value: text,
+          selectionStart: 0,
+          selectionEnd: text.length, // all text selected
+          focus: jasmine.createSpy('focus'),
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
+          style: {},
+          scrollHeight: 100,
+          offsetHeight: 100,
+        },
+      };
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component, 'wrapperEl').and.returnValue({
+        nativeElement: { style: {} },
+      } as any);
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — selected text converted to checklist items
+      expect(component.modelCopy()).toBe(
+        '- [ ] Folge 1: 17. Dezember\n- [ ] Folge 2: 24. Dezember\n- [ ] Folge 3: 31. Dezember',
+      );
+    });
+
+    it('should convert partially selected text to checklist items', () => {
+      // Arrange
+      const text = 'Line 1\nLine 2\nLine 3\nLine 4';
+      component.model = text;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(true);
+
+      // Select "Line 2\nLine 3"
+      const selectionStart = 7; // after "Line 1\n"
+      const selectionEnd = 20; // before "\nLine 4"
+
+      const mockTextareaEl = {
+        nativeElement: {
+          value: text,
+          selectionStart,
+          selectionEnd,
+          focus: jasmine.createSpy('focus'),
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
+          style: {},
+          scrollHeight: 100,
+          offsetHeight: 100,
+        },
+      };
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component, 'wrapperEl').and.returnValue({
+        nativeElement: { style: {} },
+      } as any);
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — only selected lines converted
+      expect(component.modelCopy()).toBe('Line 1\n- [ ] Line 2\n- [ ] Line 3\nLine 4');
+    });
+
+    it('should toggle checklist prefix when selected text already has checklist items', () => {
+      // Arrange
+      const text = '- [ ] Item 1\n- [ ] Item 2\n- [ ] Item 3';
+      component.model = text;
+      fixture.detectChanges();
+
+      component['isShowEdit'].set(true);
+
+      const mockTextareaEl = {
+        nativeElement: {
+          value: text,
+          selectionStart: 0,
+          selectionEnd: text.length,
+          focus: jasmine.createSpy('focus'),
+          setSelectionRange: jasmine.createSpy('setSelectionRange'),
+          style: {},
+          scrollHeight: 100,
+          offsetHeight: 100,
+        },
+      };
+      spyOn(component, 'textareaEl').and.returnValue(mockTextareaEl as any);
+      spyOn(component, 'wrapperEl').and.returnValue({
+        nativeElement: { style: {} },
+      } as any);
+
+      const mockEvent = { preventDefault: () => {}, stopPropagation: () => {} } as any;
+
+      // Act
+      component.toggleChecklistMode(mockEvent);
+
+      // Assert — checklist items toggled to plain bullets
+      expect(component.modelCopy()).toBe('- Item 1\n- Item 2\n- Item 3');
+    });
   });
 
   describe('model setter race condition', () => {
