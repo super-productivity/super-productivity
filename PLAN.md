@@ -17,16 +17,24 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 ## Step 1: Frontend – Mirror SuperSync credentials to native SharedPreferences
 
 **Files to modify:**
-- `src/app/features/android/android-interface.ts` – Add `setSuperSyncCredentials(baseUrl, accessToken)` and `clearSuperSyncCredentials()` method signatures
-- `src/app/core/platform/capacitor-reminder.service.ts` or a new small service – Call the native bridge when SuperSync credentials change
+- `src/app/features/android/android-interface.ts` – Add `setSuperSyncCredentials?(baseUrl: string, accessToken: string): void` and `clearSuperSyncCredentials?(): void` method signatures (fire-and-forget, synchronous)
 - `android/app/src/main/java/com/superproductivity/superproductivity/webview/JavaScriptInterface.kt` – Add `@JavascriptInterface` methods to persist credentials to SharedPreferences
+
+**New file:**
+- `src/app/features/android/store/android-sync-bridge.effects.ts` – NgRx effect that mirrors credentials to native
 
 **What:**
 - When SuperSync is configured (credentials saved), the frontend calls `androidInterface.setSuperSyncCredentials(baseUrl, accessToken)` to persist them to SharedPreferences
 - When credentials are cleared/changed, call the corresponding update/clear method
 - The worker reads these from SharedPreferences (no IndexedDB or WebView needed)
 
-**Where to hook in:** The best place is in the sync trigger/config flow. When the SuperSync provider is activated or credentials change, mirror to native. This should be done in an effect or service that watches for SuperSync config changes.
+**Where to hook in:** Subscribe to `SyncProviderManager.currentProviderPrivateCfg$`, filter for `SyncProviderId.SuperSync`, and mirror to native. This is a selector-based effect, so it MUST:
+- Use `skipWhileApplyingRemoteOps()` guard (per CLAUDE.md rule #8)
+- Use `dispatch: false` (platform-only side effect)
+- Guard with `IS_ANDROID_WEB_VIEW` (only relevant on Android)
+- Use `distinctUntilChanged` on `baseUrl` + `accessToken` to avoid redundant calls
+
+**Pattern reference:** Follow `android-focus-mode.effects.ts` which uses the same selector-based + hydration guard pattern.
 
 ## Step 2: Android – SuperSync credential store (SharedPreferences)
 
@@ -60,10 +68,11 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 - Detects these reminder-relevant changes:
   - **Task done:** `o` = "UPD" and payload contains `isDone: true`
   - **Task deleted:** `o` = "DEL"
-  - **Reminder cleared:** `o` = "UPD" and payload contains `remindAt: null`
+  - **Reminder cleared:** `o` = "UPD" and payload contains `remindAt: null` or `deadlineRemindAt: null`
+  - **Reminder dismissed:** action type code `a` = "HRX" (TASK_SHARED_DISMISS_REMINDER)
   - **Task archived:** action type code `a` = "HX" (TASK_SHARED_MOVE_TO_ARCHIVE)
 - Returns a list of task IDs that should have their reminders cancelled
-- Also handles BATCH operations with `entityChanges` array in payload (for meta-reducer multi-entity changes)
+- Also handles BATCH operations with `entityChanges` array in payload (for meta-reducer multi-entity changes). Note: batch operations use `ds` field (not `d`) for multiple entity IDs
 - Ignores encrypted payloads (`isPayloadEncrypted: true`) – these can't be parsed without the key, and supporting encryption in the background worker adds significant complexity. Users with encryption enabled won't benefit from background cancellation but their reminders still work normally when the app is open.
 
 ## Step 5: Android – Notification ID hash function (Kotlin port)
@@ -104,7 +113,7 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 ## Step 7: Android – Schedule the worker
 
 **Files to modify:**
-- `android/app/src/main/java/com/superproductivity/superproductivity/receiver/BootReceiver.kt` – Also enqueue periodic work after re-registering alarms
+- `android/app/src/main/java/com/superproductivity/superproductivity/receiver/BootReceiver.kt` – Enqueue periodic work after re-registering alarms (wrapped in try-catch; WorkManager may not be ready immediately at boot)
 - `android/app/src/main/java/com/superproductivity/superproductivity/CapacitorMainActivity.kt` – Enqueue periodic work on app start (idempotent via `ExistingPeriodicWorkPolicy.KEEP`)
 - `android/app/src/main/java/com/superproductivity/superproductivity/webview/JavaScriptInterface.kt` – When credentials are set, ensure worker is enqueued
 
@@ -122,6 +131,17 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 **What:**
 - Add `implementation 'androidx.work:work-runtime-ktx:2.10.0'`
 
+## Step 8b: Android – ProGuard rules (if needed)
+
+**File to modify:** `android/app/proguard-rules.pro` (currently empty)
+
+**What:**
+- Add keep rules for WorkManager worker classes and coroutines so release builds don't strip them:
+```proguard
+-keepnames class * extends androidx.work.CoroutineWorker
+```
+- OkHttp rules are typically handled by its own consumer ProGuard file, but verify after a release build
+
 ## Step 9: Frontend – Trigger credential sync on SuperSync config changes
 
 **File to modify or create:** A small piece in the sync setup flow
@@ -132,7 +152,7 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 - On clear: call `androidInterface.clearSuperSyncCredentials()`
 - This ensures the native worker always has current credentials
 
-**Best hook point:** In the existing sync trigger service or as a new small effect that watches the credential store. Could be added to `MobileNotificationEffects` or a new `AndroidSyncBridgeEffects`.
+**Best hook point:** New `AndroidSyncBridgeEffects` in `src/app/features/android/store/android-sync-bridge.effects.ts` (see Step 1 for details).
 
 ---
 
@@ -155,4 +175,5 @@ Use Android's `WorkManager` to run a periodic background job (every 15 minutes) 
 | `android/.../receiver/BootReceiver.kt` | Enqueue worker on boot |
 | `android/.../CapacitorMainActivity.kt` | Enqueue worker on app start |
 | `src/app/features/android/android-interface.ts` | Add credential bridge method types |
-| `src/app/features/android/` or similar | New effect/service to mirror credentials to native |
+| `src/app/features/android/store/android-sync-bridge.effects.ts` | **New** – Effect to mirror credentials to native |
+| `android/app/proguard-rules.pro` | Add WorkManager keep rules |
