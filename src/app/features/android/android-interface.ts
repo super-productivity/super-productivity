@@ -120,6 +120,10 @@ export interface AndroidInterface {
   onReminderDone$: ReplaySubject<string>; // emits taskId
   onReminderSnooze$: ReplaySubject<{ taskId: string; newRemindAt: number }>; // emits snooze events
   getReminderSnoozeQueue?(): string | null;
+
+  // Background sync credential bridge (for WorkManager-based reminder cancellation)
+  setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
+  clearSuperSyncCredentials?(): void;
 }
 
 // setInterval(() => {

@@ -13,8 +13,10 @@ import com.superproductivity.superproductivity.App
 import com.superproductivity.superproductivity.BuildConfig
 import com.superproductivity.superproductivity.FullscreenActivity.Companion.WINDOW_INTERFACE_PROPERTY
 import com.superproductivity.superproductivity.app.LaunchDecider
+import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.FocusModeForegroundService
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.SyncReminderScheduler
 import com.superproductivity.superproductivity.service.TrackingForegroundService
 import com.superproductivity.superproductivity.widget.ReminderDoneQueue
 import com.superproductivity.superproductivity.widget.ReminderSnoozeQueue
@@ -314,6 +316,24 @@ class JavaScriptInterface(
             activity.runOnUiThread {
                 activity.dismissStartupOverlay()
             }
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun setSuperSyncCredentials(baseUrl: String, accessToken: String) {
+        safeCall("Failed to set SuperSync credentials") {
+            BackgroundSyncCredentialStore.save(activity, baseUrl, accessToken)
+            SyncReminderScheduler.ensureScheduled(activity)
+        }
+    }
+
+    @Suppress("unused")
+    @JavascriptInterface
+    fun clearSuperSyncCredentials() {
+        safeCall("Failed to clear SuperSync credentials") {
+            BackgroundSyncCredentialStore.clear(activity)
+            SyncReminderScheduler.cancel(activity)
         }
     }
 
