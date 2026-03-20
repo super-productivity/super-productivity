@@ -324,7 +324,7 @@ export const formatText = (
   headlineCols: string[],
   rows: (string | number | undefined)[][],
 ): string => {
-  let txt = '';
+  let txt = '\uFEFF'; // UTF-8 BOM to prevent encoding issues in Excel/other CSV readers
   txt += headlineCols.join(';') + LINE_SEPARATOR;
   txt += rows.map((cols) => cols.join(';')).join(LINE_SEPARATOR);
   return txt;
