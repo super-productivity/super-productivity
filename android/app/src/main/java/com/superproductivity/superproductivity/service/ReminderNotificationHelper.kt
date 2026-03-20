@@ -101,6 +101,7 @@ object ReminderNotificationHelper {
             putExtra(ReminderAlarmReceiver.EXTRA_REMINDER_TYPE, reminderType)
             putExtra(ReminderAlarmReceiver.EXTRA_USE_ALARM_STYLE, useAlarmStyle)
             putExtra(ReminderAlarmReceiver.EXTRA_IS_ONGOING, isOngoing)
+            putExtra(ReminderAlarmReceiver.EXTRA_TRIGGER_AT_MS, triggerAtMs)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
