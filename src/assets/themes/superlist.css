@@ -1,7 +1,8 @@
 /**
  * Superlist Theme for Super Productivity
- * Inspired by Superlist's clean, warm, and elegant design language.
- * Both light and dark modes with signature coral accent (#D14836).
+ * Inspired by Superlist's indigo-tinted dark UI and clean light mode.
+ * Dark mode: deep navy/indigo backgrounds with coral + purple accents.
+ * Light mode: clean off-white with coral accent.
  * https://www.superlist.com
  */
 
@@ -19,76 +20,78 @@ body:not(.isDarkTheme) {
    * SUPERLIST LIGHT COLOR PALETTE
    * ===============================*/
 
-  /* Warm off-white base tones */
-  --sl-bg: #faf9f7;
-  --sl-bg-warm: #f5f3ef;
+  /* Clean off-white base */
+  --sl-bg: #f7f7f8;
+  --sl-bg-sidebar: #eeeef2;
   --sl-bg-card: #ffffff;
-  --sl-bg-sidebar: #f0eee9;
-  --sl-bg-hover: #efede8;
-  --sl-bg-active: #e8e5df;
+  --sl-bg-hover: #ededf1;
+  --sl-bg-active: #e4e4ea;
 
-  /* Warm neutral text */
-  --sl-text: #1d1d1f;
-  --sl-text-secondary: #6e6e73;
-  --sl-text-muted: #aeaeb2;
+  /* Text */
+  --sl-text: #1c1c1e;
+  --sl-text-secondary: #6c6c80;
+  --sl-text-muted: #a0a0b0;
 
-  /* Brand accent — Superlist signature coral */
+  /* Coral accent */
   --sl-coral: #d14836;
   --sl-coral-light: #e57368;
   --sl-coral-dark: #b23a2b;
 
-  /* Warm borders */
-  --sl-border: rgba(60, 54, 42, 0.08);
-  --sl-divider: rgba(60, 54, 42, 0.06);
+  /* Purple accent (secondary) */
+  --sl-purple: #7b6cf0;
+
+  /* Borders */
+  --sl-border: rgba(0, 0, 20, 0.08);
+  --sl-divider: rgba(0, 0, 20, 0.06);
 
   /* ===============================
    * BACKGROUND COLORS - LIGHT
    * ===============================*/
 
   --bg: var(--sl-bg);
-  --bg-darker: var(--sl-bg-warm);
+  --bg-darker: var(--sl-bg-sidebar);
   --bg-slightly-lighter: var(--sl-bg);
   --bg-lighter: var(--sl-bg-card);
   --bg-lightest: var(--sl-bg-card);
-  --bg-super-light: var(--sl-bg-warm);
+  --bg-super-light: var(--sl-bg-sidebar);
 
   /* Component backgrounds */
   --card-bg: var(--sl-bg-card);
   --sidenav-bg: transparent;
-  --sidenav-bg-mobile: var(--sl-bg);
-  --sidenav-item-active-bg: rgba(209, 72, 54, 0.08);
-  --sidenav-hover-bg: rgba(60, 54, 42, 0.05);
-  --sidenav-active-text: var(--sl-coral);
+  --sidenav-bg-mobile: var(--sl-bg-sidebar);
+  --sidenav-item-active-bg: rgba(123, 108, 240, 0.08);
+  --sidenav-hover-bg: rgba(0, 0, 20, 0.04);
+  --sidenav-active-text: var(--sl-purple);
   --sidenav-text: var(--sl-text-secondary);
   --sidenav-text-hover: var(--sl-text);
   --sidenav-text-secondary: var(--sl-text-muted);
-  --selected-task-bg-color: var(--sl-bg-warm);
+  --selected-task-bg-color: var(--sl-bg-hover);
   --banner-bg: var(--sl-bg-card);
 
-  /* Task backgrounds — warm, flat hierarchy */
+  /* Task backgrounds */
   --task-c-bg: var(--sl-bg-card);
-  --task-c-selected-bg: var(--sl-bg-warm);
+  --task-c-selected-bg: var(--sl-bg-hover);
   --sub-task-c-bg: var(--sl-bg-card);
-  --sub-task-c-bg-done: rgba(209, 72, 54, 0.04);
-  --task-c-bg-done: rgba(209, 72, 54, 0.04);
+  --sub-task-c-bg-done: rgba(123, 108, 240, 0.04);
+  --task-c-bg-done: rgba(123, 108, 240, 0.04);
   --task-c-current-bg: var(--sl-bg-hover);
-  --task-c-drag-drop-bg: var(--sl-bg-hover);
-  --sub-task-c-bg-in-selected: #faf8f5;
+  --task-c-drag-drop-bg: var(--sl-bg-active);
+  --sub-task-c-bg-in-selected: #f5f5f8;
 
   /* Note backgrounds */
   --standard-note-bg: var(--sl-bg-card);
-  --standard-note-bg-hovered: var(--sl-bg-warm);
+  --standard-note-bg-hovered: var(--sl-bg-hover);
 
   /* Planner specific */
   --planner-task-bg: var(--sl-bg-card);
-  --planner-days-bg: var(--sl-bg-warm);
+  --planner-days-bg: var(--sl-bg-sidebar);
 
   /* Panel backgrounds */
   --right-panel-bg: transparent;
   --right-panel-bg-mobile: var(--sl-bg-card);
   --bottom-panel-bg: var(--sl-bg-card);
-  --bottom-panel-handle: rgba(60, 54, 42, 0.25);
-  --bottom-panel-handle-active: rgba(60, 54, 42, 0.45);
+  --bottom-panel-handle: rgba(0, 0, 20, 0.25);
+  --bottom-panel-handle-active: rgba(0, 0, 20, 0.45);
 
   /* Schedule Events */
   --schedule-event-bg: var(--sl-bg-card);
@@ -99,7 +102,7 @@ body:not(.isDarkTheme) {
    * ===============================*/
 
   --text-color: var(--sl-text);
-  --text-color-less-intense: rgba(29, 29, 31, 0.87);
+  --text-color-less-intense: rgba(28, 28, 30, 0.87);
   --text-color-muted: var(--sl-text-muted);
   --text-color-more-intense: #000000;
   --text-color-most-intense: #000000;
@@ -107,7 +110,7 @@ body:not(.isDarkTheme) {
   --standard-note-fg: var(--sl-text);
   --task-detail-value-color: var(--sl-text-secondary);
   --task-detail-bg: var(--sl-bg-card);
-  --task-detail-bg-hover: var(--sl-bg-warm);
+  --task-detail-bg-hover: var(--sl-bg-hover);
 
   /* ===============================
    * BORDERS & SEPARATORS - LIGHT
@@ -116,7 +119,7 @@ body:not(.isDarkTheme) {
   --extra-border-color: var(--sl-border);
   --separator-color: var(--sl-divider);
   --divider-color: var(--sl-divider);
-  --chip-outline-color: rgba(60, 54, 42, 0.14);
+  --chip-outline-color: rgba(0, 0, 20, 0.14);
 
   /* ===============================
    * ACCENT & THEME COLORS - LIGHT
@@ -133,62 +136,62 @@ body:not(.isDarkTheme) {
   --palette-accent-800: #913125;
   --palette-accent-900: #7a2a1f;
 
-  /* Status colors — Apple HIG-inspired */
+  /* Status colors */
   --c-success: #34c759;
   --c-warning: #ff9f0a;
   --c-error: var(--sl-coral);
-  --c-info: #007aff;
+  --c-info: var(--sl-purple);
 
   /* ===============================
    * UI ELEMENTS - LIGHT
    * ===============================*/
 
-  --scrollbar-thumb: rgba(60, 54, 42, 0.18);
-  --scrollbar-thumb-hover: rgba(60, 54, 42, 0.35);
+  --scrollbar-thumb: rgba(0, 0, 20, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 20, 0.3);
   --scrollbar-track: transparent;
 
-  --close-btn-bg: var(--sl-bg-warm);
+  --close-btn-bg: var(--sl-bg-sidebar);
   --close-btn-border: transparent;
 
-  --select-hover-bg: rgba(209, 72, 54, 0.06);
-  --options-border-color: rgba(209, 72, 54, 0.12);
+  --select-hover-bg: rgba(123, 108, 240, 0.06);
+  --options-border-color: rgba(123, 108, 240, 0.12);
 
-  --attachment-bg: var(--sl-bg-warm);
+  --attachment-bg: var(--sl-bg-hover);
   --attachment-border: var(--sl-border);
   --attachment-control-bg: rgba(255, 255, 255, 0.85);
   --attachment-control-border: transparent;
   --attachment-control-hover-bg: rgba(255, 255, 255, 0.95);
 
-  --grid-color: rgba(60, 54, 42, 0.06);
-  --progress-bg: rgba(60, 54, 42, 0.08);
+  --grid-color: rgba(0, 0, 20, 0.06);
+  --progress-bg: rgba(0, 0, 20, 0.08);
 
   --improvement-text: var(--sl-text);
-  --improvement-border: rgba(209, 72, 54, 0.2);
+  --improvement-border: rgba(123, 108, 240, 0.2);
   --improvement-button-text: #ffffff;
 
-  --color-background-color-options: var(--sl-bg-warm);
-  --color-background-text-field: var(--sl-bg-warm);
+  --color-background-color-options: var(--sl-bg-hover);
+  --color-background-text-field: var(--sl-bg-sidebar);
   --color-background-dark: var(--sl-bg-active);
   --color-background-notes: var(--sl-bg-card);
-  --color-background-inline-markdown: var(--sl-bg-warm);
-  --color-background-button-shadow: var(--sl-coral);
+  --color-background-inline-markdown: var(--sl-bg-hover);
+  --color-background-button-shadow: var(--sl-purple);
 
   /* ===============================
-   * SHADOWS - LIGHT (very soft, warm)
+   * SHADOWS - LIGHT
    * ===============================*/
 
   --shadow-key-umbra-opacity: 0.06;
   --shadow-key-penumbra-opacity: 0.04;
   --shadow-ambient-shadow-opacity: 0.02;
 
-  --task-current-shadow: 0 2px 8px rgba(60, 54, 42, 0.1);
-  --task-selected-shadow: 0 1px 4px rgba(60, 54, 42, 0.07);
+  --task-current-shadow: 0 2px 8px rgba(0, 0, 30, 0.08);
+  --task-selected-shadow: 0 1px 4px rgba(0, 0, 30, 0.06);
 
   /* ===============================
    * HOVER CONTROLS - LIGHT
    * ===============================*/
 
-  --hover-controls-border: 1px solid rgba(209, 72, 54, 0.18);
+  --hover-controls-border: 1px solid rgba(123, 108, 240, 0.18);
   --hover-controls-border-opacity: 0.18;
 
   /* ===============================
@@ -204,10 +207,10 @@ body:not(.isDarkTheme) {
    * CODE & MARKDOWN - LIGHT
    * ===============================*/
 
-  --code-bg: var(--sl-bg-warm);
-  --code-fg: var(--sl-coral-dark);
-  --inline-code-bg: var(--sl-bg-warm);
-  --inline-code-fg: var(--sl-coral-dark);
+  --code-bg: var(--sl-bg-sidebar);
+  --code-fg: var(--sl-purple);
+  --inline-code-bg: var(--sl-bg-sidebar);
+  --inline-code-fg: var(--sl-purple);
 }
 
 /* ===============================
@@ -216,81 +219,87 @@ body:not(.isDarkTheme) {
 body.isDarkTheme {
   /* ===============================
    * SUPERLIST DARK COLOR PALETTE
+   * Indigo-tinted deep dark backgrounds
    * ===============================*/
 
-  /* Deep, slightly warm darks (not pure neutral) */
-  --sl-bg: #161618;
-  --sl-bg-elevated: #1c1c1e;
-  --sl-bg-card: #222224;
-  --sl-bg-sidebar: #1a1a1c;
-  --sl-bg-hover: #2c2c2e;
-  --sl-bg-active: #38383a;
+  --sl-bg-deep: #161728;
+  --sl-bg: #1a1b2e;
+  --sl-bg-content: #252638;
+  --sl-bg-card: #2d2e42;
+  --sl-bg-hover: #363850;
+  --sl-bg-active: #40425c;
 
-  /* Text hierarchy */
-  --sl-text: #e5e5e7;
-  --sl-text-secondary: #98989d;
-  --sl-text-muted: #636366;
+  /* Text hierarchy — cool tinted */
+  --sl-text: #d8d8e4;
+  --sl-text-secondary: #888898;
+  --sl-text-muted: #5c5c70;
+  --sl-text-heading: #eeeef4;
 
-  /* Brand accent — slightly brighter for dark backgrounds */
+  /* Coral accent */
   --sl-coral: #e8695a;
   --sl-coral-light: #f08a7e;
   --sl-coral-dark: #d14836;
 
-  /* Borders */
-  --sl-border: rgba(255, 255, 255, 0.08);
-  --sl-divider: rgba(255, 255, 255, 0.06);
+  /* Purple accent (icons, badges, buttons) */
+  --sl-purple: #8b7cf6;
+  --sl-purple-light: #a89cf8;
+  --sl-purple-muted: rgba(139, 124, 246, 0.15);
+
+  /* Borders — subtle indigo tinted */
+  --sl-border: rgba(160, 160, 220, 0.1);
+  --sl-divider: rgba(160, 160, 220, 0.07);
 
   /* ===============================
    * BACKGROUND COLORS - DARK
    * ===============================*/
 
   --bg: var(--sl-bg);
-  --bg-darker: #111113;
-  --bg-slightly-lighter: var(--sl-bg-elevated);
+  --bg-darker: var(--sl-bg-deep);
+  --bg-slightly-lighter: var(--sl-bg-content);
   --bg-lighter: var(--sl-bg-card);
   --bg-lightest: var(--sl-bg-hover);
   --bg-super-light: var(--sl-bg-active);
 
   /* Component backgrounds */
-  --card-bg: var(--sl-bg-elevated);
+  --card-bg: var(--sl-bg-content);
   --sidenav-bg: transparent;
-  --sidenav-bg-mobile: var(--sl-bg);
-  --sidenav-item-active-bg: rgba(232, 105, 90, 0.1);
-  --sidenav-hover-bg: rgba(255, 255, 255, 0.04);
-  --sidenav-active-text: var(--sl-coral);
+  --sidenav-bg-mobile: var(--sl-bg-deep);
+  --sidenav-item-active-bg: var(--sl-purple-muted);
+  --sidenav-hover-bg: rgba(160, 160, 220, 0.06);
+  --sidenav-active-text: var(--sl-purple-light);
   --sidenav-text: var(--sl-text-secondary);
   --sidenav-text-hover: var(--sl-text);
   --sidenav-text-secondary: var(--sl-text-muted);
-  --selected-task-bg-color: var(--sl-bg-hover);
+  --selected-task-bg-color: var(--sl-bg-card);
   --banner-bg: var(--sl-bg-card);
 
-  /* Task backgrounds — subtle warm-dark hierarchy */
-  --task-c-bg: var(--sl-bg-elevated);
+  /* Task backgrounds — indigo-tinted hierarchy */
+  --task-c-bg: var(--sl-bg-content);
   --task-c-selected-bg: var(--sl-bg-card);
-  --sub-task-c-bg: var(--sl-bg-elevated);
-  --sub-task-c-bg-done: #19191b;
-  --task-c-bg-done: #19191b;
+  --sub-task-c-bg: var(--sl-bg-content);
+  --sub-task-c-bg-done: #1e1f32;
+  --task-c-bg-done: #1e1f32;
   --task-c-current-bg: var(--sl-bg-hover);
   --task-c-drag-drop-bg: var(--sl-bg-hover);
-  --sub-task-c-bg-in-selected: #262628;
+  --sub-task-c-bg-in-selected: #32334a;
 
   /* Note backgrounds */
-  --standard-note-bg: var(--sl-bg-elevated);
+  --standard-note-bg: var(--sl-bg-content);
   --standard-note-bg-hovered: var(--sl-bg-card);
 
   /* Planner specific */
-  --planner-task-bg: var(--sl-bg-elevated);
+  --planner-task-bg: var(--sl-bg-content);
   --planner-days-bg: var(--sl-bg);
 
   /* Panel backgrounds */
   --right-panel-bg: transparent;
   --right-panel-bg-mobile: var(--sl-bg);
-  --bottom-panel-bg: var(--sl-bg-elevated);
-  --bottom-panel-handle: rgba(255, 255, 255, 0.2);
-  --bottom-panel-handle-active: rgba(255, 255, 255, 0.4);
+  --bottom-panel-bg: var(--sl-bg-content);
+  --bottom-panel-handle: rgba(160, 160, 220, 0.2);
+  --bottom-panel-handle-active: rgba(160, 160, 220, 0.4);
 
   /* Schedule Events */
-  --schedule-event-bg: var(--sl-bg-elevated);
+  --schedule-event-bg: var(--sl-bg-content);
   --schedule-event-bg-in-side-panel: var(--sl-bg-card);
 
   /* ===============================
@@ -298,9 +307,9 @@ body.isDarkTheme {
    * ===============================*/
 
   --text-color: var(--sl-text);
-  --text-color-less-intense: rgba(229, 229, 231, 0.87);
+  --text-color-less-intense: rgba(216, 216, 228, 0.87);
   --text-color-muted: var(--sl-text-muted);
-  --text-color-more-intense: #f2f2f7;
+  --text-color-more-intense: var(--sl-text-heading);
   --text-color-most-intense: #ffffff;
 
   --standard-note-fg: var(--sl-text);
@@ -315,12 +324,13 @@ body.isDarkTheme {
   --extra-border-color: var(--sl-border);
   --separator-color: var(--sl-divider);
   --divider-color: var(--sl-divider);
-  --chip-outline-color: rgba(255, 255, 255, 0.13);
+  --chip-outline-color: rgba(160, 160, 220, 0.15);
 
   /* ===============================
    * ACCENT & THEME COLORS - DARK
    * ===============================*/
 
+  /* Coral accent for primary actions */
   --palette-accent-500: var(--sl-coral);
   --c-accent: var(--sl-coral);
   --palette-accent-100: #fcddd9;
@@ -332,56 +342,56 @@ body.isDarkTheme {
   --palette-accent-800: #ac3c31;
   --palette-accent-900: #982d24;
 
-  /* Status colors — Apple HIG dark variants */
+  /* Status colors */
   --c-success: #30d158;
   --c-warning: #ffd60a;
   --c-error: var(--sl-coral);
-  --c-info: #0a84ff;
+  --c-info: var(--sl-purple);
 
   /* ===============================
    * UI ELEMENTS - DARK
    * ===============================*/
 
-  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+  --scrollbar-thumb: rgba(160, 160, 220, 0.15);
+  --scrollbar-thumb-hover: rgba(160, 160, 220, 0.3);
   --scrollbar-track: transparent;
 
-  --close-btn-bg: var(--sl-bg-hover);
+  --close-btn-bg: var(--sl-bg-card);
   --close-btn-border: transparent;
 
-  --select-hover-bg: rgba(232, 105, 90, 0.08);
-  --options-border-color: rgba(232, 105, 90, 0.15);
+  --select-hover-bg: rgba(139, 124, 246, 0.08);
+  --options-border-color: rgba(139, 124, 246, 0.15);
 
   --attachment-bg: var(--sl-bg-card);
   --attachment-border: transparent;
-  --attachment-control-bg: rgba(0, 0, 0, 0.4);
+  --attachment-control-bg: rgba(0, 0, 15, 0.4);
   --attachment-control-border: transparent;
-  --attachment-control-hover-bg: rgba(0, 0, 0, 0.65);
+  --attachment-control-hover-bg: rgba(0, 0, 15, 0.65);
 
-  --grid-color: rgba(255, 255, 255, 0.05);
-  --progress-bg: rgba(255, 255, 255, 0.08);
+  --grid-color: rgba(160, 160, 220, 0.06);
+  --progress-bg: rgba(160, 160, 220, 0.1);
 
-  --improvement-text: var(--sl-text);
-  --improvement-border: rgba(232, 105, 90, 0.2);
+  --improvement-text: var(--sl-text-heading);
+  --improvement-border: rgba(139, 124, 246, 0.2);
   --improvement-button-text: #ffffff;
 
   --color-background-color-options: var(--sl-bg-card);
-  --color-background-text-field: rgba(255, 255, 255, 0.06);
-  --color-background-dark: var(--sl-bg);
-  --color-background-notes: var(--sl-bg-elevated);
+  --color-background-text-field: rgba(160, 160, 220, 0.06);
+  --color-background-dark: var(--sl-bg-deep);
+  --color-background-notes: var(--sl-bg-content);
   --color-background-inline-markdown: var(--sl-bg-card);
-  --color-background-button-shadow: var(--sl-coral);
+  --color-background-button-shadow: var(--sl-purple);
 
   /* ===============================
    * SHADOWS - DARK
    * ===============================*/
 
-  --shadow-key-umbra-opacity: 0.22;
-  --shadow-key-penumbra-opacity: 0.16;
-  --shadow-ambient-shadow-opacity: 0.12;
+  --shadow-key-umbra-opacity: 0.25;
+  --shadow-key-penumbra-opacity: 0.18;
+  --shadow-ambient-shadow-opacity: 0.14;
 
-  --task-current-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --task-selected-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  --task-current-shadow: 0 2px 8px rgba(0, 0, 20, 0.4);
+  --task-selected-shadow: 0 1px 4px rgba(0, 0, 20, 0.3);
 
   /* ===============================
    * HOVER CONTROLS - DARK
@@ -394,9 +404,9 @@ body.isDarkTheme {
    * INTERACTION STATES - DARK
    * ===============================*/
 
-  --hover-bg-opacity: 0.05;
-  --focus-bg-opacity: 0.08;
-  --pressed-bg-opacity: 0.12;
+  --hover-bg-opacity: 0.06;
+  --focus-bg-opacity: 0.1;
+  --pressed-bg-opacity: 0.14;
   --disabled-opacity: 0.38;
 
   /* ===============================
@@ -404,9 +414,9 @@ body.isDarkTheme {
    * ===============================*/
 
   --code-bg: var(--sl-bg-card);
-  --code-fg: var(--sl-coral-light);
+  --code-fg: var(--sl-purple-light);
   --inline-code-bg: var(--sl-bg-card);
-  --inline-code-fg: var(--sl-coral-light);
+  --inline-code-fg: var(--sl-purple-light);
 }
 
 /* ===============================
@@ -433,7 +443,7 @@ body .page-wrapper {
   color: var(--text-color) !important;
 }
 
-/* Links — coral accent */
+/* Links — purple accent in dark, coral in light */
 body:not(.isDarkTheme) a,
 body:not(.isDarkTheme) a[href] {
   color: var(--sl-coral);
@@ -448,7 +458,7 @@ body:not(.isDarkTheme) a[href]:hover {
 
 body.isDarkTheme a,
 body.isDarkTheme a[href] {
-  color: var(--sl-coral);
+  color: var(--sl-purple-light);
   text-decoration: none;
   transition: opacity var(--transition-fast);
 }
@@ -486,9 +496,9 @@ body.isDarkTheme {
   --mat-theme-surface: var(--card-bg);
   --mat-theme-on-surface: var(--text-color);
   --mat-theme-background: var(--bg);
-  --mat-theme-primary: var(--sl-coral);
-  --mat-fab-small-container-color: var(--c-accent);
-  --mat-sys-primary-container: var(--c-accent);
+  --mat-theme-primary: var(--sl-purple);
+  --mat-fab-small-container-color: var(--sl-purple);
+  --mat-sys-primary-container: var(--sl-purple);
 }
 
 /* Code blocks */
@@ -511,8 +521,13 @@ pre {
   opacity: 0.8;
 }
 
-/* Selected text — coral tint */
-::selection {
+/* Selected text — purple tint */
+body.isDarkTheme ::selection {
+  background-color: rgba(139, 124, 246, 0.25);
+  color: var(--text-color-most-intense);
+}
+
+body:not(.isDarkTheme) ::selection {
   background-color: rgba(209, 72, 54, 0.2);
   color: var(--text-color-most-intense);
 }
