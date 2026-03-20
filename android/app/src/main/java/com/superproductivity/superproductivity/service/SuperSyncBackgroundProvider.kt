@@ -39,7 +39,10 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
             for (char in reminderId) {
                 hash = (hash shl 5) - hash + char.code
             }
-            return abs(hash) % 2147483647
+            // Use toLong() before abs() to handle Int.MIN_VALUE correctly.
+            // In Kotlin, abs(Int.MIN_VALUE) returns Int.MIN_VALUE (negative) due to overflow.
+            // This must match the JS implementation where Math.abs works on 64-bit floats.
+            return (abs(hash.toLong()) % 2147483647).toInt()
         }
     }
 
@@ -98,7 +101,8 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
      * Extracts task IDs from an operation if it represents a reminder-relevant change.
      * Compact operation format:
      *   a = actionType code, o = opType, e = entityType,
-     *   d = entityId (single), ds = entityIds (batch), p = payload
+     *   d = entityId (single), ds = entityIds (batch),
+     *   p = { actionPayload: {...}, entityChanges: [...] }
      */
     private fun extractReminderRelevantTaskIds(op: JSONObject, out: MutableSet<String>) {
         val entityType = op.optString("e", "")
@@ -124,67 +128,68 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
             return
         }
 
-        // For UPD operations, check if the payload contains reminder-relevant field changes
+        // For UPD operations, check if the payload contains reminder-relevant field changes.
+        // The payload structure is: p.entityChanges[] with per-entity changes,
+        // and p.actionPayload with the original action payload.
         if (opType == "UPD") {
-            if (isReminderRelevantUpdate(op)) {
+            val payload = op.optJSONObject("p") ?: return
+
+            // Primary: check entityChanges array (always present, consistent structure).
+            // Each entry has: { entityType, entityId, opType, changes: { isDone, remindAt, ... } }
+            if (checkEntityChanges(payload, out)) return
+
+            // Secondary: check actionPayload.task.changes for single-entity updates
+            if (checkActionPayload(payload)) {
                 collectEntityIds(op, out)
-                return
             }
-            // Also check BATCH entityChanges in payload
-            checkBatchEntityChanges(op, out)
         }
     }
 
     /**
-     * Check if an UPD operation's payload indicates a reminder-relevant change.
-     * The payload structure varies by action type, but we look for common patterns.
+     * Check the p.entityChanges array for reminder-relevant changes.
+     * This is the most reliable source since it always has a consistent structure.
+     * Returns true if any reminder-relevant changes were found.
      */
-    private fun isReminderRelevantUpdate(op: JSONObject): Boolean {
-        val payload = op.optJSONObject("p") ?: return false
-
-        // Direct payload fields (for simple task updates)
-        if (payload.has("isDone") && payload.optBoolean("isDone", false)) return true
-        if (payload.has("remindAt") && payload.isNull("remindAt")) return true
-        if (payload.has("deadlineRemindAt") && payload.isNull("deadlineRemindAt")) return true
-
-        // Nested under task.changes (for TASK_SHARED_UPDATE / "HU" actions)
-        val task = payload.optJSONObject("task")
-        if (task != null) {
-            val changes = task.optJSONObject("changes") ?: task
-            if (changes.has("isDone") && changes.optBoolean("isDone", false)) return true
-            if (changes.has("remindAt") && changes.isNull("remindAt")) return true
-            if (changes.has("deadlineRemindAt") && changes.isNull("deadlineRemindAt")) return true
-        }
-
-        return false
-    }
-
-    /**
-     * For BATCH operations, the payload may contain an entityChanges array
-     * with per-entity changes.
-     */
-    private fun checkBatchEntityChanges(op: JSONObject, out: MutableSet<String>) {
-        val payload = op.optJSONObject("p") ?: return
-        val entityChanges = payload.optJSONArray("entityChanges") ?: return
+    private fun checkEntityChanges(payload: JSONObject, out: MutableSet<String>): Boolean {
+        val entityChanges = payload.optJSONArray("entityChanges") ?: return false
+        var found = false
 
         for (i in 0 until entityChanges.length()) {
-            val change = entityChanges.optJSONObject(i) ?: continue
-            val entityId = change.optString("id", "").ifEmpty {
-                change.optString("entityId", "")
-            }
+            val entry = entityChanges.optJSONObject(i) ?: continue
+            // Only check TASK entity changes
+            if (entry.optString("entityType", "") != "TASK") continue
+
+            val entityId = entry.optString("entityId", "")
             if (entityId.isEmpty()) continue
 
-            // Check if this entity change is reminder-relevant
-            if (change.has("isDone") && change.optBoolean("isDone", false)) {
+            val changes = entry.optJSONObject("changes") ?: continue
+            if (isReminderRelevantChanges(changes)) {
                 out.add(entityId)
-            }
-            if (change.has("remindAt") && change.isNull("remindAt")) {
-                out.add(entityId)
-            }
-            if (change.has("deadlineRemindAt") && change.isNull("deadlineRemindAt")) {
-                out.add(entityId)
+                found = true
             }
         }
+        return found
+    }
+
+    /**
+     * Check p.actionPayload for reminder-relevant changes.
+     * Structure: actionPayload.task.changes.{isDone, remindAt, deadlineRemindAt}
+     */
+    private fun checkActionPayload(payload: JSONObject): Boolean {
+        val actionPayload = payload.optJSONObject("actionPayload") ?: return false
+        val task = actionPayload.optJSONObject("task") ?: return false
+        val changes = task.optJSONObject("changes") ?: return false
+        return isReminderRelevantChanges(changes)
+    }
+
+    /**
+     * Check if a changes object contains reminder-relevant field changes.
+     */
+    private fun isReminderRelevantChanges(changes: JSONObject): Boolean {
+        if (changes.has("isDone") && changes.optBoolean("isDone", false)) return true
+        if (changes.has("remindAt") && changes.isNull("remindAt")) return true
+        if (changes.has("deadlineRemindAt") && changes.isNull("deadlineRemindAt")) return true
+        return false
     }
 
     private fun collectEntityIds(op: JSONObject, out: MutableSet<String>) {
