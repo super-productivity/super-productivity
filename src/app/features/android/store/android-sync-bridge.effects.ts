@@ -5,10 +5,13 @@ import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { androidInterface } from '../android-interface';
 import { SyncProviderManager } from '../../../op-log/sync-providers/provider-manager.service';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
-import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
+import {
+  SUPER_SYNC_DEFAULT_BASE_URL,
+  SuperSyncPrivateCfg,
+} from '../../../op-log/sync-providers/super-sync/super-sync.model';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 import { DroidLog } from '../../../core/log';
-import { SuperSyncPrivateCfg } from '../../../op-log/sync-providers/super-sync/super-sync.model';
+import { CurrentProviderPrivateCfg } from '../../../op-log/core/types/sync.types';
 
 /**
  * Mirrors SuperSync credentials to native SharedPreferences so the
@@ -26,12 +29,22 @@ export class AndroidSyncBridgeEffects {
         this._providerManager.currentProviderPrivateCfg$.pipe(
           skipWhileApplyingRemoteOps(),
           distinctUntilChanged(
-            (a, b) =>
-              a?.providerId === b?.providerId &&
-              (a?.privateCfg as SuperSyncPrivateCfg | null)?.baseUrl ===
-                (b?.privateCfg as SuperSyncPrivateCfg | null)?.baseUrl &&
-              (a?.privateCfg as SuperSyncPrivateCfg | null)?.accessToken ===
-                (b?.privateCfg as SuperSyncPrivateCfg | null)?.accessToken,
+            (
+              a: CurrentProviderPrivateCfg | null,
+              b: CurrentProviderPrivateCfg | null,
+            ) => {
+              // If provider ID changed, treat as different
+              if (a?.providerId !== b?.providerId) return false;
+              // For non-SuperSync providers, treat all emissions as equal
+              // (prevents repeated clearSuperSyncCredentials calls)
+              if (a?.providerId !== SyncProviderId.SuperSync) return true;
+              // For SuperSync, compare credential-relevant fields
+              const aCfg = a?.privateCfg as SuperSyncPrivateCfg | undefined;
+              const bCfg = b?.privateCfg as SuperSyncPrivateCfg | undefined;
+              return (
+                aCfg?.accessToken === bCfg?.accessToken && aCfg?.baseUrl === bCfg?.baseUrl
+              );
+            },
           ),
           filter((cfg) => cfg !== null),
           tap((cfg) => {
@@ -51,7 +64,6 @@ export class AndroidSyncBridgeEffects {
                 androidInterface.clearSuperSyncCredentials?.();
               }
             } else {
-              // Different provider or null config — clear SuperSync credentials
               DroidLog.log(
                 'AndroidSyncBridgeEffects: Non-SuperSync provider, clearing credentials',
               );

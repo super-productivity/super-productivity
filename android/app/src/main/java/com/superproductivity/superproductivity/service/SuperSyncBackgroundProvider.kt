@@ -26,6 +26,8 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
         private val httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
             .build()
 
         /**
@@ -36,7 +38,6 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
             var hash = 0
             for (char in reminderId) {
                 hash = (hash shl 5) - hash + char.code
-                hash = hash and hash // Keep as 32-bit integer
             }
             return abs(hash) % 2147483647
         }
@@ -75,7 +76,8 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
 
     private fun parseResponse(body: String): ReminderChangeResult {
         val json = JSONObject(body)
-        val ops = json.getJSONArray("ops")
+        val ops = json.optJSONArray("ops")
+            ?: return ReminderChangeResult(emptySet(), json.optLong("latestSeq", 0L), false)
         val hasMore = json.optBoolean("hasMore", false)
         val latestSeq = json.optLong("latestSeq", 0L)
         val taskIds = mutableSetOf<String>()
