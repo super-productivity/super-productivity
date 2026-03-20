@@ -139,6 +139,36 @@
           </div>
         </mat-tab>
 
+        <!-- Tab: Team -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <mat-icon
+              class="tab-icon"
+              [matTooltip]="'PS.TABS.TEAM' | translate"
+              >groups</mat-icon
+            >
+            <span class="tab-label">{{ 'PS.TABS.TEAM' | translate }}</span>
+          </ng-template>
+          <div class="tab-content">
+            <h2 class="mat-h2 section-title">
+              {{ 'PS.TABS.TEAM' | translate }}
+            </h2>
+            @for (section of globalTeamFormCfg; track section.key) {
+              <section class="config-section section-{{ section.key }}">
+                <config-section
+                  (save)="saveGlobalCfg($event)"
+                  [cfg]="getGlobalCfgSection(section.key)"
+                  [isExpanded]="
+                    section.key === expandedSection ||
+                    section.customSection === expandedSection
+                  "
+                  [section]="section"
+                ></config-section>
+              </section>
+            }
+          </div>
+        </mat-tab>
+
         <!-- Tab: Plugins -->
         <mat-tab>
           <ng-template mat-tab-label>

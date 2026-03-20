@@ -233,6 +233,14 @@ export type DailySummaryNote = Readonly<{
   lastUpdateDayStr?: string;
 }>;
 
+export type TeamConfig = Readonly<{
+  isEnabled: boolean;
+  serverUrl?: string | null;
+  apiToken?: string | null;
+  syncIntervalMs: number;
+  isAutoSyncEnabled: boolean;
+}>;
+
 // NOTE: config properties being undefined always means that they should be overwritten with the default value
 export type GlobalConfigState = Readonly<{
   appFeatures: AppFeaturesConfig;
@@ -255,6 +263,7 @@ export type GlobalConfigState = Readonly<{
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
+  team?: TeamConfig;
   dailySummaryNote?: DailySummaryNote;
 }>;
 
@@ -269,6 +278,7 @@ export type GlobalSectionConfig =
   | ReminderConfig
   | DailySummaryNote
   | SyncConfig
+  | TeamConfig
   | ClipboardImagesConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 

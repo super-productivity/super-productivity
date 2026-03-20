@@ -17,6 +17,7 @@ import {
   GLOBAL_PRODUCTIVITY_FORM_CONFIG,
   GLOBAL_TIME_TRACKING_FORM_CONFIG,
   GLOBAL_TASKS_FORM_CONFIG,
+  GLOBAL_TEAM_FORM_CONFIG,
 } from '../../features/config/global-config-form-config.const';
 import {
   ConfigFormConfig,
@@ -112,6 +113,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
   pluginsShortcutsFormCfg: ConfigFormConfig;
   globalImexFormCfg: ConfigFormConfig;
   globalProductivityConfigFormCfg: ConfigFormConfig;
+  globalTeamFormCfg: ConfigFormConfig;
   globalSyncConfigFormCfg = signal<ConfigFormSection<SyncConfig> | undefined>(undefined);
 
   globalCfg?: GlobalConfigState;
@@ -146,6 +148,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
     this.globalImexFormCfg = GLOBAL_IMEX_FORM_CONFIG.slice();
     this.globalProductivityConfigFormCfg = GLOBAL_PRODUCTIVITY_FORM_CONFIG.slice();
     this.globalTasksFormCfg = GLOBAL_TASKS_FORM_CONFIG.slice();
+    this.globalTeamFormCfg = GLOBAL_TEAM_FORM_CONFIG.slice();
 
     // Build sync form config asynchronously (providers are lazy-loaded)
     this._buildSyncFormConfig()
@@ -192,7 +195,7 @@ export class ConfigPageComponent implements OnInit, OnDestroy {
       this._route.queryParams.subscribe((params) => {
         if (params['tab'] !== undefined) {
           const tabIndex = parseInt(params['tab'], 10);
-          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 5) {
+          if (!isNaN(tabIndex) && tabIndex >= 0 && tabIndex < 8) {
             this.selectedTabIndex = tabIndex;
             this._cd.detectChanges();
           }

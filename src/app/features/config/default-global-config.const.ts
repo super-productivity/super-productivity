@@ -230,4 +230,12 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       syncFolderPath: '',
     },
   },
+
+  team: {
+    isEnabled: false,
+    serverUrl: null,
+    apiToken: null,
+    syncIntervalMs: 60_000,
+    isAutoSyncEnabled: true,
+  },
 } as const;

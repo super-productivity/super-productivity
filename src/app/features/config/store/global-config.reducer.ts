@@ -18,6 +18,7 @@ import {
   SyncConfig,
   TakeABreakConfig,
   TasksConfig,
+  TeamConfig,
 } from '../global-config.model';
 import { DEFAULT_GLOBAL_CONFIG } from '../default-global-config.const';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
@@ -88,6 +89,10 @@ export const selectPomodoroConfig = createSelector(
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg?.reminder ?? DEFAULT_GLOBAL_CONFIG.reminder,
+);
+export const selectTeamConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): TeamConfig => cfg?.team ?? DEFAULT_GLOBAL_CONFIG.team,
 );
 export const selectAppFeaturesConfig = createSelector(
   selectConfigFeatureState,

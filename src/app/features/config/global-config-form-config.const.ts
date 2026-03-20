@@ -17,6 +17,7 @@ import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
 import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
 import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
+import { TEAM_FORM_CFG } from './form-cfgs/team-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -63,3 +64,7 @@ export const GLOBAL_TASKS_FORM_CONFIG: ConfigFormConfig = [
   TASKS_SETTINGS_FORM_CFG,
   SHORT_SYNTAX_FORM_CFG,
 ].filter(filterGlobalConfigForm);
+
+export const GLOBAL_TEAM_FORM_CONFIG: ConfigFormConfig = [TEAM_FORM_CFG].filter(
+  filterGlobalConfigForm,
+);

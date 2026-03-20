@@ -139,6 +139,13 @@ export interface TaskCopy
   remindAt?: number;
   repeatCfgId?: string;
   _hideSubTasksMode?: HideSubTasksMode;
+
+  // Team integration fields
+  teamIssueId?: string | null;
+  teamWorkspaceId?: string | null;
+  teamIssueNumber?: string | null;
+  teamStatus?: string | null;
+  teamLastSyncAt?: number | null;
 }
 
 /**

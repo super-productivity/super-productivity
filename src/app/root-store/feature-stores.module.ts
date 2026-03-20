@@ -100,6 +100,8 @@ import {
   REMINDER_FEATURE_NAME,
   reminderReducer,
 } from '../features/reminder/store/reminder.reducer';
+import { TEAM_FEATURE_NAME, teamReducer } from '../features/team/store/team.reducer';
+import { TeamEffects } from '../features/team/store/team.effects';
 @NgModule({
   declarations: [],
   imports: [
@@ -167,6 +169,9 @@ import {
     StoreModule.forFeature(PLUGIN_USER_DATA_FEATURE_NAME, pluginUserDataReducer),
     StoreModule.forFeature(PLUGIN_METADATA_FEATURE_NAME, pluginMetadataReducer),
     StoreModule.forFeature(REMINDER_FEATURE_NAME, reminderReducer),
+
+    StoreModule.forFeature(TEAM_FEATURE_NAME, teamReducer),
+    EffectsModule.forFeature([TeamEffects]),
 
     // EFFECTS ONLY
     EffectsModule.forFeature([

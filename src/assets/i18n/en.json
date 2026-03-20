@@ -1844,6 +1844,41 @@
         "NO_DATA": "No tasks this week yet.",
         "TITLE": "Title"
       }
+    },
+    "TEAM": {
+      "TITLE": "Team",
+      "S": {
+        "CONNECTED": "Connected to team workspace",
+        "DISCONNECTED": "Disconnected from team workspace",
+        "SYNC_SUCCESS": "Team issues synced successfully",
+        "SYNC_FAILED": "Failed to sync team issues"
+      },
+      "SETTINGS": {
+        "TITLE": "Team Settings",
+        "SERVER_URL": "Team Server URL",
+        "API_TOKEN": "API Token",
+        "SYNC_INTERVAL": "Sync Interval (ms)",
+        "IS_AUTO_SYNC": "Enable automatic sync",
+        "IS_ENABLED": "Enable Team Integration",
+        "CONNECT": "Connect",
+        "DISCONNECT": "Disconnect",
+        "SYNC_NOW": "Sync Now"
+      },
+      "ISSUES": {
+        "TITLE": "Team Issues",
+        "NO_ISSUES": "No team issues assigned to you",
+        "STATUS_BACKLOG": "Backlog",
+        "STATUS_TODO": "Todo",
+        "STATUS_IN_PROGRESS": "In Progress",
+        "STATUS_IN_REVIEW": "In Review",
+        "STATUS_DONE": "Done",
+        "STATUS_CANCELLED": "Cancelled",
+        "PRIORITY_URGENT": "Urgent",
+        "PRIORITY_HIGH": "High",
+        "PRIORITY_MEDIUM": "Medium",
+        "PRIORITY_LOW": "Low",
+        "PRIORITY_NONE": "None"
+      }
     }
   },
   "FILE_IMEX": {
@@ -2226,6 +2261,10 @@
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Show tracking reminder on mobile app",
       "L_TRACKING_REMINDER_MIN_TIME": "Time to wait before showing tracking reminder banner",
       "TITLE": "Time Tracking"
+    },
+    "TEAM": {
+      "TITLE": "Team Integration",
+      "HELP": "Connect to a team server to sync issues, time tracking, and collaborate with your team."
     }
   },
   "GLOBAL": {
@@ -2515,7 +2554,8 @@
       "PRODUCTIVITY": "Productivity",
       "SYNC_BACKUP": "Sync & Backup",
       "TASKS": "Tasks",
-      "TIME_TRACKING": "Time & Tracking"
+      "TIME_TRACKING": "Time & Tracking",
+      "TEAM": "Team"
     },
     "TAG_SETTINGS": "Tag Specific Settings",
     "TOGGLE_DARK_MODE": "Toggle Dark Mode",
