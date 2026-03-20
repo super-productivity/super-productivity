@@ -1,5 +1,11 @@
 import { createEntityAdapter, EntityAdapter } from '@ngrx/entity';
-import { createFeatureSelector, createReducer, createSelector, on } from '@ngrx/store';
+import {
+  createFeatureSelector,
+  createReducer,
+  createSelector,
+  MemoizedSelector,
+  on,
+} from '@ngrx/store';
 import { TeamIssue, TeamState } from '../team.model';
 import { TEAM_FEATURE_NAME, DEFAULT_TEAM_STATE } from '../team.const';
 import {
@@ -85,19 +91,21 @@ export const selectTeamCycles = createSelector(
 
 export const selectTeamIssuesByProject = (
   projectId: string,
-): ReturnType<typeof createSelector> =>
+): MemoizedSelector<object, TeamIssue[]> =>
   createSelector(selectAllTeamIssues, (issues: TeamIssue[]) =>
     issues.filter((i) => i.projectId === projectId),
   );
 
 export const selectTeamIssuesByStatus = (
   status: TeamIssue['status'],
-): ReturnType<typeof createSelector> =>
+): MemoizedSelector<object, TeamIssue[]> =>
   createSelector(selectAllTeamIssues, (issues: TeamIssue[]) =>
     issues.filter((i) => i.status === status),
   );
 
-export const selectMyTeamIssues = (userId: string): ReturnType<typeof createSelector> =>
+export const selectMyTeamIssues = (
+  userId: string,
+): MemoizedSelector<object, TeamIssue[]> =>
   createSelector(selectAllTeamIssues, (issues: TeamIssue[]) =>
     issues.filter((i) => i.assigneeId === userId),
   );

@@ -92,7 +92,7 @@ export const selectReminderConfig = createSelector(
 );
 export const selectTeamConfig = createSelector(
   selectConfigFeatureState,
-  (cfg): TeamConfig => cfg?.team ?? DEFAULT_GLOBAL_CONFIG.team,
+  (cfg): TeamConfig => cfg?.team ?? DEFAULT_GLOBAL_CONFIG.team!,
 );
 export const selectAppFeaturesConfig = createSelector(
   selectConfigFeatureState,
