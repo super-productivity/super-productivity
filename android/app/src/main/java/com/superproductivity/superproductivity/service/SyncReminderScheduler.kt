@@ -2,6 +2,7 @@ package com.superproductivity.superproductivity.service
 
 import android.content.Context
 import android.util.Log
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -31,6 +32,7 @@ object SyncReminderScheduler {
                 15, TimeUnit.MINUTES
             )
                 .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
                 .setInitialDelay(1, TimeUnit.MINUTES)
                 .build()
 

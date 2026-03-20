@@ -17,7 +17,11 @@ class SuperSyncBackgroundProvider : BackgroundSyncProvider {
     companion object {
         private const val TAG = "SuperSyncBgProvider"
 
-        // Action type codes for reminder-relevant actions
+        // Action type codes for reminder-relevant actions.
+        // These are abbreviations of NgRx action types defined in:
+        //   src/app/op-log/core/action-types.enum.ts (full names)
+        //   src/app/core/persistence/operation-log/compact/action-type-codes.ts (short codes)
+        // If the frontend codes change, these must be updated to match.
         private const val ACTION_DISMISS_REMINDER = "HRX"       // TASK_SHARED_DISMISS_REMINDER
         private const val ACTION_MOVE_TO_ARCHIVE = "HX"         // TASK_SHARED_MOVE_TO_ARCHIVE
         private const val ACTION_CLEAR_DEADLINE_REMINDER = "HCR" // TASK_SHARED_CLEAR_DEADLINE_REMINDER

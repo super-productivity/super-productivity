@@ -38,8 +38,11 @@ class SyncReminderWorker(
 
         var totalCancelled = 0
         var hasMore = true
+        var iterations = 0
+        val maxIterations = 100
 
-        while (hasMore) {
+        while (hasMore && iterations < maxIterations) {
+            iterations++
             val result = provider.fetchReminderChanges(
                 credentials.baseUrl,
                 credentials.accessToken,
@@ -66,6 +69,10 @@ class SyncReminderWorker(
             }
 
             hasMore = result.hasMore
+        }
+
+        if (iterations >= maxIterations) {
+            Log.w(TAG, "Hit max pagination iterations ($maxIterations), stopping. seq=$lastSeq")
         }
 
         if (totalCancelled > 0) {

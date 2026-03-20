@@ -2,15 +2,23 @@ package com.superproductivity.superproductivity.service
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 /**
- * SharedPreferences-backed store for background sync credentials.
+ * EncryptedSharedPreferences-backed store for background sync credentials.
  * Used by SyncReminderWorker to authenticate against the sync server.
+ *
+ * Uses AndroidX security-crypto (AES256) so the access token is not stored
+ * in plaintext. Falls back to standard SharedPreferences if encryption setup
+ * fails (e.g., on devices with broken KeyStore).
  *
  * lastServerSeq is stored per-account (keyed by baseUrl hash) to prevent
  * account-switching bugs where the old seq is used with new credentials.
  */
 object BackgroundSyncCredentialStore {
+    private const val TAG = "BgSyncCredStore"
     private const val PREFS_NAME = "SuperProductivitySync"
     private const val KEY_BASE_URL = "BASE_URL"
     private const val KEY_ACCESS_TOKEN = "ACCESS_TOKEN"
@@ -22,15 +30,36 @@ object BackgroundSyncCredentialStore {
     )
 
     private fun getPrefs(context: Context): SharedPreferences {
-        return context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return try {
+            val masterKey = MasterKey.Builder(context.applicationContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context.applicationContext,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Fallback to standard SharedPreferences if KeyStore is broken
+            Log.w(TAG, "EncryptedSharedPreferences unavailable, falling back to standard", e)
+            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
     }
 
     @Synchronized
     fun save(context: Context, baseUrl: String, accessToken: String) {
-        getPrefs(context).edit()
+        val prefs = getPrefs(context)
+        val previousToken = prefs.getString(KEY_ACCESS_TOKEN, null)
+        val editor = prefs.edit()
             .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_ACCESS_TOKEN, accessToken)
-            .commit()
+        // Reset seq when access token changes (account switch on same server)
+        if (previousToken != null && previousToken != accessToken) {
+            editor.putLong(seqKey(baseUrl), 0L)
+        }
+        editor.commit()
     }
 
     @Synchronized
