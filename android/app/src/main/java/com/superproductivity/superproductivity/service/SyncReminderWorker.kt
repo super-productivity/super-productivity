@@ -68,8 +68,12 @@ class SyncReminderWorker(
                 totalScheduled++
             }
 
-            // Update sequence cursor
-            if (result.latestSeq > lastSeq) {
+            // Update sequence cursor.
+            // Also reset if server's latestSeq is lower (server was wiped/reset).
+            if (result.latestSeq != lastSeq) {
+                if (result.latestSeq < lastSeq) {
+                    Log.w(TAG, "Server seq (${ result.latestSeq}) < local seq ($lastSeq), server was likely reset. Resetting cursor.")
+                }
                 lastSeq = result.latestSeq
                 BackgroundSyncCredentialStore.setLastServerSeq(
                     applicationContext, credentials.baseUrl, lastSeq

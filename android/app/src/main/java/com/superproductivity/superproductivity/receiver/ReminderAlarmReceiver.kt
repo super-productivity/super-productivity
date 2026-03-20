@@ -50,7 +50,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
             try {
-                val isStale = isTaskStale(context, relatedId, triggerAtMs)
+                val isStale = isTaskStale(context, relatedId, triggerAtMs, reminderType)
                 if (isStale) {
                     Log.d(TAG, "Suppressed stale notification: id=$notificationId, task=$relatedId")
                     ReminderNotificationHelper.cancelReminder(context, notificationId)
@@ -84,7 +84,7 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
      * @param triggerAtMs The alarm's scheduled trigger time. Used to distinguish
      *   "this is the current schedule" from "this was rescheduled to a different time".
      */
-    private suspend fun isTaskStale(context: Context, taskId: String, triggerAtMs: Long): Boolean {
+    private suspend fun isTaskStale(context: Context, taskId: String, triggerAtMs: Long, reminderType: String): Boolean {
         val credentials = BackgroundSyncCredentialStore.get(context) ?: return false
         val lastSeq = BackgroundSyncCredentialStore.getLastServerSeq(
             context, credentials.baseUrl
@@ -100,9 +100,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         // Check if the task was rescheduled to a DIFFERENT time on another device.
         // If the schedule op's remindAt matches this alarm's triggerAtMs, this IS
         // the current schedule — not stale. Only suppress if times differ.
+        // Match on isDueDate too: a task can have both a standard reminder and a
+        // deadline reminder with different times — don't let one suppress the other.
         if (triggerAtMs > 0L) {
+            val isDueDate = reminderType == "DUE_DATE"
             val rescheduled = result.remindersToSchedule.any {
-                it.taskId == taskId && it.remindAt != triggerAtMs
+                it.taskId == taskId && it.isDueDate == isDueDate && it.remindAt != triggerAtMs
             }
             if (rescheduled) {
                 Log.d(TAG, "Task $taskId was rescheduled (trigger=$triggerAtMs), suppressing")
