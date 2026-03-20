@@ -2589,6 +2589,8 @@
     "MOVE_DONE_TO_ARCHIVE": "Move completed tasks to archive",
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
+    "EMPTY_STATE_ADD_TASK": "Add a task",
+    "EMPTY_STATE_FIRST_TIME": "Ready to get productive? Add your first task!",
     "NO_PLANNED_TASKS": "No tasks planned",
     "READY_TO_WORK": "Ready to work!",
     "RECURRING_TASKS": "Recurring Tasks",

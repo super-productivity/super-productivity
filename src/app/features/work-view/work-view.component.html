@@ -123,7 +123,7 @@
                 @if (hasDoneTasks() || (workContextService.doneTodayArchived$ | async)) {
                   {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
                 } @else {
-                  {{ T.WW.NO_PLANNED_TASKS | translate }}
+                  {{ T.WW.EMPTY_STATE_FIRST_TIME | translate }}
                 }
               </h2>
             </div>
@@ -132,12 +132,12 @@
               <div class="btn-wrapper">
                 <button
                   (click)="planMore()"
-                  color=""
-                  mat-stroked-button
+                  color="primary"
+                  mat-flat-button
                   tabindex="1"
                 >
-                  <mat-icon>playlist_add</mat-icon>
-                  {{ T.WW.ADD_MORE | translate }}
+                  <mat-icon>add</mat-icon>
+                  {{ T.WW.EMPTY_STATE_ADD_TASK | translate }}
                 </button>
               </div>
             }
