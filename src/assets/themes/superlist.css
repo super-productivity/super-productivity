@@ -1,0 +1,435 @@
+/**
+ * Superlist Theme for Super Productivity
+ * Inspired by Superlist's clean, minimal, and elegant design language.
+ * Both light and dark modes with signature coral accent (#D14836).
+ * https://www.superlist.com
+ */
+
+/* Smooth transitions */
+:root {
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+}
+
+/* ===============================
+ * SUPERLIST LIGHT MODE
+ * ===============================*/
+body:not(.isDarkTheme) {
+  /* ===============================
+   * SUPERLIST LIGHT COLOR PALETTE
+   * ===============================*/
+
+  /* Base tones */
+  --sl-white: #ffffff;
+  --sl-off-white: #fafafa;
+  --sl-gray-50: #f5f5f5;
+  --sl-gray-100: #eeeeee;
+  --sl-gray-200: #e0e0e0;
+  --sl-gray-300: #bdbdbd;
+  --sl-gray-400: #9e9e9e;
+  --sl-gray-500: #757575;
+  --sl-gray-600: #616161;
+  --sl-gray-700: #424242;
+  --sl-gray-800: #303030;
+  --sl-gray-900: #212121;
+  --sl-black: #000000;
+
+  /* Brand accent */
+  --sl-coral: #d14836;
+  --sl-coral-light: #e57368;
+  --sl-coral-dark: #b23a2b;
+
+  /* ===============================
+   * BACKGROUND COLORS - LIGHT
+   * ===============================*/
+
+  --bg: var(--sl-off-white);
+  --bg-darker: var(--sl-gray-100);
+  --bg-slightly-lighter: var(--sl-white);
+  --bg-lighter: var(--sl-white);
+  --bg-lightest: var(--sl-white);
+  --bg-super-light: var(--sl-white);
+
+  /* Component backgrounds */
+  --card-bg: var(--sl-white);
+  --sidenav-bg: var(--sl-off-white);
+  --selected-task-bg-color: var(--sl-gray-50);
+  --banner-bg: var(--sl-white);
+
+  /* Task backgrounds — clean, flat */
+  --task-c-bg: var(--sl-white);
+  --task-c-selected-bg: var(--sl-gray-50);
+  --sub-task-c-bg: var(--sl-white);
+  --sub-task-c-bg-done: var(--sl-gray-50);
+  --task-c-bg-done: var(--sl-gray-50);
+  --task-c-current-bg: var(--sl-gray-100);
+  --task-c-drag-drop-bg: var(--sl-gray-100);
+  --sub-task-c-bg-in-selected: var(--sl-off-white);
+
+  /* Note backgrounds */
+  --standard-note-bg: var(--sl-white);
+  --standard-note-bg-hovered: var(--sl-gray-50);
+
+  /* Planner specific */
+  --planner-task-bg: var(--sl-white);
+  --planner-days-bg: var(--sl-off-white);
+
+  /* ===============================
+   * TEXT COLORS - LIGHT
+   * ===============================*/
+
+  --text-color: var(--sl-gray-900);
+  --text-color-less-intense: rgba(33, 33, 33, 0.87);
+  --text-color-muted: var(--sl-gray-500);
+  --text-color-more-intense: var(--sl-black);
+  --text-color-most-intense: var(--sl-black);
+
+  --standard-note-fg: var(--sl-gray-900);
+  --task-detail-value-color: rgba(33, 33, 33, 0.6);
+
+  /* ===============================
+   * BORDERS & SEPARATORS - LIGHT
+   * ===============================*/
+
+  --extra-border-color: var(--sl-gray-200);
+  --separator-color: var(--sl-gray-200);
+  --divider-color: var(--sl-gray-100);
+  --chip-outline-color: rgba(0, 0, 0, 0.15);
+
+  /* ===============================
+   * ACCENT & THEME COLORS - LIGHT
+   * ===============================*/
+
+  --palette-accent-500: var(--sl-coral);
+  --c-accent: var(--sl-coral);
+  --palette-accent-100: #f5d0cb;
+  --palette-accent-200: #edb0a8;
+  --palette-accent-300: #e58f85;
+  --palette-accent-400: #db6c5e;
+  --palette-accent-600: #b93f30;
+  --palette-accent-700: #a13729;
+  --palette-accent-800: #892f22;
+  --palette-accent-900: #71271b;
+
+  /* Status colors */
+  --c-success: #34a853;
+  --c-warning: #f9ab00;
+  --c-error: var(--sl-coral);
+  --c-info: #4285f4;
+
+  /* ===============================
+   * UI ELEMENTS - LIGHT
+   * ===============================*/
+
+  --scrollbar-thumb: var(--sl-gray-300);
+  --scrollbar-thumb-hover: var(--sl-gray-400);
+  --scrollbar-track: transparent;
+
+  --close-btn-bg: var(--sl-gray-100);
+  --close-btn-border: transparent;
+
+  --select-hover-bg: rgba(0, 0, 0, 0.04);
+  --options-border-color: rgba(0, 0, 0, 0.08);
+
+  --attachment-bg: var(--sl-white);
+  --attachment-border: var(--sl-gray-200);
+  --attachment-control-bg: rgba(255, 255, 255, 0.8);
+  --attachment-control-border: var(--sl-gray-200);
+  --attachment-control-hover-bg: rgba(255, 255, 255, 0.95);
+
+  --grid-color: rgba(0, 0, 0, 0.06);
+  --progress-bg: rgba(0, 0, 0, 0.08);
+
+  --improvement-text: var(--sl-gray-900);
+  --improvement-border: rgba(0, 0, 0, 0.12);
+  --improvement-button-text: var(--sl-black);
+
+  --color-background-color-options: var(--sl-gray-50);
+  --color-background-text-field: var(--sl-gray-50);
+  --color-background-dark: var(--sl-gray-200);
+  --color-background-notes: var(--sl-off-white);
+  --color-background-inline-markdown: var(--sl-gray-50);
+  --color-background-button-shadow: var(--sl-coral);
+
+  /* ===============================
+   * SHADOWS - MINIMAL
+   * ===============================*/
+
+  --shadow-key-umbra-opacity: 0.04;
+  --shadow-key-penumbra-opacity: 0.03;
+  --shadow-ambient-shadow-opacity: 0.02;
+
+  --task-current-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --task-selected-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* ===============================
+   * HOVER CONTROLS - LIGHT
+   * ===============================*/
+
+  --hover-controls-border: 1px solid rgba(0, 0, 0, 0.1);
+  --hover-controls-border-opacity: 0.1;
+
+  /* ===============================
+   * INTERACTION STATES - LIGHT
+   * ===============================*/
+
+  --hover-bg-opacity: 0.04;
+  --focus-bg-opacity: 0.06;
+  --pressed-bg-opacity: 0.1;
+  --disabled-opacity: 0.38;
+}
+
+/* ===============================
+ * SUPERLIST DARK MODE
+ * ===============================*/
+body.isDarkTheme {
+  /* ===============================
+   * SUPERLIST DARK COLOR PALETTE
+   * ===============================*/
+
+  /* True-black base (Blackout-inspired) */
+  --sl-dark-base: #0a0a0a;
+  --sl-dark-surface: #141414;
+  --sl-dark-elevated: #1c1c1c;
+  --sl-dark-card: #1e1e1e;
+  --sl-dark-hover: #262626;
+  --sl-dark-active: #2e2e2e;
+  --sl-dark-border: #333333;
+  --sl-dark-muted: #5a5a5a;
+  --sl-dark-subtle: #8a8a8a;
+  --sl-dark-text-secondary: #a0a0a0;
+  --sl-dark-text: #e8e8e8;
+  --sl-dark-text-bright: #ffffff;
+
+  /* Brand accent (slightly brighter for dark) */
+  --sl-coral: #e05545;
+  --sl-coral-light: #ef7a6d;
+  --sl-coral-dark: #c44535;
+
+  /* ===============================
+   * BACKGROUND COLORS - DARK
+   * ===============================*/
+
+  --bg: var(--sl-dark-base);
+  --bg-darker: #050505;
+  --bg-slightly-lighter: var(--sl-dark-surface);
+  --bg-lighter: var(--sl-dark-elevated);
+  --bg-lightest: var(--sl-dark-hover);
+  --bg-super-light: var(--sl-dark-active);
+
+  --card-bg: var(--sl-dark-card);
+  --sidenav-bg: var(--sl-dark-base);
+  --selected-task-bg-color: var(--sl-dark-hover);
+  --banner-bg: var(--sl-dark-elevated);
+
+  /* Task backgrounds */
+  --task-c-bg: var(--sl-dark-surface);
+  --task-c-selected-bg: var(--sl-dark-hover);
+  --sub-task-c-bg: var(--sl-dark-surface);
+  --sub-task-c-bg-done: var(--sl-dark-base);
+  --task-c-bg-done: var(--sl-dark-base);
+  --task-c-current-bg: var(--sl-dark-active);
+  --task-c-drag-drop-bg: var(--sl-dark-active);
+  --sub-task-c-bg-in-selected: var(--sl-dark-elevated);
+
+  /* Note backgrounds */
+  --standard-note-bg: var(--sl-dark-card);
+  --standard-note-bg-hovered: var(--sl-dark-hover);
+
+  /* Planner specific */
+  --planner-task-bg: var(--sl-dark-surface);
+  --planner-days-bg: var(--sl-dark-base);
+
+  /* ===============================
+   * TEXT COLORS - DARK
+   * ===============================*/
+
+  --text-color: var(--sl-dark-text);
+  --text-color-less-intense: rgba(232, 232, 232, 0.87);
+  --text-color-muted: var(--sl-dark-text-secondary);
+  --text-color-more-intense: var(--sl-dark-text);
+  --text-color-most-intense: var(--sl-dark-text-bright);
+
+  --standard-note-fg: var(--sl-dark-text);
+  --task-detail-value-color: rgba(232, 232, 232, 0.6);
+
+  /* ===============================
+   * BORDERS & SEPARATORS - DARK
+   * ===============================*/
+
+  --extra-border-color: var(--sl-dark-border);
+  --separator-color: rgba(255, 255, 255, 0.08);
+  --divider-color: rgba(255, 255, 255, 0.06);
+  --chip-outline-color: rgba(255, 255, 255, 0.15);
+
+  /* ===============================
+   * ACCENT & THEME COLORS - DARK
+   * ===============================*/
+
+  --palette-accent-500: var(--sl-coral);
+  --c-accent: var(--sl-coral);
+  --palette-accent-100: #fcd4cf;
+  --palette-accent-200: #f4b0a6;
+  --palette-accent-300: #ed8c7e;
+  --palette-accent-400: #e87060;
+  --palette-accent-600: #c44a3c;
+  --palette-accent-700: #ab4034;
+  --palette-accent-800: #92362c;
+  --palette-accent-900: #792c24;
+
+  /* Status colors */
+  --c-success: #81c995;
+  --c-warning: #fdd663;
+  --c-error: var(--sl-coral);
+  --c-info: #8ab4f8;
+
+  /* ===============================
+   * UI ELEMENTS - DARK
+   * ===============================*/
+
+  --scrollbar-thumb: var(--sl-dark-border);
+  --scrollbar-thumb-hover: var(--sl-dark-muted);
+  --scrollbar-track: transparent;
+
+  --close-btn-bg: var(--sl-dark-elevated);
+  --close-btn-border: transparent;
+
+  --select-hover-bg: rgba(255, 255, 255, 0.06);
+  --options-border-color: rgba(255, 255, 255, 0.08);
+
+  --attachment-bg: var(--sl-dark-elevated);
+  --attachment-border: transparent;
+  --attachment-control-bg: rgba(0, 0, 0, 0.4);
+  --attachment-control-border: transparent;
+  --attachment-control-hover-bg: rgba(0, 0, 0, 0.7);
+
+  --grid-color: rgba(255, 255, 255, 0.06);
+  --progress-bg: rgba(255, 255, 255, 0.1);
+
+  --improvement-text: var(--sl-dark-text);
+  --improvement-border: rgba(255, 255, 255, 0.12);
+  --improvement-button-text: var(--sl-dark-text-bright);
+
+  --color-background-color-options: var(--sl-dark-elevated);
+  --color-background-text-field: rgba(255, 255, 255, 0.06);
+  --color-background-dark: var(--sl-dark-base);
+  --color-background-notes: var(--sl-dark-surface);
+  --color-background-inline-markdown: var(--sl-dark-elevated);
+  --color-background-button-shadow: var(--sl-coral);
+
+  /* ===============================
+   * SHADOWS - DARK (subtle)
+   * ===============================*/
+
+  --shadow-key-umbra-opacity: 0.2;
+  --shadow-key-penumbra-opacity: 0.14;
+  --shadow-ambient-shadow-opacity: 0.1;
+
+  --task-current-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --task-selected-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+
+  /* ===============================
+   * HOVER CONTROLS - DARK
+   * ===============================*/
+
+  --hover-controls-border: 1px solid rgba(255, 255, 255, 0.1);
+  --hover-controls-border-opacity: 0.1;
+
+  /* ===============================
+   * INTERACTION STATES - DARK
+   * ===============================*/
+
+  --hover-bg-opacity: 0.06;
+  --focus-bg-opacity: 0.08;
+  --pressed-bg-opacity: 0.12;
+  --disabled-opacity: 0.38;
+}
+
+/* ===============================
+ * SHARED STYLES (both modes)
+ * ===============================*/
+
+/* Apply background and text colors */
+body {
+  background-color: var(--bg);
+  color: var(--text-color) !important;
+  transition:
+    background-color var(--transition-normal),
+    color var(--transition-normal);
+}
+
+/* Page wrapper */
+body .page-wrapper {
+  color: var(--text-color) !important;
+}
+
+/* Links — coral accent */
+body:not(.isDarkTheme) a,
+body:not(.isDarkTheme) a[href] {
+  color: var(--sl-coral);
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+body:not(.isDarkTheme) a:hover,
+body:not(.isDarkTheme) a[href]:hover {
+  opacity: 0.8;
+}
+
+body.isDarkTheme a,
+body.isDarkTheme a[href] {
+  color: var(--sl-coral-light);
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+body.isDarkTheme a:hover,
+body.isDarkTheme a[href]:hover {
+  opacity: 0.8;
+}
+
+/* Smooth hover states */
+.task-c:hover,
+.sub-task-c:hover {
+  background-color: var(--task-c-selected-bg);
+  transition: background-color var(--transition-fast);
+}
+
+/* Focus visible for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* Material overrides — Light mode */
+body:not(.isDarkTheme) {
+  --mat-theme-surface: var(--card-bg);
+  --mat-theme-on-surface: var(--text-color);
+  --mat-theme-background: var(--bg);
+  --mat-theme-primary: var(--sl-coral);
+  --mat-fab-small-container-color: var(--c-accent);
+  --mat-sys-primary-container: var(--c-accent);
+}
+
+/* Material overrides — Dark mode */
+body.isDarkTheme {
+  --mat-theme-surface: var(--card-bg);
+  --mat-theme-on-surface: var(--text-color);
+  --mat-theme-background: var(--bg);
+  --mat-theme-primary: var(--sl-coral);
+  --mat-fab-small-container-color: var(--c-accent);
+  --mat-sys-primary-container: var(--c-accent);
+}
+
+/* Code blocks */
+code,
+pre {
+  background-color: var(--color-background-inline-markdown);
+  color: var(--text-color);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+pre {
+  padding: 8px 12px;
+}

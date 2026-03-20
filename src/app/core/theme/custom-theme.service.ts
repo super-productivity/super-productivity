@@ -76,6 +76,12 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     url: 'assets/themes/cybr.css',
     requiredMode: 'dark',
   },
+  {
+    id: 'superlist',
+    name: 'Superlist',
+    url: 'assets/themes/superlist.css',
+    requiredMode: 'system',
+  },
 ];
 
 @Injectable({ providedIn: 'root' })
