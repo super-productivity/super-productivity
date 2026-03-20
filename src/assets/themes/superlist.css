@@ -1,6 +1,6 @@
 /**
  * Superlist Theme for Super Productivity
- * Inspired by Superlist's clean, minimal, and elegant design language.
+ * Inspired by Superlist's clean, warm, and elegant design language.
  * Both light and dark modes with signature coral accent (#D14836).
  * https://www.superlist.com
  */
@@ -19,82 +19,104 @@ body:not(.isDarkTheme) {
    * SUPERLIST LIGHT COLOR PALETTE
    * ===============================*/
 
-  /* Base tones */
-  --sl-white: #ffffff;
-  --sl-off-white: #fafafa;
-  --sl-gray-50: #f5f5f5;
-  --sl-gray-100: #eeeeee;
-  --sl-gray-200: #e0e0e0;
-  --sl-gray-300: #bdbdbd;
-  --sl-gray-400: #9e9e9e;
-  --sl-gray-500: #757575;
-  --sl-gray-600: #616161;
-  --sl-gray-700: #424242;
-  --sl-gray-800: #303030;
-  --sl-gray-900: #212121;
-  --sl-black: #000000;
+  /* Warm off-white base tones */
+  --sl-bg: #faf9f7;
+  --sl-bg-warm: #f5f3ef;
+  --sl-bg-card: #ffffff;
+  --sl-bg-sidebar: #f0eee9;
+  --sl-bg-hover: #efede8;
+  --sl-bg-active: #e8e5df;
 
-  /* Brand accent */
+  /* Warm neutral text */
+  --sl-text: #1d1d1f;
+  --sl-text-secondary: #6e6e73;
+  --sl-text-muted: #aeaeb2;
+
+  /* Brand accent — Superlist signature coral */
   --sl-coral: #d14836;
   --sl-coral-light: #e57368;
   --sl-coral-dark: #b23a2b;
+
+  /* Warm borders */
+  --sl-border: rgba(60, 54, 42, 0.08);
+  --sl-divider: rgba(60, 54, 42, 0.06);
 
   /* ===============================
    * BACKGROUND COLORS - LIGHT
    * ===============================*/
 
-  --bg: var(--sl-off-white);
-  --bg-darker: var(--sl-gray-100);
-  --bg-slightly-lighter: var(--sl-white);
-  --bg-lighter: var(--sl-white);
-  --bg-lightest: var(--sl-white);
-  --bg-super-light: var(--sl-white);
+  --bg: var(--sl-bg);
+  --bg-darker: var(--sl-bg-warm);
+  --bg-slightly-lighter: var(--sl-bg);
+  --bg-lighter: var(--sl-bg-card);
+  --bg-lightest: var(--sl-bg-card);
+  --bg-super-light: var(--sl-bg-warm);
 
   /* Component backgrounds */
-  --card-bg: var(--sl-white);
-  --sidenav-bg: var(--sl-off-white);
-  --selected-task-bg-color: var(--sl-gray-50);
-  --banner-bg: var(--sl-white);
+  --card-bg: var(--sl-bg-card);
+  --sidenav-bg: transparent;
+  --sidenav-bg-mobile: var(--sl-bg);
+  --sidenav-item-active-bg: rgba(209, 72, 54, 0.08);
+  --sidenav-hover-bg: rgba(60, 54, 42, 0.05);
+  --sidenav-active-text: var(--sl-coral);
+  --sidenav-text: var(--sl-text-secondary);
+  --sidenav-text-hover: var(--sl-text);
+  --sidenav-text-secondary: var(--sl-text-muted);
+  --selected-task-bg-color: var(--sl-bg-warm);
+  --banner-bg: var(--sl-bg-card);
 
-  /* Task backgrounds — clean, flat */
-  --task-c-bg: var(--sl-white);
-  --task-c-selected-bg: var(--sl-gray-50);
-  --sub-task-c-bg: var(--sl-white);
-  --sub-task-c-bg-done: var(--sl-gray-50);
-  --task-c-bg-done: var(--sl-gray-50);
-  --task-c-current-bg: var(--sl-gray-100);
-  --task-c-drag-drop-bg: var(--sl-gray-100);
-  --sub-task-c-bg-in-selected: var(--sl-off-white);
+  /* Task backgrounds — warm, flat hierarchy */
+  --task-c-bg: var(--sl-bg-card);
+  --task-c-selected-bg: var(--sl-bg-warm);
+  --sub-task-c-bg: var(--sl-bg-card);
+  --sub-task-c-bg-done: rgba(209, 72, 54, 0.04);
+  --task-c-bg-done: rgba(209, 72, 54, 0.04);
+  --task-c-current-bg: var(--sl-bg-hover);
+  --task-c-drag-drop-bg: var(--sl-bg-hover);
+  --sub-task-c-bg-in-selected: #faf8f5;
 
   /* Note backgrounds */
-  --standard-note-bg: var(--sl-white);
-  --standard-note-bg-hovered: var(--sl-gray-50);
+  --standard-note-bg: var(--sl-bg-card);
+  --standard-note-bg-hovered: var(--sl-bg-warm);
 
   /* Planner specific */
-  --planner-task-bg: var(--sl-white);
-  --planner-days-bg: var(--sl-off-white);
+  --planner-task-bg: var(--sl-bg-card);
+  --planner-days-bg: var(--sl-bg-warm);
+
+  /* Panel backgrounds */
+  --right-panel-bg: transparent;
+  --right-panel-bg-mobile: var(--sl-bg-card);
+  --bottom-panel-bg: var(--sl-bg-card);
+  --bottom-panel-handle: rgba(60, 54, 42, 0.25);
+  --bottom-panel-handle-active: rgba(60, 54, 42, 0.45);
+
+  /* Schedule Events */
+  --schedule-event-bg: var(--sl-bg-card);
+  --schedule-event-bg-in-side-panel: var(--sl-bg-card);
 
   /* ===============================
    * TEXT COLORS - LIGHT
    * ===============================*/
 
-  --text-color: var(--sl-gray-900);
-  --text-color-less-intense: rgba(33, 33, 33, 0.87);
-  --text-color-muted: var(--sl-gray-500);
-  --text-color-more-intense: var(--sl-black);
-  --text-color-most-intense: var(--sl-black);
+  --text-color: var(--sl-text);
+  --text-color-less-intense: rgba(29, 29, 31, 0.87);
+  --text-color-muted: var(--sl-text-muted);
+  --text-color-more-intense: #000000;
+  --text-color-most-intense: #000000;
 
-  --standard-note-fg: var(--sl-gray-900);
-  --task-detail-value-color: rgba(33, 33, 33, 0.6);
+  --standard-note-fg: var(--sl-text);
+  --task-detail-value-color: var(--sl-text-secondary);
+  --task-detail-bg: var(--sl-bg-card);
+  --task-detail-bg-hover: var(--sl-bg-warm);
 
   /* ===============================
    * BORDERS & SEPARATORS - LIGHT
    * ===============================*/
 
-  --extra-border-color: var(--sl-gray-200);
-  --separator-color: var(--sl-gray-200);
-  --divider-color: var(--sl-gray-100);
-  --chip-outline-color: rgba(0, 0, 0, 0.15);
+  --extra-border-color: var(--sl-border);
+  --separator-color: var(--sl-divider);
+  --divider-color: var(--sl-divider);
+  --chip-outline-color: rgba(60, 54, 42, 0.14);
 
   /* ===============================
    * ACCENT & THEME COLORS - LIGHT
@@ -102,72 +124,72 @@ body:not(.isDarkTheme) {
 
   --palette-accent-500: var(--sl-coral);
   --c-accent: var(--sl-coral);
-  --palette-accent-100: #f5d0cb;
-  --palette-accent-200: #edb0a8;
-  --palette-accent-300: #e58f85;
-  --palette-accent-400: #db6c5e;
-  --palette-accent-600: #b93f30;
-  --palette-accent-700: #a13729;
-  --palette-accent-800: #892f22;
-  --palette-accent-900: #71271b;
+  --palette-accent-100: #f5ccc6;
+  --palette-accent-200: #eea99f;
+  --palette-accent-300: #e88578;
+  --palette-accent-400: #dc6656;
+  --palette-accent-600: #bf4131;
+  --palette-accent-700: #a8392b;
+  --palette-accent-800: #913125;
+  --palette-accent-900: #7a2a1f;
 
-  /* Status colors */
-  --c-success: #34a853;
-  --c-warning: #f9ab00;
+  /* Status colors — Apple HIG-inspired */
+  --c-success: #34c759;
+  --c-warning: #ff9f0a;
   --c-error: var(--sl-coral);
-  --c-info: #4285f4;
+  --c-info: #007aff;
 
   /* ===============================
    * UI ELEMENTS - LIGHT
    * ===============================*/
 
-  --scrollbar-thumb: var(--sl-gray-300);
-  --scrollbar-thumb-hover: var(--sl-gray-400);
+  --scrollbar-thumb: rgba(60, 54, 42, 0.18);
+  --scrollbar-thumb-hover: rgba(60, 54, 42, 0.35);
   --scrollbar-track: transparent;
 
-  --close-btn-bg: var(--sl-gray-100);
+  --close-btn-bg: var(--sl-bg-warm);
   --close-btn-border: transparent;
 
-  --select-hover-bg: rgba(0, 0, 0, 0.04);
-  --options-border-color: rgba(0, 0, 0, 0.08);
+  --select-hover-bg: rgba(209, 72, 54, 0.06);
+  --options-border-color: rgba(209, 72, 54, 0.12);
 
-  --attachment-bg: var(--sl-white);
-  --attachment-border: var(--sl-gray-200);
-  --attachment-control-bg: rgba(255, 255, 255, 0.8);
-  --attachment-control-border: var(--sl-gray-200);
+  --attachment-bg: var(--sl-bg-warm);
+  --attachment-border: var(--sl-border);
+  --attachment-control-bg: rgba(255, 255, 255, 0.85);
+  --attachment-control-border: transparent;
   --attachment-control-hover-bg: rgba(255, 255, 255, 0.95);
 
-  --grid-color: rgba(0, 0, 0, 0.06);
-  --progress-bg: rgba(0, 0, 0, 0.08);
+  --grid-color: rgba(60, 54, 42, 0.06);
+  --progress-bg: rgba(60, 54, 42, 0.08);
 
-  --improvement-text: var(--sl-gray-900);
-  --improvement-border: rgba(0, 0, 0, 0.12);
-  --improvement-button-text: var(--sl-black);
+  --improvement-text: var(--sl-text);
+  --improvement-border: rgba(209, 72, 54, 0.2);
+  --improvement-button-text: #ffffff;
 
-  --color-background-color-options: var(--sl-gray-50);
-  --color-background-text-field: var(--sl-gray-50);
-  --color-background-dark: var(--sl-gray-200);
-  --color-background-notes: var(--sl-off-white);
-  --color-background-inline-markdown: var(--sl-gray-50);
+  --color-background-color-options: var(--sl-bg-warm);
+  --color-background-text-field: var(--sl-bg-warm);
+  --color-background-dark: var(--sl-bg-active);
+  --color-background-notes: var(--sl-bg-card);
+  --color-background-inline-markdown: var(--sl-bg-warm);
   --color-background-button-shadow: var(--sl-coral);
 
   /* ===============================
-   * SHADOWS - MINIMAL
+   * SHADOWS - LIGHT (very soft, warm)
    * ===============================*/
 
-  --shadow-key-umbra-opacity: 0.04;
-  --shadow-key-penumbra-opacity: 0.03;
+  --shadow-key-umbra-opacity: 0.06;
+  --shadow-key-penumbra-opacity: 0.04;
   --shadow-ambient-shadow-opacity: 0.02;
 
-  --task-current-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --task-selected-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --task-current-shadow: 0 2px 8px rgba(60, 54, 42, 0.1);
+  --task-selected-shadow: 0 1px 4px rgba(60, 54, 42, 0.07);
 
   /* ===============================
    * HOVER CONTROLS - LIGHT
    * ===============================*/
 
-  --hover-controls-border: 1px solid rgba(0, 0, 0, 0.1);
-  --hover-controls-border-opacity: 0.1;
+  --hover-controls-border: 1px solid rgba(209, 72, 54, 0.18);
+  --hover-controls-border-opacity: 0.18;
 
   /* ===============================
    * INTERACTION STATES - LIGHT
@@ -177,6 +199,15 @@ body:not(.isDarkTheme) {
   --focus-bg-opacity: 0.06;
   --pressed-bg-opacity: 0.1;
   --disabled-opacity: 0.38;
+
+  /* ===============================
+   * CODE & MARKDOWN - LIGHT
+   * ===============================*/
+
+  --code-bg: var(--sl-bg-warm);
+  --code-fg: var(--sl-coral-dark);
+  --inline-code-bg: var(--sl-bg-warm);
+  --inline-code-fg: var(--sl-coral-dark);
 }
 
 /* ===============================
@@ -187,80 +218,104 @@ body.isDarkTheme {
    * SUPERLIST DARK COLOR PALETTE
    * ===============================*/
 
-  /* True-black base (Blackout-inspired) */
-  --sl-dark-base: #0a0a0a;
-  --sl-dark-surface: #141414;
-  --sl-dark-elevated: #1c1c1c;
-  --sl-dark-card: #1e1e1e;
-  --sl-dark-hover: #262626;
-  --sl-dark-active: #2e2e2e;
-  --sl-dark-border: #333333;
-  --sl-dark-muted: #5a5a5a;
-  --sl-dark-subtle: #8a8a8a;
-  --sl-dark-text-secondary: #a0a0a0;
-  --sl-dark-text: #e8e8e8;
-  --sl-dark-text-bright: #ffffff;
+  /* Deep, slightly warm darks (not pure neutral) */
+  --sl-bg: #161618;
+  --sl-bg-elevated: #1c1c1e;
+  --sl-bg-card: #222224;
+  --sl-bg-sidebar: #1a1a1c;
+  --sl-bg-hover: #2c2c2e;
+  --sl-bg-active: #38383a;
 
-  /* Brand accent (slightly brighter for dark) */
-  --sl-coral: #e05545;
-  --sl-coral-light: #ef7a6d;
-  --sl-coral-dark: #c44535;
+  /* Text hierarchy */
+  --sl-text: #e5e5e7;
+  --sl-text-secondary: #98989d;
+  --sl-text-muted: #636366;
+
+  /* Brand accent — slightly brighter for dark backgrounds */
+  --sl-coral: #e8695a;
+  --sl-coral-light: #f08a7e;
+  --sl-coral-dark: #d14836;
+
+  /* Borders */
+  --sl-border: rgba(255, 255, 255, 0.08);
+  --sl-divider: rgba(255, 255, 255, 0.06);
 
   /* ===============================
    * BACKGROUND COLORS - DARK
    * ===============================*/
 
-  --bg: var(--sl-dark-base);
-  --bg-darker: #050505;
-  --bg-slightly-lighter: var(--sl-dark-surface);
-  --bg-lighter: var(--sl-dark-elevated);
-  --bg-lightest: var(--sl-dark-hover);
-  --bg-super-light: var(--sl-dark-active);
+  --bg: var(--sl-bg);
+  --bg-darker: #111113;
+  --bg-slightly-lighter: var(--sl-bg-elevated);
+  --bg-lighter: var(--sl-bg-card);
+  --bg-lightest: var(--sl-bg-hover);
+  --bg-super-light: var(--sl-bg-active);
 
-  --card-bg: var(--sl-dark-card);
-  --sidenav-bg: var(--sl-dark-base);
-  --selected-task-bg-color: var(--sl-dark-hover);
-  --banner-bg: var(--sl-dark-elevated);
+  /* Component backgrounds */
+  --card-bg: var(--sl-bg-elevated);
+  --sidenav-bg: transparent;
+  --sidenav-bg-mobile: var(--sl-bg);
+  --sidenav-item-active-bg: rgba(232, 105, 90, 0.1);
+  --sidenav-hover-bg: rgba(255, 255, 255, 0.04);
+  --sidenav-active-text: var(--sl-coral);
+  --sidenav-text: var(--sl-text-secondary);
+  --sidenav-text-hover: var(--sl-text);
+  --sidenav-text-secondary: var(--sl-text-muted);
+  --selected-task-bg-color: var(--sl-bg-hover);
+  --banner-bg: var(--sl-bg-card);
 
-  /* Task backgrounds */
-  --task-c-bg: var(--sl-dark-surface);
-  --task-c-selected-bg: var(--sl-dark-hover);
-  --sub-task-c-bg: var(--sl-dark-surface);
-  --sub-task-c-bg-done: var(--sl-dark-base);
-  --task-c-bg-done: var(--sl-dark-base);
-  --task-c-current-bg: var(--sl-dark-active);
-  --task-c-drag-drop-bg: var(--sl-dark-active);
-  --sub-task-c-bg-in-selected: var(--sl-dark-elevated);
+  /* Task backgrounds — subtle warm-dark hierarchy */
+  --task-c-bg: var(--sl-bg-elevated);
+  --task-c-selected-bg: var(--sl-bg-card);
+  --sub-task-c-bg: var(--sl-bg-elevated);
+  --sub-task-c-bg-done: #19191b;
+  --task-c-bg-done: #19191b;
+  --task-c-current-bg: var(--sl-bg-hover);
+  --task-c-drag-drop-bg: var(--sl-bg-hover);
+  --sub-task-c-bg-in-selected: #262628;
 
   /* Note backgrounds */
-  --standard-note-bg: var(--sl-dark-card);
-  --standard-note-bg-hovered: var(--sl-dark-hover);
+  --standard-note-bg: var(--sl-bg-elevated);
+  --standard-note-bg-hovered: var(--sl-bg-card);
 
   /* Planner specific */
-  --planner-task-bg: var(--sl-dark-surface);
-  --planner-days-bg: var(--sl-dark-base);
+  --planner-task-bg: var(--sl-bg-elevated);
+  --planner-days-bg: var(--sl-bg);
+
+  /* Panel backgrounds */
+  --right-panel-bg: transparent;
+  --right-panel-bg-mobile: var(--sl-bg);
+  --bottom-panel-bg: var(--sl-bg-elevated);
+  --bottom-panel-handle: rgba(255, 255, 255, 0.2);
+  --bottom-panel-handle-active: rgba(255, 255, 255, 0.4);
+
+  /* Schedule Events */
+  --schedule-event-bg: var(--sl-bg-elevated);
+  --schedule-event-bg-in-side-panel: var(--sl-bg-card);
 
   /* ===============================
    * TEXT COLORS - DARK
    * ===============================*/
 
-  --text-color: var(--sl-dark-text);
-  --text-color-less-intense: rgba(232, 232, 232, 0.87);
-  --text-color-muted: var(--sl-dark-text-secondary);
-  --text-color-more-intense: var(--sl-dark-text);
-  --text-color-most-intense: var(--sl-dark-text-bright);
+  --text-color: var(--sl-text);
+  --text-color-less-intense: rgba(229, 229, 231, 0.87);
+  --text-color-muted: var(--sl-text-muted);
+  --text-color-more-intense: #f2f2f7;
+  --text-color-most-intense: #ffffff;
 
-  --standard-note-fg: var(--sl-dark-text);
-  --task-detail-value-color: rgba(232, 232, 232, 0.6);
+  --standard-note-fg: var(--sl-text);
+  --task-detail-value-color: var(--sl-text-secondary);
+  --task-detail-bg: var(--sl-bg-card);
+  --task-detail-bg-hover: var(--sl-bg-hover);
 
   /* ===============================
    * BORDERS & SEPARATORS - DARK
    * ===============================*/
 
-  --extra-border-color: var(--sl-dark-border);
-  --separator-color: rgba(255, 255, 255, 0.08);
-  --divider-color: rgba(255, 255, 255, 0.06);
-  --chip-outline-color: rgba(255, 255, 255, 0.15);
+  --extra-border-color: var(--sl-border);
+  --separator-color: var(--sl-divider);
+  --divider-color: var(--sl-divider);
+  --chip-outline-color: rgba(255, 255, 255, 0.13);
 
   /* ===============================
    * ACCENT & THEME COLORS - DARK
@@ -268,86 +323,101 @@ body.isDarkTheme {
 
   --palette-accent-500: var(--sl-coral);
   --c-accent: var(--sl-coral);
-  --palette-accent-100: #fcd4cf;
-  --palette-accent-200: #f4b0a6;
-  --palette-accent-300: #ed8c7e;
-  --palette-accent-400: #e87060;
-  --palette-accent-600: #c44a3c;
-  --palette-accent-700: #ab4034;
-  --palette-accent-800: #92362c;
-  --palette-accent-900: #792c24;
+  --palette-accent-100: #fcddd9;
+  --palette-accent-200: #f5b8b0;
+  --palette-accent-300: #f09387;
+  --palette-accent-400: #ec7e70;
+  --palette-accent-600: #d45a4d;
+  --palette-accent-700: #c04b3f;
+  --palette-accent-800: #ac3c31;
+  --palette-accent-900: #982d24;
 
-  /* Status colors */
-  --c-success: #81c995;
-  --c-warning: #fdd663;
+  /* Status colors — Apple HIG dark variants */
+  --c-success: #30d158;
+  --c-warning: #ffd60a;
   --c-error: var(--sl-coral);
-  --c-info: #8ab4f8;
+  --c-info: #0a84ff;
 
   /* ===============================
    * UI ELEMENTS - DARK
    * ===============================*/
 
-  --scrollbar-thumb: var(--sl-dark-border);
-  --scrollbar-thumb-hover: var(--sl-dark-muted);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
   --scrollbar-track: transparent;
 
-  --close-btn-bg: var(--sl-dark-elevated);
+  --close-btn-bg: var(--sl-bg-hover);
   --close-btn-border: transparent;
 
-  --select-hover-bg: rgba(255, 255, 255, 0.06);
-  --options-border-color: rgba(255, 255, 255, 0.08);
+  --select-hover-bg: rgba(232, 105, 90, 0.08);
+  --options-border-color: rgba(232, 105, 90, 0.15);
 
-  --attachment-bg: var(--sl-dark-elevated);
+  --attachment-bg: var(--sl-bg-card);
   --attachment-border: transparent;
   --attachment-control-bg: rgba(0, 0, 0, 0.4);
   --attachment-control-border: transparent;
-  --attachment-control-hover-bg: rgba(0, 0, 0, 0.7);
+  --attachment-control-hover-bg: rgba(0, 0, 0, 0.65);
 
-  --grid-color: rgba(255, 255, 255, 0.06);
-  --progress-bg: rgba(255, 255, 255, 0.1);
+  --grid-color: rgba(255, 255, 255, 0.05);
+  --progress-bg: rgba(255, 255, 255, 0.08);
 
-  --improvement-text: var(--sl-dark-text);
-  --improvement-border: rgba(255, 255, 255, 0.12);
-  --improvement-button-text: var(--sl-dark-text-bright);
+  --improvement-text: var(--sl-text);
+  --improvement-border: rgba(232, 105, 90, 0.2);
+  --improvement-button-text: #ffffff;
 
-  --color-background-color-options: var(--sl-dark-elevated);
+  --color-background-color-options: var(--sl-bg-card);
   --color-background-text-field: rgba(255, 255, 255, 0.06);
-  --color-background-dark: var(--sl-dark-base);
-  --color-background-notes: var(--sl-dark-surface);
-  --color-background-inline-markdown: var(--sl-dark-elevated);
+  --color-background-dark: var(--sl-bg);
+  --color-background-notes: var(--sl-bg-elevated);
+  --color-background-inline-markdown: var(--sl-bg-card);
   --color-background-button-shadow: var(--sl-coral);
 
   /* ===============================
-   * SHADOWS - DARK (subtle)
+   * SHADOWS - DARK
    * ===============================*/
 
-  --shadow-key-umbra-opacity: 0.2;
-  --shadow-key-penumbra-opacity: 0.14;
-  --shadow-ambient-shadow-opacity: 0.1;
+  --shadow-key-umbra-opacity: 0.22;
+  --shadow-key-penumbra-opacity: 0.16;
+  --shadow-ambient-shadow-opacity: 0.12;
 
-  --task-current-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --task-selected-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  --task-current-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --task-selected-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 
   /* ===============================
    * HOVER CONTROLS - DARK
    * ===============================*/
 
-  --hover-controls-border: 1px solid rgba(255, 255, 255, 0.1);
-  --hover-controls-border-opacity: 0.1;
+  --hover-controls-border: none;
+  --hover-controls-border-opacity: 0;
 
   /* ===============================
    * INTERACTION STATES - DARK
    * ===============================*/
 
-  --hover-bg-opacity: 0.06;
+  --hover-bg-opacity: 0.05;
   --focus-bg-opacity: 0.08;
   --pressed-bg-opacity: 0.12;
   --disabled-opacity: 0.38;
+
+  /* ===============================
+   * CODE & MARKDOWN - DARK
+   * ===============================*/
+
+  --code-bg: var(--sl-bg-card);
+  --code-fg: var(--sl-coral-light);
+  --inline-code-bg: var(--sl-bg-card);
+  --inline-code-fg: var(--sl-coral-light);
 }
 
 /* ===============================
  * SHARED STYLES (both modes)
  * ===============================*/
+
+/* Hide gradient backgrounds */
+body::before,
+body .first-line:hover .hover-controls::before {
+  display: none !important;
+}
 
 /* Apply background and text colors */
 body {
@@ -378,7 +448,7 @@ body:not(.isDarkTheme) a[href]:hover {
 
 body.isDarkTheme a,
 body.isDarkTheme a[href] {
-  color: var(--sl-coral-light);
+  color: var(--sl-coral);
   text-decoration: none;
   transition: opacity var(--transition-fast);
 }
@@ -424,12 +494,37 @@ body.isDarkTheme {
 /* Code blocks */
 code,
 pre {
-  background-color: var(--color-background-inline-markdown);
-  color: var(--text-color);
-  border-radius: 4px;
-  padding: 2px 4px;
+  background-color: var(--code-bg);
+  color: var(--code-fg);
+  border-radius: 6px;
+  padding: 2px 6px;
 }
 
 pre {
-  padding: 8px 12px;
+  padding: 12px 16px;
+}
+
+/* Completed tasks */
+.task-c.isDone,
+.sub-task-c.isDone {
+  background-color: var(--task-c-bg-done);
+  opacity: 0.8;
+}
+
+/* Selected text — coral tint */
+::selection {
+  background-color: rgba(209, 72, 54, 0.2);
+  color: var(--text-color-most-intense);
+}
+
+/* Progress bars */
+.mat-mdc-progress-bar {
+  --mdc-linear-progress-active-indicator-color: var(--c-accent);
+  --mdc-linear-progress-track-color: var(--progress-bg);
+}
+
+/* Snackbar */
+.mat-mdc-snack-bar-container {
+  --mdc-snackbar-container-color: var(--card-bg);
+  --mdc-snackbar-supporting-text-color: var(--text-color);
 }
