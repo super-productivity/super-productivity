@@ -93,5 +93,13 @@ export const ISSUE_PROVIDER_COMMON_FORM_FIELDS: LimitedFormlyFieldConfig<IssuePr
         label: 'Poll imported for changes and notify',
       },
     },
+    {
+      key: 'defaultNote',
+      type: 'textarea',
+      props: {
+        label: 'Default note for imported tasks',
+        rows: 3,
+      },
+    },
     // ISSUE_PROVIDER_FF_LINE,
   ] as const;

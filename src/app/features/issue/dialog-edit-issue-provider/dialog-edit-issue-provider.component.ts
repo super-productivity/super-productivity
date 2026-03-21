@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+  computed,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -57,6 +64,9 @@ import { TaskService } from '../../tasks/task.service';
 import { firstValueFrom } from 'rxjs';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.const';
+import { TagService } from '../../tag/tag.service';
+import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
+import { unique } from '../../../util/unique';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -79,6 +89,7 @@ import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.co
     MatDialogTitle,
     TrelloAdditionalCfgComponent, // added for custom trello board loading support
     NextcloudDeckAdditionalCfgComponent,
+    ChipListInputComponent,
   ],
   templateUrl: './dialog-edit-issue-provider.component.html',
   styleUrl: './dialog-edit-issue-provider.component.scss',
@@ -144,6 +155,31 @@ export class DialogEditIssueProviderComponent {
   private _issueService = inject(IssueService);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
+  private _tagService = inject(TagService);
+
+  tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
+
+  addTag(id: string): void {
+    this.model = {
+      ...this.model,
+      defaultTagIds: unique([...(this.model.defaultTagIds || []), id]),
+    };
+  }
+
+  addNewTag(title: string): void {
+    const id = this._tagService.addTag({ title });
+    this.model = {
+      ...this.model,
+      defaultTagIds: unique([...(this.model.defaultTagIds || []), id]),
+    };
+  }
+
+  removeTag(id: string): void {
+    this.model = {
+      ...this.model,
+      defaultTagIds: (this.model.defaultTagIds || []).filter((tagId) => tagId !== id),
+    };
+  }
 
   submit(isSkipClose = false): void {
     if (this.form.valid) {

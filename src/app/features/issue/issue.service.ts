@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { unique } from '../../util/unique';
 import { generateCalendarTaskId } from '../calendar-integration/generate-calendar-task-id';
 import {
   BuiltInIssueProviderKey,
@@ -516,32 +517,41 @@ export class IssueService {
     IssueLog.log({ title, related_to, additionalFromProviderIssueService });
 
     const getProjectOrTagId = async (): Promise<Partial<TaskCopy>> => {
-      const defaultProjectId = (
-        await this._issueProviderService
-          .getCfgOnce$(issueProviderId, issueProviderKey)
-          .toPromise()
-      ).defaultProjectId;
+      const providerCfg = await this._issueProviderService
+        .getCfgOnce$(issueProviderId, issueProviderKey)
+        .toPromise();
+      const defaultProjectId = providerCfg.defaultProjectId;
+      const defaultTagIds = providerCfg.defaultTagIds || [];
+      const defaultNote = providerCfg.defaultNote;
 
       if (typeof this._workContextService.activeWorkContextId !== 'string') {
         throw new Error('No active work context id');
+      }
+
+      const result: Partial<TaskCopy> = {};
+      if (defaultNote) {
+        result.notes = defaultNote;
       }
 
       if (
         this._workContextService.activeWorkContextType === WorkContextType.PROJECT &&
         !isForceDefaultProject
       ) {
-        return {
-          projectId: defaultProjectId || this._workContextService.activeWorkContextId,
-        };
+        result.projectId =
+          defaultProjectId || this._workContextService.activeWorkContextId;
+        if (defaultTagIds.length) {
+          result.tagIds = [...defaultTagIds];
+        }
+        return result;
       } else {
-        return {
-          tagIds:
-            this._workContextService.activeWorkContextType === WorkContextType.TAG &&
-            this._workContextService.activeWorkContextId !== TODAY_TAG.id
-              ? [this._workContextService.activeWorkContextId]
-              : [],
-          projectId: defaultProjectId || undefined,
-        };
+        const contextTagIds =
+          this._workContextService.activeWorkContextType === WorkContextType.TAG &&
+          this._workContextService.activeWorkContextId !== TODAY_TAG.id
+            ? [this._workContextService.activeWorkContextId]
+            : [];
+        result.tagIds = unique([...contextTagIds, ...defaultTagIds]);
+        result.projectId = defaultProjectId || undefined;
+        return result;
       }
     };
 
