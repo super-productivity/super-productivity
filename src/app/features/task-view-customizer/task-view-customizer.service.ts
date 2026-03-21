@@ -237,6 +237,69 @@ export class TaskViewCustomizerService {
               return true;
           }
         });
+      case FILTER_OPTION_TYPE.deadline:
+        if (value === FILTER_COMMON.NOT_SPECIFIED) {
+          return tasks.filter((task) => !task.deadlineDay && !task.deadlineWithTime);
+        }
+
+        const _todayDl = new Date(); // ! Don't modify this date
+        const _firstDayOfWeekDl = this._dateAdapter.getFirstDayOfWeek();
+
+        const todayStrDl = getDbDateStr(_todayDl);
+        const tomorrowStrDl = getDbDateStr(
+          new Date(new Date().setDate(_todayDl.getDate() + 1)),
+        );
+
+        return tasks.filter((task) => {
+          const dlStr = task.deadlineDay
+            ? task.deadlineDay
+            : task.deadlineWithTime
+              ? getDbDateStr(task.deadlineWithTime)
+              : null;
+
+          if (!dlStr) return false;
+
+          switch (value) {
+            case FILTER_SCHEDULE.today:
+              return dlStr.startsWith(todayStrDl);
+
+            case FILTER_SCHEDULE.tomorrow:
+              return dlStr.startsWith(tomorrowStrDl);
+
+            case FILTER_SCHEDULE.thisWeek: {
+              const weekRange = getWeekRange(_todayDl, _firstDayOfWeekDl);
+              return (
+                dlStr >= getDbDateStr(weekRange.start) &&
+                dlStr <= getDbDateStr(weekRange.end)
+              );
+            }
+
+            case FILTER_SCHEDULE.nextWeek: {
+              const nextWeekStartDate = new Date(
+                new Date().setDate(_todayDl.getDate() + 7),
+              );
+              const weekRange = getWeekRange(nextWeekStartDate, _firstDayOfWeekDl);
+              return (
+                dlStr >= getDbDateStr(weekRange.start) &&
+                dlStr <= getDbDateStr(weekRange.end)
+              );
+            }
+
+            case FILTER_SCHEDULE.thisMonth: {
+              const yearMonth = getDbDateStr(_todayDl).substring(0, 7);
+              return dlStr.startsWith(yearMonth);
+            }
+
+            case FILTER_SCHEDULE.nextMonth: {
+              const nextMonth = new Date(new Date().setMonth(_todayDl.getMonth() + 1));
+              const yearMonth = getDbDateStr(nextMonth).substring(0, 7);
+              return dlStr.startsWith(yearMonth);
+            }
+
+            default:
+              return true;
+          }
+        });
       case FILTER_OPTION_TYPE.estimatedTime:
         if (value === FILTER_COMMON.NOT_SPECIFIED) {
           return tasks.filter((task) => task.timeEstimate === 0);
@@ -341,6 +404,26 @@ export class TaskViewCustomizerService {
           return (dateA.getTime() - dateB.getTime()) * factor;
         });
 
+      case SORT_OPTION_TYPE.deadline:
+        return tasksCopy.sort((a, b) => {
+          const dateA = a.deadlineDay
+            ? new Date(a.deadlineDay)
+            : a.deadlineWithTime
+              ? new Date(a.deadlineWithTime)
+              : null;
+          const dateB = b.deadlineDay
+            ? new Date(b.deadlineDay)
+            : b.deadlineWithTime
+              ? new Date(b.deadlineWithTime)
+              : null;
+
+          if (dateA === null && dateB === null) return 0;
+          if (dateA === null) return 1 * factor;
+          if (dateB === null) return -1 * factor;
+
+          return (dateA.getTime() - dateB.getTime()) * factor;
+        });
+
       case SORT_OPTION_TYPE.estimatedTime:
         return tasksCopy.sort(
           (a, b) => ((a.timeEstimate || 0) - (b.timeEstimate || 0)) * factor,
@@ -389,6 +472,12 @@ export class TaskViewCustomizerService {
           const key =
             task.dueDay ||
             (task.dueWithTime ? getDbDateStr(task.dueWithTime) : 'No date');
+          acc[key] = acc[key] || [];
+          acc[key].push(task);
+        } else if (groupType === GROUP_OPTION_TYPE.deadline) {
+          const key =
+            task.deadlineDay ||
+            (task.deadlineWithTime ? getDbDateStr(task.deadlineWithTime) : 'No deadline');
           acc[key] = acc[key] || [];
           acc[key].push(task);
         }
