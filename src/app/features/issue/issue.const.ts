@@ -167,4 +167,6 @@ export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<
   isIntegratedAddTaskBar: false,
   defaultProjectId: null,
   pinnedSearch: null,
+  defaultTagIds: [],
+  defaultNote: null,
 } as const;

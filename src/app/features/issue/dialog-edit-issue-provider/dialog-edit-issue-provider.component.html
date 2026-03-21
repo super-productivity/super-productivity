@@ -103,6 +103,15 @@
         [form]="form"
       ></formly-form>
 
+      <chip-list-input
+        (addItem)="addTag($event)"
+        (addNewItem)="addNewTag($event)"
+        (removeItem)="removeTag($event)"
+        [label]="T.F.ISSUE.DEFAULT_TAGS_LABEL | translate"
+        [model]="model.defaultTagIds || []"
+        [suggestions]="tagSuggestions()"
+      ></chip-list-input>
+
       @switch (issueProviderKey) {
         <!-- -->
         @case ('JIRA') {
