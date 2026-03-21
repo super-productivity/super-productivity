@@ -3,14 +3,12 @@ import { Store } from '@ngrx/store';
 import { Router } from '@angular/router';
 import { take } from 'rxjs/operators';
 import { GlobalConfigService } from '../config/global-config.service';
-import { ProjectService } from '../project/project.service';
 import { ShepherdService } from '../shepherd/shepherd.service';
 import { ContextualHint, ContextualHintState } from './contextual-hint.model';
 import { CONTEXTUAL_HINTS, HINT_IDS } from './contextual-hints.const';
 import { TourId } from '../shepherd/shepherd-steps.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { selectAllTasks } from '../tasks/store/task.selectors';
-import { selectAllTasksWithDueDay } from '../tasks/store/task.selectors';
 
 const DEFAULT_STATE: ContextualHintState = { dismissed: [], impressions: {} };
 
@@ -19,7 +17,6 @@ export class ContextualHintService {
   private _store = inject(Store);
   private _router = inject(Router);
   private _globalConfigService = inject(GlobalConfigService);
-  private _projectService = inject(ProjectService);
   private _shepherdService = inject(ShepherdService);
 
   activeHint = signal<ContextualHint | null>(null);
@@ -73,10 +70,6 @@ export class ContextualHintService {
         return this._checkSyncSetup();
       case HINT_IDS.KEYBOARD_SHORTCUTS:
         return this._checkKeyboardShortcuts();
-      case HINT_IDS.SHORT_SYNTAX:
-        return this._checkShortSyntax();
-      case HINT_IDS.PLANNER:
-        return this._checkPlanner();
       default:
         return false;
     }
@@ -98,30 +91,6 @@ export class ContextualHintService {
       .pipe(take(1))
       .subscribe((tasks) => (taskCount = tasks.length));
     return taskCount >= 10;
-  }
-
-  private _checkShortSyntax(): boolean {
-    const appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
-    if (appStarts < 4) return false;
-    const shortSyntaxCfg = this._globalConfigService.shortSyntax();
-    if (!shortSyntaxCfg?.isEnableTag && !shortSyntaxCfg?.isEnableProject) return false;
-    let taskCount = 0;
-    this._store
-      .select(selectAllTasks)
-      .pipe(take(1))
-      .subscribe((tasks) => (taskCount = tasks.length));
-    return taskCount >= 8;
-  }
-
-  private _checkPlanner(): boolean {
-    const features = this._globalConfigService.appFeatures();
-    if (!features.isPlannerEnabled) return false;
-    let dueDayCount = 0;
-    this._store
-      .select(selectAllTasksWithDueDay)
-      .pipe(take(1))
-      .subscribe((tasks) => (dueDayCount = tasks.length));
-    return dueDayCount >= 3;
   }
 
   private _recordImpression(hintId: string): void {
