@@ -148,8 +148,10 @@ export class ContextualHintComponent {
   dismissed = output<void>();
   actionClicked = output<void>();
 
-  @HostListener('document:keydown.escape')
-  onEscape(): void {
-    this.dismissed.emit();
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(event: KeyboardEvent): void {
+    if (!event.defaultPrevented) {
+      this.dismissed.emit();
+    }
   }
 }

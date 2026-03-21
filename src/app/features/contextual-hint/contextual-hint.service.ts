@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { Router } from '@angular/router';
-import { take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ShepherdService } from '../shepherd/shepherd.service';
 import {
@@ -29,7 +29,7 @@ export class ContextualHintService {
 
   async evaluate(): Promise<void> {
     // Wait for store hydration before checking triggers
-    await this._dataInitStateService.isAllDataLoadedInitially$.pipe(take(1)).toPromise();
+    await firstValueFrom(this._dataInitStateService.isAllDataLoadedInitially$);
 
     // Don't show hints during focus mode
     let isFocusMode = false;
@@ -122,7 +122,8 @@ export class ContextualHintService {
           parsed &&
           parsed.version === CONTEXTUAL_HINT_STATE_VERSION &&
           Array.isArray(parsed.dismissed) &&
-          typeof parsed.impressions === 'object'
+          typeof parsed.impressions === 'object' &&
+          parsed.impressions !== null
         ) {
           return parsed as ContextualHintState;
         }

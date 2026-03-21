@@ -129,7 +129,9 @@ export class StartupService {
       }
 
       if (!this._isTourLikelyToBeShown() && !isProductivityTipShown) {
-        void this._contextualHintService.evaluate();
+        this._contextualHintService.evaluate().catch((e) => {
+          Log.warn('ContextualHintService: evaluate failed', e);
+        });
       }
 
       this._handleAppStartRating();
