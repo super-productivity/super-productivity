@@ -1,4 +1,6 @@
 import { ContextualHint } from './contextual-hint.model';
+import { TourId } from '../shepherd/shepherd-steps.const';
+import { T } from '../../t.const';
 
 export const HINT_IDS = {
   SYNC_SETUP: 'sync-setup',
@@ -9,20 +11,19 @@ export const CONTEXTUAL_HINTS: ContextualHint[] = [
   {
     id: HINT_IDS.SYNC_SETUP,
     icon: 'cloud_upload',
-    title: 'Keep your data safe',
-    message: 'Set up sync to back up your tasks and access them across devices.',
+    titleKey: T.CONTEXTUAL_HINT.SYNC_TITLE,
+    messageKey: T.CONTEXTUAL_HINT.SYNC_MESSAGE,
     maxImpressions: 2,
-    actionLabel: 'Set up sync',
-    actionRoute: '/config',
+    actionLabelKey: T.CONTEXTUAL_HINT.SYNC_ACTION,
+    actionRoute: '/config?tab=3',
   },
   {
     id: HINT_IDS.KEYBOARD_SHORTCUTS,
     icon: 'keyboard',
-    title: 'Speed up your workflow',
-    message:
-      'Press Shift+A anywhere to quickly add a new task without reaching for the mouse.',
+    titleKey: T.CONTEXTUAL_HINT.KEYBOARD_TITLE,
+    messageKey: T.CONTEXTUAL_HINT.KEYBOARD_MESSAGE,
     maxImpressions: 1,
-    actionLabel: 'Learn shortcuts',
-    actionTourId: 'KeyboardNav',
+    actionLabelKey: T.CONTEXTUAL_HINT.KEYBOARD_ACTION,
+    actionTourId: TourId.KeyboardNav,
   },
 ];

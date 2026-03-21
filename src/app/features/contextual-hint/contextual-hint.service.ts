@@ -4,13 +4,18 @@ import { Router } from '@angular/router';
 import { take } from 'rxjs/operators';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ShepherdService } from '../shepherd/shepherd.service';
-import { ContextualHint, ContextualHintState } from './contextual-hint.model';
+import {
+  ContextualHint,
+  ContextualHintState,
+  CONTEXTUAL_HINT_STATE_VERSION,
+} from './contextual-hint.model';
 import { CONTEXTUAL_HINTS, HINT_IDS } from './contextual-hints.const';
-import { TourId } from '../shepherd/shepherd-steps.const';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { selectAllTasks } from '../tasks/store/task.selectors';
-
-const DEFAULT_STATE: ContextualHintState = { dismissed: [], impressions: {} };
+import { IS_MOUSE_PRIMARY } from '../../util/is-mouse-primary';
+import { DataInitStateService } from '../../core/data-init/data-init-state.service';
+import { selectIsOverlayShown } from '../focus-mode/store/focus-mode.selectors';
+import { Log } from '../../core/log';
 
 @Injectable({ providedIn: 'root' })
 export class ContextualHintService {
@@ -18,10 +23,22 @@ export class ContextualHintService {
   private _router = inject(Router);
   private _globalConfigService = inject(GlobalConfigService);
   private _shepherdService = inject(ShepherdService);
+  private _dataInitStateService = inject(DataInitStateService);
 
   activeHint = signal<ContextualHint | null>(null);
 
-  evaluate(): void {
+  async evaluate(): Promise<void> {
+    // Wait for store hydration before checking triggers
+    await this._dataInitStateService.isAllDataLoadedInitially$.pipe(take(1)).toPromise();
+
+    // Don't show hints during focus mode
+    let isFocusMode = false;
+    this._store
+      .select(selectIsOverlayShown)
+      .pipe(take(1))
+      .subscribe((val) => (isFocusMode = val));
+    if (isFocusMode) return;
+
     const state = this._loadState();
 
     for (const hint of CONTEXTUAL_HINTS) {
@@ -33,7 +50,8 @@ export class ContextualHintService {
         continue;
       }
       if (this._checkTrigger(hint.id)) {
-        this._recordImpression(hint.id);
+        state.impressions[hint.id] = impressions + 1;
+        this._saveState(state);
         this.activeHint.set(hint);
         return;
       }
@@ -58,7 +76,7 @@ export class ContextualHintService {
     if (hint.actionRoute) {
       this._router.navigateByUrl(hint.actionRoute);
     } else if (hint.actionTourId) {
-      this._shepherdService.show(hint.actionTourId as TourId);
+      this._shepherdService.show(hint.actionTourId);
     }
 
     this.dismiss();
@@ -83,8 +101,10 @@ export class ContextualHintService {
   }
 
   private _checkKeyboardShortcuts(): boolean {
+    // Keyboard shortcuts are irrelevant on touch-primary devices
+    if (!IS_MOUSE_PRIMARY) return false;
     const appStarts = +(localStorage.getItem(LS.APP_START_COUNT) || 0);
-    if (appStarts < 3) return false;
+    if (appStarts < 7) return false;
     let taskCount = 0;
     this._store
       .select(selectAllTasks)
@@ -93,25 +113,35 @@ export class ContextualHintService {
     return taskCount >= 10;
   }
 
-  private _recordImpression(hintId: string): void {
-    const state = this._loadState();
-    state.impressions[hintId] = (state.impressions[hintId] || 0) + 1;
-    this._saveState(state);
-  }
-
   private _loadState(): ContextualHintState {
     try {
       const raw = localStorage.getItem(LS.CONTEXTUAL_HINTS);
       if (raw) {
-        return JSON.parse(raw) as ContextualHintState;
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          parsed.version === CONTEXTUAL_HINT_STATE_VERSION &&
+          Array.isArray(parsed.dismissed) &&
+          typeof parsed.impressions === 'object'
+        ) {
+          return parsed as ContextualHintState;
+        }
       }
     } catch {
       // ignore parse errors
     }
-    return { ...DEFAULT_STATE, dismissed: [], impressions: {} };
+    return {
+      version: CONTEXTUAL_HINT_STATE_VERSION,
+      dismissed: [],
+      impressions: {},
+    };
   }
 
   private _saveState(state: ContextualHintState): void {
-    localStorage.setItem(LS.CONTEXTUAL_HINTS, JSON.stringify(state));
+    try {
+      localStorage.setItem(LS.CONTEXTUAL_HINTS, JSON.stringify(state));
+    } catch (e) {
+      Log.warn('ContextualHintService: failed to save state', e);
+    }
   }
 }

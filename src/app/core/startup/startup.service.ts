@@ -110,8 +110,10 @@ export class StartupService {
       this._initOfflineBanner();
 
       const miscCfg = this._globalConfigService.misc();
+      let isProductivityTipShown = false;
       if (miscCfg?.isShowProductivityTipLonger && !this._isTourLikelyToBeShown()) {
         if (w.productivityTips && w.randomIndex !== undefined) {
+          isProductivityTipShown = true;
           this._snackService.open({
             ico: 'lightbulb',
             config: {
@@ -126,8 +128,8 @@ export class StartupService {
         }
       }
 
-      if (!this._isTourLikelyToBeShown()) {
-        this._contextualHintService.evaluate();
+      if (!this._isTourLikelyToBeShown() && !isProductivityTipShown) {
+        void this._contextualHintService.evaluate();
       }
 
       this._handleAppStartRating();
