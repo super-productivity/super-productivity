@@ -79,6 +79,14 @@
   <shepherd></shepherd>
 }
 
+@if (contextualHintService.activeHint(); as hint) {
+  <contextual-hint
+    [hint]="hint"
+    (dismissed)="contextualHintService.dismiss()"
+    (actionClicked)="contextualHintService.handleAction()"
+  ></contextual-hint>
+}
+
 <!-- Background context menu -->
 @if (routeWrapper) {
   <context-menu

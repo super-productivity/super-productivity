@@ -35,6 +35,7 @@ import { TrackingReminderService } from '../../features/tracking-reminder/tracki
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
+import { ContextualHintService } from '../../features/contextual-hint/contextual-hint.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -63,6 +64,7 @@ export class StartupService {
   private _store = inject(Store);
   private _platformService = inject(CapacitorPlatformService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _contextualHintService = inject(ContextualHintService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -122,6 +124,10 @@ export class StartupService {
               w.productivityTips[w.randomIndex][1],
           });
         }
+      }
+
+      if (!this._isTourLikelyToBeShown()) {
+        this._contextualHintService.evaluate();
       }
 
       this._handleAppStartRating();
