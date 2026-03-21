@@ -516,7 +516,7 @@ export class IssueService {
     } = this._getAddTaskData(issueProviderKey, issueDataReduced);
     IssueLog.log({ title, related_to, additionalFromProviderIssueService });
 
-    const getProjectOrTagId = async (): Promise<Partial<TaskCopy>> => {
+    const getTaskDefaults = async (): Promise<Partial<TaskCopy>> => {
       const providerCfg = await this._issueProviderService
         .getCfgOnce$(issueProviderId, issueProviderKey)
         .toPromise();
@@ -565,7 +565,7 @@ export class IssueService {
       dueDay: getDbDateStr(),
       ...additionalFromProviderIssueService,
       // NOTE: if we were to add tags, this could be overwritten here
-      ...(await getProjectOrTagId()),
+      ...(await getTaskDefaults()),
       ...additional,
     };
 

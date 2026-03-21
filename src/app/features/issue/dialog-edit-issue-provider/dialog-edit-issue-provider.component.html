@@ -107,7 +107,7 @@
         (addItem)="addTag($event)"
         (addNewItem)="addNewTag($event)"
         (removeItem)="removeTag($event)"
-        [label]="'Default tags for imported tasks'"
+        [label]="T.F.ISSUE.DEFAULT_TAGS_LABEL | translate"
         [model]="model.defaultTagIds || []"
         [suggestions]="tagSuggestions()"
       ></chip-list-input>

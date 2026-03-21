@@ -168,5 +168,5 @@ export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<
   defaultProjectId: null,
   pinnedSearch: null,
   defaultTagIds: [],
-  defaultNote: undefined,
+  defaultNote: null,
 } as const;

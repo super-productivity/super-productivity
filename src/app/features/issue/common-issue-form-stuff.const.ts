@@ -97,7 +97,7 @@ export const ISSUE_PROVIDER_COMMON_FORM_FIELDS: LimitedFormlyFieldConfig<IssuePr
       key: 'defaultNote',
       type: 'textarea',
       props: {
-        label: 'Default note for imported tasks',
+        label: T.F.ISSUE.DEFAULT_NOTE_LABEL,
         rows: 3,
       },
     },

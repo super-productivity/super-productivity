@@ -321,8 +321,10 @@
         "ISSUE_STR": "issue",
         "ISSUES_STR": "issues"
       },
+      "DEFAULT_NOTE_LABEL": "Default note for imported tasks",
       "DEFAULT_PROJECT_DESCRIPTION": "Project assigned to tasks created from issues.",
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
+      "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
       "DIALOG": {
         "ADVANCED_CONFIG": "Advanced Config",
         "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!"
