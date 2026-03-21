@@ -19,7 +19,8 @@ export const CONTEXTUAL_HINTS: ContextualHint[] = [
     id: HINT_IDS.KEYBOARD_SHORTCUTS,
     icon: 'keyboard',
     title: 'Speed up your workflow',
-    message: 'Use keyboard shortcuts to manage tasks faster.',
+    message:
+      'Press Shift+A anywhere to quickly add a new task without reaching for the mouse.',
     maxImpressions: 1,
     actionLabel: 'Learn shortcuts',
     actionTourId: 'KeyboardNav',
