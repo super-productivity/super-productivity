@@ -226,7 +226,7 @@ export interface IssueProviderBase extends BaseIssueProviderCfg {
   isAutoAddToBacklog?: boolean;
   isIntegratedAddTaskBar?: boolean;
   defaultTagIds?: string[];
-  defaultNote?: string;
+  defaultNote?: string | null;
 }
 
 export interface IssueProviderJira extends IssueProviderBase, JiraCfg {
