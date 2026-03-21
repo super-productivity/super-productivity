@@ -3,8 +3,10 @@ import {
   Component,
   ElementRef,
   HostListener,
+  inject,
   Input,
   OnDestroy,
+  OnInit,
   output,
   signal,
   viewChild,
@@ -13,14 +15,24 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
+import { MentionConfig, MentionModule } from '../mentions';
+import { AsyncPipe } from '@angular/common';
+import { GlobalConfigService } from '../../features/config/global-config.service';
+import { TagService } from '../../features/tag/tag.service';
+import { ProjectService } from '../../features/project/project.service';
+import { combineLatest, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { Mentions } from '../mentions/mention-config';
+import { MentionItem } from '../mentions/mention-types';
+import { CHRONO_SUGGESTIONS } from '../../features/tasks/add-task-bar/add-task-bar.const';
 
 /**
  * Inline-editable text field for task titles.
- * Click to edit, Enter/Escape to save. Removes newlines and short syntax.
+ * Click to edit, Enter/Escape to save. Applies short syntax on save.
  */
 @Component({
   selector: 'task-title',
-  imports: [TranslateModule],
+  imports: [TranslateModule, MentionModule, AsyncPipe],
   templateUrl: './task-title.component.html',
   styleUrl: './task-title.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,8 +41,17 @@ import { Log } from '../../core/log';
     ['[class.is-editing]']: 'isEditing()',
   },
 })
-export class TaskTitleComponent implements OnDestroy {
+export class TaskTitleComponent implements OnInit, OnDestroy {
+  private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _tagService = inject(TagService);
+  private readonly _projectService = inject(ProjectService);
+
   T: typeof T = T;
+
+  // mention config observable for short syntax autocomplete in textarea
+  mentionCfg$!: Observable<MentionConfig>;
+
+  private _isMentionListShown = false;
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {
@@ -75,6 +96,50 @@ export class TaskTitleComponent implements OnDestroy {
   private _focusTimeoutId: number | undefined;
 
   constructor() {}
+
+  ngOnInit(): void {
+    this.mentionCfg$ = combineLatest([
+      this._globalConfigService.shortSyntax$,
+      this._tagService.tagsNoMyDayAndNoListSorted$,
+      this._projectService.listSortedForUI$,
+    ]).pipe(
+      map(([cfg, tagSuggestions, projectSuggestions]) => {
+        const mentions: Mentions[] = [];
+        if (cfg.isEnableTag) {
+          mentions.push({
+            items: (tagSuggestions as unknown as MentionItem[]) || [],
+            labelKey: 'title',
+            triggerChar: '#',
+          });
+        }
+        if (cfg.isEnableDue) {
+          mentions.push({
+            items: CHRONO_SUGGESTIONS,
+            labelKey: 'title',
+            triggerChar: '@',
+          });
+        }
+        if (cfg.isEnableProject) {
+          mentions.push({
+            items: (projectSuggestions as unknown as MentionItem[]) || [],
+            labelKey: 'title',
+            triggerChar: '+',
+          });
+        }
+        return {
+          mentions,
+          triggerChar: undefined,
+        } as MentionConfig;
+      }),
+    );
+  }
+
+  updateMentionListShown(isShown: boolean): void {
+    // use setTimeout to ensure blur event order doesn't interfere with mention selection
+    window.setTimeout(() => {
+      this._isMentionListShown = isShown;
+    });
+  }
 
   // Click anywhere to enter edit mode
   @HostListener('mousedown', ['$event'])
@@ -144,10 +209,16 @@ export class TaskTitleComponent implements OnDestroy {
   handleKeyDown(ev: KeyboardEvent): void {
     ev.stopPropagation();
     if (ev.key === 'Escape') {
-      this._forceBlur();
+      // if mention list is open, Escape is handled by MentionDirective - don't blur
+      if (!this._isMentionListShown) {
+        this._forceBlur();
+      }
     } else if (ev.key === 'Enter') {
-      this._forceBlur();
-      ev.preventDefault();
+      // if mention list is open, Enter selects from list - don't blur
+      if (!this._isMentionListShown) {
+        this._forceBlur();
+        ev.preventDefault();
+      }
     }
   }
 
