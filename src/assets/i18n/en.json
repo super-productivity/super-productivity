@@ -2362,6 +2362,29 @@
     "TASK_ALREADY_COMPLETED": "Task already completed",
     "TASK_MARKED_DONE": "Task marked as done"
   },
+  "ONBOARDING": {
+    "TITLE": "How do you want to use Super Productivity?",
+    "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
+    "FOOTER_HINT": "You can enable or disable individual features anytime in Settings > App Features.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Simple Todo List",
+        "DESCRIPTION": "A clean task manager with projects, tags, and notes. No extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Time Tracker",
+        "DESCRIPTION": "Track how long tasks take. Great for billing hours or understanding where your time goes."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Productivity Suite",
+        "DESCRIPTION": "Plan your day, build habits, focus deeply, and track your time — all in one place."
+      },
+      "EVERYTHING": {
+        "TITLE": "Everything",
+        "DESCRIPTION": "All features enabled including issue provider integrations. For power users who want it all."
+      }
+    }
+  },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {

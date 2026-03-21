@@ -75,6 +75,11 @@
 }
 <!-- -->
 
+@if (isShowOnboardingPresets()) {
+  <onboarding-preset-selection
+    (presetSelected)="onPresetSelected()"
+  ></onboarding-preset-selection>
+}
 @defer {
   <shepherd></shepherd>
 }

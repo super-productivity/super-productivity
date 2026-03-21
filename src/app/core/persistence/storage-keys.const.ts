@@ -34,6 +34,8 @@ export enum LS {
   // NOTE: key is different, but we keep it to avoid showing it again
   IS_SKIP_TOUR = 'SUP_IS_SHOW_TOUR',
 
+  ONBOARDING_PRESET_DONE = 'SUP_ONBOARDING_PRESET_DONE',
+
   LAST_FULLSCREEN_EDIT_VIEW_MODE = 'SUP_LAST_FULLSCREEN_EDIT_VIEW_MODE',
 
   WEB_APP_INSTALL = 'WEB_APP_INSTALL',

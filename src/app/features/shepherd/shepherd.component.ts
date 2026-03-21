@@ -20,6 +20,7 @@ export class ShepherdComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     if (
       !localStorage.getItem(LS.IS_SKIP_TOUR) &&
+      localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
       navigator.userAgent !== 'NIGHTWATCH' &&
       !navigator.userAgent.includes('PLAYWRIGHT')
     ) {

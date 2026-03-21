@@ -1,0 +1,19 @@
+<div class="onboarding-backdrop">
+  <div class="onboarding-container">
+    <h1>{{ 'ONBOARDING.TITLE' | translate }}</h1>
+    <p class="subtitle">{{ 'ONBOARDING.SUBTITLE' | translate }}</p>
+    <div class="presets-grid">
+      @for (preset of presets; track preset.id) {
+        <button
+          class="preset-card"
+          (click)="selectPreset(preset)"
+        >
+          <mat-icon>{{ preset.icon }}</mat-icon>
+          <h2>{{ preset.titleKey | translate }}</h2>
+          <p>{{ preset.descriptionKey | translate }}</p>
+        </button>
+      }
+    </div>
+    <p class="footer-hint">{{ 'ONBOARDING.FOOTER_HINT' | translate }}</p>
+  </div>
+</div>

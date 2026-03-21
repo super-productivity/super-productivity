@@ -11,6 +11,7 @@ import {
   inject,
   NgZone,
   OnDestroy,
+  signal,
   ViewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -66,6 +67,7 @@ import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bot
 import { StartupService } from './core/startup/startup.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
+import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -100,6 +102,7 @@ interface BeforeInstallPromptEvent extends Event {
     TranslatePipe,
     ContextMenuComponent,
     MobileBottomNavComponent,
+    OnboardingPresetSelectionComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {
@@ -164,6 +167,8 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.workContextService.activeWorkContext$,
     { initialValue: null },
   );
+
+  isShowOnboardingPresets = signal(!localStorage.getItem(LS.ONBOARDING_PRESET_DONE));
 
   private _subs: Subscription = new Subscription();
   private _intervalTimer?: NodeJS.Timeout;
@@ -361,6 +366,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
           });
         }
       });
+  }
+
+  onPresetSelected(): void {
+    this.isShowOnboardingPresets.set(false);
   }
 
   ngAfterViewInit(): void {
