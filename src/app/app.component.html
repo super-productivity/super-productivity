@@ -71,6 +71,14 @@
         (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
       ></mobile-bottom-nav>
     }
+
+    @if (contextualHintService.activeHint(); as hint) {
+      <contextual-hint
+        [hint]="hint"
+        (dismissed)="contextualHintService.dismiss()"
+        (actionClicked)="contextualHintService.handleAction()"
+      ></contextual-hint>
+    }
   </div>
 }
 <!-- -->

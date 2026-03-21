@@ -35,6 +35,7 @@ import { TrackingReminderService } from '../../features/tracking-reminder/tracki
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { alertDialog } from '../../util/native-dialogs';
 import { DataInitStateService } from '../data-init/data-init-state.service';
+import { ContextualHintService } from '../../features/contextual-hint/contextual-hint.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -63,6 +64,7 @@ export class StartupService {
   private _store = inject(Store);
   private _platformService = inject(CapacitorPlatformService);
   private _dataInitStateService = inject(DataInitStateService);
+  private _contextualHintService = inject(ContextualHintService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -108,8 +110,10 @@ export class StartupService {
       this._initOfflineBanner();
 
       const miscCfg = this._globalConfigService.misc();
+      let isProductivityTipShown = false;
       if (miscCfg?.isShowProductivityTipLonger && !this._isTourLikelyToBeShown()) {
         if (w.productivityTips && w.randomIndex !== undefined) {
+          isProductivityTipShown = true;
           this._snackService.open({
             ico: 'lightbulb',
             config: {
@@ -122,6 +126,12 @@ export class StartupService {
               w.productivityTips[w.randomIndex][1],
           });
         }
+      }
+
+      if (!this._isTourLikelyToBeShown() && !isProductivityTipShown) {
+        this._contextualHintService.evaluate().catch((e) => {
+          Log.warn('ContextualHintService: evaluate failed', e);
+        });
       }
 
       this._handleAppStartRating();

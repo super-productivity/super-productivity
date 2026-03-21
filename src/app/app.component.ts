@@ -66,6 +66,8 @@ import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bot
 import { StartupService } from './core/startup/startup.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
+import { ContextualHintComponent } from './features/contextual-hint/contextual-hint.component';
+import { ContextualHintService } from './features/contextual-hint/contextual-hint.service';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -100,6 +102,7 @@ interface BeforeInstallPromptEvent extends Event {
     TranslatePipe,
     ContextMenuComponent,
     MobileBottomNavComponent,
+    ContextualHintComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {
@@ -127,6 +130,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
   readonly shepherdService = inject(ShepherdService);
+  readonly contextualHintService = inject(ContextualHintService);
   readonly _store = inject(Store);
   readonly T = T;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;

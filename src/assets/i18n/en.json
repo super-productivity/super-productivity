@@ -2598,5 +2598,14 @@
     "WITHOUT_BREAK": "Without break:",
     "WORKING_TODAY": "Working today:",
     "WORKING_TODAY_ARCHIVED": "Time worked today on archived tasks"
+  },
+  "CONTEXTUAL_HINT": {
+    "SYNC_TITLE": "Keep your data safe",
+    "SYNC_MESSAGE": "Set up sync to back up your tasks and access them across devices.",
+    "SYNC_ACTION": "Set up sync",
+    "KEYBOARD_TITLE": "Speed up your workflow",
+    "KEYBOARD_MESSAGE": "Press Shift+A anywhere to quickly add a new task without reaching for the mouse.",
+    "KEYBOARD_ACTION": "Learn shortcuts",
+    "DISMISS": "Dismiss"
   }
 }
