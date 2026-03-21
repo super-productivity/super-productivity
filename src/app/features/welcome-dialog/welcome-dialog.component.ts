@@ -15,13 +15,59 @@ export type WelcomeDialogResult = 'addTask' | 'tour' | 'skip';
   standalone: true,
   imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatIcon],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: `
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: var(--s2) 0;
+    }
+
+    .feature-list li {
+      display: flex;
+      align-items: center;
+      gap: var(--s);
+      padding: var(--s-half) 0;
+    }
+
+    .feature-list mat-icon {
+      color: var(--palette-primary-500);
+      flex-shrink: 0;
+    }
+
+    .privacy-note {
+      color: var(--text-color-muted);
+      font-size: 13px;
+      margin-top: var(--s);
+    }
+  `,
   template: `
     <h1 mat-dialog-title>Welcome to Super Productivity!</h1>
 
     <mat-dialog-content>
-      <p>
-        A todo list &amp; time tracker that respects your privacy.
-        <strong>Your data stays on your device</strong> &mdash; no account required.
+      <p>Get organized and stay focused with:</p>
+
+      <ul class="feature-list">
+        <li>
+          <mat-icon>check_circle</mat-icon>
+          <span>Tasks &amp; subtasks with time estimates</span>
+        </li>
+        <li>
+          <mat-icon>timer</mat-icon>
+          <span>Built-in time tracking</span>
+        </li>
+        <li>
+          <mat-icon>event</mat-icon>
+          <span>Daily planner &amp; recurring tasks</span>
+        </li>
+        <li>
+          <mat-icon>integration_instructions</mat-icon>
+          <span>Jira, GitHub &amp; GitLab integration</span>
+        </li>
+      </ul>
+
+      <p class="privacy-note">
+        <mat-icon inline>lock</mat-icon>
+        Your data stays on your device &mdash; no account required.
       </p>
     </mat-dialog-content>
 

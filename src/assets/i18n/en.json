@@ -2592,6 +2592,7 @@
     "EMPTY_STATE_ADD_TASK": "Add a task",
     "EMPTY_STATE_FIRST_TIME": "Ready to get productive? Add your first task!",
     "NO_PLANNED_TASKS": "No tasks planned",
+    "SHORTCUT_HINT": "Tip: Press Shift+A anytime to quickly add a task",
     "READY_TO_WORK": "Ready to work!",
     "RECURRING_TASKS": "Recurring Tasks",
     "RESET_BREAK_TIMER": "Reset without break timer",

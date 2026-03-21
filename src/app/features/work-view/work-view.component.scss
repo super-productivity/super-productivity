@@ -245,6 +245,12 @@ finish-day-btn,
   }
 }
 
+.shortcut-hint {
+  color: var(--text-color-muted);
+  font-size: 13px;
+  margin-top: var(--s);
+}
+
 .add-scheduled {
   margin-top: var(--s);
 }
