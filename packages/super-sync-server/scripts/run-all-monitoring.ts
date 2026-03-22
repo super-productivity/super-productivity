@@ -45,6 +45,7 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
       name: 'Active Users',
       command: 'tsx scripts/monitor.ts active-users',
       description: 'Active user counts and recent activity',
+      skipInQuick: true,
     },
     {
       name: 'User Storage',
