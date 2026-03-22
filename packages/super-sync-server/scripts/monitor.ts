@@ -552,6 +552,35 @@ const showActiveUsers = async (): Promise<void> => {
       );
     }
 
+    // Engaged users: active on 3+ distinct days in the last 2 weeks with new ops
+    const twoWeeksAgo = BigInt(now - 14 * ONE_DAY);
+    const engagedUsers: any[] = await prisma.$queryRaw`
+      SELECT
+        u.id,
+        u.email,
+        COUNT(DISTINCT DATE(TO_TIMESTAMP(o.received_at / 1000))) as active_days,
+        COUNT(*) as ops_count
+      FROM users u
+      INNER JOIN operations o ON u.id = o.user_id
+      WHERE o.received_at > ${twoWeeksAgo}
+      GROUP BY u.id, u.email
+      HAVING COUNT(DISTINCT DATE(TO_TIMESTAMP(o.received_at / 1000))) >= 3
+      ORDER BY active_days DESC, ops_count DESC;
+    `;
+
+    console.log(`\n--- Engaged Users (3+ active days in last 2 weeks) ---`);
+    console.log(`Count: ${engagedUsers.length}`);
+    if (engagedUsers.length > 0) {
+      console.table(
+        engagedUsers.map((u) => ({
+          ID: u.id,
+          Email: u.email,
+          'Active Days': Number(u.active_days),
+          'Ops (2w)': Number(u.ops_count),
+        })),
+      );
+    }
+
     // Users who never synced
     const neverSynced: any[] = await prisma.$queryRaw`
       SELECT COUNT(*) as count
