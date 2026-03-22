@@ -23,6 +23,10 @@
   }
 
   ::ng-deep {
+    mat-calendar {
+      height: 400px;
+    }
+
     .mat-calendar-header {
       padding-top: 0;
     }
