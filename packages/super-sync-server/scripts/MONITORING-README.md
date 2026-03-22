@@ -34,6 +34,9 @@ npm run monitor:dev -- usage
 # View usage history/trends
 npm run monitor:dev -- usage-history --tail 20
 
+# Active user counts and recent activity
+npm run monitor:dev -- active-users
+
 # Recent operations analysis
 npm run monitor:dev -- ops --tail 100
 npm run monitor:dev -- ops --user 29

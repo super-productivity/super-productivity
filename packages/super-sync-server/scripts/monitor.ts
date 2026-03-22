@@ -461,6 +461,110 @@ const showOps = async (args: string[]): Promise<void> => {
   }
 };
 
+const showActiveUsers = async (): Promise<void> => {
+  console.log('\n--- Active Users Report ---');
+  try {
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+
+    // Total registered users
+    const totalUsers = await prisma.user.count();
+    const verifiedUsers = await prisma.user.count({ where: { isVerified: 1 } });
+
+    console.log(`\nTotal registered users: ${totalUsers}`);
+    console.log(`Verified users: ${verifiedUsers}`);
+
+    // Active users by time period (based on last device activity)
+    const periods = [
+      { label: 'Last 24 hours', ms: ONE_DAY },
+      { label: 'Last 7 days', ms: 7 * ONE_DAY },
+      { label: 'Last 30 days', ms: 30 * ONE_DAY },
+      { label: 'Last 90 days', ms: 90 * ONE_DAY },
+    ];
+
+    console.log('\n--- Active Users (by device activity) ---');
+    for (const period of periods) {
+      const threshold = BigInt(now - period.ms);
+      const activeDeviceUsers: any[] = await prisma.$queryRaw`
+        SELECT COUNT(DISTINCT user_id) as count
+        FROM sync_devices
+        WHERE last_seen_at > ${threshold};
+      `;
+      console.log(`  ${period.label}: ${Number(activeDeviceUsers[0]?.count ?? 0)} users`);
+    }
+
+    // Active users by sync activity (operations received)
+    console.log('\n--- Active Users (by sync operations) ---');
+    for (const period of periods) {
+      const threshold = BigInt(now - period.ms);
+      const activeSyncUsers: any[] = await prisma.$queryRaw`
+        SELECT COUNT(DISTINCT user_id) as count
+        FROM operations
+        WHERE received_at > ${threshold};
+      `;
+      console.log(`  ${period.label}: ${Number(activeSyncUsers[0]?.count ?? 0)} users`);
+    }
+
+    // New users by time period
+    console.log('\n--- New Registrations ---');
+    const regPeriods = [
+      { label: 'Last 24 hours', ms: ONE_DAY },
+      { label: 'Last 7 days', ms: 7 * ONE_DAY },
+      { label: 'Last 30 days', ms: 30 * ONE_DAY },
+    ];
+    for (const period of regPeriods) {
+      const since = new Date(now - period.ms);
+      const count = await prisma.user.count({
+        where: { createdAt: { gte: since } },
+      });
+      console.log(`  ${period.label}: ${count} new users`);
+    }
+
+    // Recently active users table (last 7 days)
+    const sevenDaysAgo = BigInt(now - 7 * ONE_DAY);
+    const recentUsers: any[] = await prisma.$queryRaw`
+      SELECT
+        u.id,
+        u.email,
+        u.created_at,
+        MAX(d.last_seen_at) as last_active,
+        COUNT(DISTINCT d.client_id) as device_count,
+        COALESCE((SELECT COUNT(*) FROM operations o WHERE o.user_id = u.id AND o.received_at > ${sevenDaysAgo}), 0) as ops_7d
+      FROM users u
+      INNER JOIN sync_devices d ON u.id = d.user_id
+      WHERE d.last_seen_at > ${sevenDaysAgo}
+      GROUP BY u.id, u.email, u.created_at
+      ORDER BY last_active DESC
+      LIMIT 30;
+    `;
+
+    if (recentUsers.length > 0) {
+      console.log('\n--- Recently Active Users (last 7 days) ---');
+      console.table(
+        recentUsers.map((u) => ({
+          ID: u.id,
+          Email: u.email,
+          Devices: Number(u.device_count),
+          'Ops (7d)': Number(u.ops_7d),
+          'Last Active': new Date(Number(u.last_active)).toLocaleString(),
+          Registered: new Date(u.created_at).toLocaleDateString(),
+        })),
+      );
+    }
+
+    // Users who never synced
+    const neverSynced: any[] = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM users u
+      LEFT JOIN sync_devices d ON u.id = d.user_id
+      WHERE d.user_id IS NULL;
+    `;
+    console.log(`\nUsers who never synced: ${Number(neverSynced[0]?.count ?? 0)}`);
+  } catch (error) {
+    console.error('Error fetching active users:', error);
+  }
+};
+
 const main = async (): Promise<void> => {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -482,6 +586,9 @@ const main = async (): Promise<void> => {
       case 'ops':
         await showOps(args);
         break;
+      case 'active-users':
+        await showActiveUsers();
+        break;
       default:
         console.log('SuperSync Monitor CLI');
         console.log('Usage: npm run monitor -- <command> [flags]');
@@ -490,6 +597,7 @@ const main = async (): Promise<void> => {
         console.log('  usage          Show top 20 users by storage (saves snapshot)');
         console.log('  usage-history  Show usage over time');
         console.log('    --tail <n>     Show last n snapshots (default 10)');
+        console.log('  active-users   Show active user counts and recent activity');
         console.log('  logs           Show server logs');
         console.log('    --tail <n>     Show last n lines (default 100)');
         console.log('    --search "s"   Filter logs by term');

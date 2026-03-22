@@ -42,6 +42,11 @@ const getMonitoringCommands = (userId?: number): MonitoringCommand[] => {
       description: 'System vitals, DB connection, disk space',
     },
     {
+      name: 'Active Users',
+      command: 'tsx scripts/monitor.ts active-users',
+      description: 'Active user counts and recent activity',
+    },
+    {
       name: 'User Storage',
       command: 'tsx scripts/monitor.ts usage',
       description: 'Top 20 users by storage usage',
