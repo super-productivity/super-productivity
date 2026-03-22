@@ -397,7 +397,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           },
         })
         .afterClosed()
-        .pipe(takeUntil(this._destroy$))
         .subscribe(async (isConfirm) => {
           if (isConfirm) {
             await this._performDelete();
