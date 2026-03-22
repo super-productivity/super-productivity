@@ -1,45 +1,45 @@
 {
   "APP": {
     "B_INSTALL": {
-      "IGNORE": "Ignore",
-      "INSTALL": "Install",
-      "MSG": "Do you want to install Super Productivity as a PWA (Progressive Web App)?"
+      "IGNORE": "Ignoră",
+      "INSTALL": "Instalează",
+      "MSG": "Vrei să instalezi Super Productivity ca PWA (Progressive Web App)?"
     },
-    "B_OFFLINE": "You are disconnected from the internet. Syncing and requesting issue provider data will not work.",
+    "B_OFFLINE": "Ești deconectat de la internet. Sincronizarea și solicitarea datelor furnizorului de probleme nu vor funcționa.",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Change Background"
+      "CHANGE_BACKGROUND": "Schimbă fundalul"
     },
-    "SKIP_SYNC_WAIT": "Skip waiting for sync",
-    "UPDATE_WEB_APP": "New version available. Load new version?"
+    "SKIP_SYNC_WAIT": "Omite așteptarea sincronizării",
+    "UPDATE_WEB_APP": "O nouă versiune este disponibilă. Încarci noua versiune?"
   },
   "BL": {
-    "NO_TASKS": "There are currently no tasks in your backlog"
+    "NO_TASKS": "Momentan nu există sarcini restante"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "Issue Provider Panel",
-    "SHOW_NOTES": "Project Notes"
+    "SHOW_ISSUE_PANEL": "Panou furnizor de probleme",
+    "SHOW_NOTES": "Notițe proiect"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Your data seems to be damaged (\"{{validityError}}\"). Do you want to try to automatically fix it? This may result in partial data loss.",
-    "RELOAD_AFTER_IDB_ERROR": "Database Error - App Will Restart\n\nSuper Productivity cannot save data! This is usually caused by:\n• Low disk space (most common)\n• App update in background\n• Linux Snap users: run 'snap set core experimental.refresh-app-awareness=true'\n\nYour recent changes may not have been saved. Please free up disk space if low. The app will restart after you close this dialog.",
-    "RESTORE_FILE_BACKUP": "There seems to be NO DATA, but there are backups available at \"{{dir}}\". Do you want to restore the latest backup from {{from}}?",
-    "RESTORE_FILE_BACKUP_ANDROID": "There seems to be NO DATA, but there is a backup available. Do you want to load it?",
-    "RESTORE_STRAY_BACKUP": "During the last sync there may have been an error. Do you want to restore the last backup?"
+    "AUTO_FIX": "Datele tare par să fie corupte (\"{{validityError}}\"). Dorești să încerci să le repari automat? Acest lucru poate rezulta în pierderi de date parțiale.",
+    "RELOAD_AFTER_IDB_ERROR": "Eroare bază de date - Aplicația se va reporni\n\nSuper Productivity nu poate salva datele! Acest lucru este de obiecei cauzat de:\n• Spațiu insuficient pe disc (cel mai frecvent)\n• Actualizare de aplicație în fundal\n• Pentru utilizatorii variantei Snap pe Linux: rulează 'snap set core experimental.refresh-app-awareness=true'\n\nSchimbările tale recente ar putea să nu fie salvate. Te rog eliberează spațiu pe disc dacă nu este suficient disponibil. Aplicația se va reporni după ce închizi acest dialog.",
+    "RESTORE_FILE_BACKUP": "Se pare că NU există DATE, dar există backup-uri disponibile la \"{{dir}}\". Vrei să restaurezi ultimul backup din {{from}}?",
+    "RESTORE_FILE_BACKUP_ANDROID": "Se pare că NU există DATE, dar există un backup disponibil. Vrei să îl restaurezi?",
+    "RESTORE_STRAY_BACKUP": "În timpul ultimei sincronizări este posibil să fi apărut o eroare. Vrei să restaurezi ultimul backup?"
   },
   "DATETIME_SCHEDULE": {
-    "PRESS_ENTER_AGAIN": "Press enter again to save"
+    "PRESS_ENTER_AGAIN": "Apasă enter din nou pentru a salva"
   },
   "DIALOG_UNSPLASH_PICKER": {
-    "BY": "by",
-    "NO_RESULTS": "No images found. Please try a different search term.",
-    "SEARCH_LABEL": "Search images",
-    "SEARCH_PLACEHOLDER": "e.g. nature, mountains, abstract",
-    "TITLE": "Select Background Image from Unsplash"
+    "BY": "după",
+    "NO_RESULTS": "Nicio imagine găsită. Te rog încearcă un alt termen de căutare.",
+    "SEARCH_LABEL": "Caută imagini",
+    "SEARCH_PLACEHOLDER": "ex: natură, munți, abstract",
+    "TITLE": "Alege o imagine de fundal din Unsplash"
   },
   "DONATE_PAGE": {
-    "BUTTON_TEXT": "Donate via GitHub Sponsors",
-    "INTRO_1": "Super Productivity is funded entirely by the community. There is no tracking, no ads, and no data collection — your tasks stay on your device.",
-    "INTRO_2": "If you value this approach and want to keep the project healthy and evolving, a voluntary donation is greatly appreciated."
+    "BUTTON_TEXT": "Donează prin Sponsori GitHub",
+    "INTRO_1": "Super Productivity este finanțat în întregime de comunitatea. Nu există urmărire, nici reclame, nici colectare de date — sarcinile rămîn pe dispozitivul tău.",
+    "INTRO_2": "Dacă apreciezi această abordare și vrei să păstrezi proiectul sănătos și în evoluție, o donație voluntară este apreciată."
   },
   "EXAMPLE_TASKS": {
     "LEARN_KEYBOARD_SHORTCUTS": {
@@ -62,66 +62,67 @@
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
-        "ADD_ATTACHMENT": "Add Attachment",
-        "EDIT_ATTACHMENT": "Edit Attachment",
+        "ADD_ATTACHMENT": "Adaugă atașament",
+        "EDIT_ATTACHMENT": "Editează atașament",
         "LABELS": {
-          "IMG": "Image",
+          "IMG": "Imagine",
           "LINK": "URL"
         },
-        "SELECT_TYPE": "Select a type",
+        "SELECT_TYPE": "Alege un tip",
         "TYPES": {
-          "FILE": "File (opened by default system app)",
-          "IMG": "Image (shown as thumbnail)",
-          "LINK": "Link (opens in web browser)"
+          "FILE": "Fișier (deschis de aplicația implicită de sistem)",
+          "IMG": "Imagine (afișată ca miniatură)",
+          "LINK": "Legătură (deschisă în navigatorul web)"
         }
       }
     },
     "BOARDS": {
       "DEFAULT": {
-        "DONE": "Done",
-        "EISENHAUER_MATRIX": "Eisenhower Matrix",
-        "IN_PROGRESS": "In Progress",
+        "DONE": "Realizat",
+        "EISENHAUER_MATRIX": "Matrice Eisenhower",
+        "IN_PROGRESS": "În curs",
         "KANBAN": "Kanban",
-        "NOT_URGENT_IMPORTANT": "Not Urgent & Important",
-        "NOT_URGENT_NOT_IMPORTANT": "Not Urgent & Not Important",
-        "TO_DO": "To Do",
-        "URGENT": "Urgent",
-        "URGENT_IMPORTANT": "Urgent & Important",
-        "URGENT_NOT_IMPORTANT": "Urgent & Not Important"
+        "NOT_URGENT_IMPORTANT": "Importante, dar nu urgente",
+        "NOT_URGENT_NOT_IMPORTANT": "Nici urgente, nici importante",
+        "TO_DO": "De făcut",
+        "URGENT": "Urgente",
+        "URGENT_IMPORTANT": "Urgente și importante",
+        "URGENT_NOT_IMPORTANT": "Urgente, dar neimportante"
       },
       "FORM": {
-        "ADD_NEW_PANEL": "Add new Panel",
-        "BACKLOG_TASK_FILTER_ALL": "All",
+        "ADD_NEW_PANEL": "Adaugă un nou panou",
+        "BACKLOG_TASK_FILTER_ALL": "Toate",
         "BACKLOG_TASK_FILTER_NO_BACKLOG": "Exclude",
-        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Backlog only",
-        "BACKLOG_TASK_FILTER_TYPE": "Backlog tasks",
-        "COLUMNS": "Columns",
-        "TAGS_EXCLUDED": "Excluded Tags",
-        "TAGS_REQUIRED": "Required Tags",
-        "TASK_DONE_STATE": "Task Completion State",
-        "TASK_DONE_STATE_ALL": "All",
-        "TASK_DONE_STATE_DONE": "Completed",
-        "TASK_DONE_STATE_UNDONE": "Not Completed"
+        "BACKLOG_TASK_FILTER_ONLY_BACKLOG": "Doar restante",
+        "BACKLOG_TASK_FILTER_TYPE": "Sarcini restante",
+        "COLUMNS": "Coloane",
+        "TAGS_EXCLUDED": "Etichete excluse",
+        "TAGS_REQUIRED": "Etichete obligatorii",
+        "TASK_DONE_STATE": "Stare terminare sarcină",
+        "TASK_DONE_STATE_ALL": "Toate",
+        "TASK_DONE_STATE_DONE": "Terminate",
+        "TASK_DONE_STATE_UNDONE": "Neterminate"
       },
       "V": {
-        "ADD_NEW_BOARD": "Add new board",
-        "CONFIRM_DELETE": "Are you sure you want to delete this board?",
-        "CREATE_NEW_TAGS_BTN": "Create Tags",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} new tags needs to be created for this board to work",
-        "CREATE_NEW_TAG_BTN": "Create Tag",
-        "CREATE_NEW_TAG_MSG": "1 new tag needs to be created for this board to work",
-        "EDIT_BOARD": "Edit board",
-        "NO_PANELS_BTN": "Configure Board",
-        "NO_PANELS_MSG": "This board has no panels configured. Add some panels to it."
+        "ADD_NEW_BOARD": "Adaugă o nouă tablă",
+        "CONFIRM_DELETE": "Ești sigur că vrei să ștergi această tablă?",
+        "CREATE_NEW_TAGS_BTN": "Creează etichete",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} noi etichete trebuie create pentru ca această tablă să funcționeze",
+        "CREATE_NEW_TAG_BTN": "Creează etichetă",
+        "CREATE_NEW_TAG_MSG": "O nouă etichetă trebuie creată pentru ca această tablă să funcționeze",
+        "EDIT_BOARD": "Editează tablă",
+        "NO_PANELS_BTN": "Configurează tabla",
+        "NO_PANELS_MSG": "Această tablă nu are panouri configurate. Adaugă cîteva panouri."
+
       }
     },
     "CALDAV": {
       "FORM": {
-        "CALDAV_CATEGORY_FILTER": "Category to filter issues for (leave empty for none)",
-        "CALDAV_PASSWORD": "Your CalDAV password",
-        "CALDAV_RESOURCE": "The name of the CalDAV resource (the calendar)",
-        "CALDAV_URL": "CalDAV URL (the base URL)",
-        "CALDAV_USER": "Your CalDAV username",
+        "CALDAV_CATEGORY_FILTER": "Categoria după care se filtrează problemele (lasă gol pentru niciuna)",
+        "CALDAV_PASSWORD": "Parola ta CalDAV",
+        "CALDAV_RESOURCE": "Numele resursei CalDAV (calendarul)",
+        "CALDAV_URL": "URL CalDAV (URL-ul de bază)",
+        "CALDAV_USER": "Numele tău de utilizator CalDAV",
         "TWO_WAY_SYNC_BOTH": "Ambele (bidirecțional)",
         "TWO_WAY_SYNC_NOTES": "Direcție sincronizare note / descriere",
         "TWO_WAY_SYNC_OFF": "Dezactivat",
@@ -132,34 +133,34 @@
         "TWO_WAY_SYNC_TITLE": "Direcție sincronizare titlu"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list uncompleted CalDAV tasks for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the task as well as more information about it.</p> <p>In addition, you can automatically add and sync all uncompleted tasks to your task backlog.</p><p>To make it work for Nextcloud in the webapp, you may need to allow \"https://app.super-productivity.com\" in the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
+        "HELP": "<p>Aici poți configura Super Productivity pentru a lista sarcinile CalDAV neterminate pentru un anumit proiect în panoul de creare a sarcinilor din vizualizarea planificării zilnice. Acestea vor fi listate ca sugestii și vor oferi o legătură către sarcină, precum și mai multe informații despre aceasta.</p><p>În plus, poți adăuga automat și sincroniza toate sarcinile neterminate în lista ta de sarcini restante.</p><p>Pentru a funcționa cu Nextcloud în aplicația web, este posibil să fie nevoie să oferi permisiune pentru \"https://app.super-productivity.com\" în aplicația Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
       },
       "ISSUE_CONTENT": {
-        "DESCRIPTION": "Description",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Mark as checked",
-        "STATUS": "Status",
-        "SUMMARY": "Summary"
+        "DESCRIPTION": "Descriere",
+        "LABELS": "Etichete",
+        "MARK_AS_CHECKED": "Marchează ca terminată",
+        "STATUS": "Stare",
+        "SUMMARY": "Sumar"
       },
       "S": {
-        "CALENDAR_NOT_FOUND": "CalDAV: Calendar \"{{calendarName}}\" not found",
-        "CALENDAR_READ_ONLY": "CalDAV: Calendar \"{{calendarName}}\" is readonly",
-        "ISSUE_NOT_FOUND": "CalDAV: Task \"{{issueId}}\" seems to be deleted on server."
+        "CALENDAR_NOT_FOUND": "CalDAV: Calendarul \"{{calendarName}}\" nu a fost găsit",
+        "CALENDAR_READ_ONLY": "CalDAV: Calendarul \"{{calendarName}}\" este doar pentru citire",
+        "ISSUE_NOT_FOUND": "CalDAV: Sarcina \"{{issueId}}\" pare a fi ștearsă pe server."
       }
     },
     "NEXTCLOUD_DECK": {
       "FORM": {
         "BASE_URL": "URL de bază Nextcloud",
-        "USERNAME": "Numele dvs. de utilizator Nextcloud",
-        "PASSWORD": "Parola dvs. de aplicație Nextcloud",
+        "USERNAME": "Numele tău de utilizator Nextcloud",
+        "PASSWORD": "Parola ta Nextcloud",
         "FILTER_BY_ASSIGNEE": "Importă doar cardurile atribuite mie",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizează starea de finalizare și titlul înapoi în Nextcloud Deck",
-        "POLL_INTERVAL_MINUTES": "Interval de interogare (minute)",
+        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizează starea de terminare și titlul înapoi pe Nextcloud Deck",
+        "POLL_INTERVAL_MINUTES": "Interval de verificare (minute)",
         "TITLE_TEMPLATE": "Șablon titlu sarcină",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variabile: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplu: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lăsați gol pentru doar titlul cardului."
+        "TITLE_TEMPLATE_DESCRIPTION": "Variabile: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplu: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lasă gol pentru numai titlul cardului."
       },
       "FORM_SECTION": {
-        "HELP": "Configurați integrarea Nextcloud Deck pentru a importa carduri ca sarcini. Utilizați o parolă de aplicație pentru autentificare."
+        "HELP": "Configurează integrarea Nextcloud Deck pentru a importa carduri ca sarcini. Folosește o parolă de aplicație pentru autentificare."
       },
       "ISSUE_CONTENT": {
         "DECK_DESCRIPTION": "Descriere Deck",
@@ -168,154 +169,154 @@
         "LABELS": "Etichete"
       },
       "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Tablou negăsit",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Cardul \"{{issueId}}\" pare să fi fost șters de pe server.",
-        "ERR_CREDENTIALS_MISSING": "Introduceți mai întâi URL-ul Nextcloud, numele de utilizator și parola.",
-        "ERR_LOAD_BOARDS": "Încărcarea tablourilor Deck a eșuat. Verificați credențialele."
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Tabla nu a fost găsită",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Cardul \"{{issueId}}\" pare a fi șters pe server.",
+        "ERR_CREDENTIALS_MISSING": "Întrodu URL-ul Nextcloud, numele de utilizator și parola mai întîi.",
+        "ERR_LOAD_BOARDS": "Nu s-au putut încărca tablele Deck. Verifică datele de autentificare."
       }
     },
     "CALENDARS": {
       "BANNER": {
-        "ADD_AS_TASK": "Add as Task",
-        "SHOW_TASK": "Show Task",
-        "TXT": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!",
+        "ADD_AS_TASK": "Adaugă ca sarcină",
+        "SHOW_TASK": "Arată sarcina",
+        "TXT": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> starts at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other events are due)",
-          "ONE": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este programat)"
+          "OTHER": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sînt restante)",
+          "ONE": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sînt restante)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> started at <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> started at <strong>{{start}}</strong>!<br> (and {{nrOfOtherBanners}} other events are due)",
-          "ONE": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este programat)"
+          "OTHER": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sînt restante)",
+          "ONE": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este restante)"
         }
       },
       "EVENT_STRINGS": {
-        "EVENTS_STR": "events",
-        "EVENT_STR": "event"
+        "EVENTS_STR": "evenimente",
+        "EVENT_STR": "eveniment"
       },
       "S": {
-        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Eroare furnizor calendar: {{errTxt}}"
       }
     },
     "CONFIG": {
       "S": {
-        "UPDATE_SECTION": "Updated settings for <strong>{{sectionKey}}</strong>"
+        "UPDATE_SECTION": "Setările au fost actualizate pentru <strong>{{sectionKey}}</strong>"
       }
     },
     "VOICE_REMINDER": {
       "FORM": {
-        "HELP": "Repeats the configured phrase every X when tracking time for a task.",
-        "L_INTERVAL": "Interval to repeat phrase",
+        "HELP": "Repetă fraza configurată la fiecare X cînd se urmărește timpul pentru o sarcină.",
+        "L_INTERVAL": "Intervalul de repetare a frazei",
         "L_TEXT": "Text",
-        "L_TEXT_DESCRIPTION": "e.g. \"Work on ${currentTaskTitle}!\"",
-        "L_VOICE": "Select a voice",
-        "L_VOICE_DESCRIPTION": "Choose a voice",
-        "TITLE": "Voice Reminder"
+        "L_TEXT_DESCRIPTION": "ex: \"Lucrează la ${currentTaskTitle}!\"",
+        "L_VOICE": "Alege o voce",
+        "L_VOICE_DESCRIPTION": "Alege o voce",
+        "TITLE": "Memento vocal"
       }
     },
     "DROPBOX": {
       "S": {
-        "OFFLINE": "Dropbox: Unable to sync because offline",
-        "SYNC_ERROR": "Dropbox: Error while syncing",
-        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Dropbox sync requires a secure connection (HTTPS). Please ensure you're using the app over HTTPS or try the stable version."
+        "OFFLINE": "Dropbox: Nu se poate sincroniza pentru că e offline",
+        "SYNC_ERROR": "Dropbox: Eroare la sincronizare",
+        "UNABLE_TO_GENERATE_PKCE_CHALLENGE": "Sincronizarea cu Dropbox necesită o conexiune sigură (HTTPS). Asigură-te că folosești aplicația prin HTTPS sau încearcă versiunea stabilă."
       }
     },
     "D_RATE": {
-      "A_HOW": "How and where to rate",
-      "BTN_DONT_BOTHER": "Don't bother me again",
-      "TITLE": "🙈 Please forgive us, but...",
-      "TXT": "You will help the project immensely by <strong>giving it a good rating, if you like it!</strong>"
+      "A_HOW": "Cum și unde să acorzi o notă",
+      "BTN_DONT_BOTHER": "Nu mă mai deranja din nou",
+      "TITLE": "🙈 Te rog iartă-ne, dar...",
+      "TXT": "Vei ajuta proiectul enorm de mult dacă îi <strong>acorzi o notă bună, dacă îți place!</strong>"
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "There are {{nr}} completed tasks in your Today list not yet moved to the archive. Are you sure you want to quit without finishing your day?"
+        "FINISH_DAY_BEFORE_EXIT": "Sînt {{nr}} sarcini terminate în lista ta de astăzi care nu au fost mutate încă în arhivă. Ești sigur că vrei să părăsești aplicația fără a-ți încheia ziua?"
       }
     },
     "FOCUS_MODE": {
-      "ADD_TIME_MINUTE": "Add 1 minute",
+      "ADD_TIME_MINUTE": "Adaugă 1 minut",
       "B": {
-        "BREAK_RUNNING": "Break is running",
-        "END_FOCUS_SESSION": "End focus session",
-        "END_SESSION": "End session",
-        "PAUSE": "Pause",
-        "POMODORO_BREAK_RUNNING": "Break #{{cycleNr}} is running",
-        "POMODORO_SESSION_RUNNING": "Pomodoro session #{{cycleNr}} is running",
-        "RESUME": "Resume",
-        "SESSION_RUNNING": "Focus session is running",
-        "START": "Start",
-        "TO_FOCUS_OVERLAY": "To focus overlay"
+        "BREAK_RUNNING": "Pauza este activă",
+        "END_FOCUS_SESSION": "Încheie sesiunea de concentrare",
+        "END_SESSION": "Încheie sesiunea",
+        "PAUSE": "Pauză",
+        "POMODORO_BREAK_RUNNING": "Pauza #{{cycleNr}} este activă",
+        "POMODORO_SESSION_RUNNING": "Sesiunea Pomodoro #{{cycleNr}} este activă",
+        "RESUME": "Reia",
+        "SESSION_RUNNING": "Sesiunea de concentrare este activă",
+        "START": "Începe",
+        "TO_FOCUS_OVERLAY": "La overlay-ul de concentrare"
       },
-      "BACK_TO_PLANNING": "Back to Planning",
-      "BREAK_RELAX_MSG": "Take a moment to relax",
-      "CLICK_TO_EDIT_DURATION": "Click to edit duration",
-      "COMPLETE_FOCUS_SESSION": "Complete focus session",
-      "CONTINUE_TO_NEXT_SESSION": "Continue to next session",
-      "COUNTDOWN": "Countdown",
-      "COUNTDOWN_HINT": "Focus until the clock hits zero",
-      "FINISH_TASK_AND_SELECT_NEXT": "Finish task and select next",
+      "BACK_TO_PLANNING": "Înapoi la planificare",
+      "BREAK_RELAX_MSG": "Ia un moment pentru a te relaxa",
+      "CLICK_TO_EDIT_DURATION": "Clic pentru a edita durata",
+      "COMPLETE_FOCUS_SESSION": "Încheie sesiunea de concentrare",
+      "CONTINUE_TO_NEXT_SESSION": "Continuă la următoarea sesiune",
+      "COUNTDOWN": "Numărătoare inversă",
+      "COUNTDOWN_HINT": "Concentrează-te pînă cînd ceasul ajunge la zero",
+      "FINISH_TASK_AND_SELECT_NEXT": "Termină sarcina și alege-o pe următoarea",
       "FLOWTIME": "Flowtime",
-      "FLOWTIME_HINT": "Flexible pacing without strict timers",
-      "FOCUS_TIME_TOOLTIP": "Focus time",
-      "GET_READY": "Get ready for your focus session!",
-      "GOGOGO": "Go, go, go!!!",
-      "GO_TO_PROCRASTINATION": "Get help when procrastinating",
-      "LONG_BREAK": "Long Break",
-      "LONG_BREAK_TITLE": "Long Break - Cycle {{cycle}}",
-      "ON": "on",
-      "OPEN_ISSUE_IN_BROWSER": "Open issue in web browser",
-      "PAUSE_BREAK": "Pause break",
-      "PAUSE_SESSION": "Pause session",
-      "PAUSE_TRACKING": "Pause tracking",
-      "PAUSE_TRACKING_FOR_CURRENT_TASK": "Pause tracking for current task",
+      "FLOWTIME_HINT": "Ritm flexibil, fără temporizare strictă",
+      "FOCUS_TIME_TOOLTIP": "Timp de concentrare",
+      "GET_READY": "Pregătește-te pentru sesiunea de concentrare!",
+      "GOGOGO": "Dă-i, dă-i, dă-i!!!",
+      "GO_TO_PROCRASTINATION": "Obține ajutor cînd amîni sarcinile",
+      "LONG_BREAK": "Pauză lungă",
+      "LONG_BREAK_TITLE": "Pauză lungă - Ciclu {{cycle}}",
+      "ON": "activat",
+      "OPEN_ISSUE_IN_BROWSER": "Deschide problema în navigatorul web",
+      "PAUSE_BREAK": "Întremînă pauza",
+      "PAUSE_SESSION": "Întrerupe sesiunea",
+      "PAUSE_TRACKING": "Întrerupe urmărirea",
+      "PAUSE_TRACKING_FOR_CURRENT_TASK": "Întrerupe urmărirea pentru sarcina curentă",
       "POMODORO": "Pomodoro",
-      "POMODORO_HINT": "Structured sprints with planned breaks",
-      "POMODORO_SESSION_COMPLETED": "Pomodoro session completed!",
-      "POMODORO_SETTINGS": "Pomodoro settings",
-      "PREP_GET_MENTALLY_READY": "Get mentally ready to be focused and productive",
-      "PREP_SIT_UPRIGHT": "Sit (or stand) upright",
-      "PREP_STRETCH": "Enjoy some mild stretching",
-      "REMOVE_TIME_MINUTE": "Remove 1 minute",
-      "RESUME_BREAK": "Resume break",
-      "RESUME_SESSION": "Resume session",
-      "SELECT_MODE": "Choose your focus mode",
-      "SELECT_TASK": "Select task to focus on",
-      "SELECT_TASK_FIRST": "Select a task first to start tracking",
-      "SELECT_TASK_TO_FOCUS": "Select task to focus",
-      "SESSION_COMPLETED": "Focus session completed!",
-      "SHORT_BREAK": "Short break",
-      "SHORT_BREAK_TITLE": "Short break - cycle {{cycle}}",
-      "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Show/hide task notes and attachments",
-      "SKIP_BREAK": "Skip break",
-      "START_BREAK": "Start break",
-      "START_FOCUS_SESSION": "Start focus session",
-      "START_NEXT_FOCUS_SESSION": "Start next focus session",
-      "SWITCH_TASK": "Switch task",
-      "WORKED_FOR": "You worked for",
+      "POMODORO_HINT": "Sprinturi structurate cu pauze planificate",
+      "POMODORO_SESSION_COMPLETED": "Sesiunea Pomodoro s-a încheiat!",
+      "POMODORO_SETTINGS": "Setări Pomodoro",
+      "PREP_GET_MENTALLY_READY": "Pregătește-te mental să fii concentrat și productiv",
+      "PREP_SIT_UPRIGHT": "Stai drept (sau stai în picioare)",
+      "PREP_STRETCH": "Bucură-te de un pic de întindere blîndă",
+      "REMOVE_TIME_MINUTE": "Elimină 1 minut",
+      "RESUME_BREAK": "Reia pauza",
+      "RESUME_SESSION": "Reia sesiunea",
+      "SELECT_MODE": "Alege modul de concentrare",
+      "SELECT_TASK": "Alege sarcina pe care vrei să te concentrezi",
+      "SELECT_TASK_FIRST": "Alege o sarcină mai întîi pentru a începe urmărirea",
+      "SELECT_TASK_TO_FOCUS": "Alege sarcina pe care vrei să te concentrezi",
+      "SESSION_COMPLETED": "Sesiunea de concentrare s-a încheiat!",
+      "SHORT_BREAK": "Pauză scurtă",
+      "SHORT_BREAK_TITLE": "Pauză scurtă - ciclu {{cycle}}",
+      "SHOW_HIDE_NOTES_AND_ATTACHMENTS": "Afișează/ascunde notițele și atașamentele sarcinii",
+      "SKIP_BREAK": "Sari peste pauză",
+      "START_BREAK": "Începe pauza",
+      "START_FOCUS_SESSION": "Începe sesiunea de concentrare",
+      "START_NEXT_FOCUS_SESSION": "Începe următoarea sesiune de concentrare",
+      "SWITCH_TASK": "Schimbă sarcina",
+      "WORKED_FOR": "Ai lucrat pentru",
       "RESET_CYCLES": "Resetează contorul de sesiuni"
     },
     "GITEA": {
       "FORM": {
-        "HOST": "Host (e.g. https://try.gitea.io)",
-        "REPO_FULL_NAME": "Username or Organization name/project",
-        "REPO_FULL_NAME_DESCRIPTION": "Can be found as part of the URL when viewing the project in a web browser.",
-        "SCOPE": "Scope",
-        "SCOPE_ALL": "All",
-        "SCOPE_ASSIGNED": "Assigned to me",
-        "SCOPE_CREATED": "Created by me",
-        "TOKEN": "Access Token"
+        "HOST": "Gazdă (ex: https://try.gitea.io)",
+        "REPO_FULL_NAME": "Nume utilizator sau nume organizație/proiect",
+        "REPO_FULL_NAME_DESCRIPTION": "Poate fi găsit ca parte a URL-ului cînd vizualizezi proiectul într-un navigator web.",
+        "SCOPE": "Domeniu de aplicare",
+        "SCOPE_ALL": "Toate",
+        "SCOPE_ASSIGNED": "Atribuite mie",
+        "SCOPE_CREATED": "Create de mine",
+        "TOKEN": "Jeton de acces"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open Gitea issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and import all open issues.</p><p>To get by usage limits and to access you can provide a an access token."
+        "HELP": "<p>Aici poți configura Super Productivity pentru a lista problemele deschise pe Gitea pentru un repository specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți adăuga și importa automat toate problemele deschise.</p><p>Pentru a fenta limitele de utilizare și acces, poți folosi un jeton de acces."
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "DESCRIPTION": "Description",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PROJECT": "Project",
-        "STATUS": "Status",
-        "SUMMARY": "Summary",
-        "WRITE_A_COMMENT": "Write a comment"
+        "ASSIGNEE": "Asignat lui",
+        "DESCRIPTION": "Descriere",
+        "LABELS": "Etichete",
+        "MARK_AS_CHECKED": "Marchează actualizările ca bifate",
+        "PROJECT": "Proiect",
+        "STATUS": "Stare",
+        "SUMMARY": "Sumar",
+        "WRITE_A_COMMENT": "Scrie un comentariu"
       }
     },
     "GITLAB": {
@@ -347,18 +348,18 @@
         "TOKEN": "Access Token"
       },
       "FORM_SECTION": {
-        "HELP": "<p>Here you can configure Super Productivity to list open GitLab (either its the online version or a self-hosted instance) issues for a specific project in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically import all open issues.</p>"
+        "HELP": "<p>Aici poți configura Super Productivity pentru a lista problemele deschise pe GitLab (fie că este versiunea online sau o instanță self-hosted) pentru un proiect specific în panoul de creare a sarcinilor în modul de planificare zilnic. Acestea vor fi listate ca sugestii și vor conține o legătură către problemă și mai multe informații despre acesta.</p> <p>În plus, poți importa automat toate problemele deschise.</p>"
       },
       "ISSUE_CONTENT": {
-        "ASSIGNEE": "Assignee",
-        "AT": "at",
-        "DESCRIPTION": "Description",
-        "LABELS": "Labels",
-        "MARK_AS_CHECKED": "Mark updates as checked",
-        "PROJECT": "Project",
-        "STATUS": "Status",
-        "SUMMARY": "Summary",
-        "WRITE_A_COMMENT": "Write a comment"
+        "ASSIGNEE": "Asignat lui",
+        "AT": "la",
+        "DESCRIPTION": "Descriere",
+        "LABELS": "Etichete",
+        "MARK_AS_CHECKED": "Marchează actualizările ca bifate",
+        "PROJECT": "Proiect",
+        "STATUS": "Stare",
+        "SUMMARY": "Sumar",
+        "WRITE_A_COMMENT": "Scrie un comentariu"
       },
       "S": {
         "ERR_UNKNOWN": "GitLab: Unknown error {{statusCode}} {{errorMsg}}"
@@ -422,7 +423,7 @@
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Creează automat probleme pentru sarcini noi",
-        "AUTO_CREATE_ISSUES_DESCRIPTION": "Creează automat o problemă când adăugați o sarcină nouă de nivel superior la proiectul implicit. Necesită un proiect implicit setat.",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Creează automat o problemă cînd adăugați o sarcină nouă de nivel superior la proiectul implicit. Necesită un proiect implicit setat.",
         "BOTH": "Ambele (bidirecțional)",
         "NOTES": "Direcție sincronizare note / descriere",
         "OFF": "Dezactivat",
@@ -913,7 +914,7 @@
     "SCHEDULE": {
       "D_INITIAL": {
         "TEXT": "<p>The Schedule will provide you with a better picture of how one's planned tasks play out over time. It is automatically generated from your Tasks and requires only <strong>time estimates on them to work</strong>.</p><p>Two things are distinguished: <strong>Scheduled Tasks</strong>, which are shown at their planned time and <strong>Regular Tasks</strong>, which should flow around those fixed events.</p><p>If you provide a work start and end time (recommended), regular tasks will never be placed outside of these boundaries.</p>",
-        "TITLE": "Schedule"
+        "TITLE": "Orar"
       },
       "END": "Work End",
       "INSERT_BEFORE": "Before",
@@ -956,16 +957,16 @@
         "L_TYPE": "Type",
         "L_WEEKDAYS": "Weekdays to check for streak",
         "L_STREAK_MODE": "Mod urmărire serie",
-        "L_STREAK_MODE_SPECIFIC_DAYS": "Zile specifice ale săptămânii",
-        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Frecvență săptămânală (ex. de 3 ori pe săptămână)",
-        "L_WEEKLY_FREQUENCY": "Realizări pe săptămână",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Zile specifice ale săptămînii",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Frecvență săptămînală (ex. de 3 ori pe săptămînă)",
+        "L_WEEKLY_FREQUENCY": "Realizări pe săptămînă",
         "TITLE": "Simple Counters & Habit Tracking",
         "TYPE_CLICK_COUNTER": "Click counter",
         "TYPE_REPEATED_COUNTDOWN": "Repeated countdown",
         "TYPE_STOPWATCH": "Stopwatch"
       },
       "HABIT_TRACKER": {
-        "PREV_WEEK": "Săptămâna anterioară",
+        "PREV_WEEK": "Săptămîna anterioară",
         "NEXT_WEEK": "Next week",
         "TODAY": "Today",
         "ADD_HABIT": "Adaugă un obicei nou",
@@ -1061,7 +1062,7 @@
         "REASON_REPAIR": "Motiv: A fost efectuată o reparare automată a datelor.",
         "REASON_SERVER_MIGRATION": "Motiv: Datele au fost migrate pe un nou server de sincronizare.",
         "REASON_UNKNOWN": "Motiv: A fost efectuată o înlocuire completă a stării.",
-        "RECOMMEND_SERVER": "Recomandat: Acceptați datele serverului pentru a rămâne sincronizat cu celălalt dispozitiv."
+        "RECOMMEND_SERVER": "Recomandat: Acceptați datele serverului pentru a rămîne sincronizat cu celălalt dispozitiv."
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Aveți {{count}} modificări locale nesincronizate care vor fi înlocuite cu datele de la distanță. Doriți să continuați?",
@@ -1094,7 +1095,7 @@
       "D_RESTORE": {
         "TITLE": "Restaurare din istoric",
         "LOADING": "Se încarcă punctele de restaurare...",
-        "NO_POINTS": "Nu sunt disponibile puncte de restaurare. Punctele de restaurare sunt create la sincronizare sau importul datelor.",
+        "NO_POINTS": "Nu sînt disponibile puncte de restaurare. Punctele de restaurare sînt create la sincronizare sau importul datelor.",
         "INTRO": "Selectați un moment în timp pentru a restaura datele:",
         "WARNING": "Aceasta va înlocui TOATE datele actuale cu backup-ul selectat. Această acțiune nu poate fi anulată!",
         "BTN_RESTORE": "Restore",
@@ -1102,7 +1103,7 @@
         "TYPE_BACKUP_IMPORT": "Restaurare backup",
         "TYPE_REPAIR": "Reparare automată",
         "CONFIRM_TITLE": "Confirmați restaurarea",
-        "CONFIRM_MSG": "Sunteți absolut sigur că doriți să restaurați la <strong>{{timestamp}}</strong>?<br><br>Aceasta va <strong>înlocui complet</strong> toate datele actuale și <strong>nu poate fi anulată</strong>.",
+        "CONFIRM_MSG": "Sînteți absolut sigur că doriți să restaurați la <strong>{{timestamp}}</strong>?<br><br>Aceasta va <strong>înlocui complet</strong> toate datele actuale și <strong>nu poate fi anulată</strong>.",
         "ERROR_LOADING": "Încărcarea punctelor de restaurare a eșuat",
         "ERROR_RESTORE": "Restaurarea datelor a eșuat"
       },
@@ -1175,7 +1176,7 @@
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "This feature is only available for SuperSync.",
           "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Please enter an encryption password first.",
           "ENCRYPTION_ENCOURAGED": "Criptarea este necesară pentru SuperSync. Vă rugăm să activați criptarea pentru a vă proteja datele.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync criptează cu parolă datele dvs. înainte de a părăsi dispozitivul</strong>, făcând utilizarea abuzivă sau scurgerile de date private aproape imposibile.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync criptează cu parolă datele dvs. înainte de a părăsi dispozitivul</strong>, făcînd utilizarea abuzivă sau scurgerile de date private aproape imposibile.",
           "SETUP_DISABLE_SUPERSYNC_BTN": "Dezactivează SuperSync",
           "SETUP_ENCRYPTION_BTN": "Setează parola",
           "SETUP_ENCRYPTION_PASSWORD_WARNING": "Folosiți aceeași parolă pe toate dispozitivele. O parolă uitată poate fi resetată prin suprascrierea datelor de la distanță.",
@@ -1310,7 +1311,7 @@
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
         "ARCHIVE_OPERATION_FAILED": "Operațiunea de arhivare a eșuat. Este posibil ca unele curățări să nu fi fost finalizate.",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "Conflicte de sincronizare rezolvate automat: {{localWins}} câștig(uri) local(e), {{remoteWins}} câștig(uri) de la distanță",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Conflicte de sincronizare rezolvate automat: {{localWins}} cîștig(uri) local(e), {{remoteWins}} cîștig(uri) de la distanță",
         "LOCAL_CHANGES_DISCARDED": "{{count}} modificare(ări) locale ignorate — elementele au fost șterse pe alt dispozitiv",
         "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} modificare(ări) locale nesalvate ignorate — sincronizarea a descărcat date mai noi",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
@@ -1324,12 +1325,12 @@
         "ENABLE_ENCRYPTION_FAILED": "Activarea criptării a eșuat: {{message}}",
         "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Criptarea este necesară pentru SuperSync. Vă rugăm să setați o parolă de criptare pentru a continua sincronizarea.",
         "INVALID_AUTH_CODE": "Codul de autorizare a fost respins. Vă rugăm să încercați din nou autentificarea și asigurați-vă că copiați codul exact.",
-        "LOCK_TIMEOUT_ERROR": "Sincronizarea a expirat așteptând finalizarea unei operațiuni anterioare. Vă rugăm să încercați din nou.",
+        "LOCK_TIMEOUT_ERROR": "Sincronizarea a expirat așteptînd finalizarea unei operațiuni anterioare. Vă rugăm să încercați din nou.",
         "OVERWRITE_SERVER_FAILED": "Suprascrierea datelor serverului a eșuat: {{message}}"
       },
       "D_DATA_REPAIRED": {
         "TITLE": "Reparare date executată",
-        "MSG": "Datele dvs. au necesitat reparare automată ({{count}} probleme remediate). Acest lucru nu ar trebui să se întâmple în mod normal. Dacă se repetă, vă rugăm să raportați.",
+        "MSG": "Datele dvs. au necesitat reparare automată ({{count}} probleme remediate). Acest lucru nu ar trebui să se întîmple în mod normal. Dacă se repetă, vă rugăm să raportați.",
         "UNKNOWN_ERROR": "Eroare necunoscută de sincronizare: {{err}}"
       },
       "D_DATA_REPAIR_CONFIRM": {
@@ -1381,7 +1382,7 @@
       "D_EDIT": {
         "ADD": "Add tags for \"{{title}}\"",
         "EDIT": "Edit tags for \"{{title}}\"",
-        "LABEL": "Tags"
+        "LABEL": "Etichete"
       },
       "FORM_BASIC": {
         "L_COLOR": "Color (if undefined primary theme color is used)",
@@ -1432,7 +1433,7 @@
         "TIME": "Duration",
         "TITLE_PLACEHOLDER": "Enter a title",
         "DEADLINE_DUE_BY": "Termen limită",
-        "DEADLINE_OVERDUE": "Întârziat!",
+        "DEADLINE_OVERDUE": "Întîrziat!",
         "ISSUE": "Link problemă",
         "COMPLETED_ON": "Finalizat la",
         "CREATED_ON": "Creat la",
@@ -1441,15 +1442,15 @@
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Add existing task \"{{taskTitle}}\"",
         "CREATE_NEW_TAGS": "Create new tags",
-        "DUE_BUTTON": "Schedule",
+        "DUE_BUTTON": "Orar",
         "ESTIMATE_BUTTON": "Estimate",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Comută adăugarea sarcinii sus / jos în listă",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Comută adăugarea sarcinii la backlog / lista de azi",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Comută între adăugarea sarcinii sus sau jos în listă",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Comută între adăugarea sarcinii la backlog sau în lista de azi",
         "TOMORROW": "Tomorrow",
         "TOOLTIP_ADD_TASK": "Add task",
         "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
@@ -1472,7 +1473,7 @@
       },
       "CMP": {
         "ADD_SUB_TASK": "Add subtask",
-        "ADD_TO_MY_DAY": "Add to Today",
+        "ADD_TO_MY_DAY": "Add to Astăzi",
         "ADD_TO_PROJECT": "Add to a project",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
         "DELETE": "Delete task",
@@ -1489,7 +1490,7 @@
         "OPEN_ATTACH": "Attach file or link",
         "OPEN_ISSUE": "Open in browser",
         "OPEN_TIME": "Time tracking",
-        "REMOVE_FROM_MY_DAY": "Remove from Today",
+        "REMOVE_FROM_MY_DAY": "Remove from Astăzi",
         "SCHEDULE": "Schedule task",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide additional info",
@@ -1517,12 +1518,12 @@
         "OK": "Delete"
       },
       "D_REMINDER_VIEW": {
-        "ADD_ALL_TO_TODAY": "Add all to Today",
-        "ADD_TO_TODAY": "Add to Today",
+        "ADD_ALL_TO_TODAY": "Add all to Astăzi",
+        "ADD_TO_TODAY": "Add to Astăzi",
         "COMPLETE": "Complete",
         "COMPLETE_ALL": "Complete all",
-        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)",
-        "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Today)",
+        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Astăzi)",
+        "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Astăzi)",
         "DONE": "Done",
         "DUE_TASK": "Reminder for planned task",
         "DUE_TASKS": "Reminder for planned tasks",
@@ -1553,7 +1554,7 @@
         "RO_5M": "5 minutes before it starts",
         "RO_NEVER": "Never",
         "RO_START": "when it starts",
-        "SCHEDULE": "Schedule",
+        "SCHEDULE": "Orar",
         "UNSCHEDULE": "Unschedule"
       },
       "D_SELECT_DATE_AND_TIME": {
@@ -1584,7 +1585,7 @@
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
         "DELETED": "Deleted task \"{{title}}\"",
-        "FOUND_MOVE_FROM_BACKLOG": "Moved task <strong>\"{{title}}\"</strong> from backlog to the Today task list",
+        "FOUND_MOVE_FROM_BACKLOG": "Moved task <strong>\"{{title}}\"</strong> from backlog to the Astăzi task list",
         "FOUND_MOVE_FROM_OTHER_LIST": "Added task <strong>\"{{title}}\"</strong> from <strong>{{contextTitle}}</strong> to current list",
         "FOUND_RESTORE_FROM_ARCHIVE": "Restored task <strong>\"{{title}}\"</strong> related to issue from archive",
         "GO_TO_TASK": "Go to Task",
@@ -1600,11 +1601,11 @@
       },
       "SELECT_OR_CREATE": "Select or create task",
       "SUMMARY_TABLE": {
-        "ESTIMATE": "Estimate",
-        "SPENT_TODAY": "Spent Today",
-        "SPENT_TOTAL": "Spent Total",
-        "TASK": "Task",
-        "TOGGLE_DONE": "Toggle completed status"
+        "ESTIMATE": "Estimat",
+        "SPENT_TODAY": "Petrecut azi",
+        "SPENT_TOTAL": "Petrecut în total",
+        "TASK": "Sarcină",
+        "TOGGLE_DONE": "Comută stare terminare"
       },
       "D_DEADLINE": {
         "ADD_TIME": "Adaugă ora",
@@ -1618,9 +1619,9 @@
         "RO_AT_DEADLINE": "La termen",
         "SET_DEADLINE": "Setează termen limită",
         "QA_NEXT_MONTH": "Luna viitoare",
-        "QA_NEXT_WEEK": "Săptămâna viitoare",
+        "QA_NEXT_WEEK": "Săptămîna viitoare",
         "QA_TODAY": "Azi",
-        "QA_TOMORROW": "Mâine",
+        "QA_TOMORROW": "Mîine",
         "RO_NEVER": "Niciodată"
       }
     },
@@ -1671,51 +1672,53 @@
         "HEATMAP_LABEL": "Activity",
         "TAG_LABEL": "Tags to add",
         "TIME_SPENT_THIS_MONTH": "Luna aceasta",
-        "TIME_SPENT_THIS_WEEK": "Săptămâna aceasta",
+        "TIME_SPENT_THIS_WEEK": "Săptămîna aceasta",
         "TIME_SPENT_TOTAL": "Total"
       },
       "F": {
-        "C_DAY": "Day",
-        "C_MONTH": "Month",
-        "C_WEEK": "Week",
-        "C_YEAR": "Year",
-        "DEFAULT_ESTIMATE": "Default Estimate",
-        "DISABLE_AUTO_UPDATE_SUBTASKS": "Disable auto-updating subtasks",
-        "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Do not update inherited subtasks automatically when the newest instance changes",
-        "FRIDAY": "Friday",
-        "INHERIT_SUBTASKS": "Inherit subtasks",
-        "INHERIT_SUBTASKS_DESCRIPTION": "When enabled, subtasks from the most recent task instance will be recreated with the recurring task",
-        "MONDAY": "Monday",
-        "NOTES": "Default notes",
-        "QUICK_SETTING": "Recurring Config",
-        "Q_CUSTOM": "Custom recurring config",
-        "Q_DAILY": "Every day",
-        "Q_MONDAY_TO_FRIDAY": "Every Monday through Friday",
-        "Q_MONTHLY_CURRENT_DATE": "Every month on the day {{dateDayStr}}",
-        "Q_WEEKLY_CURRENT_WEEKDAY": "Every week on {{weekdayStr}}",
-        "Q_YEARLY_CURRENT_DATE": "Every year on the {{dayAndMonthStr}}",
-        "REMIND_AT": "Remind at",
-        "REMIND_AT_PLACEHOLDER": "Select when to remind",
-        "REMOVE_FOR_DATE": "Remove for {{date}}",
-        "REMOVE_INSTANCE": "Remove today",
-        "REPEAT_CYCLE": "Recur cycle",
-        "REPEAT_EVERY": "Recur every",
-        "SATURDAY": "Saturday",
-        "SCHEDULE_TYPE_LABEL": "Schedule type",
-        "START_DATE": "Start date",
-        "START_TIME": "Scheduled start time",
-        "START_TIME_DESCRIPTION": "E.g. 15:00. Leave blank for an all day task",
-        "SUNDAY": "Sunday",
-        "THURSDAY": "Thursday",
-        "TITLE": "Task title",
-        "TUESDAY": "Tuesday",
-        "WEDNESDAY": "Wednesday",
+        "C_DAY": "Zi",
+        "C_MONTH": "Lună",
+        "C_WEEK": "Săptămînă",
+        "C_YEAR": "An",
+        "DEFAULT_ESTIMATE": "Estimare implicită",
+        "DISABLE_AUTO_UPDATE_SUBTASKS": "Dezactivează actualizarea automată a subsarcinilor",
+        "DISABLE_AUTO_UPDATE_SUBTASKS_DESCRIPTION": "Nu actualiza automat subsarcinile moștinate cînd se schimbă cea mai nouă instanță",
+        "FRIDAY": "Vineri",
+        "INHERIT_SUBTASKS": "Moștenește subsarcinile",
+        "INHERIT_SUBTASKS_DESCRIPTION": "Cînd este activat, subsarcinile din cea mai recentă instanță a sarcinii vor fi recreate cu sarcina recurentă",
+        "MONDAY": "Luni",
+        "NOTES": "Notițe implicite",
+        "ORDER": "Ordine",
+        "ORDER_DESCRIPTION": "Ordinea de creare a sarcinilor recurente. Afectează doar sarcinile recurente create în același moment. O valoare mai mică înseamnă că o sarcină va fi creată mai sus în listă; o valoare mai mare înseamnă că va fi creată mai jos. O valoare mai mare de 0 înseamnă că sarcinile vor fi create sub sarcinile normale.",
+        "QUICK_SETTING": "Configurație recurență",
+        "Q_CUSTOM": "Configurație recurență personalizată",
+        "Q_DAILY": "În fiecare zi",
+        "Q_MONDAY_TO_FRIDAY": "De luni pînă vineri",
+        "Q_MONTHLY_CURRENT_DATE": "În fiecare lună în ziua {{dateDayStr}}",
+        "Q_WEEKLY_CURRENT_WEEKDAY": "În fiecare săptămînă în ziua de {{weekdayStr}}",
+        "Q_YEARLY_CURRENT_DATE": "În fiecare an pe data {{dayAndMonthStr}}",
+        "REMIND_AT": "Amintește-te la",
+        "REMIND_AT_PLACEHOLDER": "Alege cînd să-mi fie amintit",
+        "REMOVE_FOR_DATE": "Elimină pentru {{date}}",
+        "REMOVE_INSTANCE": "Elimină astăzi",
+        "REPEAT_CYCLE": "Ciclu de repetare",
+        "REPEAT_EVERY": "Repetă la fiecare",
+        "SATURDAY": "Sîmbătă",
+        "SCHEDULE_TYPE_LABEL": "Tip programare",
+        "START_DATE": "Dată de început",
+        "START_TIME": "Timp programat de început",
+        "START_TIME_DESCRIPTION": "Ex: 15:00. Lasă liber pentru o sarcină de o întreagă zi",
+        "SUNDAY": "Duminică",
+        "THURSDAY": "Joi",
+        "TITLE": "Titlu sarcină",
+        "TUESDAY": "Marți",
+        "WEDNESDAY": "Miercuri",
         "Q_MONTHLY_FIRST_DAY": "În fiecare lună în prima zi",
         "Q_MONTHLY_LAST_DAY": "În fiecare lună în ultima zi",
-        "SKIP_OVERDUE": "Omite instanțele întârziate",
-        "SKIP_OVERDUE_DESCRIPTION": "Când este activat, dacă aplicația este deschisă după ce a fost omisă o apariție programată (de ex. o sarcină săptămânală în care azi nu este o zi programată), instanța ratată va fi omisă silențios în loc să fie creată ca sarcină întârziată"
+        "SKIP_OVERDUE": "Omite instanțele întîrziate",
+        "SKIP_OVERDUE_DESCRIPTION": "Cînd este activat, dacă aplicația este deschisă după ce a fost omisă o apariție programată (de ex. o sarcină săptămînală în care azi nu este o zi programată), instanța ratată va fi omisă silențios în loc să fie creată ca sarcină întîrziată"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "Nu s-a putut deschide dialogul de configurare repetare. Puteți configura din meniul sarcinii."
+      "SNACK_REPEAT_DIALOG_FAIL": "Nu s-a putut deschide dialogul de configurare repetare. Poți configura din meniul sarcinii."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1740,7 +1743,7 @@
         "SCHEDULED_NEXT_WEEK": "Next Week",
         "SCHEDULED_THIS_MONTH": "This Month",
         "SCHEDULED_THIS_WEEK": "This Week",
-        "SCHEDULED_TODAY": "Today",
+        "SCHEDULED_TODAY": "Astăzi",
         "SCHEDULED_TOMORROW": "Tomorrow",
         "SORT_CREATION_DATE": "Creation Date",
         "SORT_DEFAULT": "Default",
@@ -1796,13 +1799,13 @@
         "INTRO": "Aceasta va comprima sarcinile arhivate prin eliminarea datelor vechi. Această operațiune este sincronizată pe toate dispozitivele.",
         "SUBTASKS_TO_DELETE": "Sub-sarcini de șters (timp îmbinat la părinte)",
         "NOTES_TO_CLEAR": "Note de sarcini de curățat (mai vechi de 1 an)",
-        "ISSUE_FIELDS_TO_CLEAR": "Câmpuri de probleme de curățat",
+        "ISSUE_FIELDS_TO_CLEAR": "Cîmpuri de probleme de curățat",
         "ESTIMATED_SAVINGS": "Economie estimată de spațiu",
         "WARNING": "Această operațiune nu poate fi anulată. Asigurați-vă că aveți un backup înainte de a continua!",
         "CONFIRM_TITLE": "Confirmați comprimarea arhivei",
         "CONFIRM_MSG": "Sigur doriți să comprimați arhiva? Aceasta va șterge permanent datele listate mai sus!",
         "BTN_COMPRESS": "Comprimă arhiva",
-        "NO_DATA": "Nu sunt date de comprimat. Arhiva dvs. este deja optimizată."
+        "NO_DATA": "Nu sînt date de comprimat. Arhiva dvs. este deja optimizată."
       }
     },
     "WORKLOG": {
@@ -1810,14 +1813,14 @@
         "DAYS_WORKED": "Days, worked:",
         "MONTH_WORKED": "Month worked:",
         "REPEATING_TASK": "Recurring task",
-        "RESTORE_TASK_FROM_ARCHIVE": "Restaurează sarcina din arhivă",
-        "TASKS": "Tasks",
+        "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
+        "TASKS": "Sarcini",
         "TOTAL_TIME": "Time spent total:",
         "WEEK_NR": "Week {{nr}}",
         "WORKED": "Worked",
         "VIEW_TASK_DETAILS": "Vezi detalii sarcină"
       },
-      "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Today task list?",
+      "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Astăzi task list?",
       "D_EXPORT_TITLE": "Worklog Export {{start}}–{{end}}",
       "D_EXPORT_TITLE_SINGLE": "Worklog Export {{day}}",
       "EXPORT": {
@@ -1840,7 +1843,7 @@
           "PARENT_TASK_TITLES_ONLY": "Parent Task Titles only",
           "PROJECTS": "Project Names",
           "STARTED_WORKING": "Started Working",
-          "TAGS": "Tags",
+          "TAGS": "Etichete",
           "TASK_SUBTASK": "Task/Subtask",
           "TIME_AS_CLOCK": "Time as clock (e.g. 5:23)",
           "TIME_AS_MILLISECONDS": "Time as milliseconds",
@@ -1872,9 +1875,9 @@
       "WARNING_MSG": "Proceeding will overwrite your current application data and configuration with the content from the specified URL. This action cannot be undone!",
       "WARNING_TITLE": "Warning"
     },
-    "EXPORT_DATA": "Export Data",
-    "IMPORT_FROM_FILE": "Import from File",
-    "IMPORT_FROM_URL": "Import from URL",
+    "EXPORT_DATA": "Exportă datele",
+    "IMPORT_FROM_FILE": "Importă din fișier",
+    "IMPORT_FROM_URL": "Importă din URL",
     "IMPORT_FROM_URL_DIALOG_DESCRIPTION": "Please enter the full URL of the Super Productivity backup JSON file to import.",
     "IMPORT_FROM_URL_DIALOG_TITLE": "Import from URL",
     "OPEN_IMPORT_FROM_URL_DIALOG": "Import from URL",
@@ -1902,44 +1905,45 @@
     "SUCCESS": "Migration done! Restarting app now..."
   },
   "G": {
-    "ADD": "Add",
-    "ADVANCED_CFG": "Advanced Config",
-    "APPLY": "Apply",
-    "CANCEL": "Cancel",
-    "CLOSE": "Close",
-    "COMPLETE": "Complete",
+    "ADD": "Adaugă",
+    "ADVANCED_CFG": "Configurație avansată",
+    "APPLY": "Aplică",
+    "CANCEL": "Anulează",
+    "CLOSE": "Închide",
+    "COMPLETE": "Finalizează",
     "CONFIRM": "Confirm",
     "CONTINUE": "Continue",
-    "DELETE": "Delete",
-    "DISMISS": "Dismiss",
-    "DONT_SHOW_AGAIN": "Nu mai afișa",
-    "DO_IT": "Do it!",
-    "DUPLICATE": "Duplicate",
-    "DURATION_DESCRIPTION": "e.g. \"5h 23m\" which results in 5 hours and 23 minutes",
-    "EDIT": "Edit",
-    "ENABLED": "Enabled",
-    "EXAMPLE_VAL": "e.g. 32m",
-    "EXTENSION_INFO": "Please <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> download the Chrome extension</a> to allow communication with the Jira API and Idle Time Handling. Note that this doesn't work for mobile. <strong>Without the extension, the features will not work!</strong>",
-    "HIDE": "Hide",
-    "ICON_INP_DESCRIPTION": "All UTF-8 emojis are also supported!",
-    "INBOX_PROJECT_TITLE": "Inbox",
-    "MINUTES": "{{m}} minutes",
-    "MOVE_BACKWARD": "Move backward",
-    "MOVE_FORWARD": "Move forward",
-    "NEXT": "Next",
-    "NO_CON": "You are currently offline. Please reconnect to the internet.",
-    "NONE": "None",
+    "DELETE": "Șterge",
+    "DISMISS": "Înlătură",
+    "DONT_SHOW_AGAIN": "Nu mai afișa din nou",
+    "DO_IT": "Fă-l!",
+    "DUPLICATE": "Duplică",
+    "DURATION_DESCRIPTION": "ex: \"5h 23m\" care rezultă în 5 ore și 23 minute",
+    "EDIT": "Editează",
+    "ENABLED": "Activat",
+    "EXAMPLE_VAL": "ex: 32m",
+    "EXTENSION_INFO": "Te rog <a target=\"_blank\" href=\"https://chrome.google.com/webstore/detail/super-productivity/ljkbjodfmekklcoibdnhahlaalhihmlb\"> descarcă extensia Chrome</a> pentru a permite comunicarea cu API-ul Jira și tratarea timpului mort. Acest lucru nu funcționează pe mobil. <strong>Fără extensie, aceste funcții nu vor funcționa!</strong>",
+    "HIDE": "Ascunde",
+    "ICON_INP_DESCRIPTION": "Toate emoji-urile UTF-8 sînt de asemenea suportate!",
+    "INBOX_PROJECT_TITLE": "Intrări",
+    "MINUTES": "{{m}} miunte",
+    "MOVE_BACKWARD": "Mută înapoi",
+    "MOVE_FORWARD": "Mută înainte",
+    "NEXT": "Următorul",
+    "NO_CON": "Momentan ești offline. Te rog reconectează-te la internet.",
+    "NONE": "Niciunul",
     "OK": "Ok",
-    "OVERDUE": "Overdue",
-    "REMOVE": "Remove",
-    "SAVE": "Save",
-    "SHARE": "Share",
-    "SUBMIT": "Submit",
-    "TITLE": "Title",
-    "TODAY_TAG_TITLE": "Today",
-    "UNDO": "Undo",
-    "WITHOUT_PROJECT": "Without Project",
-    "YESTERDAY": "Yesterday",
+    "OVERDUE": "Restante",
+    "REMOVE": "Elimină",
+    "SAVE": "Salvează",
+    "SHARE": "Partajează",
+    "SUBMIT": "Trimite",
+    "TITLE": "Titlu",
+    "TODAY_TAG_TITLE": "Astăzi",
+    "TRACKING_INTERVAL_DESCRIPTION": "Urmărește timpul folosind acest interval în milisecunde. Poți crește această valoare pentru a reduce scrierile pe disc. Vezi pe GitHub problema #2355.",
+    "UNDO": "Anulează",
+    "WITHOUT_PROJECT": "Fără proiect",
+    "YESTERDAY": "Ieri",
     "TOGGLE_PASSWORD_VISIBILITY": "Afișează/ascunde parola",
     "PASSWORD_STRENGTH_FAIR": "Acceptabilă",
     "PASSWORD_STRENGTH_STRONG": "Puternică",
@@ -1951,13 +1955,13 @@
       "BOARDS": "Boards",
       "DONATE_PAGE": "Donate page",
       "FOCUS_MODE": "Focus mode",
-      "HABITS": "Habits",
+      "HABITS": "Obiceiuri",
       "HELP": "Enable or disable specific app features across the UI.",
       "ISSUES_PANEL": "Issues panel",
       "PLANNER": "Planner",
       "PROJECT_NOTES": "Project notes",
-      "SEARCH": "Search",
-      "SCHEDULE": "Schedule",
+      "SEARCH": "Caută",
+      "SCHEDULE": "Orar",
       "SCHEDULE_DAY_PANEL": "Schedule day panel",
       "SYNC_BUTTON": "Sync button",
       "TIME_TRACKING": "Stopwatch time tracking",
@@ -1987,14 +1991,14 @@
       "ERROR_DELETING": "Ștergerea imaginii din clipboard a eșuat",
       "ERROR_DELETING_ALL": "Ștergerea tuturor imaginilor din clipboard a eșuat",
       "ERROR_LOADING": "Încărcarea imaginilor din clipboard a eșuat",
-      "HELP": "Gestionați imaginile lipite din clipboard. Pentru versiunea browser, imaginile sunt stocate în IndexedDB. Pentru versiunea desktop, configurați calea de stocare.",
+      "HELP": "Gestionați imaginile lipite din clipboard. Pentru versiunea browser, imaginile sînt stocate în IndexedDB. Pentru versiunea desktop, configurați calea de stocare.",
       "LOADING": "Se încarcă imaginile...",
-      "MANAGE_DESCRIPTION": "Vizualizați și ștergeți imaginile stocate din lipirea în câmpurile Markdown",
+      "MANAGE_DESCRIPTION": "Vizualizați și ștergeți imaginile stocate din lipirea în cîmpurile Markdown",
       "MANAGE_TITLE": "Gestionare imagini stocate",
       "MANAGER_TITLE": "Imagini clipboard",
       "NO_IMAGES": "Nicio imagine din clipboard stocată",
       "OPEN_MANAGER": "Gestionare imagini",
-      "PATH_DESCRIPTION": "Configurați unde sunt stocate imaginile din clipboard pe sistemul de fișiere (lăsați gol pentru locația implicită)",
+      "PATH_DESCRIPTION": "Configurați unde sînt stocate imaginile din clipboard pe sistemul de fișiere (lăsați gol pentru locația implicită)",
       "PATH_LABEL": "Cale stocare imagini",
       "PATH_PLACEHOLDER": "Lăsați gol pentru locația implicită",
       "PATH_TITLE": "Locație stocare",
@@ -2057,7 +2061,7 @@
       "MOVE_TASK_TO_TOP": "Move task to the top of the list",
       "MOVE_TASK_UP": "Move task up in the list",
       "MOVE_TO_BACKLOG": "Move task to task backlog",
-      "MOVE_TO_REGULARS_TASKS": "Move task to Today's task list",
+      "MOVE_TO_REGULARS_TASKS": "Move task to Astăzi's task list",
       "OPEN_PROJECT_NOTES": "Show/hide notes",
       "PLUGIN_SHORTCUTS": "Plugin Shortcuts",
       "SAVE_NOTE": "Save note",
@@ -2075,7 +2079,7 @@
       "TASK_OPEN_ESTIMATION_DIALOG": "Edit estimate / time spent",
       "TASK_SCHEDULE": "Schedule task",
       "TASK_UNSCHEDULE": "Unschedule task",
-      "TASK_SHORTCUTS": "Tasks",
+      "TASK_SHORTCUTS": "Sarcini",
       "TASK_SHORTCUTS_INFO": "The following shortcuts apply to the currently selected task (selected via tab or mouse).",
       "TASK_TOGGLE_DETAIL_PANEL_OPEN": "Show/hide additional task info",
       "TASK_TOGGLE_DONE": "Toggle completed state",
@@ -2113,8 +2117,8 @@
       "RU": "Русский",
       "SK": "Slovak",
       "SV": "Svenska",
-      "RO": "Română",
-      "RO_MD": "Română (Moldova)",
+      "RO": "Romînă",
+      "RO_MD": "Romînă (Moldova)",
       "TIME_LOCALE": "Datetime format locale",
       "TIME_LOCALE_AUTO": "System default",
       "TIME_LOCALE_DE_DE": "German: 24 de ore, DD.MM.YYYY",
@@ -2133,8 +2137,8 @@
       "TIME_LOCALE_CS_CZ": "Czech: 24 de ore, DD. MM. YYYY",
       "TIME_LOCALE_SK_SK": "Slovak: 24 de ore, DD. MM. YYYY",
       "TIME_LOCALE_UK_UA": "Ukrainian: 24 de ore, DD.MM.YYYY",
-      "TIME_LOCALE_RO_RO": "Română: 24 de ore, DD.MM.YYYY",
-      "TIME_LOCALE_RO_MD": "Română (Moldova): 24 de ore, DD.MM.YYYY",
+      "TIME_LOCALE_RO_RO": "Romînă: 24 de ore, DD.MM.YYYY",
+      "TIME_LOCALE_RO_MD": "Romînă (Moldova): 24 de ore, DD.MM.YYYY",
       "TITLE": "Localization",
       "TR": "Türkçe",
       "UK": "Українська",
@@ -2142,12 +2146,12 @@
       "ZH_TW": "中文(繁體)"
     },
     "MISC": {
-      "DARK_MODE": "Dark Mode",
-      "DARK_MODE_ARIA_LABEL": "Dark mode selection",
-      "DARK_MODE_DARK": "Dark",
-      "DARK_MODE_LIGHT": "Light",
-      "DARK_MODE_SYSTEM": "System",
-      "DEFAULT_START_PAGE": "Default start page",
+      "DARK_MODE": "Mod întunecat",
+      "DARK_MODE_ARIA_LABEL": "Selectare mod întunecat",
+      "DARK_MODE_DARK": "Întunecat",
+      "DARK_MODE_LIGHT": "Luminos",
+      "DARK_MODE_SYSTEM": "Sistem",
+      "DEFAULT_START_PAGE": "Pagina de start implicită",
       "FIRST_DAY_OF_WEEK": "First day of the week",
       "HELP": "<p><strong>Not seeing desktop notifications?</strong> For Windows you may want to check 'System' > 'Notifications & actions' and verify the required notifications are enabled.</p>",
       "IS_CONFIRM_BEFORE_EXIT": "Confirm before exiting the app",
@@ -2163,10 +2167,10 @@
       "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "Requires restart to take effect.",
       "START_OF_NEXT_DAY": "Start time of the next day",
       "START_OF_NEXT_DAY_HINT": "Time (hour) from which you want to determine the next day has started. Default is midnight, which is 0.",
-      "THEME": "Theme",
+      "THEME": "Temă",
       "THEME_EXPERIMENTAL": "Theme (experimental)",
       "THEME_SELECT_LABEL": "Select Theme",
-      "TITLE": "Misc Settings"
+      "TITLE": "Setări diverse"
     },
     "TASKS": {
       "DEFAULT_PROJECT": "Default project to use for tasks if none is specified",
@@ -2176,7 +2180,7 @@
       "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Enable Markdown formatting in task notes",
       "IS_TRAY_SHOW_CURRENT": "Show current task in the tray / status menu (macOS/Windows only)",
       "NOTES_TEMPLATE": "Task description template",
-      "TITLE": "Tasks"
+      "TITLE": "Sarcini"
     },
     "POMODORO": {
       "BREAK_DURATION": "Duration of short breaks",
@@ -2194,7 +2198,7 @@
       "USE_ALARM_STYLE_REMINDERS": "Use alarm-style notifications (Android only)",
       "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "When enabled, reminders use louder alarm sounds and more intrusive notifications. Recommended for critical reminders.",
       "DUE_DATE_NOTIFICATION_HOUR": "Ora de afișare a notificărilor de termen (0-23)",
-      "HELP": "<p><strong>Important:</strong> Mementourile folosesc <strong>notificări locale</strong>, nu notificări push. Aceasta înseamnă că aplicația trebuie să fi fost deschisă cel puțin o dată pe dispozitiv pentru ca mementourile să fie programate. Mementourile setate pe alt dispozitiv vor apărea doar după sincronizarea aplicației pe dispozitivul țintă.</p><p>Pe <strong>iOS</strong>, asigurați-vă că notificările sunt activate pentru Super Productivity în setările dispozitivului la \"Setări\" > \"Notificări\".</p>",
+      "HELP": "<p><strong>Important:</strong> Mementourile folosesc <strong>notificări locale</strong>, nu notificări push. Aceasta înseamnă că aplicația trebuie să fi fost deschisă cel puțin o dată pe dispozitiv pentru ca mementourile să fie programate. Mementourile setate pe alt dispozitiv vor apărea doar după sincronizarea aplicației pe dispozitivul țintă.</p><p>Pe <strong>iOS</strong>, asigurați-vă că notificările sînt activate pentru Super Productivity în setările dispozitivului la \"Setări\" > \"Notificări\".</p>",
       "NOTIFY_ON_DUE_DATE": "Afișează notificări pentru sarcinile cu termen azi"
     },
     "SCHEDULE": {
@@ -2206,9 +2210,9 @@
       "L_LUNCH_BREAK_START": "Lunch break start",
       "L_WORK_END": "Work Day End",
       "L_WORK_START": "Work Day Start",
-      "MONTH": "Month",
-      "TITLE": "Schedule",
-      "WORK_START_END_DESCRIPTION": "e.g. 17:00"
+      "MONTH": "Lună",
+      "TITLE": "Orar",
+      "WORK_START_END_DESCRIPTION": "ex: 17:00"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>Here you can control short syntax options when creating a task</p>",
@@ -2225,9 +2229,9 @@
       "BREAK_REMINDER_SOUND": "Take a break reminder sound",
       "DONE_SOUND": "Task completed sound",
       "IS_INCREASE_DONE_PITCH": "Increase pitch for every task completed",
-      "TITLE": "Sound",
+      "TITLE": "Sunet",
       "TRACK_TIME_SOUND": "Track time reminder sound",
-      "VOLUME": "Volume"
+      "VOLUME": "Volum"
     },
     "TAKE_A_BREAK": {
       "ADD_NEW_IMG": "Add motivational image",
@@ -2259,7 +2263,7 @@
     }
   },
   "GLOBAL": {
-    "COPY_SUFFIX": " (copy)"
+    "COPY_SUFFIX": " (copie)"
   },
   "GLOBAL_RELATIVE_TIME": {
     "FUTURE": {
@@ -2321,33 +2325,33 @@
     "WEB_DAV_UPLOAD": "WebDAV: Uploading data..."
   },
   "MH": {
-    "ADD_NEW_TASK": "Add new Task",
-    "ALL_PLANNED_LIST": "Upcoming",
-    "BOARDS": "Boards",
-    "COPY_TASK_LIST_MARKDOWN": "Copy to clipboard",
-    "CREATE_PROJECT": "Create project",
-    "CREATE_TAG": "Create tag",
-    "DELETE_PROJECT": "Delete project",
-    "DELETE_TAG": "Delete tag",
-    "DISABLE_FEATURE": "Disable feature",
-    "DONATE": "Support us",
-    "DUPLICATE_PROJECT": "Duplicate",
-    "ENTER_FOCUS_MODE": "Enter focus mode",
-    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" disabled. Re-enable in App Features settings.",
-    "GO_TO_TASK_LIST": "Go to task list",
-    "HABITS": "Habits",
-    "HELP": "Help",
+    "ADD_NEW_TASK": "Adaugă o nouă sarcină",
+    "ALL_PLANNED_LIST": "Planificate",
+    "BOARDS": "Table",
+    "COPY_TASK_LIST_MARKDOWN": "Copiază în Clipboard",
+    "CREATE_PROJECT": "Creează proiect",
+    "CREATE_TAG": "Creează etichetă",
+    "DELETE_PROJECT": "Șterge proiect",
+    "DELETE_TAG": "Șterge etichetă",
+    "DISABLE_FEATURE": "Dezactivează funcționalitatea",
+    "DONATE": "Susține-ne",
+    "DUPLICATE_PROJECT": "Duplică",
+    "ENTER_FOCUS_MODE": "Intră în modul de concentrare",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" dezactivată. Activează din nou din setările aplicației.",
+    "GO_TO_TASK_LIST": "Mergi la lista de sarcini",
+    "HABITS": "Obiceiuri",
+    "HELP": "Ajutor",
     "HM": {
-      "CALENDARS": "How to: Connect calendars",
-      "CONTRIBUTE": "Contribute",
-      "GET_HELP_ONLINE": "Get help online",
-      "KEYBOARD": "How to: Advanced keyboard",
-      "REDDIT_COMMUNITY": "Reddit community",
-      "REPORT_A_PROBLEM": "Report a problem",
-      "START_WELCOME": "Start welcome tour",
-      "SYNC": "How to: Configure sync"
+      "CALENDARS": "Cum să: Conectare calendare",
+      "CONTRIBUTE": "Contribuie",
+      "GET_HELP_ONLINE": "Obține ajutor online",
+      "KEYBOARD": "Cum să: Tastatură avansată",
+      "REDDIT_COMMUNITY": "Comunitatea Reddit",
+      "REPORT_A_PROBLEM": "Raportează o problemă",
+      "START_WELCOME": "Începe tur de bun venit",
+      "SYNC": "Cum să: Configurare sincronizare"
     },
-    "METRICS": "Metrics",
+    "METRICS": "Metrici",
     "NO_TASKS_TO_TRACK": "Add a task first to start tracking time",
     "OPEN_APP_FEATURES": "Open Settings",
     "NOTES": "Notes",
@@ -2355,19 +2359,19 @@
     "NO_PROJECT_INFO": "No projects available. You can create a new project by clicking the 'Create Project' button.",
     "NO_TAG_INFO": "There are currently no tags. You can add tags by entering `#yourTagName` when adding or editing tasks.",
     "PLANNER": "Planner",
-    "PROCRASTINATE": "Procrastinate",
-    "PROJECT_MENU": "Project Menu",
-    "PROJECT_SETTINGS": "Project Settings",
-    "PROJECTS": "Projects",
-    "QUICK_HISTORY": "Quick history",
-    "SCHEDULE": "Schedule",
-    "SEARCH": "Search",
-    "SETTINGS": "Settings",
+    "PROCRASTINATE": "Amînă",
+    "PROJECT_MENU": "Meniu proiect",
+    "PROJECT_SETTINGS": "Setări proiect",
+    "PROJECTS": "Proiecte",
+    "QUICK_HISTORY": "Istoric rapid",
+    "SCHEDULE": "Orar",
+    "SEARCH": "Caută",
+    "SETTINGS": "Setări",
     "SHARE_TASK_LIST_MARKDOWN": "Share Task List",
     "SIDE_PANEL_MENU": "Side Panel Menu",
-    "TAGS": "Tags",
-    "TASKS": "Tasks",
-    "TASK_LIST": "Task List",
+    "TAGS": "Etichete",
+    "TASKS": "Sarcini",
+    "TASK_LIST": "Listă de sarcini",
     "TOGGLE_SHOW_BOOKMARKS": "Show/hide bookmarks",
     "TOGGLE_SHOW_ISSUE_PANEL": "Show/hide issue provider panel",
     "TOGGLE_SHOW_NOTES": "Show/hide project notes",
@@ -2535,7 +2539,7 @@
     "UNKNOWN_ERROR": "An unknown error occurred",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload a plugin ZIP file to install it:",
     "VALIDATION_FAILED": "Validation failed",
-    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Acest plugin oferă integrare de probleme care este în uz ({{count}} furnizor(i) de probleme). Dezactivarea va întrerupe temporar sincronizarea problemelor pentru acei furnizori până la reactivarea pluginului. Sigur doriți să dezactivați \"{{name}}\"?"
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Acest plugin oferă integrare de probleme care este în uz ({{count}} furnizor(i) de probleme). Dezactivarea va întrerupe temporar sincronizarea problemelor pentru acei furnizori pînă la reactivarea pluginului. Sigur doriți să dezactivați \"{{name}}\"?"
   },
   "PM": {
     "TITLE": "Project Metrics",
@@ -2553,7 +2557,7 @@
     "SYNC_EXPORT": "Sync & Export",
     "TABS": {
       "GENERAL": "General",
-      "TASKS": "Tasks",
+      "TASKS": "Sarcini",
       "TIME_TRACKING": "Time & Tracking",
       "PRODUCTIVITY": "Productivity",
       "PLUGINS": "Plugins",
@@ -2630,7 +2634,7 @@
     "ESTIMATE_REMAINING": "Estimate remaining:",
     "FINISH_DAY": "Finish Day",
     "FINISH_DAY_TOOLTIP": "Evaluate your day, move all completed tasks to the archive (optionally) and/or plan your next day.",
-    "LATER_TODAY": "Later Today",
+    "LATER_TODAY": "Azi mai tîrziu",
     "MOVE_DONE_TO_ARCHIVE": "Move completed tasks to archive",
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASKS": "No tasks planned",
@@ -2638,14 +2642,14 @@
     "READY_TO_WORK": "Ready to work!",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time estimated:",
-    "TODAY_REMAINING": "Today remaining:",
-    "WITHOUT_BREAK": "Without break:",
+    "TODAY_REMAINING": "Rămas pentru astăzi:",
+    "WITHOUT_BREAK": "Fără pauză:",
     "WORKING_TODAY": "Working today:",
     "WORKING_TODAY_ARCHIVED": "Time worked today on archived tasks",
     "RECURRING_TASKS": "Sarcini recurente"
   },
   "NOTIFICATION": {
-    "EXACT_ALARM_DENIED": "Permisiunea de alarmă exactă a fost refuzată. Mementourile pot fi întârziate cu până la 15 minute.",
+    "EXACT_ALARM_DENIED": "Permisiunea de alarmă exactă a fost refuzată. Mementourile pot fi întîrziate cu pînă la 15 minute.",
     "TASK_ALREADY_COMPLETED": "Sarcină deja finalizată",
     "TASK_MARKED_DONE": "Sarcină marcată ca finalizată"
   }
