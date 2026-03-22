@@ -33,6 +33,9 @@ npm run docker:shell
 # Top 20 users by storage (MOST USEFUL for your current investigation)
 ./scripts/docker-monitor.sh usage
 
+# Active user counts and engagement metrics
+./scripts/docker-monitor.sh active-users
+
 # Recent operations
 ./scripts/docker-monitor.sh ops --tail 100
 
