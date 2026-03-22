@@ -23,6 +23,33 @@
     mat-list-item {
       cursor: pointer !important;
 
+      &.search-result-subtask {
+        padding-left: 1.5rem;
+
+        .subtask-icon {
+          font-size: 1.2rem;
+          width: 1.2rem;
+          height: 1.2rem;
+          opacity: 0.7;
+          margin-right: 0.25rem;
+        }
+
+        .subtask-breadcrumb {
+          font-size: 0.85rem;
+          opacity: 0.8;
+          margin-right: 0.35rem;
+          max-width: 12rem;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .task-subtask {
+          font-style: italic;
+          font-size: 0.95em;
+        }
+      }
+
       &:hover {
         background-color: rgba(0, 0, 0, 0.04) !important;
 

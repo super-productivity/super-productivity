@@ -28,12 +28,22 @@
     @if (results && results.length > 0) {
       <mat-list>
         @for (item of results; track trackByFn($index, item)) {
-          <mat-list-item (click)="navigateToItem(item)">
+          <mat-list-item
+            (click)="navigateToItem(item)"
+            [ngClass]="{ 'search-result-subtask': item.parentId }"
+          >
             <div class="search-result-content">
               <div class="task-info">
+                @if (item.parentId && item.parentTitle) {
+                  <mat-icon class="subtask-icon">subdirectory_arrow_right</mat-icon>
+                  <span class="subtask-breadcrumb">{{ item.parentTitle }} ›</span>
+                }
                 <div
                   class="task-title"
-                  [ngClass]="{ 'task-archived': item.isArchiveTask }"
+                  [ngClass]="{
+                    'task-archived': item.isArchiveTask,
+                    'task-subtask': item.parentId
+                  }"
                 >
                   {{ item?.title }}
                 </div>

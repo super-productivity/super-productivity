@@ -116,6 +116,7 @@ export class SearchPageComponent implements OnInit {
         searchText: `${task.title}\0${taskNotes}`.toLowerCase(),
         projectId: task.projectId || null,
         parentId: task.parentId || null,
+        parentTitle: parent?.title ?? null,
         tagId,
         timeSpentOnDay: task.timeSpentOnDay,
         created: task.created,
