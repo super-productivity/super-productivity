@@ -207,16 +207,6 @@ finish-day-btn,
   }
 }
 
-add-scheduled-today-or-tomorrow-btn {
-  display: block;
-  text-align: center;
-  margin-top: var(--s);
-
-  &:empty {
-    display: none;
-  }
-}
-
 .no-tasks-illu-wrapper {
   position: relative;
   margin-bottom: var(--s4);

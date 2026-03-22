@@ -42,7 +42,6 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatMiniFabButton } from '@angular/material/button';
-import { AddScheduledTodayOrTomorrowBtnComponent } from '../add-tasks-for-tomorrow/add-scheduled-for-tomorrow/add-scheduled-today-or-tomorrow-btn.component';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -87,7 +86,6 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
     MatIcon,
     MatMiniFabButton,
     MatButton,
-    AddScheduledTodayOrTomorrowBtnComponent,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
