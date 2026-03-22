@@ -381,10 +381,12 @@ $circle-circumference: 62.83;
     transform-origin: center;
     transform: rotate(-90deg);
     animation: circle-draw 6s ease-in-out infinite;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
   .play-indicator {
     fill: currentColor;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
   &.is-done {
