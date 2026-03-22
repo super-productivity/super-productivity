@@ -833,7 +833,7 @@ export class FocusModeEffects {
         ),
         // Throttle to prevent excessive banner updates (timer ticks every 1s)
         // Use leading + trailing to ensure first and last updates both trigger
-        throttleTime(500, undefined, { leading: true, trailing: true }),
+        throttleTime(100, undefined, { leading: true, trailing: true }),
         withLatestFrom(
           this.store.select(selectors.selectIsSessionRunning),
           this.store.select(selectors.selectIsBreakActive),
@@ -947,6 +947,7 @@ export class FocusModeEffects {
                 translateParams,
                 timer$,
                 progress$,
+                isKeepVisibleAfterAction: !isSessionCompleted,
                 isHideDismissBtn: true,
                 ...this._getBannerActions(
                   timer,
@@ -956,8 +957,6 @@ export class FocusModeEffects {
                   focusModeConfig,
                 ),
               });
-            } else {
-              this.bannerService.dismiss(BannerId.FocusMode);
             }
           },
         ),

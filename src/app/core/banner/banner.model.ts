@@ -45,6 +45,7 @@ export interface Banner {
   action?: BannerAction;
   action2?: BannerAction;
   action3?: BannerAction;
+  isKeepVisibleAfterAction?: boolean;
   isHideDismissBtn?: boolean;
   progress$?: Observable<number>;
   timer$?: Observable<number>;
