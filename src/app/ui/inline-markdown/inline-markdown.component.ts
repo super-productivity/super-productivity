@@ -211,6 +211,12 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.resizeTextareaToFit();
       this.changed.emit(result.text);
     }
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'i')) {
+      ev.preventDefault();
+      const marker = ev.key === 'b' ? '**' : '_';
+      this._wrapSelectionWithMarker(marker);
+      return;
+    }
   }
 
   async pasteHandler(ev: ClipboardEvent): Promise<void> {
@@ -453,6 +459,37 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
         this.resizeTextareaToFit();
       }
     });
+  }
+
+  private _wrapSelectionWithMarker(marker: string): void {
+    const textareaEl = this.textareaEl();
+    if (!textareaEl) return;
+    const textarea = textareaEl.nativeElement as HTMLTextAreaElement;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    const selectedText = value.substring(start, end);
+    let newValue: string;
+    let newCursorPos: number;
+
+    // Case 1: No selection - > Insert markers and place cursor between them
+    // For example: **<cursor>**
+    if (selectedText.length === 0) {
+      newValue = value.substring(0, start) + marker + marker + value.substring(end);
+      newCursorPos = start + marker.length;
+    } else {
+      newValue =
+        value.substring(0, start) + marker + selectedText + marker + value.substring(end);
+      newCursorPos = start + marker.length + selectedText.length + marker.length;
+    }
+    textarea.value = newValue;
+    textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+    // Persist changes
+    this.modelCopy.set(newValue);
+    this._model = newValue;
+    this.changed.emit(newValue);
+    this.resizeTextareaToFit();
   }
 
   private _hideOverflow(): void {
