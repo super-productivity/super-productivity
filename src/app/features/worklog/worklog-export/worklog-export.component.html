@@ -200,7 +200,7 @@
   }
 
   <a
-    [simpleDownloadData]="txt"
+    [simpleDownloadData]="'\uFEFF' + txt"
     [simpleDownload]="fileName"
     color="primary"
     mat-button
