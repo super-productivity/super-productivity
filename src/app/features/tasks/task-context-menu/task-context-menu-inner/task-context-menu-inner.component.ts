@@ -7,6 +7,7 @@ import {
   inject,
   input,
   Input,
+  OnDestroy,
   output,
   viewChild,
   ViewEncapsulation,
@@ -99,7 +100,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.Emulated,
 })
-export class TaskContextMenuInnerComponent implements AfterViewInit {
+export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -179,6 +180,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
   private _destroy$: Subject<boolean> = new Subject<boolean>();
   private _isTaskDeleteTriggered: boolean = false;
   private _isOpenedFromKeyboard = false;
+  private _touchMenuTimeout: ReturnType<typeof setTimeout> | undefined;
+  private _touchMenuRafId: number | undefined;
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
@@ -196,6 +199,17 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    this._destroy$.next(true);
+    this._destroy$.complete();
+    if (this._touchMenuTimeout !== undefined) {
+      clearTimeout(this._touchMenuTimeout);
+    }
+    if (this._touchMenuRafId !== undefined) {
+      cancelAnimationFrame(this._touchMenuRafId);
+    }
   }
 
   open(ev?: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
@@ -224,7 +238,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     this.contextMenuTrigger()?.openMenu();
 
     if (IS_TOUCH_PRIMARY) {
-      setTimeout(() => {
+      this._touchMenuTimeout = setTimeout(() => {
         const boxes = document.querySelectorAll(
           '.cdk-overlay-connected-position-bounding-box',
         );
@@ -265,7 +279,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
           menuPanel.style.maxHeight = '80vh';
           menuPanel.style.transform = 'translateY(100%)';
           menuPanel.style.transition = 'transform 200ms ease-out';
-          requestAnimationFrame(() => {
+          this._touchMenuRafId = requestAnimationFrame(() => {
             menuPanel.style.transform = 'translateY(0)';
           });
         }

@@ -71,6 +71,10 @@ import { OnboardingPresetSelectionComponent } from './features/onboarding/onboar
 import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
 import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 
+const ONBOARDING_PRESET_EXIT_DELAY = 1000;
+const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
+const ENTRANCE_ANIMATION_DURATION = 1500;
+
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -203,7 +207,7 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     if (this.isAppEntrance()) {
       setTimeout(() => {
         this.isAppEntrance.set(false);
-      }, 1500);
+      }, ENTRANCE_ANIMATION_DURATION);
     }
 
     // Use effect to react to language RTL changes
@@ -379,11 +383,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     this.isAppEntrance.set(true);
     setTimeout(() => {
       this.isShowOnboardingPresets.set(false);
-    }, 1000);
+    }, ONBOARDING_PRESET_EXIT_DELAY);
     setTimeout(() => {
       this.isAppEntrance.set(false);
       this.onboardingHintService.startAfterPresetSelection();
-    }, 2000);
+    }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
   }
 
   ngAfterViewInit(): void {

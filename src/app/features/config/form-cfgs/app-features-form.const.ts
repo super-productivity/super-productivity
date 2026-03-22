@@ -110,14 +110,6 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
-      key: 'isFinishDayEnabled',
-      type: 'slide-toggle',
-      templateOptions: {
-        label: T.GCF.APP_FEATURES.FINISH_DAY,
-        icon: 'wb_twilight',
-      },
-    },
-    {
       key: 'isEnableUserProfiles',
       type: 'slide-toggle',
       templateOptions: {
