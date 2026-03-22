@@ -40,6 +40,7 @@ import {
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
+import { DEFAULT_TODAY_TAG_COLOR } from './app/features/work-context/work-context.const';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatBottomSheetModule } from '@angular/material/bottom-sheet';
 import { ReminderModule } from './app/features/reminder/reminder.module';
@@ -118,7 +119,9 @@ bootstrapApplication(AppComponent, {
         },
         sanitize: { provide: SANITIZE, useValue: SecurityContext.HTML },
       }),
-      MaterialCssVarsModule.forRoot(),
+      MaterialCssVarsModule.forRoot({
+        primary: DEFAULT_TODAY_TAG_COLOR,
+      }),
       MatSidenavModule,
       MatBottomSheetModule,
       ReminderModule,
