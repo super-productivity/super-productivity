@@ -31,7 +31,6 @@ import {
   map,
   switchMap,
   take,
-  takeUntil,
   tap,
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
@@ -428,7 +427,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         autoFocus: !IS_TOUCH_PRIMARY,
       })
       .afterClosed()
-      .pipe(takeUntil(this._destroy$))
       .subscribe(() => this.focusRelatedTaskOrNext());
   }
 
@@ -438,7 +436,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         data: {},
       })
       .afterClosed()
-      .pipe(takeUntil(this._destroy$))
       .subscribe((result) => {
         if (result) {
           this._attachmentService.addAttachment(this.task.id, result);
