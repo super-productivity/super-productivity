@@ -13,7 +13,7 @@
     "UPDATE_WEB_APP": "New version available. Load new version?"
   },
   "BL": {
-    "NO_TASKS": "There are currently no tasks in your backlog"
+    "NO_TASKS": "Your backlog is empty. Add tasks here to plan them later."
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Issue Provider Panel",
@@ -825,7 +825,7 @@
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
     "QUICK_HISTORY": {
-      "NO_DATA": "No data for current year",
+      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
       "PAGE_TITLE": "Quick History",
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
@@ -2522,8 +2522,10 @@
     "LAST": "Last:",
     "NEXT": "Next",
     "NO_DEADLINES": "There are currently no tasks with deadlines. You can set a deadline via the task's context menu or detail panel.",
-    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Recur\" in the task's side panel. To open the side panel, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
+    "NO_REPEATABLE_TASKS": "No recurring tasks yet. To create one, open a task's side panel and choose \"Recur\".",
     "NO_SCHEDULED": "There are currently no scheduled tasks of this type. You can schedule a task by choosing \"Schedule Task\" in the task's context menu. To open it, right-click (long press on mobile) on a task.",
+    "NO_SCHEDULED_FOR_DAY": "No tasks planned for specific days yet. Right-click a task and choose \"Schedule\" to plan it for a day.",
+    "NO_SCHEDULED_WITH_TIME": "No tasks scheduled with a start time yet. Right-click a task and choose \"Schedule\" to set a specific time.",
     "NO_SCHEDULED_TITLE": "Scheduled Tasks for Day",
     "REPEATED_TASKS": "Recurring Tasks",
     "SCHEDULED_TASKS": "Scheduled Tasks",
