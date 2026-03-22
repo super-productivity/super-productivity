@@ -7,13 +7,6 @@
       <h2>{{ T.SCHEDULE.REPEATED_TASKS | translate }}</h2>
       @if (!taskRepeatCfgs?.length) {
         <p class="no-scheduled-tasks">{{ T.SCHEDULE.NO_REPEATABLE_TASKS | translate }}</p>
-        <button
-          mat-stroked-button
-          (click)="createRepeatCfg()"
-        >
-          <mat-icon>repeat</mat-icon>
-          {{ T.SCHEDULE.REPEATED_TASKS | translate }}
-        </button>
       }
       <div
         [@standardList]="taskRepeatCfgs?.length"

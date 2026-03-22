@@ -14,7 +14,6 @@ import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat
 import { DialogScheduleTaskComponent } from '../../features/planner/dialog-schedule-task/dialog-schedule-task.component';
 import { DialogDeadlineComponent } from '../../features/tasks/dialog-deadline/dialog-deadline.component';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
-import { MatButton } from '@angular/material/button';
 import { MatCard, MatCardContent } from '@angular/material/card';
 import { TaskTitleComponent } from '../../ui/task-title/task-title.component';
 import { MatRipple } from '@angular/material/core';
@@ -44,7 +43,6 @@ import { formatMonthDay } from '../../util/format-month-day.util';
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [standardListAnimation],
   imports: [
-    MatButton,
     MatCard,
     MatCardContent,
     TaskTitleComponent,
@@ -145,12 +143,5 @@ export class ScheduledListPageComponent {
     const last = this._translateService.instant(T.SCHEDULE.LAST);
 
     return `${next} ${nextFormatted}, ${last} ${lastFormatted}`;
-  }
-
-  createRepeatCfg(): void {
-    this._matDialog.open(DialogEditTaskRepeatCfgComponent, {
-      restoreFocus: false,
-      data: {},
-    });
   }
 }
