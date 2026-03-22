@@ -65,22 +65,24 @@
             cy="12"
             r="10"
           />
-          <!-- Progress ring (only styled when playing) -->
-          <circle
-            class="progress-ring"
-            cx="12"
-            cy="12"
-            r="10"
-          />
+          @if (isCurrent() && !t.isDone) {
+            <!-- Progress ring (only rendered for current task) -->
+            <circle
+              class="progress-ring"
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <!-- Play triangle (only rendered for current task) -->
+            <polygon
+              class="play-indicator"
+              points="10,7 10,17 17,12"
+            />
+          }
           <!-- Checkmark (shown when done) -->
           <polyline
             class="done-check"
             points="8,12 11,15 16,9"
-          />
-          <!-- Play triangle (shown when current/playing) -->
-          <polygon
-            class="play-indicator"
-            points="10,7 10,17 17,12"
           />
         </svg>
       </div>

@@ -380,14 +380,11 @@ $circle-circumference: 62.83;
     stroke-dashoffset: 0;
     transform-origin: center;
     transform: rotate(-90deg);
-    opacity: 0;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+    animation: circle-draw 6s ease-in-out infinite;
   }
 
   .play-indicator {
     fill: currentColor;
-    opacity: 0;
-    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
   }
 
   &.is-done {
@@ -405,24 +402,12 @@ $circle-circumference: 62.83;
       opacity: 0;
     }
 
-    .progress-ring {
-      opacity: 1;
-      animation: circle-draw 6s ease-in-out infinite;
-    }
-
-    .play-indicator {
-      opacity: 1;
-    }
-
     &:hover {
       .done-circle {
         opacity: 1;
       }
 
-      .progress-ring {
-        opacity: 0;
-      }
-
+      .progress-ring,
       .play-indicator {
         opacity: 0;
       }
