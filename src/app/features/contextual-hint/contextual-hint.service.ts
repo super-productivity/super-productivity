@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { take } from 'rxjs/operators';
 import { GlobalConfigService } from '../config/global-config.service';
 import { ShepherdService } from '../shepherd/shepherd.service';
 import {
