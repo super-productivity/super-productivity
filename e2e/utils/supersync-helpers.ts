@@ -217,6 +217,15 @@ export const createSimulatedClient = async (
 
   const page = await context.newPage();
 
+  // Skip onboarding, hints, and example tasks before the app boots.
+  // This runs before any page JavaScript, so Angular sees the flags immediately.
+  await page.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  });
+
   // Set up error logging
   page.on('pageerror', (error) => {
     console.error(`[Client ${clientName}] Page error:`, error.message);

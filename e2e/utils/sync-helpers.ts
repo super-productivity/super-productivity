@@ -100,6 +100,15 @@ export const setupSyncClient = async (
   const context = await browser.newContext({ baseURL });
   const page = await context.newPage();
 
+  // Skip onboarding, hints, and example tasks before the app boots.
+  // This runs before any page JavaScript, so Angular sees the flags immediately.
+  await page.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  });
+
   // Auto-accept confirm dialogs for fresh client sync
   // This handles the window.confirm() call in OperationLogSyncService._showFreshClientSyncConfirmation
   page.on('dialog', async (dialog) => {
