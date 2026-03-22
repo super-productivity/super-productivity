@@ -1928,9 +1928,13 @@
       "USER_PROFILES_WARNING": "<strong>Experimental feature:</strong> This feature is still in development and may be removed or significantly changed in a future update. Use at your own risk and make sure to keep backups of your data."
     },
     "AUTO_BACKUPS": {
+      "BACKUP_DATE": "Date",
+      "BACKUP_LIST_TITLE": "Available Backups",
       "HELP": "Automatically save all data to your app folder to have it ready if something goes wrong.",
       "LABEL_IS_ENABLED": "Enable automatic backups",
       "LOCATION_INFO": "Backups are saved to:",
+      "NO_BACKUPS": "No backups available.",
+      "RESTORE": "Restore",
       "TITLE": "Automatic Backups"
     },
     "CALENDARS": {

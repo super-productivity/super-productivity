@@ -63,6 +63,13 @@ export class LocalBackupService {
     return Promise.resolve(false);
   }
 
+  listBackups(): Promise<LocalBackupMeta[]> {
+    if (IS_ELECTRON) {
+      return window.ea.listBackups();
+    }
+    return Promise.resolve([]);
+  }
+
   loadBackupElectron(backupPath: string): Promise<string> {
     return window.ea.loadBackupData(backupPath) as Promise<string>;
   }
