@@ -36,7 +36,7 @@ export const ActionAddTag: IAutomationAction = {
       return;
     }
     const tags = await ctx.dataCache.getTags();
-    let tagId = tags.find((t) => t.title === value)?.id;
+    let tagId = tags.find((t) => t.id === value || t.title === value)?.id;
 
     if (!tagId) {
       ctx.plugin.log.warn(`[Automation] Tag "${value}" not found.`);

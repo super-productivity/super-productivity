@@ -2,7 +2,7 @@ import { Condition } from '../types';
 import { IAutomationCondition } from './definitions';
 
 const MAX_REGEX_PATTERN_LENGTH = 200;
-const DANGEROUS_REGEX_PATTERN = /(\([^)]*[+*][^)]*\))[+*]/;
+const DANGEROUS_REGEX_PATTERN = /(\([^)]*[+*{][^)]*\))[+*{]/;
 
 const matchesTitleWithRegex = (
   ctx: Parameters<IAutomationCondition['check']>[0],
