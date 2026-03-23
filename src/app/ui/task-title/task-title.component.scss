@@ -67,13 +67,16 @@
   line-height: 1.5;
   width: 100%;
 
-  // Ensure links don't add extra spacing
+  // Ensure links don't add extra spacing.
+  // pointer-events: auto overrides inherited pointer-events: none from parent
+  // (e.g. task.component sets pointer-events: none on touch-primary devices for drag).
   a {
     margin: 0;
     padding: 0;
     line-height: inherit;
     vertical-align: baseline;
     cursor: pointer;
+    pointer-events: auto;
   }
 }
 

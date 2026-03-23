@@ -323,6 +323,12 @@
   :host.RepeatProjectionSplitContinuedLast & {
     line-clamp: 1;
   }
+
+  // Override inherited pointer-events: none from :host > * so links are clickable.
+  a {
+    pointer-events: auto;
+    cursor: pointer;
+  }
 }
 
 :host-context(.is-dragging.isShiftKeyPressed) {
