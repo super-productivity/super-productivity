@@ -38,10 +38,8 @@
                 }
                 <div
                   class="task-title"
-                  [ngClass]="{
-                    'task-archived': item.isArchiveTask,
-                    'task-subtask': !!item.parentId,
-                  }"
+                  [class.task-archived]="item.isArchiveTask"
+                  [class.task-subtask]="!!item.parentTitle"
                 >
                   {{ item?.title }}
                 </div>
