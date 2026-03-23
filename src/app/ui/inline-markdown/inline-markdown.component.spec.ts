@@ -111,6 +111,7 @@ describe('InlineMarkdownComponent', () => {
       expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(6, 6);
     });
   });
+  
   describe('ngOnDestroy', () => {
     it('should emit changed event with current value when in edit mode and value has changed', () => {
       // Arrange
