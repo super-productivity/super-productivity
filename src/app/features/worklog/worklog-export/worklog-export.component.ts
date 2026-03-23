@@ -97,13 +97,7 @@ export class WorklogExportComponent implements OnInit, OnDestroy {
     ...WORKLOG_EXPORT_DEFAULTS,
     cols: [...WORKLOG_EXPORT_DEFAULTS.cols],
   };
-
   txt: string = '';
-  get simpleDownloadData(): string {
-    // 这里添加 BOM，只用于下载
-    return '\uFEFF' + this.txt;
-  }
-
   fileName: string = 'tasks.csv';
   roundTimeOptions: { id: string; title: string }[] = [
     { id: 'QUARTER', title: T.F.WORKLOG.EXPORT.O.FULL_QUARTERS },
