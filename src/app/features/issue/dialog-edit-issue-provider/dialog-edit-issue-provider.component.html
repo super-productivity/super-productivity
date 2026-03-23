@@ -96,6 +96,39 @@
           <p [innerHTML]="T.G.EXTENSION_INFO | translate"></p>
         </div>
       }
+      @for (btn of oauthButtons; track btn.label) {
+        <div style="margin-bottom: 16px">
+          @if (isOAuthConnected()) {
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              (click)="disconnectOAuth()"
+            >
+              <mat-icon>link_off</mat-icon>
+              {{ T.F.ISSUE.DIALOG.DISCONNECT | translate }}
+            </button>
+            <span style="margin-left: 8px; color: var(--palette-accent)">
+              <mat-icon
+                style="vertical-align: middle; font-size: 18px; width: 18px; height: 18px"
+                >check_circle</mat-icon
+              >
+              {{ T.F.ISSUE.DIALOG.CONNECTED | translate }}
+            </span>
+          } @else {
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              [disabled]="isOAuthConnecting()"
+              (click)="connectOAuth(btn.oauthConfig)"
+            >
+              <mat-icon>login</mat-icon>
+              {{ btn.label }}
+            </button>
+          }
+        </div>
+      }
       <formly-form
         [model]="model"
         (modelChange)="formlyModelChange($event)"

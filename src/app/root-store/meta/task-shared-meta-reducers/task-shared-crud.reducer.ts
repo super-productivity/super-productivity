@@ -29,9 +29,12 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   ActionHandlerMap,
   addTaskToList,
+  addTaskToPlannerDay,
   getProject,
   getTag,
+  hasInvalidTodayTag,
   ProjectTaskList,
+  filterOutTodayTag,
   removeTaskFromPlannerDays,
   removeTasksFromList,
   TaskWithTags,
@@ -637,6 +640,56 @@ const handleUpdateTask = (
     }
     // Remove from planner days since task's dueDay changed to today
     updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+  }
+
+  // When dueDay changes (e.g. from two-way sync pull), update planner days
+  // and TODAY_TAG.taskIds to keep them consistent with the task's dueDay.
+  const newDueDay = taskUpdate.changes.dueDay;
+  if (newDueDay !== undefined && newDueDay !== currentTask.dueDay) {
+    const oldDueDay = currentTask.dueDay;
+
+    // Remove from old planner day
+    updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+
+    if (newDueDay && newDueDay !== todayStr && !isToDone) {
+      // Add to new planner day (not today — today uses TODAY_TAG.taskIds)
+      // Skip if task is being completed in the same update to avoid re-adding to planner
+      updatedState = addTaskToPlannerDay(updatedState, taskId, newDueDay, Infinity);
+    }
+
+    // Handle TODAY_TAG.taskIds updates
+    const todayTag = getTag(updatedState, TODAY_TAG.id);
+
+    if (oldDueDay === todayStr && newDueDay !== todayStr) {
+      // Moving away from today — remove from TODAY_TAG.taskIds
+      updatedState = updateTags(updatedState, [
+        {
+          id: TODAY_TAG.id,
+          changes: { taskIds: todayTag.taskIds.filter((id) => id !== taskId) },
+        },
+      ]);
+      // Remove TODAY from task.tagIds if present (legacy cleanup)
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities[taskId] as Task;
+      if (updatedTask && hasInvalidTodayTag(updatedTask.tagIds)) {
+        updatedState = {
+          ...updatedState,
+          [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+            { id: taskId, changes: { tagIds: filterOutTodayTag(updatedTask.tagIds) } },
+            updatedState[TASK_FEATURE_NAME],
+          ),
+        };
+      }
+    } else if (oldDueDay !== todayStr && newDueDay === todayStr) {
+      // Moving to today — add to TODAY_TAG.taskIds for ordering
+      if (!todayTag.taskIds.includes(taskId)) {
+        updatedState = updateTags(updatedState, [
+          {
+            id: TODAY_TAG.id,
+            changes: { taskIds: [...todayTag.taskIds, taskId] },
+          },
+        ]);
+      }
+    }
   }
 
   return updatedState;

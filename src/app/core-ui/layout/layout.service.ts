@@ -55,7 +55,7 @@ export class LayoutService {
   );
 
   readonly selectedTimeView = signal<'week' | 'month'>('week');
-  readonly isScrolled = signal<boolean>(false);
+  readonly isWorkViewScrolled = signal<boolean>(false);
   readonly isShowAddTaskBar = toSignal(this.isShowAddTaskBar$, { initialValue: false });
 
   readonly isXs = toSignal(

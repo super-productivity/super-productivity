@@ -12,6 +12,7 @@ import { waitForSyncWindow } from '../../../util/wait-for-sync-window.operator';
 import { selectAllRepeatableTaskWithSubTasks } from '../../tasks/store/task.selectors';
 import { TaskWithSubTasks } from '../../tasks/task.model';
 import { Log } from '../../../core/log';
+import { DeletedTaskIssueSidecarService } from '../../issue/two-way-sync/deleted-task-issue-sidecar.service';
 
 @Injectable()
 export class TaskRepeatCleanupEffects {
@@ -20,6 +21,7 @@ export class TaskRepeatCleanupEffects {
   private _syncTriggerService = inject(SyncTriggerService);
   private _syncWrapperService = inject(SyncWrapperService);
   private _hydrationState = inject(HydrationStateService);
+  private _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
 
   /**
    * After initial sync + date change, detect and remove stale duplicate
@@ -68,6 +70,7 @@ export class TaskRepeatCleanupEffects {
               }
 
               const deleteIds: string[] = [];
+              const deleteTasks: TaskWithSubTasks[] = [];
               for (const [, tasks] of tasksByRepeatCfg) {
                 // Only act when there are actual duplicates
                 if (tasks.length <= 1) {
@@ -97,6 +100,7 @@ export class TaskRepeatCleanupEffects {
                     continue;
                   }
                   deleteIds.push(task.id);
+                  deleteTasks.push(task);
                 }
               }
 
@@ -105,8 +109,19 @@ export class TaskRepeatCleanupEffects {
                   '[TaskRepeatCleanupEffects] Removing stale duplicate repeat instances:',
                   deleteIds,
                 );
+                this._deletedTaskIssueSidecar.set(
+                  deleteTasks
+                    .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
+                    .map((t) => ({
+                      issueId: t.issueId!,
+                      issueType: t.issueType!,
+                      issueProviderId: t.issueProviderId!,
+                    })),
+                );
                 this._store.dispatch(
-                  TaskSharedActions.deleteTasks({ taskIds: deleteIds }),
+                  TaskSharedActions.deleteTasks({
+                    taskIds: deleteIds,
+                  }),
                 );
               }
 

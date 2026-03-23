@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity está financiada enteramente por la comunidad. No hay rastreo, ni anuncios, ni recolección de datos — tus tareas se quedan en tu dispositivo.",
     "INTRO_2": "Si valoras este enfoque y quieres mantener el proyecto saludable y en evolución, se agradece enormemente una donación voluntaria."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Aprende los atajos de teclado",
+      "NOTES": "Super Productivity está diseñado para usarse con el teclado. Aprende los atajos para trabajar más rápido.\n\n**Cómo empezar:**\n1. Abre el **menú de la barra lateral**\n2. Ve a **Ayuda**\n3. Haz clic en **Tour de navegación con teclado**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Crea tu primer proyecto",
+      "NOTES": "Los proyectos te ayudan a organizar tus tareas por área de trabajo. Cada proyecto tiene su propia lista de tareas y backlog.\n\n**Cómo crear un proyecto:**\n1. Haz clic en el botón **+** junto a **Proyectos** en la barra lateral\n2. Dale un nombre y elige un color\n3. Empieza a añadir tareas"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Configurar la sincronización",
+      "NOTES": "Mantén tus datos seguros y accesibles en todos tus dispositivos.\n\n**Cómo configurar:**\n1. Abre los **Ajustes** (icono de engranaje en la barra lateral)\n2. Ve a **Sincronización**\n3. Elige un proveedor: Super Sync, Dropbox, WebDAV o sincronización de archivo local\n4. Sigue las instrucciones de configuración"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Ve más allá",
+      "NOTES": "¡Hay mucho más por descubrir!\n\n**Funciones de la app** (en Ajustes) — Activa integraciones, hábitos y otras funciones. Ve a **Ajustes → Funciones de la app** para ver lo que está disponible.\n\n**Tableros** — Visualiza tus tareas en tableros Kanban personalizables. Actívalos en **Funciones de la app** y encuéntralos en el **menú lateral**.\n\n**Agenda** — Planifica tu día asignando tareas a horarios específicos. Arrastra las tareas a la vista de **Agenda** en la barra lateral.\n\n**Integraciones** — Una vez activadas en Funciones de la app, importa tareas desde Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV y muchos más. También puedes integrar tu calendario. Configúralas en el **Panel de proveedores de tickets**.\n\n**Hábitos** — Registra hábitos y rutinas recurrentes. Encuéntralos en el **menú de la barra lateral** una vez activados.\n\n**Plugins** — Añade funciones como el Rompe-procrastinación, Automatizaciones o Recordatorios de voz. Ve a **Ajustes → Plugins**.\n\n**Personalizar** — Temas, modo oscuro, atajos de teclado, idioma y herramientas de productividad están todos en **Ajustes**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,33 @@
     "STATUS_COMPLETE": "¡Migración completada!",
     "STATUS_MIGRATING": "Migrando datos...",
     "STATUS_PREPARING": "Preparando migración..."
+  },
+  "ONBOARDING": {
+    "TITLE": "¿Cómo quieres usar Super Productivity?",
+    "SUBTITLE": "Elige una configuración que se adapte a tu forma de trabajar. Siempre puedes cambiar esto más tarde en Ajustes.",
+    "PRIVACY_HINT": "Tus datos permanecen seguros en tu dispositivo. No se envía nada a un servidor.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Lista de tareas simple",
+        "DESCRIPTION": "Un gestor de tareas limpio con proyectos, etiquetas y notas. Sin extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Control de tiempo",
+        "DESCRIPTION": "Registra cuánto tiempo te lleva cada tarea. Ideal para facturar horas o entender en qué se va tu tiempo."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Suite de Productividad",
+        "DESCRIPTION": "Planifica tu día, crea hábitos, concéntrate y registra tu tiempo. Todo en un solo lugar."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Haz clic en + para añadir tu primera tarea",
+      "CREATE_TASK_TOUCH": "Toca + para añadir tu primera tarea",
+      "EXPLORE": "¡Explora libremente haciendo clic por aquí! Puedes encontrar ayuda en la barra lateral.",
+      "EXPLORE_TOUCH": "¡Explora libremente tocando por aquí! Puedes encontrar ayuda en el menú.",
+      "OR_PRESS": "o pulsa",
+      "SKIP_ARIA": "Cerrar indicación"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Añadir tareas de hoy",

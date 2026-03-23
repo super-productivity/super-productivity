@@ -294,6 +294,9 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  // google-calendar-provider: disabled from bundled builds pending legal review.
+  // Source remains in packages/plugin-dev/google-calendar-provider/
+  // To re-enable: uncomment and add back to BUNDLED_PLUGIN_PATHS in plugin.service.ts
 ];
 
 async function buildPlugin(plugin) {

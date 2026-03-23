@@ -61,17 +61,6 @@ test.describe.serial('Plugin Iframe', () => {
       throw new Error('API Test Plugin not found in menu after enabling');
     }
 
-    // Dismiss tour dialog if present (non-blocking)
-    const tourDialog = page.locator('[data-shepherd-step-id="Welcome"]');
-    if (await tourDialog.isVisible().catch(() => false)) {
-      const cancelBtn = page.locator(
-        'button:has-text("No thanks"), .shepherd-cancel-icon',
-      );
-      if (await cancelBtn.isVisible().catch(() => false)) {
-        await cancelBtn.click();
-        await tourDialog.waitFor({ state: 'hidden' });
-      }
-    }
   });
 
   test('open plugin iframe view', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import {
   RegisteredPluginIssueProvider,
   IssueProviderPluginDefinition,
@@ -15,16 +15,22 @@ export class PluginIssueProviderRegistryService {
   /** Maps pluginId → registeredKey for cleanup */
   private _pluginIdToKey = new Map<string, string>();
 
-  register(
-    pluginId: string,
-    definition: IssueProviderPluginDefinition,
-    name: string,
-    icon: string,
-    pollIntervalMs: number,
-    issueStrings: { singular: string; plural: string },
-    issueProviderKey?: string,
-  ): void {
-    const key = issueProviderKey ?? `plugin:${pluginId}`;
+  /** Signal that increments on each registration/unregistration, so computed signals can react */
+  readonly registrationVersion = signal(0);
+
+  register(opts: {
+    pluginId: string;
+    definition: IssueProviderPluginDefinition;
+    name: string;
+    humanReadableName: string;
+    icon: string;
+    pollIntervalMs: number;
+    issueStrings: { singular: string; plural: string };
+    issueProviderKey?: string;
+    useAgendaView?: boolean;
+    defaultAutoAddToBacklog?: boolean;
+  }): void {
+    const key = opts.issueProviderKey ?? `plugin:${opts.pluginId}`;
     if (this._providers.has(key)) {
       console.warn(
         `[PluginIssueProviderRegistry] Duplicate registration for '${key}', ignoring.`,
@@ -32,15 +38,19 @@ export class PluginIssueProviderRegistryService {
       return;
     }
     this._providers.set(key, {
-      pluginId,
+      pluginId: opts.pluginId,
       registeredKey: key as IssueProviderKey,
-      definition,
-      name,
-      icon,
-      pollIntervalMs,
-      issueStrings,
+      definition: opts.definition,
+      name: opts.name,
+      humanReadableName: opts.humanReadableName,
+      icon: opts.icon,
+      pollIntervalMs: opts.pollIntervalMs,
+      issueStrings: opts.issueStrings,
+      useAgendaView: opts.useAgendaView,
+      defaultAutoAddToBacklog: opts.defaultAutoAddToBacklog,
     });
-    this._pluginIdToKey.set(pluginId, key);
+    this._pluginIdToKey.set(opts.pluginId, key);
+    this.registrationVersion.update((v) => v + 1);
   }
 
   unregister(pluginId: string): void {
@@ -48,6 +58,7 @@ export class PluginIssueProviderRegistryService {
     if (key) {
       this._providers.delete(key);
       this._pluginIdToKey.delete(pluginId);
+      this.registrationVersion.update((v) => v + 1);
     }
   }
 
@@ -74,6 +85,10 @@ export class PluginIssueProviderRegistryService {
 
   getName(key: string): string {
     return this._providers.get(key)?.name ?? 'Plugin';
+  }
+
+  getHumanReadableName(key: string): string {
+    return this._providers.get(key)?.humanReadableName ?? 'Plugin';
   }
 
   getIssueStrings(key: string): {
@@ -105,5 +120,9 @@ export class PluginIssueProviderRegistryService {
 
   getFieldMappings(key: string): PluginFieldMapping[] | undefined {
     return this._providers.get(key)?.definition.fieldMappings;
+  }
+
+  getUseAgendaView(key: string): boolean {
+    return this._providers.get(key)?.useAgendaView ?? false;
   }
 }

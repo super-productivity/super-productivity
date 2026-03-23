@@ -17,9 +17,27 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     requiredMode: 'system',
   },
   {
+    id: 'zen',
+    name: 'Zen',
+    url: 'assets/themes/zen.css',
+    requiredMode: 'system',
+  },
+  {
     id: 'arc',
     name: 'Arc',
     url: 'assets/themes/arc.css',
+    requiredMode: 'dark',
+  },
+  {
+    id: 'catppuccin-mocha',
+    name: 'Catppuccin Mocha',
+    url: 'assets/themes/catppuccin-mocha.css',
+    requiredMode: 'dark',
+  },
+  {
+    id: 'cybr',
+    name: 'Cybr (Cyberpunk)',
+    url: 'assets/themes/cybr.css',
     requiredMode: 'dark',
   },
   {
@@ -41,12 +59,6 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     requiredMode: 'system',
   },
   {
-    id: 'rainbow',
-    name: 'Rainbow',
-    url: 'assets/themes/rainbow.css',
-    requiredMode: 'system',
-  },
-  {
     id: 'glass',
     name: 'Glass',
     url: 'assets/themes/glass.css',
@@ -65,16 +77,10 @@ export const AVAILABLE_CUSTOM_THEMES: CustomTheme[] = [
     requiredMode: 'light',
   },
   {
-    id: 'catppuccin-mocha',
-    name: 'Catppuccin Mocha',
-    url: 'assets/themes/catppuccin-mocha.css',
-    requiredMode: 'dark',
-  },
-  {
-    id: 'cybr',
-    name: 'Cybr (Cyberpunk)',
-    url: 'assets/themes/cybr.css',
-    requiredMode: 'dark',
+    id: 'rainbow',
+    name: 'Rainbow',
+    url: 'assets/themes/rainbow.css',
+    requiredMode: 'system',
   },
 ];
 

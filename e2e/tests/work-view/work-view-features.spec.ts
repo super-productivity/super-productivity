@@ -37,7 +37,7 @@ test.describe('Work View Features', () => {
     await firstTask.hover();
 
     // Click the done button
-    const doneBtn = firstTask.locator('.task-done-btn');
+    const doneBtn = firstTask.locator('.done-toggle');
     await doneBtn.waitFor({ state: 'visible' });
     await doneBtn.click();
 

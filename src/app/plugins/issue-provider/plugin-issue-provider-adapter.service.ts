@@ -1,5 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   IssueData,
   IssueDataReduced,
@@ -16,6 +17,9 @@ import { PluginHttp, RegisteredPluginIssueProvider } from './plugin-issue-provid
 import { selectIssueProviderById } from '../../features/issue/store/issue-provider.selectors';
 import { firstValueFrom } from 'rxjs';
 import { SnackService } from '../../core/snack/snack.service';
+import { TaskService } from '../../features/tasks/task.service';
+import { getDbDateStr } from '../../util/get-db-date-str';
+import { T } from '../../t.const';
 
 @Injectable({ providedIn: 'root' })
 export class PluginIssueProviderAdapterService implements IssueServiceInterface {
@@ -23,6 +27,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   private _pluginHttp = inject(PluginHttpService);
   private _store = inject(Store);
   private _snackService = inject(SnackService);
+  private _taskService = inject(TaskService);
 
   // Not meaningful for a multi-plugin adapter, but required by interface
   pollInterval = 0;
@@ -100,19 +105,7 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
   }
 
   getAddTaskData(issueData: IssueDataReduced): IssueTask {
-    const data = issueData as PluginIssue;
-    const isDone = this._computeIsDone(data);
-
-    return {
-      title: ((data as Record<string, unknown>)['summary'] as string) || data.title,
-      issueId: data.id,
-      issueWasUpdated: false,
-      issueLastUpdated: data.lastUpdated ?? Date.now(),
-      issueAttachmentNr: 0,
-      issuePoints: undefined,
-      issueTimeTracked: undefined,
-      isDone,
-    };
+    return this._buildBaseIssueTask(issueData as PluginIssue);
   }
 
   async searchIssues(
@@ -176,15 +169,41 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       if (!issue) {
         return null;
       }
+
+      // Check if the issue state indicates remote deletion
+      const deletedStates = resolved.provider.definition.deletedStates;
+      if (deletedStates?.length && issue.state) {
+        const stateLower = issue.state.toLowerCase();
+        if (deletedStates.some((s) => s.toLowerCase() === stateLower)) {
+          this._handleRemoteDeletion(task);
+          return null;
+        }
+      }
+
       const isUpdated =
         issue.lastUpdated != null && issue.lastUpdated > (task.issueLastUpdated || 0);
       if (isUpdated) {
-        const addTaskData = this.getAddTaskData(issue);
+        // Compute sync values once and pass through to avoid redundant calls
         const issueLastSyncedValues =
           resolved.provider.definition.extractSyncValues?.(issue);
+        const addTaskData = this._getAddTaskDataForProvider(
+          issue,
+          resolved.provider,
+          issueLastSyncedValues ?? {},
+        );
+
+        // Apply field mappings to pull changes from issue to task
+        const fieldChanges = this._applyFieldMappingPull(
+          resolved.provider,
+          issueLastSyncedValues ?? {},
+          task,
+          cfg,
+        );
+
         return {
           taskChanges: {
             ...addTaskData,
+            ...fieldChanges,
             issueWasUpdated: true,
             ...(issueLastSyncedValues ? { issueLastSyncedValues } : {}),
           },
@@ -194,6 +213,11 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
       }
       return null;
     } catch (e) {
+      // Detect 404 = issue deleted remotely
+      if (e instanceof HttpErrorResponse && (e.status === 404 || e.status === 410)) {
+        this._handleRemoteDeletion(task);
+        return null;
+      }
       console.error(
         `[PluginIssueAdapter] getFreshDataForIssueTask failed for ${cfg.issueProviderKey}:`,
         e,
@@ -294,11 +318,145 @@ export class PluginIssueProviderAdapterService implements IssueServiceInterface 
     }
   }
 
+  private _extractTaskFieldsFromIssueWithSyncValues(
+    issue: PluginIssue,
+    provider: RegisteredPluginIssueProvider,
+    syncValues: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const issueRecord = issue as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    const ctx = { issueId: issue.id };
+
+    const mappings = provider.definition.fieldMappings;
+    if (!mappings?.length) {
+      return {};
+    }
+    for (const mapping of mappings) {
+      const issueValue =
+        syncValues[mapping.issueField] ?? issueRecord[mapping.issueField];
+      if (issueValue == null) {
+        continue;
+      }
+      const taskValue = mapping.toTaskValue(issueValue, ctx);
+      if (taskValue != null) {
+        result[mapping.taskField] = taskValue;
+      }
+    }
+    return result;
+  }
+
+  private _getAddTaskDataForProvider(
+    issueData: IssueDataReduced,
+    provider: RegisteredPluginIssueProvider,
+    syncValues: Record<string, unknown>,
+  ): IssueTask {
+    const data = issueData as PluginIssue;
+    const base = this._buildBaseIssueTask(data);
+    const fieldValues = this._extractTaskFieldsFromIssueWithSyncValues(
+      data,
+      provider,
+      syncValues,
+    );
+    return { ...base, ...fieldValues } as IssueTask;
+  }
+
+  private _buildBaseIssueTask(data: PluginIssue): IssueTask {
+    const isDone = this._computeIsDone(data);
+    const raw = data as Record<string, unknown>;
+    const dueWithTime =
+      typeof raw['dueWithTime'] === 'number' ? (raw['dueWithTime'] as number) : undefined;
+    const startMs =
+      typeof raw['start'] === 'number' ? (raw['start'] as number) : undefined;
+
+    return {
+      title: data.title,
+      issueId: data.id,
+      issueWasUpdated: false,
+      issueLastUpdated: data.lastUpdated ?? 0,
+      issueAttachmentNr: 0,
+      issuePoints: undefined,
+      issueTimeTracked: undefined,
+      isDone,
+      ...(dueWithTime != null
+        ? { dueWithTime }
+        : startMs != null
+          ? { dueDay: getDbDateStr(startMs) }
+          : {}),
+    };
+  }
+
   private _computeIsDone(issue: PluginIssue): boolean {
     const state = issue.state?.toLowerCase();
     if (!state) {
       return false;
     }
     return ['closed', 'done', 'completed', 'resolved'].includes(state);
+  }
+
+  private _handleRemoteDeletion(task: Task): void {
+    const hasTimeTracking = task.timeSpent > 0;
+    if (hasTimeTracking) {
+      this._snackService.open({
+        type: 'WARNING',
+        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED_WITH_TIME,
+        translateParams: { taskTitle: task.title },
+        ico: 'delete_forever',
+        actionStr: T.G.DELETE,
+        actionFn: () => this._taskService.removeMultipleTasks([task.id]),
+      });
+    } else {
+      this._taskService.removeMultipleTasks([task.id]);
+      this._snackService.open({
+        type: 'CUSTOM',
+        msg: T.F.ISSUE.S.REMOTE_ISSUE_DELETED,
+        translateParams: { taskTitle: task.title },
+        ico: 'delete_forever',
+      });
+    }
+  }
+
+  private _applyFieldMappingPull(
+    provider: RegisteredPluginIssueProvider,
+    freshSyncValues: Record<string, unknown>,
+    task: Task,
+    cfg: IssueProviderPluginType,
+  ): Partial<Task> {
+    const fieldMappings = provider.definition.fieldMappings;
+    if (!fieldMappings?.length) {
+      return {};
+    }
+
+    const twoWaySync = (cfg.pluginConfig?.['twoWaySync'] as Record<string, string>) ?? {};
+    const lastSyncedValues = task.issueLastSyncedValues ?? {};
+    const ctx = { issueId: task.issueId! };
+    const changes: Record<string, unknown> = {};
+
+    for (const mapping of fieldMappings) {
+      const dir = twoWaySync[mapping.taskField] ?? mapping.defaultDirection;
+      if (dir !== 'pullOnly' && dir !== 'both') {
+        continue;
+      }
+
+      const freshValue = freshSyncValues[mapping.issueField];
+      const lastValue = lastSyncedValues[mapping.issueField];
+
+      // Only pull if the issue value actually changed since last sync
+      if (freshValue === lastValue) {
+        continue;
+      }
+
+      const taskValue = mapping.toTaskValue(freshValue, ctx);
+      if (taskValue !== undefined) {
+        changes[mapping.taskField] = taskValue;
+        // Clear mutually exclusive fields (use null to explicitly unset)
+        if (mapping.mutuallyExclusive) {
+          for (const field of mapping.mutuallyExclusive) {
+            changes[field] = null;
+          }
+        }
+      }
+    }
+
+    return changes as Partial<Task>;
   }
 }

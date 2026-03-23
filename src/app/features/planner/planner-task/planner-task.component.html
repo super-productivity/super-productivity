@@ -5,30 +5,6 @@
   @if (isCurrent) {
     <mat-icon class="play-icon-indicator">play_arrow </mat-icon>
   }
-  <div class="type-ico-wrapper">
-    @if (task.repeatCfgId) {
-      <div>
-        @if (!isRepeatTaskCreatedToday) {
-          <div class="repeat-date-badge">{{ task.created | shortDate2 }}</div>
-        }
-        @if (task.repeatCfgId) {
-          <mat-icon
-            [style.transform]="isCurrent ? 'scale(1.4)' : ''"
-            svgIcon="repeat"
-          >
-          </mat-icon>
-        }
-      </div>
-    }
-    @if (task.issueId) {
-      <div>
-        @if (task.issuePoints) {
-          <div class="mini-badge bgc-primary">{{ task.issuePoints }}</div>
-        }
-        <mat-icon [svgIcon]="task.issueType | issueIcon"></mat-icon>
-      </div>
-    }
-  </div>
 </div>
 
 <div

@@ -27,8 +27,6 @@ import { LongPressIOSDirective } from '../../../ui/longpress/longpress-ios.direc
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
-import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { Log } from '../../../core/log';
 
 @Component({
@@ -44,8 +42,6 @@ import { Log } from '../../../core/log';
     InlineInputComponent,
     TaskContextMenuComponent,
     MsToStringPipe,
-    IssueIconPipe,
-    ShortDate2Pipe,
   ],
 })
 export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDestroy {
@@ -61,8 +57,6 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   // TODO remove
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
-
-  isRepeatTaskCreatedToday = false;
 
   readonly T = T;
   readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;

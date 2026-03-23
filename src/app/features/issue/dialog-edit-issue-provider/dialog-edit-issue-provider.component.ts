@@ -44,13 +44,15 @@ import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-componen
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
-import { FormlyModule } from '@ngx-formly/core';
+import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { devError } from '../../../util/dev-error';
 import { IssueLog } from '../../../core/log';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
 // ClickUp is now a plugin — no built-in config component needed
 import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
@@ -100,9 +102,13 @@ export class DialogEditIssueProviderComponent {
   }>(MAT_DIALOG_DATA);
 
   isConnectionWorks = signal(false);
+  isOAuthConnected = signal(false);
+  isOAuthConnecting = signal(false);
   form = new FormGroup({});
 
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _pluginBridge = inject(PluginBridgeService);
+  private _pluginHttp = inject(PluginHttpService);
 
   issueProviderKey: IssueProviderKey = (this.d.issueProvider?.issueProviderKey ||
     this.d.issueProviderKey) as IssueProviderKey;
@@ -121,6 +127,9 @@ export class DialogEditIssueProviderComponent {
                   this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId ??
                   this.issueProviderKey.replace('plugin:', ''),
                 pluginConfig: this._getDefaultPluginConfig(),
+                isAutoAddToBacklog:
+                  this._pluginRegistry.getProvider(this.issueProviderKey)
+                    ?.defaultAutoAddToBacklog ?? false,
               }
             : DEFAULT_ISSUE_PROVIDER_CFGS[
                 this.issueProviderKey as BuiltInIssueProviderKey
@@ -140,6 +149,8 @@ export class DialogEditIssueProviderComponent {
       : ISSUE_PROVIDER_FORM_CFGS_MAP[this.issueProviderKey as BuiltInIssueProviderKey];
 
   fields = this.configFormSection?.items ?? [];
+
+  oauthButtons = this._getOAuthButtons();
 
   private _matDialogRef: MatDialogRef<DialogEditIssueProviderComponent> =
     inject(MatDialogRef);
@@ -173,6 +184,12 @@ export class DialogEditIssueProviderComponent {
       ...this.model,
       defaultTagIds: (this.model.defaultTagIds || []).filter((tagId) => tagId !== id),
     };
+  }
+
+  constructor() {
+    this._initOAuthAndOptions().catch((err) => {
+      console.error('[DialogEditIssueProvider] OAuth init failed', err);
+    });
   }
 
   submit(isSkipClose = false): void {
@@ -314,10 +331,114 @@ export class DialogEditIssueProviderComponent {
     this.isConnectionWorks.set(false);
   }
 
+  async connectOAuth(oauthConfig: {
+    authUrl: string;
+    tokenUrl: string;
+    clientId: string;
+    clientSecret?: string;
+    scopes: string[];
+  }): Promise<void> {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    if (!pluginId) {
+      return;
+    }
+    this.isOAuthConnecting.set(true);
+    try {
+      await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
+      this.isOAuthConnected.set(true);
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.F.ISSUE.S.OAUTH_CONNECTED,
+      });
+      await this._loadDynamicOptions();
+    } catch (e) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.ISSUE.S.OAUTH_FAILED,
+      });
+    } finally {
+      this.isOAuthConnecting.set(false);
+    }
+  }
+
+  async disconnectOAuth(): Promise<void> {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    if (!pluginId) {
+      return;
+    }
+    await this._pluginBridge.clearOAuthTokens(pluginId);
+    this.isOAuthConnected.set(false);
+  }
+
   protected readonly ICAL_TYPE = ICAL_TYPE;
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  private async _loadDynamicOptions(): Promise<void> {
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    if (!provider) {
+      return;
+    }
+    const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+    const dynamicFields = configFields.filter((f) => typeof f.loadOptions === 'function');
+    if (!dynamicFields.length) {
+      return;
+    }
+
+    const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
+    const http = this._pluginHttp.createHttpHelper(() =>
+      provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+    );
+
+    for (const field of dynamicFields) {
+      try {
+        const options = await field.loadOptions!(
+          pluginConfig as Record<string, unknown>,
+          http,
+        );
+        const formlyField = this._findFormlyField(
+          this.fields as FormlyFieldConfig[],
+          'pluginConfig.' + field.key,
+        );
+        if (formlyField?.templateOptions) {
+          formlyField.templateOptions.options = options;
+        } else if (formlyField?.props) {
+          formlyField.props.options = options;
+        }
+      } catch (e) {
+        console.error(
+          `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
+          e,
+        );
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.ISSUE.S.LOAD_OPTIONS_FAILED,
+          translateParams: { fieldKey: field.key },
+        });
+      }
+    }
+    // Trigger formly refresh
+    this.fields = [...this.fields];
+  }
+
+  private _findFormlyField(
+    fields: FormlyFieldConfig[],
+    key: string,
+  ): FormlyFieldConfig | undefined {
+    for (const f of fields) {
+      if (f.key === key) {
+        return f;
+      }
+      if (f.fieldGroup) {
+        const found = this._findFormlyField(f.fieldGroup, key);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return undefined;
+  }
 
   private _getDefaultPluginConfig(): Record<string, unknown> {
     if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
@@ -342,8 +463,12 @@ export class DialogEditIssueProviderComponent {
       return undefined;
     }
 
-    const regularFields = configFields.filter((f) => !f.advanced);
-    const advancedFields = configFields.filter((f) => f.advanced);
+    const regularFields = configFields.filter(
+      (f) => !f.advanced && f.type !== 'oauthButton',
+    );
+    const advancedFields = configFields.filter(
+      (f) => f.advanced && f.type !== 'oauthButton',
+    );
 
     const items = regularFields.map((f) =>
       this._mapPluginConfigField(f),
@@ -374,6 +499,7 @@ export class DialogEditIssueProviderComponent {
     type: string;
     label: string;
     required?: boolean;
+    description?: string;
     url?: string;
     pattern?: string;
     options?: { value: string; label: string }[];
@@ -398,6 +524,7 @@ export class DialogEditIssueProviderComponent {
       templateOptions: {
         label: f.label,
         required: f.required ?? false,
+        ...(f.description ? { description: f.description } : {}),
         ...(f.type === 'password' ? { type: 'password' } : {}),
         ...(f.type === 'select' ? { options: f.options } : {}),
         ...(f.pattern ? { pattern: f.pattern } : {}),
@@ -419,6 +546,9 @@ export class DialogEditIssueProviderComponent {
       isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
       title: T.F.ISSUE.TWO_WAY_SYNC.TITLE,
       notes: T.F.ISSUE.TWO_WAY_SYNC.NOTES,
+      dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
+      dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
+      timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
     };
     const syncFields: any[] = fieldMappings.map((m) => ({
       key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
@@ -448,5 +578,38 @@ export class DialogEditIssueProviderComponent {
       props: { label: T.F.ISSUE.TWO_WAY_SYNC.SECTION },
       fieldGroup: syncFields,
     };
+  }
+
+  private _getOAuthButtons(): {
+    label: string;
+    oauthConfig: {
+      authUrl: string;
+      tokenUrl: string;
+      clientId: string;
+      clientSecret?: string;
+      scopes: string[];
+    };
+  }[] {
+    if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
+      return [];
+    }
+    const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+    return configFields
+      .filter((f) => f.type === 'oauthButton' && f.oauthConfig)
+      .map((f) => ({ label: f.label, oauthConfig: f.oauthConfig! }));
+  }
+
+  private async _initOAuthAndOptions(): Promise<void> {
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    if (!provider) {
+      return;
+    }
+    const hasTokens = await this._pluginBridge.restoreAndCheckOAuthTokens(
+      provider.pluginId,
+    );
+    this.isOAuthConnected.set(hasTokens);
+    if (hasTokens) {
+      await this._loadDynamicOptions();
+    }
   }
 }

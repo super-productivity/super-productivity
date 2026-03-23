@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity is funded entirely by the community. There is no tracking, no ads, and no data collection — your tasks stay on your device.",
     "INTRO_2": "If you value this approach and want to keep the project healthy and evolving, a voluntary donation is greatly appreciated."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Învață scurtăturile de tastatură",
+      "NOTES": "Super Productivity este conceput pentru a fi folosit cu tastatura. Învață scurtăturile pentru a lucra mai rapid.\n\n**Cum să începi:**\n1. Deschide **meniul lateral**\n2. Mergi la **Ajutor**\n3. Apasă pe **Tur de navigare cu tastatura**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Creează primul tău proiect",
+      "NOTES": "Proiectele te ajută să îți organizezi sarcinile pe domenii de lucru. Fiecare proiect are propria listă de sarcini și backlog.\n\n**Cum să creezi un proiect:**\n1. Apasă butonul **+** lângă **Proiecte** din bara laterală\n2. Dă-i un nume și alege o culoare\n3. Începe să adaugi sarcini"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Configurează sincronizarea",
+      "NOTES": "Păstrează-ți datele în siguranță și accesibile pe mai multe dispozitive.\n\n**Cum să configurezi:**\n1. Deschide **Setări** (pictograma roată dințată din bara laterală)\n2. Mergi la **Sincronizare**\n3. Alege un furnizor: Super Sync, Dropbox, WebDAV sau sincronizare prin fișier local\n4. Urmează instrucțiunile de configurare"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Descoperă mai mult",
+      "NOTES": "Sunt multe de descoperit!\n\n**Funcții aplicație** (în Setări) — Activează integrări, obiceiuri și alte funcții. Mergi la **Setări → Funcții aplicație** pentru a vedea ce este disponibil.\n\n**Panouri** — Vizualizați sarcinile în panouri Kanban personalizabile. Activați-le în **Funcții aplicație**, apoi găsiți-le în **meniul lateral**.\n\n**Program** — Planificați-vă ziua atribuind sarcini la ore specifice. Trageți sarcinile în vizualizarea **Program** din bara laterală.\n\n**Integrări** — Odată activate în Funcții aplicație, importă sarcini din Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV și multe altele. Poți integra și calendarul tău. Configurează-le în **Panoul furnizorilor de sarcini**.\n\n**Obiceiuri** — Urmărește obiceiuri și rutine recurente. Le găsești în **meniul lateral** după activare.\n\n**Plugin-uri** — Adaugă funcții precum Distrugătorul de procrastinare, Automatizări sau Memento-uri vocale. Mergi la **Setări → Plugin-uri**.\n\n**Personalizare** — Teme, mod întunecat, scurtături de tastatură, limbă și instrumente de productivitate — toate se găsesc în **Setări**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2362,6 +2380,33 @@
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "System Update",
     "DIALOG_MESSAGE": "We're updating how your data is stored for improved sync reliability.<br><br>A backup of your data will be downloaded automatically. You can use this backup to restore your data if needed (File > Import)."
+  },
+  "ONBOARDING": {
+    "TITLE": "Cum vrei să folosești Super Productivity?",
+    "SUBTITLE": "Alege o configurare potrivită stilului tău de lucru. Poți schimba oricând mai târziu în Setări.",
+    "PRIVACY_HINT": "Datele tale rămân în siguranță pe dispozitivul tău. Nimic nu este trimis la un server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Listă simplă de sarcini",
+        "DESCRIPTION": "Un manager de sarcini curat cu proiecte, etichete și notițe. Fără extra."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Urmărire timp",
+        "DESCRIPTION": "Urmărește cât durează sarcinile. Ideal pentru facturarea orelor sau pentru a înțelege unde îți petreci timpul."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Suită de productivitate",
+        "DESCRIPTION": "Planifică-ți ziua, construiește obiceiuri, concentrează-te profund și urmărește timpul. Totul într-un singur loc."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Apasă pe + pentru a adăuga prima ta sarcină",
+      "CREATE_TASK_TOUCH": "Atinge + pentru a adăuga prima ta sarcină",
+      "EXPLORE": "Apasă liber și explorează! Poți găsi ajutor în bara laterală.",
+      "EXPLORE_TOUCH": "Explorează liber! Poți găsi ajutor în meniu.",
+      "OR_PRESS": "sau apasă",
+      "SKIP_ARIA": "Închide indicația"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",

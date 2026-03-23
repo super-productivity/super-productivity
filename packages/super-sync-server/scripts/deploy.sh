@@ -5,14 +5,22 @@
 #   ./scripts/deploy.sh [--build]
 #
 # This script:
-#   1. Pulls latest image from GHCR (or builds locally with --build)
-#   2. Restarts containers
-#   3. Verifies health check passes
+#   1. Validates Caddyfile syntax
+#   2. Pulls latest image from GHCR (or builds locally with --build)
+#   3. Restarts containers and waits for health checks
 #
 # Options:
 #   --build    Build locally instead of pulling from registry
 
 set -e
+
+# Check required dependencies
+for cmd in docker curl jq git; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo "ERROR: Required command '$cmd' not found"
+        exit 1
+    fi
+done
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,7 +28,7 @@ SERVER_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Get domain from .env file
 if [ -f "$SERVER_DIR/.env" ]; then
-    DOMAIN=$(grep -E '^DOMAIN=' "$SERVER_DIR/.env" | cut -d'=' -f2)
+    DOMAIN=$(grep -E '^DOMAIN=' "$SERVER_DIR/.env" | cut -d'=' -f2- | tr -d '"'"'")
 fi
 
 if [ -z "$DOMAIN" ]; then
@@ -66,27 +74,59 @@ if [ -f "docker-compose.monitoring.yml" ]; then
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.monitoring.yml"
 fi
 
+# Validate Caddyfile syntax before deploying
+CADDY_IMAGE=$(grep 'image:.*caddy:' docker-compose.yml | head -1 | awk '{print $2}' | tr -d '"'"'")
+if [ -z "$CADDY_IMAGE" ]; then
+    echo "ERROR: Could not determine Caddy image from docker-compose.yml"
+    exit 1
+fi
+echo "==> Validating Caddyfile (using $CADDY_IMAGE)..."
+if ! docker run --rm -e "DOMAIN=${DOMAIN}" \
+    -v "$SERVER_DIR/Caddyfile:/etc/caddy/Caddyfile:ro" \
+    "$CADDY_IMAGE" caddy validate --config /etc/caddy/Caddyfile 2>&1; then
+    echo ""
+    echo "==> Caddyfile validation failed! Fix the errors above before deploying."
+    exit 1
+fi
+echo ""
+
 if [ "$BUILD_LOCAL" = true ]; then
     # Local build mode
     echo "==> Building locally..."
     COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.build.yml"
-    docker compose $COMPOSE_FILES up -d --build
+    docker compose $COMPOSE_FILES build
 else
     # Pull from registry (default)
     echo "==> Pulling latest image..."
     docker compose $COMPOSE_FILES pull supersync
-
-    echo ""
-    echo "==> Restarting containers..."
-    docker compose $COMPOSE_FILES up -d
 fi
 
-# Wait for health check
+# Start containers and wait for all health checks (up to 60s)
 echo ""
-echo "==> Waiting for service to be healthy..."
-sleep 5
+echo "==> Starting containers..."
+if ! docker compose $COMPOSE_FILES up -d --wait --wait-timeout 60 2>&1; then
+    echo ""
+    echo "==> Container startup failed!"
 
-# Retry health check up to 6 times (30 seconds total)
+    # Show status of non-running containers
+    echo "    Container status:"
+    docker compose $COMPOSE_FILES ps --format json | jq -c 'if type == "array" then .[] else . end' | while IFS= read -r line; do
+        STATE=$(echo "$line" | jq -r '.State // empty')
+        NAME=$(echo "$line" | jq -r '.Name // empty')
+        SERVICE=$(echo "$line" | jq -r '.Service // empty')
+        if [ -n "$STATE" ] && [ "$STATE" != "running" ]; then
+            echo "      $NAME ($STATE)"
+            echo ""
+            docker compose $COMPOSE_FILES logs --tail=10 "$SERVICE" 2>/dev/null
+        fi
+    done
+    exit 1
+fi
+echo "    All containers healthy"
+
+# Verify HTTPS health check
+echo ""
+echo "==> Verifying HTTPS health check..."
 for i in {1..6}; do
     if curl -sf "$HEALTH_URL" > /dev/null 2>&1; then
         echo ""
@@ -101,5 +141,5 @@ done
 echo ""
 echo "==> Health check failed!"
 echo "    Recent logs:"
-docker compose logs --tail=30 supersync
+docker compose $COMPOSE_FILES logs --tail=30
 exit 1

@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity jest finansowany w całości przez społeczność. Nie ma śledzenia, reklam ani zbierania danych — Twoje zadania pozostają na Twoim urządzeniu.",
     "INTRO_2": "Jeśli cenisz takie podejście i chcesz, aby projekt był zdrowy i się rozwijał, dobrowolna darowizna jest bardzo mile widziana."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Poznaj skróty klawiaturowe",
+      "NOTES": "Super Productivity jest zaprojektowane do obsługi za pomocą klawiatury. Poznaj skróty, aby pracować szybciej.\n\n**Jak zacząć:**\n1. Otwórz **menu boczne**\n2. Przejdź do **Pomoc**\n3. Kliknij **Przewodnik po nawigacji klawiaturowej**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Utwórz swój pierwszy projekt",
+      "NOTES": "Projekty pomagają organizować zadania według obszarów pracy. Każdy projekt ma własną listę zadań i backlog.\n\n**Jak utworzyć projekt:**\n1. Kliknij przycisk **+** obok **Projekty** w pasku bocznym\n2. Nadaj mu nazwę i wybierz kolor\n3. Zacznij dodawać do niego zadania"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Skonfiguruj synchronizację",
+      "NOTES": "Zabezpiecz swoje dane i miej do nich dostęp na różnych urządzeniach.\n\n**Jak skonfigurować:**\n1. Otwórz **Ustawienia** (ikona koła zębatego w pasku bocznym)\n2. Przejdź do **Synchronizacja**\n3. Wybierz dostawcę: Super Sync, Dropbox, WebDAV lub synchronizacja przez plik lokalny\n4. Postępuj zgodnie z instrukcjami konfiguracji"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Odkryj więcej",
+      "NOTES": "Jest jeszcze wiele do odkrycia!\n\n**Funkcje aplikacji** (w Ustawieniach) — Włącz integracje, nawyki i inne funkcje. Przejdź do **Ustawienia → Funkcje aplikacji**, aby zobaczyć, co jest dostępne.\n\n**Tablice** — Wizualizuj swoje zadania na konfigurowalnych tablicach Kanban. Włącz je w **Funkcjach aplikacji**, a następnie znajdź w **menu bocznym**.\n\n**Harmonogram** — Zaplanuj swój dzień, przypisując zadania do konkretnych godzin. Przeciągnij zadania do widoku **Harmonogram** na pasku bocznym.\n\n**Integracje** — Po włączeniu w Funkcjach aplikacji importuj zadania z Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV i wielu innych. Możesz również zintegrować swój kalendarz. Skonfiguruj je w **Panelu dostawców zgłoszeń**.\n\n**Nawyki** — Śledź powtarzające się nawyki i rutyny. Znajdziesz je w **menu bocznym** po włączeniu.\n\n**Wtyczki** — Dodaj funkcje takie jak Pogromca Prokrastynacji, Automatyzacje lub Przypomnienia głosowe. Przejdź do **Ustawienia → Wtyczki**.\n\n**Personalizacja** — Motywy, tryb ciemny, skróty klawiaturowe, język i narzędzia produktywności — wszystko znajdziesz w **Ustawieniach**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,33 @@
     "STATUS_COMPLETE": "Migracja zakończona!",
     "STATUS_MIGRATING": "Migrowanie danych...",
     "STATUS_PREPARING": "Przygotowanie migracji..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Jak chcesz używać Super Productivity?",
+    "SUBTITLE": "Wybierz konfigurację pasującą do Twojego stylu pracy. Zawsze możesz to zmienić później w Ustawieniach.",
+    "PRIVACY_HINT": "Twoje dane pozostają bezpiecznie na Twoim urządzeniu. Nic nie jest wysyłane na serwer.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Prosta lista zadań",
+        "DESCRIPTION": "Przejrzysty menedżer zadań z projektami, tagami i notatkami. Bez dodatków."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Śledzenie czasu",
+        "DESCRIPTION": "Śledź, ile czasu zajmują zadania. Idealne do rozliczania godzin lub zrozumienia, na co przeznaczasz czas."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Pakiet produktywności",
+        "DESCRIPTION": "Planuj dzień, buduj nawyki, skupiaj się i śledź czas. Wszystko w jednym miejscu."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Kliknij +, aby dodać pierwsze zadanie",
+      "CREATE_TASK_TOUCH": "Dotknij +, aby dodać pierwsze zadanie",
+      "EXPLORE": "Klikaj i odkrywaj! Pomoc znajdziesz w panelu bocznym.",
+      "EXPLORE_TOUCH": "Odkrywaj swobodnie! Pomoc znajdziesz w menu.",
+      "OR_PRESS": "lub naciśnij",
+      "SKIP_ARIA": "Zamknij wskazówkę"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Dodawanie zadań od dzisiaj",

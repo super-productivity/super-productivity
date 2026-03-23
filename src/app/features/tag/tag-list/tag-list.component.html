@@ -1,8 +1,10 @@
-@if (tags()?.length > 0) {
+@if (tags()?.length > 0 || indicatorChips().length > 0) {
   <div class="tags-container">
     <div class="tags">
+      @for (chip of indicatorChips(); track $index) {
+        <tag [tag]="chip"></tag>
+      }
       @for (tag of tags(); track tag.id) {
-        <!-- -->
         <tag [tag]="tag"></tag>
       }
     </div>

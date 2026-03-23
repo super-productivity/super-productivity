@@ -24,7 +24,32 @@ describe('computePushDecisions', () => {
     toTaskValue: (v: unknown, c: FieldMappingContext) => `#${c.issueNumber} ${v}`,
   };
 
+  const dueDayMapping: FieldMapping = {
+    taskField: 'dueDay',
+    issueField: 'start_date',
+    defaultDirection: 'both',
+    mutuallyExclusive: ['dueWithTime'],
+    toIssueValue: (v: unknown) => v,
+    toTaskValue: (v: unknown) => v,
+  };
+
+  const dueWithTimeMapping: FieldMapping = {
+    taskField: 'dueWithTime',
+    issueField: 'start_datetime',
+    defaultDirection: 'both',
+    mutuallyExclusive: ['dueDay'],
+    toIssueValue: (v: unknown) => v,
+    toTaskValue: (v: unknown) => v,
+  };
+
   const allMappings: FieldMapping[] = [isDoneMapping, titleMapping];
+
+  const dateMappings: FieldMapping[] = [
+    isDoneMapping,
+    titleMapping,
+    dueDayMapping,
+    dueWithTimeMapping,
+  ];
 
   it('should push when provider unchanged and task changed', () => {
     const syncConfig: FieldSyncConfig = { isDone: 'both' };
@@ -238,5 +263,146 @@ describe('computePushDecisions', () => {
     );
 
     expect(decisions[0].issueValue).toBe('New title');
+  });
+
+  it('should push dueDay change when direction is both', () => {
+    const syncConfig: FieldSyncConfig = { dueDay: 'both' };
+    const decisions = computePushDecisions(
+      { dueDay: '2026-04-01' },
+      dateMappings,
+      syncConfig,
+      { start_date: '2026-03-15' },
+      { start_date: '2026-03-15' },
+      ctx,
+    );
+
+    const dueDayDecision = decisions.find((d) => d.field === 'start_date');
+    expect(dueDayDecision).toEqual({
+      field: 'start_date',
+      action: 'push',
+      issueValue: '2026-04-01',
+    });
+  });
+
+  it('should push dueWithTime change when direction is both', () => {
+    const syncConfig: FieldSyncConfig = { dueWithTime: 'both' };
+    const decisions = computePushDecisions(
+      { dueWithTime: 1743508800000 },
+      dateMappings,
+      syncConfig,
+      { start_datetime: 1743422400000 },
+      { start_datetime: 1743422400000 },
+      ctx,
+    );
+
+    const dueWithTimeDecision = decisions.find((d) => d.field === 'start_datetime');
+    expect(dueWithTimeDecision).toEqual({
+      field: 'start_datetime',
+      action: 'push',
+      issueValue: 1743508800000,
+    });
+  });
+
+  it('should push clear for mutually exclusive field when dueWithTime is pushed', () => {
+    const syncConfig: FieldSyncConfig = { dueWithTime: 'both', dueDay: 'both' };
+    const decisions = computePushDecisions(
+      { dueWithTime: 1743508800000 },
+      dateMappings,
+      syncConfig,
+      { start_datetime: 1743422400000, start_date: '2026-03-15' },
+      { start_datetime: 1743422400000, start_date: '2026-03-15' },
+      ctx,
+    );
+
+    const dueWithTimeDecision = decisions.find((d) => d.field === 'start_datetime');
+    expect(dueWithTimeDecision).toEqual({
+      field: 'start_datetime',
+      action: 'push',
+      issueValue: 1743508800000,
+    });
+
+    const dueDayDecision = decisions.find((d) => d.field === 'start_date');
+    expect(dueDayDecision).toEqual({
+      field: 'start_date',
+      action: 'push',
+      issueValue: undefined,
+    });
+  });
+
+  it('should push clear for mutually exclusive field when dueDay is pushed', () => {
+    const syncConfig: FieldSyncConfig = { dueDay: 'both', dueWithTime: 'both' };
+    const decisions = computePushDecisions(
+      { dueDay: '2026-04-01' },
+      dateMappings,
+      syncConfig,
+      { start_date: '2026-03-15', start_datetime: 1743422400000 },
+      { start_date: '2026-03-15', start_datetime: 1743422400000 },
+      ctx,
+    );
+
+    const dueDayDecision = decisions.find((d) => d.field === 'start_date');
+    expect(dueDayDecision).toEqual({
+      field: 'start_date',
+      action: 'push',
+      issueValue: '2026-04-01',
+    });
+
+    const dueWithTimeDecision = decisions.find((d) => d.field === 'start_datetime');
+    expect(dueWithTimeDecision).toEqual({
+      field: 'start_datetime',
+      action: 'push',
+      issueValue: undefined,
+    });
+  });
+
+  it('should not duplicate decision when both exclusive fields are changed', () => {
+    const syncConfig: FieldSyncConfig = { dueDay: 'both', dueWithTime: 'both' };
+    const decisions = computePushDecisions(
+      { dueDay: '2026-04-01', dueWithTime: 1743508800000 },
+      dateMappings,
+      syncConfig,
+      { start_date: '2026-03-15', start_datetime: 1743422400000 },
+      { start_date: '2026-03-15', start_datetime: 1743422400000 },
+      ctx,
+    );
+
+    const dueDayDecisions = decisions.filter((d) => d.field === 'start_date');
+    const dueWithTimeDecisions = decisions.filter((d) => d.field === 'start_datetime');
+    expect(dueDayDecisions.length).toBe(1);
+    expect(dueWithTimeDecisions.length).toBe(1);
+  });
+
+  it('should skip exclusive field clear when its direction is pullOnly', () => {
+    const syncConfig: FieldSyncConfig = { dueWithTime: 'both', dueDay: 'pullOnly' };
+    const decisions = computePushDecisions(
+      { dueWithTime: 1743508800000 },
+      dateMappings,
+      syncConfig,
+      { start_datetime: 1743422400000, start_date: '2026-03-15' },
+      { start_datetime: 1743422400000, start_date: '2026-03-15' },
+      ctx,
+    );
+
+    const dueDayDecision = decisions.find((d) => d.field === 'start_date');
+    expect(dueDayDecision).toBeUndefined();
+  });
+
+  it('should skip dueDay push when provider changed', () => {
+    const syncConfig: FieldSyncConfig = { dueDay: 'both' };
+    const decisions = computePushDecisions(
+      { dueDay: '2026-04-01' },
+      dateMappings,
+      syncConfig,
+      { start_date: '2026-03-20' },
+      { start_date: '2026-03-15' },
+      ctx,
+    );
+
+    const dueDayDecision = decisions.find((d) => d.field === 'start_date');
+    expect(dueDayDecision).toEqual({
+      field: 'start_date',
+      action: 'skip',
+      reason: 'provider changed (provider wins)',
+    });
   });
 });

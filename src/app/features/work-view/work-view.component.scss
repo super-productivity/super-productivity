@@ -4,15 +4,6 @@
   overflow: hidden !important;
 }
 
-add-task-bar {
-  margin: 0 auto var(--s2);
-  max-width: 628px;
-
-  ::ng-deep input {
-    box-shadow: none !important;
-  }
-}
-
 h1 {
   margin: var(--s2) 0;
   text-align: center;
@@ -196,35 +187,6 @@ finish-day-btn,
   }
 }
 
-// PLAN MODE
-.planning-mode-header {
-  text-align: center;
-
-  h1,
-  h2,
-  h3 {
-    margin: 0;
-    padding: 0;
-  }
-}
-
-.planning-mode-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-bottom: var(--s2);
-  margin: var(--s);
-
-  @include mq(xs) {
-    margin: 0;
-  }
-
-  add-task-bar {
-    width: 100%;
-  }
-}
-
 .add-more-or-finish {
   text-align: center;
   padding-bottom: var(--s);
@@ -242,18 +204,6 @@ finish-day-btn,
         margin-left: 0;
       }
     }
-  }
-}
-
-.add-scheduled {
-  margin-top: var(--s);
-}
-
-.ready-to-work-btn {
-  margin-top: var(--s2);
-
-  @include mq(xs) {
-    margin-top: var(--s3);
   }
 }
 

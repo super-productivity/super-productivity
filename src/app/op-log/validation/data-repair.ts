@@ -7,6 +7,7 @@ import { ProjectCopy } from '../../features/project/project.model';
 import { isDataRepairPossible } from './is-data-repair-possible.util';
 import { Task, TaskArchive, TaskCopy, TaskState } from '../../features/tasks/task.model';
 import { unique } from '../../util/unique';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskRepeatCfgCopy } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { IssueProvider } from '../../features/issue/issue.model';
@@ -111,6 +112,7 @@ export const dataRepair = (
   dataOut = _setTaskProjectIdAccordingToParent(dataOut, summary);
   dataOut = _removeDuplicatesFromArchive(dataOut, summary);
   dataOut = _clearLegacyReminderIds(dataOut, summary);
+  dataOut = _fixInvalidDueDateStrings(dataOut, summary);
   dataOut = _fixTaskRepeatMissingWeekday(dataOut, summary);
   dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut, summary);
   dataOut = _createInboxProjectIfNecessary(dataOut, summary);
@@ -157,6 +159,43 @@ const _ensureTaskArrayProperties = (
 
   if (fixedCount > 0) {
     OpLog.warn(`[data-repair] Fixed ${fixedCount} missing array properties on tasks`);
+    summary.entityStateFixed += fixedCount;
+  }
+
+  return data;
+};
+
+const _fixInvalidDueDateStrings = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const taskStates: TaskState[] = [
+    data.task,
+    data.archiveYoung.task as TaskState,
+    data.archiveOld.task as TaskState,
+  ];
+  let fixedCount = 0;
+
+  for (const taskState of taskStates) {
+    for (const id of taskState.ids as string[]) {
+      const t = taskState.entities[id] as TaskCopy;
+      if (!t) continue;
+      if (typeof t.dueDay === 'string' && !isDBDateStr(t.dueDay)) {
+        OpLog.warn(`[data-repair] Clearing invalid dueDay "${t.dueDay}" on task ${id}`);
+        t.dueDay = undefined;
+        fixedCount++;
+      }
+      if (typeof t.deadlineDay === 'string' && !isDBDateStr(t.deadlineDay)) {
+        OpLog.warn(
+          `[data-repair] Clearing invalid deadlineDay "${t.deadlineDay}" on task ${id}`,
+        );
+        t.deadlineDay = undefined;
+        fixedCount++;
+      }
+    }
+  }
+
+  if (fixedCount > 0) {
     summary.entityStateFixed += fixedCount;
   }
 

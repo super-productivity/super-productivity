@@ -7,13 +7,14 @@
     },
     "B_OFFLINE": "You are disconnected from the internet. Syncing and requesting issue provider data will not work.",
     "CONTEXT_MENU": {
-      "CHANGE_BACKGROUND": "Change Background"
+      "CHANGE_PROJECT_SETTINGS": "Change Project Settings",
+      "CHANGE_TAG_SETTINGS": "Change Tag Settings"
     },
     "SKIP_SYNC_WAIT": "Skip waiting for sync",
     "UPDATE_WEB_APP": "New version available. Load new version?"
   },
   "BL": {
-    "NO_TASKS": "There are currently no tasks in your backlog"
+    "NO_TASKS": "Your backlog is empty. Add tasks here to plan them later."
   },
   "BN": {
     "SHOW_ISSUE_PANEL": "Issue Provider Panel",
@@ -40,6 +41,24 @@
     "BUTTON_TEXT": "Donate via GitHub Sponsors",
     "INTRO_1": "Super Productivity is funded entirely by the community. There is no tracking, no ads, and no data collection — your tasks stay on your device.",
     "INTRO_2": "If you value this approach and want to keep the project healthy and evolving, a voluntary donation is greatly appreciated."
+  },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Learn the keyboard shortcuts",
+      "NOTES": "Super Productivity is designed to be used with the keyboard. Learn the shortcuts to work faster.\n\n**How to start:**\n1. Open the **sidebar menu**\n2. Go to **Help**\n3. Click **Keyboard Navigation Tour**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Create your first project",
+      "NOTES": "Projects help you organize your tasks by area of work. Each project has its own task list and backlog.\n\n**How to create a project:**\n1. Click the **+** button next to **Projects** in the sidebar\n2. Give it a name and pick a color\n3. Start adding tasks to it"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Set up Sync",
+      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Dropbox, WebDAV, or local file sync\n4. Follow the setup instructions"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Go further",
+      "NOTES": "There is a lot more to discover!\n\n**App Features** (in Settings) — Enable integrations, habits, and other features. Go to **Settings → App Features** to see what's available.\n\n**Boards** — Visualize your tasks in customizable Kanban-style boards. Enable them in **App Features**, then find them in the **sidebar menu**.\n\n**Schedule** — Plan your day by scheduling tasks to specific times. Drag tasks onto the **Schedule** view in the sidebar to organize your timeline.\n\n**Integrations** — Once enabled in App Features, import tasks from Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV, and many more. You can also integrate your calendar. Configure them in the **Issue Provider Panel**.\n\n**Habits** — Track recurring habits and routines. Find them in the **sidebar menu** once enabled.\n\n**Plugins** — Add features like the Procrastination Buster, Automations, or Voice Reminders. Go to **Settings → Plugins**.\n\n**Customize** — Themes, dark mode, keyboard shortcuts, language, and productivity helpers are all in **Settings**."
+    }
   },
   "F": {
     "ATTACHMENT": {
@@ -325,10 +344,6 @@
       "DEFAULT_PROJECT_DESCRIPTION": "Project assigned to tasks created from issues.",
       "DEFAULT_PROJECT_LABEL": "Default Super Productivity Project",
       "DEFAULT_TAGS_LABEL": "Default tags for imported tasks",
-      "DIALOG": {
-        "ADVANCED_CONFIG": "Advanced Config",
-        "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!"
-      },
       "HOW_TO_GET_A_TOKEN": "How to get a token?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Assignee",
@@ -371,19 +386,35 @@
         "PLUGIN_NOT_INSTALLED": "Required plugin \"{{pluginName}}\" is not installed.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}",
+        "DELETE_REMOTE_FAILED": "Failed to delete remote issue",
+        "LOAD_OPTIONS_FAILED": "Failed to load options for {{fieldKey}}",
+        "OAUTH_CONNECTED": "OAuth account connected successfully.",
+        "OAUTH_DISCONNECTED": "OAuth account disconnected.",
+        "OAUTH_FAILED": "Authentication failed.",
+        "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
+        "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
         "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"
       },
       "TWO_WAY_SYNC": {
         "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
         "AUTO_CREATE_ISSUES_DESCRIPTION": "Automatically creates an issue when you add a new top-level task to the default project. Requires a default project to be set.",
         "BOTH": "Both (bidirectional)",
+        "DUE_DAY": "Due Day",
+        "DUE_WITH_TIME": "Due Date/Time",
         "NOTES": "Notes / Description sync direction",
         "OFF": "Off",
         "PULL_ONLY": "Pull only",
         "PUSH_ONLY": "Push only",
         "SECTION": "Two-Way Sync (experimental)",
         "STATUS": "Status sync direction",
+        "TIME_ESTIMATE": "Time Estimate",
         "TITLE": "Title sync direction"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Advanced Config",
+        "CONNECTED": "Connected",
+        "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!",
+        "DISCONNECT": "Disconnect"
       }
     },
     "ISSUE_PANEL": {
@@ -827,7 +858,7 @@
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
     "QUICK_HISTORY": {
-      "NO_DATA": "No data for current year",
+      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
       "PAGE_TITLE": "Quick History",
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
@@ -1913,6 +1944,7 @@
     "APP_FEATURES": {
       "BOARDS": "Boards",
       "DONATE_PAGE": "Donate page",
+      "FINISH_DAY": "Finish day",
       "FOCUS_MODE": "Focus mode",
       "HABITS": "Habits",
       "HELP": "Enable or disable specific app features across the UI.",
@@ -2364,6 +2396,33 @@
     "TASK_ALREADY_COMPLETED": "Task already completed",
     "TASK_MARKED_DONE": "Task marked as done"
   },
+  "ONBOARDING": {
+    "TITLE": "How do you want to use Super Productivity?",
+    "SUBTITLE": "Pick a setup that matches your workflow. You can always change this later in Settings.",
+    "PRIVACY_HINT": "Your data stays securely on your device. Nothing is sent to a server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Simple Todo List",
+        "DESCRIPTION": "A clean task manager with projects, tags, and notes. No extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Time Tracker",
+        "DESCRIPTION": "Track how long tasks take. Great for billing hours or understanding where your time goes."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Productivity Suite",
+        "DESCRIPTION": "Plan your day, build habits, focus deeply, and track your time. All in one place."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Click + to add your first task",
+      "CREATE_TASK_TOUCH": "Tap + to add your first task",
+      "EXPLORE": "Feel free to click around and explore! You can find help in the sidebar.",
+      "EXPLORE_TOUCH": "Feel free to tap around and explore! You can find help in the menu.",
+      "OR_PRESS": "or press",
+      "SKIP_ARIA": "Dismiss hint"
+    }
+  },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Add tasks from today",
     "ARCHIVED_TASKS": {
@@ -2524,8 +2583,10 @@
     "LAST": "Last:",
     "NEXT": "Next",
     "NO_DEADLINES": "There are currently no tasks with deadlines. You can set a deadline via the task's context menu or detail panel.",
-    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Recur\" in the task's side panel. To open the side panel, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
+    "NO_REPEATABLE_TASKS": "No recurring tasks yet. To create one, open a task's side panel and choose \"Recur\".",
     "NO_SCHEDULED": "There are currently no scheduled tasks of this type. You can schedule a task by choosing \"Schedule Task\" in the task's context menu. To open it, right-click (long press on mobile) on a task.",
+    "NO_SCHEDULED_FOR_DAY": "No tasks planned for specific days yet. Right-click a task and choose \"Schedule\" to plan it for a day.",
+    "NO_SCHEDULED_WITH_TIME": "No tasks scheduled with a start time yet. Right-click a task and choose \"Schedule\" to set a specific time.",
     "NO_SCHEDULED_TITLE": "Scheduled Tasks for Day",
     "REPEATED_TASKS": "Recurring Tasks",
     "SCHEDULED_TASKS": "Scheduled Tasks",
@@ -2581,7 +2642,6 @@
   "WW": {
     "ADD_MORE": "Add more",
     "ADD_SCHEDULED_FOR_TOMORROW": "Add tasks planned for tomorrow ({{nr}})",
-    "ADD_SOME_TASKS": "Add some tasks to plan your day!",
     "DONE_TASKS": "Completed Tasks",
     "DONE_TASKS_IN_ARCHIVE": "There are currently no completed tasks here, but there are some already archived.",
     "ESTIMATE_REMAINING": "Estimate remaining:",
@@ -2592,7 +2652,6 @@
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
     "NO_PLANNED_TASKS": "No tasks planned",
-    "READY_TO_WORK": "Ready to work!",
     "RECURRING_TASKS": "Recurring Tasks",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time estimated:",

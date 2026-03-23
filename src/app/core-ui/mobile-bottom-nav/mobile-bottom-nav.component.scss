@@ -119,3 +119,23 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
+
+@keyframes slide-up-from-bottom {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.mobile-bottom-nav.entrance {
+  animation: slide-up-from-bottom 400ms ease-out 250ms backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-nav.entrance {
+    animation: none;
+  }
+}

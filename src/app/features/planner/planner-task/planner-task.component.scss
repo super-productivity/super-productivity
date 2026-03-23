@@ -165,67 +165,6 @@
   > * {
     @include center;
   }
-
-  .type-ico-wrapper {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    opacity: var(--task-icon-default-opacity);
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    @include mq(xs, max) {
-      //display: none;
-    }
-
-    mat-icon {
-      margin-left: var(--s);
-      margin-right: var(--s);
-      opacity: 0.8;
-      font-size: var(--planner-item-ico-size);
-      height: var(--planner-item-ico-size);
-      width: var(--planner-item-ico-size);
-      min-width: var(--planner-item-ico-size);
-      max-width: var(--planner-item-ico-size);
-    }
-
-    :host.isCurrent &::ng-deep mat-icon {
-      transform: scale(1.4) !important;
-      transform-origin: center center;
-      opacity: 0.18;
-    }
-  }
-}
-
-.mini-badge {
-  line-height: var(--mini-badge-size);
-  width: var(--mini-badge-size);
-  height: var(--mini-badge-size);
-  font-size: 12px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  text-align: center;
-  z-index: 2;
-}
-
-.repeat-date-badge {
-  @include center;
-  margin-top: 10px;
-  font-size: 10px;
-  z-index: 10;
-  line-height: 1;
-  text-align: center;
-  padding: 1px var(--s-quarter) 0;
-  @include extraBorder();
-  border-radius: var(--card-border-radius);
-
-  // avoid affecting drag handle
-  pointer-events: none;
-  background: var(--bg-lighter);
 }
 
 .original-time-remaining {

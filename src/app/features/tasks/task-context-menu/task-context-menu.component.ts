@@ -28,7 +28,7 @@ export class TaskContextMenuComponent {
     read: TaskContextMenuInnerComponent,
   });
 
-  open(ev: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
+  open(ev?: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
     this.isShowInner = true;
     this._cd.detectChanges();
     this.taskContextMenuInner()?.open(ev, isOpenedFromKeyBoard);

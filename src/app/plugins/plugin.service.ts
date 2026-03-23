@@ -342,24 +342,25 @@ export class PluginService implements OnDestroy {
     name: string;
     icon: string;
     issueProviderKey: string;
+    useAgendaView: boolean;
   }> {
     const result: Array<{
       pluginId: string;
       name: string;
       icon: string;
       issueProviderKey: string;
+      useAgendaView: boolean;
     }> = [];
     for (const [, state] of this._pluginStates()) {
-      if (
-        !state.isEnabled &&
-        state.manifest.issueProvider?.issueProviderKey &&
-        state.manifest.type === 'issueProvider'
-      ) {
+      if (!state.isEnabled && state.manifest.type === 'issueProvider') {
         result.push({
           pluginId: state.manifest.id,
           name: state.manifest.name,
-          icon: state.manifest.issueProvider.icon || 'extension',
-          issueProviderKey: state.manifest.issueProvider.issueProviderKey,
+          icon: state.manifest.issueProvider?.icon || 'extension',
+          issueProviderKey:
+            state.manifest.issueProvider?.issueProviderKey ??
+            `plugin:${state.manifest.id}`,
+          useAgendaView: state.manifest.issueProvider?.useAgendaView ?? false,
         });
       }
     }

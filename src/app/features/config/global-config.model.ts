@@ -20,6 +20,7 @@ export type AppFeaturesConfig = Readonly<{
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
+  isFinishDayEnabled: boolean;
 }>;
 
 export type MiscConfig = Readonly<{

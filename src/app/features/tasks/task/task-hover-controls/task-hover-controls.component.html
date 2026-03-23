@@ -1,30 +1,29 @@
-@if (
-  isTimeTrackingEnabled() && !task().isDone && !isCurrent() && !task().subTasks?.length
-) {
-  <button
-    (click)="parent.startTask()"
-    title="{{ T.F.TASK.CMP.TRACK_TIME | translate }} {{
-      kb.togglePlay ? '[' + kb.togglePlay + ']' : ''
-    }}"
-    class="ico-btn start-task-btn"
-    color=""
-    mat-icon-button
-  >
-    <mat-icon class="play-icon">play_arrow</mat-icon>
-  </button>
-}
-@if (!task().isDone && isCurrent() && !task().subTasks?.length) {
-  <button
-    (click)="parent.pauseTask()"
-    title="{{ T.F.TASK.CMP.TRACK_TIME_STOP | translate }} {{
-      kb.togglePlay ? '[' + kb.togglePlay + ']' : ''
-    }}"
-    class="ico-btn"
-    color="accent"
-    mat-icon-button
-  >
-    <mat-icon>pause</mat-icon>
-  </button>
+@if (isTimeTrackingEnabled() && !task().isDone && !task().subTasks?.length) {
+  @if (isCurrent()) {
+    <button
+      (click)="parent.pauseTask()"
+      title="{{ T.F.TASK.CMP.TRACK_TIME_STOP | translate }} {{
+        kb.togglePlay ? '[' + kb.togglePlay + ']' : ''
+      }}"
+      class="ico-btn"
+      color="accent"
+      mat-icon-button
+    >
+      <mat-icon>pause</mat-icon>
+    </button>
+  } @else {
+    <button
+      (click)="parent.startTask()"
+      title="{{ T.F.TASK.CMP.TRACK_TIME | translate }} {{
+        kb.togglePlay ? '[' + kb.togglePlay + ']' : ''
+      }}"
+      class="ico-btn start-task-btn"
+      color=""
+      mat-icon-button
+    >
+      <mat-icon class="play-icon">play_arrow</mat-icon>
+    </button>
+  }
 }
 @if (isShowAddToToday()) {
   <button
@@ -48,19 +47,6 @@
     mat-icon-button
   >
     <mat-icon svgIcon="remove_today"></mat-icon>
-  </button>
-}
-@if (!task().isDone) {
-  <button
-    (click)="parent.toggleTaskDone()"
-    title="{{ T.F.TASK.CMP.TOGGLE_DONE | translate }} {{
-      kb.taskToggleDone ? '[' + kb.taskToggleDone + ']' : ''
-    }}"
-    class="ico-btn task-done-btn"
-    color=""
-    mat-icon-button
-  >
-    <mat-icon>check</mat-icon>
   </button>
 }
 @if (

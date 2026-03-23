@@ -1,4 +1,10 @@
-@if (tag().icon) {
+@if (tag().svgIcon) {
+  <mat-icon
+    [svgIcon]="tag().svgIcon!"
+    [style.color]="color()"
+    class="tag-ico tag-ico-svg"
+  ></mat-icon>
+} @else if (tag().icon) {
   @if (isEmojiIcon()) {
     <span
       [style.color]="color()"

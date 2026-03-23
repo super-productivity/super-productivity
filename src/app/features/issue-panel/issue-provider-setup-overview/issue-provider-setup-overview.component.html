@@ -21,6 +21,32 @@
     <mat-icon>calendar_month</mat-icon>
     <span>iCal Other</span>
   </button>
+  @for (provider of pluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="openSetupDialog(provider.registeredKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
+  @for (provider of disabledPluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
 </div>
 
 <h4>Setup Issue Provider</h4>

@@ -75,6 +75,7 @@ src/app/**/*.js.map
 # added
 build/hub
 electron/**/*.js
+!electron/scripts/bundle-preload.js
 electron/**/*.js.map
 
 # mac os deployment

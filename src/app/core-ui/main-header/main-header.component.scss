@@ -23,13 +23,12 @@
 }
 
 :host-context(.isNoMac.isObsidianStyleHeader.isElectron) {
-  // Reserve space for Windows/Linux window controls (minimize/maximize/close).
-  // Static fallback for browsers where max()/env() isn't fully supported.
-  padding-right: 140px;
-  // Dynamic version: uses WCO env var when available, but guarantees at least
-  // 140px via max() — guards against env(titlebar-area-width) being defined
-  // but returning the full viewport width (observed on Windows Electron).
-  padding-right: max(140px, calc(100vw - env(titlebar-area-width, calc(100vw - 140px))));
+  // Dynamic window controls width using Window Controls Overlay CSS env vars
+  // env(titlebar-area-width) = available width (viewport - controls)
+  // So: controls width = 100vw - titlebar-area-width
+  // Fallback calc ensures 140px when env vars unavailable
+  // Only on non-Mac: macOS window controls are on the left, no right padding needed
+  padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 140px)));
 
   // Prevent header content from overflowing into the window controls area
   // when the window is resized to a narrow width (fixes #6365).

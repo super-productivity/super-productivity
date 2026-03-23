@@ -12,11 +12,40 @@
   "permissions": [],
   "hooks": [],
   "i18n": {
-    "languages": ["en", "ar", "cs", "de", "es", "fa", "fi", "fr", "hr", "id", "it", "ja", "ko", "nb", "nl", "pl", "pt", "pt-br", "ro", "ro-md", "ru", "sk", "sv", "tr", "uk", "zh", "zh-tw"]
+    "languages": [
+      "en",
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "hr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nb",
+      "nl",
+      "pl",
+      "pt",
+      "pt-br",
+      "ro",
+      "ro-md",
+      "ru",
+      "sk",
+      "sv",
+      "tr",
+      "uk",
+      "zh",
+      "zh-tw"
+    ]
   },
   "issueProvider": {
     "pollIntervalMs": 60000,
     "icon": "clickup",
+    "humanReadableName": "ClickUp",
     "issueProviderKey": "CLICKUP",
     "issueStrings": {
       "singular": "Task",

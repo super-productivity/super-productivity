@@ -31,7 +31,6 @@ import {
 import { TaskWithSubTasks } from '../tasks/task.model';
 import { delay, filter, map, observeOn, switchMap } from 'rxjs/operators';
 import { fadeAnimation } from '../../ui/animations/fade.ani';
-import { PlanningModeService } from '../planning-mode/planning-mode.service';
 import { T } from '../../t.const';
 import { workViewProjectChangeAnimation } from '../../ui/animations/work-view-project-change.ani';
 import { WorkContextService } from '../work-context/work-context.service';
@@ -43,8 +42,6 @@ import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { MatButton, MatMiniFabButton } from '@angular/material/button';
-import { AddTaskBarComponent } from '../tasks/add-task-bar/add-task-bar.component';
-import { AddScheduledTodayOrTomorrowBtnComponent } from '../add-tasks-for-tomorrow/add-scheduled-for-tomorrow/add-scheduled-today-or-tomorrow-btn.component';
 import { TaskListComponent } from '../tasks/task-list/task-list.component';
 import { SplitComponent } from './split/split.component';
 import { BacklogComponent } from './backlog/backlog.component';
@@ -57,6 +54,7 @@ import {
 } from '../tasks/store/task.selectors';
 import { CollapsibleComponent } from '../../ui/collapsible/collapsible.component';
 import { SnackService } from '../../core/snack/snack.service';
+import { GlobalConfigService } from '../config/global-config.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TODAY_TAG } from '../tag/tag.const';
@@ -88,8 +86,6 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
     MatIcon,
     MatMiniFabButton,
     MatButton,
-    AddTaskBarComponent,
-    AddScheduledTodayOrTomorrowBtnComponent,
     TaskListComponent,
     SplitComponent,
     BacklogComponent,
@@ -106,7 +102,6 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
 export class WorkViewComponent implements OnInit, OnDestroy {
   taskService = inject(TaskService);
   takeABreakService = inject(TakeABreakService);
-  planningModeService = inject(PlanningModeService);
   layoutService = inject(LayoutService);
   customizerService = inject(TaskViewCustomizerService);
   workContextService = inject(WorkContextService);
@@ -115,6 +110,11 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _cd = inject(ChangeDetectorRef);
   private _store = inject(Store);
   private _snackService = inject(SnackService);
+  private _globalConfigService = inject(GlobalConfigService);
+
+  isFinishDayEnabled = computed(
+    () => this._globalConfigService.appFeatures().isFinishDayEnabled,
+  );
 
   // TODO refactor all to signals
   overdueTasks = toSignal(this._store.select(selectOverdueTasksWithSubTasks), {
@@ -134,7 +134,6 @@ export class WorkViewComponent implements OnInit, OnDestroy {
 
   hasDoneTasks = computed(() => this.doneTasks().length > 0);
 
-  isPlanningMode = this.planningModeService.isPlanningMode;
   todayRemainingInProject = toSignal(this.workContextService.todayRemainingInProject$, {
     initialValue: 0,
   });
@@ -190,7 +189,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       delay(50),
       switchMap(() => this.splitTopEl$),
       switchMap((el) =>
-        // Defer scroll reactions to the next frame so layoutService.isScrolled
+        // Defer scroll reactions to the next frame so layoutService.isWorkViewScrolled
         // toggles happen in sync with the browser repaint.
         fromEvent(el, 'scroll').pipe(observeOn(animationFrameScheduler)),
       ),
@@ -292,15 +291,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._switchListAnimationTimeout);
     }
     this._subs.unsubscribe();
-    this.layoutService.isScrolled.set(false);
-  }
-
-  planMore(): void {
-    this.planningModeService.enterPlanningMode();
-  }
-
-  startWork(): void {
-    this.planningModeService.leavePlanningMode();
+    this.layoutService.isWorkViewScrolled.set(false);
   }
 
   resetBreakTimer(): void {
@@ -310,22 +301,7 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   async moveDoneToArchive(): Promise<void> {
     const doneTasks = this.doneTasks();
 
-    // Add detailed logging for debugging
-    console.log('[WorkView] moveDoneToArchive called with:', {
-      doneTasks,
-      type: typeof doneTasks,
-      isArray: Array.isArray(doneTasks),
-      length: doneTasks?.length,
-      projectId: this.workContextService.activeWorkContextId,
-      contextType: this.workContextService.activeWorkContextType,
-    });
-
-    if (!doneTasks || !Array.isArray(doneTasks)) {
-      console.error('[WorkView] doneTasks is not an array:', doneTasks);
-      return;
-    }
-
-    if (doneTasks.length === 0) {
+    if (!doneTasks || doneTasks.length === 0) {
       return;
     }
 
@@ -353,9 +329,9 @@ export class WorkViewComponent implements OnInit, OnDestroy {
     this._subs.add(
       this.upperContainerScroll$.subscribe(({ target }) => {
         if ((target as HTMLElement).scrollTop !== 0) {
-          this.layoutService.isScrolled.set(true);
+          this.layoutService.isWorkViewScrolled.set(true);
         } else {
-          this.layoutService.isScrolled.set(false);
+          this.layoutService.isWorkViewScrolled.set(false);
         }
       }),
     );

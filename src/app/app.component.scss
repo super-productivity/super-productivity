@@ -186,3 +186,49 @@ mat-sidenav {
   background-position: center !important;
   background-attachment: fixed;
 }
+
+// App entrance animation after onboarding preset selection
+@keyframes entrance-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes entrance-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-entrance {
+  // Side nav slides in from left (desktop only)
+  magic-side-nav {
+    animation: entrance-slide-left 450ms ease-out 50ms backwards;
+  }
+
+  // Main content area fades + slides up as a whole
+  .main-content {
+    animation: entrance-slide-up 450ms ease-out 150ms backwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entrance {
+    magic-side-nav,
+    .main-content {
+      animation: none;
+    }
+  }
+}

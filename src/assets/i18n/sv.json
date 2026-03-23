@@ -36,6 +36,24 @@
     "NO_RESULTS": "Inga bilder hittades. Försök med en annan sökterm.",
     "BY": "av"
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Lär dig tangentbordsgenvägarna",
+      "NOTES": "Super Productivity är utformat för att användas med tangentbordet. Lär dig genvägarna för att arbeta snabbare.\n\n**Så här börjar du:**\n1. Öppna **sidofältsmenyn**\n2. Gå till **Hjälp**\n3. Klicka på **Tangentbordsnavigationstur**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Skapa ditt första projekt",
+      "NOTES": "Projekt hjälper dig att organisera dina uppgifter efter arbetsområde. Varje projekt har sin egen uppgiftslista och backlog.\n\n**Så här skapar du ett projekt:**\n1. Klicka på **+**-knappen bredvid **Projekt** i sidofältet\n2. Ge det ett namn och välj en färg\n3. Börja lägga till uppgifter"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Konfigurera synkronisering",
+      "NOTES": "Håll dina data säkra och tillgängliga på alla enheter.\n\n**Så här konfigurerar du:**\n1. Öppna **Inställningar** (kugghjulsikonen i sidofältet)\n2. Gå till **Synkronisering**\n3. Välj en leverantör: Super Sync, Dropbox, WebDAV eller lokal filsynkronisering\n4. Följ installationsinstruktionerna"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Utforska mer",
+      "NOTES": "Det finns mycket mer att upptäcka!\n\n**App-funktioner** (i Inställningar) — Aktivera integrationer, vanor och andra funktioner. Gå till **Inställningar → App-funktioner** för att se vad som finns tillgängligt.\n\n**Tavlor** — Visualisera dina uppgifter i anpassningsbara Kanban-tavlor. Aktivera dem i **Appfunktioner** och hitta dem i **sidomenyn**.\n\n**Schema** — Planera din dag genom att schemalägga uppgifter till specifika tider. Dra uppgifter till **Schema**-vyn i sidofältet.\n\n**Integrationer** — När de aktiverats i App-funktioner, importera uppgifter från Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV och många fler. Du kan också integrera din kalender. Konfigurera dem i **Ärendeprovider-panelen**.\n\n**Vanor** — Följ upp återkommande vanor och rutiner. Hitta dem i **sidofältsmenyn** när de aktiverats.\n\n**Plugins** — Lägg till funktioner som Prokrastineringsbrytaren, Automatiseringar eller Röstpåminnelser. Gå till **Inställningar → Plugins**.\n\n**Anpassa** — Teman, mörkt läge, tangentbordsgenvägar, språk och produktivitetsverktyg finns alla i **Inställningar**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2350,6 +2368,33 @@
     "STATUS_COMPLETE": "Migrering slutförd!",
     "STATUS_MIGRATING": "Migrerar data...",
     "STATUS_PREPARING": "Förbereder migrering..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Hur vill du använda Super Productivity?",
+    "SUBTITLE": "Välj en inställning som passar ditt arbetsflöde. Du kan alltid ändra detta senare i Inställningar.",
+    "PRIVACY_HINT": "Dina data förblir säkert på din enhet. Inget skickas till en server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Enkel uppgiftslista",
+        "DESCRIPTION": "En ren uppgiftshanterare med projekt, taggar och anteckningar. Inga extra funktioner."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Tidsspårning",
+        "DESCRIPTION": "Spåra hur lång tid uppgifter tar. Perfekt för tidsredovisning eller för att förstå var din tid går."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Produktivitetspaket",
+        "DESCRIPTION": "Planera din dag, bygg vanor, fokusera djupt och spåra tid. Allt på ett ställe."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klicka på + för att lägga till din första uppgift",
+      "CREATE_TASK_TOUCH": "Tryck på + för att lägga till din första uppgift",
+      "EXPLORE": "Klicka runt och utforska fritt! Du hittar hjälp i sidopanelen.",
+      "EXPLORE_TOUCH": "Tryck runt och utforska fritt! Du hittar hjälp i menyn.",
+      "OR_PRESS": "eller tryck",
+      "SKIP_ARIA": "Stäng ledtråd"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Lägg till uppgifter från idag",

@@ -48,11 +48,8 @@ export class WorkViewPage extends BasePage {
   async addSubTask(task: Locator, subTaskName: string): Promise<void> {
     await task.waitFor({ state: 'visible' });
 
-    // Click the drag handle to focus the task (avoids opening edit mode on task-title)
-    // Use .first() because parent tasks contain subtask elements which also have .drag-handle
-    const dragHandle = task.locator('.drag-handle').first();
-    await dragHandle.waitFor({ state: 'visible', timeout: 5000 });
-    await dragHandle.click();
+    // Focus the task element directly (avoids opening edit mode on task-title)
+    await task.focus();
     await this.page.waitForTimeout(200);
 
     // Verify focus is on the task, retry with task.focus() if needed

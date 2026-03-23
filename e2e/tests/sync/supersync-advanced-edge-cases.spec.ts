@@ -135,7 +135,7 @@ test.describe('@supersync SuperSync Advanced Edge Cases', () => {
       const initialTaskLocator = clientA.page.locator(`task:has-text("${initialTask}")`);
       await initialTaskLocator.hover();
       // Wait for done button to be visible after hover reveals it
-      const doneBtn = initialTaskLocator.locator('.task-done-btn');
+      const doneBtn = initialTaskLocator.locator('.done-toggle');
       await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
       await doneBtn.click();
       await clientA.sync.syncAndWait();

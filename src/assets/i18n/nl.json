@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity wordt volledig gefinancierd door de gemeenschap. Er is geen tracking, geen advertenties en geen gegevensverzameling — je taken blijven op je apparaat.",
     "INTRO_2": "Als je deze aanpak waardeert en het project gezond en in ontwikkeling wilt houden, wordt een vrijwillige donatie zeer op prijs gesteld."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Leer de sneltoetsen",
+      "NOTES": "Super Productivity is ontworpen om met het toetsenbord te gebruiken. Leer de sneltoetsen om sneller te werken.\n\n**Hoe te beginnen:**\n1. Open het **zijbalkmenu**\n2. Ga naar **Help**\n3. Klik op **Toetsenbordnavigatie-tour**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Maak je eerste project aan",
+      "NOTES": "Projecten helpen je om je taken per werkgebied te organiseren. Elk project heeft een eigen takenlijst en backlog.\n\n**Hoe maak je een project aan:**\n1. Klik op de **+**-knop naast **Projecten** in de zijbalk\n2. Geef het een naam en kies een kleur\n3. Begin met het toevoegen van taken"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Synchronisatie instellen",
+      "NOTES": "Houd je gegevens veilig en toegankelijk op al je apparaten.\n\n**Hoe in te stellen:**\n1. Open de **Instellingen** (tandwielpictogram in de zijbalk)\n2. Ga naar **Synchronisatie**\n3. Kies een provider: Super Sync, Dropbox, WebDAV of lokale bestandssynchronisatie\n4. Volg de installatie-instructies"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Ontdek meer",
+      "NOTES": "Er valt nog veel meer te ontdekken!\n\n**App-functies** (in Instellingen) — Schakel integraties, gewoonten en andere functies in. Ga naar **Instellingen → App-functies** om te zien wat beschikbaar is.\n\n**Borden** — Bekijk je taken in aanpasbare Kanban-borden. Schakel ze in bij **App-functies** en vind ze in het **zijmenu**.\n\n**Planning** — Plan je dag door taken op specifieke tijden in te plannen. Sleep taken naar de **Planning**-weergave in de zijbalk.\n\n**Integraties** — Eenmaal ingeschakeld bij App-functies, importeer taken vanuit Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV en nog veel meer. Je kunt ook je agenda integreren. Configureer ze in het **Ticketprovider-paneel**.\n\n**Gewoonten** — Houd terugkerende gewoonten en routines bij. Vind ze in het **zijbalkmenu** zodra ze zijn ingeschakeld.\n\n**Plugins** — Voeg functies toe zoals de Uitstelgedrag-breker, Automatiseringen of Spraakherinneringen. Ga naar **Instellingen → Plugins**.\n\n**Aanpassen** — Thema's, donkere modus, sneltoetsen, taal en productiviteitshulpmiddelen vind je allemaal in de **Instellingen**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,33 @@
     "STATUS_BACKUP": "Backup van je gegevens maken...",
     "STATUS_MIGRATING": "Gegevens migreren...",
     "STATUS_PREPARING": "Migratie voorbereiden..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Hoe wil je Super Productivity gebruiken?",
+    "SUBTITLE": "Kies een instelling die bij je werkwijze past. Je kunt dit later altijd wijzigen in Instellingen.",
+    "PRIVACY_HINT": "Je gegevens blijven veilig op je apparaat. Er wordt niets naar een server verzonden.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Eenvoudige takenlijst",
+        "DESCRIPTION": "Een overzichtelijke taakbeheerder met projecten, tags en notities. Zonder extra's."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Tijdregistratie",
+        "DESCRIPTION": "Registreer hoeveel tijd taken kosten. Ideaal voor het factureren van uren of om te begrijpen waar je tijd naartoe gaat."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Productiviteitspakket",
+        "DESCRIPTION": "Plan je dag, bouw gewoontes op, focus diep en registreer je tijd. Alles op één plek."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klik op + om je eerste taak toe te voegen",
+      "CREATE_TASK_TOUCH": "Tik op + om je eerste taak toe te voegen",
+      "EXPLORE": "Klik gerust rond en ontdek alles! Je vindt hulp in de zijbalk.",
+      "EXPLORE_TOUCH": "Tik gerust rond en ontdek alles! Je vindt hulp in het menu.",
+      "OR_PRESS": "of druk op",
+      "SKIP_ARIA": "Hint sluiten"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Taken toevoegen vanaf vandaag",

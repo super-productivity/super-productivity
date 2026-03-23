@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity je financována výhradně komunitou. Neexistuje žádné sledování, žádné reklamy a žádný sběr dat – vaše úkoly zůstávají ve vašem zařízení.",
     "INTRO_2": "Pokud si tohoto přístupu vážíte a chcete projekt udržet zdravý a vyvíjející se, dobrovolný dar velmi oceníme."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Naučte se klávesové zkratky",
+      "NOTES": "Super Productivity je navržena pro ovládání klávesnicí. Naučte se zkratky, abyste pracovali rychleji.\n\n**Jak začít:**\n1. Otevřete **postranní menu**\n2. Přejděte na **Nápověda**\n3. Klikněte na **Prohlídka klávesové navigace**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Vytvořte svůj první projekt",
+      "NOTES": "Projekty vám pomohou organizovat úkoly podle oblastí práce. Každý projekt má vlastní seznam úkolů a backlog.\n\n**Jak vytvořit projekt:**\n1. Klikněte na tlačítko **+** vedle **Projekty** v postranním panelu\n2. Pojmenujte ho a vyberte barvu\n3. Začněte do něj přidávat úkoly"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Nastavte synchronizaci",
+      "NOTES": "Udržujte svá data v bezpečí a přístupná napříč zařízeními.\n\n**Jak nastavit:**\n1. Otevřete **Nastavení** (ikona ozubeného kola v postranním panelu)\n2. Přejděte na **Synchronizace**\n3. Vyberte poskytovatele: Super Sync, Dropbox, WebDAV nebo synchronizaci lokálním souborem\n4. Postupujte podle pokynů k nastavení"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Objevte více",
+      "NOTES": "Je toho mnohem více k objevení!\n\n**Funkce aplikace** (v Nastavení) — Povolte integrace, návyky a další funkce. Přejděte do **Nastavení → Funkce aplikace** a podívejte se, co je k dispozici.\n\n**Nástěnky** — Vizualizujte své úkoly na přizpůsobitelných Kanban nástěnkách. Povolte je v **Funkcích aplikace**, pak je najdete v **postranním menu**.\n\n**Rozvrh** — Naplánujte si den přiřazením úkolů ke konkrétním časům. Přetáhněte úkoly do zobrazení **Rozvrh** v postranním panelu.\n\n**Integrace** — Po povolení ve Funkcích aplikace importujte úkoly z Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV a mnoha dalších. Můžete také integrovat svůj kalendář. Nakonfigurujte je v **Panelu poskytovatelů úkolů**.\n\n**Návyky** — Sledujte opakující se návyky a rutiny. Najdete je v **postranním menu** po povolení.\n\n**Pluginy** — Přidejte funkce jako Zabiják prokrastinace, Automatizace nebo Hlasová připomenutí. Přejděte do **Nastavení → Pluginy**.\n\n**Přizpůsobení** — Motivy, tmavý režim, klávesové zkratky, jazyk a nástroje produktivity — vše najdete v **Nastavení**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2362,6 +2380,33 @@
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "Aktualizace systému",
     "DIALOG_MESSAGE": "Aktualizujeme způsob ukládání dat pro lepší spolehlivost synchronizace.<br><br>Záloha vašich dat bude automaticky stažena. Tuto zálohu můžete použít k obnovení dat v případě potřeby (Soubor > Import)."
+  },
+  "ONBOARDING": {
+    "TITLE": "Jak chcete používat Super Productivity?",
+    "SUBTITLE": "Vyberte si nastavení, které odpovídá vašemu pracovnímu postupu. Můžete to kdykoliv změnit v Nastavení.",
+    "PRIVACY_HINT": "Vaše data zůstávají bezpečně na vašem zařízení. Na server se nic neodesílá.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Jednoduchý seznam úkolů",
+        "DESCRIPTION": "Přehledný správce úkolů s projekty, štítky a poznámkami. Bez zbytečností."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Sledování času",
+        "DESCRIPTION": "Sledujte, kolik času zabírají úkoly. Skvělé pro fakturaci hodin nebo pochopení, kam váš čas odchází."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Sada produktivity",
+        "DESCRIPTION": "Plánujte svůj den, budujte návyky, soustřeďte se a sledujte čas. Vše na jednom místě."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klikněte na + pro přidání prvního úkolu",
+      "CREATE_TASK_TOUCH": "Klepněte na + pro přidání prvního úkolu",
+      "EXPLORE": "Klidně klikejte a prozkoumávejte! Nápovědu najdete v postranním panelu.",
+      "EXPLORE_TOUCH": "Klidně prozkoumávejte! Nápovědu najdete v menu.",
+      "OR_PRESS": "nebo stiskněte",
+      "SKIP_ARIA": "Zavřít nápovědu"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Přidat úkoly z dneška",

@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity je financovaný výlučne komunitou. Neexistuje žiadne sledovanie, žiadne reklamy a žiadne zhromažďovanie údajov — vaše úlohy zostávajú na vašom zariadení.",
     "INTRO_2": "Ak si vážite tento prístup a chcete, aby projekt zostal zdravý a vyvíjal sa, dobrovoľný príspevok je veľmi ocenený."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Naučte sa klávesové skratky",
+      "NOTES": "Super Productivity je navrhnuté na ovládanie klávesnicou. Naučte sa skratky, aby ste pracovali rýchlejšie.\n\n**Ako začať:**\n1. Otvorte **bočné menu**\n2. Prejdite na **Pomoc**\n3. Kliknite na **Prehliadka klávesovej navigácie**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Vytvorte svoj prvý projekt",
+      "NOTES": "Projekty vám pomáhajú organizovať úlohy podľa oblasti práce. Každý projekt má vlastný zoznam úloh a backlog.\n\n**Ako vytvoriť projekt:**\n1. Kliknite na tlačidlo **+** vedľa **Projekty** v bočnom paneli\n2. Pomenujte ho a vyberte farbu\n3. Začnite do neho pridávať úlohy"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Nastavte synchronizáciu",
+      "NOTES": "Udržujte svoje dáta v bezpečí a prístupné na rôznych zariadeniach.\n\n**Ako nastaviť:**\n1. Otvorte **Nastavenia** (ikona ozubeného kolesa v bočnom paneli)\n2. Prejdite na **Synchronizácia**\n3. Vyberte poskytovateľa: Super Sync, Dropbox, WebDAV alebo synchronizáciu lokálnym súborom\n4. Postupujte podľa pokynov na nastavenie"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Objavte viac",
+      "NOTES": "Je toho oveľa viac na objavenie!\n\n**Funkcie aplikácie** (v Nastaveniach) — Povoľte integrácie, návyky a ďalšie funkcie. Prejdite do **Nastavenia → Funkcie aplikácie** a pozrite sa, čo je k dispozícii.\n\n**Nástenky** — Vizualizujte svoje úlohy na prispôsobiteľných Kanban nástenkách. Povoľte ich v **Funkciách aplikácie**, potom ich nájdete v **bočnom menu**.\n\n**Rozvrh** — Naplánujte si deň priradením úloh ku konkrétnym časom. Pretiahnite úlohy do zobrazenia **Rozvrh** na bočnom paneli.\n\n**Integrácie** — Po povolení vo Funkciách aplikácie importujte úlohy z Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV a mnohých ďalších. Môžete tiež integrovať svoj kalendár. Nakonfigurujte ich v **Paneli poskytovateľov úloh**.\n\n**Návyky** — Sledujte opakujúce sa návyky a rutiny. Nájdete ich v **bočnom menu** po povolení.\n\n**Pluginy** — Pridajte funkcie ako Zabijak prokrastinácie, Automatizácie alebo Hlasové pripomienky. Prejdite do **Nastavenia → Pluginy**.\n\n**Prispôsobenie** — Motívy, tmavý režim, klávesové skratky, jazyk a nástroje produktivity — všetko nájdete v **Nastaveniach**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,33 @@
     "STATUS_COMPLETE": "Migrácia dokončená!",
     "STATUS_MIGRATING": "Migrácia dát...",
     "STATUS_PREPARING": "Príprava migrácie..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Ako chcete používať Super Productivity?",
+    "SUBTITLE": "Vyberte si nastavenie, ktoré zodpovedá vášmu pracovnému postupu. Môžete to kedykoľvek zmeniť v Nastaveniach.",
+    "PRIVACY_HINT": "Vaše údaje zostávajú bezpečne na vašom zariadení. Na server sa nič neodosiela.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Jednoduchý zoznam úloh",
+        "DESCRIPTION": "Prehľadný správca úloh s projektmi, štítkami a poznámkami. Bez zbytočností."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Sledovanie času",
+        "DESCRIPTION": "Sledujte, koľko času zaberajú úlohy. Skvelé na fakturáciu hodín alebo pochopenie, kam váš čas odchádza."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Sada produktivity",
+        "DESCRIPTION": "Plánujte svoj deň, budujte návyky, sústreďte sa a sledujte čas. Všetko na jednom mieste."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Kliknite na + pre pridanie prvej úlohy",
+      "CREATE_TASK_TOUCH": "Ťuknite na + pre pridanie prvej úlohy",
+      "EXPLORE": "Kľudne klikajte a objavujte! Pomoc nájdete v bočnom paneli.",
+      "EXPLORE_TOUCH": "Kľudne objavujte! Pomoc nájdete v menu.",
+      "OR_PRESS": "alebo stlačte",
+      "SKIP_ARIA": "Zavrieť nápovedu"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Pridanie úloh z dnešného dňa",

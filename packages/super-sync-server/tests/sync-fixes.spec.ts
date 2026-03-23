@@ -90,6 +90,7 @@ vi.mock('../src/db', () => {
             upsert: vi.fn().mockResolvedValue({}),
             count: vi.fn().mockResolvedValue(1),
           },
+          $queryRaw: vi.fn().mockResolvedValue([]),
         };
         return callback(tx);
       }),
@@ -149,7 +150,9 @@ vi.mock('../src/db', () => {
 
 // Mock auth
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ userId: 1, email: 'test@test.com' }),
+  verifyToken: vi
+    .fn()
+    .mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Import after mocking

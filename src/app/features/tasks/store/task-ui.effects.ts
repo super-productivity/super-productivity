@@ -39,6 +39,7 @@ import { Project } from '../../project/project.model';
 import { Router } from '@angular/router';
 import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
 import { LayoutService } from '../../../core-ui/layout/layout.service';
+import { LS } from '../../../core/persistence/storage-keys.const';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 
 @Injectable()
@@ -81,25 +82,27 @@ export class TaskUiEffects {
         tap(({ project, task, activeContextTaskIds }) => {
           const isTaskVisibleOnCurrentPage = activeContextTaskIds.includes(task.id);
 
+          if (
+            isTaskVisibleOnCurrentPage ||
+            !localStorage.getItem(LS.ONBOARDING_HINTS_DONE)
+          ) {
+            return;
+          }
+
           this._snackService.open({
             type: 'SUCCESS',
             translateParams: {
               taskTitle: truncate(task.title),
               projectTitle: project ? truncate(project.title) : '',
             },
-            msg:
-              task.projectId && !isTaskVisibleOnCurrentPage
-                ? T.F.TASK.S.CREATED_FOR_PROJECT
-                : T.F.TASK.S.TASK_CREATED,
+            msg: task.projectId
+              ? T.F.TASK.S.CREATED_FOR_PROJECT
+              : T.F.TASK.S.TASK_CREATED,
             ico: 'add',
             actionStr: T.F.TASK.S.GO_TO_TASK,
             actionFn: () => {
               this._layoutService.hideAddTaskBar();
-              if (isTaskVisibleOnCurrentPage) {
-                this._taskService.setSelectedId(task.id);
-              } else {
-                this._navigateToTaskService.navigate(task.id, false);
-              }
+              this._navigateToTaskService.navigate(task.id, false);
             },
           });
         }),

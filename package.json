@@ -71,7 +71,7 @@
     "e2e:docker:webdav": "docker compose -f docker-compose.e2e.yaml up -d app webdav && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --grep @webdav; docker compose -f docker-compose.e2e.yaml down",
     "e2e:docker:all": "docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml up -d app webdav db supersync && ./scripts/wait-for-app.sh && ./scripts/wait-for-webdav.sh && ./scripts/wait-for-supersync.sh && E2E_BASE_URL=http://localhost:${APP_PORT:-4242} npm run e2e:all -- --workers=6; EXIT_CODE=$?; docker compose -f docker-compose.e2e.yaml -f docker-compose.yaml -f docker-compose.supersync.yaml down; exit $EXIT_CODE",
     "electron": "NODE_ENV=PROD electron .",
-    "electron:build": "tsc -p electron/tsconfig.electron.json",
+    "electron:build": "tsc -p electron/tsconfig.electron.json && node electron/scripts/bundle-preload.js",
     "electron:watch": "tsc -p electron/tsconfig.electron.json --watch",
     "electronBuilderOnly": "electron-builder",
     "empty": "echo 'EMPTY YEAH'",

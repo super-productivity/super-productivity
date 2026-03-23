@@ -217,6 +217,15 @@ export const createSimulatedClient = async (
 
   const page = await context.newPage();
 
+  // Skip onboarding, hints, and example tasks before the app boots.
+  // This runs before any page JavaScript, so Angular sees the flags immediately.
+  await page.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  });
+
   // Set up error logging
   page.on('pageerror', (error) => {
     console.error(`[Client ${clientName}] Page error:`, error.message);
@@ -491,7 +500,7 @@ export const markTaskDone = async (
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
   await task.hover();
-  await task.locator('.task-done-btn').click();
+  await task.locator('.done-toggle').click();
 };
 
 /**
@@ -507,7 +516,7 @@ export const markSubtaskDone = async (
 ): Promise<void> => {
   const subtask = getSubtaskElement(client, subtaskName);
   await subtask.hover();
-  await subtask.locator('.task-done-btn').click();
+  await subtask.locator('.done-toggle').click();
 };
 
 /**
@@ -538,12 +547,10 @@ export const deleteTask = async (
   taskName: string,
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
-  // Click the drag-handle to focus the task without entering title edit mode.
+  // Focus the task element directly without entering title edit mode.
   // Clicking the task body can land on the task-title, opening the textarea editor,
   // which causes Backspace to delete text instead of triggering the delete shortcut.
-  // Use .first() because parent tasks contain subtask elements which also have .drag-handle
-  const dragHandle = task.locator('.drag-handle').first();
-  await dragHandle.click();
+  await task.focus();
   await client.page.keyboard.press('Backspace');
 
   // Confirm deletion if dialog appears

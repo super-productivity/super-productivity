@@ -121,7 +121,9 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      webSecurity: false,
+      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
+      // and onHeadersReceived (injects Access-Control-Allow-* headers)
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
@@ -177,6 +179,15 @@ export const createWindow = async ({
       responseHeaders,
     });
   });
+
+  // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
+  // The app only needs notifications for desktop reminders
+  mainWin.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      const allowedPermissions = ['notifications'];
+      callback(allowedPermissions.includes(permission));
+    },
+  );
 
   mainWindowState.manage(mainWin);
 

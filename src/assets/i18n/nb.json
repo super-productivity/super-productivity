@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity finansieres helt av fellesskapet. Det er ingen sporing, ingen annonser, og ingen datainnsamling — oppgavene dine forblir på enheten din.",
     "INTRO_2": "Hvis du verdsetter denne tilnærmingen og ønsker å holde prosjektet sunt og i utvikling, er en frivillig donasjon svært verdsatt."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Lær hurtigtastene",
+      "NOTES": "Super Productivity er laget for å brukes med tastaturet. Lær hurtigtastene for å jobbe raskere.\n\n**Slik kommer du i gang:**\n1. Åpne **sidefeltmenyen**\n2. Gå til **Hjelp**\n3. Klikk på **Tastaturnavigasjonstur**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Opprett ditt første prosjekt",
+      "NOTES": "Prosjekter hjelper deg med å organisere oppgavene dine etter arbeidsområde. Hvert prosjekt har sin egen oppgaveliste og backlog.\n\n**Slik oppretter du et prosjekt:**\n1. Klikk på **+**-knappen ved siden av **Prosjekter** i sidefelt\n2. Gi det et navn og velg en farge\n3. Begynn å legge til oppgaver"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Sett opp synkronisering",
+      "NOTES": "Hold dataene dine trygge og tilgjengelige på alle enheter.\n\n**Slik setter du opp:**\n1. Åpne **Innstillinger** (tannhjulikonet i sidefeltet)\n2. Gå til **Synkronisering**\n3. Velg en leverandør: Super Sync, Dropbox, WebDAV eller lokal filsynkronisering\n4. Følg oppsettsinstruksjonene"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Utforsk mer",
+      "NOTES": "Det er mye mer å oppdage!\n\n**App-funksjoner** (i Innstillinger) — Aktiver integrasjoner, vaner og andre funksjoner. Gå til **Innstillinger → App-funksjoner** for å se hva som er tilgjengelig.\n\n**Tavler** — Visualiser oppgavene dine i tilpassbare Kanban-tavler. Aktiver dem i **App-funksjoner**, og finn dem i **sidemenyen**.\n\n**Timeplan** — Planlegg dagen din ved å tildele oppgaver til bestemte tidspunkt. Dra oppgaver til **Timeplan**-visningen i sidefeltet.\n\n**Integrasjoner** — Når de er aktivert i App-funksjoner, importer oppgaver fra Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV og mange flere. Du kan også integrere kalenderen din. Konfigurer dem i **Saksleverandør-panelet**.\n\n**Vaner** — Spor tilbakevendende vaner og rutiner. Finn dem i **sidefeltmenyen** når de er aktivert.\n\n**Plugins** — Legg til funksjoner som Prokrastineringsbryter, Automatiseringer eller Talepåminnelser. Gå til **Innstillinger → Plugins**.\n\n**Tilpass** — Temaer, mørk modus, hurtigtaster, språk og produktivitetsverktøy finner du alle i **Innstillinger**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -2358,6 +2376,33 @@
     "STATUS_COMPLETE": "Migrering fullført!",
     "STATUS_MIGRATING": "Migrerer data...",
     "STATUS_PREPARING": "Forbereder migrering..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Hvordan vil du bruke Super Productivity?",
+    "SUBTITLE": "Velg et oppsett som passer arbeidsflyten din. Du kan alltid endre dette senere i Innstillinger.",
+    "PRIVACY_HINT": "Dataene dine forblir trygt på enheten din. Ingenting sendes til en server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Enkel oppgaveliste",
+        "DESCRIPTION": "En ryddig oppgavebehandler med prosjekter, etiketter og notater. Ingen ekstra funksjoner."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Tidsregistrering",
+        "DESCRIPTION": "Registrer hvor lang tid oppgaver tar. Perfekt for timefakturering eller for å forstå hvor tiden din går."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Produktivitetspakke",
+        "DESCRIPTION": "Planlegg dagen din, bygg vaner, fokuser dypt og registrer tid. Alt på ett sted."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klikk + for å legge til din første oppgave",
+      "CREATE_TASK_TOUCH": "Trykk + for å legge til din første oppgave",
+      "EXPLORE": "Klikk deg gjerne rundt og utforsk! Du finner hjelp i sidepanelet.",
+      "EXPLORE_TOUCH": "Trykk deg gjerne rundt og utforsk! Du finner hjelp i menyen.",
+      "OR_PRESS": "eller trykk",
+      "SKIP_ARIA": "Lukk hint"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Legg til oppgaver fra i dag",

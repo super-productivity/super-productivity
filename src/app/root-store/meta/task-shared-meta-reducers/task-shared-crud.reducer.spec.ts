@@ -1372,6 +1372,78 @@ describe('taskSharedCrudMetaReducer', () => {
         testState,
       );
     });
+
+    it('should move task to new planner day when dueDay changes to a future date', () => {
+      const oldDay = '2099-12-20';
+      const newDay = '2099-12-25';
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = oldDay;
+      (testState as any).planner = {
+        days: { [oldDay]: ['task1', 'other-task'] },
+        addPlannedTasksDialogLastShown: undefined,
+      };
+
+      const action = createUpdateTaskAction('task1', { dueDay: newDay });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as any;
+      expect(resultState.planner.days[oldDay]).not.toContain('task1');
+      expect(resultState.planner.days[newDay]).toContain('task1');
+    });
+
+    it('should remove task from planner days when dueDay changes to today', () => {
+      const oldDay = '2099-12-20';
+      const todayStr = getDbDateStr();
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = oldDay;
+      (testState as any).planner = {
+        days: { [oldDay]: ['task1'] },
+        addPlannedTasksDialogLastShown: undefined,
+      };
+
+      const action = createUpdateTaskAction('task1', { dueDay: todayStr });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as any;
+      expect(resultState.planner.days[oldDay] || []).not.toContain('task1');
+      // Today's tasks use TODAY_TAG.taskIds, not planner.days
+      const todayTag = resultState[TAG_FEATURE_NAME].entities['TODAY'] as Tag;
+      expect(todayTag.taskIds).toContain('task1');
+    });
+
+    it('should remove task from TODAY_TAG when dueDay changes away from today', () => {
+      const todayStr = getDbDateStr();
+      const newDay = '2099-12-25';
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1'], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = todayStr;
+
+      const action = createUpdateTaskAction('task1', { dueDay: newDay });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as any;
+      const todayTag = resultState[TAG_FEATURE_NAME].entities['TODAY'] as Tag;
+      expect(todayTag.taskIds).not.toContain('task1');
+      expect(resultState.planner.days[newDay]).toContain('task1');
+    });
+
+    it('should not update planner when dueDay does not change', () => {
+      const day = '2099-12-20';
+      const testState = createStateWithExistingTasks(['task1'], [], ['task1']);
+      (testState[TASK_FEATURE_NAME].entities['task1'] as any).dueDay = day;
+      (testState as any).planner = {
+        days: { [day]: ['task1'] },
+        addPlannedTasksDialogLastShown: undefined,
+      };
+
+      const action = createUpdateTaskAction('task1', {
+        title: 'New title',
+        dueDay: day,
+      });
+
+      metaReducer(testState, action);
+      const resultState = mockReducer.calls.mostRecent().args[0] as any;
+      expect(resultState.planner.days[day]).toContain('task1');
+    });
   });
 
   describe('edge cases and error handling', () => {

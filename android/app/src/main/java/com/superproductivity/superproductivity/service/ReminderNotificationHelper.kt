@@ -129,7 +129,9 @@ object ReminderNotificationHelper {
 
     fun cancelReminder(context: Context, notificationId: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderAlarmReceiver::class.java)
+        val intent = Intent(context, ReminderAlarmReceiver::class.java).apply {
+            action = ReminderAlarmReceiver.ACTION_SHOW_REMINDER
+        }
         val pendingIntent = PendingIntent.getBroadcast(
             context, notificationId, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

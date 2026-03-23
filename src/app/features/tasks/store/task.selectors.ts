@@ -10,6 +10,7 @@ import {
 } from '../task.model';
 import { taskAdapter } from './task.adapter';
 import { devError } from '../../../util/dev-error';
+import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider } from '../../issue/issue.model';
 import { Project } from '../../project/project.model';
@@ -159,7 +160,7 @@ export const selectOverdueTasks = createSelector(
           // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
           // which is lexicographically sortable. This avoids timezone conversion issues.
           !!(
-            (task.dueDay && task.dueDay < todayStr) ||
+            (task.dueDay && isDBDateStr(task.dueDay) && task.dueDay < todayStr) ||
             (task.dueWithTime && task.dueWithTime < todayStartMs)
           ),
       );
@@ -190,7 +191,9 @@ export const selectUndoneOverdueDeadlineTasks = createSelector(
           !!task &&
           !task.isDone &&
           !!(
-            (task.deadlineDay && task.deadlineDay < todayStr) ||
+            (task.deadlineDay &&
+              isDBDateStr(task.deadlineDay) &&
+              task.deadlineDay < todayStr) ||
             (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
           ),
       );

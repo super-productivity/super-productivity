@@ -100,7 +100,7 @@ test.describe('@supersync SuperSync Stress Tests', () => {
           .locator(`task:has-text("${taskNames[i]}")`)
           .first();
         await taskLocator.hover();
-        await taskLocator.locator('.task-done-btn').click();
+        await taskLocator.locator('.done-toggle').click();
         await clientA.page.waitForTimeout(100);
       }
       console.log('[BulkSync] Marked 3 tasks as done');
@@ -234,7 +234,7 @@ test.describe('@supersync SuperSync Stress Tests', () => {
           .first();
         await taskLocator.waitFor({ state: 'visible', timeout: 10000 });
         await taskLocator.hover();
-        await taskLocator.locator('.task-done-btn').click();
+        await taskLocator.locator('.done-toggle').click();
         // Wait for done state to be applied
         await expect(taskLocator).toHaveClass(/isDone/, { timeout: 5000 });
 

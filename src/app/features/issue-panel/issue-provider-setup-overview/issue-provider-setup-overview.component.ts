@@ -28,8 +28,18 @@ export class IssueProviderSetupOverviewComponent {
 
   enabledProviders$ = this._store.select(selectEnabledIssueProviders);
   // NOTE: intentionally non-reactive for v1 — plugins load at startup before this dialog opens
-  pluginProviders = this._pluginRegistry.getAvailableProviders();
-  disabledPluginProviders = this._pluginService.getDisabledIssueProviderPlugins();
+  pluginProviders = this._pluginRegistry
+    .getAvailableProviders()
+    .filter((p) => !p.useAgendaView);
+  pluginCalendarProviders = this._pluginRegistry
+    .getAvailableProviders()
+    .filter((p) => p.useAgendaView);
+  disabledPluginProviders = this._pluginService
+    .getDisabledIssueProviderPlugins()
+    .filter((p) => !p.useAgendaView);
+  disabledPluginCalendarProviders = this._pluginService
+    .getDisabledIssueProviderPlugins()
+    .filter((p) => p.useAgendaView);
 
   openSetupDialog(
     issueProviderKey: IssueProviderKey,
@@ -49,11 +59,16 @@ export class IssueProviderSetupOverviewComponent {
     issueProviderKey: string,
   ): Promise<void> {
     await this._pluginService.enableAndActivatePlugin(pluginId);
-    // Remove from disabled list and refresh enabled list
+    // Remove from disabled lists and refresh enabled lists
     this.disabledPluginProviders = this.disabledPluginProviders.filter(
       (p) => p.pluginId !== pluginId,
     );
-    this.pluginProviders = this._pluginRegistry.getAvailableProviders();
+    this.disabledPluginCalendarProviders = this.disabledPluginCalendarProviders.filter(
+      (p) => p.pluginId !== pluginId,
+    );
+    const allProviders = this._pluginRegistry.getAvailableProviders();
+    this.pluginProviders = allProviders.filter((p) => !p.useAgendaView);
+    this.pluginCalendarProviders = allProviders.filter((p) => p.useAgendaView);
     if (!isValidIssueProviderKey(issueProviderKey)) {
       console.error(`Invalid issue provider key from plugin: "${issueProviderKey}"`);
       return;

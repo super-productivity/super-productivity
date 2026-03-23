@@ -78,28 +78,6 @@
         <mat-icon>event_busy</mat-icon>
       </button>
     }
-    <button
-      mat-icon-button
-      tabindex="0"
-      (click)="openDeadlineDialog()"
-      [matTooltip]="
-        task.deadlineWithTime || task.deadlineDay
-          ? (T.F.TASK.CMP.EDIT_DEADLINE | translate)
-          : (T.F.TASK.CMP.SET_DEADLINE | translate)
-      "
-    >
-      <mat-icon>flag</mat-icon>
-    </button>
-    @if (task.deadlineWithTime || task.deadlineDay) {
-      <button
-        mat-icon-button
-        tabindex="0"
-        (click)="removeDeadline()"
-        [matTooltip]="T.F.TASK.CMP.REMOVE_DEADLINE | translate"
-      >
-        <mat-icon>flag_circle</mat-icon>
-      </button>
-    }
   </div>
 
   @if (
@@ -217,19 +195,6 @@
       </span>
     </button>
   }
-  <!-- Only show the duplicate command if it is a parent unfinished task -->
-  @if (isAdvancedControls() && !task.parentId && !task.isDone) {
-    <button
-      (click)="duplicate()"
-      mat-menu-item
-    >
-      <span class="menuItemLeft">
-        <mat-icon>file_copy</mat-icon>
-        {{ T.F.TASK.CMP.DUPLICATE | translate }}
-      </span>
-    </button>
-  }
-
   @if (isAdvancedControls() && !task.parentId && !task.isDone) {
     <button
       (click)="addSubTask()"
@@ -240,6 +205,45 @@
         {{ T.F.TASK.CMP.ADD_SUB_TASK | translate }}
       </span>
       <span class="key-i">{{ kb.taskAddSubTask }}</span>
+    </button>
+  }
+
+  <button
+    (click)="openDeadlineDialog()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>flag</mat-icon>
+      {{
+        (task.deadlineWithTime || task.deadlineDay
+          ? T.F.TASK.CMP.EDIT_DEADLINE
+          : T.F.TASK.CMP.SET_DEADLINE
+        ) | translate
+      }}
+    </span>
+  </button>
+  @if (task.deadlineWithTime || task.deadlineDay) {
+    <button
+      (click)="removeDeadline()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>flag_circle</mat-icon>
+        {{ T.F.TASK.CMP.REMOVE_DEADLINE | translate }}
+      </span>
+    </button>
+  }
+
+  <!-- Only show the duplicate command if it is a parent unfinished task -->
+  @if (isAdvancedControls() && !task.parentId && !task.isDone) {
+    <button
+      (click)="duplicate()"
+      mat-menu-item
+    >
+      <span class="menuItemLeft">
+        <mat-icon>file_copy</mat-icon>
+        {{ T.F.TASK.CMP.DUPLICATE | translate }}
+      </span>
     </button>
   }
 

@@ -73,7 +73,7 @@ import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
 import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
@@ -293,7 +293,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return !!(
       !t.isDone &&
       ((t.dueWithTime && t.dueWithTime < Date.now()) ||
-        (t.dueDay && t.dueDay !== getDbDateStr() && t.dueDay < getDbDateStr()))
+        (t.dueDay &&
+          isDBDateStr(t.dueDay) &&
+          t.dueDay !== getDbDateStr() &&
+          t.dueDay < getDbDateStr()))
     );
   });
 

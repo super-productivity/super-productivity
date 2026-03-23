@@ -217,7 +217,9 @@ export class TaskArchiveService {
     if (toDeleteInArchiveYoung.length > 0) {
       const newTaskState = this._reduceForArchive(
         archiveYoung,
-        TaskSharedActions.deleteTasks({ taskIds: toDeleteInArchiveYoung }),
+        TaskSharedActions.deleteTasks({
+          taskIds: toDeleteInArchiveYoung,
+        }),
       );
       await this.archiveDbAdapter.saveArchiveYoung({
         ...archiveYoung,
@@ -233,7 +235,9 @@ export class TaskArchiveService {
       );
       const newTaskStateArchiveOld = this._reduceForArchive(
         archiveOld,
-        TaskSharedActions.deleteTasks({ taskIds: toDeleteInArchiveOld }),
+        TaskSharedActions.deleteTasks({
+          taskIds: toDeleteInArchiveOld,
+        }),
       );
       await this.archiveDbAdapter.saveArchiveOld({
         ...archiveOld,
