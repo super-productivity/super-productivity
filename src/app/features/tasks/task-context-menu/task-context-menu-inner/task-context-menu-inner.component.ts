@@ -276,7 +276,11 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           menuPanel.style.borderRadius =
             'var(--card-border-radius) var(--card-border-radius) 0 0';
           menuPanel.style.maxHeight = '80vh';
+          // Disable Angular Material's built-in menu animation to prevent conflicts
+          menuPanel.style.animation = 'none';
           menuPanel.style.transform = 'translateY(100%)';
+          // Force reflow so the browser registers the initial position
+          menuPanel.getBoundingClientRect();
           menuPanel.style.transition = 'transform 200ms ease-out';
           this._touchMenuRafId = requestAnimationFrame(() => {
             menuPanel.style.transform = 'translateY(0)';
