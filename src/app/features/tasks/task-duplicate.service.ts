@@ -41,6 +41,8 @@ export class TaskDuplicateService {
         additional: {
           isDone: subTask.isDone,
           projectId: subTask.projectId,
+          ...(subTask.dueDay && { dueDay: subTask.dueDay }),
+          ...(subTask.dueWithTime && { dueWithTime: subTask.dueWithTime }),
           timeEstimate: subTask.timeEstimate,
           notes: subTask.notes,
           ...(subTask.priority !== undefined && { priority: subTask.priority }),
