@@ -63,8 +63,8 @@ export class SuperSyncWebSocketService implements OnDestroy {
     if (this._ws) {
       try {
         this._ws.close(1000, 'Client disconnect');
-      } catch {
-        // Ignore close errors
+      } catch (err) {
+        SyncLog.warn('SuperSyncWebSocketService: Error closing WebSocket', err);
       }
       this._ws = null;
     }
@@ -104,11 +104,16 @@ export class SuperSyncWebSocketService implements OnDestroy {
 
     this._ws.onmessage = (event: MessageEvent): void => {
       this._resetHeartbeatTimer();
+      let msg: WsMessage;
       try {
-        const msg: WsMessage = JSON.parse(event.data as string);
-        this._handleMessage(msg);
+        msg = JSON.parse(event.data as string);
       } catch {
-        // Ignore non-JSON messages
+        return; // Non-JSON message
+      }
+      try {
+        this._handleMessage(msg);
+      } catch (err) {
+        SyncLog.err('SuperSyncWebSocketService: Error handling message', err);
       }
     };
 
@@ -163,8 +168,8 @@ export class SuperSyncWebSocketService implements OnDestroy {
     if (this._ws?.readyState === WebSocket.OPEN) {
       try {
         this._ws.send(JSON.stringify(msg));
-      } catch {
-        // Ignore send errors
+      } catch (err) {
+        SyncLog.warn('SuperSyncWebSocketService: Failed to send message', err);
       }
     }
   }
@@ -219,8 +224,11 @@ export class SuperSyncWebSocketService implements OnDestroy {
       if (this._ws) {
         try {
           this._ws.close(4000, 'Heartbeat timeout');
-        } catch {
-          // Ignore
+        } catch (err) {
+          SyncLog.warn(
+            'SuperSyncWebSocketService: Error closing on heartbeat timeout',
+            err,
+          );
         }
       }
     }, HEARTBEAT_TIMEOUT_MS);

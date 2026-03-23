@@ -57,8 +57,8 @@ export class WebSocketConnectionService {
         if (msg.type === 'pong') {
           client.lastPong = Date.now();
         }
-      } catch {
-        // Ignore non-JSON messages
+      } catch (err) {
+        Logger.debug(`[ws:user:${userId}:${clientId}] Non-JSON message received`, err);
       }
     });
 
@@ -92,8 +92,11 @@ export class WebSocketConnectionService {
     ) {
       try {
         client.ws.close();
-      } catch {
-        // Ignore close errors
+      } catch (err) {
+        Logger.debug(
+          `[ws:user:${userId}:${client.clientId}] Error closing connection`,
+          err,
+        );
       }
     }
   }
@@ -158,6 +161,8 @@ export class WebSocketConnectionService {
 
     this.heartbeatInterval = setInterval(() => {
       const now = Date.now();
+      const toRemove: { userId: number; client: ConnectedClient }[] = [];
+
       for (const [userId, userSet] of this.connections) {
         for (const client of userSet) {
           // Check if client responded to last ping
@@ -169,7 +174,7 @@ export class WebSocketConnectionService {
             Logger.info(
               `[ws:user:${userId}:${client.clientId}] Dead connection (no pong), closing`,
             );
-            this.removeConnection(userId, client);
+            toRemove.push({ userId, client });
             continue;
           }
 
@@ -184,10 +189,14 @@ export class WebSocketConnectionService {
             try {
               client.ws.ping();
             } catch {
-              // Ignore ping errors
+              Logger.debug(`[ws:user:${userId}:${client.clientId}] Ping failed`);
             }
           }
         }
+      }
+
+      for (const { userId, client } of toRemove) {
+        this.removeConnection(userId, client);
       }
     }, WebSocketConnectionService.PING_INTERVAL_MS);
   }
@@ -210,8 +219,8 @@ export class WebSocketConnectionService {
       for (const client of userSet) {
         try {
           client.ws.close(1001, 'Server shutting down');
-        } catch {
-          // Ignore
+        } catch (err) {
+          Logger.debug(`[ws] Error closing connection during shutdown`, err);
         }
       }
     }
@@ -232,7 +241,8 @@ export class WebSocketConnectionService {
     try {
       ws.send(JSON.stringify(message));
       return true;
-    } catch {
+    } catch (err) {
+      Logger.debug(`[ws] Failed to send message`, err);
       return false;
     }
   }

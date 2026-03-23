@@ -6,6 +6,7 @@ import { OperationLogSyncService } from './operation-log-sync.service';
 import { SyncProviderManager } from '../sync-providers/provider-manager.service';
 import { WrappedProviderService } from '../sync-providers/wrapped-provider.service';
 import { SyncLog } from '../../core/log';
+import { AuthFailSPError, MissingCredentialsSPError } from '../sync-exports';
 
 const WS_DOWNLOAD_DEBOUNCE_MS = 500;
 
@@ -82,7 +83,11 @@ export class WsTriggeredDownloadService implements OnDestroy {
         this._providerManager.setSyncStatus('IN_SYNC');
       }
     } catch (err) {
-      // Silent failure - periodic sync will catch up
+      if (err instanceof AuthFailSPError || err instanceof MissingCredentialsSPError) {
+        SyncLog.warn('WsTriggeredDownloadService: Auth failure during download', err);
+        this.stop();
+        return;
+      }
       SyncLog.warn(
         'WsTriggeredDownloadService: Download failed, periodic sync will retry',
         err,

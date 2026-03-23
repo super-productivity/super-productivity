@@ -17,38 +17,47 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
         Querystring: { token?: string; clientId?: string };
       }>,
     ) => {
-      const { token, clientId } = req.query as {
-        token?: string;
-        clientId?: string;
-      };
+      try {
+        const { token, clientId } = req.query as {
+          token?: string;
+          clientId?: string;
+        };
 
-      // Validate token
-      if (!token) {
-        Logger.warn('[ws] Connection rejected: missing token');
-        socket.close(4001, 'Missing token');
-        return;
+        // Validate token
+        if (!token) {
+          Logger.warn('[ws] Connection rejected: missing token');
+          socket.close(4001, 'Missing token');
+          return;
+        }
+
+        // Validate clientId
+        if (
+          !clientId ||
+          !CLIENT_ID_REGEX.test(clientId) ||
+          clientId.length > MAX_CLIENT_ID_LENGTH
+        ) {
+          Logger.warn('[ws] Connection rejected: invalid clientId');
+          socket.close(4001, 'Invalid clientId');
+          return;
+        }
+
+        const user = await verifyToken(token);
+        if (!user) {
+          Logger.warn('[ws] Connection rejected: invalid token');
+          socket.close(4003, 'Invalid token');
+          return;
+        }
+
+        const wsService = getWsConnectionService();
+        wsService.addConnection(user.userId, clientId, socket);
+      } catch (err) {
+        Logger.error('[ws] Unexpected error in WebSocket handler:', err);
+        try {
+          socket.close(1011, 'Internal error');
+        } catch {
+          // Ignore close errors
+        }
       }
-
-      // Validate clientId
-      if (
-        !clientId ||
-        !CLIENT_ID_REGEX.test(clientId) ||
-        clientId.length > MAX_CLIENT_ID_LENGTH
-      ) {
-        Logger.warn('[ws] Connection rejected: invalid clientId');
-        socket.close(4001, 'Invalid clientId');
-        return;
-      }
-
-      const user = await verifyToken(token);
-      if (!user) {
-        Logger.warn('[ws] Connection rejected: invalid token');
-        socket.close(4003, 'Invalid token');
-        return;
-      }
-
-      const wsService = getWsConnectionService();
-      wsService.addConnection(user.userId, clientId, socket);
     },
   );
 };
