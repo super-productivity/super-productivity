@@ -107,6 +107,8 @@ describe('FocusModeMainComponent', () => {
       focusModeConfig: jasmine.createSpy().and.returnValue({
         isSkipPreparation: false,
       }),
+      isInOvertime: jasmine.createSpy().and.returnValue(false),
+      isSessionPaused: jasmine.createSpy().and.returnValue(false),
     });
 
     await TestBed.configureTestingModule({
@@ -620,6 +622,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       focusModeConfig: signal({
         isSkipPreparation: false,
       }),
+      isInOvertime: signal(false),
     };
 
     await TestBed.configureTestingModule({
@@ -810,6 +813,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       mode: signal(FocusModeMode.Pomodoro),
       mainState: signal(FocusMainUIState.Preparation),
       focusModeConfig: focusModeConfigSignal,
+      isInOvertime: signal(false),
     };
 
     await TestBed.configureTestingModule({

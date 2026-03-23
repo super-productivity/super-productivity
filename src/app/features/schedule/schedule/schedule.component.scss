@@ -67,7 +67,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--s);
   @include extraBorder('-bottom');
   background: var(--bg-lighter);
   flex-wrap: nowrap;
@@ -140,7 +140,7 @@ header {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 6px 16px;
+    padding: 6px var(--s2);
 
     .month-title {
       font-size: 20px;

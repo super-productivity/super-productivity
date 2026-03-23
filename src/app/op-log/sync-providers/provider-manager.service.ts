@@ -19,17 +19,7 @@ import {
   PrivateCfgByProviderId,
   CurrentProviderPrivateCfg,
 } from '../core/types/sync.types';
-import { environment } from '../../../environments/environment';
-
-// Import providers
-import { Dropbox } from './file-based/dropbox/dropbox';
-import { Webdav } from './file-based/webdav/webdav';
-import { SuperSyncProvider } from './super-sync/super-sync';
-import { LocalFileSyncElectron } from './file-based/local-file/local-file-sync-electron';
-import { LocalFileSyncAndroid } from './file-based/local-file/local-file-sync-android';
-import { DROPBOX_APP_KEY } from '../../imex/sync/dropbox/dropbox.const';
-import { IS_ELECTRON } from '../../app.constants';
-import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
+import { loadSyncProviders } from './sync-providers.factory';
 
 /**
  * Sync status change payload type
@@ -41,52 +31,9 @@ export type SyncStatusChangePayload =
   | 'SYNCING';
 
 /**
- * Array of all available sync providers
- * Cast to generic SyncProviderBase - each provider implements
- * a specific SyncProviderId but we store them in a generic array.
- */
-const SYNC_PROVIDERS: SyncProviderBase<SyncProviderId>[] = [
-  new Dropbox({
-    appKey: DROPBOX_APP_KEY,
-    basePath: environment.production ? `/` : `/DEV/`,
-  }) as SyncProviderBase<SyncProviderId>,
-  new Webdav(
-    environment.production ? undefined : `/DEV`,
-  ) as SyncProviderBase<SyncProviderId>,
-  new SuperSyncProvider(
-    environment.production ? undefined : `/DEV`,
-  ) as SyncProviderBase<SyncProviderId>,
-  ...(IS_ELECTRON
-    ? [new LocalFileSyncElectron() as SyncProviderBase<SyncProviderId>]
-    : []),
-  ...(IS_ANDROID_WEB_VIEW
-    ? [new LocalFileSyncAndroid() as SyncProviderBase<SyncProviderId>]
-    : []),
-];
-
-/**
  * Service for managing sync providers.
  *
- * This service replaces the provider management parts of PfapiService.
- * It handles:
- * - Active provider selection based on user config
- * - Provider readiness state
- * - Encryption/compression configuration
- * - Provider credential management
- *
- * ## Usage
- * ```typescript
- * const manager = inject(SyncProviderManager);
- *
- * // Get active provider
- * const provider = manager.getActiveProvider();
- *
- * // Subscribe to provider readiness
- * manager.isProviderReady$.subscribe(ready => ...);
- *
- * // Get provider by ID
- * const dropbox = manager.getProviderById(SyncProviderId.Dropbox);
- * ```
+ * Providers are lazily loaded on first use to reduce initial bundle size.
  */
 @Injectable({
   providedIn: 'root',
@@ -94,6 +41,12 @@ const SYNC_PROVIDERS: SyncProviderBase<SyncProviderId>[] = [
 export class SyncProviderManager {
   private _dataInitStateService = inject(DataInitStateService);
   private _store = inject(Store);
+
+  // Lazily loaded providers (cached after first load)
+  private _providers: SyncProviderBase<SyncProviderId>[] | null = null;
+
+  /** Counter to detect stale provider activations */
+  private _activeProviderSetupId = 0;
 
   // Current active provider
   private _activeProvider: SyncProviderBase<SyncProviderId> | null = null;
@@ -195,7 +148,21 @@ export class SyncProviderManager {
   }
 
   /**
-   * Gets the currently active sync provider
+   * Ensures providers are loaded. Returns cached providers if already loaded.
+   * Deduplication of concurrent calls is handled by `loadSyncProviders()`.
+   */
+  private async _ensureProviders(): Promise<SyncProviderBase<SyncProviderId>[]> {
+    if (this._providers) {
+      return this._providers;
+    }
+    this._providers = await loadSyncProviders();
+    return this._providers;
+  }
+
+  /**
+   * Gets the currently active sync provider.
+   * Note: May return null during initial lazy-load of provider modules.
+   * Callers should gate on `isProviderReady$` before using the returned provider.
    */
   getActiveProvider(): SyncProviderBase<SyncProviderId> | null {
     return this._activeProvider;
@@ -204,17 +171,19 @@ export class SyncProviderManager {
   /**
    * Gets a sync provider by ID
    */
-  getProviderById(
+  async getProviderById(
     providerId: SyncProviderId,
-  ): SyncProviderBase<SyncProviderId> | undefined {
-    return SYNC_PROVIDERS.find((p) => p.id === providerId);
+  ): Promise<SyncProviderBase<SyncProviderId> | undefined> {
+    const providers = await this._ensureProviders();
+    return providers.find((p) => p.id === providerId);
   }
 
   /**
    * Gets all available sync providers
    */
-  getAllProviders(): SyncProviderBase<SyncProviderId>[] {
-    return [...SYNC_PROVIDERS];
+  async getAllProviders(): Promise<SyncProviderBase<SyncProviderId>[]> {
+    const providers = await this._ensureProviders();
+    return [...providers];
   }
 
   /**
@@ -245,7 +214,7 @@ export class SyncProviderManager {
   async getProviderConfig<PID extends SyncProviderId>(
     providerId: PID,
   ): Promise<PrivateCfgByProviderId<PID> | null> {
-    const provider = this.getProviderById(providerId);
+    const provider = await this.getProviderById(providerId);
     if (!provider) {
       return null;
     }
@@ -259,7 +228,7 @@ export class SyncProviderManager {
     providerId: PID,
     config: PrivateCfgByProviderId<PID>,
   ): Promise<void> {
-    const provider = this.getProviderById(providerId);
+    const provider = await this.getProviderById(providerId);
     if (!provider) {
       throw new Error(`Provider not found: ${providerId}`);
     }
@@ -288,7 +257,7 @@ export class SyncProviderManager {
    * Updates readiness state and config observable after clearing.
    */
   async clearAuthCredentials(providerId: SyncProviderId): Promise<void> {
-    const provider = this.getProviderById(providerId);
+    const provider = await this.getProviderById(providerId);
     if (!provider?.clearAuthCredentials) {
       return;
     }
@@ -314,9 +283,15 @@ export class SyncProviderManager {
   }
 
   /**
-   * Sets the active sync provider
+   * Sets the active sync provider (loads providers lazily on first call)
    */
   private _setActiveProvider(providerId: SyncProviderId | null): void {
+    // Skip if provider hasn't changed to avoid resetting state on unrelated config changes
+    if (providerId === this._activeProviderId$.getValue()) {
+      return;
+    }
+
+    const setupId = ++this._activeProviderSetupId;
     this._activeProviderId$.next(providerId);
 
     if (!providerId) {
@@ -326,22 +301,37 @@ export class SyncProviderManager {
       return;
     }
 
-    const provider = SYNC_PROVIDERS.find((p) => p.id === providerId);
-    if (provider) {
-      this._activeProvider = provider;
-      provider.isReady().then((ready) => this._isProviderReady$.next(ready));
+    // Clear stale config from previous provider during async load
+    this._currentProviderPrivateCfg$.next(null);
 
-      // Emit provider config to observable
-      provider.privateCfg.load().then((privateCfg) => {
-        this._currentProviderPrivateCfg$.next({
-          providerId,
-          privateCfg,
-        });
+    this.getProviderById(providerId)
+      .then(async (provider) => {
+        if (this._activeProviderSetupId !== setupId) {
+          return;
+        }
+        if (!provider) {
+          SyncLog.err(`SyncProviderManager: Provider not found: ${providerId}`);
+          return;
+        }
+        this._activeProvider = provider;
+
+        const [ready, privateCfg] = await Promise.all([
+          provider.isReady(),
+          provider.privateCfg.load(),
+        ]);
+
+        if (this._activeProviderSetupId !== setupId) {
+          return;
+        }
+        this._isProviderReady$.next(ready);
+        this._currentProviderPrivateCfg$.next({ providerId, privateCfg });
+        SyncLog.normal(`SyncProviderManager: Active provider set to ${providerId}`);
+      })
+      .catch((e) => {
+        SyncLog.err(`SyncProviderManager: Failed to load provider ${providerId}:`, e);
+        if (this._activeProviderSetupId === setupId) {
+          this._isProviderReady$.next(false);
+        }
       });
-
-      SyncLog.normal(`SyncProviderManager: Active provider set to ${providerId}`);
-    } else {
-      SyncLog.err(`SyncProviderManager: Provider not found: ${providerId}`);
-    }
   }
 }

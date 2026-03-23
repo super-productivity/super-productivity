@@ -7,6 +7,7 @@ import {
   inject,
   input,
   Input,
+  OnDestroy,
   output,
   viewChild,
   ViewEncapsulation,
@@ -30,7 +31,6 @@ import {
   map,
   switchMap,
   take,
-  takeUntil,
   tap,
 } from 'rxjs/operators';
 import { Project } from '../../../project/project.model';
@@ -46,6 +46,7 @@ import { WorkContextService } from '../../../work-context/work-context.service';
 import { GlobalConfigService } from '../../../config/global-config.service';
 import { KeyboardConfig } from '../../../config/keyboard-config.model';
 import { DialogScheduleTaskComponent } from '../../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../dialog-deadline/dialog-deadline.component';
 import { DialogTimeEstimateComponent } from '../../dialog-time-estimate/dialog-time-estimate.component';
 import { DialogEditTaskAttachmentComponent } from '../../task-attachment/dialog-edit-attachment/dialog-edit-task-attachment.component';
 import { throttle } from '../../../../util/decorators';
@@ -98,7 +99,7 @@ import { DEFAULT_GLOBAL_CONFIG } from 'src/app/features/config/default-global-co
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.Emulated,
 })
-export class TaskContextMenuInnerComponent implements AfterViewInit {
+export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private readonly _datePipe = inject(LocaleDatePipe);
   private readonly _taskService = inject(TaskService);
   private readonly _taskRepeatCfgService = inject(TaskRepeatCfgService);
@@ -178,6 +179,8 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
   private _destroy$: Subject<boolean> = new Subject<boolean>();
   private _isTaskDeleteTriggered: boolean = false;
   private _isOpenedFromKeyboard = false;
+  private _touchMenuTimeout: ReturnType<typeof setTimeout> | undefined;
+  private _touchMenuRafId: number | undefined;
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
@@ -197,27 +200,90 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
     });
   }
 
-  open(ev: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
-    ev.preventDefault();
-    ev.stopPropagation();
-    ev.stopImmediatePropagation();
+  ngOnDestroy(): void {
+    this._destroy$.next(true);
+    this._destroy$.complete();
+    if (this._touchMenuTimeout !== undefined) {
+      clearTimeout(this._touchMenuTimeout);
+    }
+    if (this._touchMenuRafId !== undefined) {
+      cancelAnimationFrame(this._touchMenuRafId);
+    }
+  }
 
-    if (ev instanceof MouseEvent || isTouchEventInstance(ev)) {
-      this.contextMenuPosition.x =
-        ('touches' in ev ? ev.touches[0].clientX : ev.clientX) + 10 + 'px';
-      const rawY = ('touches' in ev ? ev.touches[0].clientY : ev.clientY) - 48;
-      const safeAreaTop =
-        parseInt(
-          getComputedStyle(document.documentElement).getPropertyValue(
-            '--safe-area-inset-top',
-          ),
-          10,
-        ) || 0;
-      this.contextMenuPosition.y = Math.max(rawY, safeAreaTop) + 'px';
+  open(ev?: MouseEvent | KeyboardEvent | TouchEvent, isOpenedFromKeyBoard = false): void {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+
+      if (!IS_TOUCH_PRIMARY && (ev instanceof MouseEvent || isTouchEventInstance(ev))) {
+        const clientX = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
+        const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
+        this.contextMenuPosition.x = clientX + 10 + 'px';
+        const rawY = clientY - 48;
+        const safeAreaTop =
+          parseInt(
+            getComputedStyle(document.documentElement).getPropertyValue(
+              '--safe-area-inset-top',
+            ),
+            10,
+          ) || 0;
+        this.contextMenuPosition.y = Math.max(rawY, safeAreaTop) + 'px';
+      }
     }
 
     this._isOpenedFromKeyboard = isOpenedFromKeyBoard;
     this.contextMenuTrigger()?.openMenu();
+
+    if (IS_TOUCH_PRIMARY) {
+      this._touchMenuTimeout = setTimeout(() => {
+        const boxes = document.querySelectorAll(
+          '.cdk-overlay-connected-position-bounding-box',
+        );
+        const boundingBox = boxes[boxes.length - 1] as HTMLElement | undefined;
+        if (!boundingBox) {
+          return;
+        }
+        boundingBox.style.position = 'fixed';
+        boundingBox.style.inset = '0';
+        boundingBox.style.display = 'flex';
+        boundingBox.style.justifyContent = 'center';
+        boundingBox.style.alignItems = 'flex-end';
+
+        const pane = boundingBox.querySelector('.cdk-overlay-pane') as HTMLElement;
+        if (pane) {
+          pane.style.position = 'static';
+          pane.style.width = '100%';
+          pane.style.display = 'flex';
+          pane.style.justifyContent = 'center';
+        }
+
+        boundingBox.addEventListener(
+          'click',
+          (e: Event) => {
+            if (e.target === boundingBox || e.target === pane) {
+              this.contextMenuTrigger()?.closeMenu();
+            }
+          },
+          { once: true },
+        );
+
+        const menuPanel = boundingBox.querySelector('.mat-mdc-menu-panel') as HTMLElement;
+        if (menuPanel) {
+          menuPanel.style.maxWidth = '300px';
+          menuPanel.style.width = '100%';
+          menuPanel.style.borderRadius =
+            'var(--card-border-radius) var(--card-border-radius) 0 0';
+          menuPanel.style.maxHeight = '80vh';
+          menuPanel.style.transform = 'translateY(100%)';
+          menuPanel.style.transition = 'transform 200ms ease-out';
+          this._touchMenuRafId = requestAnimationFrame(() => {
+            menuPanel.style.transform = 'translateY(0)';
+          });
+        }
+      });
+    }
   }
 
   focusRelatedTaskOrNext(): void {
@@ -287,6 +353,26 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
       });
   }
 
+  openDeadlineDialog(): void {
+    this._matDialog
+      .open(DialogDeadlineComponent, {
+        autoFocus: false,
+        data: { task: this.task },
+      })
+      .afterClosed()
+      .subscribe(() => {
+        this.focusRelatedTaskOrNext();
+      });
+  }
+
+  removeDeadline(): void {
+    this._store.dispatch(
+      TaskSharedActions.removeDeadline({
+        taskId: this.task.id,
+      }),
+    );
+  }
+
   updateIssueData(): void {
     this._issueService.refreshIssueTask(this.task, true, true);
   }
@@ -310,7 +396,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
           },
         })
         .afterClosed()
-        .pipe(takeUntil(this._destroy$))
         .subscribe(async (isConfirm) => {
           if (isConfirm) {
             await this._performDelete();
@@ -342,7 +427,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
         autoFocus: !IS_TOUCH_PRIMARY,
       })
       .afterClosed()
-      .pipe(takeUntil(this._destroy$))
       .subscribe(() => this.focusRelatedTaskOrNext());
   }
 
@@ -352,7 +436,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit {
         data: {},
       })
       .afterClosed()
-      .pipe(takeUntil(this._destroy$))
       .subscribe((result) => {
         if (result) {
           this._attachmentService.addAttachment(this.task.id, result);

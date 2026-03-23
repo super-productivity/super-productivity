@@ -30,6 +30,10 @@ import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { isSingleEmoji } from '../../../../util/extract-first-emoji';
 import { DEFAULT_PROJECT_ICON } from '../../../project/project.const';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
+import { RepeatQuickSetting } from '../../../task-repeat-cfg/task-repeat-cfg.model';
+import { buildRepeatQuickSettingOptions } from '../../../task-repeat-cfg/dialog-edit-task-repeat-cfg/build-repeat-quick-setting-options';
+
+type MenuType = 'project' | 'tags' | 'estimate' | 'repeat';
 
 @Component({
   selector: 'add-task-bar-actions',
@@ -72,6 +76,7 @@ export class AddTaskBarActionsComponent {
   isProjectMenuOpen = signal<boolean>(false);
   isTagsMenuOpen = signal<boolean>(false);
   isEstimateMenuOpen = signal<boolean>(false);
+  isRepeatMenuOpen = signal<boolean>(false);
 
   // State from service
   state = computed(() => this.stateService.state());
@@ -101,6 +106,7 @@ export class AddTaskBarActionsComponent {
   projectMenuTrigger = viewChild('projectMenuTrigger', { read: MatMenuTrigger });
   tagsMenuTrigger = viewChild('tagsMenuTrigger', { read: MatMenuTrigger });
   estimateMenuTrigger = viewChild('estimateMenuTrigger', { read: MatMenuTrigger });
+  repeatMenuTrigger = viewChild('repeatMenuTrigger', { read: MatMenuTrigger });
 
   // Computed values
   dateDisplay = computed(() => {
@@ -126,6 +132,22 @@ export class AddTaskBarActionsComponent {
   estimateDisplay = computed(() => {
     const estimate = this.state().estimate;
     return estimate ? msToString(estimate) : null;
+  });
+
+  repeatQuickOptions = computed(() => {
+    const dateStr = this.state().date;
+    const refDate = dateStr ? dateStrToUtcDate(dateStr) : new Date();
+    return buildRepeatQuickSettingOptions(
+      refDate,
+      this._dateTimeFormatService.currentLocale(),
+      this._translateService,
+    );
+  });
+
+  repeatDisplay = computed(() => {
+    const setting = this.state().repeatQuickSetting;
+    if (!setting) return null;
+    return this.repeatQuickOptions().find((o) => o.value === setting)?.label ?? null;
   });
 
   // Emoji detection for project icons
@@ -197,6 +219,10 @@ export class AddTaskBarActionsComponent {
     this._handleMenuClick('estimate');
   }
 
+  onRepeatMenuClick(): void {
+    this._handleMenuClick('repeat');
+  }
+
   // Public methods to open menus programmatically
   openProjectMenu(): void {
     this._openMenuProgrammatically('project');
@@ -210,8 +236,21 @@ export class AddTaskBarActionsComponent {
     this._openMenuProgrammatically('estimate');
   }
 
+  openRepeatMenu(): void {
+    this._openMenuProgrammatically('repeat');
+  }
+
+  selectRepeatQuickSetting(setting: RepeatQuickSetting): void {
+    this.stateService.updateRepeatSetting(setting);
+  }
+
+  clearRepeatSetting(): void {
+    this.stateService.clearRepeatSetting();
+    this.refocus.emit();
+  }
+
   // Private helper methods for DRY menu handling
-  private _handleMenuClick(menuType: 'project' | 'tags' | 'estimate'): void {
+  private _handleMenuClick(menuType: MenuType): void {
     if (this._destroyRef.destroyed) {
       return;
     }
@@ -227,7 +266,7 @@ export class AddTaskBarActionsComponent {
     }
   }
 
-  private _openMenuProgrammatically(menuType: 'project' | 'tags' | 'estimate'): void {
+  private _openMenuProgrammatically(menuType: MenuType): void {
     if (this._destroyRef.destroyed) {
       return;
     }
@@ -244,7 +283,7 @@ export class AddTaskBarActionsComponent {
     }
   }
 
-  private _getMenuRefs(menuType: 'project' | 'tags' | 'estimate'): {
+  private _getMenuRefs(menuType: MenuType): {
     menuSignal: ReturnType<typeof signal<boolean>>;
     trigger: MatMenuTrigger | undefined;
   } {
@@ -263,6 +302,11 @@ export class AddTaskBarActionsComponent {
         return {
           menuSignal: this.isEstimateMenuOpen,
           trigger: this.estimateMenuTrigger(),
+        };
+      case 'repeat':
+        return {
+          menuSignal: this.isRepeatMenuOpen,
+          trigger: this.repeatMenuTrigger(),
         };
     }
   }

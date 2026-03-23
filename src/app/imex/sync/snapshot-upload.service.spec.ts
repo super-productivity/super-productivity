@@ -304,6 +304,83 @@ describe('SnapshotUploadService', () => {
       ).toBeRejectedWithError(/Snapshot upload failed/);
     });
 
+    it('should retry upload on 429 rate limit error', async () => {
+      let callCount = 0;
+      mockSyncProvider.uploadSnapshot.and.callFake(async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error(
+            'SuperSync API error: 429 Too Many Requests - {"statusCode":429,"message":"Rate limit exceeded, retry in 0 seconds"}',
+          );
+        }
+        return { accepted: true, serverSeq: 42 };
+      });
+
+      const result = await service.deleteAndReuploadWithNewEncryption({
+        encryptKey: undefined,
+        isEncryptionEnabled: false,
+        logPrefix: 'TestPrefix',
+      });
+
+      expect(result.accepted).toBeTrue();
+      expect(callCount).toBe(2);
+    });
+
+    it('should not retry on non-429 errors', async () => {
+      mockSyncProvider.uploadSnapshot.and.rejectWith(new Error('Network timeout'));
+
+      await expectAsync(
+        service.deleteAndReuploadWithNewEncryption({
+          encryptKey: undefined,
+          isEncryptionEnabled: false,
+          logPrefix: 'TestPrefix',
+        }),
+      ).toBeRejectedWithError(/Network timeout/);
+
+      expect(mockSyncProvider.uploadSnapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw after exhausting retries on repeated 429', async () => {
+      mockSyncProvider.uploadSnapshot.and.callFake(async () => {
+        throw new Error(
+          'SuperSync API error: 429 Too Many Requests - {"statusCode":429,"message":"Rate limit exceeded, retry in 0 seconds"}',
+        );
+      });
+
+      await expectAsync(
+        service.deleteAndReuploadWithNewEncryption({
+          encryptKey: undefined,
+          isEncryptionEnabled: false,
+          logPrefix: 'TestPrefix',
+        }),
+      ).toBeRejectedWithError(/429/);
+
+      // 1 initial + 2 retries = 3 total attempts
+      expect(mockSyncProvider.uploadSnapshot).toHaveBeenCalledTimes(3);
+    });
+
+    it('should parse retry delay from minutes in error message', async () => {
+      let callCount = 0;
+      mockSyncProvider.uploadSnapshot.and.callFake(async () => {
+        callCount++;
+        if (callCount === 1) {
+          throw new Error(
+            'SuperSync API error: 429 Too Many Requests - {"statusCode":429,"message":"Rate limit exceeded, retry in 0 minutes"}',
+          );
+        }
+        return { accepted: true, serverSeq: 42 };
+      });
+
+      const result = await service.deleteAndReuploadWithNewEncryption({
+        encryptKey: undefined,
+        isEncryptionEnabled: false,
+        logPrefix: 'TestPrefix',
+      });
+
+      expect(result.accepted).toBeTrue();
+      expect(callCount).toBe(2);
+    });
+
     it('should execute steps in correct order', async () => {
       const callOrder: string[] = [];
 

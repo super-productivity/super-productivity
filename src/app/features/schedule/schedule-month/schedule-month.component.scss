@@ -16,7 +16,7 @@
   background: var(--bg-lighter);
   align-items: center;
   justify-content: center;
-  padding: 8px 16px 6px 16px;
+  padding: var(--s) var(--s2) 6px var(--s2);
 
   .month-title {
     font-size: 20px;
@@ -171,14 +171,14 @@
 }
 
 .month-day-header {
-  padding: 8px;
+  padding: var(--s);
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--grid-color);
 
   @include mq(xs, max) {
-    padding: 4px;
+    padding: var(--s-half);
   }
 
   .month-day-number {
@@ -193,7 +193,7 @@
 
 .month-day-events {
   flex: 1;
-  padding: 4px;
+  padding: var(--s-half);
   overflow-y: auto;
   overflow-x: hidden;
   max-height: calc(100% - 35px);
@@ -201,7 +201,7 @@
   box-sizing: border-box;
 
   @include mq(xs, max) {
-    padding: 2px;
+    padding: var(--s-quarter);
     max-height: calc(100% - 25px);
   }
 
@@ -258,7 +258,7 @@
     display: none;
     font-size: 10px;
     color: rgba(0, 0, 0, 0.54);
-    padding: 2px;
+    padding: var(--s-quarter);
 
     @include darkTheme() {
       color: rgba(255, 255, 255, 0.54);
@@ -271,7 +271,7 @@
 
   .month-schedule-event {
     font-size: 11px;
-    padding: 2px 4px;
+    padding: var(--s-quarter) var(--s-half);
     border-radius: 3px;
     cursor: pointer;
     display: flex;
@@ -281,7 +281,7 @@
 
     @include mq(xs, max) {
       font-size: 10px;
-      padding: 1px 2px;
+      padding: 1px var(--s-quarter);
     }
 
     // Hover effect

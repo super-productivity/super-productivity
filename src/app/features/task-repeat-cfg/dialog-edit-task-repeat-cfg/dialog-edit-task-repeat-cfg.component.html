@@ -3,6 +3,7 @@
   class="dialog-help-wrapper"
 >
   <h1 mat-dialog-title>
+    <mat-icon>repeat</mat-icon>
     {{
       isEdit()
         ? (T.F.TASK_REPEAT.D_EDIT.EDIT | translate)
@@ -15,37 +16,31 @@
       <repeat-task-heatmap [repeatCfgId]="cfgId" />
     }
 
-    <help-section>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP1 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP2 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP3 | translate }}</p>
-      <p>{{ T.F.TASK_REPEAT.D_EDIT.HELP4 | translate }}</p>
-    </help-section>
-
     <div class="form-wrapper">
       <formly-form
         (modelChange)="repeatCfg.set($event)"
         [form]="formGroup1()"
-        [fields]="TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS()"
+        [fields]="essentialFormFields()"
         [model]="repeatCfg()"
       ></formly-form>
-      <chip-list-input
-        (addItem)="addTag($event)"
-        (addNewItem)="addNewTag($event)"
-        (removeItem)="removeTag($event)"
-        [label]="T.F.TASK_REPEAT.D_EDIT.TAG_LABEL | translate"
-        [model]="repeatCfg().tagIds"
-        [suggestions]="tagSuggestions()"
-      ></chip-list-input>
 
-      <!--      <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG|translate">-->
-      <formly-form
-        (modelChange)="repeatCfg.set($event)"
-        [form]="formGroup2()"
-        [fields]="TASK_REPEAT_CFG_ADVANCED_FORM_CFG()"
-        [model]="repeatCfg()"
-      ></formly-form>
-      <!--            </collapsible>-->
+      <collapsible [title]="T.F.TASK_REPEAT.D_EDIT.ADVANCED_CFG | translate">
+        <chip-list-input
+          (addItem)="addTag($event)"
+          (addNewItem)="addNewTag($event)"
+          (removeItem)="removeTag($event)"
+          [label]="T.F.TASK_REPEAT.D_EDIT.TAG_LABEL | translate"
+          [model]="repeatCfg().tagIds"
+          [suggestions]="tagSuggestions()"
+        ></chip-list-input>
+
+        <formly-form
+          (modelChange)="repeatCfg.set($event)"
+          [form]="formGroup2()"
+          [fields]="advancedFormFields()"
+          [model]="repeatCfg()"
+        ></formly-form>
+      </collapsible>
     </div>
   </mat-dialog-content>
 

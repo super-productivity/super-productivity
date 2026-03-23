@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { firstValueFrom, Observable, of } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
-import { Task } from '../../tasks/task.model';
+import { Task, TaskCopy } from '../../tasks/task.model';
 import { IssueServiceInterface } from '../issue-service-interface';
 import {
   IssueData,
@@ -113,9 +113,18 @@ export abstract class BaseIssueProviderService<
     }
 
     if (this._wasUpdated(task, issue)) {
+      // Exclude dueDay/dueWithTime from polling updates to prevent overwriting
+      // user-set schedules. Due dates are only set on initial task creation.
+      // Providers that need to sync due dates during polling (e.g. Calendar)
+      // override this method with their own change detection logic.
+      const taskData: Partial<TaskCopy> & { title: string } = {
+        ...this.getAddTaskData(issue as IssueDataReduced),
+      };
+      delete taskData.dueDay;
+      delete taskData.dueWithTime;
       return {
         taskChanges: {
-          ...this.getAddTaskData(issue as IssueDataReduced),
+          ...taskData,
           issueWasUpdated: true,
         },
         issue,

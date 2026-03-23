@@ -1,9 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('overlayAPI', {
-  setIgnoreMouseEvents: (ignore: boolean) => {
-    ipcRenderer.send('overlay-set-ignore-mouse', ignore);
-  },
   showMainWindow: () => {
     ipcRenderer.send('overlay-show-main-window');
   },
@@ -15,6 +12,15 @@ contextBridge.exposeInMainWorld('overlayAPI', {
     // Return cleanup function
     return () => {
       ipcRenderer.removeListener('update-content', listener);
+    };
+  },
+  onUpdateOpacity: (callback: (opacity: number) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, opacity: number): void =>
+      callback(opacity);
+    ipcRenderer.on('update-opacity', listener);
+
+    return () => {
+      ipcRenderer.removeListener('update-opacity', listener);
     };
   },
 });

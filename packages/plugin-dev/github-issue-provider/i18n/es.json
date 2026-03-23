@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Aquí puedes configurar SuperProductivity para listar incidencias abiertas de GitHub para un repositorio específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además puedes importar automáticamente todas las incidencias abiertas.</p><p>Para superar los límites de uso y para acceder puedes proporcionar un token de acceso. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Más info sobre sus ámbitos se puede encontrar aquí</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Error al mapear los datos. ¿Es correcto el nombre de tu repositorio?",
-    "ERR_UNKNOWN": "GitHub: Error desconocido {{statusCode}} {{errorMsg}}. ¿Se ha excedido el límite de tasa de la API?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Error desconocido {{statusCode}} {{errorMsg}}. ¿Se ha excedido el límite de tasa de la API?"
   }
 }

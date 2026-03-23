@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { createEffect, ofType } from '@ngrx/effects';
-import { EMPTY, Observable, first, from } from 'rxjs';
+import { EMPTY, Observable, first, firstValueFrom, from } from 'rxjs';
 import { catchError, concatMap, filter, map } from 'rxjs/operators';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { TaskService } from '../../tasks/task.service';
@@ -10,12 +10,75 @@ import { IssueProviderService } from '../issue-provider.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { IssueSyncAdapterRegistryService } from './issue-sync-adapter-registry.service';
 import { computePushDecisions } from './compute-push-decisions';
+import { FieldMapping, FieldSyncConfig } from './issue-sync.model';
 import { IssueProvider, IssueProviderKey } from '../issue.model';
 import { IssueLog } from '../../../core/log';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CaldavSyncAdapterService } from '../providers/caldav/caldav-sync-adapter.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import { T } from '../../../t.const';
+import {
+  DeletedTaskIssueSidecarService,
+  DeletedTaskIssueInfo,
+} from './deleted-task-issue-sidecar.service';
 import { selectEnabledIssueProviders } from '../store/issue-provider.selectors';
+import { getErrorTxt } from '../../../util/get-error-text';
+import { T } from '../../../t.const';
+import { PlannerActions } from '../../planner/store/planner.actions';
+
+const SYNCABLE_TASK_FIELDS: ReadonlySet<string> = new Set([
+  'isDone',
+  'title',
+  'notes',
+  'dueWithTime',
+  'dueDay',
+  'timeEstimate',
+]);
+
+// Lookup map to extract taskId and changes from each action type,
+// replacing chained if/else with manual casts.
+const ACTION_EXTRACTORS: Record<
+  string,
+  (action: unknown) => { taskId: string; changes: Record<string, unknown> }
+> = {
+  [TaskSharedActions.applyShortSyntax.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.applyShortSyntax>;
+    const changes: Record<string, unknown> = { ...a.taskChanges };
+    if (a.schedulingInfo?.dueWithTime) {
+      changes['dueWithTime'] = a.schedulingInfo.dueWithTime;
+    }
+    if (a.schedulingInfo?.day) {
+      changes['dueDay'] = a.schedulingInfo.day;
+    }
+    return { taskId: a.task.id, changes };
+  },
+  [TaskSharedActions.scheduleTaskWithTime.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.scheduleTaskWithTime>;
+    return { taskId: a.task.id, changes: { dueWithTime: a.dueWithTime } };
+  },
+  [TaskSharedActions.reScheduleTaskWithTime.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.reScheduleTaskWithTime>;
+    return { taskId: a.task.id, changes: { dueWithTime: a.dueWithTime } };
+  },
+  [TaskSharedActions.unscheduleTask.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.unscheduleTask>;
+    return { taskId: a.id, changes: { dueWithTime: undefined } };
+  },
+  [TaskSharedActions.updateTask.type]: (action) => {
+    const a = action as ReturnType<typeof TaskSharedActions.updateTask>;
+    return {
+      taskId: a.task.id.toString(),
+      changes: a.task.changes as Partial<Task>,
+    };
+  },
+  [PlannerActions.planTaskForDay.type]: (action) => {
+    const a = action as ReturnType<typeof PlannerActions.planTaskForDay>;
+    return { taskId: a.task.id, changes: { dueDay: a.day } };
+  },
+  [PlannerActions.transferTask.type]: (action) => {
+    const a = action as ReturnType<typeof PlannerActions.transferTask>;
+    return { taskId: a.task.id, changes: { dueDay: a.newDay } };
+  },
+};
 
 @Injectable()
 export class IssueTwoWaySyncEffects {
@@ -25,7 +88,9 @@ export class IssueTwoWaySyncEffects {
   private readonly _issueProviderService = inject(IssueProviderService);
   private readonly _adapterRegistry = inject(IssueSyncAdapterRegistryService);
   private readonly _snackService = inject(SnackService);
+  private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
   private _syncOriginatedTaskIds = new Set<string>();
+  private static readonly _MAX_SYNC_ORIGINATED_IDS = 1000;
 
   constructor() {
     const caldavAdapter = inject(CaldavSyncAdapterService);
@@ -35,35 +100,41 @@ export class IssueTwoWaySyncEffects {
   pushFieldsOnTaskUpdate$: Observable<unknown> = createEffect(
     () =>
       this._actions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => {
-          if (this._syncOriginatedTaskIds.delete(task.id.toString())) {
+        ofType(
+          TaskSharedActions.updateTask,
+          TaskSharedActions.applyShortSyntax,
+          TaskSharedActions.scheduleTaskWithTime,
+          TaskSharedActions.reScheduleTaskWithTime,
+          TaskSharedActions.unscheduleTask,
+          PlannerActions.planTaskForDay,
+          PlannerActions.transferTask,
+        ),
+        map((action) => ACTION_EXTRACTORS[action.type](action)),
+        filter(({ taskId, changes }) => {
+          if (this._syncOriginatedTaskIds.delete(taskId)) {
             return false;
           }
-          const changes = task.changes;
           // Skip poll-originated updates that include sync bookkeeping fields
           if ('issueLastSyncedValues' in changes || 'issueWasUpdated' in changes) {
             return false;
           }
-          return (
-            'isDone' in changes ||
-            'title' in changes ||
-            'notes' in changes ||
-            'dueWithTime' in changes ||
-            'dueDay' in changes ||
-            'timeEstimate' in changes
-          );
+          return Object.keys(changes).some((key) => SYNCABLE_TASK_FIELDS.has(key));
         }),
-        concatMap(({ task: taskUpdate }) =>
-          this._taskService.getByIdOnce$(taskUpdate.id.toString()).pipe(
+        concatMap(({ taskId, changes }) =>
+          this._taskService.getByIdOnce$(taskId).pipe(
             map((fullTask) => ({
               fullTask,
-              changes: taskUpdate.changes,
+              changes,
             })),
           ),
         ),
         filter(({ fullTask }) => {
-          if (!fullTask.issueType || !fullTask.issueProviderId || !fullTask.issueId) {
+          if (
+            !fullTask ||
+            !fullTask.issueType ||
+            !fullTask.issueProviderId ||
+            !fullTask.issueId
+          ) {
             return false;
           }
           return this._adapterRegistry.has(fullTask.issueType);
@@ -71,18 +142,47 @@ export class IssueTwoWaySyncEffects {
         concatMap(({ fullTask, changes }) =>
           this._pushChanges$(fullTask, changes).pipe(
             catchError((err) => {
-              const errStr = JSON.stringify(err);
               IssueLog.err('Two-way sync push failed', err);
-              if (errStr.includes('admin rights') || errStr.includes('403')) {
-                this._snackService.open({
-                  type: 'ERROR',
-                  msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
-                });
-              }
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.ISSUE.S.TWO_WAY_SYNC_PUSH_FAILED,
+                translateParams: { errorMsg: getErrorTxt(err) },
+              });
               return EMPTY;
             }),
           ),
         ),
+      ),
+    { dispatch: false },
+  );
+
+  deleteIssueOnTaskDelete$: Observable<unknown> = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.deleteTask),
+        filter(
+          ({ task }) => !!task.issueId && !!task.issueType && !!task.issueProviderId,
+        ),
+        filter(({ task }) => this._adapterRegistry.has(task.issueType!)),
+        concatMap(({ task }) => this._deleteRemoteIssue$(task)),
+      ),
+    { dispatch: false },
+  );
+
+  deleteIssueOnBulkTaskDelete$: Observable<unknown> = createEffect(
+    () =>
+      this._actions$.pipe(
+        ofType(TaskSharedActions.deleteTasks),
+        concatMap(() => {
+          const issueInfos = this._deletedTaskIssueSidecar.consume();
+          if (!issueInfos.length) {
+            return EMPTY;
+          }
+          return from(issueInfos).pipe(
+            filter((info) => this._adapterRegistry.has(info.issueType)),
+            concatMap((info) => this._deleteRemoteIssue$(info)),
+          );
+        }),
       ),
     { dispatch: false },
   );
@@ -114,20 +214,33 @@ export class IssueTwoWaySyncEffects {
                 .pipe(
                   concatMap((cfg) =>
                     from(adapter.createIssue!(task.title, cfg)).pipe(
-                      map(({ issueId, issueNumber, issueData }) => {
-                        this._syncOriginatedTaskIds.add(task.id);
+                      concatMap(async ({ issueId, issueNumber, issueData }) => {
+                        this._trackSyncOriginatedTask(task.id);
                         try {
                           const titlePrefix =
-                            issueNumber != null ? `#${issueNumber} ` : `${issueId} `;
+                            issueNumber != null ? `#${issueNumber} ` : '';
+                          const syncValues = adapter.extractSyncValues(issueData);
                           this._taskService.update(task.id, {
                             issueId,
                             issueType: provider.issueProviderKey,
                             issueProviderId: provider.id,
                             issueLastUpdated: Date.now(),
                             issueWasUpdated: false,
-                            issueLastSyncedValues: adapter.extractSyncValues(issueData),
-                            title: `${titlePrefix}${task.title}`,
+                            issueLastSyncedValues: syncValues,
+                            title: titlePrefix
+                              ? `${titlePrefix}${task.title}`
+                              : task.title,
                           });
+
+                          // Push initial task values (e.g. dueWithTime from short syntax)
+                          // that were set before the issue was linked
+                          await this._pushInitialValues(
+                            task,
+                            issueId,
+                            adapter,
+                            cfg,
+                            syncValues,
+                          );
                         } catch (e) {
                           this._syncOriginatedTaskIds.delete(task.id);
                           throw e;
@@ -142,6 +255,7 @@ export class IssueTwoWaySyncEffects {
               this._snackService.open({
                 type: 'ERROR',
                 msg: T.F.ISSUE.S.AUTO_CREATE_FAILED,
+                translateParams: { errorMsg: getErrorTxt(err) },
               });
               return EMPTY;
             }),
@@ -151,6 +265,61 @@ export class IssueTwoWaySyncEffects {
     { dispatch: false },
   );
 
+  private async _pushInitialValues(
+    task: Task,
+    issueId: string,
+    adapter: {
+      getFieldMappings(): FieldMapping[];
+      getSyncConfig(cfg: unknown): FieldSyncConfig;
+      pushChanges(
+        issueId: string,
+        changes: Record<string, unknown>,
+        cfg: unknown,
+      ): Promise<void>;
+    },
+    cfg: IssueProvider,
+    syncValues: Record<string, unknown>,
+  ): Promise<void> {
+    // Re-fetch task from the store to get post-meta-reducer values
+    // (e.g. dueWithTime from short syntax parsing like @2pm)
+    const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
+    const fieldMappings = adapter.getFieldMappings();
+    const syncConfig = adapter.getSyncConfig(cfg);
+    const ctx = { issueId };
+    const toPush: Record<string, unknown> = {};
+
+    for (const mapping of fieldMappings) {
+      const dir = syncConfig[mapping.taskField] ?? mapping.defaultDirection;
+      if (dir !== 'pushOnly' && dir !== 'both') {
+        continue;
+      }
+      const taskValue = currentTask[mapping.taskField as keyof Task];
+      if (taskValue == null) {
+        continue;
+      }
+      const issueValue = mapping.toIssueValue(taskValue, ctx);
+      if (issueValue == null) {
+        continue;
+      }
+      // Only push if task value differs from the created issue value
+      if (issueValue !== syncValues[mapping.issueField]) {
+        toPush[mapping.issueField] = issueValue;
+      }
+    }
+
+    if (Object.keys(toPush).length > 0) {
+      await adapter.pushChanges(issueId, toPush, cfg);
+      // Update sync baseline and issueLastUpdated to prevent poll from
+      // treating our own push as an external update
+      const updatedSyncValues = { ...syncValues, ...toPush };
+      this._trackSyncOriginatedTask(task.id);
+      this._taskService.update(task.id, {
+        issueLastSyncedValues: updatedSyncValues,
+        issueLastUpdated: Date.now(),
+      });
+    }
+  }
+
   private _hasAutoCreateEnabled(provider: IssueProvider): boolean {
     // Check for plugin providers (both plugin:* and migrated keys like GITHUB)
     const pluginCfg = (provider as { pluginConfig?: Record<string, unknown> })
@@ -159,6 +328,39 @@ export class IssueTwoWaySyncEffects {
       return !!(pluginCfg as Record<string, unknown>)?.['isAutoCreateIssues'];
     }
     return false;
+  }
+
+  private _deleteRemoteIssue$(info: DeletedTaskIssueInfo | Task): Observable<unknown> {
+    const issueType = info.issueType!;
+    const issueProviderId = info.issueProviderId!;
+    const issueId = info.issueId!;
+    const adapter = this._adapterRegistry.get(issueType);
+    if (!adapter?.deleteIssue) {
+      return EMPTY;
+    }
+    return this._issueProviderService
+      .getCfgOnce$(issueProviderId, issueType as IssueProviderKey)
+      .pipe(
+        concatMap((cfg) =>
+          from(adapter.deleteIssue!(issueId, cfg)).pipe(
+            catchError((err) => {
+              // 404/410 means the remote issue is already gone — treat as success
+              // to avoid false "delete failed" toasts (e.g. when polling detects
+              // a remote deletion and then deleteIssue is called on the same issue)
+              const status = err instanceof HttpErrorResponse ? err.status : err?.status;
+              if (status === 404 || status === 410) {
+                return EMPTY;
+              }
+              IssueLog.err('Delete remote issue failed', err);
+              this._snackService.open({
+                type: 'ERROR',
+                msg: T.F.ISSUE.S.DELETE_REMOTE_FAILED,
+              });
+              return EMPTY;
+            }),
+          ),
+        ),
+      );
   }
 
   private _pushChanges$(task: Task, changes: Partial<Task>): Observable<unknown> {
@@ -189,10 +391,15 @@ export class IssueTwoWaySyncEffects {
         const freshValues = adapter.extractSyncValues(freshIssue);
         const lastSyncedValues = task.issueLastSyncedValues ?? {};
 
+        // Re-fetch task to get post-meta-reducer values (e.g. short syntax parsed title)
+        const currentTask = await firstValueFrom(this._taskService.getByIdOnce$(task.id));
         const taskFieldChanges: Record<string, unknown> = {};
         for (const mapping of fieldMappings) {
           if (mapping.taskField in changes) {
-            taskFieldChanges[mapping.taskField] = changes[mapping.taskField];
+            // Use current task value (post-parsing) not raw action value
+            taskFieldChanges[mapping.taskField] =
+              currentTask?.[mapping.taskField as keyof Task] ??
+              changes[mapping.taskField];
           }
         }
 
@@ -244,7 +451,7 @@ export class IssueTwoWaySyncEffects {
 
         // Update sync values and issueLastUpdated to prevent poll from
         // treating our own push as an external update
-        this._syncOriginatedTaskIds.add(task.id);
+        this._trackSyncOriginatedTask(task.id);
         try {
           this._taskService.update(task.id, {
             issueLastSyncedValues: updatedSyncValues,
@@ -256,5 +463,18 @@ export class IssueTwoWaySyncEffects {
         }
       }),
     );
+  }
+
+  private _trackSyncOriginatedTask(taskId: string): void {
+    this._syncOriginatedTaskIds.add(taskId);
+    if (
+      this._syncOriginatedTaskIds.size > IssueTwoWaySyncEffects._MAX_SYNC_ORIGINATED_IDS
+    ) {
+      // Evict oldest entry (Set preserves insertion order) instead of clearing all
+      const oldest = this._syncOriginatedTaskIds.values().next().value;
+      if (oldest !== undefined) {
+        this._syncOriginatedTaskIds.delete(oldest);
+      }
+    }
   }
 }

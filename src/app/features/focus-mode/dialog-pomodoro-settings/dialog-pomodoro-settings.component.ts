@@ -39,6 +39,7 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
     key: 'cyclesBeforeLongerBreak',
     type: 'input',
     props: {
+      required: true,
       label: T.GCF.POMODORO.CYCLES_BEFORE_LONGER_BREAK,
       type: 'number',
       min: 1,

@@ -20,6 +20,7 @@
  *   compare-users <id1> <id2>            Compare two users' patterns
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma, disconnectDb } from '../src/db';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -64,7 +65,12 @@ const saveToFile = (filename: string, data: any): string => {
 const analyzeOperationSizes = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Size Distribution ===\n');
 
-  const whereClause = userId ? `WHERE user_id = ${userId}` : '';
+  const userWhere = userId
+    ? Prisma.sql`WHERE user_id = ${userId}`
+    : Prisma.empty;
+  const userAnd = userId
+    ? Prisma.sql`AND user_id = ${userId}`
+    : Prisma.empty;
 
   // Get percentile distribution
   const sizeDistribution: any[] = await prisma.$queryRaw`
@@ -81,7 +87,7 @@ const analyzeOperationSizes = async (userId?: number): Promise<void> => {
       AVG(pg_column_size(payload)) as avg_size,
       COUNT(*) as total_ops
     FROM operations
-    ${userId ? `WHERE user_id = ${userId}` : ''};
+    ${userWhere}
   `;
 
   const stats = sizeDistribution[0];
@@ -114,9 +120,9 @@ const analyzeOperationSizes = async (userId?: number): Promise<void> => {
       COUNT(*) as count,
       SUM(pg_column_size(payload)) as total_bytes
     FROM operations
-    ${userId ? `WHERE user_id = ${userId}` : ''}
+    ${userWhere}
     GROUP BY size_bucket
-    ORDER BY MIN(pg_column_size(payload));
+    ORDER BY MIN(pg_column_size(payload))
   `;
 
   console.table(
@@ -135,6 +141,10 @@ const analyzeOperationSizes = async (userId?: number): Promise<void> => {
 const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Timeline Analysis ===\n');
 
+  const userAnd = userId
+    ? Prisma.sql`AND user_id = ${userId}`
+    : Prisma.empty;
+
   // Operations per day
   console.log('Operations per Day (last 30 days):');
   const perDay: any[] = await prisma.$queryRaw`
@@ -145,10 +155,10 @@ const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
       SUM(pg_column_size(payload)) as total_bytes
     FROM operations
     WHERE received_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '30 days') * 1000
-    ${userId ? `AND user_id = ${userId}` : ''}
+    ${userAnd}
     GROUP BY DATE(to_timestamp(received_at / 1000))
     ORDER BY date DESC
-    LIMIT 30;
+    LIMIT 30
   `;
 
   if (perDay.length > 0) {
@@ -173,10 +183,10 @@ const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
       AVG(pg_column_size(payload)) as avg_size
     FROM operations
     WHERE received_at > EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours') * 1000
-    ${userId ? `AND user_id = ${userId}` : ''}
+    ${userAnd}
     GROUP BY hour
     ORDER BY hour DESC
-    LIMIT 24;
+    LIMIT 24
   `;
 
   if (perHour.length > 0) {
@@ -196,6 +206,10 @@ const analyzeOperationTimeline = async (userId?: number): Promise<void> => {
 const analyzeOperationTypes = async (userId?: number): Promise<void> => {
   console.log('\n=== Operation Type Analysis ===\n');
 
+  const userWhere = userId
+    ? Prisma.sql`WHERE user_id = ${userId}`
+    : Prisma.empty;
+
   // By opType
   console.log('By Operation Type:');
   const byOpType: any[] = await prisma.$queryRaw`
@@ -207,9 +221,9 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
       MAX(pg_column_size(payload)) as max_bytes,
       COUNT(DISTINCT user_id) as unique_users
     FROM operations
-    ${userId ? `WHERE user_id = ${userId}` : ''}
+    ${userWhere}
     GROUP BY op_type
-    ORDER BY total_bytes DESC;
+    ORDER BY total_bytes DESC
   `;
 
   console.table(
@@ -232,9 +246,9 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
       SUM(pg_column_size(payload)) as total_bytes,
       AVG(pg_column_size(payload)) as avg_bytes
     FROM operations
-    ${userId ? `WHERE user_id = ${userId}` : ''}
+    ${userWhere}
     GROUP BY entity_type
-    ORDER BY total_bytes DESC;
+    ORDER BY total_bytes DESC
   `;
 
   console.table(
@@ -255,10 +269,10 @@ const analyzeOperationTypes = async (userId?: number): Promise<void> => {
       SUM(pg_column_size(payload)) as total_bytes,
       AVG(pg_column_size(payload)) as avg_bytes
     FROM operations
-    ${userId ? `WHERE user_id = ${userId}` : ''}
+    ${userWhere}
     GROUP BY action_type
     ORDER BY total_bytes DESC
-    LIMIT 10;
+    LIMIT 10
   `;
 
   console.table(

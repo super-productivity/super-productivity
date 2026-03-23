@@ -266,7 +266,7 @@ export class AddTaskBarIssueSearchService {
 
   private _filterBacklog(searchText: string, task: Task): boolean {
     try {
-      return !!task.title.toLowerCase().match(searchText.toLowerCase());
+      return !!task.title?.toLowerCase().match(searchText.toLowerCase());
     } catch (e) {
       TaskLog.err('RegEx Error', e);
       return false;

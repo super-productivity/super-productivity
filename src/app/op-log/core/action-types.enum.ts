@@ -69,6 +69,9 @@ export enum ActionType {
   TASK_SHARED_DELETE_ISSUE_PROVIDERS = '[Task Shared] deleteIssueProviders',
   TASK_SHARED_DELETE_REPEAT_CFG = '[Task Shared] deleteTaskRepeatCfg',
   TASK_SHARED_APPLY_SHORT_SYNTAX = '[Task Shared] applyShortSyntax',
+  TASK_SHARED_SET_DEADLINE = '[Task Shared] setDeadline',
+  TASK_SHARED_REMOVE_DEADLINE = '[Task Shared] removeDeadline',
+  TASK_SHARED_CLEAR_DEADLINE_REMINDER = '[Task Shared] clearDeadlineReminder',
 
   // IssueProvider actions (I)
   ISSUE_PROVIDER_ADD = '[IssueProvider/API] Add IssueProvider',

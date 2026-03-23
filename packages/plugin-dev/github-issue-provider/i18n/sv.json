@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Här kan du konfigurera SuperProductivity så att öppna GitHub-ärenden för ett specifikt arkiv listas i panelen för uppgiftskapande i den dagliga planeringsvyn. De listas som förslag och innehåller en länk till ärendet samt mer information om det. </p> <p>Dessutom kan du automatiskt importera alla öppna ärenden. </p><p>För att komma förbi användningsbegränsningar och få åtkomst kan du ange en åtkomsttoken. <a href=’https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps’>Mer information om dess omfattning finns här</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Fel vid mappning av data. Är namnet på ditt arkiv korrekt?",
-    "ERR_UNKNOWN": "GitHub: Okänd felkod {{statusCode}} {{errorMsg}}. Har API-gränsen överskridits?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Okänd felkod {{statusCode}} {{errorMsg}}. Har API-gränsen överskridits?"
   }
 }

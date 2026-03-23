@@ -107,6 +107,7 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
               lastCompletedDuration: null,
               isOverlayShown: false,
               _isResumingBreak: false,
+              _isOvertimeEnabled: false,
             },
             tasks: {
               entities: {

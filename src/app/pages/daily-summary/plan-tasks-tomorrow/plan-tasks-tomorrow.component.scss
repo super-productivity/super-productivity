@@ -8,7 +8,6 @@
 }
 
 :host::ng-deep .hover-controls {
-  .task-done-btn,
   .start-task-btn {
     display: none !important;
   }
@@ -21,7 +20,6 @@
   justify-content: center;
   padding: 5px 0;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   vertical-align: middle;
 
   .label {

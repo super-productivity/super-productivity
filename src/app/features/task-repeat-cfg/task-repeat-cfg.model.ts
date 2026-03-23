@@ -17,6 +17,8 @@ export type RepeatQuickSetting =
   | 'DAILY'
   | 'WEEKLY_CURRENT_WEEKDAY'
   | 'MONTHLY_CURRENT_DATE'
+  | 'MONTHLY_FIRST_DAY'
+  | 'MONTHLY_LAST_DAY'
   | 'MONDAY_TO_FRIDAY'
   | 'YEARLY_CURRENT_DATE'
   | 'CUSTOM';

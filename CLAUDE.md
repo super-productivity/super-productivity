@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project-Specific Guidelines
 
 1. **ALWAYS** use `npm run checkFile <filepath>` on each `ts` or `scss` file you modify to ensure proper formatting and linting. Unless you want to lint and format multiple files, then use `npm run prettier` and `npm run lint` instead.
-2. When creating HTML templates, prefer plain HTML (`<table>`, `<div>`). Keep CSS, nesting, and classes to a minimum. Use Angular Material components where appropriate but sparingly.
+2. When creating HTML templates, prefer plain HTML (`<table>`, `<div>`). Keep CSS, nesting, and classes to a minimum. Use Angular Material components where appropriate but sparingly. See **Styling & Design System** section below for CSS variable and design token rules.
 
 ## Project Overview
 
@@ -111,6 +111,10 @@ The app uses NgRx (Redux pattern) for state management. Key state slices:
 - Multiple sync providers: Dropbox, WebDAV, local file
 - Sync is conflict-aware with vector-clock resolution
 - All sync operations go through `/src/app/imex/sync/`
+
+## Styling & Design System
+
+**WHENEVER you are making styling changes, read and apply [`docs/styling-guide.md`](docs/styling-guide.md).** It contains the rules, CSS variables, and patterns that must be followed for a consistent design language.
 
 ## Important Development Notes
 

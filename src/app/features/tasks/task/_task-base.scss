@@ -204,8 +204,8 @@
   align-items: stretch;
   flex-wrap: nowrap;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   justify-content: space-between;
+  @include grabCursor();
   min-height: var(--task-first-line-min-height);
   touch-action: pan-y;
 
@@ -241,5 +241,9 @@
 
   @include isDoneForFirstLine {
     opacity: var(--task-is-done-dim-opacity);
+
+    ::ng-deep .display-value {
+      text-decoration: line-through;
+    }
   }
 }

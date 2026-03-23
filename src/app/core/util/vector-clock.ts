@@ -170,7 +170,7 @@ export const incrementVectorClock = (
   }
 
   const newClock = { ...(clock || {}) };
-  const currentValue = newClock[clientId] || 0;
+  const currentValue = newClock[clientId] ?? 0;
 
   // Log for debugging
   OpLog.verbose('incrementVectorClock', {
@@ -262,7 +262,7 @@ export const hasVectorClockChanges = (
 
   // Check if any component in current is greater than in reference
   for (const [clientId, currentVal] of Object.entries(current!)) {
-    const refVal = reference![clientId] || 0;
+    const refVal = reference![clientId] ?? 0;
     if (currentVal > refVal) {
       return true;
     }
@@ -284,15 +284,6 @@ export const hasVectorClockChanges = (
 
   return false;
 };
-
-/**
- * Metrics for vector clock operations
- */
-export interface VectorClockMetrics {
-  size: number;
-  comparisonTime: number;
-  pruningOccurred: boolean;
-}
 
 /**
  * Emits when vector clock pruning occurs.
@@ -333,27 +324,4 @@ export const limitVectorClockSize = (
   });
 
   return sharedLimitVectorClockSize(clock, [currentClientId]);
-};
-
-/**
- * Measures vector clock metrics for monitoring
- * @param clock The vector clock to measure
- * @returns Metrics about the vector clock
- */
-export const measureVectorClock = (
-  clock: VectorClock | null | undefined,
-): VectorClockMetrics => {
-  if (!clock) {
-    return {
-      size: 0,
-      comparisonTime: 0,
-      pruningOccurred: false,
-    };
-  }
-
-  return {
-    size: Object.keys(clock).length,
-    comparisonTime: 0, // Will be set during comparison
-    pruningOccurred: false,
-  };
 };

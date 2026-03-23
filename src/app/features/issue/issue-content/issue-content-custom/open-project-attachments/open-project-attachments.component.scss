@@ -1,28 +1,28 @@
 .open-project-attachments {
   .loading-wrapper {
-    margin: 16px 0;
+    margin: var(--s2) 0;
   }
 
   .upload-btn {
-    margin: 16px 0;
+    margin: var(--s2) 0;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--s);
   }
 
   .attachment-dl-list {
-    margin-top: 16px;
+    margin-top: var(--s2);
 
     .attachment {
-      margin-bottom: 8px;
+      margin-bottom: var(--s);
 
       .attachment-inner {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: var(--s);
         color: var(--palette-primary-main);
         text-decoration: none;
-        padding: 8px;
+        padding: var(--s);
         border-radius: var(--card-border-radius);
         transition: background-color 0.2s;
 

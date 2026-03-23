@@ -49,7 +49,7 @@
 
     @include mq(xs, max) {
       font-size: 10px;
-      padding: 0 4px;
+      padding: 0 var(--s-half);
     }
 
     mat-icon {
@@ -71,20 +71,20 @@
   .task-input-container {
     position: absolute;
     inset: 0;
-    padding: 0 8px;
+    padding: 0 var(--s);
     display: flex;
     flex-direction: column;
     overflow: hidden;
 
     @include mq(xs, max) {
-      padding: 4px;
-      gap: 4px;
+      padding: var(--s-half);
+      gap: var(--s-half);
     }
 
     // Remove padding when width is very small (< 150px)
     @container (max-width: 135px) {
-      padding: 2px;
-      gap: 2px;
+      padding: var(--s-quarter);
+      gap: var(--s-quarter);
     }
 
     select-task-minimal {
@@ -96,15 +96,15 @@
     .task-type-indicator {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--s-half);
       font-size: 10px;
-      padding: 2px 6px;
+      padding: var(--s-quarter) 6px;
       border-radius: 12px;
       font-weight: 500;
 
       @include mq(xs, max) {
         font-size: 9px;
-        padding: 1px 4px;
+        padding: 1px var(--s-half);
       }
 
       &.create {
@@ -171,7 +171,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--s-half);
 
   @include mq(xs, max) {
     font-size: 12px;

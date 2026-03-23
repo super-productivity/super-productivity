@@ -103,7 +103,7 @@ describe('SuperSyncEncryptionToggleService', () => {
       );
 
       await expectAsync(service.enableEncryption('my-secret-key')).toBeRejectedWithError(
-        /CRITICAL/,
+        /Failed to upload encrypted snapshot/,
       );
 
       // Should revert using the config captured BEFORE the destructive call
@@ -118,24 +118,30 @@ describe('SuperSyncEncryptionToggleService', () => {
       );
     });
 
-    it('should throw with CRITICAL message on failure', async () => {
+    it('should throw with descriptive message including reason on failure', async () => {
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
         new Error('Server rejected'),
       );
 
       await expectAsync(service.enableEncryption('my-secret-key')).toBeRejectedWithError(
-        /CRITICAL: Failed to upload encrypted snapshot after deleting server data/,
+        /Failed to upload encrypted snapshot.*Reason: Server rejected/,
       );
     });
 
-    it('should include original error message in CRITICAL error', async () => {
+    it('should preserve original error as cause', async () => {
+      const originalError = new Error('Network error');
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
-        new Error('Network error'),
+        originalError,
       );
 
-      await expectAsync(service.enableEncryption('my-secret-key')).toBeRejectedWithError(
-        /CRITICAL.*Network error/,
-      );
+      try {
+        await service.enableEncryption('my-secret-key');
+        fail('Expected error to be thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(/Reason: Network error/);
+        expect((error as Error).cause).toBe(originalError);
+      }
     });
   });
 
@@ -165,7 +171,9 @@ describe('SuperSyncEncryptionToggleService', () => {
         new Error('Upload failed'),
       );
 
-      await expectAsync(service.disableEncryption()).toBeRejectedWithError(/CRITICAL/);
+      await expectAsync(service.disableEncryption()).toBeRejectedWithError(
+        /Failed to upload unencrypted snapshot/,
+      );
 
       // Should restore the original config including the encryption key
       expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
@@ -174,24 +182,30 @@ describe('SuperSyncEncryptionToggleService', () => {
       );
     });
 
-    it('should throw with CRITICAL message on failure', async () => {
+    it('should throw with descriptive message including reason on failure', async () => {
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
         new Error('Server rejected'),
       );
 
       await expectAsync(service.disableEncryption()).toBeRejectedWithError(
-        /CRITICAL: Failed to upload unencrypted snapshot after deleting server data/,
+        /Failed to upload unencrypted snapshot.*Reason: Server rejected/,
       );
     });
 
-    it('should include original error message in CRITICAL error', async () => {
+    it('should preserve original error as cause', async () => {
+      const originalError = new Error('Network error');
       mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
-        new Error('Network error'),
+        originalError,
       );
 
-      await expectAsync(service.disableEncryption()).toBeRejectedWithError(
-        /CRITICAL.*Network error/,
-      );
+      try {
+        await service.disableEncryption();
+        fail('Expected error to be thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toMatch(/Reason: Network error/);
+        expect((error as Error).cause).toBe(originalError);
+      }
     });
   });
 });

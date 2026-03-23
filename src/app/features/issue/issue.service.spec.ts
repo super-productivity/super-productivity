@@ -26,7 +26,6 @@ import { OpenProjectCommonInterfacesService } from './providers/open-project/ope
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
-import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
 
 describe('IssueService', () => {
@@ -148,7 +147,6 @@ describe('IssueService', () => {
         { provide: GiteaCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: RedmineCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: LinearCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: ClickUpCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,

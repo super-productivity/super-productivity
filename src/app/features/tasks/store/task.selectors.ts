@@ -10,6 +10,7 @@ import {
 } from '../task.model';
 import { taskAdapter } from './task.adapter';
 import { devError } from '../../../util/dev-error';
+import { isDBDateStr } from '../../../util/get-db-date-str';
 import { TODAY_TAG } from '../../tag/tag.const';
 import { IssueProvider } from '../../issue/issue.model';
 import { Project } from '../../project/project.model';
@@ -159,7 +160,7 @@ export const selectOverdueTasks = createSelector(
           // Note: String comparison works correctly here because dueDay is in YYYY-MM-DD format
           // which is lexicographically sortable. This avoids timezone conversion issues.
           !!(
-            (task.dueDay && task.dueDay < todayStr) ||
+            (task.dueDay && isDBDateStr(task.dueDay) && task.dueDay < todayStr) ||
             (task.dueWithTime && task.dueWithTime < todayStartMs)
           ),
       );
@@ -170,6 +171,65 @@ export const selectUndoneOverdue = createSelector(
   selectOverdueTasks,
   (overdue): Task[] => {
     return overdue.filter((t) => !t.isDone);
+  },
+);
+
+export const selectUndoneOverdueDeadlineTasks = createSelector(
+  selectTaskFeatureState,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (s, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!s || !todayStr) return [];
+
+    const today = dateStrToUtcDate(todayStr);
+    today.setHours(0, 0, 0, 0);
+    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
+    return s.ids
+      .map((id) => s.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          !!(
+            (task.deadlineDay &&
+              isDBDateStr(task.deadlineDay) &&
+              task.deadlineDay < todayStr) ||
+            (task.deadlineWithTime && task.deadlineWithTime < todayStartMs)
+          ),
+      );
+  },
+);
+
+export const selectUnplannedDeadlineTasksForToday = createSelector(
+  selectTaskFeatureState,
+  selectTodayStr,
+  selectStartOfNextDayDiffMs,
+  (taskState, todayStr, startOfNextDayDiffMs): Task[] => {
+    if (!taskState || !todayStr) return [];
+
+    const today = dateStrToUtcDate(todayStr);
+    today.setHours(0, 0, 0, 0);
+    const todayStartMs = today.getTime() + startOfNextDayDiffMs;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const todayEndMs = todayStartMs + oneDayMs;
+
+    return taskState.ids
+      .map((id) => taskState.entities[id])
+      .filter(
+        (task): task is Task =>
+          !!task &&
+          !task.isDone &&
+          // Has a date-only deadline for today (time-specific deadlines are excluded
+          // because they have their own reminder mechanism via deadlineRemindAt)
+          task.deadlineDay === todayStr &&
+          // Not already planned for today (dueDay or dueWithTime)
+          task.dueDay !== todayStr &&
+          !(
+            task.dueWithTime &&
+            task.dueWithTime >= todayStartMs &&
+            task.dueWithTime < todayEndMs
+          ),
+      );
   },
 );
 
@@ -555,6 +615,39 @@ export const selectAllTasksWithReminder = createSelector(
     return tasks.filter(
       (task) => task && typeof task.remindAt === 'number' && !task.isDone,
     ) as TaskWithReminder[];
+  },
+);
+
+export const selectAllTasksWithDeadlineReminder = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => {
+    return tasks.filter(
+      (task) => task && typeof task.deadlineRemindAt === 'number' && !task.isDone,
+    );
+  },
+);
+
+export const selectAllUndoneTasksWithDeadlineSorted = createSelector(
+  selectAllTasks,
+  (tasks: Task[]): Task[] => {
+    return tasks
+      .filter(
+        (task) =>
+          task &&
+          !task.isDone &&
+          (task.deadlineDay || typeof task.deadlineWithTime === 'number'),
+      )
+      .sort((a, b) => {
+        const aTime =
+          typeof a.deadlineWithTime === 'number'
+            ? a.deadlineWithTime
+            : dateStrToUtcDate(a.deadlineDay!).getTime();
+        const bTime =
+          typeof b.deadlineWithTime === 'number'
+            ? b.deadlineWithTime
+            : dateStrToUtcDate(b.deadlineDay!).getTime();
+        return aTime - bTime;
+      });
   },
 );
 

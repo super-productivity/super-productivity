@@ -6,7 +6,7 @@ import {
   webUtils,
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
-import { IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
@@ -220,6 +220,18 @@ const ea: ElectronAPI = {
       manifest,
       request,
     ) as Promise<PluginNodeScriptResult>,
+
+  // Plugin OAuth
+  pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),
+  onPluginOAuthCb: (
+    listener: (data: { code?: string; error?: string; state?: string }) => void,
+  ) => {
+    ipcRenderer.on(
+      IPC.PLUGIN_OAUTH_CB,
+      (_: unknown, data: { code?: string; error?: string; state?: string }) =>
+        listener(data),
+    );
+  },
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

@@ -34,6 +34,7 @@ export const initialState: FocusModeState = {
   lastCompletedDuration: 0,
   pausedTaskId: null,
   _isResumingBreak: false,
+  _isOvertimeEnabled: false,
 };
 
 const createWorkTimer = (duration: number): TimerState => ({
@@ -168,6 +169,7 @@ export const focusModeReducer = createReducer(
       currentScreen: FocusScreen.SessionDone,
       mainState: FocusMainUIState.Preparation,
       lastCompletedDuration: duration,
+      _isOvertimeEnabled: false,
     };
   }),
 
@@ -178,6 +180,12 @@ export const focusModeReducer = createReducer(
     mainState: FocusMainUIState.Preparation,
     isOverlayShown: false,
     pausedTaskId: null,
+    _isOvertimeEnabled: false,
+  })),
+
+  on(a.setOvertimeEnabled, (state, { enabled }) => ({
+    ...state,
+    _isOvertimeEnabled: enabled,
   })),
 
   // Break handling
@@ -224,6 +232,10 @@ export const focusModeReducer = createReducer(
     // Check if timer completed - mark for completion but let effects handle the flow
     if (updatedTimer.duration > 0 && updatedTimer.elapsed >= updatedTimer.duration) {
       if (updatedTimer.purpose === 'work') {
+        // When overtime is enabled, keep the timer running past duration
+        if (state._isOvertimeEnabled) {
+          return { ...state, timer: updatedTimer };
+        }
         // Work session completed - stop timer and mark duration, but don't change screen yet
         return {
           ...state,

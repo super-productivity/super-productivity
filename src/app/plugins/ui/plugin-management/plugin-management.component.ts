@@ -35,6 +35,7 @@ import { PluginConfigDialogComponent } from '../plugin-config-dialog/plugin-conf
 import { IS_ELECTRON } from '../../../app.constants';
 import { PluginLog } from '../../../core/log';
 import { SnackService } from '../../../core/snack/snack.service';
+import { PluginBridgeService } from '../../plugin-bridge.service';
 import { catchError, of } from 'rxjs';
 import { CollapsibleComponent } from '../../../ui/collapsible/collapsible.component';
 import { LanguageCode } from '../../../core/locale.constants';
@@ -85,6 +86,7 @@ export class PluginManagementComponent {
   private readonly _http = inject(HttpClient);
   private readonly _snackService = inject(SnackService);
   private readonly _store = inject(Store);
+  private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _allIssueProviders = this._store.selectSignal(selectAllIssueProviders);
 
   // Language code to human-readable name mapping
@@ -425,6 +427,14 @@ export class PluginManagementComponent {
     }
 
     return parts.join(' / ');
+  }
+
+  hasConfigHandler(plugin: PluginInstance): boolean {
+    return this._pluginBridge.hasConfigHandler(plugin.manifest.id);
+  }
+
+  openPluginConfig(plugin: PluginInstance): void {
+    this._pluginBridge.invokeConfigHandler(plugin.manifest.id);
   }
 
   async openConfigDialog(plugin: PluginInstance): Promise<void> {

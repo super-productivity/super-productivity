@@ -30,6 +30,11 @@
 
   &-title {
     margin-bottom: var(--s);
+    cursor: pointer;
+
+    .collapsible-expand-icon {
+      vertical-align: middle;
+    }
 
     button {
       margin-left: var(--s);
@@ -257,7 +262,7 @@
 
 .repeat-task-icon {
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: var(--s-half);
   transform: rotate(45deg);
   opacity: 0.7;
 }

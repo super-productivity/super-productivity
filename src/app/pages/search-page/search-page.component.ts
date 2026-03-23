@@ -19,7 +19,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { Task } from '../../features/tasks/task.model';
 import { SearchItem } from './search-page.model';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgClass } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatInput } from '@angular/material/input';
@@ -52,6 +52,7 @@ const MAX_RESULTS = 50;
     MatListItem,
     MatFormField,
     MatLabel,
+    NgClass,
   ],
 })
 export class SearchPageComponent implements OnInit {
@@ -105,7 +106,7 @@ export class SearchPageComponent implements OnInit {
       // If a subtask does not belong to a project, it will neither have a project nor a tag.
       // Therefore, we need to use the parent's tag.
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
-      const tagId = parent ? parent.tagIds[0] : task.tagIds[0];
+      const tagId = parent ? parent.tagIds?.[0] : task.tagIds?.[0];
       const taskNotes = task.notes || '';
 
       return {

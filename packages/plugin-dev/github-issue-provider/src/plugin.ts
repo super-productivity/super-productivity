@@ -96,6 +96,14 @@ const t = (key: string): string => {
   }
 };
 
+const isAuthOrNotFoundError = (err: unknown): boolean => {
+  if (typeof err === 'object' && err !== null && 'status' in err) {
+    const status = (err as { status: unknown }).status;
+    return status === 401 || status === 403 || status === 404;
+  }
+  return false;
+};
+
 PluginAPI.registerIssueProvider({
   configFields: [
     {
@@ -317,8 +325,18 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<void> {
-    const { owner, repo } = parseRepo(config as unknown as GithubConfig);
-    await http.patch(`${API_BASE}/repos/${owner}/${repo}/issues/${id}`, changes);
+    const cfg = config as unknown as GithubConfig;
+    if (!cfg.token) {
+      throw new Error(t('ERRORS.TOKEN_REQUIRED'));
+    }
+    const { owner, repo } = parseRepo(cfg);
+    try {
+      await http.patch(`${API_BASE}/repos/${owner}/${repo}/issues/${id}`, changes);
+    } catch (e) {
+      throw isAuthOrNotFoundError(e)
+        ? new Error(t('ERRORS.INSUFFICIENT_PERMISSIONS'))
+        : e;
+    }
   },
 
   async createIssue(
@@ -326,11 +344,22 @@ PluginAPI.registerIssueProvider({
     config: Record<string, unknown>,
     http: PluginHttp,
   ): Promise<{ issueId: string; issueNumber: number; issueData: PluginIssue }> {
-    const { owner, repo } = parseRepo(config as unknown as GithubConfig);
-    const response = await http.post<GithubIssueResponse>(
-      `${API_BASE}/repos/${owner}/${repo}/issues`,
-      { title },
-    );
+    const cfg = config as unknown as GithubConfig;
+    if (!cfg.token) {
+      throw new Error(t('ERRORS.TOKEN_REQUIRED'));
+    }
+    const { owner, repo } = parseRepo(cfg);
+    let response: GithubIssueResponse;
+    try {
+      response = await http.post<GithubIssueResponse>(
+        `${API_BASE}/repos/${owner}/${repo}/issues`,
+        { title },
+      );
+    } catch (e) {
+      throw isAuthOrNotFoundError(e)
+        ? new Error(t('ERRORS.INSUFFICIENT_PERMISSIONS'))
+        : e;
+    }
     return {
       issueId: String(response.number),
       issueNumber: response.number,

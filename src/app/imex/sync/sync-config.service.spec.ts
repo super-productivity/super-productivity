@@ -122,8 +122,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      // getProviderById returns synchronously, not a Promise
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -152,8 +153,10 @@ describe('SyncConfigService', () => {
     });
 
     it('should apply default values for LocalFile provider fields when no existing config', async () => {
-      // Mock no existing provider - getProviderById returns synchronously
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
+      // Mock no existing provider
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -191,8 +194,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      // getProviderById returns synchronously, not a Promise
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -231,8 +235,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      // getProviderById returns synchronously, not a Promise
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Update settings without changing the provider
       const settings: SyncConfig = {
@@ -276,7 +281,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Simulate form state after resetOnHide: true triggered
       // Form only provides baseUrl, accessToken is empty string (reset by Formly)
@@ -319,7 +326,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -360,7 +369,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Form provides empty password (e.g., from resetOnHide or form state issue)
       const settings: SyncConfig = {
@@ -402,7 +413,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Form may include isEncryptionEnabled: false (e.g., stale Formly model)
       // but for SuperSync it should NOT override the saved config
@@ -443,7 +456,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Form provides only baseUrl, all other fields empty
       const settings: SyncConfig = {
@@ -488,7 +503,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -530,7 +547,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // Form provides empty path
       const settings: SyncConfig = {
@@ -554,13 +573,15 @@ describe('SyncConfigService', () => {
     });
 
     it('should prevent duplicate saves when settings are unchanged', async () => {
-      // Mock provider for the test - getProviderById returns synchronously
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue({
-        id: SyncProviderId.WebDAV,
-        privateCfg: {
-          load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
-        },
-      });
+      // Mock provider for the test
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve({
+          id: SyncProviderId.WebDAV,
+          privateCfg: {
+            load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
+          },
+        }),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -590,12 +611,14 @@ describe('SyncConfigService', () => {
 
     it('should deduplicate when syncSettingsForm$ emits before Formly modelChange', async () => {
       // Mock provider for the test
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue({
-        id: SyncProviderId.WebDAV,
-        privateCfg: {
-          load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
-        },
-      });
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve({
+          id: SyncProviderId.WebDAV,
+          privateCfg: {
+            load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
+          },
+        }),
+      );
 
       // Simulate syncSettingsForm$ emission by pushing provider config
       mockCurrentProviderPrivateCfg$.next({
@@ -633,8 +656,10 @@ describe('SyncConfigService', () => {
     });
 
     it('should handle provider with no existing config', async () => {
-      // Mock no existing provider (e.g., initial setup) - getProviderById returns synchronously
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
+      // Mock no existing provider (e.g., initial setup)
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
 
       const settings: SyncConfig = {
         isEnabled: true,
@@ -682,9 +707,11 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock: No provider exists initially - getProviderById returns synchronously
+      // Mock: No provider exists initially
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
 
       // User saves the form
       await service.updateSettingsFromForm(initialSettings);
@@ -736,9 +763,11 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // No provider exists yet - getProviderById returns synchronously
+      // No provider exists yet
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
 
       await service.updateSettingsFromForm(initialSettings);
 
@@ -802,14 +831,16 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock existing WebDAV provider - getProviderById returns synchronously
+      // Mock existing WebDAV provider
       const mockProvider = {
         id: SyncProviderId.WebDAV,
         privateCfg: {
           load: jasmine.createSpy('load').and.returnValue(Promise.resolve({})),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       await service.updateSettingsFromForm(webDavSettings);
 
@@ -841,9 +872,11 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Mock that there's no active provider yet (initial setup) - getProviderById returns synchronously
+      // Mock that there's no active provider yet (initial setup)
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(null);
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(null);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(null),
+      );
 
       // Act: User saves the form with encryption enabled
       await service.updateSettingsFromForm(newSettings);
@@ -870,8 +903,10 @@ describe('SyncConfigService', () => {
         },
       };
 
-      // Update mocks to simulate provider is now available - getProviderById returns synchronously
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      // Update mocks to simulate provider is now available
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
 
       // In a real scenario, after setPrivateCfgForSyncProvider is called,
       // the currentProviderPrivateCfg$ would be updated with the saved config
@@ -1032,7 +1067,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Update password
@@ -1064,7 +1101,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Update password
@@ -1100,7 +1139,9 @@ describe('SyncConfigService', () => {
           ),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       await service.updateEncryptionPassword('newpass', SyncProviderId.SuperSync);
@@ -1131,7 +1172,9 @@ describe('SyncConfigService', () => {
             .and.returnValue(Promise.resolve(existingConfig)),
         },
       };
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Update password
@@ -1192,7 +1235,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Simulate form update with NO encryptKey (stale form model)
@@ -1240,7 +1285,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Simulate form update with OLD password (stale form model from before dialog)
@@ -1286,7 +1333,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Simulate form update with NEW password from form
@@ -1327,7 +1376,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Simulate form update with password in settings.encryptKey (legacy path)
@@ -1375,7 +1426,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       const formSettings: SyncConfig = {
@@ -1426,7 +1479,9 @@ describe('SyncConfigService', () => {
         getConfig: jasmine.createSpy('getConfig'),
       };
 
-      (providerManager.getProviderById as jasmine.Spy).and.returnValue(mockProvider);
+      (providerManager.getProviderById as jasmine.Spy).and.returnValue(
+        Promise.resolve(mockProvider),
+      );
       (providerManager.getActiveProvider as jasmine.Spy).and.returnValue(mockProvider);
 
       // Step 2: Simulate stale form model arriving AFTER dialog saved password

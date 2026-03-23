@@ -5,7 +5,7 @@ import {
   createSimulatedClient,
   closeClient,
   waitForTask,
-  markTaskDone,
+  markTaskDoneByKey,
   renameTask,
   archiveDoneTasks,
   expectTaskInWorklog,
@@ -94,8 +94,8 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       // ============ PHASE 4: Client A marks tasks done and archives ============
       // Client A still has old task names (hasn't synced B's rename yet)
-      await markTaskDone(clientA, task1Name);
-      await markTaskDone(clientA, task2Name);
+      await markTaskDoneByKey(clientA, task1Name);
+      await markTaskDoneByKey(clientA, task2Name);
       console.log('[ArchConflict] Client A marked both tasks as done');
 
       await archiveDoneTasks(clientA);
@@ -203,7 +203,7 @@ test.describe('@supersync Archive Conflict Resolution', () => {
 
       // ============ PHASE 3: Client A marks task done and archives ============
       // Archive happens FIRST so its timestamp is OLDER than the rename below.
-      await markTaskDone(clientA, taskName);
+      await markTaskDoneByKey(clientA, taskName);
       console.log('[BugB] Client A marked task as done');
 
       await archiveDoneTasks(clientA);

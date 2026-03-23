@@ -1,6 +1,9 @@
+h1 mat-icon {
+  transform: rotate(45deg);
+}
+
 h1,
-mat-dialog-actions,
-help-section {
+mat-dialog-actions {
   :host-context([dir='rtl']) & {
     direction: rtl;
   }
@@ -8,7 +11,7 @@ help-section {
 
 .form-wrapper {
   min-width: 280px;
-  max-width: 500px;
+  max-width: 620px;
 }
 
 :host collapsible {

@@ -84,12 +84,14 @@ describe('DialogPomodoroSettingsComponent', () => {
       expect(longBreakField?.type).toBe('duration');
     });
 
-    it('should have cyclesBeforeLongerBreak field', () => {
+    it('should have cyclesBeforeLongerBreak field with required and min validation', () => {
       const cyclesField = component.fields.find(
         (f) => f.key === 'cyclesBeforeLongerBreak',
       );
       expect(cyclesField).toBeTruthy();
       expect(cyclesField?.type).toBe('input');
+      expect(cyclesField?.props?.required).toBe(true);
+      expect(cyclesField?.props?.min).toBe(1);
     });
   });
 

@@ -82,6 +82,16 @@
           android:scheme="com.super-productivity.app"
           android:host="oauth-callback" />
       </intent-filter>
+
+      <!-- OAuth callback handler for plugin authentication -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="plugin-oauth-callback" />
+      </intent-filter>
     </activity>
 
     <activity
@@ -129,24 +139,5 @@
       </intent-filter>
     </receiver>
 
-    <!-- Quick Add Widget -->
-    <receiver
-      android:name=".widget.QuickAddWidgetProvider"
-      android:exported="true"
-      android:label="@string/widget_quick_add_label">
-      <intent-filter>
-        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-      </intent-filter>
-      <meta-data
-        android:name="android.appwidget.provider"
-        android:resource="@xml/widget_quick_add_info" />
-    </receiver>
-
-    <!-- Quick Add Dialog Activity -->
-    <activity
-      android:name=".widget.QuickAddActivity"
-      android:exported="false"
-      android:theme="@style/Theme.AppCompat.Light.Dialog"
-      android:excludeFromRecents="true" />
   </application>
 </manifest>

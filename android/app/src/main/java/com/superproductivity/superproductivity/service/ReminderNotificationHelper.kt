@@ -101,6 +101,7 @@ object ReminderNotificationHelper {
             putExtra(ReminderAlarmReceiver.EXTRA_REMINDER_TYPE, reminderType)
             putExtra(ReminderAlarmReceiver.EXTRA_USE_ALARM_STYLE, useAlarmStyle)
             putExtra(ReminderAlarmReceiver.EXTRA_IS_ONGOING, isOngoing)
+            putExtra(ReminderAlarmReceiver.EXTRA_TRIGGER_AT_MS, triggerAtMs)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -128,7 +129,9 @@ object ReminderNotificationHelper {
 
     fun cancelReminder(context: Context, notificationId: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderAlarmReceiver::class.java)
+        val intent = Intent(context, ReminderAlarmReceiver::class.java).apply {
+            action = ReminderAlarmReceiver.ACTION_SHOW_REMINDER
+        }
         val pendingIntent = PendingIntent.getBroadcast(
             context, notificationId, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -219,7 +222,11 @@ object ReminderNotificationHelper {
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_sp)
             .setContentTitle(title)
-            .setContentText(if (reminderType == "TASK") "Task reminder" else "Note reminder")
+            .setContentText(when (reminderType) {
+                "TASK" -> "Task reminder"
+                "DUE_DATE" -> "Due date reminder"
+                else -> "Task reminder"
+            })
             .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
             .addAction(0, "Done", donePendingIntent)

@@ -44,7 +44,7 @@ export const ConditionTitleContains: IAutomationCondition = {
   id: 'titleContains',
   name: 'Title contains',
   check: async (ctx, event, value, condition) => {
-    if (!event.task || !value) return false;
+    if (!event.task || !event.task.title || !value) return false;
     if (isRegexCondition(condition)) {
       return matchesTitleWithRegex(ctx, event.task.title, value);
     }
@@ -56,7 +56,7 @@ export const ConditionTitleStartsWith: IAutomationCondition = {
   id: 'titleStartsWith',
   name: 'Title starts with',
   check: async (ctx, event, value, condition) => {
-    if (!event.task || !value) return false;
+    if (!event.task || !event.task.title || !value) return false;
     return isRegexCondition(condition)
       ? matchesTitleWithRegex(ctx, event.task.title, value, true)
       : event.task.title.toLowerCase().startsWith(value.toLowerCase());

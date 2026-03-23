@@ -337,6 +337,10 @@ body .mat-mdc-button-base .mat-icon {
 }
 
 // MAT MENU
+.mat-mdc-menu-panel {
+  overflow-x: hidden !important;
+}
+
 .mat-mdc-menu-content {
   padding: 0 !important;
 }

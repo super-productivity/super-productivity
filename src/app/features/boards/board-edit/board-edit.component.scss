@@ -1,5 +1,5 @@
 .btn-wrapper {
-  margin-top: 16px;
+  margin-top: var(--s2);
   display: flex;
   justify-content: flex-end;
 }
@@ -9,7 +9,7 @@
     //border: 1px solid red !important;
 
     .footer {
-      margin-top: 8px;
+      margin-top: var(--s);
     }
   }
 }

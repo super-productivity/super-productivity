@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Hier kunt u SuperProductivity configureren om openstaande GitHub-problemen voor een specifieke repository weer te geven in het paneel voor het maken van taken in de dagelijkse planningsweergave. Ze worden vermeld als suggesties en bieden een link naar het probleem en meer informatie erover.</p> <p>Daarnaast kunt u automatisch alle openstaande problemen toevoegen en synchroniseren met uw backlog.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Fout tijdens het mappen van gegevens. Is je repositorynaam correct?",
-    "ERR_UNKNOWN": "GitHub: onbekende fout {{statusCode}} {{errorMsg}}. API-limiet overschreden?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: onbekende fout {{statusCode}} {{errorMsg}}. API-limiet overschreden?"
   }
 }

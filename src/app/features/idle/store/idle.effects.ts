@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
+import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { ChromeExtensionInterfaceService } from '../../../core/chrome-extension-interface/chrome-extension-interface.service';
 import { WorkContextService } from '../../work-context/work-context.service';
 import { TaskService } from '../../tasks/task.service';
@@ -17,6 +18,7 @@ import {
   triggerIdle,
 } from './idle.actions';
 import {
+  concatMap,
   distinctUntilChanged,
   exhaustMap,
   filter,
@@ -70,6 +72,8 @@ export class IdleEffects {
   private _uiHelperService = inject(UiHelperService);
   private _dateService = inject(DateService);
 
+  private _dataInitStateService = inject(DataInitStateService);
+
   private _clearIdlePollInterval?: () => void;
   private _isDialogOpen: boolean = false;
 
@@ -106,7 +110,8 @@ export class IdleEffects {
   // By filtering when isIdle=true, we let the internal poll timer control the display
   // while the dialog is open, preventing the flickering between two different values.
   triggerIdleWhenEnabled$ = createEffect(() =>
-    this._store.select(selectIdleConfig).pipe(
+    this._dataInitStateService.isAllDataLoadedInitially$.pipe(
+      concatMap(() => this._store.select(selectIdleConfig)),
       skipWhileApplyingRemoteOps(),
       switchMap(
         ({

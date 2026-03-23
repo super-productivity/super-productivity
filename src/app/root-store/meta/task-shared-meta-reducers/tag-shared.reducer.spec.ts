@@ -21,6 +21,8 @@ import { TASK_REPEAT_CFG_FEATURE_NAME } from '../../../features/task-repeat-cfg/
 import { TaskRepeatCfgState } from '../../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
+import { ISSUE_PROVIDER_FEATURE_KEY } from '../../../features/issue/store/issue-provider.reducer';
+import { IssueProviderState } from '../../../features/issue/issue.model';
 
 describe('tagSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -780,6 +782,56 @@ describe('tagSharedMetaReducer', () => {
       const passedState = mockReducer.calls.mostRecent().args[0];
       expect(passedState[TIME_TRACKING_FEATURE_KEY].tag.tag1).toBeUndefined();
       expect(passedState[TIME_TRACKING_FEATURE_KEY].tag.tag2).toBeDefined();
+    });
+
+    it('should cleanup issue provider defaultTagIds that reference the deleted tag', () => {
+      const testState = createBaseState() as any;
+
+      testState[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: ['provider1', 'provider2'],
+        entities: {
+          provider1: {
+            id: 'provider1',
+            defaultTagIds: ['tag1', 'tag2'],
+          },
+          provider2: {
+            id: 'provider2',
+            defaultTagIds: ['tag2'],
+          },
+        },
+      } as unknown as IssueProviderState;
+
+      const action = deleteTag({ id: 'tag1' });
+      metaReducer(testState, action);
+
+      const passedState = mockReducer.calls.mostRecent().args[0];
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider1.defaultTagIds,
+      ).toEqual(['tag2']);
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider2.defaultTagIds,
+      ).toEqual(['tag2']);
+    });
+
+    it('should not modify issue providers without defaultTagIds', () => {
+      const testState = createBaseState() as any;
+
+      testState[ISSUE_PROVIDER_FEATURE_KEY] = {
+        ids: ['provider1'],
+        entities: {
+          provider1: {
+            id: 'provider1',
+          },
+        },
+      } as unknown as IssueProviderState;
+
+      const action = deleteTag({ id: 'tag1' });
+      metaReducer(testState, action);
+
+      const passedState = mockReducer.calls.mostRecent().args[0];
+      expect(
+        passedState[ISSUE_PROVIDER_FEATURE_KEY].entities.provider1.defaultTagIds,
+      ).toBeUndefined();
     });
 
     it('should handle deleting non-existent tag gracefully', () => {

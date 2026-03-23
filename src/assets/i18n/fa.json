@@ -9,7 +9,8 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "تغییر پیش زمینه"
     },
-    "UPDATE_WEB_APP": "نسخه جدید موجود است، نسخه جدید بارگیری شود?"
+    "UPDATE_WEB_APP": "نسخه جدید موجود است، نسخه جدید بارگیری شود?",
+    "SKIP_SYNC_WAIT": "رد شدن از انتظار برای همگام‌سازی"
   },
   "BL": {
     "NO_TASKS": "کاری در بک لاگ شما وجود ندارد"
@@ -34,6 +35,24 @@
     "SEARCH_LABEL": "جستجوی تصاویر",
     "SEARCH_PLACEHOLDER": "مثلا طبیعت، کوه ها، انتزاعی",
     "TITLE": "انتخاب تصویر پس زمینه از Unsplash"
+  },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "میانبرهای صفحه‌کلید را یاد بگیرید",
+      "NOTES": "Super Productivity برای استفاده با صفحه‌کلید طراحی شده است. میانبرها را یاد بگیرید تا سریع‌تر کار کنید.\n\n**چگونه شروع کنیم:**\n1. **منوی کناری** را باز کنید\n2. به **راهنما** بروید\n3. روی **تور ناوبری صفحه‌کلید** کلیک کنید"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "اولین پروژه خود را بسازید",
+      "NOTES": "پروژه‌ها به شما کمک می‌کنند تا وظایف خود را بر اساس حوزه کاری سازمان‌دهی کنید. هر پروژه فهرست وظایف و بک‌لاگ مخصوص خود را دارد.\n\n**نحوه ایجاد پروژه:**\n1. روی دکمه **+** کنار **پروژه‌ها** در نوار کناری کلیک کنید\n2. یک نام بدهید و رنگی انتخاب کنید\n3. شروع به اضافه کردن وظایف کنید"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "همگام‌سازی را تنظیم کنید",
+      "NOTES": "داده‌های خود را امن و در دسترس بین دستگاه‌ها نگه دارید.\n\n**نحوه تنظیم:**\n1. **تنظیمات** را باز کنید (آیکون چرخ‌دنده در نوار کناری)\n2. به **همگام‌سازی** بروید\n3. یک ارائه‌دهنده انتخاب کنید: Super Sync، Dropbox، WebDAV یا همگام‌سازی فایل محلی\n4. دستورالعمل‌های تنظیم را دنبال کنید"
+    },
+    "GO_FURTHER": {
+      "TITLE": "بیشتر کشف کنید",
+      "NOTES": "چیزهای زیادی برای کشف وجود دارد!\n\n**ویژگی‌های برنامه** (در تنظیمات) — یکپارچه‌سازی‌ها، عادت‌ها و ویژگی‌های دیگر را فعال کنید. به **تنظیمات → ویژگی‌های برنامه** بروید تا ببینید چه چیزهایی در دسترس است.\n\n**بردها** — وظایف خود را در بردهای کانبان قابل تنظیم مشاهده کنید. آنها را در **ویژگی‌های برنامه** فعال کنید، سپس در **منوی کناری** پیدا کنید.\n\n**برنامه‌ریزی** — روز خود را با تخصیص وظایف به زمان‌های مشخص برنامه‌ریزی کنید. وظایف را به نمای **برنامه‌ریزی** در نوار کناری بکشید.\n\n**یکپارچه‌سازی‌ها** — پس از فعال‌سازی در ویژگی‌های برنامه، وظایف را از Jira، GitHub، GitLab، Gitea، OpenProject، CalDAV و بسیاری دیگر وارد کنید. همچنین می‌توانید تقویم خود را یکپارچه کنید. آن‌ها را در **پنل ارائه‌دهنده وظایف** پیکربندی کنید.\n\n**عادت‌ها** — عادت‌ها و روتین‌های تکرارشونده را پیگیری کنید. پس از فعال‌سازی در **منوی کناری** پیدایشان کنید.\n\n**افزونه‌ها** — ویژگی‌هایی مانند مبارزه با تعلل، خودکارسازی‌ها یا یادآوری‌های صوتی اضافه کنید. به **تنظیمات → افزونه‌ها** بروید.\n\n**سفارشی‌سازی** — تم‌ها، حالت تاریک، میانبرهای صفحه‌کلید، زبان و ابزارهای بهره‌وری همه در **تنظیمات** هستند."
+    }
   },
   "F": {
     "ATTACHMENT": {
@@ -98,7 +117,14 @@
         "CALDAV_RESOURCE": "نام منبع CalDav (تقویم)",
         "CALDAV_URL": "CalDav URL (URL پایه)",
         "CALDAV_USER": "نام کاربری CalDav شما",
-        "IS_TRANSITION_ISSUES_ENABLED": "در پایان کار به طور خودکار تالارهای CalDav را تکمیل کنید"
+        "TWO_WAY_SYNC_BOTH": "هر دو (دوطرفه)",
+        "TWO_WAY_SYNC_NOTES": "جهت همگام‌سازی یادداشت‌ها / توضیحات",
+        "TWO_WAY_SYNC_OFF": "خاموش",
+        "TWO_WAY_SYNC_PULL_ONLY": "فقط دریافت (خواندن از CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "فقط ارسال (نوشتن به CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "همگام‌سازی دوطرفه (آزمایشی)",
+        "TWO_WAY_SYNC_STATUS": "جهت همگام‌سازی وضعیت",
+        "TWO_WAY_SYNC_TITLE": "جهت همگام‌سازی عنوان"
       },
       "FORM_SECTION": {
         "HELP": "<p>در اینجا می توانید SuperProductivity را پیکربندی کنید تا لیست های انجام نشده CalDav را برای یک پروژه خاص در صفحه ایجاد کار در نمای برنامه ریزی روزانه لیست کنید. آنها به عنوان پیشنهادها لیست می شوند و پیوندی به این کار و همچنین اطلاعات بیشتر در مورد آن را ارائه می دهند.</p> <p>علاوه بر این شما می توانید به طور خودکار تمام موارد خاتمه یافته ناقص را به پرونده کار خود اضافه و همگام سازی کنید.</p>"
@@ -107,6 +133,13 @@
         "CALENDAR_NOT_FOUND": "CalDav: تقویم \"{{calendarName}}\" یافت نشد",
         "CALENDAR_READ_ONLY": "CalDav: تقویم \"{{calendarName}}\" فقط خواندنی است",
         "ISSUE_NOT_FOUND": "CalDav: به نظر می رسد Todo \"{{issueId}}\" در سرور حذف شده است."
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "توضیحات",
+        "LABELS": "برچسب‌ها",
+        "MARK_AS_CHECKED": "علامت‌گذاری به عنوان بررسی شده",
+        "STATUS": "وضعیت",
+        "SUMMARY": "خلاصه"
       }
     },
     "CALENDARS": {
@@ -115,11 +148,13 @@
         "SHOW_TASK": "نمایش وظیفه",
         "TXT": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!<br> (و {{nrOfOtherBanners}} رویداد دیگر در موعد مقرر)"
+          "OTHER": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!<br> (و {{nrOfOtherBanners}} رویداد دیگر در موعد مقرر)",
+          "ONE": "<strong>{{title}}</strong> در ساعت <strong>{{start}}</strong> شروع می‌شود!<br> (و {{nrOfOtherBanners}} رویداد دیگر موعد دارد)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> در <strong>{{start}}</strong>شروع شد!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> در <strong>{{start}}</strong>شروع شد!<br> (و {{nrOfOtherBanners}} رویداد دیگر در موعد مقرر)"
+          "OTHER": "<strong>{{title}}</strong> در <strong>{{start}}</strong>شروع شد!<br> (و {{nrOfOtherBanners}} رویداد دیگر در موعد مقرر)",
+          "ONE": "<strong>{{title}}</strong> در ساعت <strong>{{start}}</strong> شروع شده بود!<br> (و {{nrOfOtherBanners}} رویداد دیگر موعد دارد)"
         }
       },
       "EVENT_STRINGS": {
@@ -141,17 +176,6 @@
       "TITLE": "🙈 لطفا ما را ببخشید، اما...",
       "TXT": "اگر دوست دارید، با <strong>دادن امتیاز خوب، به پروژه کمک زیادی خواهید کرد!</strong>"
     },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "هنگام پیگیری زمان انجام یک کار، عبارت پیکربندی شده را هر X تکرار می کند.",
-        "L_INTERVAL": "فاصله برای تکرار عبارت",
-        "L_TEXT": "متن",
-        "L_TEXT_DESCRIPTION": "به عنوان مثال: \"روی ${currentTaskTitle}کار کنید!\"",
-        "L_VOICE": "یک صدا را انتخاب کنید",
-        "L_VOICE_DESCRIPTION": "صدا را انتخاب کنید",
-        "TITLE": "یادآوری صوتی"
-      }
-    },
     "DROPBOX": {
       "S": {
         "OFFLINE": "Dropbox: همگام سازی امکان پذیر نیست ، زیرا آفلاین است",
@@ -171,7 +195,12 @@
         "POMODORO_BREAK_RUNNING": "بریک #{{cycleNr}} در حال دویدن است",
         "POMODORO_SESSION_RUNNING": "جلسه پومودورو #{{cycleNr}} در حال اجرا است",
         "SESSION_RUNNING": "جلسه تمرکز در حال اجرا است",
-        "TO_FOCUS_OVERLAY": "برای فوکوس همپوشانی"
+        "TO_FOCUS_OVERLAY": "برای فوکوس همپوشانی",
+        "END_FOCUS_SESSION": "پایان جلسه تمرکز",
+        "END_SESSION": "پایان جلسه",
+        "PAUSE": "توقف",
+        "RESUME": "ادامه",
+        "START": "شروع"
       },
       "BACK_TO_PLANNING": "بازگشت به برنامه‌ریزی",
       "BREAK_RELAX_MSG": "لحظه ای استراحت کن",
@@ -212,7 +241,14 @@
       "START_FOCUS_SESSION": "شروع جلسه تمرکز",
       "START_NEXT_FOCUS_SESSION": "جلسه تمرکز بعدی را شروع کنید",
       "SWITCH_TASK": "وظیفه سوئیچ",
-      "WORKED_FOR": "شما کار کردید به مدت"
+      "WORKED_FOR": "شما کار کردید به مدت",
+      "GO_TO_PROCRASTINATION": "رفتن به تعلل",
+      "PAUSE_BREAK": "توقف استراحت",
+      "POMODORO_SETTINGS": "تنظیمات پومودورو",
+      "RESET_CYCLES": "بازنشانی چرخه‌ها",
+      "RESUME_BREAK": "ادامه استراحت",
+      "SELECT_TASK_FIRST": "لطفاً ابتدا یک وظیفه انتخاب کنید",
+      "START_BREAK": "شروع استراحت"
     },
     "GITEA": {
       "FORM": {
@@ -237,35 +273,6 @@
         "STATUS": "وضعیت",
         "SUMMARY": "خلاصه",
         "WRITE_A_COMMENT": "یک کامنت بنویسید"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "نام کاربری (مثلا برای فیلتر کردن تغییراتی که خودتان انجام دادید)",
-        "INVALID_TOKEN_MESSAGE": "یک توکن GitHub معتبر نیست. باید با \"ghp_\" شروع شود.",
-        "IS_ASSIGNEE_FILTER": "فقط مشکلاتی را وارد کنید که به من اختصاص داده شده است",
-        "REPO": "\"نام کاربری / مخزن نام\" برای مخزن git مورد نظر برای پیگیری",
-        "TOKEN": "توکن دسترسی"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Here you can configure SuperProductivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "مسئول",
-        "AT": "در",
-        "DESCRIPTION": "توضیحات",
-        "LABELS": "برچسب ها",
-        "LAST_COMMENT": "آخرین نظر",
-        "LOAD_ALL_COMMENTS": "همه {{nr}} نظرات را بارگیری کنید",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "بارگیری توضیحات و همه نظرات",
-        "MARK_AS_CHECKED": "بروزرسانی ها به عنوان بررسی شده نشان شود.",
-        "STATUS": "وضعیت",
-        "SUMMARY": "خلاصه",
-        "WRITE_A_COMMENT": "دیدگاهتان را بنویسید"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: خطا در هنگام نقشه برداری داده ها. آیا نام مخزن شما صحیح است؟",
-        "ERR_UNKNOWN": "GitHub: خطای ناشناخته{{errorMsg}} {{statusCode}} . محدودیت نرخ Api بیش از?"
       }
     },
     "GITLAB": {
@@ -359,7 +366,28 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: داده های به روز شده برای {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: داده های به روز شده برای \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: نظرسنجی برای موارد جدید {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: نظرسنجی تغییرات برای {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: نظرسنجی تغییرات برای {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "ایجاد خودکار مسئله ناموفق بود",
+        "CONNECTION_FAILED": "اتصال ناموفق بود",
+        "CONNECTION_SUCCESS": "اتصال موفق بود",
+        "PLUGIN_NOT_INSTALLED": "افزونه نصب نشده است",
+        "TWO_WAY_SYNC_PUSH_FAILED": "ارسال همگام‌سازی دوطرفه ناموفق بود"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "پیکربندی پیشرفته",
+        "DELETE_CONFIRM": "آیا مطمئن هستید که می‌خواهید این ارائه‌دهنده مسئله را حذف کنید؟"
+      },
+      "TWO_WAY_SYNC": {
+        "AUTO_CREATE_ISSUES": "ایجاد خودکار مسائل",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "به طور خودکار مسائل را در ارائه‌دهنده خارجی برای وظایف جدید ایجاد کنید",
+        "BOTH": "هر دو (دوطرفه)",
+        "NOTES": "یادداشت‌ها / توضیحات",
+        "OFF": "خاموش",
+        "PULL_ONLY": "فقط دریافت",
+        "PUSH_ONLY": "فقط ارسال",
+        "SECTION": "همگام‌سازی دوطرفه (آزمایشی)",
+        "STATUS": "وضعیت",
+        "TITLE": "عنوان"
       }
     },
     "ISSUE_PANEL": {
@@ -434,7 +462,8 @@
         "HOST": "آدرس جیرای شما (مثلا: http://my-jira.ir:1234)",
         "PASSWORD": "توکن / کلمه عبور",
         "USE_PAT": "به جای گذرواژه از رمز دسترسی شخصی استفاده کنید",
-        "USER_NAME": "ایمیل / نام کاربری"
+        "USER_NAME": "ایمیل / نام کاربری",
+        "WONKY_COOKIE_MODE": "حالت کوکی غیرعادی"
       },
       "FORM_SECTION": {
         "ADV_CFG": "تنظیمات پیشرفته",
@@ -481,7 +510,15 @@
         "TIMED_OUT": "Jira: Request timed out",
         "TRANSITION": "Jira: Set issue \"{{issueKey}}\" to \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Set issue {{issueKey}} to <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them"
+        "TRANSITIONS_LOADED": "Jira: Transitions loaded. Use the selects below to assign them",
+        "UNABLE_TO_REASSIGN": "امکان واگذاری مجدد وجود ندارد"
+      },
+      "STEPPER": {
+        "CREDENTIALS": "اعتبارنامه‌ها",
+        "DONE": "انجام شد",
+        "LOGIN_SUCCESS": "ورود موفق!",
+        "TEST_CREDENTIALS": "آزمایش اعتبارنامه‌ها",
+        "WELCOME_USER": "خوش آمدید {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -515,7 +552,8 @@
         "TIME_FRAME_2_WEEKS": "۲ هفته",
         "TIME_FRAME_LABEL": "بازه زمانی",
         "TIME_FRAME_MAX": "حداکثر",
-        "TIME_SPENT": "Time Spent"
+        "TIME_SPENT": "Time Spent",
+        "YEAR": "سال"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "دیلی استیت",
@@ -525,8 +563,6 @@
         "FOCUS_WORK_TIME": "زمان کار متمرکز",
         "IMPACT_OF_WORK": "تأثیر کار خود را امروز چگونه ارزیابی می کنید؟",
         "IMPACT_OF_WORK_HINT": "۱: هیچ پیشرفت معناداری وجود نداشت – ۴: تأثیر قابل توجه",
-        "NOTES": "یادداشت‌هایی برای فردا",
-        "PRODUCTIVITY": "بازدهی کار کردن امروزت چطور بود؟",
         "PRODUCTIVITY_SCORE": "امتیاز بهره وری",
         "PRODUCTIVITY_SCORE_TOOLTIP": "۶۵٪ تأثیر (مقیاس ۱ تا ۴) • ۳۰٪ تمرکز بر هدف ۴ ساعته • ۵٪ کل کار (سقف ۱۰ ساعت)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "تفکیک بهره وری ۷ روزه",
@@ -567,14 +603,36 @@
         "PLACEHOLDER_3": "کجا تمرکز از دست رفت - و چگونه می توان از آن محافظت کرد؟",
         "PLACEHOLDER_4": "کدام کار به شما انرژی می داد؟ کدام یک آن را تخلیه کرد؟",
         "PLACEHOLDER_5": "یک چیز را باید تکرار کنم. یک چیز برای تغییر.",
-        "TITLE": "یادداشت تأمل"
+        "TITLE": "یادداشت تأمل",
+        "REMIND_LABEL": "زمان یادآوری",
+        "REMINDER_CREATED": "یادآوری ایجاد شد",
+        "REMINDER_ERROR": "خطا در ایجاد یادآوری",
+        "REMINDER_NEEDS_TEXT": "لطفاً ابتدا متنی بنویسید",
+        "REMINDER_TASK_TITLE": "بازتاب: {{title}}"
       }
     },
     "NOTE": {
       "D_FULLSCREEN": {
         "VIEW_PARSED": "مشاهده به عنوان علامت گذاری تجزیه شده (غیر قابل ویرایش).",
         "VIEW_SPLIT": "مشاهده نشانه گذاری تجزیه شده و تجزیه نشده در نمای تقسیم شده",
-        "VIEW_TEXT_ONLY": "مشاهده به عنوان متن تجزیه نشده"
+        "VIEW_TEXT_ONLY": "مشاهده به عنوان متن تجزیه نشده",
+        "TOOLBAR": {
+          "BOLD": "درشت",
+          "BULLET_LIST": "لیست نقطه‌ای",
+          "CODE_BLOCK": "بلوک کد",
+          "HEADING_1": "سرتیتر ۱",
+          "HEADING_2": "سرتیتر ۲",
+          "HEADING_3": "سرتیتر ۳",
+          "INLINE_CODE": "کد درون‌خطی",
+          "INSERT_IMAGE": "درج تصویر",
+          "INSERT_LINK": "درج پیوند",
+          "INSERT_TABLE": "درج جدول",
+          "ITALIC": "مورب",
+          "NUMBERED_LIST": "لیست شماره‌دار",
+          "QUOTE": "نقل‌قول",
+          "STRIKETHROUGH": "خط‌خورده",
+          "TASK_LIST": "لیست وظایف"
+        }
       },
       "NOTE_CMP": {
         "DISABLE_PARSE": "Disable markdown parsing",
@@ -627,7 +685,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "برای پروژه OpenProject به ماژول ردیابی زمان نیاز دارد",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "نمایش گفتگوی ردیابی زمان پس از تکمیل وظایف فرعی",
         "PROJECT_ID": "شناسه پروژه",
-        "PROJECT_ID_DESCRIPTION": "هنگام مشاهده پروژه در مرورگر ، می توانید آن را به عنوان بخشی از url پیدا کنید.",
+        "PROJECT_ID_DESCRIPTION": "هنگام مشاهده پروژه در مرورگر ، می توانید آن را به عنوان بخشی از URL پیدا کنید.",
         "SCOPE": "محدوده",
         "SCOPE_ALL": "همه",
         "SCOPE_ASSIGNED": "به من اختصاص داده شده است",
@@ -669,7 +727,8 @@
       "EDIT_REPEATED_TASK": "ویرایش کار تکراری \"{{taskName}}\"",
       "NO_TASKS": "بدون وظایف",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "هیچ مورد برنامه ریزی شده ای وجود ندارد"
+        "NO_SCHEDULED_ITEMS": "هیچ مورد برنامه ریزی شده ای وجود ندارد",
+        "NO_DEADLINES": "بدون ضرب‌الاجل"
       },
       "S": {
         "REMOVED_PLAN_DATE": "تاریخ طرح برای کار \"{{taskTitle}}\" حذف شد",
@@ -707,7 +766,9 @@
         "L_IS_AUTO_CONTRAST": "Auto set text colors for best readability",
         "L_IS_DISABLE_BACKGROUND_TINT": "Disable colored background gradient",
         "L_THEME_COLOR": "رنگ قالب",
-        "TITLE": "قالب"
+        "TITLE": "قالب",
+        "D_BACKGROUND_OVERLAY_OPACITY": "شفافیت پوشش پس‌زمینه",
+        "L_BACKGROUND_OVERLAY_OPACITY": "شفافیت پوشش پس‌زمینه"
       },
       "S": {
         "ARCHIVED": "Archived Project",
@@ -715,6 +776,12 @@
         "DELETED": "Deleted Project",
         "UNARCHIVED": "Unarchived project",
         "UPDATED": "Updated project settings"
+      },
+      "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
+        "CANCEL": "لغو",
+        "MSG": "این پروژه تعداد زیادی وظیفه دارد. تکرار آن ممکن است کمی طول بکشد. آیا می‌خواهید ادامه دهید؟",
+        "OK": "تکرار",
+        "TITLE": "تکرار پروژه بزرگ؟"
       }
     },
     "PROJECT_FOLDER": {
@@ -750,7 +817,10 @@
         "SCOPE": "دامنه",
         "SCOPE_ALL": "همه",
         "SCOPE_ASSIGNED": "به من اختصاص داده است",
-        "SCOPE_CREATED": "ایجاد شده توسط من"
+        "SCOPE_CREATED": "ایجاد شده توسط من",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "نمایش گفتگوی ثبت زمان",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "نمایش گفتگوی ثبت زمان هنگام اتمام وظیفه",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "نمایش برای هر زیروظیفه"
       },
       "FORM_SECTION": {
         "HELP": "<p>در اینجا می‌توانید SuperProductivity را برای فهرست کردن مشکلات Redmine باز (چه نسخه آنلاین یا یک نمونه خود میزبان) برای یک پروژه خاص در پانل ایجاد کار در نمای برنامه‌ریزی روزانه پیکربندی کنید. آنها به عنوان پیشنهاد فهرست می شوند و پیوندی به موضوع و همچنین اطلاعات بیشتری در مورد آن ارائه می دهند.</p><p>علاوه بر این، می‌توانید به‌طور خودکار همه مسائل باز را وارد کنید.</p>",
@@ -762,6 +832,18 @@
         "MARK_AS_CHECKED": "به‌روزرسانی‌ها را علامت‌گذاری کنید",
         "PRIORITY": "اولویت",
         "STATUS": "وضعیت"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "فعالیت",
+        "INVALID_DATE": "تاریخ نامعتبر",
+        "POST_TIME": "ارسال زمان",
+        "STARTED": "شروع شده",
+        "SUBMIT_TIME_FOR": "ثبت زمان برای",
+        "TIME_SPENT": "زمان صرف شده",
+        "TITLE": "ثبت زمان در Redmine"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "زمان با موفقیت ارسال شد"
       }
     },
     "REFLECTION_NOTE": {
@@ -773,7 +855,8 @@
         "START_NOW": "همین الان شروع کن",
         "TXT": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!<br> (و {{nrOfOtherBanners}} کار دیگر موعد مقرر)"
+          "OTHER": "<strong>{{title}}</strong> از <strong>{{start}}</strong>شروع می‌شود!<br> (و {{nrOfOtherBanners}} کار دیگر موعد مقرر)",
+          "ONE": "<strong>{{title}}</strong> در <strong>{{start}}</strong> شروع می‌شود!<br> (و {{nrOfOtherBanners}} یادآوری دیگر)"
         }
       },
       "S_ACTIVE_TASK_DUE": "وظیفه ای که در حال حاضر روی آن کار می کنید اکنون به پایان رسیده است!<br/> ({{title}})",
@@ -789,7 +872,11 @@
       "PLAN_END_DAY": "در پایان روز برنامه ریزی کنید",
       "PLAN_START_DAY": "در ابتدای روز برنامه ریزی کنید",
       "SHIFT_KEY_INFO": "دکمه Shift را نگه دارید تا حالت برنامه ریزی روز را فعال کنید",
-      "START": "شروع کار"
+      "START": "شروع کار",
+      "LUNCH_BREAK": "استراحت ناهار",
+      "MONTH": "ماه",
+      "NO_TASKS": "بدون وظیفه",
+      "NOW": "اکنون"
     },
     "SEARCH_BAR": {
       "INFO": "برای جستجوی کارهای بایگانی شده روی نماد لیست کلیک کنید",
@@ -821,11 +908,24 @@
         "TITLE": "پیشخوان های ساده",
         "TYPE_CLICK_COUNTER": "پیشخوان کلیک کنید",
         "TYPE_REPEATED_COUNTDOWN": "شمارش معکوس مکرر",
-        "TYPE_STOPWATCH": "کرنومتر"
+        "TYPE_STOPWATCH": "کرنومتر",
+        "L_ICON_ON": "آیکون فعال",
+        "L_IS_HIDE_BUTTON": "مخفی کردن دکمه",
+        "L_STREAK_MODE": "حالت سلسله",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "روزهای خاص",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "تکرار هفتگی",
+        "L_WEEKLY_FREQUENCY": "تکرار هفتگی"
       },
       "S": {
         "GOAL_REACHED_1": "به هدف امروزت رسیدی!",
         "GOAL_REACHED_2": "مدت رگه فعلی: "
+      },
+      "HABIT_TRACKER": {
+        "ADD_HABIT": "افزودن عادت",
+        "DISABLED_HABITS": "عادت‌های غیرفعال",
+        "NEXT_WEEK": "هفته بعد",
+        "PREV_WEEK": "هفته قبل",
+        "TODAY": "امروز"
       }
     },
     "SYNC": {
@@ -840,7 +940,9 @@
         "FOLLOW_LINK": "لطفاً پیوند زیر را باز کرده و کد تأیید موجود را در قسمت ورودی زیر کپی کنید.",
         "GET_AUTH_CODE": "دریافت کد دسترسی",
         "L_AUTH_CODE": "کد تایید را وارد کنید",
-        "TITLE": "ورود به سیستم: {{provider}}"
+        "TITLE": "ورود به سیستم: {{provider}}",
+        "FOLLOW_LINK_MOBILE": "لینک را در مرورگر دنبال کنید",
+        "WAITING_FOR_AUTH": "در انتظار احراز هویت..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "اطلاعات تکمیلی",
@@ -874,8 +976,10 @@
         "BTN_OVER_WRITE_REMOTE": "تغییر و بازنویسی از راه دور",
         "CHANGE_PW_AND_DECRYPT": "تغییر و تلاش برای رمزگشایی",
         "P1": "داده های شما رمزگذاری شده و رمزگشایی انجام نشد. لطفا رمز عبور صحیح را وارد کنید!",
-        "P2": "همچنین می توانید رمز عبور خود را تغییر دهید، که تمام داده های راه دور را بازنویسی می کند.",
-        "PASSWORD": "رمز عبور"
+        "PASSWORD": "رمز عبور",
+        "P2_FORGOT_PW": "اگر رمز عبور خود را فراموش کرده‌اید، می‌توانید داده‌های محلی را بازنویسی کنید.",
+        "P3_PW_CHANGED": "اگر رمز عبور رمزنگاری را تغییر داده‌اید، لطفاً رمز جدید را وارد کنید.",
+        "TITLE": "خطای رمزگشایی"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "بستن برنامه",
@@ -883,12 +987,13 @@
         "BTN_FORCE_UPLOAD": "آپلود اجباری محلی",
         "P1": "داده های همگام سازی از راه دور نامنسجم است!",
         "P2": "مدل آسیب دیده:",
-        "T1": "آخرین همگام سازی ناقص بود!",
-        "T2": "داده‌های بایگانی شما در آخرین همگام‌سازی به درستی آپلود نشده است:",
         "T3": "شما دو گزینه دارید:",
         "T4": "1. به دستگاه دیگر خود بروید و همگام سازی را در آنجا تکمیل کنید.",
         "T5": "2. یا می توانید داده های راه دور را با داده های محلی خود بازنویسی کنید. همه تغییرات از راه دور انجام خواهد شد\n    گم شود!",
-        "T6": "ایجاد یک نسخه پشتیبان از اطلاعاتی که بازنویسی می کنید توصیه می شود!!!"
+        "T6": "ایجاد یک نسخه پشتیبان از اطلاعاتی که بازنویسی می کنید توصیه می شود!!!",
+        "BTN_FORCE_DOWNLOAD": "دانلود اجباری",
+        "INCOHERENT_P1": "داده‌های همگام‌سازی ناقص یا ناسازگار هستند.",
+        "INCOHERENT_P2": "می‌توانید دانلود اجباری را امتحان کنید تا داده‌های کامل از سرور دریافت شود."
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "ذخیره و فعال کردن همگام سازی",
@@ -903,7 +1008,9 @@
         "L_SYNC_INTERVAL": "فاصله همگام سازی",
         "L_SYNC_PROVIDER": "ارائه دهنده همگام سازی",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "همگام سازی مسیر پوشه"
+          "L_SYNC_FOLDER_PATH": "همگام سازی مسیر پوشه",
+          "INFO_TEXT": "داده‌های خود را با یک فایل محلی همگام‌سازی کنید.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "مسیر فایل همگام‌سازی"
         },
         "TITLE": "همگام سازی",
         "WEB_DAV": {
@@ -912,7 +1019,137 @@
           "L_BASE_URL": "آدرس پایگاه",
           "L_PASSWORD": "کلمه عبور",
           "L_SYNC_FOLDER_PATH": "همگام سازی مسیر پوشه",
-          "L_USER_NAME": "نام کاربری"
+          "L_USER_NAME": "نام کاربری",
+          "CONDITIONAL_HEADER_WARNING_MSG": "سرور WebDAV شما از هدرهای شرطی پشتیبانی نمی‌کند. این ممکن است باعث مشکلات همگام‌سازی شود.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "هشدار هدر شرطی",
+          "D_SYNC_FOLDER_PATH": "مسیر پوشه همگام‌سازی",
+          "L_TEST_CONNECTION": "آزمایش اتصال",
+          "S_FILL_ALL_FIELDS": "لطفاً تمام فیلدها را پر کنید",
+          "S_TEST_FAIL": "آزمایش اتصال ناموفق بود",
+          "S_TEST_SUCCESS": "آزمایش اتصال موفق بود"
+        },
+        "BTN_CHANGE_PASSWORD": "تغییر رمز عبور",
+        "BTN_DISABLE_ENCRYPTION": "غیرفعال کردن رمزنگاری",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "احراز هویت Dropbox موفق بود",
+          "BTN_AUTHENTICATE": "احراز هویت با Dropbox",
+          "BTN_REAUTHENTICATE": "احراز هویت مجدد",
+          "INFO_TEXT": "داده‌های خود را با Dropbox همگام‌سازی کنید.",
+          "L_ACCESS_TOKEN": "توکن دسترسی",
+          "REAUTH_SUCCESS": "احراز هویت مجدد موفق بود",
+          "STATUS_CONFIGURED": "پیکربندی شده",
+          "STATUS_NOT_CONFIGURED": "پیکربندی نشده"
+        },
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "تغییر رمز عبور",
+          "BTN_DISABLE_ENCRYPTION": "غیرفعال کردن رمزنگاری",
+          "BTN_ENABLE_ENCRYPTION": "فعال کردن رمزنگاری",
+          "BTN_REMOVE_ENCRYPTION": "حذف رمزنگاری",
+          "CHANGE_PASSWORD_SUCCESS": "رمز عبور با موفقیت تغییر کرد",
+          "CHANGE_PASSWORD_WARNING": "هشدار: تغییر رمز عبور نیاز به ورود مجدد رمز در تمام دستگاه‌ها دارد.",
+          "DISABLE_ENCRYPTION_ITEM_1": "داده‌های همگام‌سازی رمزگشایی می‌شوند",
+          "DISABLE_ENCRYPTION_ITEM_2": "فایل همگام‌سازی بدون رمزنگاری بازنویسی می‌شود",
+          "DISABLE_ENCRYPTION_ITEM_3": "سایر دستگاه‌ها به طور خودکار به‌روزرسانی می‌شوند",
+          "DISABLE_ENCRYPTION_NOTE": "توجه: داده‌ها بدون رمزنگاری ذخیره می‌شوند.",
+          "DISABLE_ENCRYPTION_SUCCESS": "رمزنگاری با موفقیت غیرفعال شد",
+          "DISABLE_ENCRYPTION_TITLE": "غیرفعال کردن رمزنگاری",
+          "DISABLE_ENCRYPTION_WARNING": "هشدار: داده‌ها بدون محافظت ذخیره خواهند شد.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "چه اتفاقی می‌افتد:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "رمزنگاری فقط برای همگام‌سازی مبتنی بر فایل در دسترس است",
+          "ENABLE_ENCRYPTION_ITEM_1": "داده‌های همگام‌سازی رمزنگاری می‌شوند",
+          "ENABLE_ENCRYPTION_ITEM_2": "فایل همگام‌سازی با رمزنگاری بازنویسی می‌شود",
+          "ENABLE_ENCRYPTION_ITEM_3": "سایر دستگاه‌ها باید رمز عبور را وارد کنند",
+          "ENABLE_ENCRYPTION_NOT_READY": "ابتدا همگام‌سازی را پیکربندی کنید",
+          "ENABLE_ENCRYPTION_NOTE": "توجه: رمز عبور را به خاطر بسپارید.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "رمز عبور الزامی است",
+          "ENABLE_ENCRYPTION_SUCCESS": "رمزنگاری با موفقیت فعال شد",
+          "ENABLE_ENCRYPTION_TITLE": "فعال کردن رمزنگاری",
+          "ENABLE_ENCRYPTION_WARNING": "هشدار: اگر رمز عبور را فراموش کنید، بازیابی ممکن نیست.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "چه اتفاقی می‌افتد:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "تغییر رمز عبور رمزنگاری",
+          "L_CONFIRM_PASSWORD": "تأیید رمز عبور",
+          "L_NEW_PASSWORD": "رمز عبور جدید",
+          "L_REMOVE_ENCRYPTION": "حذف رمزنگاری",
+          "PASSWORD_MIN_LENGTH": "رمز عبور باید حداقل {{minLength}} کاراکتر باشد",
+          "PASSWORDS_DONT_MATCH": "رمزهای عبور مطابقت ندارند",
+          "REMOVE_ENCRYPTION_WARNING": "هشدار: حذف رمزنگاری داده‌ها را بدون محافظت قرار می‌دهد."
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "نام فایل همگام‌سازی"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "ادامه",
+          "CURRENT_STATE": "وضعیت فعلی",
+          "ENCRYPTION_DISABLED": "رمزنگاری غیرفعال",
+          "ENCRYPTION_ENABLED": "رمزنگاری فعال",
+          "IMPORTED_STATE": "وضعیت وارد شده",
+          "ITEM_1": "تنظیمات رمزنگاری ممکن است تغییر کند",
+          "ITEM_2": "ممکن است نیاز به ورود مجدد رمز عبور باشد",
+          "ITEM_3": "سایر دستگاه‌ها ممکن است نیاز به به‌روزرسانی داشته باشند",
+          "NOTE": "توجه",
+          "NOTE_DISABLING": "رمزنگاری غیرفعال خواهد شد.",
+          "NOTE_ENABLING": "رمزنگاری فعال خواهد شد.",
+          "TITLE": "هشدار تغییر رمزنگاری",
+          "WARNING_TEXT": "وارد کردن این داده‌ها تنظیمات رمزنگاری را تغییر خواهد داد.",
+          "WHAT_HAPPENS": "چه اتفاقی می‌افتد:"
+        },
+        "L_MANUAL_SYNC_ONLY": "فقط همگام‌سازی دستی",
+        "PASSWORD_SET_INFO": "رمز عبور تنظیم شده است",
+        "SUPER_SYNC": {
+          "ACCESS_TOKEN_DESCRIPTION": "توکن دسترسی برای احراز هویت با سرور",
+          "BTN_CHANGE_PASSWORD": "تغییر رمز عبور",
+          "BTN_DISABLE_ENCRYPTION": "غیرفعال کردن رمزنگاری",
+          "BTN_ENABLE_ENCRYPTION": "فعال کردن رمزنگاری",
+          "BTN_FORCE_OVERWRITE": "بازنویسی اجباری سرور",
+          "BTN_GET_TOKEN": "دریافت توکن",
+          "CHANGE_PASSWORD_SUCCESS": "رمز عبور با موفقیت تغییر کرد",
+          "CHANGE_PASSWORD_WARNING": "هشدار: تغییر رمز عبور نیاز به ورود مجدد رمز در تمام دستگاه‌ها دارد.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "ابتدا رمزنگاری را فعال کنید",
+          "DISABLE_ENCRYPTION_ITEM_1": "داده‌های همگام‌سازی رمزگشایی می‌شوند",
+          "DISABLE_ENCRYPTION_ITEM_2": "داده‌ها بدون رمزنگاری ارسال می‌شوند",
+          "DISABLE_ENCRYPTION_ITEM_3": "سایر دستگاه‌ها به طور خودکار به‌روزرسانی می‌شوند",
+          "DISABLE_ENCRYPTION_NOT_READY": "ابتدا همگام‌سازی را پیکربندی کنید",
+          "DISABLE_ENCRYPTION_NOTE": "توجه: داده‌ها بدون رمزنگاری ذخیره می‌شوند.",
+          "DISABLE_ENCRYPTION_SUCCESS": "رمزنگاری با موفقیت غیرفعال شد",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "غیرفعال‌سازی رمزنگاری فقط برای SuperSync",
+          "DISABLE_ENCRYPTION_TITLE": "غیرفعال کردن رمزنگاری",
+          "DISABLE_ENCRYPTION_WARNING": "هشدار: داده‌ها بدون محافظت ذخیره خواهند شد.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "چه اتفاقی می‌افتد:",
+          "E2E_ENCRYPTION_DESCRIPTION": "رمزنگاری سرتاسری برای محافظت از داده‌های شما",
+          "ENABLE_ENCRYPTION_ITEM_1": "داده‌های همگام‌سازی رمزنگاری می‌شوند",
+          "ENABLE_ENCRYPTION_ITEM_2": "داده‌ها رمزنگاری شده ارسال می‌شوند",
+          "ENABLE_ENCRYPTION_ITEM_3": "سایر دستگاه‌ها باید رمز عبور را وارد کنند",
+          "ENABLE_ENCRYPTION_NOT_READY": "ابتدا همگام‌سازی را پیکربندی کنید",
+          "ENABLE_ENCRYPTION_NOTE": "توجه: رمز عبور را به خاطر بسپارید.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "رمز عبور الزامی است",
+          "ENABLE_ENCRYPTION_SUCCESS": "رمزنگاری با موفقیت فعال شد",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "فعال‌سازی رمزنگاری فقط برای SuperSync",
+          "ENABLE_ENCRYPTION_TITLE": "فعال کردن رمزنگاری",
+          "ENABLE_ENCRYPTION_WARNING": "هشدار: اگر رمز عبور را فراموش کنید، بازیابی ممکن نیست.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "چه اتفاقی می‌افتد:",
+          "ENCRYPTION_ENCOURAGED": "رمزنگاری توصیه می‌شود",
+          "ENCRYPTION_SETUP_INTRO": "رمزنگاری سرتاسری را تنظیم کنید تا داده‌های شما محافظت شوند.",
+          "ENCRYPTION_WARNING": "هشدار: بدون رمزنگاری، داده‌ها به صورت متن ساده ذخیره می‌شوند.",
+          "FORCE_OVERWRITE_CONFIRM": "آیا مطمئن هستید؟ این کار تمام داده‌های سرور را بازنویسی می‌کند.",
+          "FORCE_OVERWRITE_INFO": "بازنویسی اجباری داده‌های سرور را با داده‌های محلی جایگزین می‌کند.",
+          "FORCE_OVERWRITE_TITLE": "بازنویسی اجباری سرور",
+          "INFO_TEXT": "داده‌های خود را با SuperSync همگام‌سازی کنید.",
+          "L_ACCESS_TOKEN": "توکن دسترسی",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "تغییر رمز عبور رمزنگاری",
+          "L_CONFIRM_PASSWORD": "تأیید رمز عبور",
+          "L_ENABLE_E2E_ENCRYPTION": "فعال کردن رمزنگاری سرتاسری",
+          "L_NEW_PASSWORD": "رمز عبور جدید",
+          "L_REMOVE_ENCRYPTION": "حذف رمزنگاری",
+          "L_SERVER_URL": "آدرس سرور",
+          "LOGIN_INSTRUCTIONS": "دستورالعمل‌های ورود",
+          "PASSWORD_MIN_LENGTH": "رمز عبور باید حداقل {{minLength}} کاراکتر باشد",
+          "PASSWORDS_DONT_MATCH": "رمزهای عبور مطابقت ندارند",
+          "REMOVE_ENCRYPTION_WARNING": "هشدار: حذف رمزنگاری داده‌ها را بدون محافظت قرار می‌دهد.",
+          "SERVER_URL_DESCRIPTION": "آدرس سرور SuperSync خود را وارد کنید",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "غیرفعال کردن SuperSync",
+          "SETUP_ENCRYPTION_BTN": "تنظیم رمزنگاری",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "هشدار: این رمز عبور قابل بازیابی نیست.",
+          "SETUP_ENCRYPTION_TITLE": "تنظیم رمزنگاری"
         }
       },
       "S": {
@@ -924,7 +1161,64 @@
         "INCOMPLETE_CFG": "احراز هویت برای همگام سازی انجام نشد. لطفا پیکربندی خود را بررسی کنید!",
         "SUCCESS_DOWNLOAD": "داده های همگام سازی شده از راه دور",
         "SUCCESS_VIA_BUTTON": "همگام سازی داده ها با موفقیت انجام شد",
-        "UNKNOWN_ERROR": "خطای ناشناخته هنگام همگام سازی لطفا کنسول را بررسی کنید."
+        "UNKNOWN_ERROR": "خطای ناشناخته هنگام همگام سازی لطفا کنسول را بررسی کنید.",
+        "ARCHIVE_OPERATION_FAILED": "عملیات آرشیو ناموفق بود",
+        "AUTH_SETUP_FAILED": "تنظیم احراز هویت ناموفق بود",
+        "AUTH_TOKEN_REJECTED": "توکن احراز هویت رد شد",
+        "CHANGE_PASSWORD_FAILED": "تغییر رمز عبور ناموفق بود",
+        "CLOCK_DRIFT_WARNING": "هشدار: اختلاف ساعت شناسایی شد",
+        "COMPACTION_FAILED": "فشرده‌سازی ناموفق بود",
+        "CONFLICT_DIALOG_TIMEOUT": "مهلت زمانی گفتگوی تداخل به پایان رسید",
+        "CONFLICT_RESOLUTION_FAILED": "حل تداخل ناموفق بود",
+        "DATA_REPAIRED": "داده‌ها تعمیر شدند",
+        "DECRYPTION_FAILED": "رمزگشایی ناموفق بود",
+        "DEFERRED_ACTION_FAILED": "عملیات به تعویق افتاده ناموفق بود",
+        "DIALOG_RESULT_ERROR": "خطا در نتیجه گفتگو",
+        "DISABLE_ENCRYPTION_FAILED": "غیرفعال کردن رمزنگاری ناموفق بود",
+        "ENABLE_ENCRYPTION_FAILED": "فعال کردن رمزنگاری ناموفق بود",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "رمزنگاری در دستگاه دیگری غیرفعال شده است",
+        "ENCRYPTION_PASSWORD_REQUIRED": "رمز عبور رمزنگاری مورد نیاز است",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "رمزنگاری برای SuperSync مورد نیاز است",
+        "ERROR_PAYLOAD_TOO_LARGE": "حجم داده‌ها بیش از حد بزرگ است",
+        "ERROR_PERMISSION": "خطای مجوز",
+        "ERROR_PERMISSION_FLATPAK": "خطای مجوز (Flatpak)",
+        "ERROR_PERMISSION_SNAP": "خطای مجوز (Snap)",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "خواندن داده‌های راه دور امکان‌پذیر نیست",
+        "FINISH_DAY_SYNC_ERROR": "خطا در همگام‌سازی پایان روز",
+        "FRESH_CLIENT_SYNC_CANCELLED": "همگام‌سازی نصب جدید لغو شد",
+        "HYDRATION_FAILED": "بارگذاری داده‌ها ناموفق بود",
+        "IMPORTING": "در حال وارد کردن...",
+        "INCOMPLETE_OP_SYNC": "همگام‌سازی عملیات ناقص",
+        "INITIAL_SYNC_ERROR": "خطا در همگام‌سازی اولیه",
+        "INTEGRITY_CHECK_FAILED": "بررسی یکپارچگی ناموفق بود",
+        "INVALID_AUTH_CODE": "کد احراز هویت نامعتبر",
+        "INVALID_OPERATION_PAYLOAD": "محتوای عملیات نامعتبر",
+        "LOCAL_CHANGES_DISCARDED": "تغییرات محلی حذف شدند",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "تغییرات محلی حذف شدند (تصویر لحظه‌ای)",
+        "LOCAL_DATA_REPLACE_CANCELLED": "جایگزینی داده‌های محلی لغو شد",
+        "LOCK_TIMEOUT_ERROR": "خطای مهلت زمانی قفل",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "تداخل‌ها به صورت خودکار حل شدند",
+        "MIGRATION_FAILED": "مهاجرت ناموفق بود",
+        "NEWER_VERSION_AVAILABLE": "نسخه جدیدتری در دسترس است",
+        "OPERATION_PERMANENTLY_FAILED": "عملیات به طور دائم ناموفق بود",
+        "OVERWRITE_SERVER_FAILED": "بازنویسی سرور ناموفق بود",
+        "PARTIAL_APPLY_FAILURE": "اعمال جزئی ناموفق بود",
+        "PERSIST_FAILED": "ذخیره‌سازی ناموفق بود",
+        "REMOTE_DATA_TOO_OLD": "داده‌های راه دور بسیار قدیمی هستند",
+        "REPLAY_LOCAL_OPS_FAILED": "بازپخش عملیات محلی ناموفق بود",
+        "RESTORE_ERROR": "خطا در بازیابی",
+        "RESTORE_SUCCESS": "بازیابی با موفقیت انجام شد",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "اعتبارسنجی مهاجرت سرور ناموفق بود",
+        "STORAGE_QUOTA_EXCEEDED": "سهمیه ذخیره‌سازی تمام شده است",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "فضای ذخیره‌سازی پس از فشرده‌سازی بازیابی شد",
+        "TIMEOUT_ERROR": "خطای مهلت زمانی",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "تعداد عملیات برای دانلود بیش از حد زیاد است",
+        "UPLOAD_ERROR": "خطا در بارگذاری",
+        "UPLOAD_OPS_REJECTED": "عملیات بارگذاری رد شدند",
+        "VECTOR_CLOCK_LIMIT_REACHED": "محدودیت ساعت برداری رسیده است",
+        "VERSION_TOO_OLD": "نسخه بسیار قدیمی است",
+        "VERSION_UNSUPPORTED": "نسخه پشتیبانی نمی‌شود",
+        "WEB_CRYPTO_NOT_AVAILABLE": "Web Crypto در دسترس نیست"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "همه چیز را پاک کن",
@@ -953,6 +1247,80 @@
         "TOOLTIP_DELETE": "این نسخه پشتیبان را حذف کنید",
         "TOOLTIP_REFRESH": "فهرست پشتیبان را تازه کنید",
         "TOOLTIP_RESTORE": "این نسخه پشتیبان را بازیابی کنید (تمام داده های فعلی را جایگزین خواهد کرد)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "بازیابی از تاریخچه",
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "داده‌های تعمیر شده پیدا شد. آیا می‌خواهید تعمیرات را اعمال کنید؟",
+        "TITLE": "تأیید تعمیر داده‌ها"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "داده‌ها با موفقیت تعمیر شدند.",
+        "TITLE": "داده‌ها تعمیر شدند",
+        "UNKNOWN_ERROR": "خطای ناشناخته"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "بازنویسی اجباری",
+        "BTN_SAVE_AND_SYNC": "ذخیره و همگام‌سازی",
+        "FORCE_OVERWRITE_CONFIRM": "آیا مطمئن هستید؟ این کار داده‌های راه دور را با داده‌های محلی جایگزین می‌کند.",
+        "FORCE_OVERWRITE_INFO": "اگر رمز عبور خود را فراموش کرده‌اید، می‌توانید داده‌های راه دور را بازنویسی کنید.",
+        "FORCE_OVERWRITE_TITLE": "بازنویسی اجباری سرور",
+        "MESSAGE": "لطفاً رمز عبور رمزنگاری خود را وارد کنید.",
+        "PASSWORD_LABEL": "رمز عبور رمزنگاری",
+        "TITLE": "رمز عبور رمزنگاری مورد نیاز است"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "به نظر می‌رسد این یک نصب جدید است. آیا می‌خواهید داده‌ها را از سرور دریافت کنید؟",
+        "OK": "دریافت از سرور",
+        "TITLE": "نصب جدید شناسایی شد"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "این کار داده‌های محلی شما را با داده‌های راه دور جایگزین می‌کند. آیا مطمئن هستید؟",
+        "TITLE": "جایگزینی داده‌های محلی"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "غیرفعال کردن همگام‌سازی",
+        "PERM_FILE": "مجوز فایل",
+        "TEXT": "برنامه نیاز به مجوز دسترسی به فایل همگام‌سازی دارد.",
+        "TITLE": "مجوز مورد نیاز"
+      },
+      "D_RESTORE": {
+        "BTN_RESTORE": "بازیابی",
+        "CONFIRM_MSG": "آیا مطمئن هستید که می‌خواهید به این نقطه بازیابی بازگردید؟",
+        "CONFIRM_TITLE": "تأیید بازیابی",
+        "ERROR_LOADING": "خطا در بارگذاری نقاط بازیابی",
+        "ERROR_RESTORE": "خطا در بازیابی",
+        "INTRO": "یک نقطه بازیابی را انتخاب کنید.",
+        "LOADING": "در حال بارگذاری...",
+        "NO_POINTS": "هیچ نقطه بازیابی یافت نشد",
+        "TITLE": "بازیابی از تاریخچه",
+        "TYPE_BACKUP_IMPORT": "وارد کردن پشتیبان",
+        "TYPE_REPAIR": "تعمیر",
+        "TYPE_SYNC_IMPORT": "وارد کردن همگام‌سازی",
+        "WARNING": "هشدار: بازیابی تغییرات فعلی شما را جایگزین می‌کند."
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "مهاجرت",
+        "MESSAGE": "یک مهاجرت سرور شناسایی شد. آیا می‌خواهید ادامه دهید؟",
+        "SKIP": "رد شدن",
+        "TITLE": "مهاجرت سرور"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "تغییرات فیلتر شده",
+        "IMPORT_DATE": "تاریخ وارد کردن",
+        "MSG_INCOMING": "یک وارد کردن همگام‌سازی شناسایی شد. تغییرات ورودی وجود دارد.",
+        "MSG_INCOMING_NO_OPS": "یک وارد کردن همگام‌سازی شناسایی شد. هیچ عملیات ورودی وجود ندارد.",
+        "MSG_LOCAL_FILTERS": "تغییرات محلی فیلتر شده‌اند.",
+        "REASON_BACKUP_RESTORE": "بازیابی پشتیبان",
+        "REASON_FILE_IMPORT": "وارد کردن فایل",
+        "REASON_FORCE_UPLOAD": "بارگذاری اجباری",
+        "REASON_PASSWORD_CHANGED": "رمز عبور تغییر کرده",
+        "REASON_REPAIR": "تعمیر",
+        "REASON_SERVER_MIGRATION": "مهاجرت سرور",
+        "REASON_UNKNOWN": "دلیل ناشناخته",
+        "RECOMMEND_SERVER": "استفاده از نسخه سرور توصیه می‌شود",
+        "TITLE": "تداخل وارد کردن همگام‌سازی",
+        "USE_LOCAL": "استفاده از محلی",
+        "USE_REMOTE": "استفاده از راه دور"
       }
     },
     "TAG": {
@@ -974,7 +1342,8 @@
         "TITLE": "تنظیمات پایه"
       },
       "S": {
-        "UPDATED": "تنظیمات برچسب به روز شد"
+        "UPDATED": "تنظیمات برچسب به روز شد",
+        "ARCHIVE_CLEANUP_FAILED": "پاکسازی آرشیو ناموفق بود"
       },
       "TTL": {
         "ADD_NEW_TAG": "اضافه کردن برچسب جدید"
@@ -1019,7 +1388,11 @@
         "TOOLTIP_CLEAR_ESTIMATE": "برآورد واضح",
         "TOOLTIP_CLEAR_TAGS": "برچسب های پاک",
         "TOOLTIP_DISABLE_SEARCH": "غیرفعال کردن جستجوی مشکل (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "فعال سازی جستجوی مسئله (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "فعال سازی جستجوی مسئله (Ctrl+2)",
+        "REPEAT_BUTTON": "تکرار",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "افزودن به عقب‌مانده/امروز",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "افزودن به بالا/پایین",
+        "TOOLTIP_CLEAR_REPEAT": "پاک کردن تکرار"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "اضافه کردن پیوست",
@@ -1033,11 +1406,21 @@
         "SCHEDULE_TASK": "برنامه ریزی کار",
         "SUB_TASKS": "وظایف فرعی ({{nr}})",
         "TIME": "زمان",
-        "TITLE_PLACEHOLDER": "عنوانی را وارد کنید"
+        "TITLE_PLACEHOLDER": "عنوانی را وارد کنید",
+        "COMPLETED_ON": "تکمیل شده در",
+        "CREATED_ON": "ایجاد شده در",
+        "DEADLINE": "ضرب‌الاجل",
+        "DEADLINE_DUE_BY": "موعد تا",
+        "DEADLINE_OVERDUE": "عقب‌افتاده",
+        "FROM_PARENT": "از والد",
+        "ISSUE": "مسئله",
+        "REMINDER": "یادآوری"
       },
       "B": {
         "ADD_HALF_HOUR": "نیم ساعت اضافه کن",
-        "ESTIMATE_EXCEEDED": "تخمین زمان بیشتر برای  \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "تخمین زمان بیشتر برای  \"{{title}}\"",
+        "ADD_ALL_TO_TODAY": "افزودن همه به امروز",
+        "DEADLINES_TODAY": "ضرب‌الاجل‌های امروز"
       },
       "CMP": {
         "ADD_SUB_TASK": "اضافه کردن کار فرعی",
@@ -1068,7 +1451,10 @@
         "TRACK_TIME": "Start tracking time",
         "TRACK_TIME_STOP": "Pause tracking time",
         "UNSCHEDULE_TASK": "Unschedule task",
-        "UPDATE_ISSUE_DATA": "Update issue data"
+        "UPDATE_ISSUE_DATA": "Update issue data",
+        "EDIT_DEADLINE": "ویرایش ضرب‌الاجل",
+        "REMOVE_DEADLINE": "حذف ضرب‌الاجل",
+        "SET_DEADLINE": "تنظیم ضرب‌الاجل"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "آیا می خواهید تگ جدید {{tagsTxt}}را ایجاد کنید؟",
@@ -1094,7 +1480,13 @@
         "SNOOZE_ALL": "تعویق همه",
         "START": "Start Task",
         "UNSCHEDULE": "برنامه ریزی نکنید",
-        "UNSCHEDULE_ALL": "Unschedule همه"
+        "UNSCHEDULE_ALL": "Unschedule همه",
+        "CLEAR_ALL_REMINDERS": "پاک کردن همه یادآوری‌ها",
+        "CLEAR_REMINDER": "پاک کردن یادآوری",
+        "DEADLINE_REMINDER": "یادآوری ضرب‌الاجل",
+        "DEADLINE_SECTION": "ضرب‌الاجل‌ها",
+        "DUE_SECTION": "موعد",
+        "TASK_REMINDERS": "یادآوری‌های وظیفه"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "برنامه ماه آینده",
@@ -1149,7 +1541,10 @@
         "REMINDER_ADDED": "Scheduled task \"{{title}}\"",
         "REMINDER_DELETED": "Deleted reminder for task",
         "REMINDER_UPDATED": "Updated reminder for task \"{{title}}\"",
-        "TASK_CREATED": "Created task \"{{taskTitle}}\""
+        "TASK_CREATED": "Created task \"{{taskTitle}}\"",
+        "DEADLINE_REMOVED": "ضرب‌الاجل حذف شد",
+        "DEADLINE_SET": "ضرب‌الاجل تنظیم شد",
+        "TASK_ALREADY_EXISTS": "وظیفه از قبل وجود دارد"
       },
       "SELECT_OR_CREATE": "کاری انتخاب و یا ایجاد کنید",
       "SUMMARY_TABLE": {
@@ -1158,6 +1553,27 @@
         "SPENT_TOTAL": "Spent Total",
         "TASK": "Task",
         "TOGGLE_DONE": "un-/mark as done"
+      },
+      "D_CONFIRM_DELETE": {
+        "MSG": "آیا مطمئن هستید که می‌خواهید این وظیفه و تمام زیروظایف آن را حذف کنید؟",
+        "OK": "حذف"
+      },
+      "D_DEADLINE": {
+        "ADD_TIME": "افزودن زمان",
+        "QA_NEXT_MONTH": "ماه آینده",
+        "QA_NEXT_WEEK": "هفته آینده",
+        "QA_TODAY": "امروز",
+        "QA_TOMORROW": "فردا",
+        "REMIND_AT": "یادآوری در",
+        "REMOVE_DEADLINE": "حذف ضرب‌الاجل",
+        "RO_1H": "۱ ساعت قبل",
+        "RO_5M": "۵ دقیقه قبل",
+        "RO_10M": "۱۰ دقیقه قبل",
+        "RO_15M": "۱۵ دقیقه قبل",
+        "RO_30M": "۳۰ دقیقه قبل",
+        "RO_AT_DEADLINE": "در زمان ضرب‌الاجل",
+        "RO_NEVER": "هرگز",
+        "SET_DEADLINE": "تنظیم ضرب‌الاجل"
       }
     },
     "TASK_REPEAT": {
@@ -1204,11 +1620,11 @@
         "ADD": "Add Repeat Task Config",
         "ADVANCED_CFG": "پیکربندی پیشرفته",
         "EDIT": "Edit Repeat Task Config",
-        "HELP1": "Repeating tasks are meant for daily chores, e.g.: \"Organization\", \"Daily Meeting\", \"Code Review\", \"Checking emails\" or similar tasks which are likely to occur again and again.",
-        "HELP2": "Once configured a repeating task will be recreated on every day selected below as soon as you open your project and will be automatically marked as completed at the end of the day. They will be handled as different instances. So you can freely add sub tasks etc.",
-        "HELP3": "Tasks imported from Jira or Git Issues cannot be repeated. All reminders will also be deleted on a repeating task.",
-        "HELP4": "نکته ای در مورد فیلد سفارش: اشاره به دستور ایجاد کارهای تکرارپذیر. فقط برای کارهای تکراری که به طور همزمان ایجاد می شوند قابل اجرا است. مقدار کمتر به این معنی است که یک کار در لیست بالاتر خواهد بود، یک عدد پایین تر که پایین تر خواهد بود. مقدار بزرگتر از 0 به این معنی است که موارد در انتهای کارهای عادی ایجاد می شوند.",
-        "TAG_LABEL": "برچسب ها برای اضافه کردن"
+        "TAG_LABEL": "برچسب ها برای اضافه کردن",
+        "HEATMAP_LABEL": "نقشه حرارتی",
+        "TIME_SPENT_THIS_MONTH": "زمان صرف شده این ماه",
+        "TIME_SPENT_THIS_WEEK": "زمان صرف شده این هفته",
+        "TIME_SPENT_TOTAL": "مجموع زمان صرف شده"
       },
       "F": {
         "C_DAY": "روز",
@@ -1223,8 +1639,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "وقتی فعال شوند، زیرتسک ها از آخرین نمونه وظیفه همراه با وظیفه تکرارشونده بازسازی می شوند",
         "MONDAY": "دوشنبه",
         "NOTES": "یادداشت‌های پیش‌فرض",
-        "ORDER": "سفارش",
-        "ORDER_DESCRIPTION": "ترتیب ایجاد وظایف تکرار شونده فقط بر کارهای تکراری ایجاد شده در همان زمان تأثیر می گذارد. مقدار کمتر به این معنی است که یک کار بالاتر از لیست ایجاد می شود، یک عدد پایین تر که پایین تر خواهد بود. مقدار بزرگتر از 0 به این معنی است که موارد در انتهای کارهای عادی ایجاد می شوند.",
         "Q_CUSTOM": "پیکربندی تکرار سفارشی",
         "Q_DAILY": "هر روز",
         "Q_MONDAY_TO_FRIDAY": "هر دوشنبه تا جمعه",
@@ -1247,8 +1661,13 @@
         "THURSDAY": "پنج شنبه",
         "TITLE": "عنوان برای کار",
         "TUESDAY": "سه شنبه",
-        "WEDNESDAY": "چهارشنبه"
-      }
+        "WEDNESDAY": "چهارشنبه",
+        "Q_MONTHLY_FIRST_DAY": "اولین روز ماه",
+        "Q_MONTHLY_LAST_DAY": "آخرین روز ماه",
+        "SKIP_OVERDUE": "رد شدن از عقب‌افتاده‌ها",
+        "SKIP_OVERDUE_DESCRIPTION": "وظایف تکراری عقب‌افتاده را نادیده بگیرید"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "خطا در باز کردن گفتگوی تکرار"
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1269,18 +1688,18 @@
         "GROUP_SCHEDULED_DATE": "تاریخ برنامه ریزی شده",
         "GROUP_TAG": "برچسب",
         "RESET_ALL": "همه را بازنشانی کنید",
+        "SAVE_SORT": "ذخیره به عنوان پیش فرض",
         "SCHEDULED_NEXT_MONTH": "ماه آینده",
         "SCHEDULED_NEXT_WEEK": "هفته ی بعد",
         "SCHEDULED_THIS_MONTH": "این ماه",
         "SCHEDULED_THIS_WEEK": "این هفته",
         "SCHEDULED_TODAY": "امروز",
         "SCHEDULED_TOMORROW": "فردا",
+        "SORT": "مرتب سازی",
         "SORT_CREATION_DATE": "تاریخ ایجاد",
         "SORT_DEFAULT": "پیش فرض",
         "SORT_NAME": "نام",
-        "SORT_PERMANENT": "مرتب سازی (دائمی)",
         "SORT_SCHEDULED_DATE": "تاریخ برنامه ریزی شده",
-        "SORT_TEMPORARY": "مرتب سازی (موقتی)",
         "TIME_1HOUR": "> 1 ساعت",
         "TIME_2HOUR": "> 2 ساعت",
         "TIME_10MIN": "> 10 دقیقه",
@@ -1322,6 +1741,31 @@
         "TASK": "وظیفه",
         "TRACK_TO": "پیگیری به:",
         "UNTRACKED_TIME": "زمان ردیابی نشده:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "فشرده‌سازی",
+        "CONFIRM_MSG": "آیا مطمئن هستید که می‌خواهید آرشیو را فشرده‌سازی کنید؟",
+        "CONFIRM_TITLE": "تأیید فشرده‌سازی",
+        "ESTIMATED_SAVINGS": "صرفه‌جویی تخمینی",
+        "INTRO": "فشرده‌سازی آرشیو فضای ذخیره‌سازی را آزاد می‌کند.",
+        "ISSUE_FIELDS_TO_CLEAR": "فیلدهای مسئله برای پاکسازی",
+        "LOADING": "در حال بارگذاری...",
+        "NO_DATA": "داده‌ای برای فشرده‌سازی وجود ندارد",
+        "NOTES_TO_CLEAR": "یادداشت‌ها برای پاکسازی",
+        "SUBTASKS_TO_DELETE": "زیروظایف برای حذف",
+        "TITLE": "فشرده‌سازی آرشیو",
+        "WARNING": "هشدار: این عمل غیرقابل بازگشت است."
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "هنگام پیگیری زمان انجام یک کار، عبارت پیکربندی شده را هر X تکرار می کند.",
+        "L_INTERVAL": "فاصله برای تکرار عبارت",
+        "L_TEXT": "متن",
+        "L_TEXT_DESCRIPTION": "به عنوان مثال: \"روی ${currentTaskTitle}کار کنید!\"",
+        "L_VOICE": "یک صدا را انتخاب کنید",
+        "L_VOICE_DESCRIPTION": "صدا را انتخاب کنید",
+        "TITLE": "یادآوری صوتی"
       }
     },
     "WORKLOG": {
@@ -1332,7 +1776,9 @@
         "TASKS": "کارها",
         "TOTAL_TIME": "زمان صرف شده در کل:",
         "WEEK_NR": "هفته {{nr}}",
-        "WORKED": "کار کرد"
+        "WORKED": "کار کرد",
+        "RESTORE_TASK_FROM_ARCHIVE": "بازیابی وظیفه از آرشیو",
+        "VIEW_TASK_DETAILS": "مشاهده جزئیات وظیفه"
       },
       "D_CONFIRM_RESTORE": "آیا شما مطمئن هستید که کار <strong>\"{{title}}\"</strong> را به لیست کارهای امروز اضافه کنید?",
       "D_EXPORT_TITLE": "خروجی گزارش کار {{start}}–{{end}}",
@@ -1379,6 +1825,38 @@
         "NO_DATA": "هیچ کاری در این هفته انجام نشده است.",
         "TITLE": "عنوان"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "تصویر با موفقیت جایگذاری شد",
+      "SIZE_EXCEEDED": "حجم تصویر ({{actualSize}}) از حداکثر حجم مجاز ({{maxSize}}) بیشتر است",
+      "STORAGE_QUOTA_EXCEEDED": "سهمیه ذخیره‌سازی تمام شده است. لطفاً فضا را آزاد کنید یا حجم تصاویر را کاهش دهید."
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "آدرس پایه",
+        "FILTER_BY_ASSIGNEE": "فیلتر بر اساس مسئول",
+        "IS_TRANSITION_ISSUES_ENABLED": "فعال‌سازی انتقال مسائل",
+        "PASSWORD": "رمز عبور",
+        "POLL_INTERVAL_MINUTES": "فاصله نظرسنجی (دقیقه)",
+        "TITLE_TEMPLATE": "الگوی عنوان",
+        "TITLE_TEMPLATE_DESCRIPTION": "الگو برای عنوان وظیفه. از {{issueId}} و {{summary}} استفاده کنید.",
+        "USERNAME": "نام کاربری"
+      },
+      "FORM_SECTION": {
+        "HELP": "راهنما"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "کاربران اختصاص داده شده",
+        "DECK_DESCRIPTION": "توضیحات Deck",
+        "LABELS": "برچسب‌ها",
+        "STACK": "ستون"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "تخته پیدا نشد",
+        "CARD_NOT_FOUND": "کارت پیدا نشد",
+        "ERR_CREDENTIALS_MISSING": "اعتبارنامه‌ها وارد نشده‌اند",
+        "ERR_LOAD_BOARDS": "خطا در بارگذاری تخته‌ها"
+      }
     }
   },
   "FILE_IMEX": {
@@ -1402,7 +1880,8 @@
     "S_ERR_INVALID_URL": "وارد کردن ناموفق: نشانی وب ارائه‌شده نامعتبر است",
     "S_ERR_NETWORK": "وارد کردن ناموفق: خطای شبکه هنگام واکشی داده‌ها از URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "خطا: نمی‌توان پارامتر URL را برای وارد کردن رمزگشایی کرد. لطفاً اطمینان حاصل کنید که به‌درستی قالب‌بندی شده است.",
-    "URL_PLACEHOLDER": "نشانی وب برای وارد کردن را وارد کنید"
+    "URL_PLACEHOLDER": "نشانی وب برای وارد کردن را وارد کنید",
+    "BTN_COMPRESS_ARCHIVE": "فشرده‌سازی آرشیو"
   },
   "G": {
     "ADD": "اضافه کردن",
@@ -1434,10 +1913,20 @@
     "SUBMIT": "ثبت",
     "TITLE": "عنوان",
     "TODAY_TAG_TITLE": "امروز",
-    "TRACKING_INTERVAL_DESCRIPTION": "زمان را با استفاده از این بازه بر حسب میلی ثانیه پیگیری کنید. ممکن است بخواهید برای کاهش نوشتن دیسک این مورد را تغییر دهید. شماره 2355 را ببینید.",
     "UNDO": "Undo",
     "WITHOUT_PROJECT": "بدون پروژه",
-    "YESTERDAY": "دیروز"
+    "YESTERDAY": "دیروز",
+    "APPLY": "اعمال",
+    "CONTINUE": "ادامه",
+    "DONT_SHOW_AGAIN": "دیگر نمایش نده",
+    "DUPLICATE": "تکرار",
+    "NEXT": "بعدی",
+    "PASSWORD_STRENGTH_FAIR": "متوسط",
+    "PASSWORD_STRENGTH_STRONG": "قوی",
+    "PASSWORD_STRENGTH_WEAK": "ضعیف",
+    "PROCESSING": "در حال پردازش...",
+    "SHARE": "اشتراک‌گذاری",
+    "TOGGLE_PASSWORD_VISIBILITY": "تغییر نمایش رمز عبور"
   },
   "GCF": {
     "AUTO_BACKUPS": {
@@ -1460,7 +1949,12 @@
     "FOCUS_MODE": {
       "HELP": "حالت فوکوس یک صفحه بدون حواس پرتی را باز می کند تا به شما کمک کند روی کار فعلی خود تمرکز کنید.",
       "L_SKIP_PREPARATION_SCREEN": "رد شدن از صفحه آماده سازی (کشش و غیره)",
-      "TITLE": "حالت تمرکز"
+      "TITLE": "حالت تمرکز",
+      "L_IS_PLAY_TICK": "پخش صدای تیک",
+      "L_MANUAL_BREAK_START": "شروع دستی استراحت",
+      "L_PAUSE_TRACKING_DURING_BREAK": "توقف ردیابی در زمان استراحت",
+      "L_START_IN_BACKGROUND": "شروع در پس‌زمینه",
+      "L_SYNC_SESSION_WITH_TRACKING": "همگام‌سازی جلسه با ردیابی"
     },
     "IDLE": {
       "HELP": "<div><p>When idle time handling is enabled a dialog will open after a specified amount of time to check if and on which task you want to track your time, when you have been idle.</p></div>",
@@ -1526,7 +2020,8 @@
       "TRIGGER_SYNC": "همگام سازی راه اندازی (در صورت پیکربندی)",
       "ZOOM_DEFAULT": "بزرگنمایی پیش فرض (فقط دسکتاپ)",
       "ZOOM_IN": "بزرگنمایی (فقط دسکتاپ)",
-      "ZOOM_OUT": "کوچک نمایی (فقط دسکتاپ)"
+      "ZOOM_OUT": "کوچک نمایی (فقط دسکتاپ)",
+      "TASK_UNSCHEDULE": "حذف زمان‌بندی وظیفه"
     },
     "LANG": {
       "AR": "عربی",
@@ -1550,6 +2045,7 @@
       "SK": "اسلواکی",
       "TIME_LOCALE": "مکان فرمت زمانی",
       "TIME_LOCALE_AUTO": "پیش فرض سیستم",
+      "TIME_LOCALE_CS_CZ": "چکی - ۲۴ ساعته",
       "TIME_LOCALE_DE_DE": "آلمانی - ۲۴ ساعته",
       "TIME_LOCALE_DESCRIPTION": "یک مکان برای قالب بندی زمان انتخاب کنید. مکان های مختلف از قراردادهای متفاوتی استفاده می کنند (فرمت ۱۲ ساعته در مقابل ۲۴ ساعته)",
       "TIME_LOCALE_EN_GB": "انگلیسی (بریتانیا) - ۲۴ ساعته",
@@ -1561,16 +2057,22 @@
       "TIME_LOCALE_KO_KR": "کره ای - ۱۲ ساعت صبح/بعدازظهر",
       "TIME_LOCALE_PT_BR": "پرتغالی (برزیل) - ۲۴ ساعته",
       "TIME_LOCALE_RU_RU": "روسی - ۲۴ ساعته",
-      "TIME_LOCALE_TR_TR": "ترکی - ۲۴ ساعته",
-      "TIME_LOCALE_ZH_CN": "چینی (ساده شده) - ۲۴ ساعته",
-      "TIME_LOCALE_CS_CZ": "چکی - ۲۴ ساعته",
       "TIME_LOCALE_SK_SK": "سلوفاکی - ۲۴ ساعته",
+      "TIME_LOCALE_TR_TR": "ترکی - ۲۴ ساعته",
       "TIME_LOCALE_UK_UA": "اوکراینی - ۲۴ ساعته",
+      "TIME_LOCALE_ZH_CN": "چینی (ساده شده) - ۲۴ ساعته",
       "TITLE": "زبان",
       "TR": "ترکچه",
       "UK": "اوکراین",
       "ZH": "中文 (简体)",
-      "ZH_TW": "中文 (繁體)"
+      "ZH_TW": "中文 (繁體)",
+      "FI": "فنلاندی",
+      "PT_BR": "پرتغالی (برزیل)",
+      "RO": "رومانیایی",
+      "RO_MD": "رومانیایی (مولداوی)",
+      "SV": "سوئدی",
+      "TIME_LOCALE_RO_MD": "رومانیایی (مولداوی)",
+      "TIME_LOCALE_RO_RO": "رومانیایی (رومانی)"
     },
     "MISC": {
       "DARK_MODE": "حالت تاریک",
@@ -1591,21 +2093,13 @@
       "IS_TRAY_SHOW_CURRENT_COUNTDOWN": "نمایش شمارش معکوس فعلی در منوی سینی / وضعیت (فقط مک دسکتاپ)",
       "START_OF_NEXT_DAY": "ساعت شروع روز بعد",
       "START_OF_NEXT_DAY_HINT": "از زمانی که (به ساعت) می خواهید روز بعد را بشمارید شروع شده است. پیش فرض نیمه شب است که 0 است.",
-      "TASK_NOTES_TPL": "الگوی شرح کار",
       "THEME": "تم",
       "THEME_EXPERIMENTAL": "تم (آزمایشی)",
       "THEME_SELECT_LABEL": "انتخاب تم",
-      "TITLE": "Misc Settings"
-    },
-    "TASKS": {
-      "DEFAULT_PROJECT": "پروژه پیش فرض برای کارهای جدید در صورت عدم تعیین پروژه دیگر",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "اضافه کردن خودکار کارهای انجام شده به امروز",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "علامت گذاری خودکار کار اصلی به عنوان انجام شده، زمانی که تمام زیر کارها انجام شده باشند",
-      "IS_CONFIRM_BEFORE_DELETE": "تأیید قبل از حذف کارها",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "فعال کردن فرمت بندی Markdown در یادداشت های کار",
-      "IS_TRAY_SHOW_CURRENT": "نمایش کار فعلی در منوی سینی / وضعیت (فقط دسک تاپ مک/ویندوز)",
-      "NOTES_TEMPLATE": "الگوی توضیحات کار",
-      "TITLE": "کارها"
+      "TITLE": "Misc Settings",
+      "DEFAULT_START_PAGE": "صفحه شروع پیش‌فرض",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "استفاده از نوار عنوان سفارشی",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "نوار عنوان سفارشی ظاهر یکپارچه‌تری دارد اما ممکن است در برخی سیستم‌ها مشکل ایجاد کند."
     },
     "POMODORO": {
       "BREAK_DURATION": "Duration of short breaks",
@@ -1617,7 +2111,14 @@
       "COUNTDOWN_DURATION": "بنر X را قبل از یادآوری واقعی نشان دهید",
       "DEFAULT_TASK_REMIND_OPTION": "گزینه یادآوری پیش فرض هنگام ایجاد وظایف انتخاب شده است",
       "IS_COUNTDOWN_BANNER_ENABLED": "نمایش بنر شمارش معکوس قبل از زمان یادآوری",
-      "TITLE": "یادآوری‌ها"
+      "TITLE": "یادآوری‌ها",
+      "DISABLE_REMINDERS": "غیرفعال کردن یادآوری‌ها",
+      "DUE_DATE_NOTIFICATION_HOUR": "ساعت اعلان موعد",
+      "HELP": "یادآوری‌ها برای وظایف با ضرب‌الاجل یا یادآوری تنظیم شده فعال می‌شوند.",
+      "IS_FOCUS_WINDOW": "تمرکز پنجره هنگام یادآوری",
+      "NOTIFY_ON_DUE_DATE": "اعلان در تاریخ موعد",
+      "USE_ALARM_STYLE_REMINDERS": "استفاده از یادآوری‌های سبک هشدار",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "یادآوری‌های سبک هشدار صدای بلندتری دارند و توجه بیشتری جلب می‌کنند."
     },
     "SCHEDULE": {
       "HELP": "ویژگی جدول زمانی باید مروری سریع درباره چگونگی انجام کارهای برنامه ریزی شده شما در طول زمان داشته باشد. می توانید آن را در فهرست سمت چپ در زیر <a href='#/schedule'>'Schedule'</a>پیدا کنید.",
@@ -1629,14 +2130,19 @@
       "L_WORK_START": "شروع روز کار",
       "LUNCH_BREAK_START_END_DESCRIPTION": "مثلاََ ۱۳:۰۰",
       "TITLE": "جدول زمانی",
-      "WORK_START_END_DESCRIPTION": "به عنوان مثال، ساعت 17:00"
+      "WORK_START_END_DESCRIPTION": "به عنوان مثال، ساعت 17:00",
+      "MONTH": "ماه"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>در اینجا می‌توانید هنگام ایجاد یک کار، گزینه‌های نحو کوتاه را کنترل کنید</p>",
       "IS_ENABLE_DUE": "فعال کردن نحو کوتاه (@<Due time>)",
       "IS_ENABLE_PROJECT": "سینتکس کوتاه پروژه را فعال کنید (+<Project name>)",
       "IS_ENABLE_TAG": "سینتکس کوتاه برچسب را فعال کنید (#<Tag>)",
-      "TITLE": "نحو کوتاه"
+      "TITLE": "نحو کوتاه",
+      "URL_BEHAVIOR_EXTRACT": "استخراج عنوان",
+      "URL_BEHAVIOR_KEEP": "نگه داشتن URL",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "نگه داشتن و پیوست کردن",
+      "URL_BEHAVIOR_LABEL": "رفتار URL"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "صدای یادآوری استراحت بگیرید",
@@ -1661,6 +2167,16 @@
       "SNOOZE_TIME": "زمان استراحت را به تعویق بیندازید",
       "TITLE": "یادآوری استراحت"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "پروژه پیش فرض برای کارهای جدید در صورت عدم تعیین پروژه دیگر",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "اضافه کردن خودکار کارهای انجام شده به امروز",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "علامت گذاری خودکار کار اصلی به عنوان انجام شده، زمانی که تمام زیر کارها انجام شده باشند",
+      "IS_CONFIRM_BEFORE_DELETE": "تأیید قبل از حذف کارها",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "فعال کردن فرمت بندی Markdown در یادداشت های کار",
+      "IS_TRAY_SHOW_CURRENT": "نمایش کار فعلی در منوی سینی / وضعیت (فقط دسک تاپ مک/ویندوز)",
+      "NOTES_TEMPLATE": "الگوی توضیحات کار",
+      "TITLE": "کارها"
+    },
     "TIME_TRACKING": {
       "HELP": "یادآوری ردیابی زمان بنری است که در صورت فراموش کردن شروع ردیابی زمان نمایش داده می شود.",
       "L_DEFAULT_ESTIMATE": "تخمین زمان پیش فرض برای کارهای جدید",
@@ -1671,9 +2187,57 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "پنجره برنامه فوکوس زمانی که یادآوری فعال است (فقط دسکتاپ)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "هنگام نمایش یادآوری ردیابی زمان اطلاع رسانی کنید",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "نمایش یادآوری ردیابی در برنامه تلفن همراه",
-      "L_TRACKING_INTERVAL": "فاصله ردیابی زمان (EXPERIMENTAL)",
       "L_TRACKING_REMINDER_MIN_TIME": "زمان انتظار قبل از نمایش بنر یادآور ردیابی است",
       "TITLE": "ردیابی زمان"
+    },
+    "APP_FEATURES": {
+      "BOARDS": "تابلوها",
+      "DONATE_PAGE": "صفحه کمک مالی",
+      "FOCUS_MODE": "حالت تمرکز",
+      "HABITS": "عادت‌ها",
+      "HELP": "راهنما",
+      "ISSUES_PANEL": "پنل مسائل",
+      "PLANNER": "برنامه‌ریز",
+      "PROJECT_NOTES": "یادداشت‌های پروژه",
+      "SCHEDULE": "زمان‌بندی",
+      "SCHEDULE_DAY_PANEL": "پنل زمان‌بندی روز",
+      "SEARCH": "جستجو",
+      "SYNC_BUTTON": "دکمه همگام‌سازی",
+      "TIME_TRACKING": "ردیابی زمان",
+      "TITLE": "ویژگی‌های برنامه",
+      "USER_PROFILES": "پروفایل‌های کاربری",
+      "USER_PROFILES_HINT": "پروفایل‌های کاربری به شما امکان می‌دهد بین محیط‌های کاری مختلف جابجا شوید.",
+      "USER_PROFILES_WARNING": "هشدار: فعال‌سازی پروفایل‌های کاربری نیاز به راه‌اندازی مجدد برنامه دارد."
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "حذف",
+      "DELETE_ALL": "حذف همه",
+      "DELETE_ALL_SUCCESS": "تمام تصاویر حذف شدند",
+      "DELETE_SUCCESS": "تصویر حذف شد",
+      "ERROR_DELETING": "خطا در حذف تصویر",
+      "ERROR_DELETING_ALL": "خطا در حذف تمام تصاویر",
+      "ERROR_LOADING": "خطا در بارگذاری تصاویر",
+      "HELP": "تصاویر کلیپ‌بورد جایگذاری شده در اینجا مدیریت می‌شوند.",
+      "LOADING": "در حال بارگذاری...",
+      "MANAGE_DESCRIPTION": "مدیریت تصاویر کلیپ‌بورد ذخیره شده",
+      "MANAGE_TITLE": "مدیریت تصاویر",
+      "MANAGER_TITLE": "مدیر تصاویر کلیپ‌بورد",
+      "NO_IMAGES": "هیچ تصویری یافت نشد",
+      "OPEN_MANAGER": "باز کردن مدیر",
+      "PATH_DESCRIPTION": "مسیر ذخیره‌سازی تصاویر کلیپ‌بورد",
+      "PATH_LABEL": "مسیر تصاویر",
+      "PATH_PLACEHOLDER": "مسیر پوشه تصاویر",
+      "PATH_TITLE": "مسیر ذخیره‌سازی",
+      "SELECT_PATH": "انتخاب مسیر",
+      "SELECT_PATH_TITLE": "انتخاب پوشه تصاویر",
+      "SORT_BY": "مرتب‌سازی بر اساس",
+      "SORT_LARGEST": "بزرگ‌ترین",
+      "SORT_NEWEST": "جدیدترین",
+      "SORT_OLDEST": "قدیمی‌ترین",
+      "SORT_SMALLEST": "کوچک‌ترین",
+      "TITLE": "تصاویر کلیپ‌بورد",
+      "TOTAL_IMAGES": "تعداد کل تصاویر",
+      "TOTAL_SIZE": "حجم کل"
     }
   },
   "GLOBAL_RELATIVE_TIME": {
@@ -1717,7 +2281,11 @@
     "SHARE_FAILED": "اشتراک گذاری شکست خورد. لطفا به صورت دستی کپی کنید.",
     "SHARE_FAILED_FALLBACK": "اشتراک گذاری شکست خورد. در عوض روی کلیپ بورد کپی کردم.",
     "SHARE_UNAVAILABLE_FALLBACK": "روی کلیپ بورد کپی شد.",
-    "UNPLANNED_TODAY_TASKS": "همه وظایف امروز برنامه ریزی نشده بود"
+    "UNPLANNED_TODAY_TASKS": "همه وظایف امروز برنامه ریزی نشده بود",
+    "DUPLICATE_PROJECT_ERROR": "خطا در تکرار پروژه",
+    "DUPLICATE_PROJECT_SUCCESS": "پروژه با موفقیت تکرار شد",
+    "OPEN_SETTINGS_ERROR": "خطا در باز کردن تنظیمات",
+    "SAVE_BLOCKED_DURING_SYNC": "ذخیره در حین همگام‌سازی مسدود شده است"
   },
   "GPB": {
     "ASSETS": "در حال بارگیری دارایی ...",
@@ -1725,7 +2293,6 @@
     "DBX_GEN_TOKEN": "Dropbox: ایجاد نشانه ...",
     "DBX_META": "Dropbox: دریافت متا پرونده ...",
     "DBX_UPLOAD": "Dropbox: بارگذاری پرونده ...",
-    "GITHUB_LOAD_ISSUE": "GitHub: بارگیری داده های شماره ...",
     "JIRA_LOAD_ISSUE": "جیرا: بارگیری داده های شماره ...",
     "SYNC": "در حال همگام سازی داده ها...",
     "UNKNOWN": "بارگیری داده های از راه دور",
@@ -1770,14 +2337,64 @@
     "TOGGLE_TRACK_TIME": "Start/Stop tracking time",
     "TRIGGER_SYNC": "همگام سازی را به صورت دستی فعال کنید",
     "UNPLAN_ALL_TASKS": "لغو برنامه همه وظایف",
-    "WORKLOG": "گزارش کار"
+    "WORKLOG": "گزارش کار",
+    "DISABLE_FEATURE": "غیرفعال کردن ویژگی",
+    "DONATE": "کمک مالی",
+    "DUPLICATE_PROJECT": "تکرار پروژه",
+    "FEATURE_DISABLED_SNACK": "ویژگی غیرفعال شد",
+    "HABITS": "عادت‌ها",
+    "NO_PROJECT_INFO": "هیچ پروژه‌ای انتخاب نشده",
+    "NO_TAG_INFO": "هیچ برچسبی انتخاب نشده",
+    "NO_TASKS_TO_TRACK": "وظیفه‌ای برای ردیابی وجود ندارد",
+    "NOTES": "یادداشت‌ها",
+    "NOTES_PANEL_INFO": "پنل یادداشت‌ها",
+    "OPEN_APP_FEATURES": "ویژگی‌های برنامه",
+    "PROCRASTINATE": "تعلل",
+    "PROJECT_SETTINGS": "تنظیمات پروژه",
+    "SHOW_TRACKED_TASK": "نمایش وظیفه ردیابی شده",
+    "TASK_LIST": "لیست وظایف",
+    "TASKS": "وظایف",
+    "TOGGLE_SHOW_BOOKMARKS": "نمایش/مخفی کردن نشانک‌ها"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "آیا می خواهید یک نسخه پشتیبان از داده های قدیمی خود دانلود کنید (می توانید با نسخه های قدیمی Super Productivity استفاده کنید)؟",
     "DETECTED_LEGACY": "داده های قدیمی شناسایی شده ما آن را برای شما مهاجرت خواهیم کرد!",
     "E_MIGRATION_FAILED": "مهاجرت ناموفق بود! با خطا:",
     "E_RESTART_FAILED": "راه اندازی مجدد خودکار انجام نشد. لطفا برنامه را به صورت دستی مجددا راه اندازی کنید!",
-    "SUCCESS": "مهاجرت همه انجام شد! اکنون برنامه را مجددا راه اندازی کنید..."
+    "SUCCESS": "مهاجرت همه انجام شد! اکنون برنامه را مجددا راه اندازی کنید...",
+    "DIALOG_MESSAGE": "برنامه نیاز به مهاجرت داده‌ها دارد. لطفاً صبر کنید.",
+    "DIALOG_TITLE": "مهاجرت داده‌ها",
+    "STATUS_BACKUP": "پشتیبان‌گیری...",
+    "STATUS_COMPLETE": "مهاجرت کامل شد",
+    "STATUS_MIGRATING": "در حال مهاجرت...",
+    "STATUS_PREPARING": "آماده‌سازی..."
+  },
+  "ONBOARDING": {
+    "TITLE": "چگونه می‌خواهید از Super Productivity استفاده کنید؟",
+    "SUBTITLE": "تنظیماتی متناسب با روش کاری خود انتخاب کنید. هر زمان بخواهید می‌توانید این را در تنظیمات تغییر دهید.",
+    "PRIVACY_HINT": "داده‌های شما به‌صورت امن روی دستگاه شما باقی می‌مانند. هیچ چیزی به سرور ارسال نمی‌شود.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "فهرست کارهای ساده",
+        "DESCRIPTION": "یک مدیر وظایف ساده با پروژه‌ها، برچسب‌ها و یادداشت‌ها. بدون اضافات."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "ردیاب زمان",
+        "DESCRIPTION": "زمان صرف‌شده برای وظایف را ثبت کنید. عالی برای صورتحساب ساعتی یا درک اینکه وقت شما کجا صرف می‌شود."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "مجموعه بهره‌وری",
+        "DESCRIPTION": "روز خود را برنامه‌ریزی کنید، عادت بسازید، عمیقاً تمرکز کنید و زمان خود را ردیابی کنید. همه در یک جا."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "روی + کلیک کنید تا اولین وظیفه خود را اضافه کنید",
+      "CREATE_TASK_TOUCH": "روی + ضربه بزنید تا اولین وظیفه خود را اضافه کنید",
+      "EXPLORE": "آزادانه کلیک کنید و کاوش کنید! راهنما در نوار کناری موجود است.",
+      "EXPLORE_TOUCH": "آزادانه کاوش کنید! راهنما در منو موجود است.",
+      "OR_PRESS": "یا فشار دهید",
+      "SKIP_ARIA": "بستن راهنمایی"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "وظایف را از امروز اضافه کنید",
@@ -1817,7 +2434,8 @@
     "TIME_SPENT_AND_ESTIMATE_LABEL": "زمان سپری‌شده/تخمین",
     "TIME_SPENT_ESTIMATE_TITLE": "Time Spent: Total time spent today. Archived tasks not included. – Time Estimated: Time estimated for tasks worked on today minus the time already spent with them on other days.",
     "TIME_SPENT_TODAY_BY_TAG": "زمان صرف شده امروز توسط برچسب",
-    "WEEK": "Week"
+    "WEEK": "Week",
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "آداب پایان روز"
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "نوع عمل '{{type}}' مجاز نیست",
@@ -1838,7 +2456,6 @@
     "ERROR": "خطا",
     "ERROR_LOADING_PLUGIN": "خطا در بارگذاری پلاگین",
     "EXPERIMENTAL_WARNING": "سیستم افزونه در مرحله آزمایشی است و باید با نهایت احتیاط استفاده شود.",
-    "EXPERIMENTAL_WARNING_TITLE": "ویژگی آزمایشی - هشدار امنیتی",
     "FAILED_TO_CLEAR_CACHE": "کش افزونه پاک نشد.",
     "FAILED_TO_EXECUTE_SCRIPT": "اجرای Node.js اسکریپت شکست خورد",
     "FAILED_TO_EXTRACT_ZIP": "استخراج فایل ZIP افزونه شکست خورد",
@@ -1899,10 +2516,15 @@
     "UNABLE_TO_PERSIST_DATA": "نمی توانم داده ها را به ذخیره سازی افزونه ها حفظ کنم",
     "UNKNOWN_ERROR": "یک خطای ناشناخته رخ داد",
     "UPLOAD_PLUGIN_INSTRUCTION": "یک فایل ZIP افزونه آپلود کنید تا آن را نصب کنید:",
-    "VALIDATION_FAILED": "اعتبارسنجی ناموفق بود"
+    "VALIDATION_FAILED": "اعتبارسنجی ناموفق بود",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "غیرفعال کردن این افزونه ارائه‌دهندگان مسئله مرتبط را نیز غیرفعال می‌کند. آیا ادامه می‌دهید؟",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "بارگذاری افزونه‌های جامعه ناموفق بود",
+    "INDEX_HTML_NOT_LOADED": "فایل index.html بارگذاری نشد",
+    "LANGUAGES": "زبان‌ها"
   },
   "PM": {
-    "TITLE": "معیارهای پروژه"
+    "TITLE": "معیارهای پروژه",
+    "ALL_TASKS_TITLE": "تمام وظایف"
   },
   "PS": {
     "GLOBAL_SETTINGS": "تنظیمات عمومی",
@@ -1912,7 +2534,19 @@
     "PROJECT_SETTINGS": "Project Specific Settings",
     "PROVIDE_FEEDBACK": "ارائه بازخورد",
     "SYNC_EXPORT": "همگام سازی و صادرات",
-    "TAG_SETTINGS": "تنظیمات خاص را برچسب گذاری کنید"
+    "TAG_SETTINGS": "تنظیمات خاص را برچسب گذاری کنید",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "کپی به کلیپ‌بورد ناموفق بود",
+    "RELOAD": "بارگذاری مجدد",
+    "TABS": {
+      "GENERAL": "عمومی",
+      "PLUGINS": "افزونه‌ها",
+      "PRODUCTIVITY": "بهره‌وری",
+      "SYNC_BACKUP": "همگام‌سازی و پشتیبان",
+      "TASKS": "وظایف",
+      "TIME_TRACKING": "ردیابی زمان"
+    },
+    "TOGGLE_DARK_MODE": "تغییر حالت تاریک",
+    "UPDATE_APP": "به‌روزرسانی برنامه"
   },
   "SCHEDULE": {
     "LAST": "آخرین:",
@@ -1922,7 +2556,10 @@
     "NO_SCHEDULED_TITLE": "وظایف برنامه ریزی شده برای روز",
     "REPEATED_TASKS": "کارهای تکراری",
     "SCHEDULED_TASKS": "وظایف برنامه ریزی شده",
-    "SCHEDULED_TASKS_WITH_TIME": "کارهای برنامه ریزی شده با یادآوری"
+    "SCHEDULED_TASKS_WITH_TIME": "کارهای برنامه ریزی شده با یادآوری",
+    "NO_DEADLINES": "بدون ضرب‌الاجل",
+    "START_TASK": "شروع وظیفه",
+    "TASKS_WITH_DEADLINES": "وظایف با ضرب‌الاجل"
   },
   "USER_PROFILES": {
     "ACTIVE": "فعال",
@@ -1970,6 +2607,43 @@
     "TODAY_REMAINING": "باقی مانده امروز:",
     "WITHOUT_BREAK": "بدون استراحت:",
     "WORKING_TODAY": "کار امروز:",
-    "WORKING_TODAY_ARCHIVED": "تایم امروز روی کارهای آرشیو شده کار کرد"
+    "WORKING_TODAY_ARCHIVED": "تایم امروز روی کارهای آرشیو شده کار کرد",
+    "RECURRING_TASKS": "وظایف تکراری"
+  },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "کمک مالی از طریق GitHub Sponsors",
+    "INTRO_1": "Super Productivity کاملاً توسط جامعه تأمین مالی می‌شود. هیچ ردیابی، تبلیغات یا جمع‌آوری داده‌ای وجود ندارد — وظایف شما روی دستگاهتان باقی می‌مانند.",
+    "INTRO_2": "اگر برای این رویکرد ارزش قائل هستید و می‌خواهید پروژه سالم و در حال تکامل باقی بماند، کمک مالی داوطلبانه بسیار قدردانی می‌شود."
+  },
+  "GLOBAL": {
+    "COPY_SUFFIX": "(کپی)"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "مجوز هشدار دقیق رد شد",
+    "TASK_ALREADY_COMPLETED": "وظیفه قبلاً تکمیل شده است",
+    "TASK_MARKED_DONE": "وظیفه به عنوان انجام شده علامت‌گذاری شد"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "برنامه نیاز به آماده‌سازی قبل از مهاجرت دارد.",
+    "DIALOG_TITLE": "آماده‌سازی مهاجرت"
+  },
+  "THEMES": {
+    "amber": "کهربایی",
+    "blue": "آبی",
+    "blue-grey": "آبی-خاکستری",
+    "cyan": "فیروزه‌ای",
+    "deep-orange": "نارنجی تیره",
+    "deep-purple": "بنفش تیره",
+    "green": "سبز",
+    "indigo": "نیلی",
+    "light-blue": "آبی روشن",
+    "light-green": "سبز روشن",
+    "lime": "لیمویی",
+    "pink": "صورتی",
+    "purple": "بنفش",
+    "SCHEDULED_TASKS_WITH_TIME": "وظایف زمان‌بندی شده با زمان",
+    "SELECT_THEME": "انتخاب تم",
+    "teal": "سبز کله‌غازی",
+    "yellow": "زرد"
   }
 }

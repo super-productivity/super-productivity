@@ -182,10 +182,14 @@ export class TaskRepeatCfgEffects {
           // Update created to match what the repeat processor would set (noon on
           // first occurrence day). This prevents duplicate creation via the
           // created-date check in _getActionsForTaskRepeatCfg (service.ts:217-219).
+          // Also set dueDay so the task is immediately scheduled for the start date
+          // and no longer appears in today's view (#6856).
           this._taskService.update(task.id, {
             created: firstOccurrence.getTime(),
+            dueDay: firstOccurrenceStr,
           });
-          // dueDay + planner + Today tag removal handled by planTaskForDay action
+          // planTaskForDay (below) also sets dueDay redundantly, plus handles
+          // planner days and TODAY_TAG removal
         } else {
           // TODAY FIRST OCCURRENCE:
           // Update dueDay if it differs

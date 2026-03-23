@@ -204,4 +204,59 @@ describe('createPluginSyncAdapter', () => {
     expect(isDoneMapping.toTaskValue('closed', { issueId: '1' })).toBeTrue();
     expect(isDoneMapping.toTaskValue('open', { issueId: '1' })).toBeFalse();
   });
+
+  it('should forward mutuallyExclusive from plugin mapping', () => {
+    const mappingsWithExclusive: PluginFieldMapping[] = [
+      ...MOCK_FIELD_MAPPINGS,
+      {
+        taskField: 'dueDay',
+        issueField: 'start_date',
+        defaultDirection: 'both',
+        mutuallyExclusive: ['dueWithTime'],
+        toIssueValue: (v: unknown) => v,
+        toTaskValue: (v: unknown) => v,
+      },
+    ];
+    const adapter = createPluginSyncAdapter(
+      createMockDefinition({ fieldMappings: mappingsWithExclusive }),
+      () => mockHttpHelper,
+    );
+
+    const mappings = adapter.getFieldMappings();
+    const dueDayMapping = mappings.find((m) => m.taskField === 'dueDay');
+
+    expect(dueDayMapping).toBeDefined();
+    expect(dueDayMapping!.mutuallyExclusive).toEqual(['dueWithTime']);
+  });
+
+  it('should not set mutuallyExclusive when not provided in plugin mapping', () => {
+    const adapter = createPluginSyncAdapter(createMockDefinition(), () => mockHttpHelper);
+
+    const mappings = adapter.getFieldMappings();
+
+    expect(mappings[0].mutuallyExclusive).toBeUndefined();
+  });
+
+  it('should delete issue via definition.deleteIssue', async () => {
+    const deleteIssueSpy = jasmine
+      .createSpy('deleteIssue')
+      .and.returnValue(Promise.resolve());
+    const definition = createMockDefinition({ deleteIssue: deleteIssueSpy });
+    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+
+    await adapter.deleteIssue!('99', MOCK_CFG);
+
+    expect(deleteIssueSpy).toHaveBeenCalledWith(
+      '99',
+      MOCK_CFG.pluginConfig,
+      jasmine.anything(),
+    );
+  });
+
+  it('should set deleteIssue to undefined when definition does not implement it', () => {
+    const definition = createMockDefinition({ deleteIssue: undefined });
+    const adapter = createPluginSyncAdapter(definition, () => mockHttpHelper);
+
+    expect(adapter.deleteIssue).toBeUndefined();
+  });
 });

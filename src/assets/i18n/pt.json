@@ -41,6 +41,24 @@
     "INTRO_1": "O Super Productivity é financiado inteiramente pela comunidade. Não há rastreamento, anúncios, nem recolha de dados — as suas tarefas permanecem no seu dispositivo.",
     "INTRO_2": "Se valoriza esta abordagem e quer manter o projeto saudável e em evolução, uma doação voluntária é muito apreciada."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Aprenda os atalhos de teclado",
+      "NOTES": "O Super Productivity foi concebido para ser utilizado com o teclado. Aprenda os atalhos para trabalhar mais depressa.\n\n**Como começar:**\n1. Abra o **menu da barra lateral**\n2. Vá a **Ajuda**\n3. Clique em **Tour de navegação por teclado**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Crie o seu primeiro projeto",
+      "NOTES": "Os projetos ajudam-no a organizar as suas tarefas por área de trabalho. Cada projeto tem a sua própria lista de tarefas e backlog.\n\n**Como criar um projeto:**\n1. Clique no botão **+** junto a **Projetos** na barra lateral\n2. Dê-lhe um nome e escolha uma cor\n3. Comece a adicionar tarefas"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Configurar a sincronização",
+      "NOTES": "Mantenha os seus dados seguros e acessíveis em todos os dispositivos.\n\n**Como configurar:**\n1. Abra as **Definições** (ícone de engrenagem na barra lateral)\n2. Vá a **Sincronização**\n3. Escolha um fornecedor: Super Sync, Dropbox, WebDAV ou sincronização por ficheiro local\n4. Siga as instruções de configuração"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Vá mais longe",
+      "NOTES": "Há muito mais para descobrir!\n\n**Funcionalidades da app** (nas Definições) — Ative integrações, hábitos e outras funcionalidades. Vá a **Definições → Funcionalidades da app** para ver o que está disponível.\n\n**Quadros** — Visualize suas tarefas em quadros Kanban personalizáveis. Ative-os em **Funcionalidades do App** e encontre-os no **menu lateral**.\n\n**Agenda** — Planeje seu dia atribuindo tarefas a horários específicos. Arraste as tarefas para a vista de **Agenda** na barra lateral.\n\n**Integrações** — Depois de ativadas nas Funcionalidades da app, importe tarefas do Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV e muitos mais. Também pode integrar o seu calendário. Configure-as no **Painel de fornecedores de tickets**.\n\n**Hábitos** — Acompanhe hábitos e rotinas recorrentes. Encontre-os no **menu da barra lateral** depois de ativados.\n\n**Plugins** — Adicione funcionalidades como o Quebra-procrastinação, Automatizações ou Lembretes por voz. Vá a **Definições → Plugins**.\n\n**Personalizar** — Temas, modo escuro, atalhos de teclado, idioma e ferramentas de produtividade estão todos nas **Definições**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -48,7 +66,7 @@
         "EDIT_ATTACHMENT": "Editar anexo",
         "LABELS": {
           "IMG": "Imagem",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Selecione um tipo",
         "TYPES": {
@@ -104,10 +122,24 @@
         "CALDAV_RESOURCE": "O nome do recurso CalDav (o calendário)",
         "CALDAV_URL": "URL CalDav (o URL base)",
         "CALDAV_USER": "Seu nome de usuário CalDav",
-        "IS_TRANSITION_ISSUES_ENABLED": "Concluir automaticamente o CalDav todos na conclusão da tarefa"
+        "TWO_WAY_SYNC_OFF": "Desligado",
+        "TWO_WAY_SYNC_BOTH": "Ambos (bidirecional)",
+        "TWO_WAY_SYNC_NOTES": "Direção de sincronização das notas / descrição",
+        "TWO_WAY_SYNC_PULL_ONLY": "Apenas receber (ler do CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "Apenas enviar (escrever no CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "Sincronização bidirecional (experimental)",
+        "TWO_WAY_SYNC_STATUS": "Direção de sincronização do estado",
+        "TWO_WAY_SYNC_TITLE": "Direção de sincronização do título"
       },
       "FORM_SECTION": {
         "HELP": "<p>Aqui você pode configurar SuperProductivity para listar CalDav todos incompletos para um projeto específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para a tarefa, bem como mais informações sobre ela.</p> <p>Além disso, você pode adicionar e sincronizar automaticamente todas as tarefas não concluídas com a lista de pendências de suas tarefas.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "Descrição",
+        "LABELS": "Etiquetas",
+        "STATUS": "Estado",
+        "SUMMARY": "Resumo",
+        "MARK_AS_CHECKED": "Marcar como concluído"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Calendário \"{{calendarName}}\" não encontrado",
@@ -121,11 +153,13 @@
         "SHOW_TASK": "Mostrar Tarefa",
         "TXT": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outros eventos estão pendentes)"
+          "OTHER": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outros eventos estão pendentes)",
+          "ONE": "<strong>{{title}}</strong> começa às <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outro evento pendente)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> iniciou em <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> iniciou em <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outros eventos estão pendentes)"
+          "OTHER": "<strong>{{title}}</strong> iniciou em <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outros eventos estão pendentes)",
+          "ONE": "<strong>{{title}}</strong> começou às <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outro evento pendente)"
         }
       },
       "EVENT_STRINGS": {
@@ -146,17 +180,6 @@
       "BTN_DONT_BOTHER": "Não me incomode novamente",
       "TITLE": "🙈 Por favor, perdoe-nos, mas...",
       "TXT": "Você ajudaria imensamente o projeto <strong>dando uma boa classificação, se gostar!</strong>"
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "Repete a frase configurada a cada X ao monitorar o tempo de uma tarefa.",
-        "L_INTERVAL": "Intervalo para repetir frase",
-        "L_TEXT": "Texto",
-        "L_TEXT_DESCRIPTION": "Ex.: \"Trabalhar em ${currentTaskTitle}!\"",
-        "L_VOICE": "Selecionar uma Voz",
-        "L_VOICE_DESCRIPTION": "Escolher uma voz",
-        "TITLE": "Lembrete de voz"
-      }
     },
     "DROPBOX": {
       "S": {
@@ -181,7 +204,8 @@
         "RESUME": "Currículo",
         "SESSION_RUNNING": "A Sessão de Foco está em execução",
         "START": "Iniciar",
-        "TO_FOCUS_OVERLAY": "Para Sobreposição de Foco"
+        "TO_FOCUS_OVERLAY": "Para Sobreposição de Foco",
+        "END_FOCUS_SESSION": "Terminar sessão de foco"
       },
       "BACK_TO_PLANNING": "Retornar ao Planejamento",
       "BREAK_RELAX_MSG": "Tire um momento para relaxar",
@@ -224,13 +248,18 @@
       "START_FOCUS_SESSION": "Iniciar Sessão de Foco",
       "START_NEXT_FOCUS_SESSION": "Iniciar próxima Sessão de Foco",
       "SWITCH_TASK": "Mudar tarefa",
-      "WORKED_FOR": "Você trabalhou por"
+      "WORKED_FOR": "Você trabalhou por",
+      "GO_TO_PROCRASTINATION": "Obter ajuda ao procrastinar",
+      "PAUSE_BREAK": "Pausar intervalo",
+      "RESET_CYCLES": "Repor contador de sessões",
+      "RESUME_BREAK": "Retomar intervalo",
+      "SELECT_TASK_FIRST": "Selecione uma tarefa primeiro para iniciar o registo"
     },
     "GITEA": {
       "FORM": {
         "HOST": "Endereço do servidor (ex: https://try.gitea.io)",
         "REPO_FULL_NAME": "Nome do usuário ou organização/projeto",
-        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da url, ao acessar o projeto no navegador",
+        "REPO_FULL_NAME_DESCRIPTION": "Pode ser encontrado como parte da URL, ao acessar o projeto no navegador",
         "SCOPE": "Escopo",
         "SCOPE_ALL": "Todos",
         "SCOPE_ASSIGNED": "Atribuídos a mim",
@@ -249,35 +278,6 @@
         "STATUS": "Estado",
         "SUMMARY": "Resumo",
         "WRITE_A_COMMENT": "Escreva um comentário"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "Nome de usuário (ex.: para filtrar as alterações sozinho)",
-        "INVALID_TOKEN_MESSAGE": "Não é um token válido do GitHub. Ele deve começar com \"ghp_\".",
-        "IS_ASSIGNEE_FILTER": "Filtrar problemas atribuídos a mim",
-        "REPO": "username/repositoryName",
-        "TOKEN": "Token de acesso"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Aqui você pode configurar o SuperProductivity para listar os problemas abertos do GitHub para um repositório específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, além de mais informações sobre ele. </p> <p> Além disso, você pode adicionar e sincronizar automaticamente todos os problemas em aberto no seu log de tarefas.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Responsável",
-        "AT": "em",
-        "DESCRIPTION": "Descrição",
-        "LABELS": "Etiquetas",
-        "LAST_COMMENT": "Último comentário",
-        "LOAD_ALL_COMMENTS": "Carregar todos os {{nr}} comentários",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Carregar descrição e todos os comentários",
-        "MARK_AS_CHECKED": "Marcar atualizações como checadas",
-        "STATUS": "Status",
-        "SUMMARY": "Índice",
-        "WRITE_A_COMMENT": "Comentar"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: Erro ao mapear dados. O nome do seu repositório está correto?",
-        "ERR_UNKNOWN": "GitHub: Erro desconhecido {{statusCode}} {{errorMsg}}. Limite de taxa de API excedido?"
       }
     },
     "GITLAB": {
@@ -334,6 +334,10 @@
       },
       "DEFAULT_PROJECT_DESCRIPTION": "Projeto atribuído a tarefas criadas a partir de problemas.",
       "DEFAULT_PROJECT_LABEL": "Projeto de Super Produtividade por defeito",
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Configuração Avançada",
+        "DELETE_CONFIRM": "Tem a certeza de que pretende eliminar este fornecedor de issues? Eliminá-lo significa que <strong>todas as tarefas de issues importadas anteriormente perderão a sua referência</strong>. Esta ação não pode ser desfeita!"
+      },
       "HOW_TO_GET_A_TOKEN": "Como obter um token?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Atribuído",
@@ -371,7 +375,24 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Dados atualizados para {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Dados atualizados para \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Sondagem para novo {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: Alterações de sondagem para {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: Alterações de sondagem para {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "Criação automática de issue falhou: {{errorMsg}}",
+        "CONNECTION_FAILED": "Ligação falhou",
+        "CONNECTION_SUCCESS": "A ligação funciona!",
+        "PLUGIN_NOT_INSTALLED": "O plugin necessário \"{{pluginName}}\" não está instalado.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "Envio de sincronização bidirecional falhou: {{errorMsg}}"
+      },
+      "TWO_WAY_SYNC": {
+        "OFF": "Desligado",
+        "AUTO_CREATE_ISSUES": "Criar issues automaticamente para novas tarefas",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Cria automaticamente um issue quando adiciona uma nova tarefa de nível superior ao projeto predefinido. Requer um projeto predefinido configurado.",
+        "BOTH": "Ambos (bidirecional)",
+        "NOTES": "Direção de sincronização das notas / descrição",
+        "PULL_ONLY": "Apenas receber",
+        "PUSH_ONLY": "Apenas enviar",
+        "SECTION": "Sincronização bidirecional (experimental)",
+        "STATUS": "Direção de sincronização do estado",
+        "TITLE": "Direção de sincronização do título"
       }
     },
     "ISSUE_PANEL": {
@@ -446,7 +467,8 @@
         "HOST": "Host (e.g.: http://my-host.de:1234)",
         "PASSWORD": "Token / Senha",
         "USE_PAT": "Use token de acesso pessoal em vez de senha",
-        "USER_NAME": "Email / Usuário"
+        "USER_NAME": "Email / Usuário",
+        "WONKY_COOKIE_MODE": "Autenticação alternativa com cookies (apenas app de desktop)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Configurações avançadas",
@@ -493,7 +515,15 @@
         "TIMED_OUT": "Jira: solicitação expirada",
         "TRANSITION": "Jira: defina o problema \"{{issueKey}}\" como \"{{name}}\" ",
         "TRANSITION_SUCCESS": "Jira: defina o problema {{issueKey}} como <strong> {{selectedTransition}} </strong>",
-        "TRANSITIONS_LOADED": "Jira: Transições carregadas. Use as opções abaixo para atribuí-las"
+        "TRANSITIONS_LOADED": "Jira: Transições carregadas. Use as opções abaixo para atribuí-las",
+        "UNABLE_TO_REASSIGN": "Jira: não foi possível reatribuir o ticket a si mesmo, porque não especificou um nome de utilizador. Visite as definições."
+      },
+      "STEPPER": {
+        "CREDENTIALS": "Credenciais",
+        "DONE": "A configuração está concluída.",
+        "LOGIN_SUCCESS": "Início de sessão bem-sucedido!",
+        "TEST_CREDENTIALS": "Testar credenciais",
+        "WELCOME_USER": "Bem-vindo {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -527,7 +557,8 @@
         "TIME_FRAME_2_WEEKS": "2 semanas",
         "TIME_FRAME_LABEL": "Período de tempo",
         "TIME_FRAME_MAX": "Max",
-        "TIME_SPENT": "Tempo gasto"
+        "TIME_SPENT": "Tempo gasto",
+        "YEAR": "Ano"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "Estado Diário",
@@ -537,8 +568,6 @@
         "FOCUS_WORK_TIME": "Tempo de trabalho focado",
         "IMPACT_OF_WORK": "Como avalia o impacto do seu trabalho hoje?",
         "IMPACT_OF_WORK_HINT": "1: Nenhum progresso significativo \u001f 4: Impacto significativo",
-        "NOTES": "Notas para amanhã",
-        "PRODUCTIVITY": "Quão eficiente você trabalhou?",
         "PRODUCTIVITY_SCORE": "Pontua\u0000e7\u0000e3o de produtividade",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65% Impacto (escala de 1-4) \u001f 30% Foco para o alvo de 4h \u001f 5% trabalho total (limitado a 10h)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "An\u0000e1lise de produtividade de 7 dias",
@@ -579,7 +608,39 @@
         "PLACEHOLDER_3": "Onde o foco falhou - e como pode protegê-lo?",
         "PLACEHOLDER_4": "Qual tarefa lhe deu energia? Qual a esgotou?",
         "PLACEHOLDER_5": "Uma coisa para repetir. Uma coisa para mudar.",
+        "REMIND_LABEL": "Lembrar-me disto amanhã",
+        "REMINDER_CREATED": "Lembrete de reflexão agendado para amanhã",
+        "REMINDER_ERROR": "Não foi possível agendar o lembrete",
+        "REMINDER_NEEDS_TEXT": "Escreva uma reflexão antes de pedir um lembrete",
+        "REMINDER_TASK_TITLE": "Rever nota de reflexão",
         "TITLE": "Nota de reflexão"
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "ISSUE_CONTENT": {
+        "LABELS": "Etiquetas",
+        "ASSIGNED_USERS": "Utilizadores atribuídos",
+        "DECK_DESCRIPTION": "Descrição do Deck",
+        "STACK": "Pilha"
+      },
+      "FORM": {
+        "BASE_URL": "URL base do Nextcloud",
+        "FILTER_BY_ASSIGNEE": "Importar apenas cartões atribuídos a mim",
+        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizar estado de conclusão e título para o Nextcloud Deck",
+        "PASSWORD": "A sua palavra-passe de aplicação do Nextcloud",
+        "POLL_INTERVAL_MINUTES": "Intervalo de consulta (minutos)",
+        "TITLE_TEMPLATE": "Modelo de título da tarefa",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variáveis: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplo: [{BOARD}: {COLUMN}] {CARD_TITLE}. Deixe vazio para usar apenas o título do cartão.",
+        "USERNAME": "O seu nome de utilizador do Nextcloud"
+      },
+      "FORM_SECTION": {
+        "HELP": "Configure a integração com o Nextcloud Deck para importar cartões como tarefas. Use uma palavra-passe de aplicação para autenticação."
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: quadro não encontrado",
+        "CARD_NOT_FOUND": "Nextcloud Deck: o cartão \"{{issueId}}\" parece ter sido eliminado no servidor.",
+        "ERR_CREDENTIALS_MISSING": "Introduza primeiro o URL, nome de utilizador e palavra-passe do Nextcloud.",
+        "ERR_LOAD_BOARDS": "Falha ao carregar os quadros do Deck. Verifique as suas credenciais."
       }
     },
     "NOTE": {
@@ -656,7 +717,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requer que o módulo de controle de tempo seja habilitado para o projeto OpenProject",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar caixa de diálogo de controle de tempo quando as subtarefas forem concluídas",
         "PROJECT_ID": "ID do projeto",
-        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da url, ao visualizar o projeto no navegador.",
+        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da URL, ao visualizar o projeto no navegador.",
         "SCOPE": "Escopo",
         "SCOPE_ALL": "Todos",
         "SCOPE_ASSIGNED": "Atribuído a mim",
@@ -698,7 +759,8 @@
       "EDIT_REPEATED_TASK": "Editar tarefa repetida '{{taskName}}'",
       "NO_TASKS": "Nenhuma tarefa",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Nenhum item agendado"
+        "NO_SCHEDULED_ITEMS": "Nenhum item agendado",
+        "NO_DEADLINES": "Sem prazos"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Data do plano removida para a tarefa ' {{taskTitle}}'",
@@ -742,7 +804,9 @@
         "L_IS_AUTO_CONTRAST": "Definir cores de texto automaticamente para melhor legibilidade",
         "L_IS_DISABLE_BACKGROUND_TINT": "Desativar gradiente de fundo colorido",
         "L_THEME_COLOR": "Cor do tema",
-        "TITLE": "Tema"
+        "TITLE": "Tema",
+        "D_BACKGROUND_OVERLAY_OPACITY": "Ajuste este valor para tornar o fundo mais ou menos transparente. O valor predefinido é 20%.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Escurecer/clarear imagem de fundo para melhor contraste"
       },
       "S": {
         "ARCHIVED": "Projeto Arquivado",
@@ -777,15 +841,27 @@
       "WEEK_TITLE": "Semana {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Atividade",
+        "TIME_SPENT": "Tempo gasto",
+        "INVALID_DATE": "O valor introduzido não é uma data!",
+        "POST_TIME": "Registar tempo",
+        "STARTED": "Iniciado",
+        "SUBMIT_TIME_FOR": "Submeter tempo ao Redmine para",
+        "TITLE": "Redmine: submeter registo de trabalho"
+      },
       "FORM": {
         "API_KEY": "Chave de acesso API",
         "HOST": "Hospedar (e.g.: https://redmine.org)",
         "PROJECT_ID": "Identificador do projeto",
-        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da url, ao visualizar o projeto no Navegador.",
+        "PROJECT_ID_DESCRIPTION": "Pode ser encontrado como parte da URL, ao visualizar o projeto no Navegador.",
         "SCOPE": "Escopo",
         "SCOPE_ALL": "Todos",
         "SCOPE_ASSIGNED": "Definido para mim",
-        "SCOPE_CREATED": "Criado por mim"
+        "SCOPE_CREATED": "Criado por mim",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Mostrar diálogo de registo de tempo para reportar ao Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Requer que o módulo de registo de tempo esteja ativado para o projeto Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Mostrar diálogo de registo de tempo quando as subtarefas são concluídas"
       },
       "FORM_SECTION": {
         "HELP": "<p>Aqui você pode configurar o SuperProductivity para listar problemas abertos do Redmine (seja a versão online ou uma instância auto-hospedada) para um projeto específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, bem como mais informações sobre ele.</p><p>Além disso, você pode importar automaticamente todos os problemas em aberto.</p>",
@@ -797,6 +873,9 @@
         "MARK_AS_CHECKED": "Marcar atualizações como checadas",
         "PRIORITY": "Prioridade",
         "STATUS": "Status"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: registo de tempo criado com sucesso para {{issueTitle}}"
       }
     },
     "REFLECTION_NOTE": {
@@ -808,7 +887,8 @@
         "START_NOW": "Iniciar agora",
         "TXT": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong> !",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong> !<br> (e {{nrOfOtherBanners}} outras tarefas estão pendentes)"
+          "OTHER": "<strong>{{title}}</strong> começa em <strong>{{start}}</strong> !<br> (e {{nrOfOtherBanners}} outras tarefas estão pendentes)",
+          "ONE": "<strong>{{title}}</strong> começa às <strong>{{start}}</strong>!<br> (e {{nrOfOtherBanners}} outra tarefa pendente)"
         }
       },
       "S_ACTIVE_TASK_DUE": "A tarefa em que está a trabalhar atualmente já tem prazo de validade!<br/> ({{title}})",
@@ -821,10 +901,14 @@
       },
       "END": "Fim do trabalho",
       "INSERT_BEFORE": "Antes",
+      "MONTH": "Mês",
+      "NOW": "Agora",
       "PLAN_END_DAY": "Planeje no final do dia",
       "PLAN_START_DAY": "Planeje o início do dia",
       "SHIFT_KEY_INFO": "Mantenha Shift para alternar o modo de planeamento diário",
-      "START": "Início do Trabalho"
+      "START": "Início do Trabalho",
+      "LUNCH_BREAK": "Pausa para almoço",
+      "NO_TASKS": "De momento não existem tarefas. Adicione tarefas através do botão mais (+) na barra superior."
     },
     "SEARCH_BAR": {
       "INFO": "Clique no ícone da lista para procurar tarefas arquivadas",
@@ -856,7 +940,20 @@
         "TITLE": "Contadores simples",
         "TYPE_CLICK_COUNTER": "Contador de cliques",
         "TYPE_REPEATED_COUNTDOWN": "Contagem decrescente repetida",
-        "TYPE_STOPWATCH": "Cronômetro"
+        "TYPE_STOPWATCH": "Cronômetro",
+        "L_ICON_ON": "Ícone quando ativado",
+        "L_IS_HIDE_BUTTON": "Ocultar botão da barra de ferramentas",
+        "L_STREAK_MODE": "Modo de acompanhamento de sequência",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Dias específicos da semana",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Frequência semanal (ex.: 3 vezes por semana)",
+        "L_WEEKLY_FREQUENCY": "Conclusões por semana"
+      },
+      "HABIT_TRACKER": {
+        "TODAY": "Hoje",
+        "ADD_HABIT": "Adicionar um novo hábito",
+        "DISABLED_HABITS": "Hábitos desativados",
+        "NEXT_WEEK": "Próxima semana",
+        "PREV_WEEK": "Semana anterior"
       },
       "S": {
         "GOAL_REACHED_1": "Atingiu o seu objetivo para hoje!",
@@ -875,7 +972,9 @@
         "FOLLOW_LINK": "Abra o link a seguir e copie o código de autenticação fornecido no campo de entrada abaixo.",
         "GET_AUTH_CODE": "Obter Código de Autorização",
         "L_AUTH_CODE": "Digite o código de autenticação",
-        "TITLE": "Login: {{provider}}"
+        "TITLE": "Login: {{provider}}",
+        "FOLLOW_LINK_MOBILE": "Toque no botão abaixo para autorizar. Será redirecionado automaticamente de volta para a aplicação.",
+        "WAITING_FOR_AUTH": "A aguardar autenticação..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Informação adicional",
@@ -909,8 +1008,10 @@
         "BTN_OVER_WRITE_REMOTE": "Alterar e substituir remoto",
         "CHANGE_PW_AND_DECRYPT": "Alterar e Tentar Descriptografar",
         "P1": "Seus dados são criptografados e a descriptografia falhou. Digite a senha correta!",
-        "P2": "Você também pode alterar sua senha, que substituirá todos os dados remotos.",
-        "PASSWORD": "Palavra-passe"
+        "PASSWORD": "Palavra-passe",
+        "P2_FORGOT_PW": "Se <strong>esqueceu a sua palavra-passe</strong>, introduza a palavra-passe correta e clique em \"Tentar novamente\".",
+        "P3_PW_CHANGED": "Se <strong>alterou a palavra-passe noutro dispositivo</strong>, introduza a nova palavra-passe e clique em \"Substituir remoto\". Isto carregará os seus dados locais para o servidor.",
+        "TITLE": "Desencriptação falhou"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Fechar Aplicativo",
@@ -918,18 +1019,75 @@
         "BTN_FORCE_UPLOAD": "Forçar upload local",
         "P1": "Os dados de sincronização remota são incoerentes!",
         "P2": "Modelo afetado:",
-        "T1": "A última atualização foi incompleta!",
-        "T2": "Seus dados de arquivo não foram carregados corretamente durante a última sincronização:",
         "T3": "Você tem 2 opções:",
         "T4": "1. Vá para o outro dispositivo e conclua a sincronização lá.",
         "T5": "2. Ou você pode sobrescrever os dados remotos com os locais. Todas as alterações remotas serão\nesteja perdido!",
-        "T6": "É recomendável criar um backup dos dados que você sobrescreveu!!!"
+        "T6": "É recomendável criar um backup dos dados que você sobrescreveu!!!",
+        "BTN_FORCE_DOWNLOAD": "Forçar descarga remota",
+        "INCOHERENT_P1": "A data dos seus dados remotos é do futuro",
+        "INCOHERENT_P2": "Deve verificar a hora configurada nos seus sistemas!"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Salvar & Ativar Sincronização",
         "TITLE": "Configurar Sincronização"
       },
+      "D_RESTORE": {
+        "BTN_RESTORE": "Restaurar",
+        "CONFIRM_MSG": "Tem a certeza absoluta de que pretende restaurar para <strong>{{timestamp}}</strong>?<br><br>Isto irá <strong>substituir completamente</strong> todos os seus dados atuais e <strong>não pode ser desfeito</strong>.",
+        "CONFIRM_TITLE": "Confirmar restauro",
+        "ERROR_LOADING": "Falha ao carregar pontos de restauro",
+        "ERROR_RESTORE": "Falha ao restaurar dados",
+        "INTRO": "Selecione um ponto no tempo para restaurar os seus dados:",
+        "LOADING": "A carregar pontos de restauro...",
+        "NO_POINTS": "Sem pontos de restauro disponíveis. Os pontos de restauro são criados quando sincroniza ou importa dados.",
+        "TITLE": "Restaurar a partir do histórico",
+        "TYPE_BACKUP_IMPORT": "Restauro de cópia de segurança",
+        "TYPE_REPAIR": "Reparação automática",
+        "TYPE_SYNC_IMPORT": "Importação de sincronização completa",
+        "WARNING": "Isto substituirá TODOS os seus dados atuais pela cópia de segurança selecionada. Esta ação não pode ser desfeita!"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "SKIP": "Pular",
+        "CONFIRM": "Carregar dados locais",
+        "MESSAGE": "Este servidor de sincronização já contém dados. Deseja carregar os seus dados locais para os fundir? Se ignorar, algumas alterações locais poderão não ser sincronizadas.",
+        "TITLE": "O servidor já tem dados"
+      },
       "FORM": {
+        "BTN_CHANGE_PASSWORD": "Alterar palavra-passe",
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "Alterar palavra-passe",
+          "L_CONFIRM_PASSWORD": "Confirmar Palavra-passe",
+          "PASSWORDS_DONT_MATCH": "As palavras-passe não coincidem",
+          "BTN_DISABLE_ENCRYPTION": "Desativar encriptação",
+          "BTN_ENABLE_ENCRYPTION": "Ativar encriptação",
+          "BTN_REMOVE_ENCRYPTION": "Remover encriptação",
+          "CHANGE_PASSWORD_SUCCESS": "Palavra-passe de encriptação alterada com sucesso",
+          "CHANGE_PASSWORD_WARNING": "AVISO: os seus dados serão recarregados com a nova palavra-passe. Todos os outros dispositivos necessitarão da nova palavra-passe para sincronizar.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Os seus dados atuais serão recarregados sem encriptação",
+          "DISABLE_ENCRYPTION_ITEM_2": "Todos os outros dispositivos sincronizarão os dados não encriptados",
+          "DISABLE_ENCRYPTION_ITEM_3": "Pode reativar a encriptação a qualquer momento",
+          "DISABLE_ENCRYPTION_NOTE": "Os seus dados locais NÃO serão eliminados.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Encriptação desativada com sucesso",
+          "DISABLE_ENCRYPTION_TITLE": "Desativar encriptação?",
+          "DISABLE_ENCRYPTION_WARNING": "AVISO: os seus dados serão recarregados sem encriptação.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "O que acontecerá:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "Esta funcionalidade está disponível apenas para fornecedores de sincronização baseados em ficheiros.",
+          "ENABLE_ENCRYPTION_ITEM_1": "Os seus dados atuais serão recarregados com encriptação",
+          "ENABLE_ENCRYPTION_ITEM_2": "Todos os outros dispositivos necessitarão desta palavra-passe de encriptação",
+          "ENABLE_ENCRYPTION_ITEM_3": "Pode desativar a encriptação a qualquer momento",
+          "ENABLE_ENCRYPTION_NOT_READY": "A sincronização não está ativada ou configurada.",
+          "ENABLE_ENCRYPTION_NOTE": "Os seus dados locais NÃO serão eliminados.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Introduza primeiro uma palavra-passe de encriptação.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Encriptação ativada com sucesso",
+          "ENABLE_ENCRYPTION_TITLE": "Ativar encriptação?",
+          "ENABLE_ENCRYPTION_WARNING": "AVISO: os seus dados serão recarregados com encriptação. Se esquecer a palavra-passe de encriptação, os seus dados não poderão ser recuperados.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "O que acontecerá:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Alterar palavra-passe de encriptação",
+          "L_NEW_PASSWORD": "Nova palavra-passe de encriptação",
+          "L_REMOVE_ENCRYPTION": "Ou remover encriptação",
+          "PASSWORD_MIN_LENGTH": "A palavra-passe deve ter pelo menos 8 caracteres",
+          "REMOVE_ENCRYPTION_WARNING": "A remoção da encriptação recarregará os seus dados sem encriptação. Todos os dispositivos necessitarão de reconfiguração."
+        },
         "L_ENABLE_COMPRESSION": "Habilitar compressão de dados (envio mais rápido)",
         "L_ENABLE_ENCRYPTION": "Habilitar criptografia ponta-a-ponta (experimental) - Torna seus dados inelegíveis ao provedor sincronizado",
         "L_ENABLE_SYNCING": "Habilitar Sincronização",
@@ -938,22 +1096,114 @@
         "L_SYNC_INTERVAL": "Intervalo de sincronização",
         "L_SYNC_PROVIDER": "Provedor de sincronização",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "Sincronizar caminho de pasta"
+          "L_SYNC_FOLDER_PATH": "Sincronizar caminho de pasta",
+          "INFO_TEXT": "<strong>Aviso:</strong> <strong>Não</strong> utilize ferramentas de sincronização de ficheiros como Syncthing, Resilio ou semelhantes para sincronizar esta pasta entre dispositivos — <strong>irão</strong> causar corrupção de dados e conflitos. Para sincronização entre dispositivos, utilize WebDAV, Dropbox ou SuperSync.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Necessita de permissão de acesso ao ficheiro"
+        },
+        "SUPER_SYNC": {
+          "BTN_CHANGE_PASSWORD": "Alterar palavra-passe",
+          "L_CONFIRM_PASSWORD": "Confirmar Palavra-passe",
+          "PASSWORDS_DONT_MATCH": "As palavras-passe não coincidem",
+          "SETUP_ENCRYPTION_BTN": "Definir senha",
+          "ACCESS_TOKEN_DESCRIPTION": "Cole o token que copiou da página de início de sessão do servidor",
+          "BTN_DISABLE_ENCRYPTION": "Desativar encriptação",
+          "BTN_ENABLE_ENCRYPTION": "Ativar encriptação",
+          "BTN_FORCE_OVERWRITE": "Forçar substituição do servidor",
+          "BTN_GET_TOKEN": "Abrir servidor e obter token",
+          "CHANGE_PASSWORD_SUCCESS": "Palavra-passe de encriptação alterada com sucesso",
+          "CHANGE_PASSWORD_WARNING": "AVISO: isto eliminará permanentemente TODO o histórico de sincronização e cópias de segurança no servidor. Versões anteriores não poderão ser recuperadas. Os seus dados atuais serão recarregados com a nova palavra-passe. Todos os outros dispositivos necessitarão da nova palavra-passe.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Ative a sincronização e guarde a configuração SuperSync primeiro, depois tente novamente.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Todo o histórico de sincronização e cópias de segurança no servidor serão eliminados",
+          "DISABLE_ENCRYPTION_ITEM_2": "Os seus dados atuais serão recarregados sem encriptação",
+          "DISABLE_ENCRYPTION_ITEM_3": "Todos os outros dispositivos sincronizarão os dados não encriptados",
+          "DISABLE_ENCRYPTION_NOT_READY": "A sincronização não está ativada ou configurada.",
+          "DISABLE_ENCRYPTION_NOTE": "Os seus dados locais NÃO serão eliminados. Pode reativar a encriptação a qualquer momento.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Encriptação desativada com sucesso",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Esta funcionalidade está disponível apenas para SuperSync.",
+          "DISABLE_ENCRYPTION_TITLE": "Desativar encriptação?",
+          "DISABLE_ENCRYPTION_WARNING": "AVISO: isto eliminará permanentemente TODOS os dados de sincronização encriptados no servidor. Isto é necessário porque operações encriptadas não podem ser misturadas com não encriptadas.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "O que acontecerá:",
+          "E2E_ENCRYPTION_DESCRIPTION": "Será mais lento, mas mais seguro",
+          "ENABLE_ENCRYPTION_ITEM_1": "Todo o histórico de sincronização e cópias de segurança no servidor serão eliminados",
+          "ENABLE_ENCRYPTION_ITEM_2": "Os seus dados atuais serão recarregados com encriptação",
+          "ENABLE_ENCRYPTION_ITEM_3": "Todos os outros dispositivos terão de introduzir esta palavra-passe de encriptação",
+          "ENABLE_ENCRYPTION_NOT_READY": "A sincronização não está ativada ou configurada.",
+          "ENABLE_ENCRYPTION_NOTE": "Os seus dados locais NÃO serão eliminados. Pode desativar a encriptação a qualquer momento.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Introduza primeiro uma palavra-passe de encriptação.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Encriptação ativada com sucesso",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Esta funcionalidade está disponível apenas para SuperSync.",
+          "ENABLE_ENCRYPTION_TITLE": "Ativar encriptação?",
+          "ENABLE_ENCRYPTION_WARNING": "AVISO: isto eliminará permanentemente TODOS os dados de sincronização não encriptados no servidor. Isto é necessário porque operações encriptadas não podem ser misturadas com não encriptadas. Se esquecer a palavra-passe de encriptação, os seus dados não poderão ser recuperados.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "O que acontecerá:",
+          "ENCRYPTION_ENCOURAGED": "A encriptação é obrigatória para o SuperSync. Ative a encriptação para proteger os seus dados.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>O SuperSync encripta os seus dados com palavra-passe antes de saírem do seu dispositivo</strong>, tornando praticamente impossível o uso indevido ou fuga dos seus dados privados.",
+          "ENCRYPTION_WARNING": "AVISO: se esquecer a palavra-passe de encriptação, os seus dados não poderão ser recuperados. Esta palavra-passe é diferente da palavra-passe de início de sessão. Deve utilizar a mesma palavra-passe em todos os dispositivos.",
+          "FORCE_OVERWRITE_CONFIRM": "Isto irá <strong>eliminar todos os dados no servidor</strong> e carregar os seus dados locais com a nova palavra-passe. Alterações locais não sincronizadas poderão ser perdidas. Tem a certeza de que pretende continuar?",
+          "FORCE_OVERWRITE_INFO": "Se não consegue sincronizar porque não sabe a palavra-passe de encriptação atual, pode substituir o servidor com os seus dados locais e uma nova palavra-passe.",
+          "FORCE_OVERWRITE_TITLE": "Substituir dados do servidor?",
+          "INFO_TEXT": "O SuperSync mantém as suas tarefas sincronizadas em todos os seus dispositivos em tempo real. Os seus dados são armazenados de forma segura no servidor de sincronização. Nota: o SuperSync está atualmente em Beta.",
+          "L_ACCESS_TOKEN": "Token de acesso",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Alterar palavra-passe de encriptação",
+          "L_ENABLE_E2E_ENCRYPTION": "Ativar encriptação ponta a ponta",
+          "L_NEW_PASSWORD": "Nova palavra-passe de encriptação",
+          "L_REMOVE_ENCRYPTION": "Ou remover encriptação",
+          "L_SERVER_URL": "URL do servidor",
+          "LOGIN_INSTRUCTIONS": "Clique no botão abaixo para abrir a página de início de sessão do servidor. Após iniciar sessão, copie o seu token de acesso e cole-o aqui.",
+          "PASSWORD_MIN_LENGTH": "A palavra-passe deve ter pelo menos 8 caracteres",
+          "REMOVE_ENCRYPTION_WARNING": "A remoção da encriptação eliminará todos os dados do servidor e recarregará os seus dados sem encriptação. Todos os dispositivos necessitarão de reconfiguração.",
+          "SERVER_URL_DESCRIPTION": "Deixe como está para o servidor oficial, ou introduza um URL de servidor personalizado",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "Desativar SuperSync",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Utilize a mesma palavra-passe em todos os dispositivos. Uma palavra-passe esquecida pode ser reposta substituindo os dados remotos.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: definir palavra-passe"
         },
         "TITLE": "Sincronizar",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Experimental !!</strong> Para fazer isso funcionar, você precisa desabilitar ou limitar o CORS para sua instância Nextcloud, o que pode ter implicações de segurança negativas! Por favor, <a href='https://github.com/nextcloud/server/issues/3131'>consulte esta discussão</a> para obter mais informações. Use por sua conta e risco!",
           "D_SYNC_FOLDER_PATH": "Caminho relativo à raiz do servidor WebDAV onde os ficheiros de sincronização serão armazenados (ex., ' /super-productivity' ou ' /'). Este NÃO é o caminho interno do diretório do seu servidor.",
           "INFO": "As implementações WebDAV diferem muito, infelizmente. Sabe-se que o Super Productivity funciona bem com o Nextcloud, <strong>mas pode não funcionar com o seu fornecedor</strong>.",
-          "L_BASE_URL": "Url Base",
+          "L_BASE_URL": "URL Base",
           "L_PASSWORD": "Senha",
           "L_SYNC_FOLDER_PATH": "Caminho da pasta de sincronização",
           "L_TEST_CONNECTION": "Testar ligação",
           "L_USER_NAME": "Nome de usuário",
           "S_FILL_ALL_FIELDS": "Por favor, preencha primeiro todos os campos do WebDAV",
           "S_TEST_FAIL": "Teste de ligação falhou: {{error}} - URL de destino: {{url}}",
-          "S_TEST_SUCCESS": "Teste de ligação bem-sucedido! URL de destino: {{url}}"
-        }
+          "S_TEST_SUCCESS": "Teste de ligação bem-sucedido! URL de destino: {{url}}",
+          "CONDITIONAL_HEADER_WARNING_MSG": "O seu servidor WebDAV não suporta cabeçalhos condicionais (If-Unmodified-Since). Isto significa que o Super Productivity não consegue detetar alterações simultâneas de outros dispositivos durante o carregamento.<br><br>A sincronização continuará a funcionar, mas existe um pequeno risco de conflitos se fizer alterações em vários dispositivos simultaneamente.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "Segurança de sincronização reduzida"
+        },
+        "BTN_DISABLE_ENCRYPTION": "Desativar encriptação",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "Autenticação Dropbox bem-sucedida! Credenciais guardadas.",
+          "BTN_AUTHENTICATE": "Autenticar com Dropbox",
+          "BTN_REAUTHENTICATE": "Reautenticar com Dropbox",
+          "INFO_TEXT": "A autenticação Dropbox utiliza OAuth. Clique no botão abaixo para autenticar com a sua conta Dropbox.",
+          "L_ACCESS_TOKEN": "Token de acesso (gerado a partir do código de autorização)",
+          "REAUTH_SUCCESS": "Reautenticação Dropbox bem-sucedida! Credenciais atualizadas.",
+          "STATUS_CONFIGURED": "O Dropbox está configurado e pronto para sincronizar",
+          "STATUS_NOT_CONFIGURED": "Não configurado - autentique para ativar a sincronização"
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "Nome do ficheiro de sincronização"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "Importar e alterar encriptação",
+          "CURRENT_STATE": "A sua configuração atual",
+          "ENCRYPTION_DISABLED": "Não encriptado",
+          "ENCRYPTION_ENABLED": "Encriptado",
+          "IMPORTED_STATE": "Após importação",
+          "ITEM_1": "Todo o histórico de sincronização e cópias de segurança no servidor serão permanentemente eliminados",
+          "ITEM_2": "Os seus dados importados serão carregados com as novas definições de encriptação",
+          "ITEM_3": "Todos os outros dispositivos devem sincronizar e atualizar as definições de encriptação",
+          "NOTE": "Os seus dados locais serão substituídos pelos dados importados independentemente desta escolha.",
+          "NOTE_DISABLING": "Importante: sem encriptação, qualquer pessoa com acesso ao seu servidor de sincronização poderá ler os seus dados.",
+          "NOTE_ENABLING": "Importante: a encriptação requer uma palavra-passe. Se esquecer esta palavra-passe, os seus dados NÃO poderão ser recuperados!",
+          "TITLE": "As definições de encriptação serão alteradas",
+          "WARNING_TEXT": "A cópia de segurança que está a importar tem definições de encriptação diferentes. Dados encriptados e não encriptados não podem coexistir no servidor, pelo que todos os dados do servidor devem ser eliminados.",
+          "WHAT_HAPPENS": "O que acontecerá:"
+        },
+        "L_MANUAL_SYNC_ONLY": "Sincronizar apenas manualmente (desativar sincronização automática)",
+        "PASSWORD_SET_INFO": "🔒 Palavra-passe de encriptação definida."
       },
       "S": {
         "ALREADY_IN_SYNC": "Já sincronizado",
@@ -967,7 +1217,61 @@
         "INCOMPLETE_CFG": "A autenticação para sincronização falhou. Por favor, verifique o seu Config!",
         "SUCCESS_DOWNLOAD": "Dados sincronizados do controle remoto",
         "SUCCESS_VIA_BUTTON": "Dados sincronizados com sucesso",
-        "UNKNOWN_ERROR": "Erro desconhecido durante a sincronização. Verifique o console."
+        "UNKNOWN_ERROR": "Erro desconhecido durante a sincronização. Verifique o console.",
+        "ARCHIVE_OPERATION_FAILED": "Operação de arquivo falhou. Algumas limpezas poderão não ter sido concluídas.",
+        "AUTH_SETUP_FAILED": "Falha na configuração da autenticação. Se estiver a usar a aplicação web, certifique-se de que acede via HTTPS. Caso contrário, tente a versão estável ou reporte como um erro.",
+        "AUTH_TOKEN_REJECTED": "O token de sincronização foi rejeitado pelo servidor: {{reason}}. Obtenha um novo token.",
+        "CHANGE_PASSWORD_FAILED": "Falha ao alterar palavra-passe: {{message}}",
+        "CLOCK_DRIFT_WARNING": "O relógio do seu dispositivo parece estar desfasado em {{minutes}} minutos. Isto poderá causar problemas de sincronização.",
+        "COMPACTION_FAILED": "Limpeza da base de dados falhou. A aplicação poderá ficar mais lenta.",
+        "CONFLICT_DIALOG_TIMEOUT": "O diálogo de conflito de sincronização expirou e foi cancelado. A sincronização tentará novamente na próxima vez.",
+        "CONFLICT_RESOLUTION_FAILED": "Resolução de conflito de sincronização falhou. Recarregue a página.",
+        "DATA_REPAIRED": "Dados reparados automaticamente ({{count}} problemas corrigidos)",
+        "DECRYPTION_FAILED": "Falha ao desencriptar dados sincronizados. Verifique a sua palavra-passe de encriptação.",
+        "DEFERRED_ACTION_FAILED": "Algumas alterações feitas durante a sincronização não puderam ser guardadas. Recarregue para recuperar.",
+        "DIALOG_RESULT_ERROR": "Ocorreu um erro ao processar o diálogo de sincronização. Tente novamente.",
+        "DISABLE_ENCRYPTION_FAILED": "Falha ao desativar encriptação: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Falha ao ativar encriptação: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "A encriptação foi desativada noutro dispositivo. As suas definições de sincronização foram atualizadas.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Dados encriptados recebidos, mas nenhuma palavra-passe de encriptação está configurada. Defina a palavra-passe nas definições de sincronização.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "A encriptação é obrigatória para o SuperSync. Defina uma palavra-passe de encriptação para continuar a sincronizar.",
+        "ERROR_PAYLOAD_TOO_LARGE": "Erro de sincronização: os seus dados são demasiado grandes para carregar.\n\nIsto acontece quando tem muitas tarefas arquivadas. Os seus dados NÃO foram sincronizados!\n\nContacte o suporte para assistência.",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Erro ao sincronizar. Não foi possível ler os dados remotos. Talvez tenha ativado a encriptação e a sua palavra-passe local não corresponda à utilizada para encriptar os dados remotos?",
+        "FINISH_DAY_SYNC_ERROR": "Erro de sincronização ao terminar o dia. Tente novamente.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Sincronização inicial cancelada. Os dados remotos não foram aplicados.",
+        "HYDRATION_FAILED": "Falha ao carregar dados. Recarregue a aplicação.",
+        "IMPORTING": "A importar dados",
+        "INCOMPLETE_OP_SYNC": "Sincronização incompleta: {{count}} ficheiro(s) de operações falharam ao descarregar",
+        "INITIAL_SYNC_ERROR": "Sincronização inicial falhou",
+        "INTEGRITY_CHECK_FAILED": "Problema de integridade de dados detetado. Reparação automática tentada. Se tiver problemas, recarregue a aplicação.",
+        "INVALID_AUTH_CODE": "O código de autorização foi rejeitado. Tente autenticar novamente e certifique-se de copiar o código exatamente.",
+        "INVALID_OPERATION_PAYLOAD": "Operação inválida detetada. As alterações poderão não ser guardadas - recarregue a página.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} alteração(ões) local(ais) descartada(s) - item(ns) eliminado(s) noutro dispositivo",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} alteração(ões) local(ais) não guardada(s) descartada(s) - sincronização descarregou dados mais recentes",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Sincronização cancelada. Os seus dados locais foram preservados.",
+        "LOCK_TIMEOUT_ERROR": "A sincronização expirou à espera que uma operação anterior terminasse. Tente novamente.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Conflitos de sincronização resolvidos automaticamente: {{localWins}} vitória(s) local(ais), {{remoteWins}} vitória(s) remota(s)",
+        "MIGRATION_FAILED": "Alguns dados de sincronização não puderam ser migrados e foram ignorados. Isto poderá indicar corrupção de dados ou um erro.",
+        "NEWER_VERSION_AVAILABLE": "Algumas alterações são de uma versão mais recente da aplicação. Considere atualizar para total compatibilidade.",
+        "OPERATION_PERMANENTLY_FAILED": "Algumas operações de sincronização falharam e não puderam ser aplicadas. Os dados poderão estar incompletos.",
+        "OVERWRITE_SERVER_FAILED": "Falha ao substituir dados do servidor: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "Algumas operações de sincronização falharam ao ser aplicadas. Os dados foram validados.",
+        "PERSIST_FAILED": "Falha ao guardar alterações. O estado poderá estar inconsistente - recarregue a página.",
+        "REMOTE_DATA_TOO_OLD": "Os dados remotos são demasiado antigos para serem processados. Atualize a aplicação remota.",
+        "REPLAY_LOCAL_OPS_FAILED": "Falha ao reproduzir operações locais após importação. Algumas alterações recentes poderão ter sido perdidas. Os dados foram validados.",
+        "RESTORE_ERROR": "Falha ao restaurar dados",
+        "RESTORE_SUCCESS": "Dados restaurados com sucesso",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Não foi possível migrar dados para o servidor - validação de dados locais falhou. Tente importar uma cópia de segurança.",
+        "STORAGE_QUOTA_EXCEEDED": "O armazenamento do servidor de sincronização está cheio. As suas alterações NÃO estão a ser sincronizadas! Arquive tarefas antigas ou atualize o seu plano.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "O espaço estava a ficar reduzido. Dados antigos limpos com sucesso.",
+        "TIMEOUT_ERROR": "Operação de sincronização expirou. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "Demasiadas operações de sincronização para descarregar. Algumas alterações poderão estar em falta.",
+        "UPLOAD_ERROR": "Erro de carregamento desconhecido (definições corretas?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}} operação(ões) foram permanentemente rejeitada(s) pelo servidor e não serão sincronizadas.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "A sincronização rastreou {{originalSize}} dispositivos/navegadores, excedendo o limite de {{maxSize}}. Entradas de dispositivos inativos foram removidas. Considere um reinício da sincronização se tiver problemas.",
+        "VERSION_TOO_OLD": "A sua versão da aplicação é demasiado antiga para os dados sincronizados. Atualize!",
+        "VERSION_UNSUPPORTED": "Não é possível sincronizar: os dados requerem uma versão mais recente da aplicação. Atualize.",
+        "WEB_CRYPTO_NOT_AVAILABLE": "A encriptação não está disponível neste dispositivo. No Android, a encriptação requer um contexto seguro (HTTPS) que não está disponível. Desative a encriptação nas definições de sincronização ou sincronize a partir de um navegador de desktop."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Limpar tudo",
@@ -996,6 +1300,59 @@
         "TOOLTIP_DELETE": "Eliminar esta cópia de segurança",
         "TOOLTIP_REFRESH": "Atualizar a lista de cópias de segurança",
         "TOOLTIP_RESTORE": "Restaurar esta cópia de segurança (irá substituir todos os dados atuais)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "Restaurar a partir do histórico",
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "Os seus dados parecem estar danificados. Deseja tentar uma reparação automática? Poderá resultar numa pequena perda de dados.",
+        "TITLE": "Danos nos dados detetados"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "Os seus dados necessitaram de reparação automática ({{count}} problemas corrigidos). Normalmente isto não deveria acontecer. Se ocorrer repetidamente, por favor reporte.",
+        "TITLE": "Reparação de dados executada",
+        "UNKNOWN_ERROR": "Erro de sincronização desconhecido: {{err}}"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "Usar dados locais",
+        "BTN_SAVE_AND_SYNC": "Guardar e sincronizar",
+        "FORCE_OVERWRITE_CONFIRM": "Isto irá <strong>eliminar todos os dados no servidor</strong> e carregar os seus dados locais encriptados com esta palavra-passe. Continuar?",
+        "FORCE_OVERWRITE_INFO": "Se preferir manter os seus dados locais, pode substituir os dados do servidor.",
+        "FORCE_OVERWRITE_TITLE": "Substituir dados do servidor?",
+        "MESSAGE": "O servidor de sincronização contém dados encriptados, mas nenhuma palavra-passe de encriptação está configurada neste dispositivo. Introduza a sua palavra-passe de encriptação para desencriptar e sincronizar os seus dados.",
+        "PASSWORD_LABEL": "Palavra-passe de encriptação",
+        "TITLE": "Palavra-passe de encriptação necessária"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "Isto parece ser uma nova instalação. Foram encontrados dados remotos com {{count}} alterações. Deseja descarregá-los e substituir os seus dados locais?",
+        "OK": "Descarregar dados remotos",
+        "TITLE": "Sincronização inicial"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "Tem {{count}} alterações locais não sincronizadas que serão substituídas pelos dados remotos. Deseja continuar?",
+        "TITLE": "Substituir dados locais?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Desativar sincronização",
+        "PERM_FILE": "Conceder permissão",
+        "TEXT": "<p>A permissão de acesso ao ficheiro para sincronização local foi revogada.</p>",
+        "TITLE": "Sincronização: permissão de ficheiro local negada"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "Alterações afetadas",
+        "IMPORT_DATE": "Data de importação",
+        "MSG_INCOMING": "Os seus dados foram totalmente substituídos noutro dispositivo. Tem {{filteredOpCount}} alterações locais que poderão não ser transferidas.",
+        "MSG_INCOMING_NO_OPS": "Os seus dados foram totalmente substituídos noutro dispositivo. Este dispositivo sincronizará para o novo estado.",
+        "MSG_LOCAL_FILTERS": "Os seus dados locais foram importados/restaurados, mas o servidor tem {{filteredOpCount}} alterações de outros dispositivos que não podem ser fundidas automaticamente.",
+        "REASON_BACKUP_RESTORE": "Motivo: uma cópia de segurança foi restaurada noutro dispositivo.",
+        "REASON_FILE_IMPORT": "Motivo: um ficheiro de dados foi importado noutro dispositivo.",
+        "REASON_FORCE_UPLOAD": "Motivo: outro dispositivo forçou o carregamento dos seus dados locais.",
+        "REASON_PASSWORD_CHANGED": "Motivo: a palavra-passe de encriptação foi alterada noutro dispositivo.",
+        "REASON_REPAIR": "Motivo: foi realizada uma reparação automática dos dados.",
+        "REASON_SERVER_MIGRATION": "Motivo: os dados foram migrados para um novo servidor de sincronização.",
+        "REASON_UNKNOWN": "Motivo: foi efetuada uma substituição completa do estado.",
+        "RECOMMEND_SERVER": "Recomendado: aceitar os dados do servidor para manter a sincronização com o outro dispositivo.",
+        "TITLE": "Conflito de sincronização detetado",
+        "USE_LOCAL": "Usar os meus dados",
+        "USE_REMOTE": "Usar dados do servidor"
       }
     },
     "TAG": {
@@ -1017,7 +1374,8 @@
         "TITLE": "Configurações básicas"
       },
       "S": {
-        "UPDATED": "As configurações de tag foram atualizadas"
+        "UPDATED": "As configurações de tag foram atualizadas",
+        "ARCHIVE_CLEANUP_FAILED": "Falha ao limpar dados arquivados da etiqueta eliminada"
       },
       "TTL": {
         "ADD_NEW_TAG": "Adicionar nova tag"
@@ -1049,6 +1407,7 @@
         "ESTIMATE_BUTTON": "Estimativa",
         "PLACEHOLDER_CREATE": "Um título de tarefa #etiqueta @16:00",
         "PLACEHOLDER_SEARCH": "Adicionar tarefa ou problemas existentes...",
+        "REPEAT_BUTTON": "Repetir",
         "SEARCH_INFO_TEXT": "Pesquisar e adicionar problemas e tarefas do arquivo e de outros projetos",
         "TAGS_BUTTON": "Etiquetas",
         "TODAY": "Hoje",
@@ -1062,25 +1421,38 @@
         "TOOLTIP_CLEAR_ESTIMATE": "Limpar estimativa",
         "TOOLTIP_CLEAR_TAGS": "Limpar etiquetas",
         "TOOLTIP_DISABLE_SEARCH": "Desativar pesquisa de problemas (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Ativar pesquisa de problemas (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "Ativar pesquisa de problemas (Ctrl+2)",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Alternar adição de tarefa ao backlog / lista de hoje",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Alternar adição de tarefa ao topo ou fundo da lista",
+        "TOOLTIP_CLEAR_REPEAT": "Limpar definição de repetição"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Juntar anexo",
         "ADD_SUB_TASK": "Adicionar subtarefa",
         "ATTACHMENTS": "Anexos {{nr}}",
+        "CREATED_ON": "Criado em",
+        "DEADLINE": "Prazo",
         "DUE": "Programado para",
         "LOCAL_ATTACHMENTS": "Anexos locais",
         "NOTES": "Notas",
         "PARENT": "Pai",
+        "REMINDER": "Lembrete",
         "REPEAT": "Repetir",
         "SCHEDULE_TASK": "Agendar Tarefa",
         "SUB_TASKS": "Subtarefas ({{nr}})",
         "TIME": "Tempo",
-        "TITLE_PLACEHOLDER": "Insira um título"
+        "TITLE_PLACEHOLDER": "Insira um título",
+        "COMPLETED_ON": "Concluído em",
+        "DEADLINE_DUE_BY": "Vence em",
+        "DEADLINE_OVERDUE": "Em atraso!",
+        "FROM_PARENT": "(da tarefa pai)",
+        "ISSUE": "Ligação ao issue"
       },
       "B": {
         "ADD_HALF_HOUR": "Adicione meia hora",
-        "ESTIMATE_EXCEEDED": "Estimativa de tempo excedida para \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "Estimativa de tempo excedida para \"{{title}}\"",
+        "ADD_ALL_TO_TODAY": "Adicionar todas para hoje",
+        "DEADLINES_TODAY": "{{count}} tarefa(s) com prazo hoje ainda não planeada(s)"
       },
       "CMP": {
         "ADD_SUB_TASK": "Adicionar subtarefa",
@@ -1111,7 +1483,14 @@
         "TRACK_TIME": "Comece a rastrear o tempo",
         "TRACK_TIME_STOP": "Pausar o tempo de rastreamento",
         "UNSCHEDULE_TASK": "Cancelar agendamento de tarefa",
-        "UPDATE_ISSUE_DATA": "Atualizar dados da issue"
+        "UPDATE_ISSUE_DATA": "Atualizar dados da issue",
+        "EDIT_DEADLINE": "Editar prazo",
+        "REMOVE_DEADLINE": "Remover prazo",
+        "SET_DEADLINE": "Definir prazo"
+      },
+      "D_CONFIRM_DELETE": {
+        "OK": "APAGAR",
+        "MSG": "Tem a certeza de que pretende eliminar a tarefa \"{{title}}\"?"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Você deseja criar a nova tag {{tagsTxt}}?",
@@ -1121,11 +1500,29 @@
         "MSG": "Você deseja criar as novas tags {{tagsTxt}}?",
         "OK": "Criar Tags"
       },
+      "D_DEADLINE": {
+        "ADD_TIME": "Adicionar Tempo",
+        "QA_TODAY": "Hoje",
+        "QA_TOMORROW": "Amanhã",
+        "RO_NEVER": "Nunca",
+        "QA_NEXT_MONTH": "Próximo mês",
+        "QA_NEXT_WEEK": "Próxima semana",
+        "REMIND_AT": "Lembrar às",
+        "REMOVE_DEADLINE": "Remover prazo",
+        "RO_1H": "1 hora antes",
+        "RO_5M": "5 minutos antes",
+        "RO_10M": "10 minutos antes",
+        "RO_15M": "15 minutos antes",
+        "RO_30M": "30 minutos antes",
+        "RO_AT_DEADLINE": "No prazo",
+        "SET_DEADLINE": "Definir prazo"
+      },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "Adicionar tudo hoje",
         "ADD_TO_TODAY": "Adicione hoje",
         "COMPLETE": "Completar",
         "COMPLETE_ALL": "Completar tudo",
+        "DEADLINE_SECTION": "Prazos",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dispensar todos os lembretes (Manter em Hoje)",
         "DISMISS_REMINDER_KEEP_TODAY": "Dispensar lembrete (Manter em Hoje)",
         "DONE": "Feito",
@@ -1137,7 +1534,12 @@
         "SNOOZE_ALL": "Suspender tudo",
         "START": "Iniciar tarefa",
         "UNSCHEDULE": "Cancelar agendamento",
-        "UNSCHEDULE_ALL": "Cancelar o agendamento de tudo"
+        "UNSCHEDULE_ALL": "Cancelar o agendamento de tudo",
+        "CLEAR_ALL_REMINDERS": "Limpar todos os lembretes",
+        "CLEAR_REMINDER": "Limpar lembrete",
+        "DEADLINE_REMINDER": "Lembrete de prazo",
+        "DUE_SECTION": "Planeado",
+        "TASK_REMINDERS": "Lembretes de tarefas"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Agenda do próximo mês",
@@ -1193,7 +1595,9 @@
         "REMINDER_DELETED": "Lembrete excluído da tarefa",
         "REMINDER_UPDATED": "Lembrete atualizado para a tarefa \"{{title}}\"",
         "TASK_ALREADY_EXISTS": "A tarefa <strong>{{title}}<\\/strong> já existe",
-        "TASK_CREATED": "Tarefa criada \"{{taskTitle}}\""
+        "TASK_CREATED": "Tarefa criada \"{{taskTitle}}\"",
+        "DEADLINE_REMOVED": "Prazo removido",
+        "DEADLINE_SET": "Prazo definido para {{date}}"
       },
       "SELECT_OR_CREATE": "Selecione ou crie tarefa",
       "SUMMARY_TABLE": {
@@ -1248,11 +1652,11 @@
         "ADD": "Adicionar configuração de repetição de tarefas",
         "ADVANCED_CFG": "Configuração avançada",
         "EDIT": "Editr configuração de repetição de tarefas",
-        "HELP1": "Tarefas repetidas são destinadas a tarefas diárias, por exemplo: \"Organização\", \"Reunião Diária\", \"Revisão de Código\", \"Verificando e-mails\" ou tarefas semelhantes que provavelmente ocorrerão novamente e de novo.",
-        "HELP2": "Uma vez configurada, uma tarefa repetida será recriada todos os dias selecionados abaixo assim que você abrir o seu projeto e será automaticamente marcada como concluída no final do dia. Elas serão tratadas como instâncias diferentes. Assim, você pode adicione livremente subtarefas etc.",
-        "HELP3": "As tarefas importadas do Jira ou Issues do Git não podem ser repetidas. Todos os lembretes também serão excluídos em uma tarefa repetida.",
-        "HELP4": "Uma observação sobre o campo do pedido: Referindo-se às tarefas repetíveis do pedido de criação. Só tem efeito para tarefas repetíveis criadas ao mesmo tempo. Um valor mais baixo significa que uma tarefa estará no topo da lista, um número menor que estará mais abaixo. Um valor maior que 0 significa que os itens são criados na parte inferior das tarefas normais.",
-        "TAG_LABEL": "Tags para adicionar"
+        "HEATMAP_LABEL": "Atividade",
+        "TAG_LABEL": "Tags para adicionar",
+        "TIME_SPENT_THIS_MONTH": "Este mês",
+        "TIME_SPENT_THIS_WEEK": "Esta semana",
+        "TIME_SPENT_TOTAL": "Total"
       },
       "F": {
         "C_DAY": "Dia",
@@ -1267,8 +1671,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "Quando ativado, as subtarefas da instância de tarefa mais recente serão recriadas com a tarefa repetida",
         "MONDAY": "Segunda-feira",
         "NOTES": "Notas padrão",
-        "ORDER": "Ordem",
-        "ORDER_DESCRIPTION": "Ordem de criação de tarefas repetíveis. Afeta apenas tarefas repetíveis criadas ao mesmo tempo. Um valor mais baixo significa que uma tarefa será criada mais acima na lista, um número menor que estará mais abaixo. Um valor maior que 0 significa que os itens são criados na parte inferior das tarefas normais.",
         "Q_CUSTOM": "Configuração de repetição personalizada",
         "Q_DAILY": "Todos os dias",
         "Q_MONDAY_TO_FRIDAY": "De segunda a sexta",
@@ -1291,8 +1693,13 @@
         "THURSDAY": "Quinta-feira",
         "TITLE": "Título da tarefa",
         "TUESDAY": "Terça-feira",
-        "WEDNESDAY": "Quarta-feira"
-      }
+        "WEDNESDAY": "Quarta-feira",
+        "Q_MONTHLY_FIRST_DAY": "Todos os meses no primeiro dia",
+        "Q_MONTHLY_LAST_DAY": "Todos os meses no último dia",
+        "SKIP_OVERDUE": "Ignorar instâncias em atraso",
+        "SKIP_OVERDUE_DESCRIPTION": "Quando ativado, se a aplicação for aberta após perder uma ocorrência agendada (ex.: uma tarefa semanal em que hoje não é um dia agendado), a instância perdida será silenciosamente ignorada em vez de ser criada como tarefa em atraso"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "Não foi possível abrir o diálogo de configuração de repetição. Pode configurá-lo a partir do menu da tarefa."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1313,18 +1720,18 @@
         "GROUP_SCHEDULED_DATE": "Data Agendada",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Redefinir Tudo",
+        "SAVE_SORT": "Guardar como predefinido",
         "SCHEDULED_NEXT_MONTH": "Próximo Mês",
         "SCHEDULED_NEXT_WEEK": "Próxima Semana",
         "SCHEDULED_THIS_MONTH": "Este Mês",
         "SCHEDULED_THIS_WEEK": "Esta Semana",
         "SCHEDULED_TODAY": "Hoje",
         "SCHEDULED_TOMORROW": "Amanhã",
+        "SORT": "Ordenar",
         "SORT_CREATION_DATE": "Data de Criação",
         "SORT_DEFAULT": "Padrão",
         "SORT_NAME": "Nome",
-        "SORT_PERMANENT": "Ordenar (permanente)",
         "SORT_SCHEDULED_DATE": "Data Agendada",
-        "SORT_TEMPORARY": "Ordenar (temporário)",
         "TIME_1HOUR": "> 1 Hora",
         "TIME_2HOUR": "> 2 Horas",
         "TIME_10MIN": "> 10 Minutos",
@@ -1366,6 +1773,31 @@
         "TASK": "Tarefa",
         "TRACK_TO": "Rastrear para:",
         "UNTRACKED_TIME": "Tempo não rastreado:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "Comprimir arquivo",
+        "CONFIRM_MSG": "Tem a certeza de que pretende comprimir o arquivo? Isto eliminará permanentemente os dados listados acima!",
+        "CONFIRM_TITLE": "Confirmar compressão do arquivo",
+        "ESTIMATED_SAVINGS": "Poupança de espaço estimada",
+        "INTRO": "Isto comprimirá as suas tarefas arquivadas removendo dados antigos. Esta operação é sincronizada em todos os dispositivos.",
+        "ISSUE_FIELDS_TO_CLEAR": "Campos de issues a limpar",
+        "LOADING": "A analisar arquivo...",
+        "NO_DATA": "Sem dados para comprimir. O seu arquivo já está otimizado.",
+        "NOTES_TO_CLEAR": "Notas de tarefas a limpar (com mais de 1 ano)",
+        "SUBTASKS_TO_DELETE": "Subtarefas a eliminar (tempo fundido com a tarefa pai)",
+        "TITLE": "Comprimir arquivo",
+        "WARNING": "Esta operação não pode ser desfeita. Certifique-se de que tem uma cópia de segurança antes de prosseguir!"
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "Repete a frase configurada a cada X ao monitorar o tempo de uma tarefa.",
+        "L_INTERVAL": "Intervalo para repetir frase",
+        "L_TEXT": "Texto",
+        "L_TEXT_DESCRIPTION": "Ex.: \"Trabalhar em ${currentTaskTitle}!\"",
+        "L_VOICE": "Selecionar uma Voz",
+        "L_VOICE_DESCRIPTION": "Escolher uma voz",
+        "TITLE": "Lembrete de voz"
       }
     },
     "WORKLOG": {
@@ -1376,7 +1808,9 @@
         "TASKS": "Tarefas",
         "TOTAL_TIME": "Tempo gasto total:",
         "WEEK_NR": "Semana {{nr}}",
-        "WORKED": "Trabalhado"
+        "WORKED": "Trabalhado",
+        "RESTORE_TASK_FROM_ARCHIVE": "Restaurar tarefa do arquivo",
+        "VIEW_TASK_DETAILS": "Ver detalhes da tarefa"
       },
       "D_CONFIRM_RESTORE": "Tem certeza de que deseja mover a tarefa <strong> \"{{title}}\" </strong> para a sua lista de tarefas de hoje?",
       "D_EXPORT_TITLE": "Exportação de log de trabalho {{start}}–{{end}}",
@@ -1423,6 +1857,11 @@
         "NO_DATA": "Ainda não há tarefas nesta semana.",
         "TITLE": "Título"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Imagem colada com sucesso",
+      "SIZE_EXCEEDED": "O tamanho da imagem ({{actualSize}}) excede o tamanho máximo permitido ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Quota de armazenamento excedida. Liberte espaço ou reduza o tamanho das imagens."
     }
   },
   "FILE_IMEX": {
@@ -1446,15 +1885,18 @@
     "S_ERR_INVALID_URL": "Falha na importação: URL fornecido inválido",
     "S_ERR_NETWORK": "Falha na importação: Erro de rede ao buscar dados do URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Erro: Não foi possível decodificar o parâmetro URL para importação. Certifique-se de que está corretamente formatado.",
-    "URL_PLACEHOLDER": "Insira o URL para importar"
+    "URL_PLACEHOLDER": "Insira o URL para importar",
+    "BTN_COMPRESS_ARCHIVE": "Comprimir arquivo"
   },
   "G": {
     "ADD": "Adicionar",
     "ADVANCED_CFG": "Configuração Avançada",
+    "APPLY": "Aplicar",
     "CANCEL": "Cancelar",
     "CLOSE": "Fechar",
     "COMPLETE": "Completo",
     "CONFIRM": "Confirmar",
+    "CONTINUE": "Continuar",
     "DELETE": "Excluir",
     "DISMISS": "Dispensar",
     "DO_IT": "Fazer isto!",
@@ -1470,36 +1912,46 @@
     "MINUTES": "{{m}} minutos",
     "MOVE_BACKWARD": "Mover para Trás",
     "MOVE_FORWARD": "Mover para Frente",
+    "NEXT": "Seguinte",
     "NO_CON": "Você está atualmente offline. Reconecte-se à Internet.",
     "NONE": "Nenhum",
     "OK": "Ok",
     "OVERDUE": "Atrasado",
+    "PROCESSING": "Em Processamento",
     "REMOVE": "Remover",
     "SAVE": "Salvar",
+    "SHARE": "Partilhar",
     "SUBMIT": "Enviar",
     "TITLE": "Título",
     "TODAY_TAG_TITLE": "Hoje",
-    "TRACKING_INTERVAL_DESCRIPTION": "Acompanhe o tempo utilizando este intervalo em milissegundos. Você pode querer mudar isso para reduzir as gravações em disco. Veja a edição #2355.",
     "UNDO": "Desfazer",
     "WITHOUT_PROJECT": "Sem Projeto",
-    "YESTERDAY": "Ontem"
+    "YESTERDAY": "Ontem",
+    "DONT_SHOW_AGAIN": "Não mostrar novamente",
+    "PASSWORD_STRENGTH_FAIR": "Razoável",
+    "PASSWORD_STRENGTH_STRONG": "Forte",
+    "PASSWORD_STRENGTH_WEAK": "Fraca",
+    "TOGGLE_PASSWORD_VISIBILITY": "Mostrar/ocultar palavra-passe"
   },
   "GCF": {
     "APP_FEATURES": {
       "BOARDS": "Placas",
       "DONATE_PAGE": "Página de Doações",
       "FOCUS_MODE": "Modo de Foco",
+      "HABITS": "Hábitos",
       "HELP": "Ative ou desative funcionalidades específicas da aplicação em toda a interface.",
       "ISSUES_PANEL": "Painel de Problemas",
       "PLANNER": "Planeador",
       "PROJECT_NOTES": "Notas do Projeto",
       "SCHEDULE": "Agendar",
       "SCHEDULE_DAY_PANEL": "Painel de Dia Agendado",
+      "SEARCH": "Pesquisar",
       "SYNC_BUTTON": "Botão de Sincronização",
       "TIME_TRACKING": "Cronómetro para Registo de Tempo",
       "TITLE": "Funcionalidades da Aplicação",
       "USER_PROFILES": "Perfis de utilizador (Experimental)",
-      "USER_PROFILES_HINT": "Permite criar e alternar entre diferentes perfis de utilizador, cada um com definições, tarefas e configurações de sincronização separadas. O botão de gestão de perfis aparecerá no canto superior direito quando ativado. Nota: Desativar esta funcionalidade ocultará a interface, mas preservará os dados do perfil (Funcionalidade experimental, sem garantias. Certifique-se de ter um backup)."
+      "USER_PROFILES_HINT": "Permite criar e alternar entre diferentes perfis de utilizador, cada um com definições, tarefas e configurações de sincronização separadas. O botão de gestão de perfis aparecerá no canto superior direito quando ativado. Nota: Desativar esta funcionalidade ocultará a interface, mas preservará os dados do perfil (Funcionalidade experimental, sem garantias. Certifique-se de ter um backup).",
+      "USER_PROFILES_WARNING": "<strong>Funcionalidade experimental:</strong> esta funcionalidade ainda está em desenvolvimento e poderá ser removida ou significativamente alterada numa futura atualização. Use por sua conta e risco e certifique-se de manter cópias de segurança dos seus dados."
     },
     "AUTO_BACKUPS": {
       "HELP": "Salve automaticamente todos os dados na pasta do aplicativo para prepará-los, caso algo dê errado.",
@@ -1513,6 +1965,36 @@
       "CHECK_UPDATES": "Verifique se há atualizações remotas a cada X",
       "HELP": "Você pode integrar calendários para ser lembrado e adicioná-los como tarefas dentro do Super Productivity. A integração funciona usando o formato iCal. Para que isso funcione, seus calendários precisam estar acessíveis pela internet ou pelo sistema de arquivos.",
       "SHOW_BANNER_THRESHOLD": "Mostrar uma notificação X antes do evento (em branco para desabilitado)"
+    },
+    "CLIPBOARD_IMAGES": {
+      "SELECT_PATH": "Selecionar pasta",
+      "SORT_BY": "Ordenar por",
+      "SORT_NEWEST": "Mais Recentes Primeiro",
+      "SORT_OLDEST": "Mais Antigo Primeiro",
+      "DELETE": "Eliminar imagem",
+      "DELETE_ALL": "Eliminar tudo",
+      "DELETE_ALL_SUCCESS": "Todas as imagens da área de transferência eliminadas com sucesso",
+      "DELETE_SUCCESS": "Imagem da área de transferência eliminada com sucesso",
+      "ERROR_DELETING": "Falha ao eliminar imagem da área de transferência",
+      "ERROR_DELETING_ALL": "Falha ao eliminar todas as imagens da área de transferência",
+      "ERROR_LOADING": "Falha ao carregar imagens da área de transferência",
+      "HELP": "Gerir imagens coladas da área de transferência. Na versão do navegador, as imagens são armazenadas em IndexedDB. Na versão de desktop, configure o caminho de armazenamento.",
+      "LOADING": "A carregar imagens...",
+      "MANAGE_DESCRIPTION": "Ver e eliminar imagens armazenadas ao colar em campos markdown",
+      "MANAGE_TITLE": "Gerir imagens armazenadas",
+      "MANAGER_TITLE": "Imagens da área de transferência",
+      "NO_IMAGES": "Sem imagens da área de transferência armazenadas",
+      "OPEN_MANAGER": "Gerir imagens",
+      "PATH_DESCRIPTION": "Configure onde as imagens da área de transferência são armazenadas no seu sistema de ficheiros (deixe vazio para a localização predefinida)",
+      "PATH_LABEL": "Caminho de armazenamento de imagens",
+      "PATH_PLACEHOLDER": "Deixe vazio para a localização predefinida",
+      "PATH_TITLE": "Localização de armazenamento",
+      "SELECT_PATH_TITLE": "Selecionar pasta de imagens da área de transferência",
+      "SORT_LARGEST": "Maiores primeiro",
+      "SORT_SMALLEST": "Menores primeiro",
+      "TITLE": "Imagens da área de transferência",
+      "TOTAL_IMAGES": "Total de imagens",
+      "TOTAL_SIZE": "Tamanho total"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Ocultar folha de avaliação no resumo diário",
@@ -1592,7 +2074,8 @@
       "TRIGGER_SYNC": "Botão de sincronização (se configurado)",
       "ZOOM_DEFAULT": "Zoom padrão (somente para computador)",
       "ZOOM_IN": "Mais zoom (somente para computador)",
-      "ZOOM_OUT": "Diminuir o zoom (somente para computador)"
+      "ZOOM_OUT": "Diminuir o zoom (somente para computador)",
+      "TASK_UNSCHEDULE": "Remover agendamento da tarefa"
     },
     "LANG": {
       "AR": "عربى",
@@ -1619,6 +2102,7 @@
       "SV": "Sueco",
       "TIME_LOCALE": "Local de formato de hora",
       "TIME_LOCALE_AUTO": "Padrão do sistema",
+      "TIME_LOCALE_CS_CZ": "Checo - 24 horas",
       "TIME_LOCALE_DE_DE": "Alemão - 24 horas",
       "TIME_LOCALE_DESCRIPTION": "Escolha uma localidade para a formatação da hora. Diferentes localidades usam convenções diferentes (formato 12h vs 24h)",
       "TIME_LOCALE_EN_GB": "Inglês (Reino Unido) - 24 horas",
@@ -1630,16 +2114,19 @@
       "TIME_LOCALE_KO_KR": "Coreano - 12 horas AM/PM",
       "TIME_LOCALE_PT_BR": "Português (Brasil) - 24 horas",
       "TIME_LOCALE_RU_RU": "Russo - 24 horas",
-      "TIME_LOCALE_TR_TR": "Turco - 24 horas",
-      "TIME_LOCALE_ZH_CN": "Chinês (Simplificado) - 24 horas",
-      "TIME_LOCALE_CS_CZ": "Checo - 24 horas",
       "TIME_LOCALE_SK_SK": "Eslovaco - 24 horas",
+      "TIME_LOCALE_TR_TR": "Turco - 24 horas",
       "TIME_LOCALE_UK_UA": "Ucraniano - 24 horas",
+      "TIME_LOCALE_ZH_CN": "Chinês (Simplificado) - 24 horas",
       "TITLE": "Língua",
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "TIME_LOCALE_RO_MD": "Romeno (Moldávia): 24 horas, DD.MM.AAAA",
+      "TIME_LOCALE_RO_RO": "Romeno: 24 horas, DD.MM.AAAA"
     },
     "MISC": {
       "DARK_MODE": "Modo escuro",
@@ -1668,16 +2155,6 @@
       "THEME_SELECT_LABEL": "Selecionar tema",
       "TITLE": "Configurações diversas"
     },
-    "TASKS": {
-      "DEFAULT_PROJECT": "Projeto padrão a ser usado para tarefas se nenhuma for especificada",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Adicionar automaticamente tarefas trabalhadas a hoje",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Marcar tarefa pai como concluída, quando todas as subtarefas estiverem concluídas",
-      "IS_CONFIRM_BEFORE_DELETE": "Confirmar antes de excluir tarefas",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Ativar formatação Markdown nas notas das tarefas",
-      "IS_TRAY_SHOW_CURRENT": "Mostrar tarefa atual na bandeja / menu de status (somente desktop Mac/Windows)",
-      "NOTES_TEMPLATE": "Modelo de descrição de tarefa",
-      "TITLE": "Tarefas"
-    },
     "POMODORO": {
       "BREAK_DURATION": "Duração de pausas curtas",
       "CYCLES_BEFORE_LONGER_BREAK": "Iniciar pausa mais longa após X sessões de trabalho",
@@ -1689,7 +2166,13 @@
       "DEFAULT_TASK_REMIND_OPTION": "Opção padrão de lembrete selecionada ao criar tarefas",
       "DISABLE_REMINDERS": "Desativar todos os lembretes",
       "IS_COUNTDOWN_BANNER_ENABLED": "Mostrar uma faixa de contagem decrescente antes da data de vencimento dos lembretes",
-      "TITLE": "Lembretes"
+      "TITLE": "Lembretes",
+      "DUE_DATE_NOTIFICATION_HOUR": "Hora para mostrar notificações de prazos (0-23)",
+      "HELP": "<p><strong>Importante:</strong> os lembretes utilizam <strong>notificações locais</strong>, não notificações push. Isto significa que a aplicação precisa de ter sido aberta pelo menos uma vez no seu dispositivo para os lembretes serem agendados. Lembretes definidos noutro dispositivo só aparecerão após a aplicação sincronizar no dispositivo de destino.</p><p>No <strong>iOS</strong>, certifique-se de que as notificações estão ativadas para o Super Productivity nas definições do dispositivo em 'Definições' > 'Notificações'.</p>",
+      "IS_FOCUS_WINDOW": "Trazer janela da aplicação para a frente quando o lembrete é acionado",
+      "NOTIFY_ON_DUE_DATE": "Mostrar notificações para tarefas com prazo hoje",
+      "USE_ALARM_STYLE_REMINDERS": "Usar notificações estilo alarme (apenas Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Quando ativado, os lembretes usam sons de alarme mais altos e notificações mais intrusivas. Recomendado para lembretes críticos."
     },
     "SCHEDULE": {
       "HELP": "O recurso de linha do tempo deve fornecer uma visão geral rápida sobre como suas tarefas planejadas se desenrolam ao longo do tempo. Você pode encontrá-lo no menu à esquerda em <a href='#/schedule'>'Linha do tempo'</a>.",
@@ -1700,6 +2183,7 @@
       "L_WORK_END": "Fim do dia de trabalho",
       "L_WORK_START": "Início do dia de trabalho",
       "LUNCH_BREAK_START_END_DESCRIPTION": "ex: 13:00",
+      "MONTH": "Mês",
       "TITLE": "Schedule",
       "WORK_START_END_DESCRIPTION": "por exemplo. 17:00"
     },
@@ -1708,7 +2192,11 @@
       "IS_ENABLE_DUE": "Ativar a sintaxe curta devida (@<Due time>)",
       "IS_ENABLE_PROJECT": "Ativar a sintaxe curta do projeto (+<Project name>)",
       "IS_ENABLE_TAG": "Ativar a sintaxe curta da etiqueta (#<Tag>)",
-      "TITLE": "Sintaxe curta"
+      "TITLE": "Sintaxe curta",
+      "URL_BEHAVIOR_EXTRACT": "Extrair URL para anexos",
+      "URL_BEHAVIOR_KEEP": "Manter URL no título da tarefa",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Manter URL no título e adicionar aos anexos",
+      "URL_BEHAVIOR_LABEL": "Comportamento do URL ao adicionar tarefas"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Faça um lembrete sonoro de pausa",
@@ -1733,6 +2221,16 @@
       "SNOOZE_TIME": "Tempo de soneca quando solicitado para fazer uma pausa",
       "TITLE": "Lembrete de Pausa"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Projeto padrão a ser usado para tarefas se nenhuma for especificada",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Adicionar automaticamente tarefas trabalhadas a hoje",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Marcar tarefa pai como concluída, quando todas as subtarefas estiverem concluídas",
+      "IS_CONFIRM_BEFORE_DELETE": "Confirmar antes de excluir tarefas",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Ativar formatação Markdown nas notas das tarefas",
+      "IS_TRAY_SHOW_CURRENT": "Mostrar tarefa atual na bandeja / menu de status (somente desktop Mac/Windows)",
+      "NOTES_TEMPLATE": "Modelo de descrição de tarefa",
+      "TITLE": "Tarefas"
+    },
     "TIME_TRACKING": {
       "HELP": "O lembrete de controlo de tempo é uma faixa que aparece no caso de se ter esquecido de iniciar o controlo de tempo.",
       "L_DEFAULT_ESTIMATE": "Estimativa de tempo predefinida para novas tarefas",
@@ -1743,7 +2241,6 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "Janela do app Foco quando o lembrete está ativo (somente desktop)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Notificar quando o lembrete de controle de tempo for exibido",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Mostrar lembrete de seguimento na aplicação móvel",
-      "L_TRACKING_INTERVAL": "Intervalo de controlo do tempo (EXPERIMENTAL)",
       "L_TRACKING_REMINDER_MIN_TIME": "Tempo de espera antes de mostrar o lembrete de seguimento Banner",
       "TITLE": "Controlo de tempo"
     }
@@ -1794,7 +2291,9 @@
     "SHARE_FAILED": "Falha ao partilhar. Por favor, copie manualmente.",
     "SHARE_FAILED_FALLBACK": "Falha ao partilhar. Copiado para a área de transferência em vez disso.",
     "SHARE_UNAVAILABLE_FALLBACK": "Copiado para a área de transferência.",
-    "UNPLANNED_TODAY_TASKS": "Desplanear todas as tarefas de Hoje"
+    "UNPLANNED_TODAY_TASKS": "Desplanear todas as tarefas de Hoje",
+    "OPEN_SETTINGS_ERROR": "Não foi possível abrir as definições",
+    "SAVE_BLOCKED_DURING_SYNC": "Sincronização em curso - algumas alterações poderão ter de ser guardadas novamente"
   },
   "GPB": {
     "ASSETS": "Carregando recursos...",
@@ -1802,7 +2301,6 @@
     "DBX_GEN_TOKEN": "Dropbox: gerar token ...",
     "DBX_META": "Dropbox: Obter meta ...",
     "DBX_UPLOAD": "Dropbox: Carregar arquivo ...",
-    "GITHUB_LOAD_ISSUE": "GitHub: Carregar dados do problema ...",
     "JIRA_LOAD_ISSUE": "Jira: Carregar dados do problema ...",
     "SYNC": "Sincronizando dados...",
     "UNKNOWN": "Carregando dados remotos",
@@ -1822,6 +2320,7 @@
     "DUPLICATE_PROJECT": "Duplicar",
     "ENTER_FOCUS_MODE": "Entrar no Modo Foco",
     "GO_TO_TASK_LIST": "Ir para a lista de tarefas",
+    "HABITS": "Hábitos",
     "HELP": "Ajuda",
     "HM": {
       "CALENDARS": "Como fazer: Ligar calendários",
@@ -1835,6 +2334,8 @@
     },
     "METRICS": "Métricas",
     "NO_TASKS_TO_TRACK": "Adicione uma tarefa primeiro para começar a rastrear o tempo",
+    "NOTES": "Notas",
+    "OPEN_APP_FEATURES": "Abrir definições",
     "PLANNER": "Planeador",
     "PROJECT_MENU": "Menu Projeto",
     "PROJECTS": "Projetos",
@@ -1845,19 +2346,63 @@
     "SHARE_TASK_LIST_MARKDOWN": "Partilhar Lista de Tarefas",
     "SIDE_PANEL_MENU": "Menu do Painel Lateral",
     "TAGS": "Tag",
+    "TASK_LIST": "Lista de Tarefas",
+    "TASKS": "Tarefas",
     "TOGGLE_SHOW_ISSUE_PANEL": "Mostrar/ocultar painel de problemas",
     "TOGGLE_SHOW_NOTES": "Mostrar/ocultar notas do projeto",
     "TOGGLE_TRACK_TIME": "Iniciar/parar rastreamento de tempo ",
     "TRIGGER_SYNC": "Acionar a sincronização manualmente",
     "UNPLAN_ALL_TASKS": "Desplanear todas as tarefas",
-    "WORKLOG": "Log de trabalho"
+    "WORKLOG": "Log de trabalho",
+    "DISABLE_FEATURE": "Desativar funcionalidade",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" desativada. Reative nas definições de Funcionalidades da aplicação.",
+    "NO_PROJECT_INFO": "Sem projetos disponíveis. Pode criar um novo projeto clicando no botão 'Criar Projeto'.",
+    "NO_TAG_INFO": "De momento não existem etiquetas. Pode adicionar etiquetas inserindo `#nomeEtiqueta` ao adicionar ou editar tarefas.",
+    "NOTES_PANEL_INFO": "As notas só podem ser mostradas na vista de agenda e nas vistas de lista de tarefas normais.",
+    "PROCRASTINATE": "Procrastinar",
+    "PROJECT_SETTINGS": "Definições do projeto",
+    "SHOW_TRACKED_TASK": "Mostrar tarefa em registo",
+    "TOGGLE_SHOW_BOOKMARKS": "Mostrar/ocultar marcadores"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Deseja baixar um backup de seus dados legados (pode ser usado com versões mais antigas do Super Productivity)?",
     "DETECTED_LEGACY": "Dados legados detectados. Vamos migrá-lo para você!",
     "E_MIGRATION_FAILED": "Falha na migração! com erro:",
     "E_RESTART_FAILED": "Falha na reinicialização automática. Reinicie o aplicativo manualmente!",
-    "SUCCESS": "Migração concluída! Reiniciando o aplicativo agora..."
+    "SUCCESS": "Migração concluída! Reiniciando o aplicativo agora...",
+    "DIALOG_MESSAGE": "Estamos a atualizar a forma como os seus dados são armazenados para melhorar a fiabilidade da sincronização. Uma cópia de segurança será descarregada automaticamente.",
+    "DIALOG_TITLE": "A migrar os seus dados",
+    "STATUS_BACKUP": "A criar cópia de segurança dos seus dados...",
+    "STATUS_COMPLETE": "Migração concluída!",
+    "STATUS_MIGRATING": "A migrar dados...",
+    "STATUS_PREPARING": "A preparar migração..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Como pretende usar o Super Productivity?",
+    "SUBTITLE": "Escolha uma configuração adequada ao seu fluxo de trabalho. Pode sempre alterar isto mais tarde nas Definições.",
+    "PRIVACY_HINT": "Os seus dados permanecem seguros no seu dispositivo. Nada é enviado para um servidor.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Lista de tarefas simples",
+        "DESCRIPTION": "Um gestor de tarefas limpo com projetos, etiquetas e notas. Sem extras."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Registo de tempo",
+        "DESCRIPTION": "Registe quanto tempo as tarefas demoram. Ideal para faturar horas ou perceber onde gasta o seu tempo."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Suite de Produtividade",
+        "DESCRIPTION": "Planeie o seu dia, crie hábitos, concentre-se e registe o tempo. Tudo num só lugar."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Clique em + para adicionar a sua primeira tarefa",
+      "CREATE_TASK_TOUCH": "Toque em + para adicionar a sua primeira tarefa",
+      "EXPLORE": "Sinta-se à vontade para clicar e explorar! Pode encontrar ajuda na barra lateral.",
+      "EXPLORE_TOUCH": "Sinta-se à vontade para explorar! Pode encontrar ajuda no menu.",
+      "OR_PRESS": "ou prima",
+      "SKIP_ARIA": "Fechar dica"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Adicionar tarefas a partir de hoje",
@@ -1919,7 +2464,6 @@
     "ERROR": "Erro",
     "ERROR_LOADING_PLUGIN": "Erro ao carregar o plugin",
     "EXPERIMENTAL_WARNING": "O sistema de plugins está numa fase experimental e deve ser usado com extrema cautela.",
-    "EXPERIMENTAL_WARNING_TITLE": "Funcionalidade Experimental - Aviso de Segurança",
     "FAILED_TO_CLEAR_CACHE": "Falha ao limpar o cache do plugin",
     "FAILED_TO_EXECUTE_SCRIPT": "Falha ao executar o script Node.js",
     "FAILED_TO_EXTRACT_ZIP": "Falha ao extrair o ficheiro ZIP do plugin",
@@ -1933,6 +2477,7 @@
     "GRANT_PERMISSION": "Conceder Permissão",
     "HOOKS": "Ganchos",
     "ID": "ID:",
+    "INDEX_HTML_NOT_LOADED": "Index.html do plugin não carregado",
     "INSTALL_PLUGIN": "Instalar Plugin",
     "INSTALL_WARNING": "Antes de instalar um plugin, certifique-se de que confia na sua origem e compreende as permissões que solicita.",
     "INSTALLING": "A instalar...",
@@ -1980,10 +2525,14 @@
     "UNABLE_TO_PERSIST_DATA": "Não foi possível guardar dados no armazenamento do plugin",
     "UNKNOWN_ERROR": "Ocorreu um erro desconhecido",
     "UPLOAD_PLUGIN_INSTRUCTION": "Carregue um ficheiro ZIP do plugin para o instalar:",
-    "VALIDATION_FAILED": "Validação falhou"
+    "VALIDATION_FAILED": "Validação falhou",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Este plugin fornece integração com issues que está atualmente em uso ({{count}} fornecedor(es) de issues). Desativá-lo interromperá temporariamente a sincronização de issues para esses fornecedores até que o plugin seja reativado. Tem a certeza de que pretende desativar \"{{name}}\"?",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Falha ao carregar lista de plugins da comunidade",
+    "LANGUAGES": "Idiomas:"
   },
   "PM": {
-    "TITLE": "Métricas do projeto"
+    "TITLE": "Métricas do projeto",
+    "ALL_TASKS_TITLE": "Métricas (todas as tarefas)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "Configurações globais",
@@ -1992,8 +2541,20 @@
     "PRIVACY_POLICY": "Política Privada",
     "PROJECT_SETTINGS": "Configurações específicas do projeto",
     "PROVIDE_FEEDBACK": "Dar uma resposta",
+    "RELOAD": "Recarregar",
     "SYNC_EXPORT": "Sincronizar e exportar",
-    "TAG_SETTINGS": "Configurações específicas de tags"
+    "TABS": {
+      "GENERAL": "Geral",
+      "PLUGINS": "Plugins",
+      "PRODUCTIVITY": "Produtividade",
+      "TASKS": "Tarefas",
+      "SYNC_BACKUP": "Sincronização e cópia de segurança",
+      "TIME_TRACKING": "Tempo e registo"
+    },
+    "TAG_SETTINGS": "Configurações específicas de tags",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Falha ao copiar para a área de transferência",
+    "TOGGLE_DARK_MODE": "Alternar modo escuro",
+    "UPDATE_APP": "Atualizar aplicação"
   },
   "SCHEDULE": {
     "LAST": "Último:",
@@ -2003,7 +2564,29 @@
     "NO_SCHEDULED_TITLE": "Tarefas programadas para o dia",
     "REPEATED_TASKS": "Tarefas Recorrentes",
     "SCHEDULED_TASKS": "Tarefas Agendadas",
-    "SCHEDULED_TASKS_WITH_TIME": "Tarefas programadas com lembrete"
+    "SCHEDULED_TASKS_WITH_TIME": "Tarefas programadas com lembrete",
+    "NO_DEADLINES": "De momento não existem tarefas com prazos. Pode definir um prazo através do menu de contexto da tarefa ou do painel de detalhes.",
+    "START_TASK": "Iniciar tarefa e remover lembrete",
+    "TASKS_WITH_DEADLINES": "Tarefas com prazos"
+  },
+  "THEMES": {
+    "blue": "Azul",
+    "green": "Verde",
+    "indigo": "Índigo",
+    "pink": "Cor-de-rosa",
+    "purple": "Roxo",
+    "SELECT_THEME": "Selecionar tema",
+    "teal": "Verde-azulado",
+    "yellow": "Amarelo",
+    "amber": "âmbar",
+    "blue-grey": "cinzento-azulado",
+    "cyan": "ciano",
+    "deep-orange": "laranja escuro",
+    "deep-purple": "roxo escuro",
+    "light-blue": "azul claro",
+    "light-green": "verde claro",
+    "lime": "lima",
+    "SCHEDULED_TASKS_WITH_TIME": "Tarefas agendadas com hora de início"
   },
   "USER_PROFILES": {
     "ACTIVE": "Ativo",
@@ -2051,6 +2634,16 @@
     "TODAY_REMAINING": "Hoje, resta:",
     "WITHOUT_BREAK": "Sem pausa:",
     "WORKING_TODAY": "Trabalhando hoje:",
-    "WORKING_TODAY_ARCHIVED": "Tempo trabalhado hoje em tarefas arquivadas"
+    "WORKING_TODAY_ARCHIVED": "Tempo trabalhado hoje em tarefas arquivadas",
+    "RECURRING_TASKS": "Tarefas recorrentes"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Permissão de alarme exato negada. Os lembretes poderão ter um atraso até 15 minutos.",
+    "TASK_ALREADY_COMPLETED": "Tarefa já concluída",
+    "TASK_MARKED_DONE": "Tarefa marcada como concluída"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "Estamos a atualizar a forma como os seus dados são armazenados para melhorar a fiabilidade da sincronização.<br><br>Uma cópia de segurança dos seus dados será descarregada automaticamente. Pode usar esta cópia para restaurar os seus dados se necessário (Ficheiro > Importar).",
+    "DIALOG_TITLE": "Atualização do sistema"
   }
 }

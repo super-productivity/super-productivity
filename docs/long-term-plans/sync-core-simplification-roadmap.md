@@ -1,5 +1,7 @@
 # Sync Core Simplification Roadmap
 
+> **Status: Planned**
+
 **Goal:** Reduce cognitive load and architectural coupling in the sync stack without destabilizing behavior.
 
 **Primary focus:** Client-side sync orchestration.

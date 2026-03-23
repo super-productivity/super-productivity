@@ -1,122 +1,89 @@
-@if (isShowUi$ | async) {
-  @if (globalThemeService.backgroundImg(); as bgImage) {
-    <div
-      [style.background]="'url(' + bgImage + ')'"
-      class="bg-image"
-    ></div>
-    <div
-      class="bg-overlay"
-      [style.opacity]="bgOverlayOpacity()"
-    ></div>
-  }
-  <!--TODO move inside page container somehow -->
-  @if (layoutService.isShowAddTaskBar()) {
-    <add-task-bar
-      (closed)="layoutService.hideAddTaskBar()"
-      (done)="layoutService.hideAddTaskBar()"
-      (afterTaskAdd)="onTaskAdded($event)"
-      [isGlobalBarVariant]="true"
-      [isDisableAutoFocus]="shepherdService.isActive"
-      class="global"
-    ></add-task-bar>
-  }
-  @if (layoutService.isShowAddTaskBar()) {
-    <div
-      (click)="layoutService.hideAddTaskBar()"
-      @fade
-      class="backdrop"
-    ></div>
-  }
-  <!-- -->
-  @if (isShowFocusOverlay()) {
-    <focus-mode-overlay @warp></focus-mode-overlay>
-  } @else {
-    <div
-      class="app-container"
-      [class.has-mobile-bottom-nav]="isShowMobileButtonNav"
-      [dir]="isRTL ? 'rtl' : 'ltr'"
-    >
-      <magic-side-nav
-        #magicSideNav
-        [activeWorkContextId]="getActiveWorkContextId()"
-      >
-      </magic-side-nav>
-
-      <main class="main-content">
-        <header
-          [class.isNotScrolled]="!layoutService.isScrolled()"
-          class="header-wrapper"
-        >
-          <main-header></main-header>
-
-          <banner></banner>
-        </header>
-
-        <right-panel>
-          <div
-            #routeWrapper
-            [@warpRoute]="getPage(o)"
-            class="route-wrapper"
-          >
-            <router-outlet #o="outlet"></router-outlet>
-          </div>
-        </right-panel>
-        <global-progress-bar></global-progress-bar>
-      </main>
-
-      <!-- Mobile Bottom Navigation -->
-      @if (isShowMobileButtonNav()) {
-        <mobile-bottom-nav
-          (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
-        ></mobile-bottom-nav>
-      }
-    </div>
-  }
-  <!-- -->
+@if (globalThemeService.backgroundImg(); as bgImage) {
+  <div
+    [style.background]="'url(' + bgImage + ')'"
+    class="bg-image"
+  ></div>
+  <div
+    class="bg-overlay"
+    [style.opacity]="bgOverlayOpacity()"
+  ></div>
 }
-@if (
-  !(syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$ | async) ||
-  (imexMetaService.isDataImportInProgress$ | async)
-) {
-  <div class="loading-full-page-wrapper">
-    <global-progress-bar></global-progress-bar>
-    <div class="app-loading">
-      <div class="productivity-tip">
-        <h2 id="heading">{{ productivityTipTitle }}</h2>
-        <p id="text">{{ productivityTipText }}</p>
-      </div>
-      <div class="spinner">
-        <div class="double-bounce1"></div>
-        <div class="double-bounce2"></div>
-      </div>
-      <svg
-        class="logo"
-        viewBox="0 0 64 64"
+<!--TODO move inside page container somehow -->
+@if (layoutService.isShowAddTaskBar()) {
+  <add-task-bar
+    (closed)="layoutService.hideAddTaskBar()"
+    (done)="layoutService.hideAddTaskBar()"
+    (afterTaskAdd)="onTaskAdded($event)"
+    [isGlobalBarVariant]="true"
+    class="global"
+  ></add-task-bar>
+}
+@if (layoutService.isShowAddTaskBar()) {
+  <div
+    (click)="layoutService.hideAddTaskBar()"
+    @fade
+    class="backdrop"
+  ></div>
+}
+<!-- -->
+@if (isShowFocusOverlay()) {
+  @defer {
+    <focus-mode-overlay @warp></focus-mode-overlay>
+  }
+} @else {
+  <div
+    class="app-container"
+    [class.has-mobile-bottom-nav]="isShowMobileButtonNav()"
+    [class.app-entrance]="isAppEntrance()"
+    [dir]="isRTL ? 'rtl' : 'ltr'"
+  >
+    <magic-side-nav
+      #magicSideNav
+      [activeWorkContextId]="getActiveWorkContextId()"
+    >
+    </magic-side-nav>
+
+    <main class="main-content">
+      <header
+        [class.isNotScrolled]="!layoutService.isWorkViewScrolled()"
+        class="header-wrapper"
       >
-        <path
-          d="M 0.65537046,34.582787 32.452267,63.855301 63.791548,0.94356422 30.222644,47.722023 Z"
-          id="path3395"
-          style="
-            fill: #000000;
-            fill-opacity: 1;
-            fill-rule: evenodd;
-            stroke: none;
-            stroke-width: 1.46761858;
-            stroke-linecap: butt;
-            stroke-linejoin: bevel;
-            stroke-miterlimit: 13.80000019;
-            stroke-dasharray: none;
-            stroke-opacity: 1;
-          "
-        />
-      </svg>
-    </div>
+        <main-header></main-header>
+
+        <banner></banner>
+      </header>
+
+      <right-panel>
+        <div
+          #routeWrapper
+          [@warpRoute]="getPage(o)"
+          class="route-wrapper"
+        >
+          <router-outlet #o="outlet"></router-outlet>
+        </div>
+      </right-panel>
+      <global-progress-bar></global-progress-bar>
+    </main>
+
+    <!-- Mobile Bottom Navigation -->
+    @if (isShowMobileButtonNav()) {
+      <mobile-bottom-nav
+        [isEntrance]="isAppEntrance()"
+        (toggleMobileNavEvent)="magicSideNav.toggleMobileNav()"
+      ></mobile-bottom-nav>
+    }
   </div>
 }
 <!-- -->
 
-@defer {
-  <shepherd></shepherd>
+@if (isShowOnboardingPresets()) {
+  <onboarding-preset-selection
+    (presetSelected)="onPresetSelected()"
+  ></onboarding-preset-selection>
+}
+
+@if (onboardingHintService.currentStep()) {
+  <onboarding-hint></onboarding-hint>
 }
 
 <!-- Background context menu -->
@@ -134,12 +101,17 @@
   <div style="min-width: 200px; max-width: 300px">
     <button
       mat-menu-item
-      (click)="changeBackgroundFromUnsplash()"
+      (click)="openSettings()"
       class="background-menu-item"
       style="width: 100%; overflow: hidden"
     >
-      <mat-icon>image</mat-icon>
-      <span>{{ T.APP.CONTEXT_MENU.CHANGE_BACKGROUND | translate }}</span>
+      <mat-icon>settings</mat-icon>
+      <span>{{
+        (workContextService.activeWorkContextType === 'PROJECT'
+          ? T.APP.CONTEXT_MENU.CHANGE_PROJECT_SETTINGS
+          : T.APP.CONTEXT_MENU.CHANGE_TAG_SETTINGS
+        ) | translate
+      }}</span>
     </button>
   </div>
 </ng-template>

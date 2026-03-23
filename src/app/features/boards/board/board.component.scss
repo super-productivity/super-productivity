@@ -4,8 +4,8 @@
   display: grid;
   grid-template-columns: repeat(var(--cols), 1fr);
   grid-auto-rows: 1fr;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--s2);
+  padding: var(--s2);
   max-height: 100%;
   min-height: 100%;
   position: relative;
@@ -24,6 +24,6 @@
   align-items: center;
 
   .msg {
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
   }
 }

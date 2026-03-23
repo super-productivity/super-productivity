@@ -53,6 +53,28 @@ export const issueProviderReducer = createReducer(
           },
         } as unknown as IssueProvider;
       }
+
+      // Migrate pre-plugin CLICKUP providers to plugin shape
+      if (
+        provider &&
+        provider['issueProviderKey'] === 'CLICKUP' &&
+        !provider['pluginConfig']
+      ) {
+        needsMigration = true;
+        const teamIds = provider['teamIds'] as string[] | undefined;
+        // TODO: Remove legacy field preservation after a few releases.
+        // Spread original provider so legacy fields (apiKey, teamIds, etc.) survive
+        // for older clients that haven't upgraded yet.
+        migratedEntities[id] = {
+          ...provider,
+          pluginId: 'clickup-issue-provider',
+          pluginConfig: {
+            apiKey: provider['apiKey'] ?? '',
+            teamIds: teamIds?.length ? teamIds.join(',') : '',
+            userId: provider['userId'] != null ? String(provider['userId']) : '',
+          },
+        } as unknown as IssueProvider;
+      }
     }
     if (!needsMigration) {
       return state;

@@ -7,7 +7,7 @@
 .task-selector-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--c-dark-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -30,7 +30,7 @@
   align-items: center;
   gap: var(--s2);
 
-  @media (max-width: 499px) {
+  @include mq(xs, max) {
     width: 95%;
     max-width: none;
   }

@@ -157,7 +157,7 @@ $summary-point-inner-margin: var(--s);
 }
 
 .day-end-note {
-  margin-bottom: 48px;
+  margin-bottom: var(--s6);
   //margin-top: -8px;
 
   &::ng-deep inline-markdown {

@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity 完全由社区资助。没有追踪、没有广告、也没有数据收集——您的任务数据仅存于本地设备。",
     "INTRO_2": "如果您认同这种方式，并希望项目持续健康地发展，您的自愿性捐赠我们将非常感激。"
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "学习键盘快捷键",
+      "NOTES": "Super Productivity 专为键盘操作而设计。学习快捷键可以让您工作更高效。\n\n**如何开始：**\n1. 打开**侧边栏菜单**\n2. 进入**帮助**\n3. 点击**键盘导航教程**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "创建您的第一个项目",
+      "NOTES": "项目帮助您按工作领域组织任务。每个项目都有自己的任务列表和待办事项。\n\n**如何创建项目：**\n1. 点击侧边栏中**项目**旁边的 **+** 按钮\n2. 为其命名并选择颜色\n3. 开始添加任务"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "设置同步",
+      "NOTES": "确保您的数据安全，并可在多台设备上访问。\n\n**如何设置：**\n1. 打开**设置**（侧边栏中的齿轮图标）\n2. 进入**同步**\n3. 选择服务提供商：Super Sync、Dropbox、WebDAV 或本地文件同步\n4. 按照设置说明操作"
+    },
+    "GO_FURTHER": {
+      "TITLE": "探索更多",
+      "NOTES": "还有很多功能等您发现！\n\n**应用功能**（在设置中）— 启用集成、习惯和其他功能。前往**设置 → 应用功能**查看可用选项。\n\n**看板** — 在可自定义的看板中可视化您的任务。在**应用功能**中启用，然后在**侧边栏菜单**中找到它们。\n\n**日程** — 将任务安排到特定时间来规划您的一天。将任务拖到侧边栏的**日程**视图中。\n\n**集成** — 在应用功能中启用后，您可以从 Jira、GitHub、GitLab、Gitea、OpenProject、CalDAV 等导入任务。还可以集成日历。在**问题提供商面板**中进行配置。\n\n**习惯** — 追踪重复性习惯和日常事务。启用后可在**侧边栏菜单**中找到。\n\n**插件** — 添加拖延克星、自动化或语音提醒等功能。前往**设置 → 插件**。\n\n**自定义** — 主题、深色模式、键盘快捷键、语言和效率工具都在**设置**中。"
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -104,7 +122,14 @@
         "CALDAV_RESOURCE": "CalDav 资源名称（日历）",
         "CALDAV_URL": "CalDav URL（基本 URL）",
         "CALDAV_USER": "您的 CalDav 用户名",
-        "IS_TRANSITION_ISSUES_ENABLED": "在任务完成时自动完成 CalDav 待办事项"
+        "TWO_WAY_SYNC_BOTH": "双向（双向同步）",
+        "TWO_WAY_SYNC_NOTES": "笔记/描述同步方向",
+        "TWO_WAY_SYNC_OFF": "关闭",
+        "TWO_WAY_SYNC_PULL_ONLY": "仅拉取（从 CalDAV 读取）",
+        "TWO_WAY_SYNC_PUSH_ONLY": "仅推送（写入 CalDAV）",
+        "TWO_WAY_SYNC_SECTION": "双向同步（实验性）",
+        "TWO_WAY_SYNC_STATUS": "状态同步方向",
+        "TWO_WAY_SYNC_TITLE": "标题同步方向"
       },
       "FORM_SECTION": {
         "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定项目的未完成 CalDav 待办事项。它们将列为建议，并提供指向待办事项的链接以及有关它的更多信息。</p> <p>此外，您还可以自动添加并同步所有未完成的待办事项到您的任务待办事项列表。</p><p>要在网页应用中为 nextcloud 启用此功能，您可能需要通过 nextcloud 应用 <a href='https://apps.nextcloud.com/apps/webapppassword '>webapppassword<a> 将 \"https://app.super-productivity.com \" 加入白名单。</p>"
@@ -128,11 +153,13 @@
         "SHOW_TASK": "显示任务",
         "TXT": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他事件到期）"
+          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他事件到期）",
+          "ONE": "<strong>{{title}}</strong> 于 <strong>{{start}}</strong> 开始！<br>（还有 {{nrOfOtherBanners}} 个其他事件即将到来）"
         },
         "TXT_PAST": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他事件到期）"
+          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他事件到期）",
+          "ONE": "<strong>{{title}}</strong> 于 <strong>{{start}}</strong> 已开始！<br>（还有 {{nrOfOtherBanners}} 个其他事件即将到来）"
         }
       },
       "EVENT_STRINGS": {
@@ -181,7 +208,7 @@
       "ADD_TIME_MINUTE": "增加一分钟",
       "B": {
         "BREAK_RUNNING": "休息正在进行",
-        "END_FOCUS_SESSION": "结束专注会话",
+        "END_FOCUS_SESSION": "结束专注时段",
         "END_SESSION": "结束会话",
         "PAUSE": "暂停",
         "POMODORO_BREAK_RUNNING": "休息 #{{cycleNr}} 正在进行",
@@ -204,7 +231,7 @@
       "FOCUS_TIME_TOOLTIP": "专注时间",
       "GET_READY": "为您的专注会话做好准备！",
       "GOGOGO": "冲，冲，冲！！！",
-      "GO_TO_PROCRASTINATION": "拖延时获取帮助",
+      "GO_TO_PROCRASTINATION": "获取抗拖延帮助",
       "LONG_BREAK": "长休息",
       "LONG_BREAK_TITLE": "长休息 - 第 {{cycle}} 轮",
       "ON": "在",
@@ -221,11 +248,11 @@
       "PREP_SIT_UPRIGHT": "坐直（或站立）",
       "PREP_STRETCH": "做一些轻度拉伸",
       "REMOVE_TIME_MINUTE": "减少一分钟",
-      "RESUME_BREAK": "恢复休息",
+      "RESUME_BREAK": "继续休息",
       "RESUME_SESSION": "恢复会话",
       "SELECT_MODE": "选择您的专注模式",
       "SELECT_TASK": "选择要专注的任务",
-      "SELECT_TASK_FIRST": "请先选择任务以开始追踪",
+      "SELECT_TASK_FIRST": "请先选择一个任务以开始追踪",
       "SELECT_TASK_TO_FOCUS": "选择要专注的任务",
       "SESSION_COMPLETED": "专注会话已完成！",
       "SHORT_BREAK": "短休息",
@@ -236,7 +263,8 @@
       "START_FOCUS_SESSION": "开始专注会话",
       "START_NEXT_FOCUS_SESSION": "开始下一个专注会话",
       "SWITCH_TASK": "切换任务",
-      "WORKED_FOR": "您工作了"
+      "WORKED_FOR": "您工作了",
+      "RESET_CYCLES": "重置会话计数器"
     },
     "GITEA": {
       "FORM": {
@@ -261,35 +289,6 @@
         "STATUS": "状态",
         "SUMMARY": "摘要",
         "WRITE_A_COMMENT": "写评论"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "用户名（例如，筛选出您自己的更改）",
-        "INVALID_TOKEN_MESSAGE": "不是有效的 GitHub 令牌。它必须以 \"ghp_\" 开头。",
-        "IS_ASSIGNEE_FILTER": "仅将分配给我的问题导入到待办事项",
-        "REPO": "用户名/存储库名称",
-        "TOKEN": "访问令牌"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 GitHub 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。 <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps '>可以在此处找到有关其范围的更多信息</a>。"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "负责人",
-        "AT": "在",
-        "DESCRIPTION": "描述",
-        "LABELS": "标签",
-        "LAST_COMMENT": "最后评论",
-        "LOAD_ALL_COMMENTS": "加载所有 {{nr}} 条评论",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "加载描述和所有评论",
-        "MARK_AS_CHECKED": "将更新标记为已检查",
-        "STATUS": "状态",
-        "SUMMARY": "摘要",
-        "WRITE_A_COMMENT": "写评论"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: 映射数据时出错。您的存储库名称是否正确？",
-        "ERR_UNKNOWN": "GitHub: 未知错误 {{statusCode}} {{errorMsg}}。API 速率限制超出？"
       }
     },
     "GITLAB": {
@@ -383,7 +382,28 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: 更新了 {{nr}} 个 {{issuesStr}} 的数据",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: 更新了 \"{{issueTitle}}\" 的数据",
         "POLLING_BACKLOG": "{{issueProviderName}}: 轮询新 {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: 轮询 {{issuesStr}} 的更改"
+        "POLLING_CHANGES": "{{issueProviderName}}: 轮询 {{issuesStr}} 的更改",
+        "AUTO_CREATE_FAILED": "自动创建问题失败：{{errorMsg}}",
+        "CONNECTION_FAILED": "连接失败",
+        "CONNECTION_SUCCESS": "连接成功！",
+        "PLUGIN_NOT_INSTALLED": "必需的插件\"{{pluginName}}\"未安装。",
+        "TWO_WAY_SYNC_PUSH_FAILED": "双向同步推送失败：{{errorMsg}}"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "高级配置",
+        "DELETE_CONFIRM": "您确定要删除此问题提供者吗？删除后，<strong>所有先前导入的问题任务将失去其引用</strong>。此操作无法撤销！"
+      },
+      "TWO_WAY_SYNC": {
+        "AUTO_CREATE_ISSUES": "自动为新任务创建问题",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "当您向默认项目添加新的顶级任务时，自动创建问题。需要设置默认项目。",
+        "BOTH": "双向（双向同步）",
+        "NOTES": "笔记/描述同步方向",
+        "OFF": "关闭",
+        "PULL_ONLY": "仅拉取",
+        "PUSH_ONLY": "仅推送",
+        "SECTION": "双向同步（实验性）",
+        "STATUS": "状态同步方向",
+        "TITLE": "标题同步方向"
       }
     },
     "ISSUE_PANEL": {
@@ -519,8 +539,8 @@
     },
     "CLIPBOARD_IMAGE": {
       "PASTE_SUCCESS": "图片粘贴成功",
-      "SIZE_EXCEEDED": "图片尺寸（{{actualSize}}）超出最大允许尺寸（{{maxSize}}）",
-      "STORAGE_QUOTA_EXCEEDED": "存储配额已满。请释放空间或减小图片尺寸。"
+      "SIZE_EXCEEDED": "图片大小（{{actualSize}}）超过允许的最大大小（{{maxSize}}）",
+      "STORAGE_QUOTA_EXCEEDED": "存储配额已超出。请释放空间或缩小图片大小。"
     },
     "MARKDOWN_PASTE": {
       "CONFIRM_ADD_TO_SUB_TASK_NOTES": "将粘贴的 Markdown 列表添加到子任务 \"{{parentTaskTitle}}\" 的备注中？",
@@ -553,7 +573,8 @@
         "TIME_FRAME_2_WEEKS": "两周",
         "TIME_FRAME_LABEL": "时间范围",
         "TIME_FRAME_MAX": "全部",
-        "TIME_SPENT": "花费时间"
+        "TIME_SPENT": "花费时间",
+        "YEAR": "年"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "每日状态",
@@ -563,8 +584,6 @@
         "FOCUS_WORK_TIME": "专注工作时间",
         "IMPACT_OF_WORK": "您如何评价您今天的工作所产生的影响？",
         "IMPACT_OF_WORK_HINT": "1：没有实质进展 — 4：显著影响",
-        "NOTES": "",
-        "PRODUCTIVITY": "",
         "PRODUCTIVITY_SCORE": "生产力评分",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65% 影响力（1-4分）• 30% 专注度（以4小时为目标）• 5% 总工作时间（最多10小时）",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7天生产力分解",
@@ -729,7 +748,8 @@
       "EDIT_REPEATED_TASK": "编辑重复任务 '{{taskName}}'",
       "NO_TASKS": "没有任务",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "没有计划项目"
+        "NO_SCHEDULED_ITEMS": "没有计划项目",
+        "NO_DEADLINES": "无截止日期"
       },
       "S": {
         "REMOVED_PLAN_DATE": "删除了任务 '{{taskTitle}}' 的计划日期",
@@ -773,7 +793,9 @@
         "L_IS_AUTO_CONTRAST": "自动设置文本颜色以获得最佳可读性",
         "L_IS_DISABLE_BACKGROUND_TINT": "禁用彩色背景色调",
         "L_THEME_COLOR": "主题颜色",
-        "TITLE": "主题"
+        "TITLE": "主题",
+        "D_BACKGROUND_OVERLAY_OPACITY": "调整此值使背景更透明或更不透明。默认为 20%。",
+        "L_BACKGROUND_OVERLAY_OPACITY": "加深/减淡背景图片以获得更好的对比度"
       },
       "S": {
         "ARCHIVED": "已归档项目",
@@ -854,7 +876,8 @@
         "START_NOW": "现在开始",
         "TXT": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他任务到期）"
+          "OTHER": "<strong>{{title}}</strong> 在 <strong>{{start}}</strong> 开始！<br> （以及 {{nrOfOtherBanners}} 个其他任务到期）",
+          "ONE": "<strong>{{title}}</strong> 于 <strong>{{start}}</strong> 开始！<br>（还有 {{nrOfOtherBanners}} 个其他任务即将到来）"
         }
       },
       "S_ACTIVE_TASK_DUE": "您当前正在处理的任务现已到期！<br/> （{{title}}）",
@@ -898,16 +921,16 @@
         "L_COUNTDOWN_DURATION": "倒计时持续时间",
         "L_DAILY_GOAL": "成功连续每日目标",
         "L_ICON": "图标",
-        "L_ICON_ON": "切换开启时的图标",
+        "L_ICON_ON": "启用时的图标",
         "L_IS_ENABLED": "启用",
         "L_IS_HIDE_BUTTON": "隐藏工具栏按钮",
         "L_TITLE": "标题",
         "L_TRACK_STREAKS": "跟踪连续",
         "L_TYPE": "类型",
         "L_WEEKDAYS": "检查连续的星期几",
-        "L_STREAK_MODE": "连续打卡模式",
-        "L_STREAK_MODE_SPECIFIC_DAYS": "每周特定日期",
-        "L_STREAK_MODE_WEEKLY_FREQUENCY": "每周完成次数（例如：每周3次）",
+        "L_STREAK_MODE": "连续追踪模式",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "特定工作日",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "每周频率（例如每周 3 次）",
         "L_WEEKLY_FREQUENCY": "每周完成次数",
         "TITLE": "简单计数器和习惯跟踪",
         "TYPE_CLICK_COUNTER": "点击计数器",
@@ -915,11 +938,11 @@
         "TYPE_STOPWATCH": "秒表"
       },
       "HABIT_TRACKER": {
-        "PREV_WEEK": "上一周",
+        "PREV_WEEK": "上周",
         "NEXT_WEEK": "下一周",
         "TODAY": "今天",
         "ADD_HABIT": "添加新习惯",
-        "MANAGE_HABITS": "管理习惯"
+        "DISABLED_HABITS": "已禁用的习惯"
       },
       "S": {
         "GOAL_REACHED_1": "您今天达到了目标！",
@@ -931,7 +954,7 @@
         "REMOTE_MODEL_VERSION_NEWER": "远程模型版本比本地模型版本新。请将您的本地应用更新到最新版本！"
       },
       "BTN_SYNC_NOW": "立即同步",
-      "BTN_RESTORE_FROM_HISTORY": "从历史记录还原",
+      "BTN_RESTORE_FROM_HISTORY": "从历史记录恢复",
       "C": {
         "FORCE_UPLOAD": "强制上传您的数据可能会导致数据丢失。继续？"
       },
@@ -997,15 +1020,24 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "TITLE": "检测到同步冲突",
-        "MESSAGE": "您的本地数据已导入/恢复，但服务器存在来自其他设备的 {{filteredOpCount}} 项更改。",
-        "EXPLANATION": "这些更改是在不知晓您导入操作的情况下进行的，无法自动合并。",
         "IMPORT_DATE": "导入日期",
-        "FILTERED_CHANGES": "筛选后的更改",
+        "FILTERED_CHANGES": "受影响的更改",
         "USE_LOCAL": "使用我的数据",
-        "USE_REMOTE": "使用服务器数据"
+        "USE_REMOTE": "使用服务器数据",
+        "MSG_INCOMING": "您的数据已在另一台设备上完全被替换。您有 {{filteredOpCount}} 个本地更改可能无法保留。",
+        "MSG_INCOMING_NO_OPS": "您的数据已在另一台设备上完全被替换。此设备将同步到新状态。",
+        "MSG_LOCAL_FILTERS": "您的本地数据已被导入/恢复，但服务器有 {{filteredOpCount}} 个来自其他设备的更改无法自动合并。",
+        "REASON_BACKUP_RESTORE": "原因：在另一台设备上恢复了备份。",
+        "REASON_FILE_IMPORT": "原因：在另一台设备上导入了数据文件。",
+        "REASON_FORCE_UPLOAD": "原因：另一台设备强制上传了其本地数据。",
+        "REASON_PASSWORD_CHANGED": "原因：加密密码在另一台设备上被更改。",
+        "REASON_REPAIR": "原因：执行了自动数据修复。",
+        "REASON_SERVER_MIGRATION": "原因：数据已迁移到新的同步服务器。",
+        "REASON_UNKNOWN": "原因：执行了完整状态替换。",
+        "RECOMMEND_SERVER": "建议：接受服务器数据以保持与另一台设备的同步。"
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
-        "MESSAGE": "您有 {{count}} 项尚未同步的本地更改将被远程数据替换。是否继续？",
+        "MESSAGE": "您有 {{count}} 个未同步的本地更改将被远程数据替换。是否要继续？",
         "TITLE": "替换本地数据？"
       },
       "D_INCOMPLETE_SYNC": {
@@ -1014,12 +1046,13 @@
         "BTN_FORCE_UPLOAD": "强制上传本地",
         "P1": "远程同步数据不连贯！",
         "P2": "受影响的模型：",
-        "T1": "上次同步不完整！",
-        "T2": "上次同步期间您的存档数据未正确上传：",
         "T3": "您有 2 个选项：",
         "T4": "1. 转到您的其他设备并在那里完成同步。",
         "T5": "2. 或者您可以用本地数据覆盖远程数据。所有远程更改都将丢失！",
-        "T6": "建议创建您要覆盖的数据的备份！！！"
+        "T6": "建议创建您要覆盖的数据的备份！！！",
+        "BTN_FORCE_DOWNLOAD": "强制下载远程数据",
+        "INCOHERENT_P1": "您的远程数据日期来自未来",
+        "INCOHERENT_P2": "您应该检查系统上配置的时间！"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "保存并启用同步",
@@ -1033,22 +1066,29 @@
       },
       "D_RESTORE": {
         "TITLE": "从历史记录恢复",
-        "LOADING": "正在加载恢复点...",
-        "NO_POINTS": "无可用恢复点。当您同步或导入数据时会创建恢复点。",
-        "INTRO": "请选择要恢复到的历史时间点：",
-        "WARNING": "这将用选定的备份替换您所有的当前数据。此操作无法撤销。",
+        "LOADING": "加载恢复点中...",
+        "NO_POINTS": "没有可用的恢复点。恢复点在您同步或导入数据时创建。",
+        "INTRO": "选择一个时间点来恢复您的数据：",
+        "WARNING": "这将用选定的备份替换您所有当前数据。此操作无法撤销！",
         "BTN_RESTORE": "恢复",
         "TYPE_SYNC_IMPORT": "完整同步导入",
         "TYPE_BACKUP_IMPORT": "备份恢复",
         "TYPE_REPAIR": "自动修复",
         "CONFIRM_TITLE": "确认恢复",
-        "CONFIRM_MSG": "您确定要恢复到 <strong>{{timestamp}}</strong> 吗？<br><br>这将<strong>完全替换</strong>您所有的当前数据，且<strong>无法撤销</strong>。",
+        "CONFIRM_MSG": "您确定要恢复到 <strong>{{timestamp}}</strong> 吗？<br><br>这将<strong>完全替换</strong>您所有当前数据且<strong>无法撤销</strong>。",
         "ERROR_LOADING": "加载恢复点失败",
         "ERROR_RESTORE": "恢复数据失败"
       },
       "FORM": {
         "DROPBOX": {
-          "L_ACCESS_TOKEN": "访问令牌（从授权码生成）"
+          "L_ACCESS_TOKEN": "访问令牌（从授权码生成）",
+          "AUTH_SUCCESS": "Dropbox 身份验证成功！凭据已保存。",
+          "BTN_AUTHENTICATE": "使用 Dropbox 验证",
+          "BTN_REAUTHENTICATE": "重新验证 Dropbox",
+          "INFO_TEXT": "Dropbox 身份验证使用 OAuth。点击下方按钮以使用您的 Dropbox 帐户进行验证。",
+          "REAUTH_SUCCESS": "Dropbox 重新验证成功！凭据已更新。",
+          "STATUS_CONFIGURED": "Dropbox 已配置并准备好同步",
+          "STATUS_NOT_CONFIGURED": "未配置——请验证以启用同步"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "同步文件名"
@@ -1106,7 +1146,13 @@
           "ENABLE_ENCRYPTION_SUCCESS": "加密已成功启用",
           "ENABLE_ENCRYPTION_NOT_READY": "同步未启用或未配置。",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "此功能仅适用于 SuperSync。",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "请先输入一个加密密码。"
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "请先输入一个加密密码。",
+          "ENCRYPTION_ENCOURAGED": "SuperSync 需要加密。请启用加密以保护您的数据。",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync 在数据离开您的设备前使用密码加密</strong>，使您的私人数据几乎不可能被滥用或泄露。",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "禁用 SuperSync",
+          "SETUP_ENCRYPTION_BTN": "设置密码",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "在所有设备上使用相同的密码。忘记的密码可以通过覆盖远程数据来重置。",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync：设置密码"
         },
         "IMPORT_ENCRYPTION_WARNING": {
           "TITLE": "加密设置将更改",
@@ -1229,28 +1275,39 @@
         "VERSION_TOO_OLD": "您的应用版本对于同步数据来说太旧。请更新！",
         "VERSION_UNSUPPORTED": "无法同步：数据需要更新的应用版本。请更新。",
         "NEWER_VERSION_AVAILABLE": "部分更改来自较新的应用版本。请考虑更新以获得完全兼容性。",
-        "FRESH_CLIENT_SYNC_CANCELLED": "初始同步已取消。远程数据未应用。",
+        "FRESH_CLIENT_SYNC_CANCELLED": "初始同步已取消。远程数据未被应用。",
         "LOCAL_DATA_REPLACE_CANCELLED": "同步已取消。您的本地数据已保留。",
         "RESTORE_SUCCESS": "数据恢复成功",
         "RESTORE_ERROR": "恢复数据失败",
         "TIMEOUT_ERROR": "同步操作超时。{{suggestion}}",
         "PARTIAL_APPLY_FAILURE": "部分同步操作未能应用。数据已验证。",
         "REPLAY_LOCAL_OPS_FAILED": "导入后重放本地操作失败。部分近期更改可能丢失。数据已验证。",
-        "ARCHIVE_OPERATION_FAILED": "归档操作失败。部分清理操作可能未完成。",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "同步冲突已自动解决：{{localWins}} 项本地胜出，{{remoteWins}} 项远程胜出",
-        "LOCAL_CHANGES_DISCARDED": "已丢弃 {{count}} 项本地更改——项目已在另一台设备上删除",
-        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "已丢弃 {{count}} 项未保存的本地更改——同步已下载更新的数据",
+        "ARCHIVE_OPERATION_FAILED": "存档操作失败。部分清理可能未完成。",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "同步冲突已自动解决：{{localWins}} 个本地胜出、{{remoteWins}} 个远程胜出",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} 个本地更改被丢弃——项目已在另一台设备上删除",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} 个未保存的本地更改被丢弃——同步下载了更新的数据",
         "FINISH_DAY_SYNC_ERROR": "在结束一天时发生同步错误。请重试。",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "无法将数据迁移到服务器——本地数据验证失败。请尝试导入备份。"
+        "SERVER_MIGRATION_VALIDATION_FAILED": "无法将数据迁移到服务器——本地数据验证失败。请尝试导入备份。",
+        "AUTH_SETUP_FAILED": "身份验证设置失败。如果您使用网页应用，请确保通过 HTTPS 访问。否则，请尝试稳定版本或报告此问题。",
+        "AUTH_TOKEN_REJECTED": "同步令牌被服务器拒绝：{{reason}}。请获取新的令牌。",
+        "CHANGE_PASSWORD_FAILED": "更改密码失败：{{message}}",
+        "DISABLE_ENCRYPTION_FAILED": "禁用加密失败：{{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "启用加密失败：{{message}}",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "SuperSync 需要加密。请设置加密密码以继续同步。",
+        "INVALID_AUTH_CODE": "授权码被拒绝。请重新尝试身份验证并确保准确复制验证码。",
+        "LOCK_TIMEOUT_ERROR": "同步等待前一个操作完成时超时。请重试。",
+        "OVERWRITE_SERVER_FAILED": "覆盖服务器数据失败：{{message}}",
+        "MIGRATION_FAILED": "部分同步数据无法迁移并被跳过。这可能表示数据损坏或程序错误。",
+        "VECTOR_CLOCK_LIMIT_REACHED": "同步已追踪 {{originalSize}} 个设备/浏览器，超过 {{maxSize}} 的限制。非活跃设备的记录已被清除。如果您遇到问题，请考虑重置同步。"
       },
       "D_DATA_REPAIRED": {
         "TITLE": "数据修复已执行",
-        "MSG": "您的数据需要自动修复（已修复 {{count}} 个问题）。这通常不应发生。如果反复出现，请报告此问题。",
+        "MSG": "您的数据需要自动修复（已修复 {{count}} 个问题）。这通常不应该发生。如果反复出现，请报告此问题。",
         "UNKNOWN_ERROR": "未知同步错误：{{err}}"
       },
       "D_DATA_REPAIR_CONFIRM": {
-        "TITLE": "检测到数据已损坏",
-        "MSG": "您的数据似乎已损坏。是否要尝试自动修复？此操作可能会导致部分数据丢失。"
+        "TITLE": "检测到数据损坏",
+        "MSG": "您的数据似乎已损坏。是否要尝试自动修复？这可能会导致少量数据丢失。"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "全部清除",
@@ -1279,6 +1336,12 @@
         "TOOLTIP_DELETE": "删除此备份",
         "TOOLTIP_REFRESH": "刷新备份列表",
         "TOOLTIP_RESTORE": "恢复此备份（将替换所有当前数据）"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "上传本地数据",
+        "MESSAGE": "此同步服务器已包含数据。是否要上传您的本地数据进行合并？如果跳过，您的某些本地更改可能无法同步。",
+        "SKIP": "跳过",
+        "TITLE": "服务器已有数据"
       }
     },
     "TAG": {
@@ -1300,7 +1363,7 @@
         "TITLE": "基本设置"
       },
       "S": {
-        "ARCHIVE_CLEANUP_FAILED": "清理已删除标签的归档数据失败",
+        "ARCHIVE_CLEANUP_FAILED": "清理已删除标签的存档数据失败",
         "UPDATED": "标签设置已更新"
       },
       "TTL": {
@@ -1331,7 +1394,7 @@
         "ADD_SUB_TASK": "添加子任务",
         "ATTACHMENTS": "附件（{{nr}}）",
         "DUE": "计划在",
-        "FROM_PARENT": "（来自父级）",
+        "FROM_PARENT": "（来自父任务）",
         "LOCAL_ATTACHMENTS": "本地附件",
         "NOTES": "描述",
         "PARENT": "父级",
@@ -1340,7 +1403,13 @@
         "SCHEDULE_TASK": "计划任务",
         "SUB_TASKS": "子任务（{{nr}}）",
         "TIME": "时间",
-        "TITLE_PLACEHOLDER": "输入标题"
+        "TITLE_PLACEHOLDER": "输入标题",
+        "COMPLETED_ON": "完成于",
+        "CREATED_ON": "创建于",
+        "DEADLINE": "截止日期",
+        "DEADLINE_DUE_BY": "到期日",
+        "DEADLINE_OVERDUE": "已逾期！",
+        "ISSUE": "问题链接"
       },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "添加现有任务 \"{{taskTitle}}\"",
@@ -1352,8 +1421,8 @@
         "SEARCH_INFO_TEXT": "搜索并从归档和其他项目中添加问题和任务",
         "TAGS_BUTTON": "标签",
         "TODAY": "今天",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "切换添加任务到列表顶部/底部",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "切换添加任务到待办事项/今日列表",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "切换将任务添加到列表顶部/底部",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "切换将任务添加到待办/今日列表",
         "TOMORROW": "明天",
         "TOOLTIP_ADD_TASK": "添加任务",
         "TOOLTIP_ADD_TO_BACKLOG": "添加至待办事项",
@@ -1364,11 +1433,15 @@
         "TOOLTIP_CLEAR_ESTIMATE": "清除估算",
         "TOOLTIP_CLEAR_TAGS": "清除标签",
         "TOOLTIP_DISABLE_SEARCH": "禁用问题搜索 (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "启用问题搜索 (Ctrl+2)",
+        "REPEAT_BUTTON": "重复",
+        "TOOLTIP_CLEAR_REPEAT": "清除重复设置"
       },
       "B": {
         "ADD_HALF_HOUR": "添加 1/2 小时",
-        "ESTIMATE_EXCEEDED": "任务 \"{{title}}\" 超出时间估计"
+        "ESTIMATE_EXCEEDED": "任务 \"{{title}}\" 超出时间估计",
+        "ADD_ALL_TO_TODAY": "全部添加到今天",
+        "DEADLINES_TODAY": "{{count}} 个任务今天到期但尚未规划"
       },
       "CMP": {
         "ADD_SUB_TASK": "添加子任务",
@@ -1399,7 +1472,10 @@
         "TRACK_TIME": "开始计时",
         "TRACK_TIME_STOP": "暂停计时",
         "UNSCHEDULE_TASK": "取消任务时间安排",
-        "UPDATE_ISSUE_DATA": "更新任务数据"
+        "UPDATE_ISSUE_DATA": "更新任务数据",
+        "EDIT_DEADLINE": "编辑截止日期",
+        "REMOVE_DEADLINE": "移除截止日期",
+        "SET_DEADLINE": "设置截止日期"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "您想要创建新标签 {{tagsTxt}} 吗？",
@@ -1410,7 +1486,7 @@
         "OK": "创建标签"
       },
       "D_CONFIRM_DELETE": {
-        "MSG": "您是否想要删除任务 \"{{title}}\"?",
+        "MSG": "您确定要删除任务\"{{title}}\"吗？",
         "OK": "删除"
       },
       "D_REMINDER_VIEW": {
@@ -1429,7 +1505,13 @@
         "SNOOZE_ALL": "全部推迟",
         "START": "开始",
         "UNSCHEDULE": "取消计划",
-        "UNSCHEDULE_ALL": "全部取消计划"
+        "UNSCHEDULE_ALL": "全部取消计划",
+        "CLEAR_ALL_REMINDERS": "清除所有提醒",
+        "CLEAR_REMINDER": "清除提醒",
+        "DEADLINE_REMINDER": "截止日期提醒",
+        "DEADLINE_SECTION": "截止日期",
+        "DUE_SECTION": "已规划",
+        "TASK_REMINDERS": "任务提醒"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "安排至下个月",
@@ -1485,7 +1567,9 @@
         "REMINDER_DELETED": "已删除任务提醒",
         "REMINDER_UPDATED": "已更新任务“{{title}}”的提醒",
         "TASK_ALREADY_EXISTS": "任务 <strong>{{title}}</strong> 已经存在",
-        "TASK_CREATED": "已创建任务“{{taskTitle}}”"
+        "TASK_CREATED": "已创建任务“{{taskTitle}}”",
+        "DEADLINE_REMOVED": "截止日期已移除",
+        "DEADLINE_SET": "截止日期已设置为 {{date}}"
       },
       "SELECT_OR_CREATE": "选择或创建任务",
       "SUMMARY_TABLE": {
@@ -1494,6 +1578,23 @@
         "SPENT_TOTAL": "总花费",
         "TASK": "任务",
         "TOGGLE_DONE": "取消/标记为完成"
+      },
+      "D_DEADLINE": {
+        "ADD_TIME": "添加时间",
+        "QA_NEXT_MONTH": "下个月",
+        "QA_NEXT_WEEK": "下周",
+        "QA_TODAY": "今天",
+        "QA_TOMORROW": "明天",
+        "REMIND_AT": "提醒时间",
+        "REMOVE_DEADLINE": "移除截止日期",
+        "RO_1H": "1 小时前",
+        "RO_5M": "5 分钟前",
+        "RO_10M": "10 分钟前",
+        "RO_15M": "15 分钟前",
+        "RO_30M": "30 分钟前",
+        "RO_AT_DEADLINE": "到期时",
+        "RO_NEVER": "从不",
+        "SET_DEADLINE": "设置截止日期"
       }
     },
     "TASK_REPEAT": {
@@ -1540,11 +1641,11 @@
         "ADD": "添加重复任务配置",
         "ADVANCED_CFG": "高级配置",
         "EDIT": "编辑重复任务配置",
-        "HELP1": "重复任务适用于日常琐事，例如：\"组织\"、\"每日会议\"、\"代码审查\"、\"检查电子邮件\" 或类似可能一次又一次出现的任务。",
-        "HELP2": "配置完成后，重复任务将在下面选择的每一天重新创建，一旦您打开项目，就会在一天结束时自动标记为完成。它们将被视为不同的实例。因此，您可以自由添加子任务等。",
-        "HELP3": "从 Jira 或 Git 问题导入的任务不能重复。",
-        "HELP4": "关于顺序字段的说明：指重复任务的创建顺序。仅对同时创建的重复任务有效。值越低表示任务在列表中越高，值越高表示任务在列表中越低。大于 0 的值表示项目在普通任务底部创建。",
-        "TAG_LABEL": "要添加的标签"
+        "TAG_LABEL": "要添加的标签",
+        "TIME_SPENT_THIS_MONTH": "本月",
+        "TIME_SPENT_THIS_WEEK": "本周",
+        "TIME_SPENT_TOTAL": "总计",
+        "HEATMAP_LABEL": "活动"
       },
       "F": {
         "C_DAY": "日",
@@ -1559,8 +1660,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "启用后，系统将从最近的任务实例中重新创建子任务，并与重复任务关联",
         "MONDAY": "星期一",
         "NOTES": "默认备注",
-        "ORDER": "排序",
-        "ORDER_DESCRIPTION": "重复任务的创建顺序。仅影响同时创建的重复任务。数值越低，任务在列表中的位置越靠上；数值越高，位置越靠下。数值大于0时，项目将在普通任务的底部创建。",
         "QUICK_SETTING": "重复设置",
         "Q_CUSTOM": "自定义重复配置",
         "Q_DAILY": "每天",
@@ -1583,8 +1682,13 @@
         "THURSDAY": "星期四",
         "TITLE": "任务标题",
         "TUESDAY": "星期二",
-        "WEDNESDAY": "星期三"
-      }
+        "WEDNESDAY": "星期三",
+        "Q_MONTHLY_FIRST_DAY": "每月第一天",
+        "Q_MONTHLY_LAST_DAY": "每月最后一天",
+        "SKIP_OVERDUE": "跳过逾期的任务",
+        "SKIP_OVERDUE_DESCRIPTION": "启用时，如果应用在错过排定的时间后才打开（例如每周任务但今天不是排定日），错过的任务将被静默跳过，而不是创建为逾期任务"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "无法打开重复配置对话框。您可以从任务菜单中配置。"
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1614,9 +1718,9 @@
         "SORT_CREATION_DATE": "创建日期",
         "SORT_DEFAULT": "默认",
         "SORT_NAME": "名称",
-        "SORT_PERMANENT": "排序 （永久）",
+        "SAVE_SORT": "保存为默认值",
         "SORT_SCHEDULED_DATE": "计划日期",
-        "SORT_TEMPORARY": "排序 (临时)",
+        "SORT": "排序",
         "TIME_10MIN": "> 10 分钟",
         "TIME_1HOUR": "> 1 小时",
         "TIME_2HOUR": "> 2 小时",
@@ -1660,18 +1764,18 @@
         "UNTRACKED_TIME": "未跟踪时间："
       },
       "D_ARCHIVE_COMPRESS": {
-        "TITLE": "压缩归档",
-        "LOADING": "正在分析归档数据...",
-        "INTRO": "此操作将通过移除旧数据来压缩您的已归档任务。此操作将在所有设备间同步。",
+        "TITLE": "压缩存档",
+        "LOADING": "分析存档中...",
+        "INTRO": "这将通过移除旧数据来压缩已存档的任务。此操作会在所有设备间同步。",
         "SUBTASKS_TO_DELETE": "要删除的子任务（时间已合并到父任务）",
-        "NOTES_TO_CLEAR": "要清除的任务备注（超过一年）",
-        "ISSUE_FIELDS_TO_CLEAR": "要清除的任务字段",
-        "ESTIMATED_SAVINGS": "预计节省的空间",
-        "WARNING": "此操作无法撤销。请确保在继续之前已进行备份。",
-        "CONFIRM_TITLE": "确认归档压缩",
-        "CONFIRM_MSG": "您确定要压缩归档吗？这将永久删除上面列出的数据。",
-        "BTN_COMPRESS": "压缩归档",
-        "NO_DATA": "没有需要压缩的数据。您的归档已是最优状态。"
+        "NOTES_TO_CLEAR": "要清除的任务备注（超过 1 年）",
+        "ISSUE_FIELDS_TO_CLEAR": "要清除的问题字段",
+        "ESTIMATED_SAVINGS": "预计节省空间",
+        "WARNING": "此操作无法撤销。请在继续前确保您有备份！",
+        "CONFIRM_TITLE": "确认压缩存档",
+        "CONFIRM_MSG": "您确定要压缩存档吗？这将永久删除上方列出的数据！",
+        "BTN_COMPRESS": "压缩存档",
+        "NO_DATA": "没有可压缩的数据。您的存档已经最优化。"
       }
     },
     "WORKLOG": {
@@ -1679,11 +1783,12 @@
         "DAYS_WORKED": "工作天数：",
         "MONTH_WORKED": "工作月份：",
         "REPEATING_TASK": "重复任务",
-        "RESTORE_TASK_FROM_ARCHIVE": "从归档中恢复任务",
+        "RESTORE_TASK_FROM_ARCHIVE": "从存档恢复任务",
         "TASKS": "任务",
         "TOTAL_TIME": "总花费时间：",
         "WEEK_NR": "第 {{nr}} 周",
-        "WORKED": "已工作"
+        "WORKED": "已工作",
+        "VIEW_TASK_DETAILS": "查看任务详情"
       },
       "D_CONFIRM_RESTORE": "您确定要将任务 <strong>\"{{title}}\"</strong> 移至今天的任务列表吗？",
       "D_EXPORT_TITLE": "工作日志导出 {{start}}–{{end}}",
@@ -1730,6 +1835,33 @@
         "NO_DATA": "本周尚无任务。",
         "TITLE": "标题"
       }
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Nextcloud 基础 URL",
+        "FILTER_BY_ASSIGNEE": "仅导入分配给我的卡片",
+        "IS_TRANSITION_ISSUES_ENABLED": "将完成状态和标题同步回 Nextcloud Deck",
+        "PASSWORD": "您的 Nextcloud 应用密码",
+        "POLL_INTERVAL_MINUTES": "轮询间隔（分钟）",
+        "TITLE_TEMPLATE": "任务标题模板",
+        "TITLE_TEMPLATE_DESCRIPTION": "变量：{CARD_TITLE}、{BOARD}、{COLUMN}、{ID}、{LABELS}。示例：[{BOARD}: {COLUMN}] {CARD_TITLE}。留空则仅使用卡片标题。",
+        "USERNAME": "您的 Nextcloud 用户名"
+      },
+      "FORM_SECTION": {
+        "HELP": "配置您的 Nextcloud Deck 集成以将卡片导入为任务。使用应用密码进行身份验证。"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "已分配用户",
+        "DECK_DESCRIPTION": "Deck 描述",
+        "LABELS": "标签",
+        "STACK": "堆栈"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck：未找到看板",
+        "CARD_NOT_FOUND": "Nextcloud Deck：卡片\"{{issueId}}\"似乎已从服务器上删除。",
+        "ERR_CREDENTIALS_MISSING": "请先输入 Nextcloud URL、用户名和密码。",
+        "ERR_LOAD_BOARDS": "加载 Deck 看板失败。请检查您的凭据。"
+      }
     }
   },
   "FILE_IMEX": {
@@ -1754,7 +1886,7 @@
     "S_ERR_NETWORK": "导入失败：从 URL 获取数据时网络错误",
     "S_IMPORT_FROM_URL_ERR_DECODE": "错误：无法解码用于导入的 URL 参数。请确保其格式正确。",
     "URL_PLACEHOLDER": "输入要从中导入的 URL",
-    "BTN_COMPRESS_ARCHIVE": "Compress Archive"
+    "BTN_COMPRESS_ARCHIVE": "压缩存档"
   },
   "MIGRATE": {
     "DIALOG_TITLE": "正在迁移您的数据",
@@ -1805,10 +1937,14 @@
     "SUBMIT": "提交",
     "TITLE": "标题",
     "TODAY_TAG_TITLE": "今天",
-    "TRACKING_INTERVAL_DESCRIPTION": "使用此间隔（以毫秒为单位）跟踪时间。您可能希望更改此设置以减少磁盘写入。参见问题 #2355。",
     "UNDO": "撤销",
     "WITHOUT_PROJECT": "无项目",
-    "YESTERDAY": "昨天"
+    "YESTERDAY": "昨天",
+    "PASSWORD_STRENGTH_FAIR": "一般",
+    "PASSWORD_STRENGTH_STRONG": "强",
+    "PASSWORD_STRENGTH_WEAK": "弱",
+    "PROCESSING": "处理中",
+    "TOGGLE_PASSWORD_VISIBILITY": "切换密码可见性"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -1826,7 +1962,9 @@
       "TIME_TRACKING": "秒表式时间追踪",
       "TITLE": "应用功能",
       "USER_PROFILES": "用户配置文件 (实验性)",
-      "USER_PROFILES_HINT": "允许您创建和切换不同的用户配置文件，每个配置文件拥有独立的设置、任务和同步配置。启用后，配置文件管理按钮将出现在右上角。注意：禁用此功能将隐藏相关界面，但会保留您的配置文件数据。(此为实验性功能，不作保证。请确保您已备份数据。)"
+      "USER_PROFILES_HINT": "允许您创建和切换不同的用户配置文件，每个配置文件拥有独立的设置、任务和同步配置。启用后，配置文件管理按钮将出现在右上角。注意：禁用此功能将隐藏相关界面，但会保留您的配置文件数据。(此为实验性功能，不作保证。请确保您已备份数据。)",
+      "USER_PROFILES_WARNING": "<strong>实验性功能：</strong>此功能仍在开发中，未来更新中可能会被移除或大幅更改。使用风险自负，请确保保留数据备份。",
+      "SEARCH": "搜索"
     },
     "AUTO_BACKUPS": {
       "HELP": "自动将所有数据保存到您的应用文件夹，以防出现问题。",
@@ -1844,21 +1982,21 @@
     "CLIPBOARD_IMAGES": {
       "DELETE": "删除图片",
       "DELETE_ALL": "删除全部",
-      "DELETE_ALL_SUCCESS": "已成功删除所有剪贴板图片",
-      "DELETE_SUCCESS": "剪贴板图片删除成功",
+      "DELETE_ALL_SUCCESS": "所有剪贴板图片已成功删除",
+      "DELETE_SUCCESS": "剪贴板图片已成功删除",
       "ERROR_DELETING": "删除剪贴板图片失败",
-      "ERROR_DELETING_ALL": "删除所有图片失败",
+      "ERROR_DELETING_ALL": "删除所有剪贴板图片失败",
       "ERROR_LOADING": "加载剪贴板图片失败",
-      "HELP": "管理从剪贴板粘贴的图片。浏览器版本中，图片存储在 IndexedDB；桌面版本中，请配置存储路径。",
-      "LOADING": "正在加载图片...",
+      "HELP": "管理从剪贴板粘贴的图片。浏览器版本中，图片存储在 IndexedDB 中。桌面版本中，请配置存储路径。",
+      "LOADING": "加载图片中...",
       "MANAGE_DESCRIPTION": "查看和删除在 Markdown 字段中粘贴时存储的图片",
       "MANAGE_TITLE": "管理已存储的图片",
       "MANAGER_TITLE": "剪贴板图片",
-      "NO_IMAGES": "未存储任何剪贴板图片",
+      "NO_IMAGES": "没有存储的剪贴板图片",
       "OPEN_MANAGER": "管理图片",
-      "PATH_DESCRIPTION": "配置剪贴板图片在您文件系统上的存储位置（留空则使用默认位置）",
+      "PATH_DESCRIPTION": "配置剪贴板图片在文件系统中的存储位置（留空使用默认位置）",
       "PATH_LABEL": "图片存储路径",
-      "PATH_PLACEHOLDER": "留空则使用默认位置",
+      "PATH_PLACEHOLDER": "留空使用默认位置",
       "PATH_TITLE": "存储位置",
       "SELECT_PATH": "选择文件夹",
       "SELECT_PATH_TITLE": "选择剪贴板图片文件夹",
@@ -1997,7 +2135,11 @@
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "TIME_LOCALE_RO_MD": "罗马尼亚语（摩尔多瓦）：24 小时制，DD.MM.YYYY",
+      "TIME_LOCALE_RO_RO": "罗马尼亚语：24 小时制，DD.MM.YYYY"
     },
     "MISC": {
       "DARK_MODE": "深色模式",
@@ -2050,7 +2192,10 @@
       "IS_FOCUS_WINDOW": "提醒触发时，将应用程序窗口设为焦点",
       "TITLE": "提醒",
       "USE_ALARM_STYLE_REMINDERS": "使用闹钟风格通知（Android）",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "启用后，提醒将使用更响亮的闹钟声和更显眼的通知样式。建议用于关键提醒。"
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "启用后，提醒将使用更响亮的闹钟声和更显眼的通知样式。建议用于关键提醒。",
+      "DUE_DATE_NOTIFICATION_HOUR": "显示到期通知的时间（0-23）",
+      "HELP": "<p><strong>重要：</strong>提醒使用<strong>本地通知</strong>，而非推送通知。这意味着应用需要在您的设备上至少打开过一次才能安排提醒。在另一台设备上设置的提醒只有在应用在目标设备上同步后才会显示。</p><p>在 <strong>iOS</strong> 上，请确保在设备设置的\"设置\">\"通知\"中为 Super Productivity 启用通知。</p>",
+      "NOTIFY_ON_DUE_DATE": "显示今天到期任务的通知"
     },
     "SCHEDULE": {
       "HELP": "计划功能应为您快速概览计划任务如何随时间展开。您可以在左侧菜单 <a href='#/schedule'>'计划'</a> 下找到它。",
@@ -2070,7 +2215,11 @@
       "IS_ENABLE_DUE": "启用计划短语法（@<计划时间>）",
       "IS_ENABLE_PROJECT": "启用项目短语法（+<项目名称>）",
       "IS_ENABLE_TAG": "启用标签短语法（#<标签>）",
-      "TITLE": "短语法"
+      "TITLE": "短语法",
+      "URL_BEHAVIOR_EXTRACT": "将 URL 提取到附件",
+      "URL_BEHAVIOR_KEEP": "在任务标题中保留 URL",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "在任务标题中保留 URL 并添加到附件",
+      "URL_BEHAVIOR_LABEL": "添加任务时的 URL 行为"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "休息提醒声音",
@@ -2105,7 +2254,6 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "提醒活动时聚焦应用窗口（仅限桌面）",
       "L_IS_TRACKING_REMINDER_NOTIFY": "显示跟踪提醒时通知",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "在移动应用上显示跟踪提醒",
-      "L_TRACKING_INTERVAL": "时间跟踪间隔（实验性）",
       "L_TRACKING_REMINDER_MIN_TIME": "在显示跟踪提醒横幅前等待的时间",
       "TITLE": "时间跟踪"
     }
@@ -2157,7 +2305,8 @@
     "SHARE_FAILED": "共享失败。请手动复制。",
     "SHARE_FAILED_FALLBACK": "共享失败。改为复制到剪贴板。",
     "SHARE_UNAVAILABLE_FALLBACK": "已复制到剪贴板。",
-    "UNPLANNED_TODAY_TASKS": "取消今日所有的任务"
+    "UNPLANNED_TODAY_TASKS": "取消今日所有的任务",
+    "OPEN_SETTINGS_ERROR": "无法打开设置"
   },
   "GPB": {
     "ASSETS": "正在加载资源...",
@@ -2165,7 +2314,6 @@
     "DBX_GEN_TOKEN": "Dropbox: 正在生成令牌...",
     "DBX_META": "Dropbox: 正在获取文件元数据...",
     "DBX_UPLOAD": "Dropbox: 正在上传文件...",
-    "GITHUB_LOAD_ISSUE": "GitHub: 正在加载问题数据...",
     "JIRA_LOAD_ISSUE": "Jira: 正在加载问题数据...",
     "SYNC": "正在同步数据...",
     "UNKNOWN": "正在加载远程数据",
@@ -2223,11 +2371,42 @@
     "TOGGLE_TRACK_TIME": "开始/停止跟踪时间",
     "TRIGGER_SYNC": "同步！",
     "UNPLAN_ALL_TASKS": "取消计划所有任务",
-    "WORKLOG": "工作日志"
+    "WORKLOG": "工作日志",
+    "DISABLE_FEATURE": "禁用功能",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\"已禁用。在应用功能设置中重新启用。",
+    "OPEN_APP_FEATURES": "打开设置",
+    "SHOW_TRACKED_TASK": "显示正在追踪的任务"
   },
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "系统更新",
     "DIALOG_MESSAGE": "我们正在更新数据存储方式以提升同步可靠性。<br><br>您的数据备份将自动下载。如果需要，您可以使用此备份恢复数据（文件 > 导入）。"
+  },
+  "ONBOARDING": {
+    "TITLE": "你想如何使用 Super Productivity？",
+    "SUBTITLE": "选择适合你工作方式的设置。你可以随时在设置中更改。",
+    "PRIVACY_HINT": "你的数据安全地保存在你的设备上。不会向服务器发送任何内容。",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "简单待办列表",
+        "DESCRIPTION": "简洁的任务管理器，支持项目、标签和笔记。没有多余功能。"
+      },
+      "TIME_TRACKER": {
+        "TITLE": "时间追踪",
+        "DESCRIPTION": "记录任务所花的时间。非常适合计费或了解时间都花在了哪里。"
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "生产力套件",
+        "DESCRIPTION": "规划你的一天，养成习惯，深度专注，追踪时间。一站式搞定。"
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "点击 + 添加你的第一个任务",
+      "CREATE_TASK_TOUCH": "点按 + 添加你的第一个任务",
+      "EXPLORE": "随意点击探索吧！你可以在侧边栏找到帮助。",
+      "EXPLORE_TOUCH": "随意点按探索吧！你可以在菜单中找到帮助。",
+      "OR_PRESS": "或按",
+      "SKIP_ARIA": "关闭提示"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "从今日添加任务",
@@ -2289,7 +2468,6 @@
     "ERROR": "错误",
     "ERROR_LOADING_PLUGIN": "加载插件出错",
     "EXPERIMENTAL_WARNING": "插件系统处于实验阶段，请极度谨慎使用。",
-    "EXPERIMENTAL_WARNING_TITLE": "实验功能 - 安全警告",
     "FAILED_TO_CLEAR_CACHE": "清除插件缓存失败",
     "FAILED_TO_EXECUTE_SCRIPT": "执行 Node.js 脚本失败",
     "FAILED_TO_EXTRACT_ZIP": "解压插件 ZIP 文件失败",
@@ -2352,7 +2530,9 @@
     "UNABLE_TO_PERSIST_DATA": "无法将数据持久化到插件存储",
     "UNKNOWN_ERROR": "发生未知错误",
     "UPLOAD_PLUGIN_INSTRUCTION": "上传插件 ZIP 文件以进行安装：",
-    "VALIDATION_FAILED": "验证失败"
+    "VALIDATION_FAILED": "验证失败",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "此插件提供当前正在使用的问题集成（{{count}} 个问题提供者）。禁用它将暂时中断这些提供者的问题同步，直到插件重新启用。您确定要禁用\"{{name}}\"吗？",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "加载社区插件列表失败"
   },
   "PM": {
     "TITLE": "项目指标",
@@ -2389,10 +2569,10 @@
     "REPEATED_TASKS": "重复任务",
     "SCHEDULED_TASKS": "计划任务",
     "SCHEDULED_TASKS_WITH_TIME": "有开始时间的计划任务",
-    "START_TASK": "开始任务并移除提醒"
+    "START_TASK": "开始任务并移除提醒",
+    "NO_DEADLINES": "目前没有设置截止日期的任务。您可以通过任务的右键菜单或详细信息面板设置截止日期。",
+    "TASKS_WITH_DEADLINES": "有截止日期的任务"
   },
-  "Share Chart": "",
-  "Share Heatmap": "",
   "THEMES": {
     "SELECT_THEME": "选择主题",
     "amber": "琥珀色",
@@ -2458,6 +2638,12 @@
     "TODAY_REMAINING": "今天剩余：",
     "WITHOUT_BREAK": "无休息：",
     "WORKING_TODAY": "今天工作：",
-    "WORKING_TODAY_ARCHIVED": "在已归档任务上今天工作的时间"
+    "WORKING_TODAY_ARCHIVED": "在已归档任务上今天工作的时间",
+    "RECURRING_TASKS": "重复任务"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "精确闹钟权限被拒绝。提醒可能延迟最多 15 分钟。",
+    "TASK_ALREADY_COMPLETED": "任务已完成",
+    "TASK_MARKED_DONE": "任务已标记为完成"
   }
 }

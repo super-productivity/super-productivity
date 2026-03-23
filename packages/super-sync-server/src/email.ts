@@ -81,7 +81,7 @@ export const sendVerificationEmail = async (
       `,
     });
 
-    Logger.info(`Verification email sent to ${to}: ${info.messageId}`);
+    Logger.info(`Verification email sent: ${info.messageId}`);
 
     // If using Ethereal, log the preview URL
     if (nodemailer.getTestMessageUrl(info)) {
@@ -138,7 +138,7 @@ export const sendPasskeyRecoveryEmail = async (
       `,
     });
 
-    Logger.info(`Passkey recovery email sent to ${to}: ${info.messageId}`);
+    Logger.info(`Passkey recovery email sent: ${info.messageId}`);
 
     // If using Ethereal, log the preview URL
     if (nodemailer.getTestMessageUrl(info)) {
@@ -195,7 +195,7 @@ export const sendLoginMagicLinkEmail = async (
       `,
     });
 
-    Logger.info(`Magic link login email sent to ${to}: ${info.messageId}`);
+    Logger.info(`Magic link login email sent: ${info.messageId}`);
 
     if (nodemailer.getTestMessageUrl(info)) {
       Logger.info(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);

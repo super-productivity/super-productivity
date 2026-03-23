@@ -36,7 +36,8 @@
             <mat-icon
               [matTooltip]="entry.tooltip"
               matTooltipPosition="above"
-            >extension</mat-icon>
+              >extension</mat-icon
+            >
           }
           <div class="initials">{{ entry.initials }}</div>
         </div>
@@ -44,8 +45,13 @@
       <ng-template matTabContent>
         @if (entry.missingPluginName) {
           <div style="padding: 16px; opacity: 0.7; text-align: center">
-            <mat-icon style="vertical-align: middle; margin-right: 4px">extension_off</mat-icon>
-            {{ T.F.ISSUE.S.PLUGIN_NOT_INSTALLED | translate: { pluginName: entry.missingPluginName } }}
+            <mat-icon style="vertical-align: middle; margin-right: 4px"
+              >extension_off</mat-icon
+            >
+            {{
+              T.F.ISSUE.S.PLUGIN_NOT_INSTALLED
+                | translate: { pluginName: entry.missingPluginName }
+            }}
           </div>
         } @else {
           <issue-provider-tab [issueProvider]="entry.issueProvider"></issue-provider-tab>

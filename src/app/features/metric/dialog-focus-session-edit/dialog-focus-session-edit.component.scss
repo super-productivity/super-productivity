@@ -1,7 +1,7 @@
 @use '../../../../styles/_globals.scss' as *;
 
 .chart-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--s3);
 
   .chart-wrapper {
     height: 200px;
@@ -21,8 +21,8 @@
   display: flex;
   justify-content: space-around;
   text-align: center;
-  margin-bottom: 24px;
-  padding: 16px;
+  margin-bottom: var(--s3);
+  padding: var(--s2);
   background: rgba(0, 0, 0, 0.03);
   border-radius: var(--card-border-radius);
 
@@ -30,7 +30,7 @@
     .label {
       font-size: 0.875rem;
       opacity: 0.8;
-      margin-bottom: 4px;
+      margin-bottom: var(--s-half);
     }
 
     .value {
@@ -40,7 +40,7 @@
 }
 
 .sessions-list-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--s3);
 
   h3 {
     margin-bottom: 12px;
@@ -50,7 +50,7 @@
 
   .empty-state {
     text-align: center;
-    padding: 32px;
+    padding: var(--s4);
     opacity: 0.6;
     font-style: italic;
   }
@@ -61,7 +61,7 @@
 
   mat-list-item {
     height: auto;
-    padding: 8px 0;
+    padding: var(--s) 0;
   }
 
   .session-item {
@@ -82,7 +82,7 @@
 }
 
 .add-session-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 
   h3 {
     margin-bottom: 12px;

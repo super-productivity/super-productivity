@@ -47,10 +47,12 @@
               "typia",
               "electron-log",
               "stacktrace-js",
+              "stack-generator",
+              "stacktrace-gps",
+              "error-stack-parser",
               "spark-md5",
               "chrono-node",
               "dayjs",
-              "jira2md",
               "query-string"
             ]
           },

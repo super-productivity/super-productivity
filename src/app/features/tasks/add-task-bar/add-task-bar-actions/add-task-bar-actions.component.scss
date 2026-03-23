@@ -33,7 +33,7 @@
   line-height: 1;
   text-align: center;
   vertical-align: middle;
-  margin-right: 8px;
+  margin-right: var(--s);
 }
 
 .menu-icon-emoji {
@@ -44,7 +44,7 @@
   line-height: 1;
   text-align: center;
   vertical-align: middle;
-  margin-right: 8px;
+  margin-right: var(--s);
   overflow: hidden;
   width: 24px;
   height: 24px;
@@ -61,7 +61,7 @@
   overflow-y: hidden;
 
   @include mq(xs) {
-    gap: 2px;
+    gap: var(--s-quarter);
   }
 
   .action-btn {
@@ -97,7 +97,7 @@
 
     // Override mat-button padding to be more compact
     &.mat-mdc-button {
-      padding: 0 8px;
+      padding: 0 var(--s);
 
       .mat-mdc-button-touch-target {
         display: none; // Remove touch target that can affect layout
@@ -129,7 +129,11 @@
 
     mat-icon {
       flex-shrink: 0; // Prevent icon from shrinking
-      margin-right: 4px;
+      margin-right: var(--s-half);
+
+      &.repeat-icon {
+        transform: rotate(45deg);
+      }
     }
 
     &.has-value {
@@ -149,7 +153,7 @@
       opacity: 1;
 
       @include darkTheme() {
-        background-color: rgba(255, 255, 255, 0.05);
+        background-color: var(--c-light-05);
       }
 
       mat-icon {
@@ -161,7 +165,7 @@
       font-size: 0.8em;
       font-weight: normal;
       opacity: 0.8;
-      margin-left: 4px;
+      margin-left: var(--s-half);
     }
 
     .tags-display {
@@ -182,7 +186,7 @@
       .tag-item {
         display: flex;
         align-items: center;
-        gap: 2px;
+        gap: var(--s-quarter);
         flex-shrink: 0;
         min-width: 0;
 
@@ -208,11 +212,6 @@
           @include truncateText();
           min-width: 0;
           font-size: 0.9em;
-        }
-
-        // Last visible tag gets truncated with ellipsis if needed
-        &:last-child .tag-title {
-          text-overflow: ellipsis;
         }
       }
     }

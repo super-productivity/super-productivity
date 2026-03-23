@@ -13,7 +13,7 @@ td {
 }
 
 mat-card {
-  margin: 8px;
+  margin: var(--s);
 }
 
 mat-card-header {
@@ -24,7 +24,7 @@ mat-card-header {
   .plugin-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--s);
     margin-left: auto;
   }
 }
@@ -32,7 +32,7 @@ mat-card-header {
 plugin-icon {
   width: 40px;
   height: 40px;
-  margin-right: 8px;
+  margin-right: var(--s);
 }
 
 .label {
@@ -43,22 +43,22 @@ plugin-icon {
 mat-card-subtitle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
 
   mat-chip {
-    margin-left: 8px;
+    margin-left: var(--s);
   }
 }
 
 .empty-state {
   text-align: center;
-  padding: 48px 24px;
+  padding: var(--s6) var(--s3);
 
   mat-icon {
     font-size: 48px;
     width: 48px;
     height: 48px;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
     opacity: 0.5;
   }
 }
@@ -66,8 +66,8 @@ mat-card-subtitle {
 mat-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 16px 0;
+  gap: var(--s);
+  margin: var(--s2) 0;
 
   mat-icon {
     font-size: 18px;
@@ -78,7 +78,7 @@ mat-error {
 
 .info-card {
   grid-column: 1 / -1;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 
   mat-card-header {
     align-items: center;
@@ -96,7 +96,7 @@ mat-error {
   }
 
   .warning-content {
-    padding: 8px 0;
+    padding: var(--s) 0;
 
     p {
       margin: 12px 0;
@@ -107,11 +107,11 @@ mat-error {
     }
 
     ul {
-      margin: 12px 0 12px 24px;
+      margin: 12px 0 12px var(--s3);
       padding: 0;
 
       li {
-        margin: 8px 0;
+        margin: var(--s) 0;
         font-weight: bold;
       }
     }
@@ -119,11 +119,11 @@ mat-error {
     .recommendation {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--s);
       padding: 12px;
       background-color: var(--primary-50, rgba(63, 81, 181, 0.08));
       border-radius: var(--card-border-radius);
-      margin-top: 16px;
+      margin-top: var(--s2);
       margin-bottom: 0;
 
       mat-icon {
@@ -136,11 +136,11 @@ mat-error {
 .install-warning {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
   padding: 12px;
   border-color: var(--c-primary);
   border-radius: var(--card-border-radius);
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
   border-width: 2px;
   border-style: solid;
 
@@ -171,18 +171,18 @@ mat-error {
 .community-plugins-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
+  gap: var(--s2);
+  margin-top: var(--s2);
 }
 
 .community-plugin-item {
-  padding: 16px;
+  padding: var(--s2);
   border: 1px solid var(--c-border);
   border-radius: var(--card-border-radius);
   background: var(--c-bg-card);
 
   .plugin-name {
-    margin: 0 0 8px;
+    margin: 0 0 var(--s);
     font-size: 16px;
     font-weight: bold;
 
@@ -204,7 +204,7 @@ mat-error {
 }
 
 .plugin-info-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 
   &:last-child {
     margin-bottom: 0;

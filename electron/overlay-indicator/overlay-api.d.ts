@@ -5,9 +5,9 @@ interface OverlayContentData {
 }
 
 interface OverlayAPI {
-  setIgnoreMouseEvents: (ignore: boolean) => void;
   showMainWindow: () => void;
-  onUpdateContent: (callback: (data: OverlayContentData) => void) => void;
+  onUpdateContent: (callback: (data: OverlayContentData) => void) => () => void;
+  onUpdateOpacity: (callback: (opacity: number) => void) => () => void;
 }
 
 declare global {

@@ -128,7 +128,8 @@ test.describe('@supersync @regression Superseded Clock Regression', () => {
       await clientA.page.waitForLoadState('networkidle');
 
       // Re-enable sync after import (import overwrites globalConfig)
-      await clientA.sync.setupSuperSync(syncConfig);
+      // Use syncImportChoice 'local' to preserve the just-imported backup data
+      await clientA.sync.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
 
       // Wait for imported task to be visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
@@ -266,7 +267,7 @@ test.describe('@supersync @regression Superseded Clock Regression', () => {
       });
       await clientA.page.waitForLoadState('networkidle');
 
-      await clientA.sync.setupSuperSync(syncConfig);
+      await clientA.sync.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
 
       await clientA.sync.syncAndWait();

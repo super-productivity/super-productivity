@@ -409,8 +409,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       // 4. Try to decrypt with OLD password → DecryptError
       // 5. Show decrypt error dialog
 
-      // Trigger sync manually (don't use syncAndWait - it would timeout on error)
-      await clientB.sync.triggerSync();
+      // Click sync button directly — triggerSync() throws on error state before
+      // the async decrypt error dialog has time to render
+      await clientB.sync.syncBtn.click();
 
       // Wait for decrypt error dialog to appear
       // Use specific component selector to avoid strict mode violation

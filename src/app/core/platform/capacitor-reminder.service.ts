@@ -103,8 +103,11 @@ export class CapacitorReminderService {
     // On Android, use native AlarmManager for precision
     if (IS_ANDROID_WEB_VIEW && androidInterface.scheduleNativeReminder) {
       try {
+        // Due-date notifications fire at an arbitrary hour (e.g. 9 AM) that the
+        // user did not explicitly choose, so they should never be alarm-style.
         const useAlarmStyle =
-          this._globalConfigService.cfg()?.reminder?.useAlarmStyleReminders ?? false;
+          options.reminderType !== 'DUE_DATE' &&
+          (this._globalConfigService.cfg()?.reminder?.useAlarmStyleReminders ?? false);
         Log.log('🔔 Calling androidInterface.scheduleNativeReminder', {
           notificationId: options.notificationId,
           useAlarmStyle,

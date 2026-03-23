@@ -22,7 +22,7 @@
   display: flex;
   flex-wrap: nowrap;
   overflow-x: auto;
-  gap: 2px;
+  gap: var(--s-quarter);
   padding: var(--s) var(--s2);
   background-color: var(--bg-lightest);
   @include extraBorder('-bottom');
@@ -34,7 +34,7 @@
     width: 1px;
     flex-shrink: 0;
     background: var(--divider-color);
-    margin: 4px 4px;
+    margin: var(--s-half) var(--s-half);
   }
 
   .heading-label {
@@ -145,6 +145,6 @@
   align-items: flex-start;
   flex-grow: 0;
   flex-shrink: 0;
-  margin: 8px;
+  margin: var(--s);
   margin-right: auto;
 }

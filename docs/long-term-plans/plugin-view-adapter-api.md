@@ -1,5 +1,7 @@
 # Plugin System: View-Adapter API for Task Grouping
 
+> **Status: Planned**
+
 **Date:** 2026-01-20
 **Approach:** Option B - Simpler view-adapter API (not full wrapping system)
 **Estimated Complexity:** ~500 lines of code

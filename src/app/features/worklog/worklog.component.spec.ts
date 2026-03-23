@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -136,6 +137,11 @@ describe('WorklogComponent', () => {
         'en-US',
       ),
     );
+    fixture.detectChanges();
+
+    // Expand the month (January 2025 is not the current month, so it's collapsed by default)
+    fixture.componentInstance.toggleMonth('2025', '1');
+    fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
     fixture.detectChanges();
 
     const dayLabels = fixture.debugElement

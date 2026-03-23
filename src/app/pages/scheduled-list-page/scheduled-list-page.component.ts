@@ -12,6 +12,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { DialogEditTaskRepeatCfgComponent } from '../../features/task-repeat-cfg/dialog-edit-task-repeat-cfg/dialog-edit-task-repeat-cfg.component';
 import { TaskRepeatCfgService } from '../../features/task-repeat-cfg/task-repeat-cfg.service';
 import { DialogScheduleTaskComponent } from '../../features/planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../../features/tasks/dialog-deadline/dialog-deadline.component';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 import { MatCard, MatCardContent } from '@angular/material/card';
 import { TaskTitleComponent } from '../../ui/task-title/task-title.component';
@@ -26,6 +27,7 @@ import { PlannerTaskComponent } from '../../features/planner/planner-task/planne
 import {
   selectAllTasksWithDueTimeSorted,
   selectAllUndoneTasksWithDueDay,
+  selectAllUndoneTasksWithDeadlineSorted,
 } from '../../features/tasks/store/task.selectors';
 import { selectTaskRepeatCfgsSortedByTitleAndProject } from '../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { getNextRepeatOccurrence } from '../../features/task-repeat-cfg/store/get-next-repeat-occurrence.util';
@@ -69,11 +71,22 @@ export class ScheduledListPageComponent {
   taskRepeatCfgs$ = this._store.select(selectTaskRepeatCfgsSortedByTitleAndProject);
   tasksPlannedForDays$ = this._store.select(selectAllUndoneTasksWithDueDay);
   tasksPlannedWithTime$ = this._store.select(selectAllTasksWithDueTimeSorted);
+  tasksWithDeadlines$ = this._store.select(selectAllUndoneTasksWithDeadlineSorted);
 
   editReminder(task: TaskCopy, ev: MouseEvent): void {
     ev.preventDefault();
     ev.stopPropagation();
     this._matDialog.open(DialogScheduleTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
+  }
+
+  editDeadline(task: TaskCopy, ev: MouseEvent): void {
+    ev.preventDefault();
+    ev.stopPropagation();
+    this._matDialog.open(DialogDeadlineComponent, {
+      autoFocus: false,
       restoreFocus: true,
       data: { task },
     });

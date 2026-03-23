@@ -15,7 +15,10 @@ import { PlannerService } from '../planner.service';
 import { PlannerDayComponent } from '../planner-day/planner-day.component';
 import { AsyncPipe } from '@angular/common';
 import { Store } from '@ngrx/store';
-import { selectUndoneOverdue } from '../../tasks/store/task.selectors';
+import {
+  selectUndoneOverdue,
+  selectUndoneOverdueDeadlineTasks,
+} from '../../tasks/store/task.selectors';
 import { PlannerDayOverdueComponent } from '../planner-day-overdue/planner-day-overdue.component';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
@@ -38,6 +41,7 @@ export class PlannerPlanViewComponent {
   private _elRef = inject(ElementRef);
 
   overdue$ = this._store.select(selectUndoneOverdue);
+  overdueDeadlines$ = this._store.select(selectUndoneOverdueDeadlineTasks);
   days$: Observable<PlannerDay[]> = this._plannerService.days$;
   isLoadingMore$ = this._plannerService.isLoadingMore$;
 

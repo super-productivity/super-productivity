@@ -1,5 +1,5 @@
 .chart-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--s3);
 }
 
 .breakdown-table {
@@ -8,7 +8,7 @@
 
   th,
   td {
-    padding: 8px;
+    padding: var(--s);
     text-align: left;
   }
 

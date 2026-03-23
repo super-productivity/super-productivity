@@ -59,7 +59,7 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
           userId = existingUser.id;
           tokenVersion = existingUser.tokenVersion ?? 0;
           Logger.info(
-            `[TEST] Returning existing user: ${email} (ID: ${userId}) - Clearing old data`,
+            `[TEST] Returning existing user (ID: ${userId}) - Clearing old data`,
           );
 
           // Clear old data for this user to ensure clean state.
@@ -85,7 +85,7 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
 
           userId = user.id;
           tokenVersion = 0;
-          Logger.info(`[TEST] Created test user: ${email} (ID: ${userId})`);
+          Logger.info(`[TEST] Created test user (ID: ${userId})`);
         }
 
         // Generate JWT token (include tokenVersion for consistency with auth.ts)
@@ -245,6 +245,71 @@ export const testRoutes = async (fastify: FastifyInstance): Promise<void> => {
         Logger.error('[TEST] Failed to query ops:', err);
         return reply.status(500).send({
           error: 'Failed to query ops',
+          message: (err as Error).message,
+        });
+      }
+    },
+  );
+
+  /**
+   * Simulate a server backup revert by deleting all operations after a given serverSeq.
+   * Also resets the user's sync state (snapshot) to simulate a pg_dump restore
+   * to an earlier point in time.
+   *
+   * Used by E2E tests to verify client recovery after server backup restore.
+   */
+  fastify.delete<{
+    Params: { userId: string; serverSeq: string };
+  }>(
+    '/user/:userId/ops-after/:serverSeq',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['userId', 'serverSeq'],
+          properties: {
+            userId: { type: 'string' },
+            serverSeq: { type: 'string' },
+          },
+        },
+      },
+      config: {
+        rateLimit: false,
+      },
+    },
+    async (request, reply) => {
+      const userId = parseInt(request.params.userId, 10);
+      const serverSeq = parseInt(request.params.serverSeq, 10);
+
+      if (isNaN(userId) || isNaN(serverSeq)) {
+        return reply.status(400).send({ error: 'Invalid userId or serverSeq' });
+      }
+
+      try {
+        const deleted = await prisma.$transaction(async (tx) => {
+          // Delete operations after the given serverSeq
+          const result = await tx.operation.deleteMany({
+            where: {
+              userId,
+              serverSeq: { gt: serverSeq },
+            },
+          });
+
+          // Reset snapshot state so the server doesn't serve stale cached snapshots
+          await tx.userSyncState.deleteMany({ where: { userId } });
+
+          return result.count;
+        });
+
+        Logger.info(
+          `[TEST] Simulated backup revert for user ${userId}: deleted ${deleted} ops after serverSeq ${serverSeq}`,
+        );
+
+        return reply.send({ deleted, revertedToSeq: serverSeq });
+      } catch (err: unknown) {
+        Logger.error('[TEST] Failed to simulate backup revert:', err);
+        return reply.status(500).send({
+          error: 'Failed to simulate backup revert',
           message: (err as Error).message,
         });
       }

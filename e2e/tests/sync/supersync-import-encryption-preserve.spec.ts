@@ -72,6 +72,13 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       // Import the encrypted backup (has isEncryptionEnabled: true)
       const backupPath = ImportPage.getFixturePath('test-backup-encrypted.json');
       const fileInput = clientA.page.locator('file-imex input[type="file"]');
+
+      // Start listening for import completion BEFORE triggering the import
+      const importCompletePromise = clientA.page.waitForEvent('console', {
+        predicate: (msg) => msg.text().includes('Load(import) all data'),
+        timeout: 60000,
+      });
+
       await fileInput.setInputFiles(backupPath);
 
       // Since both current and imported states have encryption enabled,
@@ -85,9 +92,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         encryptionChangeDialog
           .waitFor({ state: 'visible', timeout: 10000 })
           .then(() => 'encryption_dialog' as const),
-        clientA.page
-          .waitForURL(/tag\/TODAY/, { timeout: 10000 })
-          .then(() => 'import_completed' as const),
+        importCompletePromise.then(() => 'import_completed' as const),
       ]).catch(() => 'timeout' as const);
 
       if (importOutcome === 'encryption_dialog') {
@@ -99,18 +104,13 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         );
         await importAndChangeBtn.click();
         await encryptionChangeDialog.waitFor({ state: 'hidden', timeout: 15000 });
-        await clientA.page.waitForURL(/tag\/TODAY/, { timeout: 30000 });
+        await importCompletePromise;
       } else if (importOutcome === 'import_completed') {
         console.log(
           '[EncPreserve] Import completed without encryption dialog (expected)',
         );
       } else {
-        const currentUrl = clientA.page.url();
-        if (currentUrl.includes('tag/TODAY')) {
-          console.log('[EncPreserve] Import completed (detected via URL)');
-        } else {
-          throw new Error(`Import timed out. Current URL: ${currentUrl}`);
-        }
+        throw new Error('Import timed out waiting for completion');
       }
 
       // Navigate to work view
@@ -129,6 +129,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         ...baseConfig,
         isEncryptionEnabled: true,
         password: encryptionPassword,
+        syncImportChoice: 'local',
       });
 
       await clientA.sync.syncAndWait();
@@ -217,6 +218,13 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
       await importPage.navigateToImportPage();
       const backupPath = ImportPage.getFixturePath('test-backup-encrypted.json');
       const fileInput = clientA.page.locator('file-imex input[type="file"]');
+
+      // Start listening for import completion BEFORE triggering the import
+      const importCompletePromise = clientA.page.waitForEvent('console', {
+        predicate: (msg) => msg.text().includes('Load(import) all data'),
+        timeout: 60000,
+      });
+
       await fileInput.setInputFiles(backupPath);
 
       // Handle dialog or wait for completion
@@ -228,9 +236,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         encryptionChangeDialog
           .waitFor({ state: 'visible', timeout: 10000 })
           .then(() => 'encryption_dialog' as const),
-        clientA.page
-          .waitForURL(/tag\/TODAY/, { timeout: 10000 })
-          .then(() => 'import_completed' as const),
+        importCompletePromise.then(() => 'import_completed' as const),
       ]).catch(() => 'timeout' as const);
 
       if (importOutcome === 'encryption_dialog') {
@@ -239,12 +245,9 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         );
         await importBtn.click();
         await encryptionChangeDialog.waitFor({ state: 'hidden', timeout: 15000 });
-        await clientA.page.waitForURL(/tag\/TODAY/, { timeout: 30000 });
+        await importCompletePromise;
       } else if (importOutcome === 'timeout') {
-        const currentUrl = clientA.page.url();
-        if (!currentUrl.includes('tag/TODAY')) {
-          throw new Error(`Import timed out. Current URL: ${currentUrl}`);
-        }
+        throw new Error('Import timed out waiting for completion');
       }
 
       await clientA.page.goto('/#/work-view');
@@ -256,6 +259,7 @@ test.describe('@supersync @encryption Import with Encryption Preservation', () =
         ...baseConfig,
         isEncryptionEnabled: true,
         password: encryptionPassword,
+        syncImportChoice: 'local',
       });
       await clientA.sync.syncAndWait();
 

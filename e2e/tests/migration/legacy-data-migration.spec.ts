@@ -224,20 +224,6 @@ test.describe('@migration Legacy Data Migration', () => {
       // Wait for network to settle
       await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
-      // Dismiss welcome dialog if it appears
-      const welcomeDialog = page
-        .locator('mat-dialog-container')
-        .filter({ hasText: 'Welcome' });
-      if (await welcomeDialog.isVisible().catch(() => false)) {
-        const noThanksBtn = welcomeDialog
-          .locator('button')
-          .filter({ hasText: 'No thanks' });
-        if (await noThanksBtn.isVisible().catch(() => false)) {
-          await noThanksBtn.click();
-          await welcomeDialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
-        }
-      }
-
       // ========================================================================
       // STEP 6: Verify migrated data via IndexedDB
       // ========================================================================

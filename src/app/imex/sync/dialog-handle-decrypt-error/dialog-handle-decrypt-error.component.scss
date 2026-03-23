@@ -9,7 +9,7 @@
 
 .option-section {
   text-align: center;
-  margin-top: 16px;
+  margin-top: var(--s2);
 }
 
 .option-label {
@@ -18,7 +18,7 @@
 }
 
 .divider {
-  margin: 24px 0;
+  margin: var(--s3) 0;
   border: none;
   border-top: 1px solid rgba(128, 128, 128, 0.3);
 }

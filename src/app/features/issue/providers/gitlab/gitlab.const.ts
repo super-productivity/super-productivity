@@ -19,7 +19,7 @@ export const DEFAULT_GITLAB_CFG: GitlabCfg = {
 
 // NOTE: we need a high limit because git has low usage limits :(
 export const GITLAB_POLL_INTERVAL = 10 * 60 * 1000;
-export const GITLAB_INITIAL_POLL_DELAY = 8 * 1000 + 8000;
+export const GITLAB_INITIAL_POLL_DELAY = 16000;
 export const GITLAB_BASE_URL = 'https://gitlab.com/';
 
 export const GITLAB_API_BASE_URL = `${GITLAB_BASE_URL}api/v4`;

@@ -61,6 +61,20 @@ describe('Conditions', () => {
       expect(await ConditionTitleContains.check(mockContext, event, 'milk')).toBe(false);
     });
 
+    it('should return false when task title is undefined', async () => {
+      const event = {
+        task: { title: undefined },
+      } as unknown as TaskEvent;
+      expect(await ConditionTitleContains.check(mockContext, event, 'milk')).toBe(false);
+    });
+
+    it('should return false when task title is null', async () => {
+      const event = {
+        task: { title: null },
+      } as unknown as TaskEvent;
+      expect(await ConditionTitleContains.check(mockContext, event, 'milk')).toBe(false);
+    });
+
     it('should support regex matching when enabled', async () => {
       const event = {
         task: { title: 'Bug: broken sync' },

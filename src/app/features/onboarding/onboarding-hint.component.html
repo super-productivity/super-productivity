@@ -1,0 +1,34 @@
+@if (hintPosition(); as pos) {
+  <div
+    class="hint-container"
+    [class.floating]="isFloating()"
+    role="status"
+    aria-live="polite"
+    [style.top.px]="isFloating() ? null : pos.top"
+    [style.left.px]="isFloating() ? null : pos.left"
+  >
+    @if (!isFloating()) {
+      <div
+        class="hint-arrow"
+        [class.arrow-up]="pos.arrowDirection === 'up'"
+        [class.arrow-down]="pos.arrowDirection === 'down'"
+        [style.left.px]="pos.arrowOffset"
+      ></div>
+    }
+    <div class="hint-chip">
+      <div class="hint-text">
+        <span>{{ hintMessage() | translate }}</span>
+        @if (shortcutHint(); as shortcut) {
+          <span class="shortcut-hint">
+            {{ T.ONBOARDING.HINTS.OR_PRESS | translate }} <kbd>{{ shortcut }}</kbd>
+          </span>
+        }
+      </div>
+      <button
+        class="close-btn"
+        [attr.aria-label]="T.ONBOARDING.HINTS.SKIP_ARIA | translate"
+        (click)="skip()"
+      ><span aria-hidden="true">✕</span></button>
+    </div>
+  </div>
+}

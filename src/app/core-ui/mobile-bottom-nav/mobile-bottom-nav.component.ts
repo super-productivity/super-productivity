@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -43,6 +43,8 @@ export class MobileBottomNavComponent {
   private readonly _pluginBridge = inject(PluginBridgeService);
   private readonly _store = inject(Store);
   private readonly _workContextService = inject(WorkContextService);
+
+  isEntrance = input(false);
 
   readonly T = T;
   readonly TODAY_TAG = TODAY_TAG;

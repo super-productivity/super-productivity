@@ -14,6 +14,28 @@ permissions:
   contents: read
 
 jobs:
+  # Verify package-lock.json only uses the official npm registry.
+  # Prevents contributors using mirror registries from rewriting all resolved URLs.
+  check-lockfile-registry:
+    name: Check package-lock.json registry
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Reject non-standard registry URLs
+        run: |
+          BAD_COUNT=$(grep '"resolved": "https\?://' package-lock.json | grep -cv 'registry.npmjs.org' || true)
+          if [ "$BAD_COUNT" -gt 0 ]; then
+            echo "::error::package-lock.json contains $BAD_COUNT resolved URLs pointing to a non-standard registry."
+            echo "Examples:"
+            grep '"resolved": "https\?://' package-lock.json | grep -v 'registry.npmjs.org' | head -5
+            echo ""
+            echo "Please delete node_modules and package-lock.json, then run 'npm install' with the default registry (https://registry.npmjs.org/)."
+            exit 1
+          fi
+
   # This job will scan dependency manifest files
   # surfacing known-vulnerable versions of the packages declared or updated.
   # Only runs on pull_request events as the action requires base/head refs
@@ -33,13 +55,13 @@ jobs:
           ssh://git@github.com/
 
       - name: 'Dependency Review'
-        uses: actions/dependency-review-action@05fe4576374b728f0c523d6a13d64c25081e0803 # v4
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Check out Git repository
@@ -56,7 +78,7 @@ jobs:
     needs: [lint, dependency-vulnerability-review]
     if: ${{ !cancelled() && !failure() }}
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Check out Git repository
@@ -71,8 +93,8 @@ jobs:
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -114,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
           cache: 'npm'
@@ -142,7 +164,7 @@ jobs:
         run: rm -f dist/browser/ngsw.json dist/browser/ngsw-worker.js dist/browser/safety-worker.js dist/browser/worker-basic.min.js
 
       - name: Run Lighthouse CI
-        uses: treosh/lighthouse-ci-action@fcd65974f7c4c2bf0ee9d09b84d2489183c29726 # v12
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # v12
         with:
           # Configure Lighthouse CI
           configPath: './tools/lighthouse/.lighthouserc.json'

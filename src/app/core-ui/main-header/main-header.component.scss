@@ -14,7 +14,6 @@
   display: block;
   position: relative;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   --header-nav-button-gap: var(--s-half);
   --header-button-size: 40px;
 }
@@ -68,12 +67,12 @@
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  padding: 4px 8px;
+  padding: var(--s-half) var(--s);
   min-height: var(--bar-height-large);
 
   @include mq(xs) {
     min-height: var(--bar-height);
-    padding: 4px 16px;
+    padding: var(--s-half) var(--s2);
   }
 
   &:has(page-title:hover) ::ng-deep .current-task-title,
@@ -333,7 +332,7 @@ page-title {
     border-bottom-left-radius: var(--card-border-radius);
 
     @include darkTheme() {
-      border-right-color: rgba(255, 255, 255, 0.1);
+      border-right-color: var(--c-light-10);
     }
   }
 }
@@ -404,7 +403,7 @@ page-title {
   .focus-label {
     position: absolute;
     line-height: 1;
-    padding: 2px 4px 1px;
+    padding: var(--s-quarter) var(--s-half) 1px;
     left: 50%;
     transform: translateX(-50%);
     font-weight: bold;

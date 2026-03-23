@@ -134,6 +134,36 @@ describe('getQuickSettingUpdates', () => {
     });
   });
 
+  describe('MONTHLY_FIRST_DAY', () => {
+    it('should return MONTHLY cycle with repeatEvery 1', () => {
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      expect(result).toBeDefined();
+      expect(result!.repeatCycle).toBe('MONTHLY');
+      expect(result!.repeatEvery).toBe(1);
+    });
+
+    it('should set startDate to the 1st of the month', () => {
+      const result = getQuickSettingUpdates('MONTHLY_FIRST_DAY');
+      const startDate = new Date(result!.startDate + 'T00:00:00');
+      expect(startDate.getDate()).toBe(1);
+    });
+  });
+
+  describe('MONTHLY_LAST_DAY', () => {
+    it('should return MONTHLY cycle with repeatEvery 1', () => {
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
+      expect(result).toBeDefined();
+      expect(result!.repeatCycle).toBe('MONTHLY');
+      expect(result!.repeatEvery).toBe(1);
+    });
+
+    it('should always set startDate with day=31 regardless of current month', () => {
+      const result = getQuickSettingUpdates('MONTHLY_LAST_DAY');
+      const startDate = new Date(result!.startDate + 'T00:00:00');
+      expect(startDate.getDate()).toBe(31);
+    });
+  });
+
   describe('YEARLY_CURRENT_DATE', () => {
     it('should return YEARLY cycle with repeatEvery 1', () => {
       const result = getQuickSettingUpdates('YEARLY_CURRENT_DATE');

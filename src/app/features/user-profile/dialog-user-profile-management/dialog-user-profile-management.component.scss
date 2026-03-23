@@ -1,9 +1,9 @@
 .create-profile-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--s4);
 
   h3 {
     margin-top: 0;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
   }
 
   .create-profile-form {
@@ -20,7 +20,7 @@
 .profiles-list-section {
   h3 {
     margin-top: 0;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
   }
 
   .profiles-list {
@@ -32,7 +32,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px;
+      padding: var(--s2);
       border: 1px solid rgba(0, 0, 0, 0.12);
       border-radius: var(--card-border-radius);
       transition: var(--transition-standard);
@@ -52,15 +52,15 @@
         .profile-name {
           display: flex;
           align-items: center;
-          gap: 8px;
-          margin-bottom: 4px;
+          gap: var(--s);
+          margin-bottom: var(--s-half);
 
           strong {
             font-size: 16px;
           }
 
           .active-badge {
-            padding: 2px 8px;
+            padding: var(--s-quarter) var(--s);
             background: var(--c-accent);
             color: white;
             border-radius: 12px;
@@ -82,14 +82,14 @@
 
       .profile-actions {
         display: flex;
-        gap: 4px;
+        gap: var(--s-half);
       }
     }
   }
 }
 
 .profile-folder-section {
-  margin-top: 24px;
-  padding-top: 24px;
+  margin-top: var(--s3);
+  padding-top: var(--s3);
   border-top: 1px solid rgba(0, 0, 0, 0.12);
 }

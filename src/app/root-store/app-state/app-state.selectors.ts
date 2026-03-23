@@ -7,10 +7,10 @@ export const selectAppStateState = createFeatureSelector<fromAppState.AppState>(
 
 export const selectTodayStr = createSelector(
   selectAppStateState,
-  (state: fromAppState.AppState) => state.todayStr,
+  (state: fromAppState.AppState) => state?.todayStr,
 );
 
 export const selectStartOfNextDayDiffMs = createSelector(
   selectAppStateState,
-  (state: fromAppState.AppState) => state.startOfNextDayDiffMs,
+  (state: fromAppState.AppState) => state?.startOfNextDayDiffMs,
 );

@@ -83,7 +83,7 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
-    mockValidateStateService.validateAndRepair.and.returnValue({
+    mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     });
@@ -319,7 +319,7 @@ describe('SyncHydrationService', () => {
     it('should use repaired state when validation detects issues', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
       const repairedState = { task: { ids: ['t1'], repaired: true } } as any;
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState,
@@ -339,7 +339,7 @@ describe('SyncHydrationService', () => {
 
     it('should use original data when no repair needed', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: false,
       });
@@ -458,7 +458,7 @@ describe('SyncHydrationService', () => {
 
       it('should still validate and repair when createSyncImportOp is false', async () => {
         const repairedState = { task: { repaired: true } } as any;
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: true,
           wasRepaired: true,
           repairedState,

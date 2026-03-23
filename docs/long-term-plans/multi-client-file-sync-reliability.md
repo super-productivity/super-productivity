@@ -1,5 +1,7 @@
 # Making File-Based Sync Reliable with Multiple Concurrent Clients
 
+> **Status: Planned**
+
 ## Current Vulnerabilities
 
 The single-file approach (`sync-data.json`) has these specific weaknesses when multiple clients sync simultaneously:

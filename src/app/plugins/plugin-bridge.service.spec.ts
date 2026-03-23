@@ -778,4 +778,36 @@ describe('PluginBridgeService - Counter Methods', () => {
       );
     });
   });
+
+  describe('config handler', () => {
+    it('should return false for hasConfigHandler when no handler is registered', () => {
+      expect(service.hasConfigHandler('unknown-plugin')).toBe(false);
+    });
+
+    it('should return true for hasConfigHandler after registering a handler', () => {
+      (service as any)._configHandlers.set('test-plugin', () => {});
+      expect(service.hasConfigHandler('test-plugin')).toBe(true);
+    });
+
+    it('should invoke the registered config handler', () => {
+      const handler = jasmine.createSpy('configHandler');
+      (service as any)._configHandlers.set('test-plugin', handler);
+
+      service.invokeConfigHandler('test-plugin');
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not throw when invoking handler for unregistered plugin', () => {
+      expect(() => service.invokeConfigHandler('unknown-plugin')).not.toThrow();
+    });
+
+    it('should remove config handler on cleanup', () => {
+      (service as any)._configHandlers.set('test-plugin', () => {});
+      expect(service.hasConfigHandler('test-plugin')).toBe(true);
+
+      (service as any)._configHandlers.delete('test-plugin');
+      expect(service.hasConfigHandler('test-plugin')).toBe(false);
+    });
+  });
 });

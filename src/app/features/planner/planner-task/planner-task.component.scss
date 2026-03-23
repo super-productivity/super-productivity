@@ -25,8 +25,8 @@
   ::ng-deep .tags-container {
     // to match task title padding
     margin-left: 3px;
-    margin-bottom: 2px;
-    margin-top: 2px;
+    margin-bottom: var(--s-quarter);
+    margin-top: var(--s-quarter);
   }
 }
 
@@ -48,10 +48,10 @@
   flex-shrink: 1;
   min-width: 0;
   position: relative;
-  padding: 4px 0;
+  padding: var(--s-half) 0;
 
   @include mq(xs) {
-    padding: 2px 0;
+    padding: var(--s-quarter) 0;
   }
 }
 
@@ -78,16 +78,15 @@
 }
 
 .title {
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: var(--s-half);
+  padding-right: var(--s-half);
   // to have room for the coloured edit border
   padding-top: 1px;
   padding-bottom: 1px;
 
   line-height: 1.5;
   position: relative;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   flex-grow: 1;
   flex-shrink: 1;
 
@@ -97,11 +96,11 @@
 }
 
 .parent-title {
-  padding-left: 4px;
-  padding-right: 4px;
-  padding-top: 4px;
-  padding-bottom: 4px;
-  text-overflow: ellipsis;
+  padding-left: var(--s-half);
+  padding-right: var(--s-half);
+  padding-top: var(--s-half);
+  padding-bottom: var(--s-half);
+  @include truncateText();
   line-height: 1.1;
   font-size: var(--planner-font-size-smaller-mobile);
 
@@ -128,8 +127,8 @@
     padding-bottom: 12px;
     min-width: 44px;
     text-align: right;
-    padding-left: 4px;
-    padding-right: 8px;
+    padding-left: var(--s-half);
+    padding-right: var(--s);
   }
 
   inline-input ::ng-deep input {
@@ -140,7 +139,7 @@
 .drag-handle {
   width: 32px;
   height: 32px;
-  margin-left: 4px;
+  margin-left: var(--s-half);
   min-width: 32px;
   z-index: var(--z-drag-handle);
   display: flex;
@@ -166,67 +165,6 @@
   > * {
     @include center;
   }
-
-  .type-ico-wrapper {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    opacity: var(--task-icon-default-opacity);
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-
-    @include mq(xs, max) {
-      //display: none;
-    }
-
-    mat-icon {
-      margin-left: var(--s);
-      margin-right: var(--s);
-      opacity: 0.8;
-      font-size: var(--planner-item-ico-size);
-      height: var(--planner-item-ico-size);
-      width: var(--planner-item-ico-size);
-      min-width: var(--planner-item-ico-size);
-      max-width: var(--planner-item-ico-size);
-    }
-
-    :host.isCurrent &::ng-deep mat-icon {
-      transform: scale(1.4) !important;
-      transform-origin: center center;
-      opacity: 0.18;
-    }
-  }
-}
-
-.mini-badge {
-  line-height: var(--mini-badge-size);
-  width: var(--mini-badge-size);
-  height: var(--mini-badge-size);
-  font-size: 12px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  text-align: center;
-  z-index: 2;
-}
-
-.repeat-date-badge {
-  @include center;
-  margin-top: 10px;
-  font-size: 10px;
-  z-index: 10;
-  line-height: 1;
-  text-align: center;
-  padding: 1px 2px 0;
-  @include extraBorder();
-  border-radius: var(--card-border-radius);
-
-  // avoid affecting drag handle
-  pointer-events: none;
-  background: var(--bg-lighter);
 }
 
 .original-time-remaining {

@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API Key",
+    "API_KEY_LINK": "Get your Personal API key",
+    "TEAM_IDS": "Workspace/Team IDs (comma-separated, leave empty for all)",
+    "USER_ID": "User ID (for filtering by assignee)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATUS": "Status",
+    "PRIORITY": "Priority",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Description"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Unknown error. Check your API key and try again."
+  }
+}

@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/test.fixture';
 
 const TASK_SEL = 'task';
 const TASK_TITLE = 'task task-title';
-const TASK_DONE_BTN = '.task-done-btn';
+const TASK_DONE_BTN = '.done-toggle';
 const FINISH_DAY_BTN = '.e2e-finish-day';
 const FIRST_TASK = 'task:nth-child(1)';
 const SECOND_TASK = 'task:nth-child(2)';

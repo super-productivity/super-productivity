@@ -3,10 +3,7 @@
 :host {
   position: fixed;
   z-index: var(--z-focus-mode-overlay);
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -91,7 +88,7 @@ main {
 
 .pomodoro-info-msg {
   font-size: 20px;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 }
 
 .focus-mode-select-mode {

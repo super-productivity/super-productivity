@@ -95,7 +95,6 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
 
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', ['load']);
-
     TestBed.configureTestingModule({
       providers: [
         TaskRepeatCfgEffects,
@@ -289,9 +288,10 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           }),
         );
 
-        // Should update created timestamp (not dueDay) for duplicate prevention
+        // Should update created timestamp AND dueDay for proper scheduling (#6856)
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
+          dueDay: firstOccurrenceStr,
         });
         done();
       });
@@ -381,6 +381,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
+          dueDay: firstOccurrenceStr,
         });
         done();
       });
@@ -444,6 +445,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
+          dueDay: firstOccurrenceStr,
         });
         done();
       });
@@ -506,6 +508,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         );
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
+          dueDay: firstOccurrenceStr,
         });
         done();
       });
@@ -569,11 +572,12 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
         expect(emitted).toBe(false);
 
         // Should still update created (duplicate prevention)
+        const firstOccurrenceStr = getDbDateStr(firstOccurrence);
         expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
           created: firstOccurrence.getTime(),
+          dueDay: firstOccurrenceStr,
         });
         // Should still update lastTaskCreationDay to the future date
-        const firstOccurrenceStr = getDbDateStr(firstOccurrence);
         expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
           'repeat-cfg-id',
           jasmine.objectContaining({
@@ -799,6 +803,7 @@ describe('TaskRepeatCfgEffects - Repeatable Subtasks', () => {
           );
           expect(taskService.update).toHaveBeenCalledWith('parent-task-id', {
             created: firstOccurrence.getTime(),
+            dueDay: firstOccurrenceStr,
           });
           done();
         });
@@ -2040,7 +2045,6 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
     const matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
     const taskArchiveServiceSpy = jasmine.createSpyObj('TaskArchiveService', ['load']);
-
     TestBed.configureTestingModule({
       providers: [
         TaskRepeatCfgEffects,
@@ -2698,6 +2702,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       // Verify created is set to noon on Friday Jan 17
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: expectedCreated,
+        dueDay: '2025-01-17',
       });
 
       // Verify lastTaskCreationDay is the future date
@@ -2753,6 +2758,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 20, 12, 0, 0, 0).getTime(),
+        dueDay: '2025-01-20',
       });
     });
 
@@ -2832,6 +2838,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 20, 12, 0, 0, 0).getTime(),
+        dueDay: '2025-01-20',
       });
     });
 
@@ -2898,6 +2905,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 1, 15, 12, 0, 0, 0).getTime(),
+        dueDay: '2025-02-15',
       });
     });
 
@@ -2937,6 +2945,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
       // Should still update created for duplicate prevention
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 0, 17, 12, 0, 0, 0).getTime(),
+        dueDay: '2025-01-17',
       });
       expect(taskRepeatCfgService.updateTaskRepeatCfg).toHaveBeenCalledWith(
         'repeat-cfg-id',
@@ -2981,6 +2990,7 @@ describe('TaskRepeatCfgEffects - Deterministic Date Scenarios', () => {
 
       expect(taskService.update).toHaveBeenCalledWith('test-task-id', {
         created: new Date(2025, 1, 1, 12, 0, 0, 0).getTime(),
+        dueDay: '2025-02-01',
       });
     });
 

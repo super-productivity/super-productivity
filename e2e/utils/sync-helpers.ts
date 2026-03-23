@@ -6,11 +6,7 @@ import {
 } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { waitForAppReady } from './waits';
-import { dismissTourIfVisible, dismissWelcomeDialog } from './tour-helpers';
 import type { SyncPage } from '../pages/sync.page';
-
-// Re-export tour helpers for convenience
-export { dismissTourIfVisible, dismissWelcomeDialog };
 
 /**
  * WebDAV configuration interface
@@ -91,7 +87,7 @@ export const createWebDavFolder = async (
 
 /**
  * Creates a new browser context and page for sync testing.
- * Handles app initialization, tour dismissal, and auto-accepts fresh client sync confirmations.
+ * Handles app initialization and auto-accepts fresh client sync confirmations.
  *
  * @param browser - Playwright Browser instance
  * @param baseURL - Base URL for the app
@@ -103,6 +99,15 @@ export const setupSyncClient = async (
 ): Promise<{ context: BrowserContext; page: Page }> => {
   const context = await browser.newContext({ baseURL });
   const page = await context.newPage();
+
+  // Skip onboarding, hints, and example tasks before the app boots.
+  // This runs before any page JavaScript, so Angular sees the flags immediately.
+  await page.addInitScript(() => {
+    localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+    localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+    localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+    localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+  });
 
   // Auto-accept confirm dialogs for fresh client sync
   // This handles the window.confirm() call in OperationLogSyncService._showFreshClientSyncConfirmation
@@ -128,7 +133,6 @@ export const setupSyncClient = async (
 
   await page.goto('/');
   await waitForAppReady(page);
-  await dismissTourIfVisible(page);
   return { context, page };
 };
 

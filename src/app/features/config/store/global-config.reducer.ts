@@ -67,6 +67,7 @@ export const selectTimelineConfig = createSelector(
   (cfg): ScheduleConfig => cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule,
 );
 
+/** @deprecated Exists only for migration to the voice-reminder plugin. */
 export const selectIsDominaModeConfig = createSelector(
   selectConfigFeatureState,
   (cfg): DominaModeConfig => cfg?.dominaMode ?? DEFAULT_GLOBAL_CONFIG.dominaMode,
@@ -152,6 +153,15 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
       shortSyntax: {
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
+      },
+      overlayIndicator: {
+        ...DEFAULT_GLOBAL_CONFIG.overlayIndicator,
+        ...appDataComplete.globalConfig.overlayIndicator,
+        // Migrate deprecated misc.isOverlayIndicatorEnabled
+        ...(appDataComplete.globalConfig.misc?.isOverlayIndicatorEnabled !== undefined &&
+        appDataComplete.globalConfig.overlayIndicator?.isEnabled === undefined
+          ? { isEnabled: appDataComplete.globalConfig.misc.isOverlayIndicatorEnabled }
+          : {}),
       },
       sync: {
         ...incomingSyncConfig,

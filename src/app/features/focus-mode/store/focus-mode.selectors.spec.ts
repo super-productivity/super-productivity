@@ -29,6 +29,7 @@ describe('FocusModeSelectors', () => {
     lastCompletedDuration: 0,
     pausedTaskId: null,
     _isResumingBreak: false,
+    _isOvertimeEnabled: false,
     ...overrides,
   });
 
@@ -333,6 +334,89 @@ describe('FocusModeSelectors', () => {
 
     it('should return false when current screen is not SessionDone', () => {
       const result = selectors.selectIsSessionCompleted.projector(FocusScreen.Main);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('selectIsOvertimeEnabled', () => {
+    it('should return true when overtime is enabled', () => {
+      const state = createMockFocusModeState({ _isOvertimeEnabled: true });
+      const result = selectors.selectIsOvertimeEnabled.projector(state);
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when overtime is disabled', () => {
+      const state = createMockFocusModeState({ _isOvertimeEnabled: false });
+      const result = selectors.selectIsOvertimeEnabled.projector(state);
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('selectIsInOvertime', () => {
+    it('should return true when timer is running past duration with overtime enabled', () => {
+      const timer = createMockTimer({
+        isRunning: true,
+        purpose: 'work',
+        duration: 1500000,
+        elapsed: 1600000,
+      });
+
+      const result = selectors.selectIsInOvertime.projector(timer, true);
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when overtime is not enabled', () => {
+      const timer = createMockTimer({
+        isRunning: true,
+        purpose: 'work',
+        duration: 1500000,
+        elapsed: 1600000,
+      });
+
+      const result = selectors.selectIsInOvertime.projector(timer, false);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when timer is not running', () => {
+      const timer = createMockTimer({
+        isRunning: false,
+        purpose: 'work',
+        duration: 1500000,
+        elapsed: 1600000,
+      });
+
+      const result = selectors.selectIsInOvertime.projector(timer, true);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when elapsed has not reached duration', () => {
+      const timer = createMockTimer({
+        isRunning: true,
+        purpose: 'work',
+        duration: 1500000,
+        elapsed: 1000000,
+      });
+
+      const result = selectors.selectIsInOvertime.projector(timer, true);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for break timers', () => {
+      const timer = createMockTimer({
+        isRunning: true,
+        purpose: 'break',
+        duration: 300000,
+        elapsed: 400000,
+      });
+
+      const result = selectors.selectIsInOvertime.projector(timer, true);
 
       expect(result).toBe(false);
     });

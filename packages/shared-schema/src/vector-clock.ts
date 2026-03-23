@@ -68,7 +68,6 @@ export const compareVectorClocks = (
     if (aGreater && bGreater) return 'CONCURRENT';
   }
 
-  if (aGreater && bGreater) return 'CONCURRENT';
   if (aGreater) return 'GREATER_THAN';
   if (bGreater) return 'LESS_THAN';
   return 'EQUAL';

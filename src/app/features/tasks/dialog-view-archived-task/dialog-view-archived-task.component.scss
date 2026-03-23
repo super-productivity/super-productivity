@@ -16,13 +16,13 @@
   }
 
   .section {
-    margin-bottom: 24px;
+    margin-bottom: var(--s3);
 
     h3 {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin: 0 0 8px;
+      margin: 0 0 var(--s);
       font-size: 15px;
       color: var(--text-color-muted);
 
@@ -43,7 +43,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 0;
+      padding: var(--s-half) 0;
 
       mat-icon {
         font-size: 20px;
@@ -69,7 +69,7 @@
   .time-info {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--s-half);
 
     .separator {
       color: var(--text-color-muted);
@@ -78,7 +78,7 @@
 
   .notes-section {
     .notes-content {
-      padding: 8px 12px;
+      padding: var(--s) 12px;
       border-radius: var(--card-border-radius);
       background: var(--bg-lighter);
     }
@@ -90,12 +90,12 @@
     ::ng-deep {
       ul,
       ol {
-        padding-left: 24px;
-        margin: 4px 0;
+        padding-left: var(--s3);
+        margin: var(--s-half) 0;
       }
 
       p {
-        margin: 4px 0;
+        margin: var(--s-half) 0;
       }
     }
   }
@@ -111,7 +111,7 @@
   .issue-link-body {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--s-half);
     color: var(--c-accent);
     text-decoration: none;
     word-break: break-all;

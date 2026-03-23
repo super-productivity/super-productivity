@@ -135,6 +135,9 @@ export const createValidTask = (id: string, overrides: Partial<Task> = {}): Task
   timeSpent: 0,
   dueDay: undefined,
   dueWithTime: undefined,
+  deadlineDay: undefined,
+  deadlineWithTime: undefined,
+  deadlineRemindAt: undefined,
   attachments: [],
   ...overrides,
 });

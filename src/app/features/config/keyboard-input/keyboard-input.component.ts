@@ -8,7 +8,6 @@ import { prepareKeyCode } from '../../../util/check-key-combo';
 @Component({
   selector: 'keyboard-input',
   templateUrl: './keyboard-input.component.html',
-  styleUrls: ['./keyboard-input.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatInput, FormsModule, ReactiveFormsModule, FormlyModule],
 })

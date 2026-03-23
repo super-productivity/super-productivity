@@ -3,11 +3,11 @@
 @include dialog-encryption-common-classes;
 
 .info-box {
-  margin-bottom: 24px;
+  margin-bottom: var(--s3);
 }
 
 .password-fields {
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 
   mat-form-field {
     width: 100%;
@@ -17,9 +17,9 @@
 .password-error {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
   color: var(--c-warn);
   font-size: 13px;
   margin-top: -4px;
-  margin-bottom: 8px;
+  margin-bottom: var(--s);
 }

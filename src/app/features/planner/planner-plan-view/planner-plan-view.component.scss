@@ -2,8 +2,12 @@
 
 :host {
   overflow: auto;
-  display: flex;
+  display: block;
   height: 100%;
+
+  @include mq(xs, max) {
+    overflow-x: hidden;
+  }
 
   &.isScrolled {
     border-top: 1px solid var(--extra-border-color);
@@ -15,19 +19,19 @@
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   box-sizing: border-box;
-  padding: 24px;
+  padding: var(--s3);
   padding-top: 0;
-  gap: 16px;
+  gap: var(--s2);
 
   @include mq(xs) {
-    gap: 24px;
+    gap: var(--s3);
   }
 
   @include mq(xs, max) {
     display: block;
     width: 100%;
     max-width: 100%;
-    padding: 16px;
+    padding: var(--s2);
   }
 }
 

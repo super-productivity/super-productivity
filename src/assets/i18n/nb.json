@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity finansieres helt av fellesskapet. Det er ingen sporing, ingen annonser, og ingen datainnsamling — oppgavene dine forblir på enheten din.",
     "INTRO_2": "Hvis du verdsetter denne tilnærmingen og ønsker å holde prosjektet sunt og i utvikling, er en frivillig donasjon svært verdsatt."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Lær hurtigtastene",
+      "NOTES": "Super Productivity er laget for å brukes med tastaturet. Lær hurtigtastene for å jobbe raskere.\n\n**Slik kommer du i gang:**\n1. Åpne **sidefeltmenyen**\n2. Gå til **Hjelp**\n3. Klikk på **Tastaturnavigasjonstur**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Opprett ditt første prosjekt",
+      "NOTES": "Prosjekter hjelper deg med å organisere oppgavene dine etter arbeidsområde. Hvert prosjekt har sin egen oppgaveliste og backlog.\n\n**Slik oppretter du et prosjekt:**\n1. Klikk på **+**-knappen ved siden av **Prosjekter** i sidefelt\n2. Gi det et navn og velg en farge\n3. Begynn å legge til oppgaver"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Sett opp synkronisering",
+      "NOTES": "Hold dataene dine trygge og tilgjengelige på alle enheter.\n\n**Slik setter du opp:**\n1. Åpne **Innstillinger** (tannhjulikonet i sidefeltet)\n2. Gå til **Synkronisering**\n3. Velg en leverandør: Super Sync, Dropbox, WebDAV eller lokal filsynkronisering\n4. Følg oppsettsinstruksjonene"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Utforsk mer",
+      "NOTES": "Det er mye mer å oppdage!\n\n**App-funksjoner** (i Innstillinger) — Aktiver integrasjoner, vaner og andre funksjoner. Gå til **Innstillinger → App-funksjoner** for å se hva som er tilgjengelig.\n\n**Tavler** — Visualiser oppgavene dine i tilpassbare Kanban-tavler. Aktiver dem i **App-funksjoner**, og finn dem i **sidemenyen**.\n\n**Timeplan** — Planlegg dagen din ved å tildele oppgaver til bestemte tidspunkt. Dra oppgaver til **Timeplan**-visningen i sidefeltet.\n\n**Integrasjoner** — Når de er aktivert i App-funksjoner, importer oppgaver fra Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV og mange flere. Du kan også integrere kalenderen din. Konfigurer dem i **Saksleverandør-panelet**.\n\n**Vaner** — Spor tilbakevendende vaner og rutiner. Finn dem i **sidefeltmenyen** når de er aktivert.\n\n**Plugins** — Legg til funksjoner som Prokrastineringsbryter, Automatiseringer eller Talepåminnelser. Gå til **Innstillinger → Plugins**.\n\n**Tilpass** — Temaer, mørk modus, hurtigtaster, språk og produktivitetsverktøy finner du alle i **Innstillinger**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -48,7 +66,7 @@
         "EDIT_ATTACHMENT": "Rediger vedlegg",
         "LABELS": {
           "IMG": "Bilde",
-          "LINK": "Url"
+          "LINK": "URL"
         },
         "SELECT_TYPE": "Velg en type",
         "TYPES": {
@@ -104,10 +122,24 @@
         "CALDAV_RESOURCE": "Navnet på CalDav-ressursen (kalenderen)",
         "CALDAV_URL": "CalDav URL (den grunnleggende URL-en)",
         "CALDAV_USER": "Ditt CalDav-brukernavn",
-        "IS_TRANSITION_ISSUES_ENABLED": "Fullfør CalDav-oppgavene automatisk når oppgaven er fullført"
+        "TWO_WAY_SYNC_OFF": "Av",
+        "TWO_WAY_SYNC_BOTH": "Begge (toveis)",
+        "TWO_WAY_SYNC_NOTES": "Synkretningsretning for notater / beskrivelse",
+        "TWO_WAY_SYNC_PULL_ONLY": "Kun henting (les fra CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "Kun sending (skriv til CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "Toveissynkronisering (eksperimentell)",
+        "TWO_WAY_SYNC_STATUS": "Synkretningsretning for status",
+        "TWO_WAY_SYNC_TITLE": "Synkretningsretning for tittel"
       },
       "FORM_SECTION": {
         "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste ufullførte CalDav-oppgaver for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til oppgaven samt mer informasjon om den.<\\/p> <p>I tillegg kan du automatisk legge til og synkronisere alle ufullførte oppgaver til oppgavelisten din.<\\/p><p>For at det skal fungere for Nextcloud i nettappen, må du kanskje hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>.<\\/p>"
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "Beskrivelse",
+        "LABELS": "Etiketter",
+        "STATUS": "Status",
+        "SUMMARY": "Sammendrag",
+        "MARK_AS_CHECKED": "Merk som sjekket"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: Kalender \"{{calendarName}}\" ikke funnet",
@@ -121,11 +153,13 @@
         "SHOW_TASK": "Vis oppgave",
         "TXT": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre hendelser forfaller)"
+          "OTHER": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre hendelser forfaller)",
+          "ONE": "<strong>{{title}}</strong> starter kl. <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} annen hendelse forfaller)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> startet på <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> startet på <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre hendelser forfaller)"
+          "OTHER": "<strong>{{title}}</strong> startet på <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre hendelser forfaller)",
+          "ONE": "<strong>{{title}}</strong> startet kl. <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} annen hendelse forfaller)"
         }
       },
       "EVENT_STRINGS": {
@@ -146,17 +180,6 @@
       "BTN_DONT_BOTHER": "Ikke plag meg igjen",
       "TITLE": "🙈 Vennligst tilgi oss, men...",
       "TXT": "Du vil hjelpe prosjektet enormt ved å <strong>gi det en god vurdering, hvis du liker det!</strong>"
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "Gjentar den konfigurerte frasen hver X når du sporer tid til en oppgave.",
-        "L_INTERVAL": "Intervall for å gjenta frasen",
-        "L_TEXT": "Tekst",
-        "L_TEXT_DESCRIPTION": "F.eks: \"Jobb på ${currentTaskTitle}!\"",
-        "L_VOICE": "Velg en stemme",
-        "L_VOICE_DESCRIPTION": "Velg en stemme",
-        "TITLE": "Stemmepåminnelse"
-      }
     },
     "DROPBOX": {
       "S": {
@@ -181,7 +204,8 @@
         "RESUME": "CV",
         "SESSION_RUNNING": "Fokusøkt pågår",
         "START": "Start",
-        "TO_FOCUS_OVERLAY": "Til fokusoverlegg"
+        "TO_FOCUS_OVERLAY": "Til fokusoverlegg",
+        "END_FOCUS_SESSION": "Avslutt fokusøkt"
       },
       "BACK_TO_PLANNING": "Tilbake til Planlegging",
       "BREAK_RELAX_MSG": "Ta et øyeblikk for å slappe av",
@@ -224,13 +248,18 @@
       "START_FOCUS_SESSION": "Start fokusøkten",
       "START_NEXT_FOCUS_SESSION": "Start neste fokusøkt",
       "SWITCH_TASK": "Bytt oppgave",
-      "WORKED_FOR": "Du jobbet for"
+      "WORKED_FOR": "Du jobbet for",
+      "GO_TO_PROCRASTINATION": "Få hjelp ved prokrastinering",
+      "PAUSE_BREAK": "Pause",
+      "RESET_CYCLES": "Nullstill øktteller",
+      "RESUME_BREAK": "Gjenoppta pause",
+      "SELECT_TASK_FIRST": "Velg en oppgave først for å starte sporing"
     },
     "GITEA": {
       "FORM": {
         "HOST": "Vert (f.eks.: https://try.gitea.io)",
         "REPO_FULL_NAME": "Brukernavn eller organisasjonsnavn/prosjekt",
-        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av url-en når du viser prosjektet i nettleseren.",
+        "REPO_FULL_NAME_DESCRIPTION": "Kan finnes som en del av URL-en når du viser prosjektet i nettleseren.",
         "SCOPE": "Omfang",
         "SCOPE_ALL": "Alle",
         "SCOPE_ASSIGNED": "Tildelt til meg",
@@ -249,35 +278,6 @@
         "STATUS": "Status",
         "SUMMARY": "Sammendrag",
         "WRITE_A_COMMENT": "Skriv en kommentar"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "Brukernavn (f.eks. for å filtrere ut endringer selv)",
-        "INVALID_TOKEN_MESSAGE": "Ikke et gyldig GitHub-token. Det må begynne med \"ghp_\".",
-        "IS_ASSIGNEE_FILTER": "Importer kun saker som er tildelt meg til etterslep",
-        "REPO": "\"brukernavn / repositoryName\" for git-depotet du vil spore",
-        "TOKEN": "Tilgangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne GitHub-problemer for et bestemt repo i oppgavelagerpanelet i den daglige planvisningen. De vil bli oppført som forslag og vil gi en lenke til problemet, samt mer informasjon om det.</p><p> I tillegg kan du automatisk legge til og synkronisere alle åpne problemer i oppgaven din.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Oppdragsgiver",
-        "AT": "på",
-        "DESCRIPTION": "Beskrivelse",
-        "LABELS": "Etiketter",
-        "LAST_COMMENT": "Siste kommentar",
-        "LOAD_ALL_COMMENTS": "Last inn alle {{nr}} kommentarer",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Last inn beskrivelse og alle kommentarer",
-        "MARK_AS_CHECKED": "Merk oppdateringer som merket",
-        "STATUS": "Status",
-        "SUMMARY": "Sammendrag",
-        "WRITE_A_COMMENT": "Skriv en kommentar"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: Feil under tilordning av data. Er navnet på depotet ditt riktig?",
-        "ERR_UNKNOWN": "GitHub: Ukjent feil {{statusCode}} {{errorMsg}}. Grensen for api-rate overskredet?"
       }
     },
     "GITLAB": {
@@ -334,6 +334,10 @@
       },
       "DEFAULT_PROJECT_DESCRIPTION": "Prosjekt som er tilordnet oppgaver som er opprettet fra problemer.",
       "DEFAULT_PROJECT_LABEL": "Standard superproduktivitetsprosjekt",
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Avansert konfigurasjon",
+        "DELETE_CONFIRM": "Er du sikker på at du vil slette denne saksleverandøren? Å slette den betyr at <strong>alle tidligere importerte saksoppgaver mister referansen sin</strong>. Dette kan ikke angres!"
+      },
       "HOW_TO_GET_A_TOKEN": "Hvordan får man et token?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Tildelt",
@@ -371,7 +375,24 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Oppdaterte data for {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Oppdaterte data for \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling etter ny {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: Pollingendringer for {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: Pollingendringer for {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "Automatisk opprettelse av sak mislyktes: {{errorMsg}}",
+        "CONNECTION_FAILED": "Tilkobling mislyktes",
+        "CONNECTION_SUCCESS": "Tilkoblingen fungerer!",
+        "PLUGIN_NOT_INSTALLED": "Nødvendig tillegg \"{{pluginName}}\" er ikke installert.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "Toveissynkronisering (sending) mislyktes: {{errorMsg}}"
+      },
+      "TWO_WAY_SYNC": {
+        "OFF": "Av",
+        "AUTO_CREATE_ISSUES": "Opprett saker automatisk for nye oppgaver",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Oppretter automatisk en sak når du legger til en ny toppnivåoppgave i standardprosjektet. Krever at et standardprosjekt er satt.",
+        "BOTH": "Begge (toveis)",
+        "NOTES": "Synkretningsretning for notater / beskrivelse",
+        "PULL_ONLY": "Kun henting",
+        "PUSH_ONLY": "Kun sending",
+        "SECTION": "Toveissynkronisering (eksperimentell)",
+        "STATUS": "Synkretningsretning for status",
+        "TITLE": "Synkretningsretning for tittel"
       }
     },
     "ISSUE_PANEL": {
@@ -446,7 +467,8 @@
         "HOST": "Vert (for eksempel: http://my-host.de:1234)",
         "PASSWORD": "Token / passord",
         "USE_PAT": "Bruk Personal Access Token i stedet (LEGACY)",
-        "USER_NAME": "E-post / brukernavn"
+        "USER_NAME": "E-post / brukernavn",
+        "WONKY_COOKIE_MODE": "Wonky Cookie-reserveautentisering (kun skrivebordsappen)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Avansert konfigurasjon",
@@ -493,7 +515,15 @@
         "TIMED_OUT": "Jira: Forespørsel ble tidsavbrutt",
         "TRANSITION": "Jira: Sett problemet \"{{issueKey}}\" til \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Sett problemet {{issueKey}} til <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Overganger lastet. Bruk valgene nedenfor for å tildele dem"
+        "TRANSITIONS_LOADED": "Jira: Overganger lastet. Bruk valgene nedenfor for å tildele dem",
+        "UNABLE_TO_REASSIGN": "Jira: Kan ikke tilordne saken til deg selv fordi du ikke har angitt et brukernavn. Gå til innstillingene."
+      },
+      "STEPPER": {
+        "CREDENTIALS": "Legitimasjon",
+        "DONE": "Du er nå ferdig.",
+        "LOGIN_SUCCESS": "Innlogging vellykket!",
+        "TEST_CREDENTIALS": "Test legitimasjon",
+        "WELCOME_USER": "Velkommen {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -527,7 +557,8 @@
         "TIME_FRAME_2_WEEKS": "2 uker",
         "TIME_FRAME_LABEL": "Tidsramme",
         "TIME_FRAME_MAX": "Maks",
-        "TIME_SPENT": "Tid brukt"
+        "TIME_SPENT": "Tid brukt",
+        "YEAR": "År"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "Daglig tilstand",
@@ -537,8 +568,6 @@
         "FOCUS_WORK_TIME": "Fokusert arbeidstid",
         "IMPACT_OF_WORK": "Hvordan vurderer du virkningen av arbeidet ditt i dag?",
         "IMPACT_OF_WORK_HINT": "1: Ingen meningsfull fremgang \u000210 4: Betydelig innvirkning",
-        "NOTES": "Merknader for i morgen",
-        "PRODUCTIVITY": "Hvor effektiv jobbet du?",
         "PRODUCTIVITY_SCORE": "Produktivitetsscore",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65 % innvirkning (1-4 skala) \u00022 30 % fokus mot 4t m\u0000e5l \u00022 5 % totalt arbeid (begrenset til 10t)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7-dagers produktivitetsoversikt",
@@ -579,7 +608,39 @@
         "PLACEHOLDER_3": "Hvor glapp fokuset - og hvordan kan du beskytte det?",
         "PLACEHOLDER_4": "Hvilken oppgave ga deg energi? Hvilken tappet den?",
         "PLACEHOLDER_5": "En ting å gjenta. En ting å endre.",
+        "REMIND_LABEL": "Minne meg på dette i morgen",
+        "REMINDER_CREATED": "Påminnelse om refleksjon planlagt til i morgen",
+        "REMINDER_ERROR": "Kunne ikke planlegge påminnelsen",
+        "REMINDER_NEEDS_TEXT": "Skriv en refleksjon før du ber om en påminnelse",
+        "REMINDER_TASK_TITLE": "Gå gjennom refleksjonsnotatet igjen",
         "TITLE": "Refleksjonsnotat"
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "ISSUE_CONTENT": {
+        "LABELS": "Etiketter",
+        "ASSIGNED_USERS": "Tildelte brukere",
+        "DECK_DESCRIPTION": "Deck-beskrivelse",
+        "STACK": "Stabel"
+      },
+      "FORM": {
+        "BASE_URL": "Nextcloud base-URL",
+        "FILTER_BY_ASSIGNEE": "Importer kun kort tildelt meg",
+        "IS_TRANSITION_ISSUES_ENABLED": "Synkroniser fullføringsstatus og tittel tilbake til Nextcloud Deck",
+        "PASSWORD": "Ditt Nextcloud-apppassord",
+        "POLL_INTERVAL_MINUTES": "Pollingsintervall (minutter)",
+        "TITLE_TEMPLATE": "Mal for oppgavetittel",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variabler: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Eksempel: [{BOARD}: {COLUMN}] {CARD_TITLE}. La stå tomt for kun korttittel.",
+        "USERNAME": "Ditt Nextcloud-brukernavn"
+      },
+      "FORM_SECTION": {
+        "HELP": "Konfigurer Nextcloud Deck-integrasjonen for å importere kort som oppgaver. Bruk et apppassord for autentisering."
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Tavle ikke funnet",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Kortet \"{{issueId}}\" ser ut til å være slettet fra serveren.",
+        "ERR_CREDENTIALS_MISSING": "Fyll inn Nextcloud-URL, brukernavn og passord først.",
+        "ERR_LOAD_BOARDS": "Kunne ikke laste Deck-tavler. Sjekk legitimasjonen din."
       }
     },
     "NOTE": {
@@ -698,7 +759,8 @@
       "EDIT_REPEATED_TASK": "Rediger gjentatt oppgave '{{taskName}}'",
       "NO_TASKS": "Ingen oppgaver",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Ingen planlagte elementer"
+        "NO_SCHEDULED_ITEMS": "Ingen planlagte elementer",
+        "NO_DEADLINES": "Ingen frister"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Fjernet plandato for oppgave '{{taskTitle}}'",
@@ -731,8 +793,8 @@
       },
       "FORM_THEME": {
         "HELP": "Temainnstillinger for prosjektet ditt.",
-        "L_BACKGROUND_IMAGE_DARK": "Url for bakgrunnsbilde (mørkt tema)",
-        "L_BACKGROUND_IMAGE_LIGHT": "Url for bakgrunnsbilde (Light Theme)",
+        "L_BACKGROUND_IMAGE_DARK": "URL for bakgrunnsbilde (mørkt tema)",
+        "L_BACKGROUND_IMAGE_LIGHT": "URL for bakgrunnsbilde (Light Theme)",
         "L_COLOR_ACCENT": "Aksentfarge",
         "L_COLOR_PRIMARY": "Primærfarge",
         "L_COLOR_WARN": "Advarsel / feilfarge",
@@ -742,7 +804,9 @@
         "L_IS_AUTO_CONTRAST": "Sett inn tekstfarger automatisk for best lesbarhet",
         "L_IS_DISABLE_BACKGROUND_TINT": "Deaktiver farget bakgrunnsforløpning",
         "L_THEME_COLOR": "Temafarge",
-        "TITLE": "Tema"
+        "TITLE": "Tema",
+        "D_BACKGROUND_OVERLAY_OPACITY": "Juster denne verdien for å gjøre bakgrunnen mer eller mindre gjennomsiktig. Standard er 20 %.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Mørklegg/lysne bakgrunnsbilde for bedre kontrast"
       },
       "S": {
         "ARCHIVED": "Arkivert prosjekt",
@@ -777,6 +841,15 @@
       "WEEK_TITLE": "Uke {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivitet",
+        "STARTED": "Startet",
+        "TIME_SPENT": "Brukt tid",
+        "INVALID_DATE": "Den angitte verdien er ikke en dato!",
+        "POST_TIME": "Registrer tid",
+        "SUBMIT_TIME_FOR": "Send tid til Redmine for",
+        "TITLE": "Redmine: Send tidslogg"
+      },
       "FORM": {
         "API_KEY": "API-tilgangsnøkkel",
         "HOST": "Vert (f.eks.: https://redmine.org)",
@@ -785,7 +858,10 @@
         "SCOPE": "Omfang",
         "SCOPE_ALL": "Alle",
         "SCOPE_ASSIGNED": "Tildelt meg",
-        "SCOPE_CREATED": "Opprettet av meg"
+        "SCOPE_CREATED": "Opprettet av meg",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Vis tidsregistreringsdialog for rapportering til Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Krever at tidsregistreringsmodulen er aktivert for Redmine-prosjektet",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Vis tidsregistreringsdialog når deloppgaver fullføres"
       },
       "FORM_SECTION": {
         "HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne Redmine (enten det er den nettbaserte versjonen eller en selvhostet instans) problemer for et spesifikt prosjekt i opprettingspanelet for oppgaver i den daglige planleggingsvisningen. De vil bli listet som forslag og vil gi en lenke til problemet samt mer informasjon om det.<\\/p><p>I tillegg kan du automatisk importere alle åpne problemer.<\\/p>",
@@ -797,6 +873,9 @@
         "MARK_AS_CHECKED": "Merk oppdateringer som sjekket",
         "PRIORITY": "Prioritet",
         "STATUS": "Status"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: Tidsoppføring opprettet for {{issueTitle}}"
       }
     },
     "REFLECTION_NOTE": {
@@ -808,7 +887,8 @@
         "START_NOW": "Start nå",
         "TXT": "<strong>{{title}}<\\/strong> starter kl <strong>{{start}}<\\/strong>!",
         "TXT_MULTIPLE": {
-          "OTHER": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre oppgaver skal utføres)"
+          "OTHER": "<strong>{{title}}</strong> starter ved <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} andre oppgaver skal utføres)",
+          "ONE": "<strong>{{title}}</strong> starter kl. <strong>{{start}}</strong>!<br> (og {{nrOfOtherBanners}} annen oppgave forfaller)"
         }
       },
       "S_ACTIVE_TASK_DUE": "Oppgaven du jobber med for øyeblikket, er nå forfalt!<br/> ({{title}})",
@@ -821,10 +901,14 @@
       },
       "END": "Arbeidets slutt",
       "INSERT_BEFORE": "Før",
+      "MONTH": "Måned",
+      "NOW": "Nå",
       "PLAN_END_DAY": "Plan ved dagens slutt",
       "PLAN_START_DAY": "Planlegg ved dagens begynnelse",
       "SHIFT_KEY_INFO": "Hold Shift for å bytte dagplanleggingsmodus",
-      "START": "Start på arbeidet"
+      "START": "Start på arbeidet",
+      "LUNCH_BREAK": "Lunsjpause",
+      "NO_TASKS": "Det er ingen oppgaver for øyeblikket. Legg til oppgaver via pluss-knappen (+) i topplinjen."
     },
     "SEARCH_BAR": {
       "INFO": "Klikk på listeikonet for å søke etter arkiverte oppgaver",
@@ -856,7 +940,20 @@
         "TITLE": "Enkle tellere",
         "TYPE_CLICK_COUNTER": "Klikk på teller",
         "TYPE_REPEATED_COUNTDOWN": "Gjentatt nedtelling",
-        "TYPE_STOPWATCH": "Stoppeklokke"
+        "TYPE_STOPWATCH": "Stoppeklokke",
+        "L_ICON_ON": "Ikon når aktivert",
+        "L_IS_HIDE_BUTTON": "Skjul verktøylinjeknapp",
+        "L_STREAK_MODE": "Strekmodus",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Bestemte ukedager",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Ukentlig frekvens (f.eks. 3 ganger per uke)",
+        "L_WEEKLY_FREQUENCY": "Fullføringer per uke"
+      },
+      "HABIT_TRACKER": {
+        "NEXT_WEEK": "Neste uke",
+        "TODAY": "I dag",
+        "ADD_HABIT": "Legg til en ny vane",
+        "DISABLED_HABITS": "Deaktiverte vaner",
+        "PREV_WEEK": "Forrige uke"
       },
       "S": {
         "GOAL_REACHED_1": "Du har nådd målet ditt for i dag!",
@@ -875,7 +972,9 @@
         "FOLLOW_LINK": "Åpne følgende lenke og kopier autentiseringskoden som du finner der, inn i inntastingsfeltet nedenfor.",
         "GET_AUTH_CODE": "Få autorisasjonskode",
         "L_AUTH_CODE": "Skriv inn autentiseringskode",
-        "TITLE": "Logg inn: {{provider}}"
+        "TITLE": "Logg inn: {{provider}}",
+        "FOLLOW_LINK_MOBILE": "Trykk på knappen nedenfor for å autorisere. Du blir automatisk sendt tilbake til appen.",
+        "WAITING_FOR_AUTH": "Venter på autentisering..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Tilleggsinformasjon",
@@ -909,8 +1008,10 @@
         "BTN_OVER_WRITE_REMOTE": "Endre og overskrive eksternt",
         "CHANGE_PW_AND_DECRYPT": "Endre og prøv å dekryptere",
         "P1": "Dataene dine er kryptert og dekryptering mislyktes. Vennligst skriv inn riktig passord!",
-        "P2": "Du kan også endre passordet ditt, som vil overskrive alle eksterne data.",
-        "PASSWORD": "Passord"
+        "PASSWORD": "Passord",
+        "P2_FORGOT_PW": "Hvis du <strong>har glemt passordet</strong>, skriv inn riktig passord og klikk \"Prøv dekryptering på nytt\".",
+        "P3_PW_CHANGED": "Hvis du <strong>endret passordet på en annen enhet</strong>, skriv inn det nye passordet og klikk \"Overskriv ekstern\".",
+        "TITLE": "Dekryptering mislyktes"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Lukk app",
@@ -918,18 +1019,75 @@
         "BTN_FORCE_UPLOAD": "Tving opplasting lokalt",
         "P1": "Fjernsynkroniseringsdataene er usammenhengende!",
         "P2": "Berørt modell:",
-        "T1": "Siste synkronisering var ufullstendig!",
-        "T2": "Arkivdataene dine ble ikke lastet opp på riktig måte under siste synkronisering:",
         "T3": "Du har to alternativer:",
         "T4": "1. Gå til den andre enheten og fullfør synkroniseringen der.",
         "T5": "2. Eller du kan overskrive de eksterne dataene med dine lokale. Alle eksterne endringer vil\n    gå tapt!",
-        "T6": "Det anbefales å ta en sikkerhetskopi av dataene du overskriver!!!"
+        "T6": "Det anbefales å ta en sikkerhetskopi av dataene du overskriver!!!",
+        "BTN_FORCE_DOWNLOAD": "Tving nedlasting av ekstern",
+        "INCOHERENT_P1": "Datoen for dine eksterne data er fra fremtiden",
+        "INCOHERENT_P2": "Du bør sjekke tiden som er konfigurert på systemene dine!"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Lagre & Aktiver synkronisering",
         "TITLE": "Konfigurer synkronisering"
       },
+      "D_RESTORE": {
+        "BTN_RESTORE": "Gjenopprett",
+        "CONFIRM_MSG": "Er du helt sikker på at du vil gjenopprette til <strong>{{timestamp}}</strong>?<br><br>Dette vil <strong>fullstendig erstatte</strong> alle dine nåværende data og <strong>kan ikke angres</strong>.",
+        "CONFIRM_TITLE": "Bekreft gjenoppretting",
+        "ERROR_LOADING": "Kunne ikke laste gjenopprettingspunkter",
+        "ERROR_RESTORE": "Kunne ikke gjenopprette data",
+        "INTRO": "Velg et tidspunkt å gjenopprette dataene til:",
+        "LOADING": "Laster gjenopprettingspunkter...",
+        "NO_POINTS": "Ingen gjenopprettingspunkter tilgjengelig. Gjenopprettingspunkter opprettes når du synkroniserer eller importerer data.",
+        "TITLE": "Gjenopprett fra historikk",
+        "TYPE_BACKUP_IMPORT": "Sikkerhetskopigjenoppretting",
+        "TYPE_REPAIR": "Automatisk reparasjon",
+        "TYPE_SYNC_IMPORT": "Full synkroniseringsimport",
+        "WARNING": "Dette vil erstatte ALLE dine nåværende data med den valgte sikkerhetskopien. Denne handlingen kan ikke angres!"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "SKIP": "Hopp over",
+        "CONFIRM": "Last opp lokale data",
+        "MESSAGE": "Denne synkroniseringsserveren inneholder allerede data. Vil du laste opp dine lokale data for å slå sammen? Hvis du hopper over dette, kan noen av dine lokale endringer ikke bli synkronisert.",
+        "TITLE": "Serveren har allerede data"
+      },
       "FORM": {
+        "BTN_CHANGE_PASSWORD": "Endre passord",
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "Endre passord",
+          "L_CONFIRM_PASSWORD": "Bekreft passord",
+          "PASSWORD_MIN_LENGTH": "Passordet må være minst 8 tegn",
+          "PASSWORDS_DONT_MATCH": "Passordene samsvarer ikke",
+          "BTN_DISABLE_ENCRYPTION": "Deaktiver kryptering",
+          "BTN_ENABLE_ENCRYPTION": "Aktiver kryptering",
+          "BTN_REMOVE_ENCRYPTION": "Fjern kryptering",
+          "CHANGE_PASSWORD_SUCCESS": "Krypteringspassord endret",
+          "CHANGE_PASSWORD_WARNING": "ADVARSEL: Dette vil laste opp dataene dine på nytt med det nye passordet. Alle andre enheter trenger det nye passordet før synkronisering.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Dine nåværende data vil bli lastet opp på nytt uten kryptering",
+          "DISABLE_ENCRYPTION_ITEM_2": "Alle andre enheter vil synkronisere de ukrypterte dataene",
+          "DISABLE_ENCRYPTION_ITEM_3": "Du kan aktivere kryptering igjen når som helst",
+          "DISABLE_ENCRYPTION_NOTE": "Dine lokale data vil IKKE bli slettet.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Kryptering deaktivert",
+          "DISABLE_ENCRYPTION_TITLE": "Deaktivere kryptering?",
+          "DISABLE_ENCRYPTION_WARNING": "ADVARSEL: Dette vil laste opp dataene dine på nytt uten kryptering.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Hva som vil skje:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "Denne funksjonen er kun tilgjengelig for filbaserte synkroniseringsleverandører.",
+          "ENABLE_ENCRYPTION_ITEM_1": "Dine nåværende data vil bli lastet opp på nytt med kryptering",
+          "ENABLE_ENCRYPTION_ITEM_2": "Alle andre enheter trenger dette krypteringspassordet",
+          "ENABLE_ENCRYPTION_ITEM_3": "Du kan deaktivere kryptering når som helst",
+          "ENABLE_ENCRYPTION_NOT_READY": "Synkronisering er ikke aktivert eller konfigurert.",
+          "ENABLE_ENCRYPTION_NOTE": "Dine lokale data vil IKKE bli slettet.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Skriv inn et krypteringspassord først.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Kryptering aktivert",
+          "ENABLE_ENCRYPTION_TITLE": "Aktivere kryptering?",
+          "ENABLE_ENCRYPTION_WARNING": "ADVARSEL: Dette vil laste opp dataene dine på nytt med kryptering. Hvis du glemmer krypteringspassordet, kan ikke dataene gjenopprettes.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Hva som vil skje:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Endre krypteringspassord",
+          "L_NEW_PASSWORD": "Nytt krypteringspassord",
+          "L_REMOVE_ENCRYPTION": "Eller fjern kryptering",
+          "REMOVE_ENCRYPTION_WARNING": "Fjerning av kryptering vil laste opp dataene dine på nytt uten kryptering. Alle enheter må rekonfigureres."
+        },
         "L_ENABLE_COMPRESSION": "Aktiver komprimering (raskere dataoverføring)",
         "L_ENABLE_ENCRYPTION": "Aktiver ende-til-ende-kryptering (eksperimentell) - Gjør dataene dine utilgjengelige for synkroniseringsleverandøren",
         "L_ENABLE_SYNCING": "Aktiver synkronisering",
@@ -938,22 +1096,114 @@
         "L_SYNC_INTERVAL": "Synkroniseringsintervall",
         "L_SYNC_PROVIDER": "Synkroniseringsleverandør",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "Stien til synkroniseringsmappen"
+          "L_SYNC_FOLDER_PATH": "Stien til synkroniseringsmappen",
+          "INFO_TEXT": "<strong>Advarsel:</strong> <strong>Ikke</strong> bruk filsynkroniseringsverktøy som Syncthing, Resilio eller lignende for å synkronisere denne mappen mellom enheter – de <strong>vil</strong> forårsake datakorrupsjon og konflikter. For synkronisering mellom enheter, bruk WebDAV, Dropbox eller SuperSync i stedet.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Trenger filtillatelse"
+        },
+        "SUPER_SYNC": {
+          "BTN_CHANGE_PASSWORD": "Endre passord",
+          "L_ACCESS_TOKEN": "Tilgangstoken",
+          "L_CONFIRM_PASSWORD": "Bekreft passord",
+          "PASSWORD_MIN_LENGTH": "Passordet må være minst 8 tegn",
+          "PASSWORDS_DONT_MATCH": "Passordene samsvarer ikke",
+          "ACCESS_TOKEN_DESCRIPTION": "Lim inn tokenet du kopierte fra serverens innloggingsside",
+          "BTN_DISABLE_ENCRYPTION": "Deaktiver kryptering",
+          "BTN_ENABLE_ENCRYPTION": "Aktiver kryptering",
+          "BTN_FORCE_OVERWRITE": "Tving overskriving av server",
+          "BTN_GET_TOKEN": "Åpne server og hent token",
+          "CHANGE_PASSWORD_SUCCESS": "Krypteringspassord endret",
+          "CHANGE_PASSWORD_WARNING": "ADVARSEL: Dette vil permanent slette ALL synkroniseringshistorikk og alle sikkerhetskopier på serveren. Tidligere versjoner kan ikke gjenopprettes. Dine nåværende data lastes opp på nytt med det nye passordet. Alle andre enheter trenger det nye passordet.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Aktiver synkronisering og lagre SuperSync-konfigurasjonen først, og prøv igjen.",
+          "DISABLE_ENCRYPTION_ITEM_1": "All synkroniseringshistorikk og sikkerhetskopier på serveren vil bli slettet",
+          "DISABLE_ENCRYPTION_ITEM_2": "Dine nåværende data vil bli lastet opp på nytt uten kryptering",
+          "DISABLE_ENCRYPTION_ITEM_3": "Alle andre enheter vil synkronisere de ukrypterte dataene",
+          "DISABLE_ENCRYPTION_NOT_READY": "Synkronisering er ikke aktivert eller konfigurert.",
+          "DISABLE_ENCRYPTION_NOTE": "Dine lokale data vil IKKE bli slettet. Du kan aktivere kryptering igjen når som helst.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Kryptering deaktivert",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Denne funksjonen er kun tilgjengelig for SuperSync.",
+          "DISABLE_ENCRYPTION_TITLE": "Deaktivere kryptering?",
+          "DISABLE_ENCRYPTION_WARNING": "ADVARSEL: Dette vil permanent slette ALLE krypterte synkroniseringsdata på serveren. Dette er nødvendig fordi krypterte operasjoner ikke kan blandes med ukrypterte.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Hva som vil skje:",
+          "E2E_ENCRYPTION_DESCRIPTION": "Vil være tregere, men sikrere",
+          "ENABLE_ENCRYPTION_ITEM_1": "All synkroniseringshistorikk og sikkerhetskopier på serveren vil bli slettet",
+          "ENABLE_ENCRYPTION_ITEM_2": "Dine nåværende data vil bli lastet opp på nytt med kryptering",
+          "ENABLE_ENCRYPTION_ITEM_3": "Alle andre enheter må skrive inn dette krypteringspassordet",
+          "ENABLE_ENCRYPTION_NOT_READY": "Synkronisering er ikke aktivert eller konfigurert.",
+          "ENABLE_ENCRYPTION_NOTE": "Dine lokale data vil IKKE bli slettet. Du kan deaktivere kryptering når som helst.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Skriv inn et krypteringspassord først.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Kryptering aktivert",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Denne funksjonen er kun tilgjengelig for SuperSync.",
+          "ENABLE_ENCRYPTION_TITLE": "Aktivere kryptering?",
+          "ENABLE_ENCRYPTION_WARNING": "ADVARSEL: Dette vil permanent slette ALLE ukrypterte synkroniseringsdata på serveren. Dette er nødvendig fordi krypterte operasjoner ikke kan blandes med ukrypterte. Hvis du glemmer krypteringspassordet, kan ikke dataene gjenopprettes.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Hva som vil skje:",
+          "ENCRYPTION_ENCOURAGED": "Kryptering er påkrevd for SuperSync. Aktiver kryptering for å beskytte dataene dine.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync krypterer dataene dine med passord før de forlater enheten din</strong>, noe som gjør misbruk eller lekkasje av dine private data nesten umulig.",
+          "ENCRYPTION_WARNING": "ADVARSEL: Hvis du glemmer krypteringspassordet, kan ikke dataene gjenopprettes. Dette passordet er atskilt fra innloggingspassordet. Du må bruke samme passord på alle enheter.",
+          "FORCE_OVERWRITE_CONFIRM": "Dette vil <strong>slette alle data på serveren</strong> og laste opp dine lokale data med det nye passordet. Usynkroniserte lokale endringer kan gå tapt. Er du sikker på at du vil fortsette?",
+          "FORCE_OVERWRITE_INFO": "Hvis du ikke kan synkronisere fordi du ikke kjenner gjeldende krypteringspassord, kan du overskrive serveren med dine lokale data og et nytt passord.",
+          "FORCE_OVERWRITE_TITLE": "Overskrive serverdata?",
+          "INFO_TEXT": "SuperSync holder oppgavene dine synkronisert på tvers av alle enhetene dine i sanntid. Dataene dine lagres sikkert på synkroniseringsserveren. Merk: SuperSync er for øyeblikket i beta.",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Endre krypteringspassord",
+          "L_ENABLE_E2E_ENCRYPTION": "Aktiver ende-til-ende-kryptering",
+          "L_NEW_PASSWORD": "Nytt krypteringspassord",
+          "L_REMOVE_ENCRYPTION": "Eller fjern kryptering",
+          "L_SERVER_URL": "Server-URL",
+          "LOGIN_INSTRUCTIONS": "Klikk på knappen nedenfor for å åpne serverens innloggingsside. Etter innlogging, kopier tilgangstokenet og lim det inn her.",
+          "REMOVE_ENCRYPTION_WARNING": "Fjerning av kryptering vil slette alle serverdata og laste opp dataene dine på nytt uten kryptering. Alle enheter må rekonfigureres.",
+          "SERVER_URL_DESCRIPTION": "La stå som den er for den offisielle serveren, eller skriv inn en egendefinert server-URL",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "Deaktiver SuperSync",
+          "SETUP_ENCRYPTION_BTN": "Sett passord",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Bruk samme passord på alle enheter. Et glemt passord kan tilbakestilles ved å overskrive eksterne data.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Sett passord"
         },
         "TITLE": "Synkroniser",
         "WEB_DAV": {
           "CORS_INFO": "<strong>Få det til å fungere i nettleseren:<\\/strong> For å få dette til å fungere i nettleseren må du hviteliste Super Productivity for CORS-forespørselene til din Nextcloud-instans. Dette kan ha negative sikkerhetsimplikasjoner! Vennligst <a href='https:\\/\\/github.com\\/nextcloud\\/server\\/issues\\/3131'>se denne tråden for mer informasjon<\\/a>. En tilnærming for å få dette til å fungere på mobil er å hviteliste \"https:\\/\\/app.super-productivity.com\" via Nextcloud-appen <a href='https:\\/\\/apps.nextcloud.com\\/apps\\/webapppassword'>webapppassword<a>. Bruk på egen risiko!<\\/p>",
           "D_SYNC_FOLDER_PATH": "Sti relativ til WebDAV-serverens rot hvor synkroniseringsfiler vil bli lagret (f.eks. '/super-productivity' eller '/'). Dette er IKKE serverens interne katalogsti.",
           "INFO": "WebDAV-implementeringer varierer dessverre mye. Super Productivity er kjent for å fungere godt med Nextcloud, <strong>men det kan hende det ikke fungerer med din leverandør</strong>.",
-          "L_BASE_URL": "Base Url",
+          "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Passord",
           "L_SYNC_FOLDER_PATH": "Synkroniseringsmappebane",
           "L_TEST_CONNECTION": "Test tilkobling",
           "L_USER_NAME": "Brukernavn",
           "S_FILL_ALL_FIELDS": "Vennligst fyll ut alle WebDAV-feltene først",
           "S_TEST_FAIL": "Tilkoblingstest mislyktes: {{error}} - Mål-URL: {{url}}",
-          "S_TEST_SUCCESS": "Tilkoblingstest vellykket! Mål-URL: {{url}}"
-        }
+          "S_TEST_SUCCESS": "Tilkoblingstest vellykket! Mål-URL: {{url}}",
+          "CONDITIONAL_HEADER_WARNING_MSG": "WebDAV-serveren din støtter ikke betingede hoder (If-Unmodified-Since). Dette betyr at Super Productivity ikke kan oppdage samtidige endringer fra andre enheter under opplasting.<br><br>Synkronisering vil fortsatt fungere, men det er en liten risiko for datakonflikter hvis du gjør endringer på flere enheter samtidig.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "Redusert synkroniseringssikkerhet"
+        },
+        "BTN_DISABLE_ENCRYPTION": "Deaktiver kryptering",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "Dropbox-autentisering vellykket! Legitimasjon lagret.",
+          "BTN_AUTHENTICATE": "Autentiser med Dropbox",
+          "BTN_REAUTHENTICATE": "Autentiser på nytt med Dropbox",
+          "INFO_TEXT": "Dropbox-autentisering bruker OAuth. Klikk på knappen nedenfor for å autentisere med Dropbox-kontoen din.",
+          "L_ACCESS_TOKEN": "Tilgangstoken (generert fra autorisasjonskode)",
+          "REAUTH_SUCCESS": "Dropbox-reautentisering vellykket! Legitimasjon oppdatert.",
+          "STATUS_CONFIGURED": "Dropbox er konfigurert og klar til synkronisering",
+          "STATUS_NOT_CONFIGURED": "Ikke konfigurert – autentiser for å aktivere synkronisering"
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "Synkroniseringsfilnavn"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "Importer og endre kryptering",
+          "CURRENT_STATE": "Din nåværende konfigurasjon",
+          "ENCRYPTION_DISABLED": "Ikke kryptert",
+          "ENCRYPTION_ENABLED": "Kryptert",
+          "IMPORTED_STATE": "Etter import",
+          "ITEM_1": "All synkroniseringshistorikk og sikkerhetskopier på serveren vil bli permanent slettet",
+          "ITEM_2": "De importerte dataene dine lastes opp med de nye krypteringsinnstillingene",
+          "ITEM_3": "Alle andre enheter må synkronisere og oppdatere krypteringsinnstillingene sine",
+          "NOTE": "Dine lokale data vil bli erstattet med de importerte dataene uansett.",
+          "NOTE_DISABLING": "Viktig: Uten kryptering kan alle med tilgang til synkroniseringsserveren lese dataene dine.",
+          "NOTE_ENABLING": "Viktig: Kryptering krever et passord. Hvis du glemmer dette passordet, kan IKKE dataene gjenopprettes!",
+          "TITLE": "Krypteringsinnstillinger endres",
+          "WARNING_TEXT": "Sikkerhetskopien du importerer har andre krypteringsinnstillinger. Krypterte og ukrypterte data kan ikke sameksistere på serveren, så alle serverdata må slettes.",
+          "WHAT_HAPPENS": "Hva som vil skje:"
+        },
+        "L_MANUAL_SYNC_ONLY": "Synkroniser kun manuelt (deaktiver automatisk synkronisering)",
+        "PASSWORD_SET_INFO": "?? Krypteringspassord er satt."
       },
       "S": {
         "ALREADY_IN_SYNC": "Allerede synkronisert",
@@ -967,7 +1217,61 @@
         "INCOMPLETE_CFG": "Autentisering for synkronisering mislyktes. Vennligst sjekk konfigurasjonen din!",
         "SUCCESS_DOWNLOAD": "Synkroniserte data fra fjernkontrollen",
         "SUCCESS_VIA_BUTTON": "Data vellykket synkronisert",
-        "UNKNOWN_ERROR": "Ukjent synkroniseringsfeil: {{err}}"
+        "UNKNOWN_ERROR": "Ukjent synkroniseringsfeil: {{err}}",
+        "ARCHIVE_OPERATION_FAILED": "Arkivoperasjon mislyktes. Noe opprydding ble kanskje ikke fullført.",
+        "AUTH_SETUP_FAILED": "Oppsett av autentisering mislyktes. Hvis du bruker webappen, sørg for at du bruker HTTPS. Ellers prøv den stabile versjonen eller rapporter dette som en feil.",
+        "AUTH_TOKEN_REJECTED": "Synkroniseringstoken ble avvist av serveren: {{reason}}. Hent et nytt token.",
+        "CHANGE_PASSWORD_FAILED": "Kunne ikke endre passord: {{message}}",
+        "CLOCK_DRIFT_WARNING": "Enhetsklokken din ser ut til å avvike med {{minutes}} minutter. Dette kan forårsake synkroniseringsproblemer.",
+        "COMPACTION_FAILED": "Databaseopprydding mislyktes. Appen kan bli treg.",
+        "CONFLICT_DIALOG_TIMEOUT": "Synkroniseringskonfliktdialogen ble tidsavbrutt. Synkronisering prøves på nytt ved neste utløser.",
+        "CONFLICT_RESOLUTION_FAILED": "Løsning av synkroniseringskonflikt mislyktes. Last inn på nytt.",
+        "DATA_REPAIRED": "Data automatisk reparert ({{count}} problemer fikset)",
+        "DECRYPTION_FAILED": "Kunne ikke dekryptere synkroniserte data. Sjekk krypteringspassordet ditt.",
+        "DEFERRED_ACTION_FAILED": "Noen endringer gjort under synkronisering kunne ikke lagres. Last inn på nytt for å gjenopprette.",
+        "DIALOG_RESULT_ERROR": "En feil oppstod under behandling av synkroniseringsdialogen. Prøv igjen.",
+        "DISABLE_ENCRYPTION_FAILED": "Kunne ikke deaktivere kryptering: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Kunne ikke aktivere kryptering: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Kryptering ble deaktivert på en annen enhet. Synkroniseringsinnstillingene dine er oppdatert.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Krypterte data mottatt, men ingen krypteringspassord er konfigurert. Sett krypteringspassordet i synkroniseringsinnstillingene.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Kryptering er påkrevd for SuperSync. Sett et krypteringspassord for å fortsette synkroniseringen.",
+        "ERROR_PAYLOAD_TOO_LARGE": "Synkroniseringsfeil: Dataene dine er for store til å lastes opp.\n\nDette skjer når du har mange arkiverte oppgaver. Dataene dine ble IKKE synkronisert!\n\nKontakt brukerstøtte for hjelp.",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Feil under synkronisering. Kan ikke lese eksterne data. Kanskje du aktiverte kryptering og det lokale passordet ikke samsvarer med det som ble brukt til å kryptere de eksterne dataene?",
+        "FINISH_DAY_SYNC_ERROR": "Synkroniseringsfeil ved avslutning av dagen. Prøv igjen.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Første synkronisering avbrutt. Eksterne data ble ikke brukt.",
+        "HYDRATION_FAILED": "Kunne ikke laste data. Last inn appen på nytt.",
+        "IMPORTING": "Importerer data",
+        "INCOMPLETE_OP_SYNC": "Synkronisering ufullstendig: {{count}} operasjonsfil(er) kunne ikke lastes ned",
+        "INITIAL_SYNC_ERROR": "Første synkronisering mislyktes",
+        "INTEGRITY_CHECK_FAILED": "Dataintegritetsproblem oppdaget. Automatisk reparasjon forsøkt. Hvis du opplever problemer, last inn appen på nytt.",
+        "INVALID_AUTH_CODE": "Autorisasjonskoden ble avvist. Prøv å autentisere på nytt og sørg for å kopiere koden nøyaktig.",
+        "INVALID_OPERATION_PAYLOAD": "Ugyldig operasjon oppdaget. Endringer blir kanskje ikke lagret – last inn på nytt.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} lokale endring(er) forkastet – element(er) ble slettet på en annen enhet",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} ulagrede lokale endring(er) forkastet – synkronisering lastet ned nyere data",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Synkronisering avbrutt. Dine lokale data er bevart.",
+        "LOCK_TIMEOUT_ERROR": "Synkronisering tidsavbrutt mens den ventet på en tidligere operasjon. Prøv igjen.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Synkroniseringskonflikter automatisk løst: {{localWins}} lokal(e) seier(e), {{remoteWins}} ekstern(e) seier(e)",
+        "MIGRATION_FAILED": "Noen synkroniseringsdata kunne ikke migreres og ble hoppet over. Dette kan indikere datakorrupsjon eller en feil.",
+        "NEWER_VERSION_AVAILABLE": "Noen endringer er fra en nyere appversjon. Vurder å oppdatere for full kompatibilitet.",
+        "OPERATION_PERMANENTLY_FAILED": "Noen synkroniseringsoperasjoner mislyktes og kunne ikke brukes. Data kan være ufullstendige.",
+        "OVERWRITE_SERVER_FAILED": "Kunne ikke overskrive serverdata: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "Noen synkroniseringsoperasjoner kunne ikke brukes. Data er validert.",
+        "PERSIST_FAILED": "Kunne ikke lagre endringer. Tilstanden kan være inkonsistent – last inn på nytt.",
+        "REMOTE_DATA_TOO_OLD": "Eksterne data er for gamle til å behandles. Oppdater den eksterne appen.",
+        "REPLAY_LOCAL_OPS_FAILED": "Kunne ikke spille av lokale operasjoner etter import. Noen nylige endringer kan være tapt. Data er validert.",
+        "RESTORE_ERROR": "Kunne ikke gjenopprette data",
+        "RESTORE_SUCCESS": "Data gjenopprettet",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Kunne ikke migrere data til serveren – lokal datavalidering mislyktes. Prøv å importere en sikkerhetskopi.",
+        "STORAGE_QUOTA_EXCEEDED": "Synkroniseringsserverens lagring er full. Endringene dine synkroniseres IKKE! Arkiver gamle oppgaver eller oppgrader planen din.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "Lagringsplassen ble lav. Gamle data ryddet opp.",
+        "TIMEOUT_ERROR": "Synkroniseringsoperasjonen ble tidsavbrutt. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "For mange synkroniseringsoperasjoner å laste ned. Noen endringer kan mangle.",
+        "UPLOAD_ERROR": "Ukjent opplastingsfeil (innstillinger korrekte?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}} operasjon(er) ble permanent avvist av serveren og vil ikke bli synkronisert.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "Synkronisering har sporet {{originalSize}} enheter/nettlesere, som overskrider grensen på {{maxSize}}. Inaktive enhetsoppføringer ble fjernet. Vurder en synkroniseringstilbakestilling hvis du opplever problemer.",
+        "VERSION_TOO_OLD": "Appversjonen din er for gammel for de synkroniserte dataene. Oppdater!",
+        "VERSION_UNSUPPORTED": "Kan ikke synkronisere: data krever en nyere appversjon. Oppdater.",
+        "WEB_CRYPTO_NOT_AVAILABLE": "Kryptering er ikke tilgjengelig på denne enheten. På Android krever kryptering en sikker kontekst (HTTPS) som ikke er tilgjengelig. Deaktiver kryptering i synkroniseringsinnstillingene eller synkroniser fra en skrivebordsnettleser."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Fjern alt",
@@ -996,6 +1300,59 @@
         "TOOLTIP_DELETE": "Slett denne sikkerhetskopien",
         "TOOLTIP_REFRESH": "Oppdater listen over sikkerhetskopier",
         "TOOLTIP_RESTORE": "Gjenopprett denne sikkerhetskopien (vil erstatte alle nåværende data)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "Gjenopprett fra historikk",
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "Dataene dine ser ut til å være skadet. Vil du forsøke automatisk reparasjon? Dette kan føre til mindre datatap.",
+        "TITLE": "Dataskade oppdaget"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "Dataene dine krevde automatisk reparasjon ({{count}} problemer fikset). Dette bør normalt ikke skje. Hvis dette skjer gjentatte ganger, vennligst rapporter det.",
+        "TITLE": "Datareparasjon utført",
+        "UNKNOWN_ERROR": "Ukjent synkroniseringsfeil: {{err}}"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "Bruk lokale data",
+        "BTN_SAVE_AND_SYNC": "Lagre og synkroniser",
+        "FORCE_OVERWRITE_CONFIRM": "Dette vil <strong>slette alle data på serveren</strong> og laste opp dine lokale data kryptert med dette passordet. Fortsette?",
+        "FORCE_OVERWRITE_INFO": "Hvis du foretrekker å beholde dine lokale data, kan du overskrive serveren i stedet.",
+        "FORCE_OVERWRITE_TITLE": "Overskrive serverdata?",
+        "MESSAGE": "Synkroniseringsserveren inneholder krypterte data, men ingen krypteringspassord er konfigurert på denne enheten. Skriv inn krypteringspassordet ditt for å dekryptere og synkronisere dataene.",
+        "PASSWORD_LABEL": "Krypteringspassord",
+        "TITLE": "Krypteringspassord påkrevd"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "Dette ser ut til å være en ny installasjon. Ekstern data med {{count}} endringer ble funnet. Vil du laste ned og overskrive dine lokale data?",
+        "OK": "Last ned eksterne data",
+        "TITLE": "Første synkronisering"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "Du har {{count}} usynkroniserte lokale endringer som vil bli erstattet av eksterne data. Vil du fortsette?",
+        "TITLE": "Erstatte lokale data?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Deaktiver synkronisering",
+        "PERM_FILE": "Gi tillatelse",
+        "TEXT": "<p>Filtillatelsen din for lokal synkronisering er blitt tilbakekalt.</p>",
+        "TITLE": "Synk: Lokal filtillatelse nektet"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "Berørte endringer",
+        "IMPORT_DATE": "Importdato",
+        "MSG_INCOMING": "Dataene dine ble fullstendig erstattet på en annen enhet. Du har {{filteredOpCount}} lokale endringer som kanskje ikke blir med videre.",
+        "MSG_INCOMING_NO_OPS": "Dataene dine ble fullstendig erstattet på en annen enhet. Denne enheten synkroniseres til den nye tilstanden.",
+        "MSG_LOCAL_FILTERS": "Dine lokale data ble importert/gjenopprettet, men serveren har {{filteredOpCount}} endringer fra andre enheter som ikke kan slås sammen automatisk.",
+        "REASON_BACKUP_RESTORE": "Årsak: En sikkerhetskopi ble gjenopprettet på en annen enhet.",
+        "REASON_FILE_IMPORT": "Årsak: En datafil ble importert på en annen enhet.",
+        "REASON_FORCE_UPLOAD": "Årsak: En annen enhet tvangslastet opp sine lokale data.",
+        "REASON_PASSWORD_CHANGED": "Årsak: Krypteringspassordet ble endret på en annen enhet.",
+        "REASON_REPAIR": "Årsak: En automatisk datareparasjon ble utført.",
+        "REASON_SERVER_MIGRATION": "Årsak: Data ble migrert til en ny synkroniseringsserver.",
+        "REASON_UNKNOWN": "Årsak: En fullstendig tilstandserstatning ble utført.",
+        "RECOMMEND_SERVER": "Anbefalt: Godta serverdataene for å holde deg synkronisert med den andre enheten.",
+        "TITLE": "Synkroniseringskonflikt oppdaget",
+        "USE_LOCAL": "Bruk mine data",
+        "USE_REMOTE": "Bruk serverdata"
       }
     },
     "TAG": {
@@ -1017,7 +1374,8 @@
         "TITLE": "Grunnleggende innstillinger"
       },
       "S": {
-        "UPDATED": "Tag-innstillinger ble oppdatert"
+        "UPDATED": "Tag-innstillinger ble oppdatert",
+        "ARCHIVE_CLEANUP_FAILED": "Kunne ikke rydde opp arkiverte data for slettet etikett"
       },
       "TTL": {
         "ADD_NEW_TAG": "Legg til ny tag"
@@ -1062,7 +1420,11 @@
         "TOOLTIP_CLEAR_ESTIMATE": "Fjern estimat",
         "TOOLTIP_CLEAR_TAGS": "Fjern merker",
         "TOOLTIP_DISABLE_SEARCH": "Deaktiver søk etter saker (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Aktiver søk etter saker (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "Aktiver søk etter saker (Ctrl+2)",
+        "REPEAT_BUTTON": "Gjenta",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Veksle mellom å legge til oppgave i etterslep / dagens liste",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Veksle mellom å legge til oppgave øverst og nederst i listen",
+        "TOOLTIP_CLEAR_REPEAT": "Fjern gjentakelsesinnstilling"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Legg til vedlegg",
@@ -1076,11 +1438,21 @@
         "SCHEDULE_TASK": "Planlegg oppgave",
         "SUB_TASKS": "Underoppgaver ({{nr}})",
         "TIME": "Tid",
-        "TITLE_PLACEHOLDER": "Skriv inn en tittel"
+        "TITLE_PLACEHOLDER": "Skriv inn en tittel",
+        "COMPLETED_ON": "Fullført den",
+        "CREATED_ON": "Opprettet den",
+        "DEADLINE": "Frist",
+        "DEADLINE_DUE_BY": "Forfaller innen",
+        "DEADLINE_OVERDUE": "Forfalt!",
+        "FROM_PARENT": "(fra overordnet)",
+        "ISSUE": "Sakslenke",
+        "REMINDER": "Påminnelse"
       },
       "B": {
         "ADD_HALF_HOUR": "Tilsett 1/2 time",
-        "ESTIMATE_EXCEEDED": "Tidsestimatet overskredet for \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "Tidsestimatet overskredet for \"{{title}}\"",
+        "ADD_ALL_TO_TODAY": "Legg alle til i dag",
+        "DEADLINES_TODAY": "{{count}} oppgave(r) forfaller i dag, ennå ikke planlagt"
       },
       "CMP": {
         "ADD_SUB_TASK": "Legg til underoppgave",
@@ -1111,7 +1483,14 @@
         "TRACK_TIME": "Begynn å spore tid",
         "TRACK_TIME_STOP": "Sett sporingstid på pause",
         "UNSCHEDULE_TASK": "Oppheve tidsplan for oppgave",
-        "UPDATE_ISSUE_DATA": "Oppdater data om problemet"
+        "UPDATE_ISSUE_DATA": "Oppdater data om problemet",
+        "EDIT_DEADLINE": "Rediger frist",
+        "REMOVE_DEADLINE": "Fjern frist",
+        "SET_DEADLINE": "Sett frist"
+      },
+      "D_CONFIRM_DELETE": {
+        "OK": "Slett",
+        "MSG": "Er du sikker på at du vil slette oppgaven \"{{title}}\"?"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Ønsker du å opprette den nye taggen {{tagsTxt}}?",
@@ -1120,6 +1499,23 @@
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAGS": {
         "MSG": "Vil du opprette de nye taggene {{tagsTxt}}?",
         "OK": "Opprett tagger"
+      },
+      "D_DEADLINE": {
+        "QA_NEXT_MONTH": "Neste måned",
+        "QA_NEXT_WEEK": "Neste uke",
+        "QA_TODAY": "I dag",
+        "QA_TOMORROW": "I morgen",
+        "REMIND_AT": "Minne på",
+        "RO_NEVER": "Aldri",
+        "ADD_TIME": "Legg til tid",
+        "REMOVE_DEADLINE": "Fjern frist",
+        "RO_1H": "1 time før",
+        "RO_5M": "5 minutter før",
+        "RO_10M": "10 minutter før",
+        "RO_15M": "15 minutter før",
+        "RO_30M": "30 minutter før",
+        "RO_AT_DEADLINE": "Ved fristen",
+        "SET_DEADLINE": "Sett frist"
       },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "Legg alt til i dag",
@@ -1137,7 +1533,13 @@
         "SNOOZE_ALL": "Utsett alle",
         "START": "Start",
         "UNSCHEDULE": "Opphev tidsplanen",
-        "UNSCHEDULE_ALL": "Opphev tidsplanen for alle"
+        "UNSCHEDULE_ALL": "Opphev tidsplanen for alle",
+        "CLEAR_ALL_REMINDERS": "Fjern alle påminnelser",
+        "CLEAR_REMINDER": "Fjern påminnelse",
+        "DEADLINE_REMINDER": "Fristpåminnelse",
+        "DEADLINE_SECTION": "Frister",
+        "DUE_SECTION": "Planlagt",
+        "TASK_REMINDERS": "Oppgavepåminnelser"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Tidsplan neste måned",
@@ -1193,7 +1595,9 @@
         "REMINDER_DELETED": "Slettet påminnelse for oppgaven",
         "REMINDER_UPDATED": "Oppdatert påminnelse for oppgaven \"{{title}}\"",
         "TASK_ALREADY_EXISTS": "Oppgave <strong>{{title}}<\\/strong> finnes allerede",
-        "TASK_CREATED": "Opprettet oppgaven \"{{taskTitle}}\""
+        "TASK_CREATED": "Opprettet oppgaven \"{{taskTitle}}\"",
+        "DEADLINE_REMOVED": "Frist fjernet",
+        "DEADLINE_SET": "Frist satt til {{date}}"
       },
       "SELECT_OR_CREATE": "Velg eller opprett oppgave",
       "SUMMARY_TABLE": {
@@ -1248,11 +1652,11 @@
         "ADD": "Legg til gjenta oppgavekonfigurasjon",
         "ADVANCED_CFG": "Avansert konfigurasjon",
         "EDIT": "Rediger gjenta oppgavekonfigurasjon",
-        "HELP1": "Gjentatte oppgaver er ment for daglige gjøremål, for eksempel: \"Organisasjon\", \"Daglig møte\", \"Kodegjennomgang\", \"Kontrollerer e-post\" eller lignende oppgaver som sannsynligvis vil oppstå igjen og igjen.",
-        "HELP2": "Når den er konfigurert, blir en gjentatt oppgave gjenskapt hver dag valgt nedenfor så snart du åpner prosjektet, og vil automatisk bli merket som fullført på slutten av dagen. De vil bli håndtert som forskjellige forekomster. Så du kan fritt legge til underoppgaver etc.",
-        "HELP3": "Oppgaver importert fra Jira eller Git Issues kan ikke gjentas. Alle påminnelser vil også bli slettet på en gjentatt oppgave.",
-        "HELP4": "En merknad om bestillingsfeltet: Refererer til opprettelsesrekkefølgen for repeterbare oppgaver. Gjelder kun for repeterbare oppgaver som opprettes samtidig. En lavere verdi betyr at en oppgave kommer høyere opp på listen, et høyere tall betyr at den kommer lenger ned. En verdi større enn 0 betyr at elementer opprettes nederst i listen over normale oppgaver.",
-        "TAG_LABEL": "Merker å legge til"
+        "HEATMAP_LABEL": "Aktivitet",
+        "TAG_LABEL": "Merker å legge til",
+        "TIME_SPENT_THIS_MONTH": "Denne måneden",
+        "TIME_SPENT_THIS_WEEK": "Denne uken",
+        "TIME_SPENT_TOTAL": "Totalt"
       },
       "F": {
         "C_DAY": "Dag",
@@ -1267,8 +1671,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "Når aktivert, vil underoppgaver fra den nyeste oppgaveinstansen bli gjenskapt med den gjentakende oppgaven",
         "MONDAY": "mandag",
         "NOTES": "Misligholdte notater",
-        "ORDER": "Bestilling",
-        "ORDER_DESCRIPTION": "Opprettelsesrekkefølge for repeterbare oppgaver. Påvirker bare repeterbare oppgaver som opprettes samtidig. En lavere verdi betyr at en oppgave opprettes høyere opp i listen, et høyere tall betyr at den opprettes lenger ned. En verdi større enn 0 betyr at elementer opprettes nederst i listen over normale oppgaver.",
         "Q_CUSTOM": "Egendefinert gjentakelsesinnstilling",
         "Q_DAILY": "Hver dag",
         "Q_MONDAY_TO_FRIDAY": "Hver mandag til fredag",
@@ -1291,8 +1693,13 @@
         "THURSDAY": "Torsdag",
         "TITLE": "Tittel for oppgave",
         "TUESDAY": "tirsdag",
-        "WEDNESDAY": "onsdag"
-      }
+        "WEDNESDAY": "onsdag",
+        "Q_MONTHLY_FIRST_DAY": "Hver måned på den første dagen",
+        "Q_MONTHLY_LAST_DAY": "Hver måned på den siste dagen",
+        "SKIP_OVERDUE": "Hopp over forfalte forekomster",
+        "SKIP_OVERDUE_DESCRIPTION": "Når aktivert, hvis appen åpnes etter å ha gått glipp av en planlagt forekomst (f.eks. en ukentlig oppgave der i dag ikke er en planlagt dag), vil den tapte forekomsten bli stille hoppet over i stedet for å bli opprettet som en forfalt oppgave"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "Kunne ikke åpne gjentakelseskonfigurasjonsdialogen. Du kan konfigurere det fra oppgavemenyen."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1313,18 +1720,18 @@
         "GROUP_SCHEDULED_DATE": "Planlagt dato",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Tilbakestill alt",
+        "SAVE_SORT": "Lagre som standard",
         "SCHEDULED_NEXT_MONTH": "Neste måned",
         "SCHEDULED_NEXT_WEEK": "Neste uke",
         "SCHEDULED_THIS_MONTH": "Denne måneden",
         "SCHEDULED_THIS_WEEK": "Denne uken",
         "SCHEDULED_TODAY": "I dag",
         "SCHEDULED_TOMORROW": "I morgen",
+        "SORT": "Sorter",
         "SORT_CREATION_DATE": "Opprettelsesdato",
         "SORT_DEFAULT": "Standard",
         "SORT_NAME": "Navn",
-        "SORT_PERMANENT": "Sorter (permanent)",
         "SORT_SCHEDULED_DATE": "Planlagt dato",
-        "SORT_TEMPORARY": "Sorter (midlertidig)",
         "TIME_1HOUR": "> 1 time",
         "TIME_2HOUR": "> 2 timer",
         "TIME_10MIN": "> 10 minutter",
@@ -1366,6 +1773,31 @@
         "TASK": "Oppgave",
         "TRACK_TO": "Spor til:",
         "UNTRACKED_TIME": "Usporet tid:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "Komprimer arkiv",
+        "CONFIRM_MSG": "Er du sikker på at du vil komprimere arkivet? Dette vil permanent slette dataene oppført ovenfor!",
+        "CONFIRM_TITLE": "Bekreft arkivkomprimering",
+        "ESTIMATED_SAVINGS": "Estimert plassbesparelse",
+        "INTRO": "Dette vil komprimere dine arkiverte oppgaver ved å fjerne gamle data. Denne operasjonen synkroniseres på tvers av alle enheter.",
+        "ISSUE_FIELDS_TO_CLEAR": "Saksfelt som fjernes",
+        "LOADING": "Analyserer arkiv...",
+        "NO_DATA": "Ingen data å komprimere. Arkivet ditt er allerede optimalisert.",
+        "NOTES_TO_CLEAR": "Oppgavenotater som fjernes (eldre enn 1 år)",
+        "SUBTASKS_TO_DELETE": "Deloppgaver som slettes (tid slått sammen til overordnet)",
+        "TITLE": "Komprimer arkiv",
+        "WARNING": "Denne operasjonen kan ikke angres. Sørg for at du har en sikkerhetskopi før du fortsetter!"
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "Gjentar den konfigurerte frasen hver X når du sporer tid til en oppgave.",
+        "L_INTERVAL": "Intervall for å gjenta frasen",
+        "L_TEXT": "Tekst",
+        "L_TEXT_DESCRIPTION": "F.eks: \"Jobb på ${currentTaskTitle}!\"",
+        "L_VOICE": "Velg en stemme",
+        "L_VOICE_DESCRIPTION": "Velg en stemme",
+        "TITLE": "Stemmepåminnelse"
       }
     },
     "WORKLOG": {
@@ -1376,7 +1808,9 @@
         "TASKS": "Oppgaver",
         "TOTAL_TIME": "Totalt brukt tid:",
         "WEEK_NR": "Uke {{nr}}",
-        "WORKED": "Jobbet"
+        "WORKED": "Jobbet",
+        "RESTORE_TASK_FROM_ARCHIVE": "Gjenopprett oppgave fra arkiv",
+        "VIEW_TASK_DETAILS": "Vis oppgavedetaljer"
       },
       "D_CONFIRM_RESTORE": "Er du sikker på at du vil flytte oppgaven <strong>&quot;{{title}}&quot;</strong> til dagens oppgaveliste?",
       "D_EXPORT_TITLE": "Eksporter arbeidslogg {{start}} - {{end}}",
@@ -1423,6 +1857,11 @@
         "NO_DATA": "Ingen oppgaver denne uken ennå.",
         "TITLE": "Tittel"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Bilde limt inn",
+      "SIZE_EXCEEDED": "Bildestørrelsen ({{actualSize}}) overskrider maks tillatt størrelse ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Lagringskvoten er overskredet. Frigjør plass eller reduser bildestørrelsene."
     }
   },
   "FILE_IMEX": {
@@ -1446,7 +1885,8 @@
     "S_ERR_INVALID_URL": "Import mislyktes: Ugyldig URL oppgitt",
     "S_ERR_NETWORK": "Import mislyktes: Nettverksfeil ved henting av data fra URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Feil: Kunne ikke dekode URL-parameteren for import. Vennligst sørg for at den er riktig formatert.",
-    "URL_PLACEHOLDER": "Skriv inn URL for import"
+    "URL_PLACEHOLDER": "Skriv inn URL for import",
+    "BTN_COMPRESS_ARCHIVE": "Komprimer arkiv"
   },
   "G": {
     "ADD": "ADD",
@@ -1455,6 +1895,7 @@
     "CLOSE": "Lukk",
     "COMPLETE": "Fullfør",
     "CONFIRM": "Bekreft",
+    "CONTINUE": "Fortsett",
     "DELETE": "Slett",
     "DISMISS": "Avvis",
     "DO_IT": "Gjør det!",
@@ -1470,19 +1911,27 @@
     "MINUTES": "{{m}} minutter",
     "MOVE_BACKWARD": "Flytt bakover",
     "MOVE_FORWARD": "Flytt fremover",
+    "NEXT": "Neste",
     "NO_CON": "Du er for øyeblikket frakoblet. Koble til Internett på nytt.",
     "NONE": "Ingen",
     "OK": "Ok",
     "OVERDUE": "Forfallen",
+    "PASSWORD_STRENGTH_FAIR": "Rettferdig",
+    "PASSWORD_STRENGTH_STRONG": "Sterk",
+    "PASSWORD_STRENGTH_WEAK": "Svak",
     "REMOVE": "Ta vekk",
     "SAVE": "Lagre",
+    "SHARE": "Del",
     "SUBMIT": "Send inn",
     "TITLE": "Tittel",
     "TODAY_TAG_TITLE": "I dag",
-    "TRACKING_INTERVAL_DESCRIPTION": "Spor tid ved hjelp av dette intervallet i millisekunder. Det kan være lurt å endre dette for å redusere diskskriving. Se problem #2355.",
     "UNDO": "Angre",
     "WITHOUT_PROJECT": "Uten prosjekt",
-    "YESTERDAY": "I går"
+    "YESTERDAY": "I går",
+    "APPLY": "Bruk",
+    "DONT_SHOW_AGAIN": "Ikke vis igjen",
+    "PROCESSING": "Behandler",
+    "TOGGLE_PASSWORD_VISIBILITY": "Vis/skjul passord"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -1495,11 +1944,14 @@
       "PROJECT_NOTES": "Prosjektnotater",
       "SCHEDULE": "Planlegge",
       "SCHEDULE_DAY_PANEL": "Planlegg dag-panel",
+      "SEARCH": "Søk",
       "SYNC_BUTTON": "Synkroniseringsknapp",
       "TIME_TRACKING": "Stoppeklokketidsregistrering",
       "TITLE": "App-funksjoner",
       "USER_PROFILES": "Brukerprofiler (Eksperimentell)",
-      "USER_PROFILES_HINT": "Lar deg opprette og bytte mellom forskjellige brukerprofiler, hver med separate innstillinger, oppgaver og synkroniseringskonfigurasjoner. Profilhåndteringsknappen vises øverst til høyre når aktivert. Merk: Deaktivering av denne funksjonen skjuler brukergrensesnittet, men bevarer profildataene dine (Eksperimentell funksjon, ingen garantier. Sørg for å ha en sikkerhetskopi)."
+      "USER_PROFILES_HINT": "Lar deg opprette og bytte mellom forskjellige brukerprofiler, hver med separate innstillinger, oppgaver og synkroniseringskonfigurasjoner. Profilhåndteringsknappen vises øverst til høyre når aktivert. Merk: Deaktivering av denne funksjonen skjuler brukergrensesnittet, men bevarer profildataene dine (Eksperimentell funksjon, ingen garantier. Sørg for å ha en sikkerhetskopi).",
+      "HABITS": "Vaner",
+      "USER_PROFILES_WARNING": "<strong>Eksperimentell funksjon:</strong> Denne funksjonen er fortsatt under utvikling og kan bli fjernet eller vesentlig endret i en fremtidig oppdatering. Bruk på egen risiko og sørg for å ha sikkerhetskopier av dataene dine."
     },
     "AUTO_BACKUPS": {
       "HELP": "Lagre alle data automatisk i appmappen din for å ha den klar i tilfelle noe går galt.",
@@ -1509,10 +1961,40 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "På grunn av begrensninger på tvers av opprinnelse <b>vil dette sannsynligvis IKKE fungere med nettleserversjonen av Super Productivity.<br /> Vennligst <a href=\"https://super-productivity.com/download/\">last ned skrivebordsversjonen</a> for å bruke denne funksjonen!</b>",
-      "CAL_PATH": "Url til iCal-kilden",
+      "CAL_PATH": "URL til iCal-kilden",
       "CHECK_UPDATES": "Se etter eksterne oppdateringer hver X",
       "HELP": "Du kan integrere kalendere for å bli påminnet og legge dem til som oppgaver i Super Productivity. Integreringen fungerer ved å bruke iCal-formatet. For at dette skal fungere, må kalenderne dine være tilgjengelige enten via Internett eller filsystemet.",
       "SHOW_BANNER_THRESHOLD": "Vis et varsel X før hendelsen (blank for deaktivert)"
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Slett bilde",
+      "SELECT_PATH": "Velg mappe",
+      "SORT_BY": "Sorter etter",
+      "DELETE_ALL": "Slett alle",
+      "DELETE_ALL_SUCCESS": "Alle utklippstavlebilder slettet",
+      "DELETE_SUCCESS": "Utklippstavlebilde slettet",
+      "ERROR_DELETING": "Kunne ikke slette utklippstavlebilde",
+      "ERROR_DELETING_ALL": "Kunne ikke slette alle utklippstavlebilder",
+      "ERROR_LOADING": "Kunne ikke laste utklippstavlebilder",
+      "HELP": "Administrer bilder limt fra utklippstavlen. I nettleserversjonen lagres bilder i IndexedDB. I skrivebordsversjonen kan du konfigurere lagringssted.",
+      "LOADING": "Laster bilder...",
+      "MANAGE_DESCRIPTION": "Vis og slett bilder lagret fra innliming i markdown-felt",
+      "MANAGE_TITLE": "Administrer lagrede bilder",
+      "MANAGER_TITLE": "Utklippstavlebilder",
+      "NO_IMAGES": "Ingen utklippstavlebilder lagret",
+      "OPEN_MANAGER": "Administrer bilder",
+      "PATH_DESCRIPTION": "Konfigurer hvor utklippstavlebilder lagres på filsystemet (la stå tomt for standardplassering)",
+      "PATH_LABEL": "Lagringssti for bilder",
+      "PATH_PLACEHOLDER": "La stå tomt for standardplassering",
+      "PATH_TITLE": "Lagringsplassering",
+      "SELECT_PATH_TITLE": "Velg mappe for utklippstavlebilder",
+      "SORT_LARGEST": "Størst først",
+      "SORT_NEWEST": "Nyeste først",
+      "SORT_OLDEST": "Eldste først",
+      "SORT_SMALLEST": "Minste først",
+      "TITLE": "Utklippstavlebilder",
+      "TOTAL_IMAGES": "Totalt antall bilder",
+      "TOTAL_SIZE": "Total størrelse"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Skjul evalueringsark på daglig sammendrag",
@@ -1592,7 +2074,8 @@
       "TRIGGER_SYNC": "Utløsersynkronisering (hvis konfigurert)",
       "ZOOM_DEFAULT": "Zoomstandard (bare skrivebord)",
       "ZOOM_IN": "Zoom inn (bare skrivebordet)",
-      "ZOOM_OUT": "Zoom ut (bare skrivebordet)"
+      "ZOOM_OUT": "Zoom ut (bare skrivebordet)",
+      "TASK_UNSCHEDULE": "Fjern planlegging av oppgave"
     },
     "LANG": {
       "AR": "عربى",
@@ -1619,6 +2102,7 @@
       "SV": "Svenska",
       "TIME_LOCALE": "Tidsformat lokalitet",
       "TIME_LOCALE_AUTO": "Systemstandard",
+      "TIME_LOCALE_CS_CZ": "Tsjekkisk - 24-timers",
       "TIME_LOCALE_DE_DE": "Tysk - 24-timers",
       "TIME_LOCALE_DESCRIPTION": "Velg et lokalområde for tidsformatering. Ulike lokalområder bruker forskjellige konvensjoner (12-timers vs 24-timers format)",
       "TIME_LOCALE_EN_GB": "Engelsk (UK) - 24-timers",
@@ -1630,16 +2114,19 @@
       "TIME_LOCALE_KO_KR": "Koreansk - 12-timers AM/PM",
       "TIME_LOCALE_PT_BR": "Portugisisk (Brasil) - 24-timers",
       "TIME_LOCALE_RU_RU": "Russisk - 24-timers",
-      "TIME_LOCALE_TR_TR": "Tyrkisk - 24-timers",
-      "TIME_LOCALE_ZH_CN": "Kinesisk (forenklet) - 24-timers",
-      "TIME_LOCALE_CS_CZ": "Tsjekkisk - 24-timers",
       "TIME_LOCALE_SK_SK": "Slovakisk - 24-timers",
+      "TIME_LOCALE_TR_TR": "Tyrkisk - 24-timers",
       "TIME_LOCALE_UK_UA": "Ukrainsk - 24-timers",
+      "TIME_LOCALE_ZH_CN": "Kinesisk (forenklet) - 24-timers",
       "TITLE": "Språk",
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "TIME_LOCALE_RO_MD": "Romanian (Moldova): 24-hour, DD.MM.YYYY",
+      "TIME_LOCALE_RO_RO": "Romanian: 24-hour, DD.MM.YYYY"
     },
     "MISC": {
       "DARK_MODE": "Mørk modus",
@@ -1668,16 +2155,6 @@
       "THEME_SELECT_LABEL": "Velg tema",
       "TITLE": "Diverse innstillinger"
     },
-    "TASKS": {
-      "DEFAULT_PROJECT": "Standard prosjekt som skal brukes til oppgaver hvis ingen er spesifisert",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Legg til dagens tag automatisk for å jobbe med oppgaver",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Merk foreldreoppgaven som ferdig når alle underoppgaver er utført",
-      "IS_CONFIRM_BEFORE_DELETE": "Bekreft før du sletter oppgaver",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Aktiver Markdown-formatering i oppgavenotater",
-      "IS_TRAY_SHOW_CURRENT": "Vis gjeldende oppgave i skuffen / statusmenyen (kun desktop mac/windows)",
-      "NOTES_TEMPLATE": "Mal for oppgavebeskrivelse",
-      "TITLE": "Oppgaver"
-    },
     "POMODORO": {
       "BREAK_DURATION": "Varighet av korte pauser",
       "CYCLES_BEFORE_LONGER_BREAK": "Start lengre pause etter X-arbeidsøkter",
@@ -1689,7 +2166,13 @@
       "DEFAULT_TASK_REMIND_OPTION": "Standard påminnelsesvalg valgt ved oppretting av oppgaver",
       "DISABLE_REMINDERS": "Deaktiver alle påminnelser",
       "IS_COUNTDOWN_BANNER_ENABLED": "Vis nedtellingsbanner før påminnelser forfaller",
-      "TITLE": "Påminnelser"
+      "TITLE": "Påminnelser",
+      "DUE_DATE_NOTIFICATION_HOUR": "Time for visning av forfallsdatovarslinger (0-23)",
+      "HELP": "<p><strong>Viktig:</strong> Påminnelser bruker <strong>lokale varslinger</strong>, ikke push-varslinger. Dette betyr at appen må ha vært åpnet minst én gang på enheten din for at påminnelser skal bli planlagt. Påminnelser satt på en annen enhet vil bare vises etter at appen synkroniserer på målenheten.</p><p>På <strong>iOS</strong>, sørg for at varslinger er aktivert for Super Productivity i enhetsinnstillingene under «Innstillinger» > «Varslinger».</p>",
+      "IS_FOCUS_WINDOW": "Fokuser appvinduet når påminnelse utløses",
+      "NOTIFY_ON_DUE_DATE": "Vis varslinger for oppgaver som forfaller i dag",
+      "USE_ALARM_STYLE_REMINDERS": "Bruk alarmstil-varslinger (kun Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Når aktivert, bruker påminnelser høyere alarmlyder og mer påtrengende varslinger. Anbefalt for kritiske påminnelser."
     },
     "SCHEDULE": {
       "HELP": "Planleggingsfunksjonen skal gi deg en rask oversikt over hvordan de planlagte oppgavene dine utvikler seg over tid. Du finner den i menyen til venstre under <a href='#/schedule'>\"Planlegg\"</a>.",
@@ -1700,6 +2183,7 @@
       "L_WORK_END": "Arbeidsdagens slutt",
       "L_WORK_START": "Start på arbeidsdagen",
       "LUNCH_BREAK_START_END_DESCRIPTION": "f.eks. 13:00",
+      "MONTH": "Måned",
       "TITLE": "Planlegge",
       "WORK_START_END_DESCRIPTION": "f.eks. 17:00"
     },
@@ -1708,7 +2192,11 @@
       "IS_ENABLE_DUE": "Aktiver kort syntaks (@<Due time>)",
       "IS_ENABLE_PROJECT": "Aktiver kort prosjektsyntaks (+<Project name>)",
       "IS_ENABLE_TAG": "Aktiver kort tagg-syntaks (#<Tag>)",
-      "TITLE": "Kort syntaks"
+      "TITLE": "Kort syntaks",
+      "URL_BEHAVIOR_EXTRACT": "Trekk ut URL til vedlegg",
+      "URL_BEHAVIOR_KEEP": "Behold URL i oppgavetittelen",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Behold URL i oppgavetittelen og legg til i vedlegg",
+      "URL_BEHAVIOR_LABEL": "URL-oppførsel ved tillegging av oppgaver"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Ta en pause-påminnelseslyd",
@@ -1733,6 +2221,16 @@
       "SNOOZE_TIME": "Snooze-tid når du blir bedt om å ta en pause",
       "TITLE": "Pausepåminnelse"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Standard prosjekt som skal brukes til oppgaver hvis ingen er spesifisert",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Legg til dagens tag automatisk for å jobbe med oppgaver",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Merk foreldreoppgaven som ferdig når alle underoppgaver er utført",
+      "IS_CONFIRM_BEFORE_DELETE": "Bekreft før du sletter oppgaver",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Aktiver Markdown-formatering i oppgavenotater",
+      "IS_TRAY_SHOW_CURRENT": "Vis gjeldende oppgave i skuffen / statusmenyen (kun desktop mac/windows)",
+      "NOTES_TEMPLATE": "Mal for oppgavebeskrivelse",
+      "TITLE": "Oppgaver"
+    },
     "TIME_TRACKING": {
       "HELP": "Påminnelsen om tidsregistrering er et banner som vises i tilfelle du har glemt å starte tidsregistreringen.",
       "L_DEFAULT_ESTIMATE": "Standard tidsestimat for nye oppgaver",
@@ -1743,7 +2241,6 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "Fokus-appvindu når påminnelsen er aktiv (kun datamaskin)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Varsle når påminnelse om tidssporing vises",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Vis påminnelse om sporing i mobilappen",
-      "L_TRACKING_INTERVAL": "Tidssporingsintervall (EKSPERIMENTELT)",
       "L_TRACKING_REMINDER_MIN_TIME": "Tid til å vente før sporingspåminnelse vises Banner",
       "TITLE": "Tidsregistrering"
     }
@@ -1794,7 +2291,9 @@
     "SHARE_FAILED": "Deling mislyktes. Vennligst kopier manuelt.",
     "SHARE_FAILED_FALLBACK": "Deling mislyktes. Kopiert til utklippstavlen i stedet.",
     "SHARE_UNAVAILABLE_FALLBACK": "Kopiert til utklippstavlen.",
-    "UNPLANNED_TODAY_TASKS": "Uplanlagte alle oppgaver fra i dag"
+    "UNPLANNED_TODAY_TASKS": "Uplanlagte alle oppgaver fra i dag",
+    "OPEN_SETTINGS_ERROR": "Kunne ikke åpne innstillinger",
+    "SAVE_BLOCKED_DURING_SYNC": "Synkronisering pågår – noen endringer kan måtte lagres på nytt"
   },
   "GPB": {
     "ASSETS": "Laster inn ressurser ...",
@@ -1802,7 +2301,6 @@
     "DBX_GEN_TOKEN": "Dropbox: Generer token ...",
     "DBX_META": "Dropbox: Få metadata om fil ...",
     "DBX_UPLOAD": "Dropbox: Last opp fil ...",
-    "GITHUB_LOAD_ISSUE": "GitHub: Last problemdata ...",
     "JIRA_LOAD_ISSUE": "Jira: Last inn data ...",
     "SYNC": "Synkronisering av data...",
     "UNKNOWN": "Laster inn eksterne data",
@@ -1835,6 +2333,7 @@
     },
     "METRICS": "Beregninger",
     "NO_TASKS_TO_TRACK": "Legg til en oppgave først for å begynne å spore tid",
+    "NOTES": "Notater",
     "PLANNER": "Planlegger",
     "PROJECT_MENU": "Prosjektmeny",
     "PROJECTS": "Prosjekter",
@@ -1845,19 +2344,65 @@
     "SHARE_TASK_LIST_MARKDOWN": "Del oppgaveliste",
     "SIDE_PANEL_MENU": "Sidepanelmeny",
     "TAGS": "Merker",
+    "TASK_LIST": "Oppgaveliste",
     "TOGGLE_SHOW_ISSUE_PANEL": "Vis/Gjem problempanel",
     "TOGGLE_SHOW_NOTES": "Vis / skjul prosjektnotater",
     "TOGGLE_TRACK_TIME": "Start / stopp sporingstid",
     "TRIGGER_SYNC": "Utløs synkronisering manuelt",
     "UNPLAN_ALL_TASKS": "Uplanlegg alle oppgaver",
-    "WORKLOG": "Arbeidslogg"
+    "WORKLOG": "Arbeidslogg",
+    "DISABLE_FEATURE": "Deaktiver funksjon",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" deaktivert. Aktiver på nytt i appfunksjonsinnstillingene.",
+    "HABITS": "Vaner",
+    "NO_PROJECT_INFO": "Ingen prosjekter tilgjengelige. Du kan opprette et nytt prosjekt ved å klikke på «Opprett prosjekt»-knappen.",
+    "NO_TAG_INFO": "Det er for øyeblikket ingen etiketter. Du kan legge til etiketter ved å skrive `#dittEtikettNavn` når du legger til eller redigerer oppgaver.",
+    "NOTES_PANEL_INFO": "Notater kan bare vises i tidsplanen og den vanlige oppgavelistevisningen.",
+    "OPEN_APP_FEATURES": "Åpne innstillinger",
+    "PROCRASTINATE": "Utsett",
+    "PROJECT_SETTINGS": "Prosjektinnstillinger",
+    "SHOW_TRACKED_TASK": "Vis sporet oppgave",
+    "TASKS": "Oppgaver",
+    "TOGGLE_SHOW_BOOKMARKS": "Vis/skjul bokmerker"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Vil du laste ned en sikkerhetskopi av dine eldre data (kan brukes med eldre versjoner av Super Productivity)?",
     "DETECTED_LEGACY": "Oppdaget eldre data. Vi vil migrere den for deg!",
     "E_MIGRATION_FAILED": "Migrasjonen mislyktes! med feil:",
     "E_RESTART_FAILED": "Automatisk omstart mislyktes. Start appen på nytt manuelt!",
-    "SUCCESS": "Migreringen er ferdig! Starter appen på nytt nå..."
+    "SUCCESS": "Migreringen er ferdig! Starter appen på nytt nå...",
+    "DIALOG_MESSAGE": "Vi oppdaterer hvordan dataene dine lagres for forbedret synkroniseringspålitelighet. En sikkerhetskopi vil bli lastet ned automatisk.",
+    "DIALOG_TITLE": "Migrerer dataene dine",
+    "STATUS_BACKUP": "Oppretter sikkerhetskopi av dataene dine...",
+    "STATUS_COMPLETE": "Migrering fullført!",
+    "STATUS_MIGRATING": "Migrerer data...",
+    "STATUS_PREPARING": "Forbereder migrering..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Hvordan vil du bruke Super Productivity?",
+    "SUBTITLE": "Velg et oppsett som passer arbeidsflyten din. Du kan alltid endre dette senere i Innstillinger.",
+    "PRIVACY_HINT": "Dataene dine forblir trygt på enheten din. Ingenting sendes til en server.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Enkel oppgaveliste",
+        "DESCRIPTION": "En ryddig oppgavebehandler med prosjekter, etiketter og notater. Ingen ekstra funksjoner."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Tidsregistrering",
+        "DESCRIPTION": "Registrer hvor lang tid oppgaver tar. Perfekt for timefakturering eller for å forstå hvor tiden din går."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Produktivitetspakke",
+        "DESCRIPTION": "Planlegg dagen din, bygg vaner, fokuser dypt og registrer tid. Alt på ett sted."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klikk + for å legge til din første oppgave",
+      "CREATE_TASK_TOUCH": "Trykk + for å legge til din første oppgave",
+      "EXPLORE": "Klikk deg gjerne rundt og utforsk! Du finner hjelp i sidepanelet.",
+      "EXPLORE_TOUCH": "Trykk deg gjerne rundt og utforsk! Du finner hjelp i menyen.",
+      "OR_PRESS": "eller trykk",
+      "SKIP_ARIA": "Lukk hint"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Legg til oppgaver fra i dag",
@@ -1919,7 +2464,6 @@
     "ERROR": "Feil",
     "ERROR_LOADING_PLUGIN": "Feil ved lasting av plugin",
     "EXPERIMENTAL_WARNING": "Pluginsystemet er i en eksperimentell fase og bør brukes med ekstrem forsiktighet.",
-    "EXPERIMENTAL_WARNING_TITLE": "Eksperimentell funksjon - Sikkerhetsadvarsel",
     "FAILED_TO_CLEAR_CACHE": "Kunne ikke tømme plugin-buffer",
     "FAILED_TO_EXECUTE_SCRIPT": "Kunne ikke kjøre Node.js-skript",
     "FAILED_TO_EXTRACT_ZIP": "Kunne ikke pakke ut plugin ZIP-fil",
@@ -1933,6 +2477,7 @@
     "GRANT_PERMISSION": "Gi tillatelse",
     "HOOKS": "Hooks",
     "ID": "ID:",
+    "INDEX_HTML_NOT_LOADED": "Plugin index.html ikke lastet",
     "INSTALL_PLUGIN": "Installer plugin",
     "INSTALL_WARNING": "Før du installerer en plugin, sørg for at du stoler på kilden og forstår tillatelsene den ber om.",
     "INSTALLING": "Installerer...",
@@ -1980,10 +2525,14 @@
     "UNABLE_TO_PERSIST_DATA": "Kan ikke lagre data til plugin-lagring",
     "UNKNOWN_ERROR": "En ukjent feil oppstod",
     "UPLOAD_PLUGIN_INSTRUCTION": "Last opp en plugin ZIP-fil for å installere den:",
-    "VALIDATION_FAILED": "Validering mislyktes"
+    "VALIDATION_FAILED": "Validering mislyktes",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Dette tillegget tilbyr saksintegrasjon som for øyeblikket er i bruk ({{count}} saksleverandør(er)). Å deaktivere det vil midlertidig bryte sakssynkronisering for disse leverandørene til tillegget aktiveres på nytt. Er du sikker på at du vil deaktivere \"{{name}}\"?",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Kunne ikke laste listen over fellesskapstillegg",
+    "LANGUAGES": "Språk:"
   },
   "PM": {
-    "TITLE": "Prosjektstatistikk"
+    "TITLE": "Prosjektstatistikk",
+    "ALL_TASKS_TITLE": "Statistikk (alle oppgaver)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "Globale innstillinger",
@@ -1992,8 +2541,20 @@
     "PRIVACY_POLICY": "Privat policy",
     "PROJECT_SETTINGS": "Prosjektspesifikke innstillinger",
     "PROVIDE_FEEDBACK": "Gi tilbakemelding",
+    "RELOAD": "Last inn på nytt",
     "SYNC_EXPORT": "Synkroniser og eksporter",
-    "TAG_SETTINGS": "Merk spesifikke innstillinger"
+    "TABS": {
+      "GENERAL": "Generell",
+      "PLUGINS": "Plugins",
+      "PRODUCTIVITY": "Produktivitet",
+      "SYNC_BACKUP": "Synk og sikkerhetskopi",
+      "TASKS": "Oppgaver",
+      "TIME_TRACKING": "Tid og sporing"
+    },
+    "TAG_SETTINGS": "Merk spesifikke innstillinger",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Kunne ikke kopiere til utklippstavlen",
+    "TOGGLE_DARK_MODE": "Veksle mørk modus",
+    "UPDATE_APP": "Oppdater appen"
   },
   "SCHEDULE": {
     "LAST": "Sist:",
@@ -2003,7 +2564,29 @@
     "NO_SCHEDULED_TITLE": "Planlagte oppgaver for dagen",
     "REPEATED_TASKS": "Gjentatte oppgaver",
     "SCHEDULED_TASKS": "Planlagte oppgaver",
-    "SCHEDULED_TASKS_WITH_TIME": "Planlagte oppgaver med påminnelse"
+    "SCHEDULED_TASKS_WITH_TIME": "Planlagte oppgaver med påminnelse",
+    "NO_DEADLINES": "Det er for øyeblikket ingen oppgaver med frister. Du kan sette en frist via oppgavens kontekstmeny eller detaljpanel.",
+    "START_TASK": "Start oppgave og fjern påminnelse",
+    "TASKS_WITH_DEADLINES": "Oppgaver med frister"
+  },
+  "THEMES": {
+    "SELECT_THEME": "Velg tema",
+    "amber": "rav",
+    "blue": "blå",
+    "blue-grey": "blågrå",
+    "cyan": "cyan",
+    "deep-orange": "dyp oransje",
+    "deep-purple": "dyp lilla",
+    "green": "grønn",
+    "indigo": "indigo",
+    "light-blue": "lyseblå",
+    "light-green": "lysegrønn",
+    "lime": "lime",
+    "pink": "rosa",
+    "purple": "lilla",
+    "SCHEDULED_TASKS_WITH_TIME": "Planlagte oppgaver med starttid",
+    "teal": "blågrønn",
+    "yellow": "gul"
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktiv",
@@ -2051,6 +2634,16 @@
     "TODAY_REMAINING": "I dag gjenstår:",
     "WITHOUT_BREAK": "Uten pause:",
     "WORKING_TODAY": "Jobber i dag:",
-    "WORKING_TODAY_ARCHIVED": "Dagens arbeidstid på arkiverte oppgaver"
+    "WORKING_TODAY_ARCHIVED": "Dagens arbeidstid på arkiverte oppgaver",
+    "RECURRING_TASKS": "Gjentakende oppgaver"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Tillatelse for nøyaktig alarm nektet. Påminnelser kan bli forsinket med opptil 15 minutter.",
+    "TASK_ALREADY_COMPLETED": "Oppgaven er allerede fullført",
+    "TASK_MARKED_DONE": "Oppgave merket som ferdig"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "Vi oppdaterer hvordan dataene dine lagres for forbedret synkroniseringspålitelighet.<br><br>En sikkerhetskopi av dataene dine vil bli lastet ned automatisk. Du kan bruke denne sikkerhetskopien til å gjenopprette dataene dine om nødvendig (Fil > Importer).",
+    "DIALOG_TITLE": "Systemoppdatering"
   }
 }

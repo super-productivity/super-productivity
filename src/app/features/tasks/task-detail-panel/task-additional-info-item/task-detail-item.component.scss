@@ -15,7 +15,7 @@
 
 // Flatten deep nesting
 :host::ng-deep task {
-  margin: 2px;
+  margin: var(--s-quarter);
 
   .parent-title,
   tag-list,
@@ -56,7 +56,7 @@
 .input-item,
 .mat-expansion-panel {
   border: 1px solid transparent;
-  margin: 8px;
+  margin: var(--s);
   border-radius: var(--card-border-radius);
   background: var(--task-detail-bg);
   font-size: 14px;
@@ -109,8 +109,7 @@
       flex: 1;
       display: flex;
       align-items: center;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
     }
 
     &-description {
@@ -201,8 +200,7 @@
   display: flex;
   align-items: center;
   margin: 0 var(--s3);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  @include truncateText();
   min-width: 90px;
   flex: 1;
 
@@ -240,7 +238,7 @@
   .full-size & {
     min-width: 40px;
     flex: 1;
-    padding: 4px 0;
+    padding: var(--s-half) 0;
     min-height: 48px;
 
     > * {

@@ -1,13 +1,13 @@
 :host {
   display: block;
   max-width: 500px;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 }
 
 .time-summary {
   display: flex;
-  gap: 16px;
+  gap: var(--s2);
   flex-wrap: wrap;
   font-size: 13px;
-  margin-bottom: 8px;
+  margin-bottom: var(--s);
 }

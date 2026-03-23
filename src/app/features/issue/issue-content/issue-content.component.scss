@@ -7,7 +7,7 @@
 /* Table styles */
 
 .table-wrapper {
-  padding: 8px;
+  padding: var(--s);
 }
 
 .issue-table {
@@ -63,7 +63,7 @@
 
     .author-name {
       font-weight: 500;
-      margin-right: 8px;
+      margin-right: var(--s);
     }
 
     .when {
@@ -72,7 +72,7 @@
     }
 
     .markdown {
-      margin-top: 8px;
+      margin-top: var(--s);
 
       ::ng-deep p:last-child {
         margin-bottom: 0;
@@ -82,18 +82,18 @@
 }
 
 .last-comment-headline {
-  margin-top: 24px;
+  margin-top: var(--s3);
   margin-bottom: 12px;
   text-align: center;
   color: var(--palette-text-secondary);
 }
 
 .load-comments-and-all-data {
-  margin: 16px 0;
+  margin: var(--s2) 0;
 }
 
 .write-a-comment {
-  margin-top: 16px;
+  margin-top: var(--s2);
 }
 
 mat-chip-listbox {
@@ -102,6 +102,6 @@ mat-chip-listbox {
   vertical-align: baseline;
 
   mat-chip-option {
-    margin: 2px 4px 2px 0;
+    margin: var(--s-quarter) var(--s-half) var(--s-quarter) 0;
   }
 }

@@ -4,15 +4,6 @@
   overflow: hidden !important;
 }
 
-add-task-bar {
-  margin: 0 auto var(--s2);
-  max-width: 628px;
-
-  ::ng-deep input {
-    box-shadow: none !important;
-  }
-}
-
 h1 {
   margin: var(--s2) 0;
   text-align: center;
@@ -91,7 +82,6 @@ h2 {
   justify-content: center;
   padding: 5px 0;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .item {
     margin: 0 calc(1.5 * var(--s));
@@ -146,7 +136,7 @@ finish-day-btn,
 .finish-day-button-wrapper {
   text-align: center;
   margin: var(--s2) 0 var(--s);
-  padding-top: 8px;
+  padding-top: var(--s);
   display: block;
   white-space: nowrap;
 
@@ -182,7 +172,7 @@ finish-day-btn,
   top: 0;
   bottom: 0;
   // make space for add task bar button not overlapping 'finish day' button
-  padding-bottom: 64px;
+  padding-bottom: var(--s8);
 }
 
 .backlog {
@@ -197,35 +187,6 @@ finish-day-btn,
   }
 }
 
-// PLAN MODE
-.planning-mode-header {
-  text-align: center;
-
-  h1,
-  h2,
-  h3 {
-    margin: 0;
-    padding: 0;
-  }
-}
-
-.planning-mode-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding-bottom: var(--s2);
-  margin: var(--s);
-
-  @include mq(xs) {
-    margin: 0;
-  }
-
-  add-task-bar {
-    width: 100%;
-  }
-}
-
 .add-more-or-finish {
   text-align: center;
   padding-bottom: var(--s);
@@ -235,8 +196,7 @@ finish-day-btn,
 
     button {
       min-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      @include truncateText();
       margin-left: var(--s);
       margin-bottom: var(--s);
 
@@ -247,21 +207,9 @@ finish-day-btn,
   }
 }
 
-.add-scheduled {
-  margin-top: var(--s);
-}
-
-.ready-to-work-btn {
-  margin-top: var(--s2);
-
-  @include mq(xs) {
-    margin-top: var(--s3);
-  }
-}
-
 .no-tasks-illu-wrapper {
   position: relative;
-  margin-bottom: 32px;
+  margin-bottom: var(--s4);
 
   img {
     width: 500px;
@@ -290,7 +238,7 @@ finish-day-btn,
 
 // Unified collapsible section styles
 .collapsible-section {
-  margin-top: 16px;
+  margin-top: var(--s2);
 
   &:first-child {
     margin-top: 0;
@@ -300,7 +248,7 @@ finish-day-btn,
 :host ::ng-deep .collapsible-header {
   font-size: 16px;
   margin-top: 0;
-  padding: 12px 8px;
+  padding: 12px var(--s);
   justify-content: center;
   border-bottom: 2px solid transparent;
 
@@ -316,16 +264,16 @@ finish-day-btn,
 }
 
 .overdue-tasks {
-  margin-top: 16px;
+  margin-top: var(--s2);
 }
 
 .overdue-btn-wrapper {
   display: flex;
-  gap: 16px;
+  gap: var(--s2);
   justify-content: center;
   align-items: center;
-  padding-bottom: 8px;
-  padding-top: 8px;
+  padding-bottom: var(--s);
+  padding-top: var(--s);
 }
 
 .repeat-cfg-list {

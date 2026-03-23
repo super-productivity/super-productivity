@@ -1,5 +1,9 @@
 # Progressive E2E Encryption for SuperSync - REVISED PLAN
 
+> **Status: Archived — Rejected**
+>
+> Rejected due to 4 critical blockers. See `e2e-encryption-CRITICAL-ISSUES.md`. The implemented approach uses password-based encryption — see `../sync-and-op-log/supersync-encryption-architecture.md`.
+
 ## Executive Summary
 
 **ORIGINAL PLAN REJECTED** after comprehensive agent review identified fatal flaws:

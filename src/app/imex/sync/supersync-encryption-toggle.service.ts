@@ -8,6 +8,18 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 const LOG_PREFIX = 'SuperSyncEncryptionToggleService';
 
 /**
+ * Extracts a user-friendly message from an error, stripping raw JSON payloads.
+ * e.g. "SuperSync API error: 429 Too Many Requests - {"statusCode":429,...}"
+ *   -> "SuperSync API error: 429 Too Many Requests"
+ */
+const _friendlyErrorMessage = (error: unknown): string => {
+  const raw = error instanceof Error ? error.message : String(error);
+  // Strip JSON body appended after " - {" by the SuperSync provider
+  const jsonStart = raw.indexOf(' - {');
+  return jsonStart > 0 ? raw.substring(0, jsonStart) : raw;
+};
+
+/**
  * Service for enabling/disabling encryption for SuperSync.
  *
  * Both enable and disable flows delegate to SnapshotUploadService.deleteAndReuploadWithNewEncryption()
@@ -70,9 +82,10 @@ export class SuperSyncEncryptionToggleService {
       } as SuperSyncPrivateCfg);
 
       throw new Error(
-        'CRITICAL: Failed to upload encrypted snapshot after deleting server data. ' +
+        'Failed to upload encrypted snapshot after deleting server data. ' +
           'Your local data is safe. Encryption has been reverted. Please use "Sync Now" to re-upload your data. ' +
-          `Original error: ${error instanceof Error ? error.message : error}`,
+          `Reason: ${_friendlyErrorMessage(error)}`,
+        { cause: error },
       );
     }
   }
@@ -112,9 +125,10 @@ export class SuperSyncEncryptionToggleService {
       }
 
       throw new Error(
-        'CRITICAL: Failed to upload unencrypted snapshot after deleting server data. ' +
+        'Failed to upload unencrypted snapshot after deleting server data. ' +
           'Your local data is safe. Encryption is still enabled. Please try disabling encryption again. ' +
-          `Original error: ${uploadError instanceof Error ? uploadError.message : uploadError}`,
+          `Reason: ${_friendlyErrorMessage(uploadError)}`,
+        { cause: uploadError },
       );
     }
   }

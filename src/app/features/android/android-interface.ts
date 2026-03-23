@@ -85,6 +85,11 @@ export interface AndroidInterface {
   // Widget task queue - get queued tasks from home screen widget
   getWidgetTaskQueue?(): string | null;
 
+  // Startup overlay
+  getStartupOverlayPartialText?(): string | null;
+  hideStartupOverlay?(): void;
+  dismissStartupOverlay?(): void;
+
   // added here only
   onResume$: Subject<void>;
   onPause$: Subject<void>;
@@ -115,6 +120,10 @@ export interface AndroidInterface {
   onReminderDone$: ReplaySubject<string>; // emits taskId
   onReminderSnooze$: ReplaySubject<{ taskId: string; newRemindAt: number }>; // emits snooze events
   getReminderSnoozeQueue?(): string | null;
+
+  // Background sync credential bridge (for WorkManager-based reminder cancellation)
+  setSuperSyncCredentials?(baseUrl: string, accessToken: string): void;
+  clearSuperSyncCredentials?(): void;
 }
 
 // setInterval(() => {

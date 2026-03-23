@@ -9,7 +9,7 @@ input {
   width: 100%;
   border: 1px solid var(--border-color);
   border-radius: var(--card-border-radius);
-  padding: 8px 12px;
+  padding: var(--s) 12px;
   font-size: 14px;
   line-height: 1.4;
   background: transparent;
@@ -18,7 +18,7 @@ input {
   transition: border-color 0.2s ease;
 
   @include mq(xs, max) {
-    padding: 6px 8px;
+    padding: 6px var(--s);
     font-size: 12px;
   }
 
@@ -49,7 +49,7 @@ input {
       border-bottom: 1px solid var(--border-light);
 
       @include mq(xs, max) {
-        padding: 4px 8px;
+        padding: var(--s-half) var(--s);
         font-size: 12px;
       }
 

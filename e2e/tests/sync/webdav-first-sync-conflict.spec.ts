@@ -8,7 +8,6 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
   closeContextsSafely,
 } from '../../utils/sync-helpers';
 import { waitForAppReady } from '../../utils/waits';
@@ -79,7 +78,6 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await pageB.goto('/');
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
 
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
@@ -195,7 +193,6 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await pageB.goto('/');
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
 
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
@@ -295,7 +292,6 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await pageB.goto('/');
     await waitForAppReady(pageB);
-    await dismissTourIfVisible(pageB);
 
     const syncPageB = new SyncPage(pageB);
     const workViewPageB = new WorkViewPage(pageB);
@@ -455,7 +451,6 @@ test.describe('@webdav WebDAV First Sync Conflict', () => {
 
     await pageC.goto('/');
     await waitForAppReady(pageC);
-    await dismissTourIfVisible(pageC);
 
     const syncPageC = new SyncPage(pageC);
     const workViewPageC = new WorkViewPage(pageC);

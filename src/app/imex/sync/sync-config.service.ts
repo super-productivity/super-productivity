@@ -228,7 +228,7 @@ export class SyncConfigService {
     syncProviderId?: SyncProviderId,
   ): Promise<void> {
     const activeProvider = syncProviderId
-      ? this._providerManager.getProviderById(syncProviderId)
+      ? await this._providerManager.getProviderById(syncProviderId)
       : this._providerManager.getActiveProvider();
     if (!activeProvider) {
       // During initial sync setup, no provider exists yet to store the key.
@@ -283,7 +283,7 @@ export class SyncConfigService {
     // This ensures sync services see isEncryptionEnabled=true when SuperSync encryption is enabled
     // Note: We need to check the SAVED private config because Formly doesn't include hidden fields
     if (providerId === SyncProviderId.SuperSync) {
-      const activeProvider = this._providerManager.getProviderById(providerId);
+      const activeProvider = await this._providerManager.getProviderById(providerId);
       const savedPrivateCfg = activeProvider
         ? await activeProvider.privateCfg.load()
         : null;
@@ -305,7 +305,7 @@ export class SyncConfigService {
     const prop = PROP_MAP_TO_FORM[providerId];
 
     // Load existing config to preserve OAuth tokens and other settings
-    const activeProvider = this._providerManager.getProviderById(providerId);
+    const activeProvider = await this._providerManager.getProviderById(providerId);
     const oldConfig = activeProvider ? await activeProvider.privateCfg.load() : {};
 
     // Form fields contain provider-specific settings, but Dropbox uses OAuth tokens

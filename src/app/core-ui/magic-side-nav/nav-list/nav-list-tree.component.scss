@@ -46,7 +46,7 @@
       border: 2px dashed var(--c-primary);
 
       // Add some padding to make the drop zone more visible
-      padding: 2px;
+      padding: var(--s-quarter);
       margin: -2px;
     }
   }
@@ -71,7 +71,7 @@
   width: 32px !important;
   height: 32px !important;
   min-width: 32px !important;
-  padding: 4px !important;
+  padding: var(--s-half) !important;
   margin-left: var(--s);
   color: var(--sidenav-text-secondary);
   background: transparent;
@@ -86,7 +86,7 @@
     border-radius: 0 !important;
     width: 32px !important;
     height: 32px !important;
-    padding: 4px !important;
+    padding: var(--s-half) !important;
   }
 
   &:focus,
@@ -105,7 +105,7 @@
 .nav-children {
   list-style: none;
   padding: 0;
-  margin: 4px 0 8px 0;
+  margin: var(--s-half) 0 var(--s) 0;
   position: relative; // For drop indicator positioning
   // Angular animations handle expand/collapse - no CSS transitions needed
 }
@@ -166,10 +166,7 @@
       &::before {
         content: '';
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        inset: 0;
         border-radius: var(--card-border-radius);
         border: 2px dashed transparent;
         pointer-events: none;
@@ -228,14 +225,14 @@
       @media (hover: none) {
         opacity: 1 !important;
         position: static;
-        margin-top: 4px;
+        margin-top: var(--s-half);
       }
     }
 
     .additional-btn {
       @media (hover: none) {
         position: static;
-        margin: 0 2px;
+        margin: 0 var(--s-quarter);
       }
     }
   }

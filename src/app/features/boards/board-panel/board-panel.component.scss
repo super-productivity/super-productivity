@@ -19,8 +19,8 @@
   }
 
   planner-task {
-    margin-bottom: 8px;
-    margin-right: 4px;
+    margin-bottom: var(--s);
+    margin-right: var(--s-half);
   }
 
   add-task-inline {
@@ -29,8 +29,8 @@
 }
 
 header {
-  padding: 4px 16px;
-  padding-right: 4px;
+  padding: var(--s-half) var(--s2);
+  padding-right: var(--s-half);
   display: flex;
   align-items: center;
 
@@ -57,13 +57,13 @@ header {
 
   .title {
     font-size: 14px;
-    margin-right: 8px;
+    margin-right: var(--s);
   }
 
   .tasks-total-estimate {
     white-space: nowrap;
     margin-left: auto;
-    margin-right: 4px;
+    margin-right: var(--s-half);
     //margin-right: auto;
     font-style: italic;
     opacity: 0.7;
@@ -72,7 +72,7 @@ header {
 
 .task-items {
   overflow: auto;
-  padding: 0 8px;
+  padding: 0 var(--s);
   border-radius: 8px;
   min-height: 100px;
   flex-grow: 1;
@@ -111,7 +111,7 @@ header {
   z-index: 10;
   line-height: 1;
   text-align: center;
-  padding: 1px 2px 0;
+  padding: 1px var(--s-quarter) 0;
   @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;

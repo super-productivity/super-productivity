@@ -7,6 +7,7 @@ import { taskSharedCrudMetaReducer } from './task-shared-meta-reducers/task-shar
 import { taskBatchUpdateMetaReducer } from './task-shared-meta-reducers/task-batch-update.reducer';
 import { taskSharedLifecycleMetaReducer } from './task-shared-meta-reducers/task-shared-lifecycle.reducer';
 import { taskSharedSchedulingMetaReducer } from './task-shared-meta-reducers/task-shared-scheduling.reducer';
+import { taskSharedDeadlineMetaReducer } from './task-shared-meta-reducers/task-shared-deadline.reducer';
 import { projectSharedMetaReducer } from './task-shared-meta-reducers/project-shared.reducer';
 import { tagSharedMetaReducer } from './task-shared-meta-reducers/tag-shared.reducer';
 import { issueProviderSharedMetaReducer } from './task-shared-meta-reducers/issue-provider-shared.reducer';
@@ -94,6 +95,7 @@ export const META_REDUCERS: MetaReducer[] = [
   taskBatchUpdateMetaReducer, // Plugin API batch operations
   taskSharedLifecycleMetaReducer, // Archive/restore operations
   taskSharedSchedulingMetaReducer, // Due dates, times, TODAY_TAG management
+  taskSharedDeadlineMetaReducer, // Deadline dates, times
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 5: ENTITY-SPECIFIC CASCADES (Order-independent within phase)

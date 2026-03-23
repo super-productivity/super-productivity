@@ -5,12 +5,11 @@
 .collapsible-header {
   cursor: pointer;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   display: flex;
   flex-direction: row;
   align-items: center;
   //padding-top: 16px;
-  padding-bottom: 8px;
+  padding-bottom: var(--s);
 
   &:focus {
     outline: none;

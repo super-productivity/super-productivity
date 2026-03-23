@@ -22,6 +22,11 @@ import {
 import { adapter as taskRepeatCfgAdapter } from '../../../features/task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { TIME_TRACKING_FEATURE_KEY } from '../../../features/time-tracking/store/time-tracking.reducer';
 import { TimeTrackingState } from '../../../features/time-tracking/time-tracking.model';
+import {
+  ISSUE_PROVIDER_FEATURE_KEY,
+  adapter as issueProviderAdapter,
+} from '../../../features/issue/store/issue-provider.reducer';
+import { IssueProvider, IssueProviderState } from '../../../features/issue/issue.model';
 
 /**
  * Extended state type that includes feature stores not in RootState.
@@ -29,6 +34,7 @@ import { TimeTrackingState } from '../../../features/time-tracking/time-tracking
  */
 interface ExtendedState extends RootState {
   [TASK_REPEAT_CFG_FEATURE_NAME]?: TaskRepeatCfgState;
+  [ISSUE_PROVIDER_FEATURE_KEY]?: IssueProviderState;
 }
 
 // =============================================================================
@@ -230,6 +236,40 @@ const cleanupTimeTrackingState = (
 };
 
 /**
+ * Removes deleted tags from issue provider defaultTagIds.
+ */
+const cleanupIssueProviders = (
+  issueProviderState: IssueProviderState | undefined,
+  tagIdsToRemove: string[],
+): IssueProviderState | undefined => {
+  if (!issueProviderState) return issueProviderState;
+
+  const updates: Update<IssueProvider>[] = [];
+  const tagIdsToRemoveSet = new Set(tagIdsToRemove);
+
+  Object.values(issueProviderState.entities).forEach((provider) => {
+    if (!provider?.defaultTagIds?.length) return;
+
+    const hasDeletedTag = provider.defaultTagIds.some((tagId) =>
+      tagIdsToRemoveSet.has(tagId),
+    );
+    if (!hasDeletedTag) return;
+
+    updates.push({
+      id: provider.id,
+      changes: {
+        defaultTagIds: provider.defaultTagIds.filter(
+          (tagId) => !tagIdsToRemoveSet.has(tagId),
+        ),
+      },
+    });
+  });
+
+  if (updates.length === 0) return issueProviderState;
+  return issueProviderAdapter.updateMany(updates, issueProviderState);
+};
+
+/**
  * Comprehensive handler for tag deletion.
  * Atomically handles all related cleanup in a single reducer pass.
  */
@@ -258,6 +298,12 @@ const handleTagDeletion = (
     tagIdsToRemove,
   );
 
+  // 5. Cleanup issue provider defaultTagIds
+  const updatedIssueProviderState = cleanupIssueProviders(
+    state[ISSUE_PROVIDER_FEATURE_KEY],
+    tagIdsToRemove,
+  );
+
   if (orphanedTaskIds.length > 0) {
     OpLog.log('tagSharedMetaReducer: Removed orphaned tasks during tag deletion', {
       orphanedTaskIds,
@@ -273,6 +319,9 @@ const handleTagDeletion = (
     }),
     ...(updatedTimeTrackingState && {
       [TIME_TRACKING_FEATURE_KEY]: updatedTimeTrackingState,
+    }),
+    ...(updatedIssueProviderState && {
+      [ISSUE_PROVIDER_FEATURE_KEY]: updatedIssueProviderState,
     }),
   };
 };

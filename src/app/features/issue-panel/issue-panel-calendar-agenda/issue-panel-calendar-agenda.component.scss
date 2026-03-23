@@ -7,15 +7,15 @@
 h4 {
   text-align: center;
   opacity: 0.8;
-  margin-bottom: 8px;
+  margin-bottom: var(--s);
 }
 
 .offline-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 8px 12px;
+  gap: var(--s);
+  margin-bottom: var(--s2);
+  padding: var(--s) 12px;
   border-radius: var(--card-border-radius);
   border: 1px solid var(--palette-warn-200, var(--c-warn));
   background: var(--palette-warn-50, rgba(255, 193, 7, 0.15));
@@ -34,14 +34,14 @@ h4 {
 }
 
 .agenda {
-  margin-top: 24px;
-  gap: 8px;
+  margin-top: var(--s3);
+  gap: var(--s);
 }
 
 .agenda-day {
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 
   issue-preview-item {
-    margin-bottom: 8px;
+    margin-bottom: var(--s);
   }
 }

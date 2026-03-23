@@ -30,7 +30,8 @@ win:
   publish:
     - github
 nsis:
-  artifactName: ${productName} Setup-${arch}.${ext}
+  # Hardcoded to avoid spaces (SignPath converts spaces to dots). Also referenced in build.yml.
+  artifactName: Super-Productivity-Setup-${arch}.${ext}
   # allow to install to custom location
   oneClick: false
   allowToChangeInstallationDirectory: true

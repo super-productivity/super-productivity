@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Burada Süper Verimliliği, günlük planlama görünümünde görev oluşturma panelinde belirli bir depo için açık GitHub sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili daha fazla bilgi sunacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listesine ekleyebilir ve senkronize edebilirsiniz.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Veri eşlenirken hata oluştu. Depo adınız doğru mu?",
-    "ERR_UNKNOWN": "GitHub: Bilinmeyen hata {{statusCode}} {{errorMsg}}. Api Hızı sınırı aşıldı?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Bilinmeyen hata {{statusCode}} {{errorMsg}}. Api Hızı sınırı aşıldı?"
   }
 }

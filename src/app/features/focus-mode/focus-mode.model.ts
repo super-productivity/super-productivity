@@ -50,6 +50,9 @@ export interface FocusModeState {
 
   // Internal flag: tracks if break resume is in progress
   _isResumingBreak: boolean;
+
+  // Internal flag: when true, tick reducer won't auto-stop work timer at duration
+  _isOvertimeEnabled: boolean;
 }
 
 // Mode strategy interface

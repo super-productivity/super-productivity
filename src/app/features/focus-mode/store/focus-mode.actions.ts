@@ -80,3 +80,8 @@ export const adjustRemainingTime = createAction(
   '[FocusMode] Adjust Remaining Time',
   props<{ amountMs: number }>(),
 );
+
+export const setOvertimeEnabled = createAction(
+  '[FocusMode] Set Overtime Enabled',
+  props<{ enabled: boolean }>(),
+);

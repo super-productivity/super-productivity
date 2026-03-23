@@ -227,6 +227,13 @@ async function buildPlugin(plugin) {
             throw e;
           }
         }
+
+        // Copy i18n directory if it exists
+        const i18nSrc = path.join(sourcePath, 'i18n');
+        if (await pathExists(i18nSrc)) {
+          const i18nDest = path.join(targetDir, 'i18n');
+          await fs.cp(i18nSrc, i18nDest, { recursive: true });
+        }
       }
 
       // Validate required files exist after copy

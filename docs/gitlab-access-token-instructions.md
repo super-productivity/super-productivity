@@ -16,5 +16,4 @@ The scope is similar to the Personal Access token, but you also set a role. To l
 
 ![Project Token](https://github.com/user-attachments/assets/f008f114-3d3e-450d-9301-7825222f9812)
 
-For GitHub Personal Access Token instructions, please visit the following link:
-[GitHub Access Token Instructions](https://github.com/super-productivity/super-productivity/blob/master/docs/github-access-token-instructions.md)
+For GitHub Personal Access Token instructions, see [GitHub Access Token Instructions](./github-access-token-instructions.md).

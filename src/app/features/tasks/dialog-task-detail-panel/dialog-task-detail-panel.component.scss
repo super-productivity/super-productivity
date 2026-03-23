@@ -21,7 +21,7 @@
 
   &::ng-deep {
     .task-title-wrapper {
-      padding-right: 8px !important;
+      padding-right: var(--s) !important;
     }
 
     task .hover-controls {

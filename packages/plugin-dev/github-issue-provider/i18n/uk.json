@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Тут ви можете налаштувати SuperProductivity для відображення відкритих завдань GitHub для конкретного репозиторію в панелі створення завдань у вікні щоденного планування. Вони будуть показані як пропозиції та надаватимуть посилання на завдання, а також додаткову інформацію про нього.</p> <p>Крім того, ви можете автоматично імпортувати всі відкриті завдання.</p><p>Щоб обійти обмеження використання та отримати доступ, ви можете надати токен доступу. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Більше інформації про його області можна знайти тут</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Помилка під час відображення даних. Чи правильна назва вашого репозиторію?",
-    "ERR_UNKNOWN": "GitHub: Невідома помилка {{statusCode}} {{errorMsg}}. Перевищено ліміт API?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Невідома помилка {{statusCode}} {{errorMsg}}. Перевищено ліміт API?"
   }
 }

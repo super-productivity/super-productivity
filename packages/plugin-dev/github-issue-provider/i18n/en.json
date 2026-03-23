@@ -19,7 +19,7 @@
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Error while mapping data. Is your repository name correct?",
     "ERR_UNKNOWN": "GitHub: Unknown error {{statusCode}} {{errorMsg}}. API rate limit exceeded?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "TOKEN_REQUIRED": "GitHub: A personal access token is required to create or update issues. Please add a token in the issue provider settings.",
+    "INSUFFICIENT_PERMISSIONS": "GitHub: Your token likely lacks sufficient permissions. Classic tokens need the \"repo\" scope; fine-grained tokens need \"Issues: Read and write\". It can also mean the repository does not exist or has issues disabled."
   }
 }

@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Tu môžete nakonfigurovať program SuperProductivity tak, aby na paneli vytvárania úloh v zobrazení denného plánovania zobrazoval zoznam otvorených problémov GitHub pre konkrétny repozitár. Budú uvedené ako návrhy a budú obsahovať odkaz na problém, ako aj ďalšie informácie o ňom.</p> <p>Okrem toho môžete automaticky importovať všetky otvorené problémy.</p><p>Ak chcete obísť obmedzenia používania a získať prístup, môžete zadať prístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Viac informácií o jeho rozsahu nájdete tu</a>.",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Chyba pri mapovaní údajov. Je názov vášho úložiska správny?",
-    "ERR_UNKNOWN": "GitHub: Neznáma chyba {{statusCode}} {{errorMsg}}. Api Rate limit prekročený?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Neznáma chyba {{statusCode}} {{errorMsg}}. Api Rate limit prekročený?"
   }
 }

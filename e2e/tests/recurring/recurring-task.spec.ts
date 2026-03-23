@@ -129,7 +129,7 @@ test.describe('Scheduled Task Operations', () => {
     await page.waitForTimeout(1000);
 
     // Navigate back to work view to verify app is responsive
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await page.waitForLoadState('networkidle');
 
     // Verify the app is still responsive

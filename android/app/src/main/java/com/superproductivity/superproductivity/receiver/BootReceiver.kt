@@ -4,8 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.superproductivity.superproductivity.service.BackgroundSyncCredentialStore
 import com.superproductivity.superproductivity.service.ReminderAlarmStore
 import com.superproductivity.superproductivity.service.ReminderNotificationHelper
+import com.superproductivity.superproductivity.service.SyncReminderScheduler
 
 /**
  * Re-registers all saved alarms after device reboot.
@@ -45,5 +47,10 @@ class BootReceiver : BroadcastReceiver() {
         }
 
         Log.d(TAG, "Re-registered ${alarms.size} alarms")
+
+        // Re-schedule the background sync worker if credentials are configured
+        if (BackgroundSyncCredentialStore.get(context) != null) {
+            SyncReminderScheduler.ensureScheduled(context)
+        }
     }
 }

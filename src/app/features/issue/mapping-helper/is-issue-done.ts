@@ -1,4 +1,5 @@
 import { SearchResultItem } from '../issue.model';
+import { isLinearIssueDone } from '../providers/linear/linear-issue-map.util';
 
 const ISSUE_DONE_STATE_NAME_GUESSES = ['closed', 'done', 'completed', 'resolved'];
 
@@ -30,6 +31,11 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
     case 'CALDAV':
       return false;
 
+    case 'LINEAR':
+      return isLinearIssueDone(
+        (searchResultItem as SearchResultItem<'LINEAR'>).issueData,
+      );
+
     default: {
       // Handle plugin providers and migrated providers (e.g. 'GITHUB')
       // PluginIssue uses 'state', PluginSearchResult uses 'status'
@@ -38,7 +44,7 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
         status?: string;
       };
       const stateOrStatus = issueData?.state ?? issueData?.status;
-      if (stateOrStatus) {
+      if (typeof stateOrStatus === 'string') {
         return ISSUE_DONE_STATE_NAME_GUESSES.includes(stateOrStatus.toLowerCase());
       }
       return false;

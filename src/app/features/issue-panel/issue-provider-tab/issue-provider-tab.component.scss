@@ -1,3 +1,5 @@
+@use '../../../../styles/_globals.scss' as *;
+
 $pad: 12px;
 
 :host {
@@ -20,7 +22,7 @@ $pad: 12px;
 header {
   display: flex;
   align-items: center;
-  margin-top: 16px;
+  margin-top: var(--s2);
 }
 
 .title,
@@ -32,12 +34,7 @@ header {
 .title,
 .default-project {
   font-style: italic;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.title {
-  white-space: nowrap;
+  @include truncateText();
 }
 
 .default-project {
@@ -57,7 +54,7 @@ header {
 }
 
 .item-list {
-  gap: 8px;
+  gap: var(--s);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -66,7 +63,7 @@ header {
 .spinner {
   display: flex;
   justify-content: center;
-  padding: 8px;
+  padding: var(--s);
 }
 
 .keep-ico {

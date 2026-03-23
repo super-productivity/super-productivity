@@ -38,7 +38,6 @@ $this-border-radius: 8px;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .spacer {
     width: calc(var(--s) * 1.5);
@@ -184,6 +183,6 @@ $this-border-radius: 8px;
 
   mat-icon {
     font-size: 18px;
-    margin-right: 2px;
+    margin-right: var(--s-quarter);
   }
 }

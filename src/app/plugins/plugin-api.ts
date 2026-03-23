@@ -5,6 +5,8 @@ import {
   Hooks,
   IssueProviderPluginDefinition,
   NotifyCfg,
+  OAuthFlowConfig,
+  OAuthTokenResult,
   PluginAPI as PluginAPIInterface,
   PluginBaseCfg,
   PluginCreateTaskData,
@@ -111,6 +113,11 @@ export class PluginAPI implements PluginAPIInterface {
     this._menuEntries.push(fullMenuEntry);
     PluginLog.log(`Plugin ${this._pluginId} registered menu entry`, menuEntryCfg);
     this._boundMethods.registerMenuEntry(menuEntryCfg);
+  }
+
+  registerConfigHandler(handler: () => void): void {
+    PluginLog.log(`Plugin ${this._pluginId} registered config handler`);
+    this._boundMethods.registerConfigHandler(handler);
   }
 
   registerShortcut(
@@ -510,6 +517,20 @@ export class PluginAPI implements PluginAPIInterface {
    */
   getCurrentLanguage(): string {
     return this._pluginI18nService.getCurrentLanguage();
+  }
+
+  async startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult> {
+    PluginLog.log(`Plugin ${this._pluginId} requested OAuth flow`);
+    return this._boundMethods.startOAuthFlow(config);
+  }
+
+  async getOAuthToken(): Promise<string | null> {
+    return this._boundMethods.getOAuthToken();
+  }
+
+  async clearOAuthToken(): Promise<void> {
+    PluginLog.log(`Plugin ${this._pluginId} requested OAuth token clear`);
+    return this._boundMethods.clearOAuthToken();
   }
 
   /**

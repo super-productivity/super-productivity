@@ -19,6 +19,7 @@ import { error, log } from 'electron-log/main';
 import { IS_MAC } from './common.const';
 import {
   destroyOverlayWindow,
+  getIsOverlayAlwaysShow,
   hideOverlayWindow,
   showOverlayWindow,
 } from './overlay-indicator/overlay-indicator';
@@ -120,7 +121,9 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      webSecurity: false,
+      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
+      // and onHeadersReceived (injects Access-Control-Allow-* headers)
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
@@ -176,6 +179,15 @@ export const createWindow = async ({
       responseHeaders,
     });
   });
+
+  // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
+  // The app only needs notifications for desktop reminders
+  mainWin.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      const allowedPermissions = ['notifications'];
+      callback(allowedPermissions.includes(permission));
+    },
+  );
 
   mainWindowState.manage(mainWin);
 
@@ -259,6 +271,19 @@ export const createWindow = async ({
     }
   });
 
+  // Notify renderer of fullscreen state changes (used for app border visibility)
+  mainWin.on('enter-full-screen', () => {
+    mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
+  });
+  mainWin.on('leave-full-screen', () => {
+    mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
+  });
+  mainWin.webContents.on('did-finish-load', () => {
+    if (mainWin.isFullScreen()) {
+      mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
+    }
+  });
+
   // Listen for theme changes to update title bar overlay color and symbol
   if (isUseCustomWindowTitleBar && !IS_MAC) {
     ipcMain.on(IPC.UPDATE_TITLE_BAR_DARK_MODE, (ev, isDarkMode: boolean) => {
@@ -318,15 +343,21 @@ function initWinEventListeners(app: Electron.App): void {
 
   // Handle restore and show events to hide overlay
   mainWin.on('restore', () => {
-    hideOverlayWindow();
+    if (!getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   mainWin.on('show', () => {
-    hideOverlayWindow();
+    if (!getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   mainWin.on('focus', () => {
-    hideOverlayWindow();
+    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   // Handle hide event to show overlay

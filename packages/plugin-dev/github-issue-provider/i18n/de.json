@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>Hier können Sie SuperProductivity so konfigurieren, dass offene GitHub-Issues für ein bestimmtes Repository im Aufgabenerstellungsbereich in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge aufgeführt und enthalten einen Link zum Thema sowie weitere Informationen dazu.</p> <p>Außerdem können Sie alle offenen Issues automatisch zu Ihrem Aufgaben-Backlog hinzufügen und synchronisieren.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: Fehler beim Zuordnen von Daten. Ist Ihr Repository-Name korrekt?",
-    "ERR_UNKNOWN": "GitHub: Unbekannter Fehler {{statusCode}} {{errorMsg}}. Wurde das Api-Anfrage-Limit überschritten?",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub: Unbekannter Fehler {{statusCode}} {{errorMsg}}. Wurde das Api-Anfrage-Limit überschritten?"
   }
 }

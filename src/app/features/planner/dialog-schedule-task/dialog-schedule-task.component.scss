@@ -23,6 +23,10 @@
   }
 
   ::ng-deep {
+    mat-calendar {
+      height: 400px;
+    }
+
     .mat-calendar-header {
       padding-top: 0;
     }
@@ -40,21 +44,21 @@
     }
 
     .mat-calendar-controls {
-      margin-top: 8px;
-      margin-bottom: 8px;
+      margin-top: var(--s);
+      margin-bottom: var(--s);
     }
   }
 }
 
 :host h4 {
   text-align: center;
-  padding-top: 16px;
+  padding-top: var(--s2);
   font-size: 14px;
   font-weight: bold;
 }
 
 .form-ctrl-wrapper {
-  margin: 16px 16px 0;
+  margin: var(--s2) var(--s2) 0;
 }
 
 mat-dialog-content {
@@ -68,7 +72,7 @@ mat-dialog-content {
 .press-enter-msg {
   text-align: center;
   font-weight: bold;
-  padding: 4px 12px;
+  padding: var(--s-half) 12px;
   position: absolute;
   left: 50%;
   z-index: 11;
@@ -113,7 +117,7 @@ mat-dialog-content {
 }
 
 :host ::ng-deep mat-dialog-actions {
-  padding: 0 0 16px 0 !important;
+  padding: 0 0 var(--s2) 0 !important;
 }
 
 .schedule-actions {
@@ -122,7 +126,7 @@ mat-dialog-content {
   align-items: stretch;
   width: 100%;
   margin: 0 auto;
-  padding-bottom: 8px;
+  padding-bottom: var(--s);
 }
 
 .schedule-actions button {
@@ -141,7 +145,7 @@ mat-dialog-content {
 }
 
 .schedule-actions button:not(:last-child) {
-  margin-right: 2px;
+  margin-right: var(--s-quarter);
 }
 
 .dialog-cancel-btn {
@@ -154,4 +158,8 @@ mat-dialog-content {
   white-space: normal;
   word-break: break-word;
   text-align: center;
+}
+
+.time-clear-btn {
+  cursor: pointer;
 }

@@ -18,8 +18,6 @@
   "FORM_HELP": "<p>여기서는 일일 계획 보기의 작업 만들기 패널에서 특정 리포지토리에 대한 열린 GitHub 문제를 나열하도록 SuperProductivity를 구성할 수 있습니다. 제안으로 나열 되며 문제에 대 한 링크 뿐만 아니라 그것에 대 한 자세한 정보를 제공 합니다.</p> <p>또한 자동으로 추가하고 작업 백로그에 열려있는 모든 문제를 동기화 할 수 있습니다.</p>",
   "ERRORS": {
     "CONFIG_ERROR": "GitHub: 데이터를 매핑하는 동안 오류가 발생했습니다. 리포지토리 이름이 맞나요?",
-    "ERR_UNKNOWN": "GitHub : 알 수없는 오류 {{statusCode}} {{errorMsg}}",
-    "TWO_WAY_SYNC_INSUFFICIENT_PERMISSIONS": "GitHub: Must have admin rights to update issues. Your token needs the 'repo' scope.",
-    "AUTO_CREATE_ISSUE_FAILED": "GitHub: Failed to auto-create issue"
+    "ERR_UNKNOWN": "GitHub : 알 수없는 오류 {{statusCode}} {{errorMsg}}"
   }
 }

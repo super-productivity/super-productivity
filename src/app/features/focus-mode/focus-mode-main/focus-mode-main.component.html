@@ -153,7 +153,9 @@
             "
             [title]="T.F.FOCUS_MODE.FOCUS_TIME_TOOLTIP | translate"
           >
-            @if (isCountDown) {
+            @if (focusModeService.isInOvertime()) {
+              {{ timeElapsed() | msToMinuteClockString }}
+            } @else if (isCountDown) {
               {{ focusModeService.timeRemaining() | msToMinuteClockString }}
             } @else {
               {{ timeElapsed() | msToMinuteClockString }}
@@ -208,6 +210,13 @@
         </div>
       </div>
 
+      <!-- Overtime message -->
+      @if (focusModeService.isInOvertime()) {
+        <div class="overtime-msg">
+          {{ T.F.FOCUS_MODE.OVERTIME_MSG | translate }}
+        </div>
+      }
+
       <!-- Duration slider (Preparation state, Countdown mode only) -->
       @if (isShowDurationSlider()) {
         <div class="duration-slider-overlay-wrapper">
@@ -259,20 +268,22 @@
           </a>
         }
 
-        <button
-          (click)="isFocusNotes.set(!isFocusNotes())"
-          [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
-          class="ico-btn show-additional-info-btn"
-          color=""
-          mat-icon-button
-        >
-          @if (!isFocusNotes()) {
-            <mat-icon>chat</mat-icon>
-          }
-          @if (isFocusNotes()) {
-            <mat-icon>expand_less</mat-icon>
-          }
-        </button>
+        @if (ct) {
+          <button
+            (click)="isFocusNotes.set(!isFocusNotes())"
+            [matTooltip]="T.F.FOCUS_MODE.SHOW_HIDE_NOTES_AND_ATTACHMENTS | translate"
+            class="ico-btn show-additional-info-btn"
+            color=""
+            mat-icon-button
+          >
+            @if (!isFocusNotes()) {
+              <mat-icon>chat</mat-icon>
+            }
+            @if (isFocusNotes()) {
+              <mat-icon>expand_less</mat-icon>
+            }
+          </button>
+        }
       </section>
     }
   </div>

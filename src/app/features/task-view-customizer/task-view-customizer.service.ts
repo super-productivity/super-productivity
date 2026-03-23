@@ -44,16 +44,13 @@ export class TaskViewCustomizerService {
   private _collatorLocale: string | null = null;
 
   public selectedSort = signal<SortOption>(
-    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort) ??
-      DEFAULT_OPTIONS.sort,
+    lsGetJSON<SortOption>(LS.TASK_VIEW_CUSTOMIZER_SORT, DEFAULT_OPTIONS.sort),
   );
   public selectedGroup = signal<GroupOption>(
-    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group) ??
-      DEFAULT_OPTIONS.group,
+    lsGetJSON<GroupOption>(LS.TASK_VIEW_CUSTOMIZER_GROUP, DEFAULT_OPTIONS.group),
   );
   public selectedFilter = signal<FilterOption>(
-    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter) ??
-      DEFAULT_OPTIONS.filter,
+    lsGetJSON<FilterOption>(LS.TASK_VIEW_CUSTOMIZER_FILTER, DEFAULT_OPTIONS.filter),
   );
 
   isCustomized = computed(() => {
@@ -122,10 +119,8 @@ export class TaskViewCustomizerService {
     ]).pipe(
       observeOn(animationFrameScheduler),
       map(([undone, sort, group, filter]) => {
-        const normalizedFilterVal =
-          typeof filter.preset === 'string' ? filter.preset.trim() : filter.preset;
-        const filterValueToUse =
-          typeof normalizedFilterVal === 'string' ? normalizedFilterVal : '';
+        const normalizedFilterVal = filter.preset?.trim();
+        const filterValueToUse = normalizedFilterVal ?? '';
 
         const isDefaultFilter = !filter.type || !filterValueToUse;
         const isDefaultSort = !sort.type;
@@ -426,59 +421,51 @@ export class TaskViewCustomizerService {
     this.setFilter(DEFAULT_OPTIONS.filter);
   }
 
-  async sortPermanent(sort: SortOption | null): Promise<void> {
-    if (!sort) {
-      this.resetAll();
-      return;
-    }
+  /**
+   * Instantly save sort changes by reordering tasks in the current work context
+   * ! Saved sorting will be default
+   */
+  async saveSort(): Promise<void> {
+    const selectedSort = { ...this.selectedSort() };
+
+    // Saved sorting will be default
+    this.setSort(DEFAULT_OPTIONS.sort);
 
     const workContextId = this._workContextService.activeWorkContextId;
     const workContextType = this._workContextService.activeWorkContextType;
-    if (!workContextId || !workContextType) {
-      this.resetAll();
-      return;
-    }
+    if (!workContextId || !workContextType) return;
 
-    const [todaysTasks, undoneTasks] = await Promise.all([
+    // Tasks in the current work context
+    const [allTasks, undoneTasks] = await Promise.all([
       this._workContextService.mainListTasks$.pipe(take(1)).toPromise(),
       this._workContextService.undoneTasks$.pipe(take(1)).toPromise(),
     ]);
 
-    if (!todaysTasks?.length || !undoneTasks?.length) {
-      this.resetAll();
-      return;
-    }
+    if (!allTasks?.length || !undoneTasks?.length) return;
 
-    const sortedTasks = this.applySort(undoneTasks, sort.type, sort.order);
-    if (!sortedTasks.length) {
-      this.resetAll();
-      return;
-    }
+    const sortedTasks = this.applySort(
+      undoneTasks,
+      selectedSort.type,
+      selectedSort.order,
+    );
+    if (!sortedTasks.length) return;
 
     const sortedIdQueue = sortedTasks.map((task) => task.id);
     const sortedIdSet = new Set(sortedIdQueue);
-    const newOrderedIds = todaysTasks.map((task) => {
-      if (!sortedIdSet.has(task.id)) {
-        return task.id;
-      }
+    const newOrderedIds = allTasks.map((task) => {
+      if (!sortedIdSet.has(task.id)) return task.id;
+
       const nextId = sortedIdQueue.shift();
       return nextId ?? task.id;
     });
 
-    const isOrderChanged = todaysTasks.some(
-      (task, idx) => task.id !== newOrderedIds[idx],
-    );
-    if (!isOrderChanged) {
-      this.resetAll();
-      return;
-    }
+    const isOrderChanged = allTasks.some((task, idx) => task.id !== newOrderedIds[idx]);
+    if (!isOrderChanged) return;
 
     if (workContextType === WorkContextType.PROJECT) {
       this._projectService.update(workContextId, { taskIds: newOrderedIds });
     } else if (workContextType === WorkContextType.TAG) {
       this._tagService.updateTag(workContextId, { taskIds: newOrderedIds });
     }
-
-    this.resetAll();
   }
 }

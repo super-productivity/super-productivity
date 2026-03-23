@@ -127,13 +127,13 @@
   }
 
   .search-input {
-    padding-right: 40px; // Make room for spinner
+    padding-right: var(--s5); // Make room for spinner
   }
 }
 
 .add-issue-info-text {
   height: 38px;
-  padding: 0 8px;
+  padding: 0 var(--s);
   line-height: 38px;
   border-top: 1px dashed var(--extra-border-color);
   color: var(--text-color-muted);
@@ -152,11 +152,11 @@
   right: 50%;
   bottom: 2px;
   transform: translateX(-50%);
-  z-index: 333333;
+  z-index: var(--z-add-task-bar);
   border-radius: 50%;
   background: var(--card-bg);
   padding: 6px;
-  margin-top: 4px;
+  margin-top: var(--s-half);
 }
 
 @keyframes fadeIn {
@@ -183,13 +183,13 @@
   .mat-mdc-option {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--s);
 
     .project-icon {
       font-size: 16px;
       width: 16px;
       height: 16px;
-      margin-left: 8px;
+      margin-left: var(--s);
       opacity: 0.7;
       margin-right: 0;
     }
@@ -197,7 +197,7 @@
     .project-title {
       opacity: 0.7;
       font-size: 0.9em;
-      margin-left: 4px;
+      margin-left: var(--s-half);
     }
 
     mat-icon:first-child {
@@ -208,12 +208,12 @@
 
   .suggestion-option {
     min-height: 48px;
-    padding: 8px 16px;
+    padding: var(--s) var(--s2);
 
     .option-content {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--s);
       width: 100%;
 
       .option-icon {

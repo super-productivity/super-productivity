@@ -45,6 +45,7 @@ export interface DialogButtonCfg {
   icon?: string;
   onClick: () => void | Promise<void>;
   color?: 'primary' | 'warn';
+  raised?: boolean;
 }
 
 export interface DialogCfg {
@@ -227,6 +228,8 @@ export interface Task {
   doneOn?: number | null;
   attachments?: any[];
   remindAt?: number | null;
+  dueDay?: string | null;
+  dueWithTime?: number | null;
   repeatCfgId?: string | null;
 
   // Issue tracking fields (optional)
@@ -320,6 +323,28 @@ export interface PluginSidePanelBtnCfg {
   onClick: () => void;
 }
 
+export interface OAuthFlowConfig {
+  authUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  /**
+   * NOT kept confidential — this value is embedded in plugin source code,
+   * persisted in user data, and may be synced to cloud backends.
+   * Only use for OAuth providers that document their "client secret" as
+   * non-confidential (e.g., Google installed-app credentials per RFC 8252).
+   */
+  clientSecret?: string;
+  scopes: string[];
+  /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
+  extraAuthParams?: Record<string, string>;
+}
+
+export interface OAuthTokenResult {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number; // unix ms
+}
+
 export interface PluginAPI {
   cfg: PluginBaseCfg;
 
@@ -328,6 +353,8 @@ export interface PluginAPI {
   registerHeaderButton(headerBtnCfg: Omit<PluginHeaderBtnCfg, 'pluginId'>): void;
 
   registerMenuEntry(menuEntryCfg: Omit<PluginMenuEntryCfg, 'pluginId'>): void;
+
+  registerConfigHandler(handler: () => void): void;
 
   registerShortcut(
     shortcutCfg: Omit<PluginShortcutCfg, 'pluginId'> & { id?: string },
@@ -405,6 +432,13 @@ export interface PluginAPI {
 
   getConfig<T = Record<string, unknown>>(): Promise<T | null>;
 
+  // oauth
+  startOAuthFlow(config: OAuthFlowConfig): Promise<OAuthTokenResult>;
+
+  getOAuthToken(): Promise<string | null>;
+
+  clearOAuthToken(): Promise<void>;
+
   // download file
   downloadFile(filename: string, data: string): Promise<void>;
 
@@ -454,6 +488,8 @@ export interface PluginCreateTaskData {
   timeEstimate?: number;
   parentId?: string | null;
   isDone?: boolean;
+  /** Due date as ISO date string (YYYY-MM-DD) */
+  dueDay?: string | null;
 }
 
 export interface PluginShortcutCfg {

@@ -43,6 +43,9 @@ export class FocusModeService {
   pomodoroConfig = this._globalConfigService.pomodoroConfig;
   focusModeConfig = this._store.selectSignal(selectFocusModeConfig);
 
+  // Overtime
+  isInOvertime = this._store.selectSignal(selectors.selectIsInOvertime);
+
   // Compatibility aliases (TODO: remove when components are updated)
   isBreakLong = this.isLongBreak;
 

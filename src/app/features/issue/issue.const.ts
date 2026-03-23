@@ -38,10 +38,7 @@ import {
   DEFAULT_LINEAR_CFG,
   LINEAR_CONFIG_FORM_SECTION,
 } from './providers/linear/linear.const';
-import {
-  DEFAULT_CLICKUP_CFG,
-  CLICKUP_CONFIG_FORM_SECTION,
-} from './providers/clickup/clickup.const';
+// ClickUp is now a plugin — no built-in config needed
 import { AZURE_DEVOPS_INITIAL_CFG } from './providers/azure-devops/azure-devops.const';
 import { DEFAULT_NEXTCLOUD_DECK_CFG } from './providers/nextcloud-deck/nextcloud-deck.const';
 import { AZURE_DEVOPS_CONFIG_FORM_SECTION } from './providers/azure-devops/azure-devops-cfg-form.const';
@@ -59,7 +56,7 @@ export const REDMINE_TYPE: BuiltInIssueProviderKey = 'REDMINE';
 export const ICAL_TYPE: BuiltInIssueProviderKey = 'ICAL';
 export const TRELLO_TYPE: BuiltInIssueProviderKey = 'TRELLO';
 export const LINEAR_TYPE: BuiltInIssueProviderKey = 'LINEAR';
-export const CLICKUP_TYPE: BuiltInIssueProviderKey = 'CLICKUP';
+export const CLICKUP_TYPE: MigratedIssueProviderKey = 'CLICKUP';
 export const AZURE_DEVOPS_TYPE: BuiltInIssueProviderKey = 'AZURE_DEVOPS';
 export const NEXTCLOUD_DECK_TYPE: BuiltInIssueProviderKey = 'NEXTCLOUD_DECK';
 
@@ -73,7 +70,6 @@ export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   TRELLO_TYPE,
   REDMINE_TYPE,
   LINEAR_TYPE,
-  CLICKUP_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
 ] as const;
@@ -88,7 +84,6 @@ export const ISSUE_PROVIDER_ICON_MAP = {
   [TRELLO_TYPE]: 'trello',
   [REDMINE_TYPE]: 'redmine',
   [LINEAR_TYPE]: 'linear',
-  [CLICKUP_TYPE]: 'clickup',
   [AZURE_DEVOPS_TYPE]: 'azure_devops',
   [NEXTCLOUD_DECK_TYPE]: 'nextcloud_deck',
 } as const;
@@ -103,7 +98,6 @@ export const ISSUE_PROVIDER_HUMANIZED = {
   [TRELLO_TYPE]: 'Trello',
   [REDMINE_TYPE]: 'Redmine',
   [LINEAR_TYPE]: 'Linear',
-  [CLICKUP_TYPE]: 'ClickUp',
   [AZURE_DEVOPS_TYPE]: 'Azure DevOps',
   [NEXTCLOUD_DECK_TYPE]: 'Nextcloud Deck',
 } as const;
@@ -118,7 +112,6 @@ export const DEFAULT_ISSUE_PROVIDER_CFGS = {
   [TRELLO_TYPE]: DEFAULT_TRELLO_CFG,
   [REDMINE_TYPE]: DEFAULT_REDMINE_CFG,
   [LINEAR_TYPE]: DEFAULT_LINEAR_CFG,
-  [CLICKUP_TYPE]: DEFAULT_CLICKUP_CFG,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_INITIAL_CFG,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_NEXTCLOUD_DECK_CFG,
 } as const;
@@ -133,7 +126,6 @@ export const ISSUE_PROVIDER_FORM_CFGS_MAP = {
   [TRELLO_TYPE]: TRELLO_CONFIG_FORM_SECTION,
   [REDMINE_TYPE]: REDMINE_CONFIG_FORM_SECTION,
   [LINEAR_TYPE]: LINEAR_CONFIG_FORM_SECTION,
-  [CLICKUP_TYPE]: CLICKUP_CONFIG_FORM_SECTION,
   [AZURE_DEVOPS_TYPE]: AZURE_DEVOPS_CONFIG_FORM_SECTION,
   [NEXTCLOUD_DECK_TYPE]: NEXTCLOUD_DECK_CONFIG_FORM_SECTION,
 } as const;
@@ -162,7 +154,6 @@ export const ISSUE_STR_MAP: Record<
   [TRELLO_TYPE]: DEFAULT_ISSUE_STRS,
   [REDMINE_TYPE]: DEFAULT_ISSUE_STRS,
   [LINEAR_TYPE]: DEFAULT_ISSUE_STRS,
-  [CLICKUP_TYPE]: DEFAULT_ISSUE_STRS,
   [AZURE_DEVOPS_TYPE]: DEFAULT_ISSUE_STRS,
   [NEXTCLOUD_DECK_TYPE]: DEFAULT_ISSUE_STRS,
 } as const;
@@ -176,4 +167,6 @@ export const ISSUE_PROVIDER_DEFAULT_COMMON_CFG: Omit<
   isIntegratedAddTaskBar: false,
   defaultProjectId: null,
   pinnedSearch: null,
+  defaultTagIds: [],
+  defaultNote: null,
 } as const;

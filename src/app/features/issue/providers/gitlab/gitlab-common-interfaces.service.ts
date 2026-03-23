@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { Task } from 'src/app/features/tasks/task.model';
+import { Task, TaskCopy } from 'src/app/features/tasks/task.model';
 import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import { IssueData, SearchResultItem } from '../../issue.model';
 import { GitlabApiService } from './gitlab-api/gitlab-api.service';
@@ -113,9 +113,15 @@ export class GitlabCommonInterfacesService extends BaseIssueProviderService<Gitl
       issueUpdate > (task.issueLastUpdated || 0);
 
     if (wasUpdated) {
+      // Exclude dueDay from polling updates to prevent overwriting
+      // user-set schedules (see issue #6792)
+      const taskData: Partial<TaskCopy> & { title: string } = {
+        ...this.getAddTaskData(issue),
+      };
+      delete taskData.dueDay;
       return {
         taskChanges: {
-          ...this.getAddTaskData(issue),
+          ...taskData,
           issueWasUpdated: true,
         },
         issue,

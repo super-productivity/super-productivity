@@ -281,7 +281,7 @@ export const expectTimeTrackingActive = async (
   timeout = 5000,
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
-  const indicator = task.locator('.play-icon-indicator');
+  const indicator = task.locator('.play-indicator');
   await expect(indicator).toBeVisible({ timeout });
 };
 
@@ -298,6 +298,6 @@ export const expectTimeTrackingInactive = async (
   timeout = 5000,
 ): Promise<void> => {
   const task = getTaskElement(client, taskName);
-  const indicator = task.locator('.play-icon-indicator');
+  const indicator = task.locator('.play-indicator');
   await expect(indicator).not.toBeVisible({ timeout });
 };

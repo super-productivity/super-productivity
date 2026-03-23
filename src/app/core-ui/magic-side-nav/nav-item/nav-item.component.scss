@@ -32,7 +32,7 @@
 
     // to make space for the task-count
     &.has-tasks {
-      padding-right: 40px;
+      padding-right: var(--s5);
     }
 
     .nav-label {

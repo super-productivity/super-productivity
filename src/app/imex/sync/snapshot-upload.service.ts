@@ -244,15 +244,16 @@ export class SnapshotUploadService {
       isEncryptionEnabled,
     } as SuperSyncPrivateCfg);
 
-    // Upload snapshot
-    SyncLog.normal(`${logPrefix}: Uploading snapshot...`);
-    const result = await this.uploadSnapshot(
+    // Upload snapshot with retry for rate limiting
+    // Critical: server data is already deleted, so we must try hard to get the upload through
+    const result = await this._uploadWithRateLimitRetry({
       syncProvider,
       payload,
       clientId,
       vectorClock,
-      isEncryptionEnabled && !!encryptKey,
-    );
+      isPayloadEncrypted: isEncryptionEnabled && !!encryptKey,
+      logPrefix,
+    });
 
     if (!result.accepted) {
       throw new Error(`Snapshot upload failed: ${result.error}`);
@@ -261,5 +262,81 @@ export class SnapshotUploadService {
     await this.updateLastServerSeq(syncProvider, result.serverSeq, logPrefix);
 
     return { ...result, existingCfg };
+  }
+
+  /**
+   * Uploads a snapshot with automatic retry on 429 rate limit errors.
+   * Used after destructive delete where upload failure leaves server in bad state.
+   */
+  private async _uploadWithRateLimitRetry(options: {
+    syncProvider: SyncProviderBase<SyncProviderId> & OperationSyncCapable;
+    payload: unknown;
+    clientId: string;
+    vectorClock: VectorClock;
+    isPayloadEncrypted: boolean;
+    logPrefix: string;
+  }): Promise<SnapshotUploadResult> {
+    const {
+      syncProvider,
+      payload,
+      clientId,
+      vectorClock,
+      isPayloadEncrypted,
+      logPrefix,
+    } = options;
+    const MAX_RETRIES = 2;
+    // Server rate limits are typically 5-10 minutes; honor the full delay since
+    // the dialog shows a spinner and server data is already deleted
+    const MAX_DELAY_MS = 10 * 60_000;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        SyncLog.normal(`${logPrefix}: Uploading snapshot (attempt ${attempt + 1})...`);
+        return await this.uploadSnapshot(
+          syncProvider,
+          payload,
+          clientId,
+          vectorClock,
+          isPayloadEncrypted,
+        );
+      } catch (error) {
+        const delayMs = this._parseRateLimitDelayMs(error);
+        if (delayMs !== null && attempt < MAX_RETRIES) {
+          const cappedDelay = Math.min(delayMs, MAX_DELAY_MS);
+          SyncLog.warn(
+            `${logPrefix}: Rate limited (429) on attempt ${attempt + 1}, ` +
+              `retrying in ${(cappedDelay / 1000).toFixed(0)}s...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, cappedDelay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Snapshot upload failed after retries');
+  }
+
+  /**
+   * Parses a rate limit (429) error and returns the suggested retry delay in ms.
+   * Returns null if the error is not a rate limit error.
+   */
+  private _parseRateLimitDelayMs(error: unknown): number | null {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/\b429\b/.test(message)) {
+      return null;
+    }
+
+    const minutesMatch = message.match(/retry in (\d+)\s*minute/i);
+    if (minutesMatch) {
+      return parseInt(minutesMatch[1], 10) * 60_000;
+    }
+
+    const secondsMatch = message.match(/retry in (\d+)\s*second/i);
+    if (secondsMatch) {
+      return parseInt(secondsMatch[1], 10) * 1000;
+    }
+
+    // Default retry delay for unspecified 429
+    return 60_000;
   }
 }

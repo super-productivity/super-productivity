@@ -1,5 +1,4 @@
 import { HANDLED_ERROR_PROP_STR, IS_ELECTRON } from '../../app.constants';
-import StackTrace from 'stacktrace-js';
 import newGithubIssueUrl from 'new-github-issue-url';
 import { getBeforeLastErrorActionLog } from '../../util/action-logger';
 import { download, downloadLogs } from '../../util/download';
@@ -40,6 +39,8 @@ const _getStacktrace = async (err: Error | any): Promise<string> => {
 
   // Don't try to send stacktraces of HTTP errors as they are already logged on the server
   if (!isHttpError && isErrorWithStack && !isHandledError(err)) {
+    const mod = await import('stacktrace-js');
+    const StackTrace = mod.default ?? mod;
     return StackTrace.fromError(err, {
       filter: (f) => f?.fileName !== 'log.ts',
     }).then((stackframes) => {

@@ -239,7 +239,7 @@
   top: 40px;
   position: sticky;
   line-height: 1.2;
-  padding: 4px 4px;
+  padding: var(--s-half) var(--s-half);
   justify-content: stretch;
   align-self: start;
   z-index: 33;
@@ -277,10 +277,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: var(--s);
 
   @include mq(xs, max) {
-    padding: 4px;
+    padding: var(--s-half);
   }
 
   mat-icon {
@@ -315,7 +315,7 @@
     position: absolute;
     bottom: 100%;
     line-height: 1;
-    padding: 2px 8px;
+    padding: var(--s-quarter) var(--s);
     margin-bottom: -6px;
     background: var(--bg);
   }
@@ -378,7 +378,7 @@
   .time-badge {
     background: var(--c-accent);
     color: var(--text-on-accent);
-    padding: 8px 16px;
+    padding: var(--s) var(--s2);
     border-radius: 20px;
     font-size: 14px;
     font-weight: 600;
@@ -400,10 +400,10 @@
   .info-content {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--s);
     background: var(--bg-darker);
     color: var(--text-color);
-    padding: 12px 16px;
+    padding: 12px var(--s2);
     border-radius: 8px;
     box-shadow: var(--whiteframe-shadow-12dp);
     @include extraBorder();

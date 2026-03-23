@@ -13,7 +13,6 @@ import { REDMINE_ISSUE_CONTENT_CONFIG } from '../providers/redmine/redmine-issue
 import { OPEN_PROJECT_ISSUE_CONTENT_CONFIG } from '../providers/open-project/open-project-issue-content.const';
 import { TRELLO_ISSUE_CONTENT_CONFIG } from '../providers/trello/trello-issue-content.const';
 import { LINEAR_ISSUE_CONTENT_CONFIG } from '../providers/linear/linear-issue-content.const';
-import { CLICKUP_ISSUE_CONTENT_CONFIG } from '../providers/clickup/clickup-issue-content.const';
 import { AZURE_DEVOPS_ISSUE_CONTENT_CONFIG } from '../providers/azure-devops/azure-devops-issue/azure-devops-issue-content.const';
 import { NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG } from '../providers/nextcloud-deck/nextcloud-deck-issue-content.const';
 
@@ -32,7 +31,6 @@ export const ISSUE_CONTENT_CONFIGS: Record<
   OPEN_PROJECT: OPEN_PROJECT_ISSUE_CONTENT_CONFIG,
   TRELLO: TRELLO_ISSUE_CONTENT_CONFIG,
   LINEAR: LINEAR_ISSUE_CONTENT_CONFIG,
-  CLICKUP: CLICKUP_ISSUE_CONTENT_CONFIG,
   AZURE_DEVOPS: AZURE_DEVOPS_ISSUE_CONTENT_CONFIG,
   NEXTCLOUD_DECK: NEXTCLOUD_DECK_ISSUE_CONTENT_CONFIG,
   ICAL: {

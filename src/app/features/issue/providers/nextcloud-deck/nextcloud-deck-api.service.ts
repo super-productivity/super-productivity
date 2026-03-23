@@ -73,7 +73,12 @@ export class NextcloudDeckApiService {
     boardId: number,
     stackId: number,
     cardId: number,
-    changes: Partial<{ title: string; done: boolean }>,
+    changes: Partial<{
+      title: string;
+      description: string;
+      duedate: string | null;
+      done: boolean;
+    }>,
   ): Observable<DeckCardResponse> {
     this._checkSettings(cfg);
     const url = `${this._getBaseUrl(cfg)}/boards/${boardId}/stacks/${stackId}/cards/${cardId}`;

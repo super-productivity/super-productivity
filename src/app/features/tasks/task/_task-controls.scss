@@ -23,7 +23,7 @@
   flex-direction: row;
   align-items: stretch;
   text-align: right;
-  margin-right: 2px;
+  margin-right: var(--s-quarter);
   position: relative;
 
   button {
@@ -160,17 +160,17 @@
       display: inline-flex;
       vertical-align: middle;
       height: 16px;
-      margin-right: 2px;
+      margin-right: var(--s-quarter);
       margin-top: -2px;
 
       @include mq(xs, max) {
-        margin-right: 2px;
+        margin-right: var(--s-quarter);
         height: 14px;
       }
     }
 
     span:not(:last-child) {
-      margin-right: 2px;
+      margin-right: var(--s-quarter);
     }
   }
 
@@ -216,52 +216,13 @@
 .drag-over-msg {
   pointer-events: none;
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  bottom: 0;
+  inset: 0;
   opacity: 1;
   justify-content: center;
   align-items: center;
   font-weight: bold;
   display: flex;
   z-index: var(--z-drag-over-msg);
-}
-
-.check-done {
-  opacity: 0.5;
-  @include center;
-  display: block;
-  z-index: var(--z-check-done);
-  transition: var(--transition-standard);
-  border-radius: 50%;
-
-  &:hover {
-    opacity: 1 !important;
-
-    mat-icon {
-      animation: var(--transition-duration-m) success-btn-ani linear;
-    }
-
-    .check {
-      display: none;
-    }
-
-    .undo {
-      display: block;
-    }
-  }
-
-  mat-icon {
-    font-size: var(--task-icon-size);
-    height: var(--task-icon-size);
-    width: var(--task-icon-size);
-    line-height: var(--task-icon-size);
-
-    &.undo {
-      display: none;
-    }
-  }
 }
 
 // SWIPE BLOCKS
@@ -302,8 +263,8 @@ progress-bar {
   z-index: var(--z-progress-bar);
 }
 
-// BUTTON STYLES AND DRAG HANDLE
-// -----------------------------
+// BUTTON STYLES
+// -------------
 .toggle-sub-tasks-btn,
 .first-line ::ng-deep .ico-btn,
 .first-line .ico-btn {
@@ -337,22 +298,44 @@ progress-bar {
   }
 }
 
-.drag-handle {
+// approximate length of checkmark polyline
+$check-len: 16;
+
+@keyframes draw-check {
+  from {
+    stroke-dashoffset: $check-len;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+// circumference of r=10 circle: 2 * π * 10 ≈ 62.83
+$circle-circumference: 62.83;
+
+@keyframes circle-draw {
+  0% {
+    stroke-dashoffset: $circle-circumference;
+  }
+  35% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.done-toggle {
   margin-left: var(--s);
   margin-right: 0;
   width: 40px;
   height: 40px;
   min-width: 40px;
   z-index: var(--z-drag-handle);
-  //display: flex;
-  //justify-content: center;
-  //align-items: center;
   position: relative;
-  // fixes drag and drop on mobile
   touch-action: none;
   pointer-events: all;
-
-  @include grabCursor();
+  cursor: pointer;
 
   @include verySmallMainContainer {
     width: 8px;
@@ -365,37 +348,82 @@ progress-bar {
     @include center;
   }
 
-  .type-ico-wrapper {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    opacity: var(--task-icon-default-opacity);
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  .done-toggle-svg {
+    width: 24px;
+    height: 24px;
+    opacity: 0.3;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
 
-    @include mq(xs, max) {
-      display: none;
+  .done-circle {
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+  }
+
+  .done-check {
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: $check-len;
+    stroke-dashoffset: $check-len;
+  }
+
+  .progress-ring {
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    fill: none;
+    stroke-dasharray: $circle-circumference;
+    stroke-dashoffset: 0;
+    transform-origin: center;
+    transform: rotate(-90deg);
+    animation: circle-draw 6s ease-in-out infinite;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
+
+  .play-indicator {
+    fill: currentColor;
+    transition: opacity var(--transition-duration-m) var(--ani-standard-timing);
+  }
+
+  &.is-done {
+    .done-toggle-svg {
+      opacity: 0.5;
     }
 
-    :host.isCurrent &::ng-deep mat-icon {
-      transform: scale(1.4) !important;
-      transform-origin: center center;
-      opacity: 0.18;
+    .done-check {
+      animation: draw-check 150ms ease-out forwards;
     }
   }
 
-  .drag-handle-ico {
-    opacity: 0.15;
-
-    :host.isCurrent & {
+  &.is-current:not(.is-done) {
+    .done-circle {
       opacity: 0;
     }
+
+    &:hover {
+      .done-circle {
+        opacity: 1;
+      }
+
+      .progress-ring,
+      .play-indicator {
+        opacity: 0;
+      }
+    }
   }
 
-  &:active {
-    cursor: grabbing;
+  &:hover {
+    .done-toggle-svg {
+      opacity: 0.6;
+    }
+
+    &.is-done .done-toggle-svg {
+      opacity: 0.8;
+    }
   }
 
   // hit area
@@ -513,39 +541,12 @@ progress-bar {
   }
 }
 
-// ANIMATIONS ETC
-// --------------
-@keyframes success-btn-ani {
-  0% {
-    transform: scale(0.5) rotate(-180deg);
-  }
-  50% {
-    transform: scale(1) rotate(-90deg);
-  }
-  100% {
-    transform: scale(1) rotate(0deg);
-  }
-}
-
 .isPreventPointerEventsWhilePanning {
   * {
     user-select: none !important;
-    -webkit-user-select: none !important; /* Safari */
     pointer-events: none !important;
     transition: none !important;
   }
-}
-
-.mini-badge {
-  line-height: var(--mini-badge-size);
-  width: var(--mini-badge-size);
-  height: var(--mini-badge-size);
-  font-size: 12px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-radius: 50%;
-  text-align: center;
 }
 
 .parent-title {
@@ -557,11 +558,19 @@ progress-bar {
 
   .title {
     font-size: 12px;
-    text-overflow: ellipsis;
+    @include truncateText();
   }
 }
 
 .schedule-btn {
+  position: relative;
+
+  &.mat-warn mat-icon {
+    color: var(--c-warn) !important;
+  }
+}
+
+.deadline-btn {
   position: relative;
 
   &.mat-warn mat-icon {
@@ -577,13 +586,13 @@ progress-bar {
   z-index: 10;
   line-height: 1;
   text-align: center;
-  padding: 1px 2px 0;
+  padding: 1px var(--s-quarter) 0;
   @include extraBorder();
   border-radius: var(--card-border-radius);
   white-space: nowrap;
   background: #fff;
 
-  // avoid affecting drag handle
+  // avoid affecting done toggle
   pointer-events: none;
 
   @include darkTheme() {
@@ -610,5 +619,5 @@ progress-bar {
   width: 20px;
   display: inline-block;
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: var(--s-half);
 }

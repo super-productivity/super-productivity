@@ -308,58 +308,90 @@ describe('OperationDownloadService', () => {
       expect(result.gapDetected).toBe(false);
     });
 
-    it('should optimize download when latest snapshot exists', async () => {
-      const snapshotOp = { serverSeq: 50 };
-      const skippedOps = [
-        { vectorClock: { 'client-1': 10, 'client-2': 5 } },
-        { vectorClock: { 'client-1': 15, 'client-3': 8 } },
-      ];
-      const opsAfterSnapshot = [createMockOpRow(51)];
+    // === Snapshot Vector Clock SQL Aggregate Tests ===
+    // The server uses a PostgreSQL aggregate query (jsonb_each_text + GROUP BY + MAX)
+    // to compute the snapshot vector clock from skipped ops. These tests verify:
+    // - $queryRaw is used (not findMany for clock data)
+    // - BigInt results are correctly converted to Number
+    // - limitVectorClockSize is applied to the aggregate result
+    // - preserveIds includes both excludeClient and snapshot author
+
+    it('should use $queryRaw for clock aggregation (not findMany)', async () => {
+      const snapshotOp = { serverSeq: 50, clientId: 'author-client' };
+      let capturedTx: any;
 
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
-        const mockTx = {
+        capturedTx = {
           operation: {
-            findFirst: vi.fn().mockResolvedValue(snapshotOp), // Latest SYNC_IMPORT at seq 50
-            findMany: vi
-              .fn()
-              .mockResolvedValueOnce(skippedOps) // Skipped ops for vector clock
-              .mockResolvedValueOnce(opsAfterSnapshot as any), // Actual ops to return
+            findFirst: vi.fn().mockResolvedValue(snapshotOp),
+            findMany: vi.fn().mockResolvedValue([]),
             aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([{ client_id: 'a', max_counter: 5n }]),
+        };
+        return fn(capturedTx);
+      });
+
+      await service.getOpsSinceWithSeq(1, 10);
+
+      // $queryRaw should be called exactly once for clock aggregation
+      expect(capturedTx.$queryRaw).toHaveBeenCalledTimes(1);
+      // findMany should be called exactly once (for ops after snapshot), NOT twice
+      expect(capturedTx.operation.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('should optimize download when latest snapshot exists', async () => {
+      const snapshotOp = { serverSeq: 50 };
+      const opsAfterSnapshot = [createMockOpRow(51)];
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue(snapshotOp),
+            findMany: vi.fn().mockResolvedValue(opsAfterSnapshot as any),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
+          },
+          $queryRaw: vi.fn().mockResolvedValue([
+            { client_id: 'client-1', max_counter: 15n },
+            { client_id: 'client-2', max_counter: 5n },
+            { client_id: 'client-3', max_counter: 8n },
+          ]),
         };
         return fn(mockTx);
       });
 
-      const result = await service.getOpsSinceWithSeq(1, 10); // Client at seq 10, snapshot at 50
+      const result = await service.getOpsSinceWithSeq(1, 10);
 
       expect(result.latestSnapshotSeq).toBe(50);
       expect(result.snapshotVectorClock).toEqual({
-        'client-1': 15, // Max of 10 and 15
+        'client-1': 15,
         'client-2': 5,
         'client-3': 8,
       });
     });
 
     it('should aggregate vector clocks correctly from skipped ops', async () => {
-      const skippedOps = [
-        { vectorClock: { a: 1, b: 2 } },
-        { vectorClock: { a: 3, c: 1 } },
-        { vectorClock: { b: 5, c: 2 } },
-      ];
-
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
-            findMany: vi.fn().mockResolvedValueOnce(skippedOps).mockResolvedValueOnce([]),
+            findMany: vi.fn().mockResolvedValue([]),
             aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([
+            { client_id: 'a', max_counter: 3n },
+            { client_id: 'b', max_counter: 5n },
+            { client_id: 'c', max_counter: 2n },
+          ]),
         };
         return fn(mockTx);
       });
@@ -367,41 +399,197 @@ describe('OperationDownloadService', () => {
       const result = await service.getOpsSinceWithSeq(1, 0);
 
       expect(result.snapshotVectorClock).toEqual({
-        a: 3, // Max of 1 and 3
-        b: 5, // Max of 2 and 5
-        c: 2, // Max of 1 and 2
+        a: 3,
+        b: 5,
+        c: 2,
       });
     });
 
-    it('should handle malformed vector clocks gracefully', async () => {
-      const skippedOps = [
-        { vectorClock: { a: 1 } },
-        { vectorClock: null }, // Invalid
-        { vectorClock: 'not an object' }, // Invalid
-        { vectorClock: { b: 'not a number', c: 2 } }, // Partially invalid
-      ];
-
+    it('should handle empty aggregate result gracefully', async () => {
       vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
         const mockTx = {
           operation: {
             findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
-            findMany: vi.fn().mockResolvedValueOnce(skippedOps).mockResolvedValueOnce([]),
+            findMany: vi.fn().mockResolvedValue([]),
             aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
           },
           userSyncState: {
             findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
           },
+          $queryRaw: vi.fn().mockResolvedValue([]),
         };
         return fn(mockTx);
       });
 
       const result = await service.getOpsSinceWithSeq(1, 0);
 
-      // Should only include valid entries
-      expect(result.snapshotVectorClock).toEqual({
-        a: 1,
-        c: 2, // String 'not a number' is skipped
+      expect(result.snapshotVectorClock).toEqual({});
+    });
+
+    it('should correctly convert BigInt values to Number', async () => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({ serverSeq: 10 }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
+          },
+          $queryRaw: vi.fn().mockResolvedValue([
+            { client_id: 'x', max_counter: 0n },
+            { client_id: 'y', max_counter: 1n },
+            { client_id: 'z', max_counter: 99999999n },
+          ]),
+        };
+        return fn(mockTx);
       });
+
+      const result = await service.getOpsSinceWithSeq(1, 0);
+
+      expect(result.snapshotVectorClock).toEqual({ x: 0, y: 1, z: 99999999 });
+      // Verify values are Numbers, not BigInts
+      expect(typeof result.snapshotVectorClock!['x']).toBe('number');
+      expect(typeof result.snapshotVectorClock!['z']).toBe('number');
+    });
+
+    it('should handle single-entry aggregate result', async () => {
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({ serverSeq: 5 }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 10 }),
+          },
+          $queryRaw: vi
+            .fn()
+            .mockResolvedValue([{ client_id: 'solo-client', max_counter: 42n }]),
+        };
+        return fn(mockTx);
+      });
+
+      const result = await service.getOpsSinceWithSeq(1, 0);
+
+      expect(result.snapshotVectorClock).toEqual({ 'solo-client': 42 });
+    });
+
+    it('should apply limitVectorClockSize to aggregate result exceeding MAX', async () => {
+      // Create 25 entries — exceeds MAX_VECTOR_CLOCK_SIZE (20)
+      const clockRows = Array.from({ length: 25 }, (_, i) => ({
+        client_id: `client-${String(i).padStart(3, '0')}`,
+        max_counter: BigInt(100 - i), // Descending counters
+      }));
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
+          },
+          $queryRaw: vi.fn().mockResolvedValue(clockRows),
+        };
+        return fn(mockTx);
+      });
+
+      const result = await service.getOpsSinceWithSeq(1, 10);
+
+      // Should be pruned to MAX_VECTOR_CLOCK_SIZE (20) entries
+      expect(Object.keys(result.snapshotVectorClock!).length).toBeLessThanOrEqual(20);
+      // Highest-counter entries should be preserved
+      expect(result.snapshotVectorClock!['client-000']).toBe(100);
+      expect(result.snapshotVectorClock!['client-001']).toBe(99);
+    });
+
+    it('should preserve excludeClient and snapshot author in pruned clock', async () => {
+      // Create 25 entries exceeding MAX; put excludeClient and author at the bottom
+      const clockRows = Array.from({ length: 25 }, (_, i) => ({
+        client_id: `client-${String(i).padStart(3, '0')}`,
+        max_counter: BigInt(100 - i),
+      }));
+      // Add low-counter entries for the clients that should be preserved
+      clockRows.push({ client_id: 'requesting-client', max_counter: 1n });
+      clockRows.push({ client_id: 'snapshot-author', max_counter: 1n });
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        const mockTx = {
+          operation: {
+            findFirst: vi
+              .fn()
+              .mockResolvedValue({ serverSeq: 50, clientId: 'snapshot-author' }),
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 60 }),
+          },
+          $queryRaw: vi.fn().mockResolvedValue(clockRows),
+        };
+        return fn(mockTx);
+      });
+
+      const result = await service.getOpsSinceWithSeq(1, 10, 'requesting-client');
+
+      // Both low-counter clients should be preserved despite pruning
+      expect(result.snapshotVectorClock!['requesting-client']).toBe(1);
+      expect(result.snapshotVectorClock!['snapshot-author']).toBe(1);
+      expect(Object.keys(result.snapshotVectorClock!).length).toBeLessThanOrEqual(20);
+    });
+
+    it('should NOT use $queryRaw when client is past snapshot', async () => {
+      let capturedTx: any;
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        capturedTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue({ serverSeq: 50 }),
+            findMany: vi.fn().mockResolvedValue([createMockOpRow(61)] as any),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 70 }),
+          },
+          $queryRaw: vi.fn(),
+        };
+        return fn(capturedTx);
+      });
+
+      const result = await service.getOpsSinceWithSeq(1, 60);
+
+      // $queryRaw should NOT be called — client is past the snapshot
+      expect(capturedTx.$queryRaw).not.toHaveBeenCalled();
+      expect(result.snapshotVectorClock).toBeUndefined();
+    });
+
+    it('should NOT use $queryRaw when no snapshot exists', async () => {
+      let capturedTx: any;
+
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn: any) => {
+        capturedTx = {
+          operation: {
+            findFirst: vi.fn().mockResolvedValue(null), // No full-state op
+            findMany: vi.fn().mockResolvedValue([]),
+            aggregate: vi.fn().mockResolvedValue({ _min: { serverSeq: 1 } }),
+          },
+          userSyncState: {
+            findUnique: vi.fn().mockResolvedValue({ lastSeq: 20 }),
+          },
+          $queryRaw: vi.fn(),
+        };
+        return fn(capturedTx);
+      });
+
+      const result = await service.getOpsSinceWithSeq(1, 0);
+
+      expect(capturedTx.$queryRaw).not.toHaveBeenCalled();
+      expect(result.snapshotVectorClock).toBeUndefined();
     });
 
     it('should not optimize when client is already past snapshot', async () => {

@@ -53,7 +53,7 @@
     font-size: 11px;
     font-weight: 600;
     opacity: 0.8;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--c-light-10);
     z-index: 2;
 
     @include darkTheme() {
@@ -61,7 +61,7 @@
     }
 
     @include lightTheme() {
-      background-color: rgba(0, 0, 0, 0.1);
+      background-color: var(--c-dark-10);
     }
 
     :host(.isSuccess) & {

@@ -1,6 +1,6 @@
 :host {
   display: block;
-  padding: 4px 8px 0;
+  padding: var(--s-half) var(--s) 0;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   touch-action: none;
@@ -9,7 +9,7 @@
 .month-label {
   font-size: 15px;
   font-weight: 500;
-  padding: 4px 8px;
+  padding: var(--s-half) var(--s);
   text-align: center;
 }
 
@@ -23,7 +23,7 @@
 .day-labels {
   font-size: 11px;
   color: var(--text-muted, rgba(255, 255, 255, 0.5));
-  padding-bottom: 2px;
+  padding-bottom: var(--s-quarter);
 }
 
 .weeks {
@@ -39,7 +39,7 @@
   font-size: 14px;
   width: 36px;
   height: 36px;
-  margin: 2px auto;
+  margin: var(--s-quarter) auto;
   border-radius: 50%;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;

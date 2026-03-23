@@ -9,6 +9,7 @@ import {
   input,
   OnDestroy,
   OnInit,
+  signal,
   viewChild,
 } from '@angular/core';
 import { TaskCopy } from '../../tasks/task.model';
@@ -26,8 +27,6 @@ import { LongPressIOSDirective } from '../../../ui/longpress/longpress-ios.direc
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
-import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { Log } from '../../../core/log';
 
 @Component({
@@ -43,8 +42,6 @@ import { Log } from '../../../core/log';
     InlineInputComponent,
     TaskContextMenuComponent,
     MsToStringPipe,
-    IssueIconPipe,
-    ShortDate2Pipe,
   ],
 })
 export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDestroy {
@@ -61,11 +58,10 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
 
-  isRepeatTaskCreatedToday = false;
-
   readonly T = T;
   readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
   parentTitle: string | null = null;
+  isContextMenuLoaded = signal(false);
 
   moveToProjectList$!: Observable<Project[]>;
 
@@ -81,6 +77,11 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   @HostBinding('class.isCurrent')
   get isCurrent(): boolean {
     return this.task.id === this._taskService.currentTaskId();
+  }
+
+  @HostListener('contextmenu', ['$event'])
+  onContextMenu(event: MouseEvent): void {
+    this.openContextMenu(event);
   }
 
   @HostListener('click')
@@ -133,6 +134,15 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   }
 
   openContextMenu(event: TouchEvent | MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.isContextMenuLoaded()) {
+      this.isContextMenuLoaded.set(true);
+      setTimeout(() => {
+        this.taskContextMenu()?.open(event);
+      });
+      return;
+    }
     this.taskContextMenu()?.open(event);
   }
 

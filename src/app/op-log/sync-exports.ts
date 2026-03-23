@@ -59,9 +59,8 @@ export {
   isFileSyncProvider,
 } from './sync-providers/provider.interface';
 
-// Providers
-export { Dropbox } from './sync-providers/file-based/dropbox/dropbox';
-export { DropboxPrivateCfg } from './sync-providers/file-based/dropbox/dropbox';
+// Provider types
+export type { DropboxPrivateCfg } from './sync-providers/file-based/dropbox/dropbox';
 
 // VectorClock from core
 export { VectorClock } from '../core/util/vector-clock';

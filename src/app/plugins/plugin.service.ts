@@ -25,6 +25,7 @@ import {
   PluginNodeConsentDialogData,
 } from './ui/plugin-node-consent-dialog/plugin-node-consent-dialog-simple.component';
 import { first, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLoaderService } from './plugin-loader.service';
 import { validatePluginManifest } from './util/validate-manifest.util';
@@ -34,8 +35,21 @@ import { PluginLog } from '../core/log';
 import { PluginI18nService } from './plugin-i18n.service';
 import { Store } from '@ngrx/store';
 import { issueProvidersFeature } from '../features/issue/store/issue-provider.reducer';
+import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
 import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
 import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+
+const BUNDLED_PLUGIN_PATHS = [
+  'assets/bundled-plugins/yesterday-tasks-plugin',
+  'assets/bundled-plugins/sync-md',
+  'assets/bundled-plugins/api-test-plugin',
+  'assets/bundled-plugins/procrastination-buster',
+  'assets/bundled-plugins/automations',
+  'assets/bundled-plugins/github-issue-provider',
+  'assets/bundled-plugins/clickup-issue-provider',
+  'assets/bundled-plugins/brain-dump',
+  'assets/bundled-plugins/voice-reminder',
+] as const;
 
 @Injectable({
   providedIn: 'root',
@@ -101,13 +115,8 @@ export class PluginService implements OnDestroy {
 
   private async _discoverBuiltInPlugins(): Promise<void> {
     const pluginPaths = [
-      'assets/bundled-plugins/yesterday-tasks-plugin',
-      'assets/bundled-plugins/sync-md',
-      'assets/bundled-plugins/api-test-plugin',
-      'assets/bundled-plugins/procrastination-buster',
-      'assets/bundled-plugins/ai-productivity-prompts',
-      'assets/bundled-plugins/automations',
-      'assets/bundled-plugins/github-issue-provider',
+      ...BUNDLED_PLUGIN_PATHS,
+      'assets/bundled-plugins/ai-productivity-prompts', // discover-only
     ];
 
     // Only load manifests for discovery
@@ -139,6 +148,26 @@ export class PluginService implements OnDestroy {
                 );
                 PluginLog.log(
                   `Auto-enabled bundled plugin '${manifest.id}' (replaces built-in ${manifest.issueProvider.issueProviderKey} provider)`,
+                );
+              }
+            }
+          }
+
+          // Auto-enable voice-reminder plugin if domina mode was enabled,
+          // and migrate config so users keep their settings.
+          if (!isEnabled && manifest.id === 'voice-reminder') {
+            const hasMetadata =
+              await this._pluginMetaPersistenceService.hasPluginMetadata(manifest.id);
+            if (!hasMetadata) {
+              const migrated = await this._migrateVoiceReminderFromDominaMode();
+              if (migrated) {
+                isEnabled = true;
+                await this._pluginMetaPersistenceService.setPluginEnabled(
+                  manifest.id,
+                  true,
+                );
+                PluginLog.log(
+                  `Auto-enabled voice-reminder plugin (migrated from domina mode config)`,
                 );
               }
             }
@@ -190,14 +219,7 @@ export class PluginService implements OnDestroy {
   }
 
   private async _loadBuiltInPlugins(): Promise<void> {
-    const pluginPaths = [
-      'assets/bundled-plugins/yesterday-tasks-plugin',
-      'assets/bundled-plugins/sync-md',
-      'assets/bundled-plugins/api-test-plugin',
-      'assets/bundled-plugins/procrastination-buster',
-      'assets/bundled-plugins/automations',
-      'assets/bundled-plugins/github-issue-provider',
-    ];
+    const pluginPaths = [...BUNDLED_PLUGIN_PATHS];
 
     // KISS: No preloading - just load plugins directly
     await this._loadPluginsFromPaths(pluginPaths, 'built-in');
@@ -279,6 +301,78 @@ export class PluginService implements OnDestroy {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Migrate domina mode (voice reminder) config to the voice-reminder plugin.
+   * Returns true if migration was performed (domina mode was enabled).
+   */
+  private async _migrateVoiceReminderFromDominaMode(): Promise<boolean> {
+    try {
+      const cfg = await firstValueFrom(
+        this._store.select(selectIsDominaModeConfig).pipe(take(1)),
+      );
+      if (!cfg?.isEnabled) {
+        return false;
+      }
+      const pluginData = JSON.stringify({
+        isEnabled: cfg.isEnabled,
+        text: cfg.text,
+        interval: cfg.interval,
+        volume: cfg.volume,
+        voice: cfg.voice || '',
+      });
+      this._pluginUserPersistenceService.persistPluginUserData(
+        'voice-reminder',
+        pluginData,
+      );
+      return true;
+    } catch (e) {
+      PluginLog.err('Failed to migrate voice reminder config from domina mode:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Returns discovered issue provider plugins that are NOT yet enabled.
+   * Used by the issue-provider setup overview to show available plugins.
+   */
+  getDisabledIssueProviderPlugins(): Array<{
+    pluginId: string;
+    name: string;
+    icon: string;
+    issueProviderKey: string;
+    useAgendaView: boolean;
+  }> {
+    const result: Array<{
+      pluginId: string;
+      name: string;
+      icon: string;
+      issueProviderKey: string;
+      useAgendaView: boolean;
+    }> = [];
+    for (const [, state] of this._pluginStates()) {
+      if (!state.isEnabled && state.manifest.type === 'issueProvider') {
+        result.push({
+          pluginId: state.manifest.id,
+          name: state.manifest.name,
+          icon: state.manifest.issueProvider?.icon || 'extension',
+          issueProviderKey:
+            state.manifest.issueProvider?.issueProviderKey ??
+            `plugin:${state.manifest.id}`,
+          useAgendaView: state.manifest.issueProvider?.useAgendaView ?? false,
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Enable and activate a plugin. Returns the activated instance.
+   */
+  async enableAndActivatePlugin(pluginId: string): Promise<PluginInstance | null> {
+    await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, true);
+    return this.activatePlugin(pluginId, true);
   }
 
   private _updatePluginIcons(): void {

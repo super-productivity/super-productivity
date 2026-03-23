@@ -2226,4 +2226,104 @@ describe('dataRepair()', () => {
     const result = dataRepair(mock);
     expect(result.repairSummary.invalidReferencesRemoved).toBeGreaterThan(0);
   });
+
+  describe('invalid dueDay/deadlineDay sanitization (#6908)', () => {
+    it('should clear invalid dueDay from task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'INVALID_DUE',
+            title: 'INVALID_DUE',
+            projectId: FAKE_PROJECT_ID,
+            dueDay: '-/-/2026' as any,
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['INVALID_DUE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['INVALID_DUE']!.dueDay).toBeUndefined();
+    });
+
+    it('should clear invalid deadlineDay from task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'INVALID_DEADLINE',
+            title: 'INVALID_DEADLINE',
+            projectId: FAKE_PROJECT_ID,
+            deadlineDay: 'garbage' as any,
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['INVALID_DEADLINE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['INVALID_DEADLINE']!.deadlineDay).toBeUndefined();
+    });
+
+    it('should preserve valid dueDay on task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'VALID_DUE',
+            title: 'VALID_DUE',
+            projectId: FAKE_PROJECT_ID,
+            dueDay: '2026-03-21',
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['VALID_DUE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['VALID_DUE']!.dueDay).toBe('2026-03-21');
+    });
+
+    it('should clear invalid dueDay from archived task', () => {
+      const archiveTask: Task = {
+        ...DEFAULT_TASK,
+        id: 'ARCHIVED_INVALID',
+        title: 'ARCHIVED_INVALID',
+        projectId: FAKE_PROJECT_ID,
+        dueDay: '-/-/2026' as any,
+      };
+
+      const archiveTaskState: TaskArchive = {
+        ids: [archiveTask.id],
+        entities: {
+          [archiveTask.id]: archiveTask,
+        },
+      };
+
+      const result = dataRepair({
+        ...mock,
+        archiveYoung: {
+          ...mock.archiveYoung,
+          task: archiveTaskState,
+        },
+      });
+
+      expect(
+        result.data.archiveYoung.task.entities['ARCHIVED_INVALID']!.dueDay,
+      ).toBeUndefined();
+    });
+  });
 });

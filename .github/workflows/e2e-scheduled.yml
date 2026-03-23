@@ -14,6 +14,8 @@ on:
       - 'e2e/tests/**'
       - 'docker-compose.yaml'
       - 'docker-compose.supersync.yaml'
+      - 'packages/super-sync-server/**'
+      - 'packages/shared-schema/**'
 
 permissions:
   contents: read
@@ -74,7 +76,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -110,7 +112,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -171,7 +173,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -208,3 +210,26 @@ jobs:
           name: e2e-results-supersync-${{ matrix.shard }}-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
+
+  # Job 4: SuperSync Server Unit Tests (runs in parallel with build, no artifact needed)
+  supersync-server-tests:
+    name: SuperSync Server Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Install npm Packages
+        run: npm i
+      - name: Run SuperSync Server Tests
+        run: cd packages/super-sync-server && npm test

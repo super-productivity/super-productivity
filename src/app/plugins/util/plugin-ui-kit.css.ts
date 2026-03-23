@@ -75,20 +75,22 @@ export const PLUGIN_UI_KIT_CSS = `
   }
 
   input, textarea, select {
-    background: var(--bg);
+    background: var(--card-bg);
     color: var(--text-color);
-    border: 1px solid var(--divider-color);
-    border-radius: var(--card-border-radius);
+    border: none;
+    border-bottom: 1px solid var(--divider-color);
+    border-radius: var(--card-border-radius) var(--card-border-radius) 0 0;
     padding: var(--s) var(--s2);
     font-family: inherit;
     font-size: inherit;
     transition: var(--transition-standard);
+    width: 100%;
   }
 
   input:focus, textarea:focus, select:focus {
     outline: none;
-    border-color: var(--c-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-primary) 25%, transparent);
+    border-bottom-color: var(--c-primary);
+    border-bottom-width: 2px;
   }
 
   input:disabled, textarea:disabled, select:disabled {
@@ -96,8 +98,25 @@ export const PLUGIN_UI_KIT_CSS = `
     cursor: not-allowed;
   }
 
+  input[type="checkbox"], input[type="radio"] {
+    width: auto;
+    accent-color: var(--c-primary);
+  }
+
   label {
+    display: block;
+    margin-bottom: var(--s-half);
+    font-size: 0.85em;
+    color: var(--text-color-muted);
     cursor: pointer;
+  }
+
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--s) center;
+    padding-right: var(--s4);
   }
 
   a {

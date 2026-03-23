@@ -220,7 +220,8 @@ export class SyncHydrationService {
       // 7. Validate and repair synced data before dispatching
       // This fixes stale task references (e.g., tags/projects referencing deleted tasks)
       let dataToLoad = syncedData as AppDataComplete;
-      const validationResult = this.validateStateService.validateAndRepair(dataToLoad);
+      const validationResult =
+        await this.validateStateService.validateAndRepair(dataToLoad);
       if (validationResult.wasRepaired && validationResult.repairedState) {
         // Cast to any since Record<string, unknown> doesn't directly map to AppDataComplete
         dataToLoad = validationResult.repairedState as any;

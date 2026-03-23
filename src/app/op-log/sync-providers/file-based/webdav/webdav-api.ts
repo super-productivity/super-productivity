@@ -247,6 +247,15 @@ export class WebdavApi {
     expectedRev?: string | null;
     isForceOverwrite?: boolean;
   }): Promise<{ rev: string; legacyRev?: string; lastModified?: string }> {
+    // Guard against empty upload data — prevents overwriting remote file with zero bytes.
+    // This can happen when the Capacitor bridge drops the payload on Android.
+    // Symmetric with the download guard at the download() method.
+    if (!data || data.trim().length === 0) {
+      throw new InvalidDataSPError(
+        `Refusing to upload empty data to ${path}. This would overwrite the remote file with zero bytes.`,
+      );
+    }
+
     const cfg = await this._getCfgOrError();
     const fullPath = this._buildFullPath(cfg.baseUrl, path);
 

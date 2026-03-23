@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API 密钥",
+    "API_KEY_LINK": "获取您的个人 API 密钥",
+    "TEAM_IDS": "工作区/团队 ID（用逗号分隔，留空表示全部）",
+    "USER_ID": "用户 ID（按负责人筛选）"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATUS": "状态",
+    "PRIORITY": "优先级",
+    "ASSIGNEE": "负责人",
+    "LABELS": "标签",
+    "DESCRIPTION": "描述"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp：未知错误。请检查您的 API 密钥并重试。"
+  }
+}

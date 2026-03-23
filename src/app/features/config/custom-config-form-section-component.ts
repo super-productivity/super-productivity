@@ -1,6 +1,5 @@
 import { FileImexComponent } from '../../imex/file-imex/file-imex.component';
 import { CustomCfgSection } from './global-config.model';
-import { ClickUpAdditionalCfgComponent } from '../issue/providers/clickup/clickup-view-components/clickup-cfg/clickup-additional-cfg.component';
 import { ClipboardImagesCfgComponent } from './clipboard-images-cfg/clipboard-images-cfg.component';
 import { Type } from '@angular/core';
 
@@ -10,9 +9,6 @@ export const customConfigFormSectionComponent = (
   switch (customSection) {
     case 'FILE_IMPORT_EXPORT':
       return FileImexComponent;
-
-    case 'CLICKUP_CFG':
-      return ClickUpAdditionalCfgComponent;
 
     case 'CLIPBOARD_IMAGES_CFG':
       return ClipboardImagesCfgComponent;

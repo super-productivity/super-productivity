@@ -34,7 +34,6 @@ $this-dot-size: 14px;
   overflow: hidden;
   display: block;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   width: $this-size + $this-margin * 2;
   min-width: $this-size + $this-margin * 2;
   color: var(--text-color);
@@ -186,7 +185,6 @@ $this-stroke-width: 4px;
   position: relative;
   overflow: visible;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   backface-visibility: hidden;
   transform: translateZ(0);
   z-index: 4;
@@ -203,7 +201,6 @@ $this-stroke-width: 4px;
     outline: none;
     z-index: 5;
     user-select: all;
-    -webkit-user-select: all; /* Safari */
     transform: scale(1.2);
 
     &:after {

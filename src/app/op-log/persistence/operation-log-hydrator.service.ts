@@ -501,7 +501,7 @@ export class OperationLogHydratorService {
       await this._repairMutex;
     }
 
-    const result = this.validateStateService.validateAndRepair(state as never);
+    const result = await this.validateStateService.validateAndRepair(state as never);
 
     if (!result.wasRepaired) {
       return { wasRepaired: false };

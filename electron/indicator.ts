@@ -6,8 +6,9 @@ import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  initOverlayIndicator,
+  updateOverlayAlwaysShow,
   updateOverlayEnabled,
+  updateOverlayOpacity,
   updateOverlayTask,
 } from './overlay-indicator/overlay-indicator';
 import { getWin } from './main-window';
@@ -131,22 +132,26 @@ function initListeners(): void {
   let isOverlayEnabled = false;
   // Listen for settings updates to handle overlay enable/disable
   ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isOverlayEnabledNew = settings?.misc?.isOverlayIndicatorEnabled || false;
-    if (isOverlayEnabledNew === isOverlayEnabled) {
-      return;
+    const isOverlayEnabledNew = settings?.overlayIndicator?.isEnabled || false;
+
+    if (isOverlayEnabledNew !== isOverlayEnabled) {
+      isOverlayEnabled = isOverlayEnabledNew;
+      updateOverlayEnabled(isOverlayEnabled);
     }
 
-    isOverlayEnabled = isOverlayEnabledNew;
-    updateOverlayEnabled(isOverlayEnabled);
-
-    // Initialize overlay without shortcut (overlay doesn't need shortcut, that's for focus mode)
     if (isOverlayEnabled) {
-      initOverlayIndicator(isOverlayEnabled);
+      const opacity = settings?.overlayIndicator?.opacity ?? 95;
+      updateOverlayOpacity(opacity);
+      updateOverlayAlwaysShow(settings?.overlayIndicator?.isAlwaysShow || false);
+    } else {
+      updateOverlayAlwaysShow(false);
     }
   });
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    setTrayIcon(tray, getRunningIconPath(progress));
+    if (_isRunning) {
+      setTrayIcon(tray, getRunningIconPath(progress));
+    }
 
     // Also update the context menu and tray title during the progress bar tick
     // This perfectly synchronizes the text "blinking" with the pie chart animation

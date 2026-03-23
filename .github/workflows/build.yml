@@ -13,12 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+      - name: Generate release body
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_REF_NAME: ${{ github.ref_name }}
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+          {
+            cat build/release-notes.md
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "**Full Changelog**: https://github.com/${GH_REPOSITORY}/compare/${PREV_TAG}...${GH_REF_NAME}"
+            fi
+          } > /tmp/release-body.md
       - name: Create Draft Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          body_path: /tmp/release-body.md
 
   linux-bin-and-snap-release:
     runs-on: ubuntu-latest
@@ -28,7 +46,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Check out Git repository
@@ -44,8 +62,8 @@ jobs:
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -126,7 +144,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Echo is Release
@@ -147,8 +165,8 @@ jobs:
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -225,7 +243,7 @@ jobs:
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       # required because setting via env.TZ does not work on windows
@@ -246,9 +264,10 @@ jobs:
 
       - name: Get npm cache directory
         id: npm-cache-dir
+        shell: bash
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
@@ -287,25 +306,13 @@ jobs:
         with:
           build_script_name: empty
           github_token: ${{ secrets.github_token }}
-          release: false # Don't publish unsigned; we sign first, then publish
+          release: false
+          args: "--publish never" # Explicit: don't auto-publish unsigned exe files
 
-      # Publish unsigned Windows binaries first so the release is never missing Windows assets
-      - name: Publish unsigned Windows binaries to GitHub Release
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            .tmp/app-builds/*.exe
-            .tmp/app-builds/*.blockmap
-            .tmp/app-builds/latest*.yml
-          draft: true
-          prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-
-      # --- Code signing (best-effort: signing failure won't block the release) ---
+      # --- Code signing (must succeed — we never publish unsigned exe files) ---
 
       - name: Upload unsigned executables for SignPath
         id: upload-unsigned
-        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: unsigned-windows-executables
@@ -314,9 +321,6 @@ jobs:
           retention-days: 1
 
       - name: Sign Windows executables with SignPath
-        id: signpath
-        if: steps.upload-unsigned.outcome == 'success'
-        continue-on-error: true
         uses: signpath/github-action-submit-signing-request@3f9250c56651ff692d6729a2fbb0603a42d7d322 # v2
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -327,10 +331,9 @@ jobs:
           github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           output-artifact-directory: '.tmp/app-builds-signed/'
           wait-for-completion: true
-          wait-for-completion-timeout-in-seconds: 600
+          wait-for-completion-timeout-in-seconds: 3600
 
       - name: Move signed executables back to build directory
-        if: steps.signpath.outcome == 'success'
         shell: pwsh
         run: |
           $signed = Get-ChildItem -Path .tmp/app-builds-signed -Filter *.exe -Recurse
@@ -339,8 +342,8 @@ jobs:
             exit 1
           }
           # Build a map of original filenames for matching
-          # SignPath may replace spaces with dots in filenames, so we normalize
-          # spaces, dots, and hyphens to find the corresponding original file
+          # SignPath may alter separators in filenames, so we normalize
+          # dots, hyphens, and spaces to find the corresponding original file
           $originals = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
           $signed | ForEach-Object {
             $signedName = $_.Name
@@ -362,7 +365,6 @@ jobs:
           Get-ChildItem -Path .tmp/app-builds -Filter *.exe | Format-Table -AutoSize
 
       - name: Verify code signatures
-        if: steps.signpath.outcome == 'success'
         shell: pwsh
         run: |
           $exeFiles = Get-ChildItem -Path .tmp/app-builds -Filter *.exe
@@ -375,21 +377,25 @@ jobs:
             }
           }
 
-      - name: Regenerate blockmaps and update latest.yml for signed executables
-        if: steps.signpath.outcome == 'success'
+      - name: Regenerate blockmaps and generate latest.yml for signed executables
         shell: pwsh
         run: |
           $buildDir = ".tmp/app-builds"
-          $exeFiles = Get-ChildItem -Path $buildDir -Filter "*.exe"
+          # Only regenerate blockmaps for NSIS setup files (portables don't use them)
+          $setupExes = Get-ChildItem -Path $buildDir -Filter "Super-Productivity-Setup*.exe"
 
-          foreach ($exe in $exeFiles) {
+          # Resolve the platform-specific app-builder binary from the lockfile-pinned package
+          $appBuilder = node -e "console.log(require('app-builder-bin').appBuilderPath)"
+
+          foreach ($exe in $setupExes) {
             $blockmapPath = "$($exe.FullName).blockmap"
             Write-Host "Regenerating blockmap for $($exe.Name)..."
-            $output = npx --yes app-builder-bin blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
+            $output = & $appBuilder blockmap --input="$($exe.FullName)" --output="$blockmapPath" --compression=gzip
             Write-Host "  blockmap output: $output"
           }
 
-          # Update latest.yml with new sha512 hashes and sizes from signed executables
+          # Update latest.yml with hashes from signed executables
+          # (electron-builder generates it during build, but with hashes of unsigned files)
           node -e "
             const fs = require('fs');
             const path = require('path');
@@ -397,48 +403,82 @@ jobs:
             const crypto = require('crypto');
 
             const buildDir = '.tmp/app-builds';
-            const ymlFiles = fs.readdirSync(buildDir).filter(f => f.startsWith('latest') && f.endsWith('.yml'));
+            const ymlPath = path.join(buildDir, 'latest.yml');
 
-            for (const ymlFile of ymlFiles) {
-              const ymlPath = path.join(buildDir, ymlFile);
+            function getFileInfo(filePath) {
+              const fileBuffer = fs.readFileSync(filePath);
+              const info = {
+                sha512: crypto.createHash('sha512').update(fileBuffer).digest('base64'),
+                size: fileBuffer.length,
+              };
+              const blockmapPath = filePath + '.blockmap';
+              if (fs.existsSync(blockmapPath)) {
+                info.blockMapSize = fs.statSync(blockmapPath).size;
+              }
+              return info;
+            }
+
+            if (fs.existsSync(ymlPath)) {
+              // Update existing latest.yml (preserves all electron-builder fields)
               const ymlData = yaml.load(fs.readFileSync(ymlPath, 'utf8'));
-
-              if (ymlData.files) {
-                for (const fileEntry of ymlData.files) {
-                  const filePath = path.join(buildDir, fileEntry.url);
-                  if (fs.existsSync(filePath)) {
-                    const fileBuffer = fs.readFileSync(filePath);
-                    const sha512 = crypto.createHash('sha512').update(fileBuffer).digest('base64');
-                    const size = fileBuffer.length;
-                    console.log(ymlFile + ': Updated ' + fileEntry.url + ' sha512=' + sha512.substring(0, 20) + '... size=' + size);
-                    fileEntry.sha512 = sha512;
-                    fileEntry.size = size;
-                  }
-                }
+              if (!ymlData.files || ymlData.files.length === 0) {
+                console.error('ERROR: latest.yml has no file entries');
+                process.exit(1);
               }
-
-              // Update top-level sha512 to match primary file
+              for (const fileEntry of ymlData.files) {
+                const filePath = path.join(buildDir, fileEntry.url);
+                if (!fs.existsSync(filePath)) {
+                  console.error('ERROR: File referenced in latest.yml not found: ' + fileEntry.url);
+                  process.exit(1);
+                }
+                const info = getFileInfo(filePath);
+                Object.assign(fileEntry, info);
+                console.log('  Updated ' + fileEntry.url + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
+              }
               if (ymlData.path) {
-                const primary = ymlData.files && ymlData.files.find(f => f.url === ymlData.path);
-                if (primary) {
-                  ymlData.sha512 = primary.sha512;
-                }
+                const primary = ymlData.files.find(f => f.url === ymlData.path);
+                if (primary) { ymlData.sha512 = primary.sha512; }
               }
-
               fs.writeFileSync(ymlPath, yaml.dump(ymlData, { lineWidth: -1 }));
-              console.log(ymlFile + ' updated successfully');
+              console.log('latest.yml updated with signed file hashes');
+            } else {
+              // Fallback: generate from scratch if latest.yml was not created
+              console.log('No existing latest.yml found, generating from scratch');
+              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+              const setupExes = fs.readdirSync(buildDir)
+                .filter(f => f.startsWith('Super-Productivity-Setup') && f.endsWith('.exe'));
+              if (setupExes.length === 0) {
+                console.error('ERROR: No setup executables found in ' + buildDir);
+                process.exit(1);
+              }
+              const files = setupExes.map(filename => {
+                const filePath = path.join(buildDir, filename);
+                const info = getFileInfo(filePath);
+                console.log('  ' + filename + ': sha512=' + info.sha512.substring(0, 20) + '... size=' + info.size);
+                return { url: filename, ...info };
+              });
+              const primary = files.find(f => f.url === 'Super-Productivity-Setup.exe')
+                || files.find(f => f.url === 'Super-Productivity-Setup-x64.exe')
+                || files[0];
+              const latestYml = {
+                version: pkg.version,
+                files,
+                path: primary.url,
+                sha512: primary.sha512,
+                releaseDate: new Date().toISOString(),
+              };
+              fs.writeFileSync(ymlPath, yaml.dump(latestYml, { lineWidth: -1 }));
+              console.log('Generated latest.yml for ' + files.length + ' signed executables');
             }
           "
 
-      # Overwrite unsigned release assets with signed versions
       - name: Publish signed Windows binaries to GitHub Release
-        if: steps.signpath.outcome == 'success'
-        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
             .tmp/app-builds/*.exe
-            .tmp/app-builds/*.blockmap
+            .tmp/app-builds/Super-Productivity-Setup*.blockmap
             .tmp/app-builds/latest*.yml
           draft: true
           prerelease: ${{ contains(github.ref, 'RC') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}

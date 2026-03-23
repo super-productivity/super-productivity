@@ -122,7 +122,7 @@ export class SelectTaskComponent {
       }
 
       return this._tasks().filter((task) =>
-        task.title.toLowerCase().includes(searchTerm),
+        task.title?.toLowerCase().includes(searchTerm),
       );
     }
     return [];

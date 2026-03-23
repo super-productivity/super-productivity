@@ -10,7 +10,6 @@ import { TagPage } from '../pages/tag.page';
 import { NotePage } from '../pages/note.page';
 import { SideNavPage } from '../pages/side-nav.page';
 import { waitForAppReady } from '../utils/waits';
-import { dismissTourIfVisible } from '../utils/tour-helpers';
 
 type TestFixtures = {
   workViewPage: WorkViewPage;
@@ -51,6 +50,15 @@ export const test = base.extend<TestFixtures>({
   page: async ({ isolatedContext }, use) => {
     const page = await isolatedContext.newPage();
 
+    // Skip onboarding, hints, and example tasks before the app boots.
+    // This runs before any page JavaScript, so Angular sees the flags immediately.
+    await page.addInitScript(() => {
+      localStorage.setItem('SUP_ONBOARDING_PRESET_DONE', 'true');
+      localStorage.setItem('SUP_ONBOARDING_HINTS_DONE', 'true');
+      localStorage.setItem('SUP_IS_SHOW_TOUR', 'true');
+      localStorage.setItem('SUP_EXAMPLE_TASKS_CREATED', 'true');
+    });
+
     try {
       // Always log uncaught page errors — they are almost always test-relevant
       page.on('pageerror', (error) => {
@@ -81,9 +89,6 @@ export const test = base.extend<TestFixtures>({
       }
 
       await waitForAppReady(page);
-
-      // Dismiss Shepherd tour if it appears
-      await dismissTourIfVisible(page);
 
       await use(page);
     } finally {

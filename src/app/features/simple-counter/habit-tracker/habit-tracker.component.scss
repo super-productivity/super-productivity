@@ -4,7 +4,7 @@
   display: flex;
   justify-content: center;
   overflow-x: auto;
-  padding: 8px;
+  padding: var(--s);
 }
 
 .habit-tracker-container {
@@ -20,11 +20,11 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 12px 8px;
-  margin-bottom: 16px;
-  padding: 0 4px;
+  gap: 12px var(--s);
+  margin-bottom: var(--s2);
+  padding: 0 var(--s-half);
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     margin-bottom: 12px;
   }
 
@@ -41,7 +41,7 @@
 .nav-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
 }
 
 .range-label {
@@ -59,10 +59,10 @@
 
 .add-habit-btn {
   font-size: 13px;
-  margin-left: 8px;
+  margin-left: var(--s);
 
   mat-icon {
-    margin-right: 4px;
+    margin-right: var(--s-half);
   }
 }
 
@@ -74,7 +74,7 @@
 
 .header-row {
   display: flex;
-  margin-bottom: 4px;
+  margin-bottom: var(--s-half);
   align-items: flex-end;
 }
 
@@ -82,7 +82,7 @@
   flex: 0 0 120px;
   width: 120px;
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     flex: 0 0 40px;
     width: 40px;
   }
@@ -96,7 +96,7 @@
   font-size: 11px;
   opacity: 0.7;
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     min-width: 32px;
     font-size: 10px;
   }
@@ -104,13 +104,13 @@
   .day-name {
     text-transform: uppercase;
     font-weight: bold;
-    margin-bottom: 2px;
+    margin-bottom: var(--s-quarter);
   }
 
   .day-date {
     font-size: 10px;
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       font-size: 9px;
     }
   }
@@ -119,9 +119,9 @@
 .habit-row {
   display: flex;
   align-items: center;
-  padding: 8px 0;
+  padding: var(--s) 0;
 
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--c-dark-10);
 
   @include darkTheme() {
     border-bottom-color: rgba(255, 255, 255, 0.15);
@@ -135,7 +135,7 @@
     box-sizing: border-box;
     border-radius: var(--card-border-radius);
     box-shadow:
-      0 5px 5px -3px rgba(0, 0, 0, 0.2),
+      0 5px 5px -3px var(--c-dark-20),
       0 8px 10px 1px rgba(0, 0, 0, 0.14),
       0 3px 14px 2px rgba(0, 0, 0, 0.12);
   }
@@ -157,14 +157,14 @@
   justify-content: flex-start;
   overflow: hidden;
   cursor: pointer;
-  gap: 8px;
-  padding: 0 8px;
+  gap: var(--s);
+  padding: 0 var(--s);
 
   &:hover {
     opacity: 0.7;
   }
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     flex: 0 0 40px;
     width: 40px;
     justify-content: center;
@@ -181,7 +181,7 @@
     align-items: center;
     justify-content: center;
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       font-size: 18px;
       width: 22px;
       height: 22px;
@@ -199,17 +199,17 @@
     font-size: 11px;
     font-weight: 600;
     opacity: 0.8;
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--c-light-10);
 
     @include darkTheme() {
       background-color: rgba(255, 255, 255, 0.15);
     }
 
     @include lightTheme() {
-      background-color: rgba(0, 0, 0, 0.1);
+      background-color: var(--c-dark-10);
     }
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       width: 22px;
       height: 22px;
       font-size: 10px;
@@ -223,7 +223,7 @@
     @include truncateText();
     min-width: 0;
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       display: none;
     }
   }
@@ -232,23 +232,23 @@
 .footer-actions {
   display: flex;
   justify-content: center;
-  padding: 32px 16px;
+  padding: var(--s4) var(--s2);
 
   .add-habit-btn {
     opacity: 0.6;
     transition: var(--transition-standard);
     background-color: transparent !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    padding: 2px 16px;
+    padding: var(--s-quarter) var(--s2);
 
     &:hover {
       opacity: 1;
-      background-color: rgba(255, 255, 255, 0.05) !important;
-      border: 1px solid rgba(255, 255, 255, 0.4) !important;
+      background-color: var(--c-light-05) !important;
+      border: 1px solid var(--c-light-40) !important;
     }
 
     mat-icon {
-      margin-right: 8px;
+      margin-right: var(--s);
     }
 
     .mdc-button__label {
@@ -259,21 +259,21 @@
 }
 
 .disabled-section {
-  margin-top: 8px;
-  padding: 0 4px;
+  margin-top: var(--s);
+  padding: 0 var(--s-half);
 }
 
 .disabled-section-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--s-half);
   background: none;
   border: none;
   color: inherit;
   cursor: pointer;
   font-size: 13px;
   opacity: 0.6;
-  padding: 8px 0;
+  padding: var(--s) 0;
 
   &:hover {
     opacity: 1;
@@ -289,20 +289,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0;
+  padding: var(--s-half) 0;
 }
 
 .disabled-item-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s);
   font-size: 13px;
   opacity: 0.7;
 }
 
 .disabled-item-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--s-half);
 }
 
 .day-cell {
@@ -313,7 +313,7 @@
   justify-content: center;
   cursor: pointer;
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     min-width: 32px;
   }
 }
@@ -326,13 +326,13 @@
   aspect-ratio: 1/1;
 
   border-radius: 50%;
-  border: 1.5px solid rgba(0, 0, 0, 0.2);
+  border: 1.5px solid var(--c-dark-20);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: var(--transition-standard);
 
-  @media (max-width: 600px) {
+  @include mq(xs, max) {
     width: 30px;
     height: 30px;
     min-width: 28px;
@@ -358,7 +358,7 @@
     width: 18px;
     height: 18px;
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       font-size: 18px;
       width: 18px;
       height: 18px;
@@ -373,7 +373,7 @@
     font-weight: 600;
     line-height: 1;
 
-    @media (max-width: 600px) {
+    @include mq(xs, max) {
       font-size: 9px;
     }
   }

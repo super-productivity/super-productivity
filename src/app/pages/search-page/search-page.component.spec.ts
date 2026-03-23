@@ -281,6 +281,35 @@ describe('SearchPageComponent', () => {
     expect(latestResults[0].ctx.icon).toBe('help_outline');
   }));
 
+  it('should not crash when task.tagIds is undefined', fakeAsync(() => {
+    allTasks$.next([
+      createTask({ id: 't1', title: 'No Tags Task', tagIds: undefined as any }),
+    ]);
+    initAndFlush();
+    typeAndFlush('No Tags');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].tagId).toBeUndefined();
+  }));
+
+  it('should not crash when parent.tagIds is undefined', fakeAsync(() => {
+    const parent = createTask({
+      id: 'parent-1',
+      title: 'Parent',
+      tagIds: undefined as any,
+    });
+    const child = createTask({
+      id: 'child-1',
+      title: 'Child Bad Parent',
+      parentId: 'parent-1',
+      tagIds: ['tag-1'],
+    });
+    allTasks$.next([parent, child]);
+    initAndFlush();
+    typeAndFlush('Child Bad');
+    expect(latestResults.length).toBe(1);
+    expect(latestResults[0].tagId).toBeUndefined();
+  }));
+
   // --- Optimization-specific tests ---
 
   it('should include searchText on SearchItem (pre-computed lowercase)', fakeAsync(() => {
