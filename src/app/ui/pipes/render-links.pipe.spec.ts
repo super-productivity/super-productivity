@@ -249,6 +249,13 @@ describe('RenderLinksPipe', () => {
       expect(result).not.toContain('<a ');
       expect(result).not.toContain('href=');
     });
+
+    it('should reject empty URLs in markdown links', () => {
+      const result = html(pipe.transform('[text]()', true));
+      expect(result).toContain('text');
+      expect(result).not.toContain('<a ');
+      expect(result).not.toContain('href=');
+    });
   });
 
   describe('URL parsing: trailing punctuation stripping', () => {

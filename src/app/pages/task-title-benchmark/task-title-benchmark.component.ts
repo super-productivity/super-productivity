@@ -1,5 +1,4 @@
 import { Component, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { TaskTitleComponent } from '../../ui/task-title/task-title.component';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -20,14 +19,7 @@ interface BenchmarkResult {
 
 @Component({
   selector: 'task-title-benchmark',
-  standalone: true,
-  imports: [
-    CommonModule,
-    TaskTitleComponent,
-    MatButtonModule,
-    MatCardModule,
-    MatProgressBarModule,
-  ],
+  imports: [TaskTitleComponent, MatButtonModule, MatCardModule, MatProgressBarModule],
   templateUrl: './task-title-benchmark.component.html',
   styleUrl: './task-title-benchmark.component.scss',
 })

@@ -91,6 +91,7 @@ const _stripUrlTrailing = (raw: string): string => {
 
 const _isUrlSchemeSafe = (url: string): boolean => {
   const lowerUrl = url.trimStart().toLowerCase();
+  if (!lowerUrl) return false;
   if (
     lowerUrl.startsWith('http://') ||
     lowerUrl.startsWith('https://') ||
