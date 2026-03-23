@@ -54,8 +54,8 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
         Logger.error('[ws] Unexpected error in WebSocket handler:', err);
         try {
           socket.close(1011, 'Internal error');
-        } catch {
-          // Ignore close errors
+        } catch (closeErr) {
+          Logger.debug('[ws] Failed to close socket after error', closeErr);
         }
       }
     },

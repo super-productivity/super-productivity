@@ -1,5 +1,5 @@
 # -- Number of SuperSync replicas.
-# Running more than 1 replica requires Redis for session sharing (not yet supported).
+# Running more than 1 replica requires a shared store (e.g., Redis) for in-memory caches and WebSocket connection state (not yet supported).
 replicaCount: 1
 
 image:

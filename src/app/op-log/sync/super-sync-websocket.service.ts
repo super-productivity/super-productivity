@@ -108,7 +108,8 @@ export class SuperSyncWebSocketService implements OnDestroy {
       try {
         msg = JSON.parse(event.data as string);
       } catch {
-        return; // Non-JSON message
+        SyncLog.warn('SuperSyncWebSocketService: Received non-JSON message, ignoring');
+        return;
       }
       try {
         this._handleMessage(msg);
