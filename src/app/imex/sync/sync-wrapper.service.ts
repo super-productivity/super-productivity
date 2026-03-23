@@ -1,5 +1,5 @@
 import { inject, Injectable } from '@angular/core';
-import { BehaviorSubject, firstValueFrom, Observable, of } from 'rxjs';
+import { BehaviorSubject, combineLatest, firstValueFrom, Observable, of } from 'rxjs';
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import {
   distinctUntilChanged,
@@ -114,13 +114,14 @@ export class SyncWrapperService {
    * - Other providers: user-configured value
    * - Return 0 when manual sync only is enabled to disable automatic triggers
    */
-  syncInterval$: Observable<number> = this.syncCfg$.pipe(
-    map((cfg) => {
+  syncInterval$: Observable<number> = combineLatest([
+    this.syncCfg$,
+    toObservable(this._superSyncWsService.isConnected),
+  ]).pipe(
+    map(([cfg, wsConnected]) => {
       if (cfg.isManualSyncOnly) return 0;
       if (cfg.syncProvider === SyncProviderId.SuperSync) {
-        // When WS is connected, reduce polling to 5 minutes (health check)
-        // When WS is disconnected, poll every 1 minute
-        return this._superSyncWsService.isConnected() ? 300_000 : 60_000;
+        return wsConnected ? 300_000 : 60_000;
       }
       return cfg.syncInterval;
     }),
@@ -282,12 +283,18 @@ export class SyncWrapperService {
 
     const provider = this._providerManager.getProviderById(SyncProviderId.SuperSync);
     if (!provider) {
+      SyncLog.warn(
+        'SyncWrapperService: No SuperSync provider found for WebSocket connection',
+      );
       return;
     }
 
     const superSyncProvider = provider as unknown as SuperSyncProvider;
     const wsParams = await superSyncProvider.getWebSocketParams();
     if (!wsParams) {
+      SyncLog.warn(
+        'SyncWrapperService: No WebSocket params available from SuperSync provider',
+      );
       return;
     }
 
@@ -430,7 +437,12 @@ export class SyncWrapperService {
 
       // Connect WebSocket after first successful SuperSync sync (fire-and-forget)
       if (!this._superSyncWsService.isConnected()) {
-        this.connectWebSocket();
+        this.connectWebSocket().catch((err) => {
+          SyncLog.warn(
+            'SyncWrapperService: WebSocket connection failed, will retry on next sync',
+            err,
+          );
+        });
       }
 
       return SyncStatus.InSync;
