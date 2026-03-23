@@ -95,16 +95,17 @@ export class NoteComponent implements OnChanges {
               switchMap((pId) =>
                 pId
                   ? this._projectService.getByIdOnceCatchError$(pId).pipe(
-                      map(
-                        (project) =>
-                          project && {
-                            ...project,
-                            color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
-                            icon: 'list',
-                            theme: {
-                              primary: project.theme?.primary || DEFAULT_PROJECT_COLOR,
-                            },
-                          },
+                      map((project) =>
+                        project
+                          ? {
+                              ...project,
+                              color: project.theme?.primary || DEFAULT_PROJECT_COLOR,
+                              icon: 'list',
+                              theme: {
+                                primary: project.theme?.primary || DEFAULT_PROJECT_COLOR,
+                              },
+                            }
+                          : null,
                       ),
                     )
                   : of(null),

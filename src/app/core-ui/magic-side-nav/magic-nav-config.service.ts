@@ -10,7 +10,6 @@ import { ShepherdService } from '../../features/shepherd/shepherd.service';
 import { TourId } from '../../features/shepherd/shepherd-steps.const';
 import { T } from '../../t.const';
 import { LS } from '../../core/persistence/storage-keys.const';
-import { DialogCreateProjectComponent } from '../../features/project/dialogs/create-project/dialog-create-project.component';
 import { getGithubErrorUrl } from '../../core/error-handler/global-error-handler.util';
 import { DialogPromptComponent } from '../../ui/dialog-prompt/dialog-prompt.component';
 import {
@@ -292,31 +291,10 @@ export class MagicNavConfigService {
           },
           {
             type: 'action',
-            id: 'tour-welcome',
-            label: T.MH.HM.START_WELCOME,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Welcome),
-          },
-          {
-            type: 'action',
             id: 'tour-keyboard',
             label: T.MH.HM.KEYBOARD,
             icon: 'directions',
             action: () => this._startTour(TourId.KeyboardNav),
-          },
-          {
-            type: 'action',
-            id: 'tour-sync',
-            label: T.MH.HM.SYNC,
-            icon: 'directions',
-            action: () => this._startTour(TourId.Sync),
-          },
-          {
-            type: 'action',
-            id: 'tour-calendars',
-            label: T.MH.HM.CALENDARS,
-            icon: 'directions',
-            action: () => this._startTour(TourId.IssueProviders),
           },
         ],
       },
@@ -498,7 +476,9 @@ export class MagicNavConfigService {
   }
 
   // Simple action handlers
-  private _openCreateProject(): void {
+  private async _openCreateProject(): Promise<void> {
+    const { DialogCreateProjectComponent } =
+      await import('../../features/project/dialogs/create-project/dialog-create-project.component');
     this._matDialog
       .open(DialogCreateProjectComponent, { restoreFocus: true })
       .afterClosed()

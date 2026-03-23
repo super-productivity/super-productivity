@@ -25,7 +25,7 @@
     </div>
   }
   <!---->
-  @if (ip.issueProviderKey === 'ICAL') {
+  @if (useAgendaView()) {
     <issue-panel-calendar-agenda [issueProvider]="ip"></issue-panel-calendar-agenda>
   } @else {
     <form
@@ -81,7 +81,10 @@
             ><a
               [href]="issueProviderHelpLink()"
               target="_blank"
-              >{{ ISSUE_PROVIDER_HUMANIZED[ip.issueProviderKey] }} search syntax</a
+              >{{
+                ISSUE_PROVIDER_HUMANIZED[ip.issueProviderKey] || ip.issueProviderKey
+              }}
+              search syntax</a
             ></mat-hint
           >
         }

@@ -203,8 +203,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
         .isVisible()
         .catch(() => false);
 
-      // Either error icon or error snackbar should be visible
-      expect(hasError || snackbarVisible).toBe(true);
+      // Either decrypt error dialog appeared, error icon, or error snackbar should be visible.
+      // The decrypt error dialog is the primary indicator that the old password failed.
+      expect(dialogAppeared || hasError || snackbarVisible).toBe(true);
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientC) await closeClient(clientC);
@@ -408,8 +409,9 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       // 4. Try to decrypt with OLD password → DecryptError
       // 5. Show decrypt error dialog
 
-      // Trigger sync manually (don't use syncAndWait - it would timeout on error)
-      await clientB.sync.triggerSync();
+      // Click sync button directly — triggerSync() throws on error state before
+      // the async decrypt error dialog has time to render
+      await clientB.sync.syncBtn.click();
 
       // Wait for decrypt error dialog to appear
       // Use specific component selector to avoid strict mode violation
@@ -429,8 +431,26 @@ test.describe('@supersync SuperSync Encryption Password Change', () => {
       await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 5000 });
 
       // --- Verify sync completes successfully with new password ---
-      // The fix ensures encryption key is re-fetched after gap detection
-      await clientB.sync.waitForSyncToComplete({ timeout: 15000 });
+      // After retry, the sync discovers the clean slate (SYNC_IMPORT) from the
+      // password change and may show a sync-import-conflict dialog. Handle it.
+      const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
+      const syncImportAppeared = await syncImportDialog
+        .waitFor({ state: 'visible', timeout: 15000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (syncImportAppeared) {
+        console.log(
+          '[PasswordChange] Sync import conflict dialog appeared - using server data',
+        );
+        await clientB.page
+          .locator('dialog-sync-import-conflict button:has-text("Use Server Data")')
+          .click();
+        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+      }
+
+      // Now wait for sync to complete (may need another sync round)
+      await clientB.sync.syncAndWait();
 
       // Verify Client B received the task created after password change
       await waitForTask(clientB.page, taskAfterChange);

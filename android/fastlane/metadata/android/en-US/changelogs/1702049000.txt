@@ -1,0 +1,4 @@
+
+### Bug Fixes
+
+* **note:** return null instead of undefined for absent project tag

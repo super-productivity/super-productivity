@@ -65,6 +65,7 @@ import { updateWorkContextData } from '../time-tracking/store/time-tracking.acti
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { INBOX_PROJECT } from '../project/project.const';
 import { selectProjectById } from '../project/store/project.selectors';
+import { Project } from '../project/project.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { Log } from '../../core/log';
 import { LOCAL_ACTIONS } from '../../util/local-actions.token';
@@ -196,6 +197,7 @@ export class WorkContextService {
 
   inboxWorkContext$: Observable<WorkContext> = this._isAllDataLoaded$.pipe(
     concatMap(() => this._store$.select(selectProjectById, { id: INBOX_PROJECT.id })),
+    filter((p): p is Project => !!p),
     map(
       (inboxWorkContext) =>
         ({

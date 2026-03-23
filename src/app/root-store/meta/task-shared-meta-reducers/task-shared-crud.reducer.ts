@@ -29,9 +29,13 @@ import { getDbDateStr } from '../../../util/get-db-date-str';
 import {
   ActionHandlerMap,
   addTaskToList,
+  addTaskToPlannerDay,
   getProject,
   getTag,
+  hasInvalidTodayTag,
   ProjectTaskList,
+  filterOutTodayTag,
+  removeTaskFromPlannerDays,
   removeTasksFromList,
   TaskWithTags,
   updateProject,
@@ -310,26 +314,29 @@ const handleDeleteTask = (
     });
   }
 
-  // Update tags - collect all affected tags and tasks to remove
-  // Include TODAY_TAG.id explicitly since it's not stored in task.tagIds by design
-  const potentialTagIds = [
-    TODAY_TAG.id,
-    ...task.tagIds,
-    ...(task.subTasks || []).flatMap((st) => st.tagIds || []),
-  ];
-
-  // Only include tags that actually exist in the state to prevent errors
-  const affectedTagIds = unique(
-    potentialTagIds.filter((tagId) => state[TAG_FEATURE_NAME].entities[tagId]),
-  );
-
+  // Update tags - find affected tags from CURRENT STATE, not payload.
+  // During sync, the receiving client may have different tag associations
+  // (e.g. an LWW Update recreated the task with different tags), so we must
+  // iterate all tags to ensure complete cleanup. This matches handleDeleteTasks.
   const taskIdsToRemove = [task.id, ...(task.subTaskIds || [])];
+  const taskIdsToRemoveSet = new Set(taskIdsToRemove);
+
+  const affectedTagIds = (updatedState[TAG_FEATURE_NAME].ids as string[]).filter(
+    (tagId) => {
+      const tag = updatedState[TAG_FEATURE_NAME].entities[tagId];
+      if (!tag) return false;
+      return tag.taskIds.some((taskId) => taskIdsToRemoveSet.has(taskId));
+    },
+  );
 
   const tagUpdates = affectedTagIds.map(
     (tagId): Update<Tag> => ({
       id: tagId,
       changes: {
-        taskIds: removeTasksFromList(getTag(state, tagId).taskIds, taskIdsToRemove),
+        taskIds: removeTasksFromList(
+          getTag(updatedState, tagId).taskIds,
+          taskIdsToRemove,
+        ),
       },
     }),
   );
@@ -595,12 +602,13 @@ const handleUpdateTask = (
   // Handle task state updates using existing task reducer logic
   let taskState = updatedState[TASK_FEATURE_NAME];
   const { timeSpentOnDay, timeEstimate } = taskUpdate.changes;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
 
   taskState = timeSpentOnDay
     ? updateTimeSpentForTask(taskId, timeSpentOnDay, taskState)
     : taskState;
   taskState = updateTimeEstimateForTask(taskUpdate, timeEstimate, taskState);
-  taskState = updateDoneOnForTask(taskUpdate, taskState);
+  taskState = updateDoneOnForTask(taskUpdate, taskState, todayStr);
   taskState = taskAdapter.updateOne(
     {
       ...taskUpdate,
@@ -612,10 +620,79 @@ const handleUpdateTask = (
     taskState,
   );
 
-  return {
+  updatedState = {
     ...updatedState,
     [TASK_FEATURE_NAME]: taskState,
   };
+
+  // Add completed top-level task to TODAY_TAG.taskIds for ordering.
+  // Subtasks are excluded — their parent manages today-tag membership.
+  const isToDone = taskUpdate.changes.isDone === true;
+  if (isToDone && !currentTask.parentId) {
+    const todayTag = getTag(updatedState, TODAY_TAG.id);
+    if (!todayTag.taskIds.includes(taskId)) {
+      updatedState = updateTags(updatedState, [
+        {
+          id: TODAY_TAG.id,
+          changes: { taskIds: [...todayTag.taskIds, taskId] },
+        },
+      ]);
+    }
+    // Remove from planner days since task's dueDay changed to today
+    updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+  }
+
+  // When dueDay changes (e.g. from two-way sync pull), update planner days
+  // and TODAY_TAG.taskIds to keep them consistent with the task's dueDay.
+  const newDueDay = taskUpdate.changes.dueDay;
+  if (newDueDay !== undefined && newDueDay !== currentTask.dueDay) {
+    const oldDueDay = currentTask.dueDay;
+
+    // Remove from old planner day
+    updatedState = removeTaskFromPlannerDays(updatedState, taskId);
+
+    if (newDueDay && newDueDay !== todayStr && !isToDone) {
+      // Add to new planner day (not today — today uses TODAY_TAG.taskIds)
+      // Skip if task is being completed in the same update to avoid re-adding to planner
+      updatedState = addTaskToPlannerDay(updatedState, taskId, newDueDay, Infinity);
+    }
+
+    // Handle TODAY_TAG.taskIds updates
+    const todayTag = getTag(updatedState, TODAY_TAG.id);
+
+    if (oldDueDay === todayStr && newDueDay !== todayStr) {
+      // Moving away from today — remove from TODAY_TAG.taskIds
+      updatedState = updateTags(updatedState, [
+        {
+          id: TODAY_TAG.id,
+          changes: { taskIds: todayTag.taskIds.filter((id) => id !== taskId) },
+        },
+      ]);
+      // Remove TODAY from task.tagIds if present (legacy cleanup)
+      const updatedTask = updatedState[TASK_FEATURE_NAME].entities[taskId] as Task;
+      if (updatedTask && hasInvalidTodayTag(updatedTask.tagIds)) {
+        updatedState = {
+          ...updatedState,
+          [TASK_FEATURE_NAME]: taskAdapter.updateOne(
+            { id: taskId, changes: { tagIds: filterOutTodayTag(updatedTask.tagIds) } },
+            updatedState[TASK_FEATURE_NAME],
+          ),
+        };
+      }
+    } else if (oldDueDay !== todayStr && newDueDay === todayStr) {
+      // Moving to today — add to TODAY_TAG.taskIds for ordering
+      if (!todayTag.taskIds.includes(taskId)) {
+        updatedState = updateTags(updatedState, [
+          {
+            id: TODAY_TAG.id,
+            changes: { taskIds: [...todayTag.taskIds, taskId] },
+          },
+        ]);
+      }
+    }
+  }
+
+  return updatedState;
 };
 
 const handleTagUpdates = (

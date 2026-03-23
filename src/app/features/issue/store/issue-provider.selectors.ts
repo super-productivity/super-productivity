@@ -25,15 +25,15 @@ export const selectEnabledIssueProviders = createSelector(
   (issueProviders: IssueProvider[]): IssueProvider[] =>
     issueProviders.filter(
       // TODO fix type
-      (issueProvider: IssueProvider) => (issueProvider as any).isEnabled,
+      (issueProvider: IssueProvider) => issueProvider && (issueProvider as any).isEnabled,
     ),
 );
 
 export const selectIssueProvidersWithDisabledLast = createSelector(
   selectAll,
   (issueProviders: IssueProvider[]): IssueProvider[] => {
-    const enabled = issueProviders.filter((ip) => ip.isEnabled);
-    const disabled = issueProviders.filter((ip) => !ip.isEnabled);
+    const enabled = issueProviders.filter((ip) => ip?.isEnabled);
+    const disabled = issueProviders.filter((ip) => ip && !ip.isEnabled);
     return [...enabled, ...disabled];
   },
 );

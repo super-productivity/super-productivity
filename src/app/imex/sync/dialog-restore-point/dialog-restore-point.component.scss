@@ -32,7 +32,7 @@
   padding: 0.75rem;
   margin-bottom: 1rem;
   background: rgba(255, 152, 0, 0.1);
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   color: var(--warn-color, #ff9800);
 
   mat-icon {
@@ -54,7 +54,7 @@
   gap: 1rem;
   padding: 0.75rem;
   border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
   cursor: pointer;
   transition:
     background-color 0.15s,

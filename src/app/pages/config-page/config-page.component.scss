@@ -12,6 +12,15 @@
   }
 
   .settings-tabs {
+    // Prevent focus-induced scroll jumps: Material tab body containers default to
+    // overflow:auto/hidden, which makes the browser's focus-scrolling algorithm
+    // treat them as scroll boundaries and reset the parent scroll position.
+    ::ng-deep .mat-mdc-tab-body-wrapper,
+    ::ng-deep .mat-mdc-tab-body-active,
+    ::ng-deep .mat-mdc-tab-body-content {
+      overflow: visible !important;
+    }
+
     ::ng-deep .mat-mdc-tab-header {
       border-bottom: 1px solid var(--divider-color);
       margin-bottom: var(--s2);

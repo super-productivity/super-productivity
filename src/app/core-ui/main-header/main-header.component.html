@@ -24,133 +24,135 @@
     </div>
   }
 
-  <nav class="action-nav-right">
-    <div class="counters-action-group">
-      @if (isTimeTrackingEnabled()) {
-        <play-button
-          [currentTask]="currentTask()"
-          [currentTaskId]="currentTaskId()"
-          [currentTaskContext]="currentTaskContext()"
-          [hasTrackableTasks]="hasTrackableTasks()"
-        ></play-button>
-      }
-
-      <!-- Desktop: FocusMode button remains inline if enabled -->
-      @if (showDesktopButtons()) {
-        @if (isFocusModeEnabled() && !isXxxs()) {
-          <focus-button></focus-button>
+  @if (isDataLoaded()) {
+    <nav class="action-nav-right">
+      <div class="counters-action-group">
+        @if (isTimeTrackingEnabled()) {
+          <play-button
+            [currentTask]="currentTask()"
+            [currentTaskId]="currentTaskId()"
+            [currentTaskContext]="currentTaskContext()"
+            [hasTrackableTasks]="hasTrackableTasks()"
+          ></play-button>
         }
-        @for (
-          simpleCounter of enabledSimpleCounters();
-          track trackById($index, simpleCounter)
-        ) {
-          @if (!simpleCounter.isHideButton) {
-            <simple-counter-button
-              [matTooltip]="simpleCounter.title"
-              [simpleCounter]="simpleCounter"
-            ></simple-counter-button>
+
+        <!-- Desktop: FocusMode button remains inline if enabled -->
+        @if (showDesktopButtons()) {
+          @if (isFocusModeEnabled() && !isXxxs()) {
+            <focus-button></focus-button>
+          }
+          @for (
+            simpleCounter of enabledSimpleCounters();
+            track trackById($index, simpleCounter)
+          ) {
+            @if (!simpleCounter.isHideButton) {
+              <simple-counter-button
+                [matTooltip]="simpleCounter.title"
+                [simpleCounter]="simpleCounter"
+              ></simple-counter-button>
+            }
           }
         }
+      </div>
+
+      <!-- Desktop: Secondary action group -->
+      @if (showDesktopButtons()) {
+        <button
+          (click)="layoutService.showAddTaskBar()"
+          matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
+            kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
+          }}"
+          class="tour-addBtn"
+          mat-icon-button
+        >
+          <mat-icon>add</mat-icon>
+        </button>
       }
-    </div>
 
-    <!-- Desktop: Secondary action group -->
-    @if (showDesktopButtons()) {
-      <button
-        (click)="layoutService.showAddTaskBar()"
-        matTooltip="{{ T.MH.ADD_NEW_TASK | translate }} {{
-          kb.addNewTask ? '[' + kb.addNewTask + ']' : ''
-        }}"
-        class="tour-addBtn"
-        mat-icon-button
-      >
-        <mat-icon>add</mat-icon>
-      </button>
-    }
-
-    @if (isSyncIconEnabled()) {
-      <button
-        class="sync-btn"
-        matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
-        (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
-        (longPress)="setupSync()"
-        (contextmenu)="$event.preventDefault(); setupSync()"
-        mat-icon-button
-      >
-        @if (syncIsEnabledAndReady()) {
-          @if (isOnline()) {
-            @if (syncState() === 'ERROR') {
-              <mat-icon>sync_problem</mat-icon>
-            } @else {
-              <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
-            }
-            @if (hasNoPendingOps()) {
-              @if (superSyncIsConfirmedInSync()) {
-                <mat-icon class="sync-state-ico">done_all</mat-icon>
+      @if (isSyncIconEnabled()) {
+        <button
+          class="sync-btn"
+          matTooltip="{{ T.MH.TRIGGER_SYNC | translate }}"
+          (click)="syncIsEnabledAndReady() ? sync() : setupSync()"
+          (longPress)="setupSync()"
+          (contextmenu)="$event.preventDefault(); setupSync()"
+          mat-icon-button
+        >
+          @if (syncIsEnabledAndReady()) {
+            @if (isOnline()) {
+              @if (syncState() === 'ERROR') {
+                <mat-icon>sync_problem</mat-icon>
               } @else {
-                <mat-icon class="sync-state-ico">check</mat-icon>
+                <mat-icon [class.spin]="isSyncInProgress()">sync</mat-icon>
               }
+              @if (hasNoPendingOps()) {
+                @if (superSyncIsConfirmedInSync()) {
+                  <mat-icon class="sync-state-ico">done_all</mat-icon>
+                } @else {
+                  <mat-icon class="sync-state-ico">check</mat-icon>
+                }
+              }
+            } @else {
+              <mat-icon>wifi_off</mat-icon>
             }
           } @else {
-            <mat-icon>wifi_off</mat-icon>
+            <mat-icon>sync_disabled</mat-icon>
           }
-        } @else {
-          <mat-icon>sync_disabled</mat-icon>
-        }
-      </button>
-    }
-
-    <plugin-header-btns></plugin-header-btns>
-
-    @if (isUserProfilesEnabled()) {
-      <user-profile-button></user-profile-button>
-    }
-
-    <!-- Desktop: Show all buttons inline -->
-    @if (showDesktopButtons()) {
-      <plugin-side-panel-btns></plugin-side-panel-btns>
-
-      <desktop-panel-buttons
-        [kb]="kb"
-        [isRouteWithSidePanel]="isRouteWithSidePanel()"
-        [isShowScheduleDayPanel]="isShowScheduleDayPanel()"
-        [isShowIssuePanel]="isShowIssuePanel()"
-        [isShowNotes]="isShowNotes()"
-      ></desktop-panel-buttons>
-    }
-
-    <!-- Simple Counter Dropdown (mobile only) -->
-    @if (isXs()) {
-      @if (enabledSimpleCounters().length) {
-        <div class="mobile-dropdown-wrapper">
-          <button
-            (click)="
-              isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
-            "
-            [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
-            mat-icon-button
-          >
-            <mat-icon>{{
-              isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer'
-            }}</mat-icon>
-          </button>
-          <div
-            class="mobile-dropdown"
-            [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
-          >
-            @for (
-              simpleCounter of enabledSimpleCounters();
-              track trackById($index, simpleCounter)
-            ) {
-              @if (!simpleCounter.isHideButton) {
-                <simple-counter-button
-                  [simpleCounter]="simpleCounter"
-                ></simple-counter-button>
-              }
-            }
-          </div>
-        </div>
+        </button>
       }
-    }
-  </nav>
+
+      <plugin-header-btns></plugin-header-btns>
+
+      @if (isUserProfilesEnabled()) {
+        <user-profile-button></user-profile-button>
+      }
+
+      <!-- Desktop: Show all buttons inline -->
+      @if (showDesktopButtons()) {
+        <plugin-side-panel-btns></plugin-side-panel-btns>
+
+        <desktop-panel-buttons
+          [kb]="kb"
+          [isRouteWithSidePanel]="isRouteWithSidePanel()"
+          [isShowScheduleDayPanel]="isShowScheduleDayPanel()"
+          [isShowIssuePanel]="isShowIssuePanel()"
+          [isShowNotes]="isShowNotes()"
+        ></desktop-panel-buttons>
+      }
+
+      <!-- Simple Counter Dropdown (mobile only) -->
+      @if (isXs()) {
+        @if (enabledSimpleCounters().length) {
+          <div class="mobile-dropdown-wrapper">
+            <button
+              (click)="
+                isShowSimpleCounterBtnsDropdown.set(!isShowSimpleCounterBtnsDropdown())
+              "
+              [color]="isCounterRunning(enabledSimpleCounters()) ? 'accent' : ''"
+              mat-icon-button
+            >
+              <mat-icon>{{
+                isShowSimpleCounterBtnsDropdown() ? 'close' : 'timer'
+              }}</mat-icon>
+            </button>
+            <div
+              class="mobile-dropdown"
+              [class.isVisible]="isShowSimpleCounterBtnsDropdown()"
+            >
+              @for (
+                simpleCounter of enabledSimpleCounters();
+                track trackById($index, simpleCounter)
+              ) {
+                @if (!simpleCounter.isHideButton) {
+                  <simple-counter-button
+                    [simpleCounter]="simpleCounter"
+                  ></simple-counter-button>
+                }
+              }
+            </div>
+          </div>
+        }
+      }
+    </nav>
+  }
 </div>

@@ -505,6 +505,190 @@ export const insertImage = (
   };
 };
 
+// ============================================================================
+// List auto-continuation helpers
+// ============================================================================
+
+/**
+ * Regex to parse a list line into: (leading whitespace)(list prefix)(content)
+ * Order: checkbox before bullet so "- [ ] " matches before "- "
+ */
+const LIST_PREFIX_REGEX = /^(\s*)(- \[[x ]\] |- |\d+\. )(.*)/i;
+
+/**
+ * Build the continuation prefix for the next line.
+ * Checkboxes always continue as unchecked. Numbers auto-increment.
+ */
+const buildContinuationPrefix = (whitespace: string, prefix: string): string => {
+  if (/^- \[[x ]\] $/i.test(prefix)) {
+    return whitespace + '- [ ] ';
+  }
+  const numMatch = prefix.match(/^(\d+)\.\s$/);
+  if (numMatch) {
+    return whitespace + `${parseInt(numMatch[1], 10) + 1}. `;
+  }
+  return whitespace + prefix;
+};
+
+/**
+ * Handle degradation of an empty list prefix:
+ * checkbox -> bullet, bullet/number -> remove line content.
+ */
+const degradeEmptyPrefix = (
+  text: string,
+  lineStart: number,
+  lineEnd: number,
+  whitespace: string,
+  prefix: string,
+): TextTransformResult => {
+  const isCheckbox = /^- \[[x ]\] $/i.test(prefix);
+  if (isCheckbox) {
+    const newLine = whitespace + '- ';
+    const newText = text.substring(0, lineStart) + newLine + text.substring(lineEnd);
+    const cursorPos = lineStart + newLine.length;
+    return { text: newText, selectionStart: cursorPos, selectionEnd: cursorPos };
+  }
+  const newText = text.substring(0, lineStart) + text.substring(lineEnd);
+  return { text: newText, selectionStart: lineStart, selectionEnd: lineStart };
+};
+
+// ============================================================================
+// Keyboard-driven list functions
+// ============================================================================
+
+/**
+ * Handle Enter key on a list line.
+ * Returns null if cursor is not on a list line (caller should not preventDefault).
+ */
+export const handleEnterKey = (
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): TextTransformResult | null => {
+  if (selectionStart !== selectionEnd) {
+    return null;
+  }
+  const { start: lineStart, end: lineEnd } = getLineRange(text, selectionStart);
+  const currentLine = text.substring(lineStart, lineEnd);
+  const match = currentLine.match(LIST_PREFIX_REGEX);
+  if (!match) {
+    return null;
+  }
+  const [, whitespace, prefix] = match;
+  const prefixLen = whitespace.length + prefix.length;
+  const cursorInLine = selectionStart - lineStart;
+  if (cursorInLine < prefixLen) {
+    return null;
+  }
+  const contentAfterPrefix = currentLine.substring(prefixLen);
+  if (contentAfterPrefix.trim().length === 0) {
+    return degradeEmptyPrefix(text, lineStart, lineEnd, whitespace, prefix);
+  }
+  const continuation = buildContinuationPrefix(whitespace, prefix);
+  const before = text.substring(0, selectionStart);
+  const after = text.substring(selectionStart);
+  const newText = before + '\n' + continuation + after;
+  const newCursor = selectionStart + 1 + continuation.length;
+  return { text: newText, selectionStart: newCursor, selectionEnd: newCursor };
+};
+
+/**
+ * Handle Tab key to indent a list line by 2 spaces.
+ * Only acts when cursor is at line start (position 0) or at prefix end with no content.
+ * Returns null if conditions are not met (caller should not preventDefault).
+ */
+export const handleTabKey = (
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): TextTransformResult | null => {
+  if (selectionStart !== selectionEnd) {
+    return null;
+  }
+  const { start: lineStart, end: lineEnd } = getLineRange(text, selectionStart);
+  const currentLine = text.substring(lineStart, lineEnd);
+  const match = currentLine.match(LIST_PREFIX_REGEX);
+  if (!match) {
+    return null;
+  }
+  const [, whitespace, prefix, content] = match;
+  const prefixLen = whitespace.length + prefix.length;
+  const cursorInLine = selectionStart - lineStart;
+  const atLineStart = cursorInLine === 0;
+  const atEmptyPrefixEnd = cursorInLine === prefixLen && content.trim().length === 0;
+  if (!atLineStart && !atEmptyPrefixEnd) {
+    return null;
+  }
+  const indent = '  ';
+  const newText = text.substring(0, lineStart) + indent + text.substring(lineStart);
+  const newCursor = selectionStart + indent.length;
+  return { text: newText, selectionStart: newCursor, selectionEnd: newCursor };
+};
+
+/**
+ * Handle Shift+Tab to un-indent a list line by up to 2 spaces.
+ * Returns null if line has no leading whitespace or no list prefix.
+ */
+export const handleShiftTabKey = (
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+): TextTransformResult | null => {
+  if (selectionStart !== selectionEnd) {
+    return null;
+  }
+  const { start: lineStart, end: lineEnd } = getLineRange(text, selectionStart);
+  const currentLine = text.substring(lineStart, lineEnd);
+  if (!currentLine.match(LIST_PREFIX_REGEX)) {
+    return null;
+  }
+  let spacesToRemove = 0;
+  while (
+    spacesToRemove < 2 &&
+    spacesToRemove < currentLine.length &&
+    currentLine[spacesToRemove] === ' '
+  ) {
+    spacesToRemove++;
+  }
+  if (spacesToRemove === 0) {
+    return null;
+  }
+  const newText =
+    text.substring(0, lineStart) +
+    currentLine.substring(spacesToRemove) +
+    text.substring(lineEnd);
+  const newCursor = Math.max(lineStart, selectionStart - spacesToRemove);
+  return { text: newText, selectionStart: newCursor, selectionEnd: newCursor };
+};
+
+/**
+ * Dispatcher for list-related keyboard shortcuts.
+ * Returns null if the key is not handled (caller should not preventDefault).
+ */
+export const handleListKeydown = (
+  text: string,
+  selectionStart: number,
+  selectionEnd: number,
+  key: string,
+  shiftKey: boolean,
+  ctrlKey: boolean,
+  metaKey: boolean = false,
+): TextTransformResult | null => {
+  if (ctrlKey || metaKey) {
+    return null;
+  }
+  if (key === 'Enter' && !shiftKey) {
+    return handleEnterKey(text, selectionStart, selectionEnd);
+  }
+  if (key === 'Tab' && !shiftKey) {
+    return handleTabKey(text, selectionStart, selectionEnd);
+  }
+  if (key === 'Tab' && shiftKey) {
+    return handleShiftTabKey(text, selectionStart, selectionEnd);
+  }
+  return null;
+};
+
 export const insertTable = (
   text: string,
   selectionStart: number,

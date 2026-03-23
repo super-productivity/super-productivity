@@ -1,0 +1,81 @@
+/**
+ * Zen Theme for Super Productivity
+ * Removes task backgrounds for a clean, borderless look.
+ * Tasks still get a background when dragged or selected/current.
+ * Works with both light and dark modes.
+ */
+
+body,
+body.isDarkTheme {
+  /* Task backgrounds: transparent */
+  --task-c-bg: transparent;
+  --task-c-bg-done: transparent;
+  --task-c-current-bg: transparent;
+  --sub-task-c-bg: transparent;
+  --sub-task-c-bg-done: transparent;
+  --sub-task-c-bg-in-selected: transparent;
+
+  /* Remove task shadows */
+  --task-shadow: none;
+  --task-shadow-sub-task: none;
+
+  /* Remove task border */
+  --task-border: none;
+
+  /* Keep selected state subtly visible */
+  --task-c-selected-bg: rgba(128, 128, 128, 0.08);
+}
+
+body.isDarkTheme {
+  --task-c-selected-bg: rgba(255, 255, 255, 0.06);
+}
+
+/* Add a subtle separator between tasks */
+body task .inner-wrapper {
+  border-bottom: 1px solid rgba(128, 128, 128, 0.12);
+}
+
+body.isDarkTheme task .inner-wrapper {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Restore background when dragging */
+body task.isDragReady:not(.cdk-drag-placeholder) .box {
+  background: var(--bg-lighter) !important;
+}
+
+/* Give controls an opaque background on hover so they cover content below */
+body .first-line:hover task-hover-controls {
+  background: var(--bg) !important;
+}
+
+body .first-line:hover .all-controls-wrapper {
+  background: var(--bg) !important;
+  border-radius: var(--task-border-radius);
+}
+
+/* Flatten subtask toggle button */
+body .toggle-sub-tasks-btn.toggle-sub-tasks-btn {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body .toggle-sub-tasks-btn.toggle-sub-tasks-btn:hover {
+  background: rgba(128, 128, 128, 0.12) !important;
+}
+
+body.isDarkTheme .toggle-sub-tasks-btn.toggle-sub-tasks-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Remove borders from repeat projections and non-added calendar events */
+body planner-repeat-projection > div,
+body planner-calendar-event {
+  --extra-border-color: transparent;
+  --separator-color: transparent;
+}
+
+/* Give current task a background when sticky (page scrolled) */
+app-root.isWorkViewScrolled task.isCurrent .box {
+  background: var(--bg);
+}

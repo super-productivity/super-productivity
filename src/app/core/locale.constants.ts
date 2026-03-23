@@ -1,29 +1,4 @@
-import localeEnUS from '@angular/common/locales/en';
 import localeEnGB from '@angular/common/locales/en-GB';
-import localeEs from '@angular/common/locales/es';
-import localeDe from '@angular/common/locales/de';
-import localeAr from '@angular/common/locales/ar';
-import localeCs from '@angular/common/locales/cs';
-import localeFa from '@angular/common/locales/fa';
-import localeFr from '@angular/common/locales/fr';
-import localeJa from '@angular/common/locales/ja';
-import localeKo from '@angular/common/locales/ko';
-import localeRu from '@angular/common/locales/ru';
-import localeSk from '@angular/common/locales/sk';
-import localeTr from '@angular/common/locales/tr';
-import localeZh from '@angular/common/locales/zh';
-import localeIt from '@angular/common/locales/it';
-import localePl from '@angular/common/locales/pl';
-import localePt from '@angular/common/locales/pt';
-import localeNl from '@angular/common/locales/nl';
-import localeNb from '@angular/common/locales/nb';
-import localeHr from '@angular/common/locales/hr';
-import localeUk from '@angular/common/locales/uk';
-import localeId from '@angular/common/locales/id';
-import localeFi from '@angular/common/locales/fi';
-import localeSv from '@angular/common/locales/sv';
-import localeRo from '@angular/common/locales/ro';
-import localeRoMD from '@angular/common/locales/ro-MD';
 
 /**
  * All of available app languages
@@ -102,50 +77,61 @@ export const DateTimeLocales = {
 
 export type DateTimeLocale = (typeof DateTimeLocales)[keyof typeof DateTimeLocales];
 
-export const LocalesImports: Record<keyof typeof DateTimeLocales, unknown> = {
-  en: localeEnGB,
-  en_gb: localeEnGB,
-  en_us: localeEnUS,
-  tr_tr: localeTr,
-  de_de: localeDe,
-  de: localeDe,
-  fr_fr: localeFr,
-  es_es: localeEs,
-  es: localeEs,
-  it_it: localeIt,
-  pt_br: localePt,
-  ru_ru: localeRu,
-  ru: localeRu,
-  zh_cn: localeZh,
-  ja_jp: localeJa,
-  ja: localeJa,
-  ko_kr: localeKo,
-  ko: localeKo,
-  zh_tw: localeZh,
-  ar: localeAr,
-  cs_cz: localeCs,
-  cs: localeCs,
-  fa: localeFa,
-  fi: localeFi,
-  fr: localeFr,
-  id: localeId,
-  it: localeIt,
-  pl: localePl,
-  pt: localePt,
-  nl: localeNl,
-  nb: localeNb,
-  hr: localeHr,
-  uk_ua: localeUk,
-  uk: localeUk,
-  sk_sk: localeSk,
-  sk: localeSk,
-  sv: localeSv,
-  tr: localeTr,
-  zh: localeZh,
-  ro: localeRo,
-  ro_ro: localeRo,
-  ro_md: localeRoMD,
+/**
+ * Maps locale keys to dynamic import functions for lazy loading.
+ * Only the default locale (en-GB) is statically imported; all others
+ * are loaded on demand to reduce the initial bundle size.
+ */
+export const LocaleImportFns: Record<
+  keyof typeof DateTimeLocales,
+  () => Promise<{ default: unknown }>
+> = {
+  en: () => Promise.resolve({ default: localeEnGB }),
+  en_gb: () => Promise.resolve({ default: localeEnGB }),
+  en_us: () => import('@angular/common/locales/en'),
+  tr_tr: () => import('@angular/common/locales/tr'),
+  de_de: () => import('@angular/common/locales/de'),
+  de: () => import('@angular/common/locales/de'),
+  fr_fr: () => import('@angular/common/locales/fr'),
+  es_es: () => import('@angular/common/locales/es'),
+  es: () => import('@angular/common/locales/es'),
+  it_it: () => import('@angular/common/locales/it'),
+  pt_br: () => import('@angular/common/locales/pt'),
+  ru_ru: () => import('@angular/common/locales/ru'),
+  ru: () => import('@angular/common/locales/ru'),
+  zh_cn: () => import('@angular/common/locales/zh'),
+  ja_jp: () => import('@angular/common/locales/ja'),
+  ja: () => import('@angular/common/locales/ja'),
+  ko_kr: () => import('@angular/common/locales/ko'),
+  ko: () => import('@angular/common/locales/ko'),
+  zh_tw: () => import('@angular/common/locales/zh'),
+  ar: () => import('@angular/common/locales/ar'),
+  cs_cz: () => import('@angular/common/locales/cs'),
+  cs: () => import('@angular/common/locales/cs'),
+  fa: () => import('@angular/common/locales/fa'),
+  fi: () => import('@angular/common/locales/fi'),
+  fr: () => import('@angular/common/locales/fr'),
+  id: () => import('@angular/common/locales/id'),
+  it: () => import('@angular/common/locales/it'),
+  pl: () => import('@angular/common/locales/pl'),
+  pt: () => import('@angular/common/locales/pt'),
+  nl: () => import('@angular/common/locales/nl'),
+  nb: () => import('@angular/common/locales/nb'),
+  hr: () => import('@angular/common/locales/hr'),
+  uk_ua: () => import('@angular/common/locales/uk'),
+  uk: () => import('@angular/common/locales/uk'),
+  sk_sk: () => import('@angular/common/locales/sk'),
+  sk: () => import('@angular/common/locales/sk'),
+  sv: () => import('@angular/common/locales/sv'),
+  tr: () => import('@angular/common/locales/tr'),
+  zh: () => import('@angular/common/locales/zh'),
+  ro: () => import('@angular/common/locales/ro'),
+  ro_ro: () => import('@angular/common/locales/ro'),
+  ro_md: () => import('@angular/common/locales/ro-MD'),
 };
+
+/** Default locale data, statically imported for instant availability */
+export const DEFAULT_LOCALE_DATA = localeEnGB;
 
 export const DEFAULT_LANGUAGE = LanguageCode.en;
 export const DEFAULT_LOCALE = DateTimeLocales.en_gb;

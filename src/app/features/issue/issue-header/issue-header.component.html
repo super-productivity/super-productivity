@@ -1,7 +1,7 @@
 @if (task().issueWasUpdated) {
   <mat-icon>update</mat-icon>
 } @else {
-  <mat-icon [svgIcon]="ISSUE_PROVIDER_ICON_MAP[task().issueType!]"></mat-icon>
+  <mat-icon [svgIcon]="icon()"></mat-icon>
 }
 
-<span>{{ ISSUE_PROVIDER_HUMANIZED[task().issueType!] }}</span>
+<span>{{ providerName() }}</span>

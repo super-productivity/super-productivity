@@ -1,0 +1,18 @@
+{
+  "SETTINGS": {
+    "TITLE": "Voice Reminder Settings",
+    "ENABLE": "Enable Voice Reminder",
+    "TEXT_LABEL": "Text (use ${currentTaskTitle} for task name)",
+    "INTERVAL_LABEL": "Interval (seconds)",
+    "VOLUME_LABEL": "Volume",
+    "VOICE_LABEL": "Voice",
+    "VOICE_DEFAULT": "-- Default --",
+    "TEST": "Test",
+    "SAVE": "Save",
+    "CANCEL": "Cancel",
+    "SAVED_MSG": "Voice reminder settings saved",
+    "TEST_NO_TEXT": "No text configured for voice reminder",
+    "TEST_PLACEHOLDER": "current task title",
+    "DESCRIPTION": "Repeats the configured phrase at a set interval when tracking time for a task."
+  }
+}

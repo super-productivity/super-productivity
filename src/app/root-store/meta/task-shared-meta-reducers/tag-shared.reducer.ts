@@ -36,41 +36,58 @@ interface ExtendedState extends RootState {
 // =============================================================================
 
 /**
- * Logs a warning if a Tag update contains taskIds that don't exist in the store.
- * This is informational only - we no longer filter out these IDs because:
- * 1. The DependencyResolverService now ensures proper ordering (tasks before tag updates)
- * 2. The UI gracefully handles references to non-existent tasks
- * 3. Filtering would cause data loss if ordering still failed for any reason
+ * Filters out taskIds that don't exist in the store from an updateTag action.
  *
- * @param state - Current root state
- * @param action - The updateTag action to check
+ * During sync, a remote updateTag operation can carry taskIds referencing tasks
+ * that were deleted locally. This happens when meta-reducer side effects (e.g.
+ * deleteTask removing a task from a tag) don't generate their own TAG operations,
+ * so no LWW conflict is detected and the stale updateTag is applied directly.
+ *
+ * Returns a cloned action with filtered taskIds, or null if no filtering needed.
  */
-const warnOnMissingTaskIds = (
+const filterMissingTaskIds = (
   state: RootState,
   action: ReturnType<typeof updateTag>,
-): void => {
+): ReturnType<typeof updateTag> | null => {
   const changes = action.tag.changes;
 
   // Only check if taskIds are being updated
   if (!changes || !('taskIds' in changes) || !Array.isArray(changes.taskIds)) {
-    return;
+    return null;
   }
 
   const taskState = state[TASK_FEATURE_NAME];
   const existingTaskIds = new Set(taskState.ids as string[]);
 
-  const missingTaskIds = changes.taskIds.filter((taskId) => !existingTaskIds.has(taskId));
+  const filteredTaskIds = changes.taskIds.filter((taskId) => existingTaskIds.has(taskId));
 
-  if (missingTaskIds.length > 0) {
-    OpLog.warn(
-      'tagSharedMetaReducer: Tag update references non-existent taskIds (allowing anyway)',
-      {
-        tagId: action.tag.id,
-        missingTaskIds,
-        totalTaskIds: changes.taskIds.length,
-      },
-    );
+  if (filteredTaskIds.length === changes.taskIds.length) {
+    return null; // No filtering needed
   }
+
+  const missingTaskIds = changes.taskIds.filter((taskId) => !existingTaskIds.has(taskId));
+  OpLog.warn(
+    'tagSharedMetaReducer: Filtered non-existent taskIds from updateTag action',
+    {
+      tagId: action.tag.id,
+      missingTaskIds,
+      totalTaskIds: changes.taskIds.length,
+    },
+  );
+
+  // Clone the original action instead of recreating via the action creator.
+  // This preserves meta.isRemote (needed for LOCAL_ACTIONS filtering) and
+  // isSkipSnack, which would be lost if we called updateTag() again.
+  return {
+    ...action,
+    tag: {
+      ...action.tag,
+      changes: {
+        ...changes,
+        taskIds: filteredTaskIds,
+      },
+    },
+  } as ReturnType<typeof updateTag>;
 };
 
 // =============================================================================
@@ -317,15 +334,22 @@ export const tagSharedMetaReducer: MetaReducer = (
 
     const extendedState = state as ExtendedState;
 
-    // Log warning if updateTag references non-existent tasks (informational only)
+    // Filter non-existent taskIds from updateTag actions
+    let effectiveAction = action;
     if (action.type === updateTag.type) {
-      warnOnMissingTaskIds(extendedState, action as ReturnType<typeof updateTag>);
+      const filteredAction = filterMissingTaskIds(
+        extendedState,
+        action as ReturnType<typeof updateTag>,
+      );
+      if (filteredAction) {
+        effectiveAction = filteredAction;
+      }
     }
 
-    const actionHandlers = createActionHandlers(extendedState, action);
-    const handler = actionHandlers[action.type];
+    const actionHandlers = createActionHandlers(extendedState, effectiveAction);
+    const handler = actionHandlers[effectiveAction.type];
     const updatedState = handler ? handler(extendedState) : extendedState;
 
-    return reducer(updatedState, action);
+    return reducer(updatedState, effectiveAction);
   };
 };

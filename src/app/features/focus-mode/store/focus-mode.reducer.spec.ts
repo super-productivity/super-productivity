@@ -142,12 +142,6 @@ describe('FocusModeReducer', () => {
       expect(result.mainState).toBe(FocusMainUIState.InProgress);
     });
 
-    it('should set isManualSessionCompletion to true when dispatched with isManualSessionCompletion: true', () => {
-      const action = a.startFocusSession({ isManualSessionCompletion: true });
-      const result = focusModeReducer(initialState, action);
-      expect(result.isManualSessionCompletion).toBe(true);
-    });
-
     it('should pause focus session', () => {
       const runningState = {
         ...initialState,
@@ -298,23 +292,6 @@ describe('FocusModeReducer', () => {
       expect(result.lastCompletedDuration).toBe(60000);
     });
 
-    it('should reset isManualSessionCompletion to false on completeFocusSession', () => {
-      const stateWithFlag = {
-        ...initialState,
-        isManualSessionCompletion: true,
-        timer: {
-          isRunning: false,
-          startedAt: Date.now(),
-          elapsed: 1500000,
-          duration: 1500000,
-          purpose: 'work' as const,
-        },
-      };
-      const action = a.completeFocusSession({ isManual: false });
-      const result = focusModeReducer(stateWithFlag, action);
-      expect(result.isManualSessionCompletion).toBe(false);
-    });
-
     it('should cancel focus session', () => {
       const runningState = {
         ...initialState,
@@ -337,23 +314,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(false);
       expect(result.timer.purpose).toBeNull();
       expect(result.isOverlayShown).toBe(false);
-    });
-
-    it('should reset isManualSessionCompletion to false on cancelFocusSession', () => {
-      const stateWithFlag = {
-        ...initialState,
-        isManualSessionCompletion: true,
-        timer: {
-          isRunning: true,
-          startedAt: Date.now(),
-          elapsed: 500000,
-          duration: 1500000,
-          purpose: 'work' as const,
-        },
-      };
-      const action = a.cancelFocusSession();
-      const result = focusModeReducer(stateWithFlag, action);
-      expect(result.isManualSessionCompletion).toBe(false);
     });
   });
 
@@ -603,27 +563,6 @@ describe('FocusModeReducer', () => {
       expect(result.timer.isRunning).toBe(true);
       expect(result.timer.elapsed).toBe(3600000);
     });
-
-    it('should NOT stop work session when duration reached and isManualSessionCompletion is true', () => {
-      const startTime = Date.now() - 1500000; // Started 25 minutes ago
-      const runningState = {
-        ...initialState,
-        isManualSessionCompletion: true,
-        timer: {
-          isRunning: true,
-          startedAt: startTime,
-          elapsed: 1500000,
-          duration: 1500000,
-          purpose: 'work' as const,
-        },
-      };
-
-      const action = a.tick();
-      const result = focusModeReducer(runningState, action);
-
-      expect(result.timer.isRunning).toBe(true);
-      expect(result.timer.elapsed).toBeGreaterThanOrEqual(1500000);
-    });
   });
 
   describe('adjustRemainingTime', () => {
@@ -725,6 +664,89 @@ describe('FocusModeReducer', () => {
 
       expect(result.pausedTaskId).toBe('new-task');
       expect(result.currentCycle).toBe(3);
+    });
+  });
+
+  describe('overtime', () => {
+    it('should keep work timer running when _isOvertimeEnabled is true and elapsed >= duration', () => {
+      const startTime = Date.now() - 1500000;
+      const overtimeState = {
+        ...initialState,
+        _isOvertimeEnabled: true,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const result = focusModeReducer(overtimeState, a.tick());
+
+      expect(result.timer.isRunning).toBe(true);
+      expect(result.timer.elapsed).toBeGreaterThanOrEqual(1500000);
+    });
+
+    it('should still stop work timer when _isOvertimeEnabled is false', () => {
+      const startTime = Date.now() - 1500000;
+      const normalState = {
+        ...initialState,
+        _isOvertimeEnabled: false,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const result = focusModeReducer(normalState, a.tick());
+
+      expect(result.timer.isRunning).toBe(false);
+    });
+
+    it('should still stop break timer even when _isOvertimeEnabled is true', () => {
+      const startTime = Date.now() - 300000;
+      const breakState = {
+        ...initialState,
+        _isOvertimeEnabled: true,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 300000,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+      };
+
+      const result = focusModeReducer(breakState, a.tick());
+
+      expect(result.timer.isRunning).toBe(false);
+    });
+
+    it('setOvertimeEnabled should set the flag', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.setOvertimeEnabled({ enabled: true }),
+      );
+
+      expect(result._isOvertimeEnabled).toBe(true);
+    });
+
+    it('completeFocusSession should reset _isOvertimeEnabled', () => {
+      const state = { ...initialState, _isOvertimeEnabled: true };
+      const result = focusModeReducer(state, a.completeFocusSession({ isManual: true }));
+
+      expect(result._isOvertimeEnabled).toBe(false);
+    });
+
+    it('cancelFocusSession should reset _isOvertimeEnabled', () => {
+      const state = { ...initialState, _isOvertimeEnabled: true };
+      const result = focusModeReducer(state, a.cancelFocusSession());
+
+      expect(result._isOvertimeEnabled).toBe(false);
     });
   });
 

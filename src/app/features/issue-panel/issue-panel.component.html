@@ -26,16 +26,36 @@
           (longPressIOS)="openEditIssueProvider(entry.issueProvider)"
           (longPress)="openEditIssueProvider(entry.issueProvider)"
         >
-          <mat-icon
-            [svgIcon]="entry.issueProvider.issueProviderKey | issueIcon"
-            [matTooltip]="entry.tooltip"
-            matTooltipPosition="above"
-          ></mat-icon>
+          @if (entry.issueProvider.issueProviderKey | issueIcon; as icon) {
+            <mat-icon
+              [svgIcon]="icon"
+              [matTooltip]="entry.tooltip"
+              matTooltipPosition="above"
+            ></mat-icon>
+          } @else {
+            <mat-icon
+              [matTooltip]="entry.tooltip"
+              matTooltipPosition="above"
+              >extension</mat-icon
+            >
+          }
           <div class="initials">{{ entry.initials }}</div>
         </div>
       </ng-template>
       <ng-template matTabContent>
-        <issue-provider-tab [issueProvider]="entry.issueProvider"></issue-provider-tab>
+        @if (entry.missingPluginName) {
+          <div style="padding: 16px; opacity: 0.7; text-align: center">
+            <mat-icon style="vertical-align: middle; margin-right: 4px"
+              >extension_off</mat-icon
+            >
+            {{
+              T.F.ISSUE.S.PLUGIN_NOT_INSTALLED
+                | translate: { pluginName: entry.missingPluginName }
+            }}
+          </div>
+        } @else {
+          <issue-provider-tab [issueProvider]="entry.issueProvider"></issue-provider-tab>
+        }
       </ng-template>
     </mat-tab>
   }

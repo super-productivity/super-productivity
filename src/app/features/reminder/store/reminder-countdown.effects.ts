@@ -15,6 +15,7 @@ import {
   tap,
 } from 'rxjs/operators';
 import { BannerId } from '../../../core/banner/banner.model';
+import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { Store } from '@ngrx/store';
@@ -28,6 +29,7 @@ import { Router } from '@angular/router';
 import { DataInitStateService } from '../../../core/data-init/data-init-state.service';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
 import { Log } from '../../../core/log';
+import { getPluralKey } from '../../../util/get-plural-key';
 import { skipWhileApplyingRemoteOps } from '../../../util/skip-during-sync.operator';
 
 const UPDATE_PERCENTAGE_INTERVAL = 250;
@@ -44,6 +46,8 @@ export class ReminderCountdownEffects {
   private _taskService = inject(TaskService);
   private _projectService = inject(ProjectService);
   private _router = inject(Router);
+  private _translateService = inject(TranslateService);
+  private _translateStore = inject(TranslateStore);
 
   /**
    * SAFETY: Guarded with skipWhileApplyingRemoteOps() to prevent banner
@@ -135,9 +139,14 @@ export class ReminderCountdownEffects {
       id: BannerId.ReminderCountdown,
       ico: 'alarm',
       msg:
-        nrOfAllBanners > 1
-          ? T.F.REMINDER.COUNTDOWN_BANNER.TXT_MULTIPLE
-          : T.F.REMINDER.COUNTDOWN_BANNER.TXT,
+        nrOfAllBanners === 1
+          ? T.F.REMINDER.COUNTDOWN_BANNER.TXT
+          : getPluralKey(
+              this._translateService,
+              this._translateStore,
+              nrOfAllBanners - 1,
+              'F.REMINDER.COUNTDOWN_BANNER.TXT_MULTIPLE',
+            ),
       translateParams: {
         title: firstDueTask.title,
         start: startsAt,

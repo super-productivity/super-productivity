@@ -19,6 +19,7 @@ import { error, log } from 'electron-log/main';
 import { IS_MAC } from './common.const';
 import {
   destroyOverlayWindow,
+  getIsOverlayAlwaysShow,
   hideOverlayWindow,
   showOverlayWindow,
 } from './overlay-indicator/overlay-indicator';
@@ -120,7 +121,9 @@ export const createWindow = async ({
     webPreferences: {
       scrollBounce: true,
       backgroundThrottling: false,
-      webSecurity: false,
+      // CORS is handled at the session level via onBeforeSendHeaders (strips Origin)
+      // and onHeadersReceived (injects Access-Control-Allow-* headers)
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       // make remote module work with those two settings
@@ -177,6 +180,15 @@ export const createWindow = async ({
     });
   });
 
+  // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
+  // The app only needs notifications for desktop reminders
+  mainWin.webContents.session.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      const allowedPermissions = ['notifications'];
+      callback(allowedPermissions.includes(permission));
+    },
+  );
+
   mainWindowState.manage(mainWin);
 
   const url = customUrl
@@ -216,6 +228,22 @@ export const createWindow = async ({
   // show gracefully
   mainWin.once('ready-to-show', () => {
     mainWin.show();
+
+    // Workaround for Windows phantom focus bug (electron#20464):
+    // show() can silently fail to acquire keyboard focus after reboot.
+    // blur() is not supported on Wayland and limited on macOS, so only
+    // apply the blur+focus cycle on Windows.
+    const IS_WINDOWS = process.platform === 'win32';
+    setTimeout(() => {
+      if (mainWin.isDestroyed()) return;
+      if (IS_WINDOWS) {
+        mainWin.blur();
+      }
+      mainWin.focus();
+      if (!mainWin.webContents.isDestroyed()) {
+        mainWin.webContents.focus();
+      }
+    }, 60);
   });
 
   initWinEventListeners(app);
@@ -240,6 +268,19 @@ export const createWindow = async ({
     if (input.type === 'keyDown' && input.key === 'F11') {
       event.preventDefault();
       mainWin.setFullScreen(!mainWin.isFullScreen());
+    }
+  });
+
+  // Notify renderer of fullscreen state changes (used for app border visibility)
+  mainWin.on('enter-full-screen', () => {
+    mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
+  });
+  mainWin.on('leave-full-screen', () => {
+    mainWin.webContents.send(IPC.LEAVE_FULL_SCREEN);
+  });
+  mainWin.webContents.on('did-finish-load', () => {
+    if (mainWin.isFullScreen()) {
+      mainWin.webContents.send(IPC.ENTER_FULL_SCREEN);
     }
   });
 
@@ -302,15 +343,21 @@ function initWinEventListeners(app: Electron.App): void {
 
   // Handle restore and show events to hide overlay
   mainWin.on('restore', () => {
-    hideOverlayWindow();
+    if (!getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   mainWin.on('show', () => {
-    hideOverlayWindow();
+    if (!getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   mainWin.on('focus', () => {
-    hideOverlayWindow();
+    if (mainWin.isVisible() && !mainWin.isMinimized() && !getIsOverlayAlwaysShow()) {
+      hideOverlayWindow();
+    }
   });
 
   // Handle hide event to show overlay

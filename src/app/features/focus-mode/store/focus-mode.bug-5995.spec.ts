@@ -107,6 +107,7 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
               lastCompletedDuration: null,
               isOverlayShown: false,
               _isResumingBreak: false,
+              _isOvertimeEnabled: false,
             },
             tasks: {
               entities: {
@@ -248,7 +249,8 @@ describe('FocusMode Bug #5995: Resume paused break', () => {
       // Verify: skipBreak was dispatched
       expect(dispatchedActions.length).toBe(1);
       expect(dispatchedActions[0].type).toBe(actions.skipBreak.type);
-      expect((dispatchedActions[0] as any).pausedTaskId).toBe('test-task-id');
+      // Bug #6726: pausedTaskId is undefined because the user already chose a new task
+      expect((dispatchedActions[0] as any).pausedTaskId).toBeUndefined();
 
       flush();
     }));

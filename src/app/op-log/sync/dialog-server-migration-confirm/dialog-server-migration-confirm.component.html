@@ -1,0 +1,25 @@
+<h1 mat-dialog-title>
+  <mat-icon aria-hidden="true">warning</mat-icon>
+  {{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.TITLE | translate }}
+</h1>
+
+<mat-dialog-content>
+  <p>{{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.MESSAGE | translate }}</p>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button
+    (click)="close(false)"
+    mat-button
+  >
+    {{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.SKIP | translate }}
+  </button>
+  <button
+    (click)="close(true)"
+    color="primary"
+    mat-stroked-button
+  >
+    <mat-icon aria-hidden="true">cloud_upload</mat-icon>
+    {{ T.F.SYNC.D_SERVER_MIGRATION_CONFIRM.CONFIRM | translate }}
+  </button>
+</mat-dialog-actions>

@@ -35,6 +35,11 @@ export class LocaleDatePipe implements PipeTransform {
       return null;
     }
 
-    return this._datePipe.transform(value, format, timezone, effectiveLocale);
+    try {
+      return this._datePipe.transform(value, format, timezone, effectiveLocale);
+    } catch (e) {
+      console.warn('LocaleDatePipe: failed to format value', value, e);
+      return null;
+    }
   }
 }

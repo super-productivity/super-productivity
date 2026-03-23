@@ -32,7 +32,7 @@
   flex-wrap: nowrap;
   padding-top: var(--s2);
   padding-bottom: var(--s);
-  border-top: 1px solid var(--extra-border-color);
+  @include extraBorder('-top');
 
   &:first-of-type {
     border-top: none !important;

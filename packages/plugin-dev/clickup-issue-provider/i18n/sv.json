@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API-nyckel",
+    "API_KEY_LINK": "Hämta din personliga API-nyckel",
+    "TEAM_IDS": "Workspace-/team-ID:n (kommaseparerade, tomt för alla)",
+    "USER_ID": "Användar-ID (för filtrering efter tilldelad)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammanfattning",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritet",
+    "ASSIGNEE": "Mottagare",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivning"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Okänt fel. Kontrollera din API-nyckel och försök igen."
+  }
+}

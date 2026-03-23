@@ -34,6 +34,8 @@ import { environment } from '../../../environments/environment';
 import { TrackingReminderService } from '../../features/tracking-reminder/tracking-reminder.service';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { alertDialog } from '../../util/native-dialogs';
+import { DataInitStateService } from '../data-init/data-init-state.service';
+import { OnboardingHintService } from '../../features/onboarding/onboarding-hint.service';
 
 const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
 
@@ -61,6 +63,7 @@ export class StartupService {
   private _legacyPfDb = inject(LegacyPfDbService);
   private _store = inject(Store);
   private _platformService = inject(CapacitorPlatformService);
+  private _dataInitStateService = inject(DataInitStateService);
 
   constructor() {
     // Initialize electron error handler in an effect
@@ -302,7 +305,11 @@ export class StartupService {
                 Log.log('Persistent store granted');
               }
               // NOTE: we never show this warning for native mobile apps, because persistence is always granted
-              else if (!this._platformService.isNative) {
+              // Also suppress during active onboarding to avoid confusing first-time users
+              else if (
+                !this._platformService.isNative &&
+                !OnboardingHintService.isOnboardingInProgress()
+              ) {
                 const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
                 Log.warn('Persistence not allowed');
                 this._snackService.open({ msg });
@@ -369,10 +376,15 @@ export class StartupService {
   private async _initPlugins(): Promise<void> {
     // Initialize plugin system
     try {
-      // Wait for sync to complete before initializing plugins to avoid DB lock conflicts
-      await this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$
-        .pipe(take(1))
-        .toPromise();
+      // Wait for store hydration and sync to complete before initializing plugins.
+      // Store hydration must finish so that _shouldAutoEnableMigrationPlugin
+      // can query issueProviders from the store reliably.
+      await Promise.all([
+        this._dataInitStateService.isAllDataLoadedInitially$.pipe(take(1)).toPromise(),
+        this._syncWrapperService.afterCurrentSyncDoneOrSyncDisabled$
+          .pipe(take(1))
+          .toPromise(),
+      ]);
       await this._pluginService.initializePlugins();
       Log.log('Plugin system initialized after sync completed');
     } catch (error) {

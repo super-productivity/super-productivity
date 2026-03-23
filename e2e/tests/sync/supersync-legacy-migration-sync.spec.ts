@@ -145,50 +145,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
         }
       });
 
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait for initial sync
-
-      // Check for Angular conflict dialog or let sync complete
-      const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
-      const conflictResolutionDialog = clientB.page.locator('dialog-conflict-resolution');
-
-      // Wait briefly for any dialog to appear
-      const dialogAppeared = await Promise.race([
-        syncImportDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'sync-import'),
-        conflictResolutionDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'conflict-resolution'),
-        clientB.page.waitForTimeout(5000).then(() => 'none'),
-      ]).catch(() => 'none');
-
-      if (dialogAppeared === 'sync-import') {
-        console.log('[Test] Sync import conflict dialog appeared');
-        const useLocalBtn = syncImportDialog.locator('button', {
-          hasText: /Use My Data/i,
-        });
-        await useLocalBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 10000 });
-      } else if (dialogAppeared === 'conflict-resolution') {
-        console.log('[Test] Conflict resolution dialog appeared');
-        // This dialog has "Use All Remote" and "Apply" buttons
-        // To keep local, we don't click "Use All Remote" - just close or apply
-        const closeBtn = conflictResolutionDialog.locator('button', {
-          hasText: /Cancel|Close/i,
-        });
-        if (await closeBtn.isVisible()) {
-          await closeBtn.click();
-        } else {
-          await clientB.page.keyboard.press('Escape');
-        }
-        await conflictResolutionDialog.waitFor({ state: 'hidden', timeout: 5000 });
-      } else {
-        console.log(
-          '[Test] No Angular conflict dialog appeared - sync may have auto-resolved via native confirm',
-        );
-      }
-
-      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
+      await syncPageB.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
       console.log('[Test] Client B sync completed');
 
       // Navigate to B's project and verify data
@@ -299,60 +256,8 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       // Setup sync - may trigger conflict dialog or auto-resolve
       console.log('[Test] Client B setting up sync...');
 
-      // For "Keep remote" test, we want to dismiss/reject the native confirm to use server data
-      // But the native confirm auto-accepted keeps local data
-      // So we need to handle Angular dialogs explicitly
-      clientB.page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'confirm') {
-          console.log('[Test] Native confirm dialog: ' + dialog.message());
-          // Dismiss to try to use server data
-          await dialog.dismiss();
-        }
-      });
-
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait
-
-      // Check for Angular conflict dialog
-      const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
-      const conflictResolutionDialog = clientB.page.locator('dialog-conflict-resolution');
-
-      const dialogAppeared = await Promise.race([
-        syncImportDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'sync-import'),
-        conflictResolutionDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'conflict-resolution'),
-        clientB.page.waitForTimeout(5000).then(() => 'none'),
-      ]).catch(() => 'none');
-
-      if (dialogAppeared === 'sync-import') {
-        console.log('[Test] Sync import conflict dialog appeared');
-        const useRemoteBtn = syncImportDialog.locator('button', {
-          hasText: /Use Server Data/i,
-        });
-        await useRemoteBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 10000 });
-      } else if (dialogAppeared === 'conflict-resolution') {
-        console.log('[Test] Conflict resolution dialog appeared');
-        // Click "Use All Remote" then "Apply"
-        const useAllRemoteBtn = conflictResolutionDialog.locator('button', {
-          hasText: /Use All Remote/i,
-        });
-        await useAllRemoteBtn.click();
-        await clientB.page.waitForTimeout(500);
-        const applyBtn = conflictResolutionDialog.locator('button', {
-          hasText: /Apply/i,
-        });
-        if (await applyBtn.isEnabled()) {
-          await applyBtn.click();
-        }
-        await conflictResolutionDialog.waitFor({ state: 'hidden', timeout: 10000 });
-      } else {
-        console.log('[Test] No Angular conflict dialog - sync auto-resolved');
-      }
-
-      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
+      // Use syncImportChoice 'remote' so B adopts A's data
+      await syncPageB.setupSuperSync({ ...syncConfig, syncImportChoice: 'remote' });
       console.log('[Test] Client B sync completed');
 
       // Check which data Client B has - may have A's data or B's data depending on resolution
@@ -493,49 +398,8 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       // Setup sync - may trigger conflict (same IDs, different content)
       console.log('[Test] Client B setting up sync...');
 
-      // Set up handler for native confirm dialogs to keep local data
-      clientB.page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'confirm') {
-          console.log('[Test] Native confirm dialog: ' + dialog.message());
-          await dialog.accept();
-        }
-      });
-
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait
-
-      // Check for Angular conflict dialog
-      const syncImportDialog = clientB.page.locator('dialog-sync-import-conflict');
-      const conflictResolutionDialog = clientB.page.locator('dialog-conflict-resolution');
-
-      const dialogAppeared = await Promise.race([
-        syncImportDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'sync-import'),
-        conflictResolutionDialog
-          .waitFor({ state: 'visible', timeout: 5000 })
-          .then(() => 'conflict-resolution'),
-        clientB.page.waitForTimeout(5000).then(() => 'none'),
-      ]).catch(() => 'none');
-
-      if (dialogAppeared === 'sync-import') {
-        console.log(
-          '[Test] Sync import conflict dialog appeared (ID collision detected)',
-        );
-        const useLocalBtn = syncImportDialog.locator('button', {
-          hasText: /Use My Data/i,
-        });
-        await useLocalBtn.click();
-        await syncImportDialog.waitFor({ state: 'hidden', timeout: 10000 });
-      } else if (dialogAppeared === 'conflict-resolution') {
-        console.log('[Test] Conflict resolution dialog appeared');
-        // To keep local, close without applying remote
-        await clientB.page.keyboard.press('Escape');
-        await conflictResolutionDialog.waitFor({ state: 'hidden', timeout: 5000 });
-      } else {
-        console.log('[Test] No Angular conflict dialog - sync auto-resolved');
-      }
-
-      await syncPageB.waitForSyncToComplete({ timeout: 30000, skipSpinnerCheck: true });
+      // Use syncImportChoice 'local' so B keeps its Version B data
+      await syncPageB.setupSuperSync({ ...syncConfig, syncImportChoice: 'local' });
       console.log('[Test] Client B sync completed');
 
       // Navigate back to project and verify
@@ -564,25 +428,10 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       console.log('[Test] Verified: No ID duplicates, winner-take-all for shared-task-1');
 
       // === Client A syncs - with divergent timelines ===
+      // B's SYNC_IMPORT replaces server state, so A gets a sync_import_conflict dialog.
+      // syncAndWait handles dialogs automatically (defaults to 'Use Server Data').
       console.log('[Test] Client A syncing...');
-      await syncPageA.triggerSync();
-
-      // Client A might also see a sync import conflict dialog
-      const conflictDialogA = clientA.page.locator('dialog-sync-import-conflict');
-      try {
-        await conflictDialogA.waitFor({ state: 'visible', timeout: 5000 });
-        console.log('[Test] Client A sees conflict dialog - choosing Use Server Data');
-        const useRemoteBtn = conflictDialogA.locator('button', {
-          hasText: /Use Server Data/i,
-        });
-        await useRemoteBtn.click();
-        await conflictDialogA.waitFor({ state: 'hidden', timeout: 10000 });
-      } catch {
-        console.log('[Test] Client A did not see conflict dialog');
-      }
-
-      // Skip spinner check - sync may have completed during/before dialog handling
-      await syncPageA.waitForSyncToComplete({ skipSpinnerCheck: true });
+      await syncPageA.syncAndWait();
 
       // Navigate to shared project and verify
       await sidenavA.locator('nav-item', { hasText: 'Shared Project' }).click();
@@ -712,7 +561,7 @@ test.describe('@supersync @migration SuperSync Legacy Migration Sync', () => {
       await workViewB.waitForTaskList();
 
       // Setup sync - fresh client downloads data
-      await syncPageB.setupSuperSync(syncConfig, false); // Don't auto-wait, we'll sync manually
+      await syncPageB.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
 
       // Trigger sync and wait for it to complete
       await syncPageB.triggerSync();

@@ -454,8 +454,10 @@ export class DropboxApi {
         });
 
         if (response.status < 200 || response.status >= 300) {
+          const bodyStr = JSON.stringify(response.data);
           throw new HttpNotOkAPIError(
-            new Response(JSON.stringify(response.data), { status: response.status }),
+            new Response(bodyStr, { status: response.status }),
+            bodyStr,
           );
         }
 
@@ -471,7 +473,11 @@ export class DropboxApi {
         });
 
         if (!response.ok) {
-          throw new HttpNotOkAPIError(response);
+          const bodyStr = await response.text();
+          throw new HttpNotOkAPIError(
+            new Response(bodyStr, { status: response.status }),
+            bodyStr,
+          );
         }
 
         data = (await response.json()) as TokenResponse;

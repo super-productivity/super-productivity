@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity je financována výhradně komunitou. Neexistuje žádné sledování, žádné reklamy a žádný sběr dat – vaše úkoly zůstávají ve vašem zařízení.",
     "INTRO_2": "Pokud si tohoto přístupu vážíte a chcete projekt udržet zdravý a vyvíjející se, dobrovolný dar velmi oceníme."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Naučte se klávesové zkratky",
+      "NOTES": "Super Productivity je navržena pro ovládání klávesnicí. Naučte se zkratky, abyste pracovali rychleji.\n\n**Jak začít:**\n1. Otevřete **postranní menu**\n2. Přejděte na **Nápověda**\n3. Klikněte na **Prohlídka klávesové navigace**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Vytvořte svůj první projekt",
+      "NOTES": "Projekty vám pomohou organizovat úkoly podle oblastí práce. Každý projekt má vlastní seznam úkolů a backlog.\n\n**Jak vytvořit projekt:**\n1. Klikněte na tlačítko **+** vedle **Projekty** v postranním panelu\n2. Pojmenujte ho a vyberte barvu\n3. Začněte do něj přidávat úkoly"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Nastavte synchronizaci",
+      "NOTES": "Udržujte svá data v bezpečí a přístupná napříč zařízeními.\n\n**Jak nastavit:**\n1. Otevřete **Nastavení** (ikona ozubeného kola v postranním panelu)\n2. Přejděte na **Synchronizace**\n3. Vyberte poskytovatele: Super Sync, Dropbox, WebDAV nebo synchronizaci lokálním souborem\n4. Postupujte podle pokynů k nastavení"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Objevte více",
+      "NOTES": "Je toho mnohem více k objevení!\n\n**Funkce aplikace** (v Nastavení) — Povolte integrace, návyky a další funkce. Přejděte do **Nastavení → Funkce aplikace** a podívejte se, co je k dispozici.\n\n**Nástěnky** — Vizualizujte své úkoly na přizpůsobitelných Kanban nástěnkách. Povolte je v **Funkcích aplikace**, pak je najdete v **postranním menu**.\n\n**Rozvrh** — Naplánujte si den přiřazením úkolů ke konkrétním časům. Přetáhněte úkoly do zobrazení **Rozvrh** v postranním panelu.\n\n**Integrace** — Po povolení ve Funkcích aplikace importujte úkoly z Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV a mnoha dalších. Můžete také integrovat svůj kalendář. Nakonfigurujte je v **Panelu poskytovatelů úkolů**.\n\n**Návyky** — Sledujte opakující se návyky a rutiny. Najdete je v **postranním menu** po povolení.\n\n**Pluginy** — Přidejte funkce jako Zabiják prokrastinace, Automatizace nebo Hlasová připomenutí. Přejděte do **Nastavení → Pluginy**.\n\n**Přizpůsobení** — Motivy, tmavý režim, klávesové zkratky, jazyk a nástroje produktivity — vše najdete v **Nastavení**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -104,7 +122,14 @@
         "CALDAV_RESOURCE": "Název zdroje CalDav (kalendář)",
         "CALDAV_URL": "URL CalDav (základní URL)",
         "CALDAV_USER": "Vaše uživatelské jméno CalDav",
-        "IS_TRANSITION_ISSUES_ENABLED": "Automaticky dokončovat úkoly CalDav při dokončení úkolu"
+        "TWO_WAY_SYNC_BOTH": "Oboje (obousměrně)",
+        "TWO_WAY_SYNC_NOTES": "Směr synchronizace poznámek / popisu",
+        "TWO_WAY_SYNC_OFF": "Vypnuto",
+        "TWO_WAY_SYNC_PULL_ONLY": "Pouze stahování (čtení z CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "Pouze odesílání (zápis do CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "Obousměrná synchronizace (experimentální)",
+        "TWO_WAY_SYNC_STATUS": "Směr synchronizace stavu",
+        "TWO_WAY_SYNC_TITLE": "Směr synchronizace názvu"
       },
       "FORM_SECTION": {
         "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby v seznamu úkolů pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení zobrazoval neukončené úkoly CalDav. Budou uvedeny jako návrhy a poskytnou odkaz na úkol a další informace o něm.</p> <p>Kromě toho můžete automaticky přidat a synchronizovat všechny neukončené úkoly do vašeho backlogu úkolů.</p><p>Aby to fungovalo v Nextcloud ve webové aplikaci, možná budete muset přidat „https://app.super-productivity.com“ na bílý seznam pomocí aplikace Nextcloud <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword</a>.</p>"
@@ -127,9 +152,15 @@
         "ADD_AS_TASK": "Přidat jako úkol",
         "SHOW_TASK": "Zobrazit úkol",
         "TXT": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} dalších událostí má nastat)",
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} dalších událostí má nastat)",
+          "ONE": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} další událost je naplánována)"
+        },
         "TXT_PAST": "<strong>{{title}}</strong> začalo v <strong>{{start}}</strong>!",
-        "TXT_PAST_MULTIPLE": "<strong>{{title}}</strong> začalo v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} dalších událostí má nastat)"
+        "TXT_PAST_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> začalo v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} dalších událostí má nastat)",
+          "ONE": "<strong>{{title}}</strong> začala v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} další událost je naplánována)"
+        }
       },
       "EVENT_STRINGS": {
         "EVENTS_STR": "události",
@@ -232,7 +263,8 @@
       "START_FOCUS_SESSION": "Spustit relaci zaměření",
       "START_NEXT_FOCUS_SESSION": "Spustit další relaci zaměření",
       "SWITCH_TASK": "Přepnout úkol",
-      "WORKED_FOR": "Pracovali jste"
+      "WORKED_FOR": "Pracovali jste",
+      "RESET_CYCLES": "Resetovat počítadlo relací"
     },
     "GITEA": {
       "FORM": {
@@ -257,35 +289,6 @@
         "STATUS": "Stav",
         "SUMMARY": "Shrnutí",
         "WRITE_A_COMMENT": "Napsat komentář"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "Uživatelské jméno (např. pro filtrování změn od vás)",
-        "INVALID_TOKEN_MESSAGE": "Není platný token GitHubu. Musí začínat na „ghp_“.",
-        "IS_ASSIGNEE_FILTER": "Filtrovat úkoly přiřazené mně",
-        "REPO": "„uživatelské jméno/název repozitáře“ pro gitový repozitář, který chcete sledovat",
-        "TOKEN": "Přístupový token"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy GitHubu pro konkrétní repozitář v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p> <p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p><p>Pro překročení omezení použití a k přístupu můžete poskytnout přístupový token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Více informací o jeho rozsahu naleznete zde</a>."
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Přiřazený",
-        "AT": "v",
-        "DESCRIPTION": "Popis",
-        "LABELS": "Štítky",
-        "LAST_COMMENT": "Poslední komentář",
-        "LOAD_ALL_COMMENTS": "Načíst všech {{nr}} komentářů",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Načíst popis a všechny komentáře",
-        "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
-        "STATUS": "Stav",
-        "SUMMARY": "Shrnutí",
-        "WRITE_A_COMMENT": "Napsat komentář"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: Chyba při mapování dat. Je název vašeho repozitáře správný?",
-        "ERR_UNKNOWN": "GitHub: Neznámá chyba {{statusCode}} {{errorMsg}}. Bylo překročeno omezení volání API?"
       }
     },
     "GITLAB": {
@@ -379,7 +382,28 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Aktualizována data pro {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Aktualizována data pro \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Sledování nových {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: Sledování změn v {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: Sledování změn v {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "Automatické vytvoření úkolu selhalo: {{errorMsg}}",
+        "CONNECTION_FAILED": "Připojení selhalo",
+        "CONNECTION_SUCCESS": "Připojení funguje!",
+        "PLUGIN_NOT_INSTALLED": "Požadovaný plugin \"{{pluginName}}\" není nainstalován.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "Odesílání obousměrné synchronizace selhalo: {{errorMsg}}"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Pokročilá konfigurace",
+        "DELETE_CONFIRM": "Opravdu chcete smazat tohoto poskytovatele úkolů? Smazání znamená, že <strong>všechny dříve importované úkoly ztratí svou referenci</strong>. Toto nelze vrátit zpět!"
+      },
+      "TWO_WAY_SYNC": {
+        "AUTO_CREATE_ISSUES": "Automaticky vytvářet úkoly pro nové položky",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Automaticky vytvoří úkol, když přidáte novou hlavní položku do výchozího projektu. Vyžaduje nastavený výchozí projekt.",
+        "BOTH": "Oboje (obousměrně)",
+        "NOTES": "Směr synchronizace poznámek / popisu",
+        "OFF": "Vypnuto",
+        "PULL_ONLY": "Pouze stahování",
+        "PUSH_ONLY": "Pouze odesílání",
+        "SECTION": "Obousměrná synchronizace (experimentální)",
+        "STATUS": "Směr synchronizace stavu",
+        "TITLE": "Směr synchronizace názvu"
       }
     },
     "ISSUE_PANEL": {
@@ -544,7 +568,8 @@
         "TIME_FRAME_2_WEEKS": "2 týdny",
         "TIME_FRAME_LABEL": "Časový rámec",
         "TIME_FRAME_MAX": "Max",
-        "TIME_SPENT": "Strávený čas"
+        "TIME_SPENT": "Strávený čas",
+        "YEAR": "Rok"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "Denní stav",
@@ -554,8 +579,6 @@
         "FOCUS_WORK_TIME": "Čas soustředěné práce",
         "IMPACT_OF_WORK": "Jak hodnotíte dopad své dnešní práce?",
         "IMPACT_OF_WORK_HINT": "1: Žádný významný pokrok – 4: Významný dopad",
-        "NOTES": "Poznámky na zítra",
-        "PRODUCTIVITY": "Jak efektivně jste pracoval/a?",
         "PRODUCTIVITY_SCORE": "Skóre produktivity",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65 % Dopad (škála 1-4) • 30 % Soustředění k cíli 4h • 5 % celková práce (omezeno na 10h)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "Rozbor produktivity za 7 dní",
@@ -720,7 +743,8 @@
       "EDIT_REPEATED_TASK": "Upravit opakující se úkol „{{taskName}}“",
       "NO_TASKS": "Žádné úkoly",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Žádné naplánované položky"
+        "NO_SCHEDULED_ITEMS": "Žádné naplánované položky",
+        "NO_DEADLINES": "Žádné termíny"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Odstraněno datum plánu pro úkol „{{taskTitle}}“",
@@ -764,7 +788,9 @@
         "L_IS_AUTO_CONTRAST": "Automaticky nastavit barvy textu pro nejlepší čitelnost",
         "L_IS_DISABLE_BACKGROUND_TINT": "Vypnout barevný pozadí",
         "L_THEME_COLOR": "Barva tématu",
-        "TITLE": "Téma"
+        "TITLE": "Téma",
+        "D_BACKGROUND_OVERLAY_OPACITY": "Upravte tuto hodnotu pro více či méně průhledné pozadí. Výchozí je 20 %.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Ztmavit/zesvětlit obrázek pozadí pro lepší kontrast"
       },
       "S": {
         "ARCHIVED": "Archivovaný projekt",
@@ -807,7 +833,10 @@
         "SCOPE": "Rozsah",
         "SCOPE_ALL": "Všechny",
         "SCOPE_ASSIGNED": "Přiřazeno mně",
-        "SCOPE_CREATED": "Vytvořeno mnou"
+        "SCOPE_CREATED": "Vytvořeno mnou",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Zobrazit dialog sledování času pro Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vyžaduje povolený modul sledování času v projektu Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Zobrazit dialog sledování času při dokončení podúkolů"
       },
       "FORM_SECTION": {
         "HELP": "<p>Zde můžete nakonfigurovat SuperProductivity tak, aby zobrazoval otevřené problémy Redmine (buď online verze, nebo samonosné instance) pro konkrétní projekt v panelu vytváření úkolů v denním plánovacím zobrazení. Budou uvedeny jako návrhy a poskytnou odkaz na problém a další informace o něm.</p><p>Kromě toho můžete automaticky importovat všechny otevřené problémy.</p>",
@@ -819,6 +848,18 @@
         "MARK_AS_CHECKED": "Označit změny jako zkontrolované",
         "PRIORITY": "Priorita",
         "STATUS": "Status"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Aktivita",
+        "INVALID_DATE": "Zadaná hodnota není datum!",
+        "POST_TIME": "Odeslat čas",
+        "STARTED": "Zahájeno",
+        "SUBMIT_TIME_FOR": "Odeslat čas do Redmine pro",
+        "TIME_SPENT": "Strávený čas",
+        "TITLE": "Redmine: Odeslat pracovní výkaz"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: Záznam času pro {{issueTitle}} úspěšně vytvořen"
       }
     },
     "REFLECTION_NOTE": {
@@ -829,7 +870,10 @@
       "COUNTDOWN_BANNER": {
         "START_NOW": "Začít hned",
         "TXT": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a vypršel čas u {{nrOfOtherBanners}} dalších úkolů)"
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a vypršel čas u {{nrOfOtherBanners}} dalších úkolů)",
+          "ONE": "<strong>{{title}}</strong> začíná v <strong>{{start}}</strong>!<br> (a {{nrOfOtherBanners}} další úkol je naplánován)"
+        }
       },
       "S_ACTIVE_TASK_DUE": "Právě vypršel čas u úkolu, na kterém pracujete!<br/> ({{title}})",
       "S_REMINDER_ERR": "Chyba rozhraní pro upomínky"
@@ -880,11 +924,24 @@
         "TITLE": "Jednoduché čítače",
         "TYPE_CLICK_COUNTER": "Klikací čítač",
         "TYPE_REPEATED_COUNTDOWN": "Opakované odpočítávání",
-        "TYPE_STOPWATCH": "Stopky"
+        "TYPE_STOPWATCH": "Stopky",
+        "L_ICON_ON": "Ikona při zapnutí",
+        "L_IS_HIDE_BUTTON": "Skrýt tlačítko na panelu nástrojů",
+        "L_STREAK_MODE": "Režim sledování série",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Konkrétní dny v týdnu",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Týdenní frekvence (např. 3× za týden)",
+        "L_WEEKLY_FREQUENCY": "Splnění za týden"
       },
       "S": {
         "GOAL_REACHED_1": "Dnes jste dosáhli svého cíle!",
         "GOAL_REACHED_2": "Aktuální délka série: "
+      },
+      "HABIT_TRACKER": {
+        "ADD_HABIT": "Přidat nový návyk",
+        "DISABLED_HABITS": "Deaktivované návyky",
+        "NEXT_WEEK": "Příští týden",
+        "PREV_WEEK": "Předchozí týden",
+        "TODAY": "Dnes"
       }
     },
     "SYNC": {
@@ -898,11 +955,11 @@
       },
       "D_AUTH_CODE": {
         "FOLLOW_LINK": "Otevřete prosím následující odkaz a zkopírujte autentifikační kód do pole níže.",
-        "FOLLOW_LINK_MOBILE": "Klepněte prosím na tlačítko níže pro autorizaci. Budete automaticky přesměrováni zpět do aplikace.",
+        "FOLLOW_LINK_MOBILE": "Klepněte na tlačítko níže pro autorizaci. Budete automaticky přesměrováni zpět do aplikace.",
         "GET_AUTH_CODE": "Získat autentifikační kód",
         "L_AUTH_CODE": "Zadat autentifikační kód",
         "TITLE": "Přihlášení: {{provider}}",
-        "WAITING_FOR_AUTH": "Čekání na autentifikaci..."
+        "WAITING_FOR_AUTH": "Čekání na ověření..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Další informace",
@@ -936,8 +993,10 @@
         "BTN_OVER_WRITE_REMOTE": "Změnit a přepsat vzdálená data",
         "CHANGE_PW_AND_DECRYPT": "Změnit a zkusit dešifrovat",
         "P1": "Vaše vzdálená data jsou šifrovaná a dešifrování selhalo. Zadejte prosím správné heslo!",
-        "P2": "Nebo můžete změnit heslo, což přepíše všechna vzdálená data.",
-        "PASSWORD": "Heslo"
+        "PASSWORD": "Heslo",
+        "P2_FORGOT_PW": "Pokud jste <strong>zapomněli heslo</strong>, zadejte správné heslo a klikněte na \"Znovu zkusit dešifrování\".",
+        "P3_PW_CHANGED": "Pokud jste <strong>změnili heslo na jiném zařízení</strong>, zadejte nové heslo a klikněte na \"Přepsat vzdálené\". Tím se vaše lokální data nahrají na server.",
+        "TITLE": "Dešifrování selhalo"
       },
       "D_ENTER_PASSWORD": {
         "TITLE": "Vyžadováno šifrovací heslo",
@@ -956,12 +1015,21 @@
       },
       "D_SYNC_IMPORT_CONFLICT": {
         "TITLE": "Zjištěn konflikt synchronizace",
-        "MESSAGE": "Vaše lokální data byla importována/obnovena, ale server obsahuje {{filteredOpCount}} změn z jiných zařízení.",
-        "EXPLANATION": "Tyto změny byly provedeny bez znalosti vašeho importu a nelze je automaticky sloučit.",
         "IMPORT_DATE": "Datum importu",
-        "FILTERED_CHANGES": "Filtrované změny",
+        "FILTERED_CHANGES": "Dotčené změny",
         "USE_LOCAL": "Použít moje data",
-        "USE_REMOTE": "Použít data ze serveru"
+        "USE_REMOTE": "Použít data serveru",
+        "MSG_INCOMING": "Vaše data byla na jiném zařízení kompletně nahrazena. Máte {{filteredOpCount}} lokálních změn, které se nemusí zachovat.",
+        "MSG_INCOMING_NO_OPS": "Vaše data byla na jiném zařízení kompletně nahrazena. Toto zařízení se synchronizuje s novým stavem.",
+        "MSG_LOCAL_FILTERS": "Vaše lokální data byla importována/obnovena, ale server má {{filteredOpCount}} změn z jiných zařízení, které nelze automaticky sloučit.",
+        "REASON_BACKUP_RESTORE": "Důvod: Na jiném zařízení byla obnovena záloha.",
+        "REASON_FILE_IMPORT": "Důvod: Na jiném zařízení byl importován datový soubor.",
+        "REASON_FORCE_UPLOAD": "Důvod: Jiné zařízení vynutilo nahrání svých lokálních dat.",
+        "REASON_PASSWORD_CHANGED": "Důvod: Šifrovací heslo bylo změněno na jiném zařízení.",
+        "REASON_REPAIR": "Důvod: Byla provedena automatická oprava dat.",
+        "REASON_SERVER_MIGRATION": "Důvod: Data byla migrována na nový synchronizační server.",
+        "REASON_UNKNOWN": "Důvod: Bylo provedeno kompletní nahrazení stavu.",
+        "RECOMMEND_SERVER": "Doporučeno: Přijměte data serveru pro udržení synchronizace s druhým zařízením."
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
         "MESSAGE": "Máte {{count}} nesynchronizovaných lokálních změn, které budou nahrazeny vzdálenými daty. Chcete pokračovat?",
@@ -973,12 +1041,13 @@
         "BTN_FORCE_UPLOAD": "Vynutit nahrání lokálních dat",
         "P1": "Vzdálená synchronizační data jsou nekonzistentní!",
         "P2": "Ovlivněný model:",
-        "T1": "Poslední synchronizace byla neúplná!",
-        "T2": "Vaše archivní data nebyla během poslední synchronizace správně nahrána:",
         "T3": "Máte 2 možnosti:",
         "T4": "1. Jděte na své druhé zařízení a dokončete synchronizaci tam.",
         "T5": "2. Nebo můžete přepsat vzdálená data svými lokálními. Všechny vzdálené změny budou ztraceny!",
-        "T6": "Doporučujeme vytvořit zálohu dat, která přepisujete!!!"
+        "T6": "Doporučujeme vytvořit zálohu dat, která přepisujete!!!",
+        "BTN_FORCE_DOWNLOAD": "Vynutit stažení ze serveru",
+        "INCOHERENT_P1": "Datum vašich vzdálených dat je z budoucnosti",
+        "INCOHERENT_P2": "Měli byste zkontrolovat čas nastavený na vašich systémech!"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Uložit a povolit synchronizaci",
@@ -992,22 +1061,29 @@
       },
       "D_RESTORE": {
         "TITLE": "Obnovit z historie",
-        "LOADING": "Načítání bodů obnovy...",
-        "NO_POINTS": "Nejsou k dispozici žádné body obnovy. Body obnovy se vytvářejí při synchronizaci nebo importu dat.",
-        "INTRO": "Vyberte bod v čase, do kterého chcete data obnovit:",
-        "WARNING": "Tímto nahradíte VEŠKERÁ svá aktuální data vybranou zálohou. Tuto akci nelze vrátit zpět!",
+        "LOADING": "Načítání bodů obnovení...",
+        "NO_POINTS": "Žádné body obnovení nejsou k dispozici. Body obnovení se vytvářejí při synchronizaci nebo importu dat.",
+        "INTRO": "Vyberte časový bod pro obnovení vašich dat:",
+        "WARNING": "Toto nahradí VŠECHNA vaše aktuální data vybranou zálohou. Tuto akci nelze vrátit zpět!",
         "BTN_RESTORE": "Obnovit",
-        "TYPE_SYNC_IMPORT": "Úplný import synchronizace",
+        "TYPE_SYNC_IMPORT": "Kompletní import synchronizace",
         "TYPE_BACKUP_IMPORT": "Obnovení zálohy",
         "TYPE_REPAIR": "Automatická oprava",
         "CONFIRM_TITLE": "Potvrdit obnovení",
-        "CONFIRM_MSG": "Opravdu chcete obnovit data k <strong>{{timestamp}}</strong>?<br><br>Tímto <strong>zcela nahradíte</strong> všechna svá aktuální data a akci <strong>nebude možné vrátit zpět</strong>.",
-        "ERROR_LOADING": "Nepodařilo se načíst body obnovy",
-        "ERROR_RESTORE": "Nepodařilo se obnovit data"
+        "CONFIRM_MSG": "Jste si naprosto jisti, že chcete obnovit stav k <strong>{{timestamp}}</strong>?<br><br>Toto <strong>kompletně nahradí</strong> všechna vaše aktuální data a <strong>nelze to vrátit zpět</strong>.",
+        "ERROR_LOADING": "Načtení bodů obnovení selhalo",
+        "ERROR_RESTORE": "Obnovení dat selhalo"
       },
       "FORM": {
         "DROPBOX": {
-          "L_ACCESS_TOKEN": "Přístupový token (vygenerovaný z autorizačního kódu)"
+          "L_ACCESS_TOKEN": "Přístupový token (vygenerovaný z ověřovacího kódu)",
+          "AUTH_SUCCESS": "Ověření Dropbox úspěšné! Přihlašovací údaje uloženy.",
+          "BTN_AUTHENTICATE": "Ověřit pomocí Dropbox",
+          "BTN_REAUTHENTICATE": "Znovu ověřit Dropbox",
+          "INFO_TEXT": "Ověření Dropbox používá OAuth. Klikněte na tlačítko níže pro ověření pomocí vašeho Dropbox účtu.",
+          "REAUTH_SUCCESS": "Opakované ověření Dropbox úspěšné! Přihlašovací údaje aktualizovány.",
+          "STATUS_CONFIGURED": "Dropbox je nakonfigurován a připraven k synchronizaci",
+          "STATUS_NOT_CONFIGURED": "Nenakonfigurováno — ověřte se pro aktivaci synchronizace"
         },
         "GOOGLE": {
           "L_SYNC_FILE_NAME": "Název synchronizačního souboru"
@@ -1065,7 +1141,13 @@
           "ENABLE_ENCRYPTION_SUCCESS": "Šifrování bylo úspěšně zapnuto",
           "ENABLE_ENCRYPTION_NOT_READY": "Synchronizace není povolena nebo nakonfigurována.",
           "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Tato funkce je dostupná pouze pro SuperSync.",
-          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Nejprve prosím zadejte šifrovací heslo."
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Nejprve prosím zadejte šifrovací heslo.",
+          "ENCRYPTION_ENCOURAGED": "Šifrování je vyžadováno pro SuperSync. Aktivujte šifrování pro ochranu vašich dat.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync šifruje vaše data heslem před odesláním ze zařízení</strong>, čímž je zneužití nebo únik vašich soukromých dat téměř nemožný.",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "Deaktivovat SuperSync",
+          "SETUP_ENCRYPTION_BTN": "Nastavit heslo",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Používejte stejné heslo na všech zařízeních. Zapomenuté heslo lze resetovat přepsáním vzdálených dat.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Nastavit heslo"
         },
         "IMPORT_ENCRYPTION_WARNING": {
           "TITLE": "Nastavení šifrování se změní",
@@ -1089,7 +1171,7 @@
         "L_ENCRYPTION_NOTES": "DŮLEŽITÉ POZNÁMKY: Před příští synchronizací budete muset nastavit stejné heslo i na svých ostatních zařízeních, aby vše fungovalo. Vyberte prosím bezpečné heslo. Vezměte prosím na vědomí, že pokud toto heslo zapomenete, NEBUDETE mít ke svým datům přístup! Obnova není možná, protože klíč máte pouze vy. Šifrování bude pravděpodobně dostatečně silné, aby odradilo většinu útoků, ale neexistuje žádná záruka.",
         "L_ENCRYPTION_PASSWORD": "Šifrovací heslo (NEZAPOMEŇTE JEJ!)",
         "L_SYNC_INTERVAL": "Interval synchronizace",
-        "L_MANUAL_SYNC_ONLY": "Pouze ruční synchronizace (vypnout automatickou synchronizaci)",
+        "L_MANUAL_SYNC_ONLY": "Pouze ruční synchronizace (deaktivovat automatickou synchronizaci)",
         "L_SYNC_PROVIDER": "Poskytovatel synchronizace",
         "PASSWORD_SET_INFO": "🔒 Šifrovací heslo je nastaveno.",
         "BTN_CHANGE_PASSWORD": "Změnit heslo",
@@ -1155,7 +1237,7 @@
         "DIALOG_RESULT_ERROR": "Při zpracování dialogu synchronizace došlo k chybě. Zkuste to prosím znovu.",
         "CONFLICT_DIALOG_TIMEOUT": "Časový limit dialogu pro konflikt synchronizace vypršel a byl zrušen. Synchronizace bude opakována při dalším spuštění.",
         "OPERATION_PERMANENTLY_FAILED": "Některé operace synchronizace selhaly a nemohly být použity. Data mohou být neúplná.",
-        "DATA_REPAIRED": "Data byla automaticky opravena (opraveno {{count}} problémů)",
+        "DATA_REPAIRED": "Data automaticky opravena ({{count}} problémů opraveno)",
         "ERROR_CORS": "Chyba synchronizace WebDAV: Síťový požadavek selhal.\n\nTo může být způsobeno problémem CORS. Ujistěte se, že:\n• Váš server WebDAV povoluje požadavky Cross-Origin\n• URL serveru je správná a dostupná\n• Máte funkční internetové připojení",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Vzdálená data se právě zapisují",
         "ERROR_PERMISSION": "Přístup k souboru odepřen. Zkontrolujte prosím oprávnění souborového systému.",
@@ -1188,28 +1270,39 @@
         "VERSION_TOO_OLD": "Verze vaší aplikace je příliš stará pro synchronizovaná data. Proveďte prosím aktualizaci!",
         "VERSION_UNSUPPORTED": "Nelze synchronizovat: data vyžadují novější verzi aplikace. Proveďte prosím aktualizaci.",
         "NEWER_VERSION_AVAILABLE": "Některé změny pocházejí z novější verze aplikace. Zvažte aktualizaci pro plnou kompatibilitu.",
-        "FRESH_CLIENT_SYNC_CANCELLED": "Počáteční synchronizace byla zrušena. Vzdálená data nebyla použita.",
-        "LOCAL_DATA_REPLACE_CANCELLED": "Synchronizace byla zrušena. Vaše lokální data byla zachována.",
-        "RESTORE_SUCCESS": "Data byla úspěšně obnovena",
-        "RESTORE_ERROR": "Nepodařilo se obnovit data",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Počáteční synchronizace zrušena. Vzdálená data nebyla aplikována.",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Synchronizace zrušena. Vaše lokální data byla zachována.",
+        "RESTORE_SUCCESS": "Data úspěšně obnovena",
+        "RESTORE_ERROR": "Obnovení dat selhalo",
         "TIMEOUT_ERROR": "Časový limit synchronizační operace vypršel. {{suggestion}}",
         "PARTIAL_APPLY_FAILURE": "Některé synchronizační operace se nepodařilo použít. Data byla validována.",
         "REPLAY_LOCAL_OPS_FAILED": "Po importu se nepodařilo znovu provést lokální operace. Některé nedávné změny mohou být ztraceny. Data byla validována.",
-        "ARCHIVE_OPERATION_FAILED": "Archivační operace selhala. Některé kroky čištění nemusely být dokončeny.",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "Konflikty synchronizace automaticky vyřešeny: {{localWins}} lokálních vítězství, {{remoteWins}} vzdálených vítězství",
-        "LOCAL_CHANGES_DISCARDED": "{{count}} lokálních změn bylo zahozeno – položky byly smazány na jiném zařízení",
-        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} neuložených lokálních změn bylo zahozeno – synchronizace stáhla novější data",
+        "ARCHIVE_OPERATION_FAILED": "Operace archivace selhala. Některé čištění nemuselo být dokončeno.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Konflikty synchronizace automaticky vyřešeny: {{localWins}} lokální(ch) výher, {{remoteWins}} vzdálených výher",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} lokální(ch) změn(y) zahozeno — položky byly smazány na jiném zařízení",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} neuložená(ých) lokální(ch) změn(y) zahozeno — synchronizace stáhla novější data",
         "FINISH_DAY_SYNC_ERROR": "Chyba synchronizace při dokončování dne. Zkuste to prosím znovu.",
-        "SERVER_MIGRATION_VALIDATION_FAILED": "Nepodařilo se migrovat data na server – validace lokálních dat selhala. Zkuste prosím importovat zálohu."
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Nepodařilo se migrovat data na server – validace lokálních dat selhala. Zkuste prosím importovat zálohu.",
+        "AUTH_SETUP_FAILED": "Nastavení ověření selhalo. Pokud používáte webovou aplikaci, ujistěte se, že k ní přistupujete přes HTTPS. Jinak zkuste stabilní verzi nebo nahlaste problém.",
+        "AUTH_TOKEN_REJECTED": "Synchronizační token byl odmítnut serverem: {{reason}}. Získejte prosím nový token.",
+        "CHANGE_PASSWORD_FAILED": "Změna hesla selhala: {{message}}",
+        "DISABLE_ENCRYPTION_FAILED": "Deaktivace šifrování selhala: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Aktivace šifrování selhala: {{message}}",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Šifrování je vyžadováno pro SuperSync. Nastavte prosím šifrovací heslo pro pokračování synchronizace.",
+        "INVALID_AUTH_CODE": "Autorizační kód byl odmítnut. Zkuste ověření znovu a ujistěte se, že kód kopírujete přesně.",
+        "LOCK_TIMEOUT_ERROR": "Synchronizace vypršela při čekání na dokončení předchozí operace. Zkuste to prosím znovu.",
+        "OVERWRITE_SERVER_FAILED": "Přepsání dat serveru selhalo: {{message}}",
+        "MIGRATION_FAILED": "Některá synchronizační data nemohla být migrována a byla přeskočena. To může značit poškození dat nebo chybu.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "Synchronizace sledovala {{originalSize}} zařízení/prohlížečů, překročila limit {{maxSize}}. Neaktivní záznamy zařízení byly odstraněny. Zvažte reset synchronizace, pokud máte problémy."
       },
       "D_DATA_REPAIRED": {
         "TITLE": "Oprava dat provedena",
-        "MSG": "Vaše data vyžadovala automatickou opravu (opraveno {{count}} problémů). To by se normálně nemělo stávat. Pokud se to opakuje, nahlaste to prosím.",
+        "MSG": "Vaše data vyžadovala automatickou opravu ({{count}} problémů opraveno). To by se normálně nemělo stávat. Pokud se to opakuje, nahlaste to.",
         "UNKNOWN_ERROR": "Neznámá chyba synchronizace: {{err}}"
       },
       "D_DATA_REPAIR_CONFIRM": {
         "TITLE": "Zjištěno poškození dat",
-        "MSG": "Zdá se, že jsou vaše data poškozena. Chcete se pokusit o automatickou opravu? To může vést k mírné ztrátě dat."
+        "MSG": "Vaše data se zdají být poškozená. Chcete zkusit automatickou opravu? To může vést k menší ztrátě dat."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Vymazat vše",
@@ -1238,6 +1331,12 @@
         "TOOLTIP_DELETE": "Smazat tuto zálohu",
         "TOOLTIP_REFRESH": "Obnovit seznam záloh",
         "TOOLTIP_RESTORE": "Obnovit tuto zálohu (nahradí všechna aktuální data)"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "Nahrát lokální data",
+        "MESSAGE": "Tento synchronizační server již obsahuje data. Chcete nahrát svá lokální data pro sloučení? Pokud přeskočíte, některé lokální změny se nemusí synchronizovat.",
+        "SKIP": "Přeskočit",
+        "TITLE": "Server již obsahuje data"
       }
     },
     "TAG": {
@@ -1259,7 +1358,7 @@
         "TITLE": "Základní nastavení"
       },
       "S": {
-        "ARCHIVE_CLEANUP_FAILED": "Nepodařilo se vyčistit archivovaná data pro smazanou značku",
+        "ARCHIVE_CLEANUP_FAILED": "Čištění archivovaných dat pro smazaný štítek selhalo",
         "UPDATED": "Nastavení značky bylo aktualizováno"
       },
       "TTL": {
@@ -1290,16 +1389,22 @@
         "ADD_SUB_TASK": "Přidat podúkol",
         "ATTACHMENTS": "Přílohy ({{nr}})",
         "DUE": "Plánováno na",
-        "FROM_PARENT": "(z nadřazeného úkolu)",
+        "FROM_PARENT": "(z nadřazeného)",
         "LOCAL_ATTACHMENTS": "Místní přílohy",
         "NOTES": "Popis",
         "PARENT": "Nadřazený úkol",
-        "REMINDER": "Připomenutí",
+        "REMINDER": "Připomínka",
         "REPEAT": "Opakovat",
         "SCHEDULE_TASK": "Naplánovat úkol",
         "SUB_TASKS": "Podúkoly ({{nr}})",
         "TIME": "Čas",
-        "TITLE_PLACEHOLDER": "Zadejte název"
+        "TITLE_PLACEHOLDER": "Zadejte název",
+        "COMPLETED_ON": "Dokončeno",
+        "CREATED_ON": "Vytvořeno",
+        "DEADLINE": "Termín",
+        "DEADLINE_DUE_BY": "Splatné do",
+        "DEADLINE_OVERDUE": "Po termínu!",
+        "ISSUE": "Odkaz na úkol"
       },
       "ADD_TASK_BAR": {
         "ADD_EXISTING_TASK": "Přidat existující úkol „{{taskTitle}}“",
@@ -1311,8 +1416,8 @@
         "SEARCH_INFO_TEXT": "Hledat a přidat problémy a úkoly z archivu a jiných projektů",
         "TAGS_BUTTON": "Značky",
         "TODAY": "Dnes",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Přepnout přidávání úkolů na začátek nebo konec seznamu",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Přepnout přidávání úkolů do zásobníku / dnešního seznamu",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Přepnout přidání úkolu na začátek / konec seznamu",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Přepnout přidání úkolu do backlogu / dnešního seznamu",
         "TOMORROW": "Zítra",
         "TOOLTIP_ADD_TASK": "Přidat úkol",
         "TOOLTIP_ADD_TO_BACKLOG": "Přidat do zásobníku",
@@ -1323,11 +1428,15 @@
         "TOOLTIP_CLEAR_ESTIMATE": "Vymazat odhad",
         "TOOLTIP_CLEAR_TAGS": "Vymazat značky",
         "TOOLTIP_DISABLE_SEARCH": "Vypnout vyhledávání problémů (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Zapnout vyhledávání problémů (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "Zapnout vyhledávání problémů (Ctrl+2)",
+        "TOOLTIP_CLEAR_REPEAT": "Vymazat nastavení opakování",
+        "REPEAT_BUTTON": "Opakovat"
       },
       "B": {
         "ADD_HALF_HOUR": "Přidat 1/2 hodiny",
-        "ESTIMATE_EXCEEDED": "Časový odhad překročen pro „{{title}}“"
+        "ESTIMATE_EXCEEDED": "Časový odhad překročen pro „{{title}}“",
+        "ADD_ALL_TO_TODAY": "Přidat vše na dnešek",
+        "DEADLINES_TODAY": "{{count}} úkol(ů) s termínem dnes dosud neplánovaných"
       },
       "CMP": {
         "ADD_SUB_TASK": "Přidat podúkol",
@@ -1358,7 +1467,10 @@
         "TRACK_TIME": "Začít sledovat čas",
         "TRACK_TIME_STOP": "Pozastavit sledování času",
         "UNSCHEDULE_TASK": "Zrušit naplánování úkolu",
-        "UPDATE_ISSUE_DATA": "Aktualizovat údaje o problému"
+        "UPDATE_ISSUE_DATA": "Aktualizovat údaje o problému",
+        "EDIT_DEADLINE": "Upravit termín",
+        "REMOVE_DEADLINE": "Odebrat termín",
+        "SET_DEADLINE": "Nastavit termín"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Chcete vytvořit novou značku {{tagsTxt}}?",
@@ -1369,7 +1481,7 @@
         "OK": "Vytvořit značky"
       },
       "D_CONFIRM_DELETE": {
-        "MSG": "Opravdu chcete smazat úkol „{{title}}“?",
+        "MSG": "Opravdu chcete smazat úkol \"{{title}}\"?",
         "OK": "Smazat"
       },
       "D_REMINDER_VIEW": {
@@ -1388,7 +1500,13 @@
         "SNOOZE_ALL": "Odložit vše",
         "START": "Začít",
         "UNSCHEDULE": "Zrušit naplánování",
-        "UNSCHEDULE_ALL": "Zrušit všechna naplánování"
+        "UNSCHEDULE_ALL": "Zrušit všechna naplánování",
+        "CLEAR_ALL_REMINDERS": "Vymazat všechny připomínky",
+        "CLEAR_REMINDER": "Vymazat připomínku",
+        "DEADLINE_REMINDER": "Připomínka termínu",
+        "DEADLINE_SECTION": "Termíny",
+        "DUE_SECTION": "Naplánované",
+        "TASK_REMINDERS": "Připomínky úkolů"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Naplánovat na příští měsíc",
@@ -1444,7 +1562,9 @@
         "REMINDER_DELETED": "Smazáno připomenutí k úkolu",
         "REMINDER_UPDATED": "Aktualizováno připomenutí k úkolu „{{title}}“",
         "TASK_ALREADY_EXISTS": "Úkol <strong>{{title}}</strong> již existuje",
-        "TASK_CREATED": "Vytvořen úkol „{{taskTitle}}“"
+        "TASK_CREATED": "Vytvořen úkol „{{taskTitle}}“",
+        "DEADLINE_REMOVED": "Termín odebrán",
+        "DEADLINE_SET": "Termín nastaven na {{date}}"
       },
       "SELECT_OR_CREATE": "Vyberte nebo vytvořte úkol",
       "SUMMARY_TABLE": {
@@ -1453,6 +1573,23 @@
         "SPENT_TOTAL": "Celkový čas",
         "TASK": "Úkol",
         "TOGGLE_DONE": "označit/nic označit jako hotové"
+      },
+      "D_DEADLINE": {
+        "ADD_TIME": "Přidat čas",
+        "QA_NEXT_MONTH": "Příští měsíc",
+        "QA_NEXT_WEEK": "Příští týden",
+        "QA_TODAY": "Dnes",
+        "QA_TOMORROW": "Zítra",
+        "REMIND_AT": "Připomenout v",
+        "REMOVE_DEADLINE": "Odebrat termín",
+        "RO_1H": "1 hodinu předem",
+        "RO_5M": "5 minut předem",
+        "RO_10M": "10 minut předem",
+        "RO_15M": "15 minut předem",
+        "RO_30M": "30 minut předem",
+        "RO_AT_DEADLINE": "V termínu",
+        "RO_NEVER": "Nikdy",
+        "SET_DEADLINE": "Nastavit termín"
       }
     },
     "TASK_REPEAT": {
@@ -1499,11 +1636,11 @@
         "ADD": "Přidat nastavení opakování úkolu",
         "ADVANCED_CFG": "Pokročilá konfigurace",
         "EDIT": "Upravit nastavení opakování úkolu",
-        "HELP1": "Opakující úkoly jsou určeny pro každodenní úkoly, např.: „Organizace“, „Denní schůzka“, „Kódový přezkum“, „Kontrola e-mailů“ nebo podobné úkoly, které se pravděpodobně budou opakovat znovu a znovu.",
-        "HELP2": "Jakmile je opakující úkol nakonfigurován, bude znovu vytvářen každý vybraný den, jakmile otevřete svůj projekt, a automaticky bude označen jako dokončený na konci dne. Budou zpracovávány jako různé instance. Můžete tak volně přidávat podúkoly atd.",
-        "HELP3": "Úkoly importované z Jiry nebo Git Issues nemohou být opakovány.",
-        "HELP4": "Poznámka k poli pořadí: Odkazuje na pořadí vytváření opakujících se úkolů. Platí pouze pro opakující se úkoly vytvořené ve stejný čas. Nižší hodnota znamená, že úkol bude nahoře v seznamu, vyšší číslo znamená, že bude níže. Hodnota větší než 0 znamená, že položky jsou vytvářeny na konci běžných úkolů.",
-        "TAG_LABEL": "Značky k přidání"
+        "TAG_LABEL": "Značky k přidání",
+        "HEATMAP_LABEL": "Aktivita",
+        "TIME_SPENT_THIS_MONTH": "Tento měsíc",
+        "TIME_SPENT_THIS_WEEK": "Tento týden",
+        "TIME_SPENT_TOTAL": "Celkem"
       },
       "F": {
         "C_DAY": "Den",
@@ -1518,8 +1655,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "Při zapnutí budou podúkoly z nejnovější instance úkolu znovu vytvořeny s opakujícím se úkolem",
         "MONDAY": "Pondělí",
         "NOTES": "Výchozí poznámky",
-        "ORDER": "Pořadí",
-        "ORDER_DESCRIPTION": "Pořadí vytváření opakovatelných úkolů. Ovlivňuje pouze opakovatelné úkoly vytvořené ve stejný čas. Nižší hodnota znamená, že úkol bude vytvořen výše v seznamu, vyšší číslo znamená, že bude níže. Hodnota větší než 0 znamená, že položky jsou vytvářeny na konci běžných úkolů.",
         "QUICK_SETTING": "Konfigurace opakování",
         "Q_CUSTOM": "Vlastní konfigurace opakování",
         "Q_DAILY": "Každý den",
@@ -1542,8 +1677,13 @@
         "THURSDAY": "Čtvrtek",
         "TITLE": "Název úkolu",
         "TUESDAY": "Úterý",
-        "WEDNESDAY": "Středa"
-      }
+        "WEDNESDAY": "Středa",
+        "Q_MONTHLY_FIRST_DAY": "Každý měsíc první den",
+        "Q_MONTHLY_LAST_DAY": "Každý měsíc poslední den",
+        "SKIP_OVERDUE": "Přeskočit zpožděné výskyty",
+        "SKIP_OVERDUE_DESCRIPTION": "Pokud je povoleno a aplikace se otevře po vynechaném naplánovaném výskytu (např. týdenní úkol, kde dnes není naplánovaný den), vynechaný výskyt bude tiše přeskočen místo vytvoření jako zpožděný úkol"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "Nepodařilo se otevřít dialog konfigurace opakování. Můžete to nakonfigurovat z menu úkolu."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1573,9 +1713,9 @@
         "SORT_CREATION_DATE": "Datum vytvoření",
         "SORT_DEFAULT": "Výchozí",
         "SORT_NAME": "Název",
-        "SORT_PERMANENT": "Řadit (trvale)",
+        "SAVE_SORT": "Uložit jako výchozí",
         "SORT_SCHEDULED_DATE": "Naplánované datum",
-        "SORT_TEMPORARY": "Řadit (dočasně)",
+        "SORT": "Řadit",
         "TIME_10MIN": "> 10 minut",
         "TIME_1HOUR": "> 1 hodina",
         "TIME_2HOUR": "> 2 hodiny",
@@ -1620,15 +1760,15 @@
       },
       "D_ARCHIVE_COMPRESS": {
         "TITLE": "Komprimovat archiv",
-        "LOADING": "Analyzování archivu...",
-        "INTRO": "Tímto zkomprimujete své archivované úkoly odstraněním starých dat. Tato operace se synchronizuje napříč všemi zařízeními.",
-        "SUBTASKS_TO_DELETE": "Podúkoly ke smazání (čas sloučen s nadřazeným úkolem)",
-        "NOTES_TO_CLEAR": "Poznámky k úkolům k vymazání (starší než 1 rok)",
-        "ISSUE_FIELDS_TO_CLEAR": "Pole problémů k vymazání",
+        "LOADING": "Analýza archivu...",
+        "INTRO": "Toto komprimuje vaše archivované úkoly odstraněním starých dat. Tato operace se synchronizuje na všech zařízeních.",
+        "SUBTASKS_TO_DELETE": "Podúkoly ke smazání (čas sloučen s nadřazeným)",
+        "NOTES_TO_CLEAR": "Poznámky úkolů k vyčištění (starší než 1 rok)",
+        "ISSUE_FIELDS_TO_CLEAR": "Pole úkolů k vyčištění",
         "ESTIMATED_SAVINGS": "Odhadovaná úspora místa",
         "WARNING": "Tuto operaci nelze vrátit zpět. Před pokračováním se ujistěte, že máte zálohu!",
         "CONFIRM_TITLE": "Potvrdit kompresi archivu",
-        "CONFIRM_MSG": "Opravdu chcete komprimovat archiv? Tímto trvale smažete výše uvedená data!",
+        "CONFIRM_MSG": "Opravdu chcete komprimovat archiv? Toto trvale smaže data uvedená výše!",
         "BTN_COMPRESS": "Komprimovat archiv",
         "NO_DATA": "Žádná data ke kompresi. Váš archiv je již optimalizován."
       }
@@ -1642,7 +1782,8 @@
         "TASKS": "Úkoly",
         "TOTAL_TIME": "Celkově strávený čas:",
         "WEEK_NR": "Týden {{nr}}",
-        "WORKED": "Odpracováno"
+        "WORKED": "Odpracováno",
+        "VIEW_TASK_DETAILS": "Zobrazit detaily úkolu"
       },
       "D_CONFIRM_RESTORE": "Jste si jisti, že chcete úkol <strong>„{{title}}“</strong> vrátit na seznam úkolů na dnešní den?",
       "D_EXPORT_TITLE": "Export pracovního záznamu {{start}}–{{end}}",
@@ -1689,6 +1830,38 @@
         "NO_DATA": "Tento týden zatím nejsou žádné úkoly.",
         "TITLE": "Název"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Obrázek úspěšně vložen",
+      "SIZE_EXCEEDED": "Velikost obrázku ({{actualSize}}) překračuje maximální povolenou velikost ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Kvóta úložiště překročena. Uvolněte prostor nebo zmenšete obrázky."
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "Základní URL Nextcloud",
+        "FILTER_BY_ASSIGNEE": "Importovat pouze karty přiřazené mně",
+        "IS_TRANSITION_ISSUES_ENABLED": "Synchronizovat stav dokončení a název zpět do Nextcloud Deck",
+        "PASSWORD": "Vaše heslo aplikace Nextcloud",
+        "POLL_INTERVAL_MINUTES": "Interval dotazování (minuty)",
+        "TITLE_TEMPLATE": "Šablona názvu úkolu",
+        "TITLE_TEMPLATE_DESCRIPTION": "Proměnné: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Příklad: [{BOARD}: {COLUMN}] {CARD_TITLE}. Ponechte prázdné pro pouze název karty.",
+        "USERNAME": "Vaše uživatelské jméno Nextcloud"
+      },
+      "FORM_SECTION": {
+        "HELP": "Nakonfigurujte integraci Nextcloud Deck pro import karet jako úkolů. Pro ověření použijte heslo aplikace."
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "Přiřazení uživatelé",
+        "DECK_DESCRIPTION": "Popis Deck",
+        "LABELS": "Štítky",
+        "STACK": "Zásobník"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Nástěnka nenalezena",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Karta \"{{issueId}}\" zřejmě byla ze serveru smazána.",
+        "ERR_CREDENTIALS_MISSING": "Nejprve zadejte URL Nextcloud, uživatelské jméno a heslo.",
+        "ERR_LOAD_BOARDS": "Načtení nástěnek Deck selhalo. Zkontrolujte přihlašovací údaje."
+      }
     }
   },
   "FILE_IMEX": {
@@ -1720,7 +1893,13 @@
     "DETECTED_LEGACY": "Zjištěna starší data. Provedeme migraci za vás!",
     "E_MIGRATION_FAILED": "Migrace selhala s chybou:",
     "E_RESTART_FAILED": "Automatický restart selhal. Restartujte aplikaci ručně!",
-    "SUCCESS": "Migrace dokončena! Restartování aplikace..."
+    "SUCCESS": "Migrace dokončena! Restartování aplikace...",
+    "DIALOG_MESSAGE": "Aktualizujeme způsob ukládání dat pro lepší spolehlivost synchronizace. Záloha bude automaticky stažena.",
+    "DIALOG_TITLE": "Migrace vašich dat",
+    "STATUS_BACKUP": "Vytváření zálohy dat...",
+    "STATUS_COMPLETE": "Migrace dokončena!",
+    "STATUS_MIGRATING": "Migrace dat...",
+    "STATUS_PREPARING": "Příprava migrace..."
   },
   "G": {
     "ADD": "Přidat",
@@ -1733,7 +1912,7 @@
     "CONTINUE": "Pokračovat",
     "DELETE": "Smazat",
     "DISMISS": "Zamítnout",
-    "DONT_SHOW_AGAIN": "Znovu nezobrazovat",
+    "DONT_SHOW_AGAIN": "Nezobrazovat znovu",
     "DO_IT": "Udělej to!",
     "DUPLICATE": "Duplikovat",
     "DURATION_DESCRIPTION": "např. „5h 23m“, což odpovídá 5 hodinám a 23 minutám",
@@ -1758,10 +1937,14 @@
     "SUBMIT": "Odeslat",
     "TITLE": "Název",
     "TODAY_TAG_TITLE": "Dnes",
-    "TRACKING_INTERVAL_DESCRIPTION": "Sledovat čas v tomto intervalu v milisekundách. Možná jej budete chtít zvýšit, abyste snížili počet zápisů na disk. Viz GitHub issue #2355.",
     "UNDO": "Vrátit",
     "WITHOUT_PROJECT": "Bez projektu",
-    "YESTERDAY": "Včera"
+    "YESTERDAY": "Včera",
+    "PASSWORD_STRENGTH_FAIR": "Přijatelné",
+    "PASSWORD_STRENGTH_STRONG": "Silné",
+    "PASSWORD_STRENGTH_WEAK": "Slabé",
+    "PROCESSING": "Zpracování",
+    "TOGGLE_PASSWORD_VISIBILITY": "Zobrazit/skrýt heslo"
   },
   "GCF": {
     "APP_FEATURES": {
@@ -1778,7 +1961,10 @@
       "TIME_TRACKING": "Stopky sledování času",
       "TITLE": "Funkce aplikace",
       "USER_PROFILES": "Uživatelské profily (Experimentální)",
-      "USER_PROFILES_HINT": "Umožňuje vytvářet a přepínat mezi různými uživatelskými profily, z nichž každý má samostatné nastavení, úkoly a konfigurace synchronizace. Po povolení se v pravém horním rohu zobrazí tlačítko správy profilů. Poznámka: Zakázáním této funkce se skryje uživatelské rozhraní, ale data vašeho profilu zůstanou zachována. (Experimentální funkce, bez záruk. Ujistěte se, že máte zálohu!)"
+      "USER_PROFILES_HINT": "Umožňuje vytvářet a přepínat mezi různými uživatelskými profily, z nichž každý má samostatné nastavení, úkoly a konfigurace synchronizace. Po povolení se v pravém horním rohu zobrazí tlačítko správy profilů. Poznámka: Zakázáním této funkce se skryje uživatelské rozhraní, ale data vašeho profilu zůstanou zachována. (Experimentální funkce, bez záruk. Ujistěte se, že máte zálohu!)",
+      "SEARCH": "Hledání",
+      "USER_PROFILES_WARNING": "<strong>Experimentální funkce:</strong> Tato funkce je stále ve vývoji a může být v budoucí aktualizaci odstraněna nebo výrazně změněna. Používejte na vlastní riziko a ujistěte se, že máte zálohy dat.",
+      "HABITS": "Návyky"
     },
     "AUTO_BACKUPS": {
       "HELP": "Automaticky ukládat všechna data do složky vaší aplikace, abyste je měli k dispozici v případě problémů.",
@@ -1919,7 +2105,11 @@
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文(简体)",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "TIME_LOCALE_RO_MD": "Rumunština (Moldavsko): 24hodinový, DD.MM.RRRR",
+      "TIME_LOCALE_RO_RO": "Rumunština: 24hodinový, DD.MM.RRRR"
     },
     "MISC": {
       "DARK_MODE": "Tmavý režim",
@@ -1969,10 +2159,13 @@
       "DEFAULT_TASK_REMIND_OPTION": "Výchozí možnost připomenutí vybraná při vytváření úkolů",
       "DISABLE_REMINDERS": "Zakázat všechna připomenutí",
       "IS_COUNTDOWN_BANNER_ENABLED": "Zobrazit banner s odpočtem před termínem připomenutí",
-      "IS_FOCUS_WINDOW": "Zaměřit okno aplikace při spuštění připomenutí",
+      "IS_FOCUS_WINDOW": "Zaostřit okno aplikace při spuštění připomínky",
       "TITLE": "Připomenutí",
-      "USE_ALARM_STYLE_REMINDERS": "Použít upozornění ve stylu budíku (pouze Android)",
-      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Pokud je povoleno, připomenutí používají hlasitější zvuky budíku a vtíravější oznámení. Doporučeno pro kritická připomenutí."
+      "USE_ALARM_STYLE_REMINDERS": "Používat oznámení ve stylu budíku (pouze Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Pokud je povoleno, připomínky používají hlasitější zvuky budíku a výraznější oznámení. Doporučeno pro důležité připomínky.",
+      "DUE_DATE_NOTIFICATION_HOUR": "Hodina zobrazení upozornění na termín (0-23)",
+      "HELP": "<p><strong>Důležité:</strong> Připomínky používají <strong>lokální oznámení</strong>, ne push oznámení. To znamená, že aplikace musí být na vašem zařízení alespoň jednou otevřena, aby mohly být připomínky naplánovány. Připomínky nastavené na jiném zařízení se zobrazí až po synchronizaci aplikace na cílovém zařízení.</p><p>Na <strong>iOS</strong> se ujistěte, že jsou povolena oznámení pro Super Productivity v nastavení zařízení v \"Nastavení\" > \"Oznámení\".</p>",
+      "NOTIFY_ON_DUE_DATE": "Zobrazit oznámení pro úkoly s termínem dnes"
     },
     "SCHEDULE": {
       "HELP": "Funkce časové osy by vám měla poskytnout rychlý přehled o tom, jak se plánované úkoly vyvíjejí v čase. Najdete ji v levém bočním menu pod <a href='#/schedule'>‘Časová osa’</a>.",
@@ -1992,7 +2185,11 @@
       "IS_ENABLE_DUE": "Povolit krátkou syntaxi pro naplánovaný čas (@<čas>)",
       "IS_ENABLE_PROJECT": "Povolit krátkou syntaxi pro projekt (+<projekt>)",
       "IS_ENABLE_TAG": "Povolit krátkou syntaxi pro štítek (#<štítek>)",
-      "TITLE": "Krátká syntaxe"
+      "TITLE": "Krátká syntaxe",
+      "URL_BEHAVIOR_EXTRACT": "Extrahovat URL do příloh",
+      "URL_BEHAVIOR_KEEP": "Ponechat URL v názvu úkolu",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "Ponechat URL v názvu a přidat do příloh",
+      "URL_BEHAVIOR_LABEL": "Chování URL při přidávání úkolů"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Zvuk připomenutí přestávky",
@@ -2027,9 +2224,38 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "Zaměřit okno aplikace, když je připomenutí aktivní (pouze desktop)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Upozornit, když se zobrazí připomenutí sledování času",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Zobrazit připomenutí sledování v mobilní aplikaci",
-      "L_TRACKING_INTERVAL": "Interval sledování času (EXPERIMENTÁLNÍ)",
       "L_TRACKING_REMINDER_MIN_TIME": "Doba čekání před zobrazením banneru připomenutí sledování",
       "TITLE": "Sledování času"
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Smazat obrázek",
+      "DELETE_ALL": "Smazat vše",
+      "DELETE_ALL_SUCCESS": "Všechny obrázky ze schránky úspěšně smazány",
+      "DELETE_SUCCESS": "Obrázek ze schránky úspěšně smazán",
+      "ERROR_DELETING": "Smazání obrázku ze schránky selhalo",
+      "ERROR_DELETING_ALL": "Smazání všech obrázků ze schránky selhalo",
+      "ERROR_LOADING": "Načtení obrázků ze schránky selhalo",
+      "HELP": "Spravujte obrázky vložené ze schránky. V prohlížečové verzi jsou obrázky uloženy v IndexedDB. V desktopové verzi nakonfigurujte cestu k úložišti.",
+      "LOADING": "Načítání obrázků...",
+      "MANAGE_DESCRIPTION": "Zobrazit a smazat obrázky uložené z vkládání v Markdown polích",
+      "MANAGE_TITLE": "Spravovat uložené obrázky",
+      "MANAGER_TITLE": "Obrázky ze schránky",
+      "NO_IMAGES": "Žádné uložené obrázky ze schránky",
+      "OPEN_MANAGER": "Spravovat obrázky",
+      "PATH_DESCRIPTION": "Nakonfigurujte, kde jsou obrázky ze schránky uloženy na vašem souborovém systému (ponechte prázdné pro výchozí umístění)",
+      "PATH_LABEL": "Cesta úložiště obrázků",
+      "PATH_PLACEHOLDER": "Ponechte prázdné pro výchozí umístění",
+      "PATH_TITLE": "Umístění úložiště",
+      "SELECT_PATH": "Vybrat složku",
+      "SELECT_PATH_TITLE": "Vybrat složku pro obrázky ze schránky",
+      "SORT_BY": "Řadit podle",
+      "SORT_LARGEST": "Největší první",
+      "SORT_NEWEST": "Nejnovější první",
+      "SORT_OLDEST": "Nejstarší první",
+      "SORT_SMALLEST": "Nejmenší první",
+      "TITLE": "Obrázky ze schránky",
+      "TOTAL_IMAGES": "Celkem obrázků",
+      "TOTAL_SIZE": "Celková velikost"
     }
   },
   "GLOBAL": {
@@ -2075,11 +2301,12 @@
     "PERSISTENCE_DISALLOWED": "Data nebudou trvale ukládána. Buďte si vědomi, že to může vést k ztrátě dat!!",
     "PERSISTENCE_ERROR": "Chyba při žádosti o trvalé ukládání dat: {{err}}",
     "RUNNING_X": "Spouští se „{{str}}“.",
-    "SAVE_BLOCKED_DURING_SYNC": "Probíhá synchronizace – některé změny může být nutné znovu uložit",
+    "SAVE_BLOCKED_DURING_SYNC": "Probíhá synchronizace — některé změny může být potřeba znovu uložit",
     "SHARE_FAILED": "Sdílení selhalo. Prosím zkopírujte ručně.",
     "SHARE_FAILED_FALLBACK": "Sdílení selhalo. Místo toho zkopírováno do schránky.",
     "SHARE_UNAVAILABLE_FALLBACK": "Zkopírováno do schránky.",
-    "UNPLANNED_TODAY_TASKS": "Zrušeno plánování všech úkolů z dneška"
+    "UNPLANNED_TODAY_TASKS": "Zrušeno plánování všech úkolů z dneška",
+    "OPEN_SETTINGS_ERROR": "Nepodařilo se otevřít nastavení"
   },
   "GPB": {
     "ASSETS": "Načítání prostředků...",
@@ -2087,7 +2314,6 @@
     "DBX_GEN_TOKEN": "Dropbox: Generování tokenu...",
     "DBX_META": "Dropbox: Získání meta informací o souboru...",
     "DBX_UPLOAD": "Dropbox: Nahrávání souboru...",
-    "GITHUB_LOAD_ISSUE": "GitHub: Načítání dat úkolu...",
     "JIRA_LOAD_ISSUE": "Jira: Načítání dat úkolu...",
     "SYNC": "Synchronizace dat...",
     "UNKNOWN": "Načítání vzdálených dat",
@@ -2121,9 +2347,9 @@
     "METRICS": "Metriky",
     "NO_TASKS_TO_TRACK": "Chcete-li začít sledovat čas, nejprve přidejte úkol",
     "NOTES": "Poznámky",
-    "NOTES_PANEL_INFO": "Poznámky lze zobrazit pouze z časové osy a z běžných pohledů na seznam úkolů.",
-    "NO_PROJECT_INFO": "Nejsou k dispozici žádné projekty. Nový projekt můžete vytvořit kliknutím na tlačítko 'Vytvořit projekt'.",
-    "NO_TAG_INFO": "Momentálně nejsou k dispozici žádné štítky. Štítky můžete přidat zadáním `#nazevStitku` při přidávání nebo úpravě úkolů.",
+    "NOTES_PANEL_INFO": "Poznámky lze zobrazit pouze v zobrazení rozvrhu a běžného seznamu úkolů.",
+    "NO_PROJECT_INFO": "Žádné projekty k dispozici. Nový projekt vytvoříte kliknutím na tlačítko 'Vytvořit projekt'.",
+    "NO_TAG_INFO": "Zatím nejsou žádné štítky. Štítky můžete přidat zadáním `#názevŠtítku` při přidávání nebo úpravě úkolů.",
     "PLANNER": "Plánovač",
     "PROCRASTINATE": "Prokrastinovat",
     "PROJECT_MENU": "Menu projektu",
@@ -2138,23 +2364,55 @@
     "TAGS": "Štítky",
     "TASKS": "Úkoly",
     "TASK_LIST": "Seznam úkolů",
-    "TOGGLE_SHOW_BOOKMARKS": "Zobrazit/Skrýt záložky",
+    "TOGGLE_SHOW_BOOKMARKS": "Zobrazit/skrýt záložky",
     "TOGGLE_SHOW_ISSUE_PANEL": "Zobrazit/Skrýt panel poskytovatele problémů",
     "TOGGLE_SHOW_NOTES": "Zobrazit/Skrýt poznámky k projektu",
     "TOGGLE_TRACK_TIME": "Spustit/Zastavit sledování času",
     "TRIGGER_SYNC": "Spustit synchronizaci ručně",
     "UNPLAN_ALL_TASKS": "Zrušit plánování všech úkolů",
-    "WORKLOG": "Pracovní záznam"
+    "WORKLOG": "Pracovní záznam",
+    "DISABLE_FEATURE": "Deaktivovat funkci",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" deaktivována. Znovu aktivujte v nastavení funkcí aplikace.",
+    "SHOW_TRACKED_TASK": "Zobrazit sledovaný úkol",
+    "OPEN_APP_FEATURES": "Otevřít nastavení",
+    "HABITS": "Návyky"
   },
   "PRE_MIGRATION": {
     "DIALOG_TITLE": "Aktualizace systému",
-    "DIALOG_MESSAGE": "Aktualizujeme způsob ukládání vašich dat pro lepší spolehlivost synchronizace.<br><br>Záloha vašich dat bude stažena automaticky. Tuto zálohu můžete v případě potřeby použít k obnovení dat (Soubor > Import)."
+    "DIALOG_MESSAGE": "Aktualizujeme způsob ukládání dat pro lepší spolehlivost synchronizace.<br><br>Záloha vašich dat bude automaticky stažena. Tuto zálohu můžete použít k obnovení dat v případě potřeby (Soubor > Import)."
+  },
+  "ONBOARDING": {
+    "TITLE": "Jak chcete používat Super Productivity?",
+    "SUBTITLE": "Vyberte si nastavení, které odpovídá vašemu pracovnímu postupu. Můžete to kdykoliv změnit v Nastavení.",
+    "PRIVACY_HINT": "Vaše data zůstávají bezpečně na vašem zařízení. Na server se nic neodesílá.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Jednoduchý seznam úkolů",
+        "DESCRIPTION": "Přehledný správce úkolů s projekty, štítky a poznámkami. Bez zbytečností."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Sledování času",
+        "DESCRIPTION": "Sledujte, kolik času zabírají úkoly. Skvělé pro fakturaci hodin nebo pochopení, kam váš čas odchází."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Sada produktivity",
+        "DESCRIPTION": "Plánujte svůj den, budujte návyky, soustřeďte se a sledujte čas. Vše na jednom místě."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klikněte na + pro přidání prvního úkolu",
+      "CREATE_TASK_TOUCH": "Klepněte na + pro přidání prvního úkolu",
+      "EXPLORE": "Klidně klikejte a prozkoumávejte! Nápovědu najdete v postranním panelu.",
+      "EXPLORE_TOUCH": "Klidně prozkoumávejte! Nápovědu najdete v menu.",
+      "OR_PRESS": "nebo stiskněte",
+      "SKIP_ARIA": "Zavřít nápovědu"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Přidat úkoly z dneška",
     "ARCHIVED_TASKS": {
-      "PLURAL": "{{count}} dokončených nadřazených úkolů bylo archivováno",
-      "SINGULAR": "{{count}} dokončený nadřazený úkol byl archivován"
+      "ONE": "{{count}} dokončený nadřazený úkol byl archivován",
+      "OTHER": "{{count}} dokončených nadřazených úkolů bylo archivováno"
     },
     "BREAK_LABEL": "Přestávky (číslo / čas)",
     "CELEBRATE": "Najděte si chvíli na <i>oslavu!</i>",
@@ -2210,7 +2468,6 @@
     "ERROR": "Chyba",
     "ERROR_LOADING_PLUGIN": "Chyba při načítání pluginu",
     "EXPERIMENTAL_WARNING": "Systém pluginů je v experimentální fázi a měl by být používán s extrémní opatrností!",
-    "EXPERIMENTAL_WARNING_TITLE": "Experimentální funkce – Bezpečnostní varování",
     "FAILED_TO_CLEAR_CACHE": "Nepodařilo se vymazat mezipaměť pluginu",
     "FAILED_TO_EXECUTE_SCRIPT": "Nepodařilo se spustit skript Node.js",
     "FAILED_TO_EXTRACT_ZIP": "Nepodařilo se extrahovat ZIP soubor pluginu",
@@ -2224,7 +2481,7 @@
     "GRANT_PERMISSION": "Udělit oprávnění",
     "HOOKS": "Hooky",
     "ID": "ID:",
-    "INDEX_HTML_NOT_LOADED": "index.html pluginu nebyl načten",
+    "INDEX_HTML_NOT_LOADED": "Plugin index.html nebyl načten",
     "INSTALLING": "Instalace...",
     "INSTALL_PLUGIN": "Nainstalovat plugin",
     "INSTALL_WARNING": "Před instalací pluginu se ujistěte, že důvěřujete jeho zdroji a rozumíte oprávněním, která vyžaduje.",
@@ -2273,7 +2530,9 @@
     "UNABLE_TO_PERSIST_DATA": "Data nelze uložit do úložiště pluginu",
     "UNKNOWN_ERROR": "Došlo k neznámé chybě",
     "UPLOAD_PLUGIN_INSTRUCTION": "Nahrajte soubor ZIP pluginu pro jeho instalaci:",
-    "VALIDATION_FAILED": "Validace selhala"
+    "VALIDATION_FAILED": "Validace selhala",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Tento plugin poskytuje integraci úkolů, která je aktuálně používána ({{count}} poskytovatel(ů) úkolů). Deaktivace dočasně přeruší synchronizaci úkolů pro tyto poskytovatele, dokud nebude plugin znovu aktivován. Opravdu chcete deaktivovat \"{{name}}\"?",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Načtení seznamu komunitních pluginů selhalo"
   },
   "PM": {
     "TITLE": "Projektová metrika",
@@ -2310,15 +2569,15 @@
     "REPEATED_TASKS": "Opakující se úkoly",
     "SCHEDULED_TASKS": "Naplánované úkoly",
     "SCHEDULED_TASKS_WITH_TIME": "Naplánované úkoly s časem zahájení",
-    "START_TASK": "Spustit úkol a odstranit připomenutí"
+    "START_TASK": "Spustit úkol a odstranit připomínku",
+    "NO_DEADLINES": "V současnosti nejsou žádné úkoly s termínem. Termín můžete nastavit přes kontextové menu úkolu nebo panel podrobností.",
+    "TASKS_WITH_DEADLINES": "Úkoly s termínem"
   },
-  "Share Chart": "Sdílet graf",
-  "Share Heatmap": "Sdílet teplotní mapu",
   "THEMES": {
     "SELECT_THEME": "Vybrat motiv",
     "amber": "jantarová",
     "blue": "modrá",
-    "blue-grey": "modrošedá",
+    "blue-grey": "modro-šedá",
     "cyan": "azurová",
     "deep-orange": "tmavě oranžová",
     "deep-purple": "tmavě fialová",
@@ -2331,7 +2590,7 @@
     "purple": "fialová",
     "teal": "tyrkysová",
     "yellow": "žlutá",
-    "SCHEDULED_TASKS_WITH_TIME": "Naplánované úkoly s časem zahájení"
+    "SCHEDULED_TASKS_WITH_TIME": "Naplánované úkoly s časem začátku"
   },
   "USER_PROFILES": {
     "ACTIVE": "Aktivní",
@@ -2379,6 +2638,12 @@
     "TODAY_REMAINING": "Dnes zbývá:",
     "WITHOUT_BREAK": "Bez přestávky:",
     "WORKING_TODAY": "Pracujete dnes:",
-    "WORKING_TODAY_ARCHIVED": "Čas odpracovaný dnes na archivovaných úkolech"
+    "WORKING_TODAY_ARCHIVED": "Čas odpracovaný dnes na archivovaných úkolech",
+    "RECURRING_TASKS": "Opakující se úkoly"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Oprávnění přesného budíku zamítnuto. Připomínky mohou být zpožděny až o 15 minut.",
+    "TASK_ALREADY_COMPLETED": "Úkol již dokončen",
+    "TASK_MARKED_DONE": "Úkol označen jako dokončený"
   }
 }

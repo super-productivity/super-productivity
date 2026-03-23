@@ -38,7 +38,6 @@ $this-border-radius: 8px;
   justify-content: space-between;
   cursor: pointer;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
 
   .spacer {
     width: calc(var(--s) * 1.5);
@@ -149,6 +148,14 @@ $this-border-radius: 8px;
   }
 }
 
+.task-title-clickable {
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .simple-counter-items {
   display: flex;
   flex-wrap: wrap;
@@ -176,6 +183,6 @@ $this-border-radius: 8px;
 
   mat-icon {
     font-size: 18px;
-    margin-right: 2px;
+    margin-right: var(--s-quarter);
   }
 }

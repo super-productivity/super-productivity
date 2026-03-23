@@ -158,9 +158,13 @@ export class NotePage extends BasePage {
    * Deletes a note via menu button
    */
   async deleteNote(note: Locator): Promise<void> {
+    // Hover to reveal the menu button
+    await note.hover();
+    await this.page.waitForTimeout(200);
+
     // Find the menu button (more_vert) on the note
     const menuBtn = note.locator('button:has(mat-icon:has-text("more_vert"))');
-    const menuBtnVisible = await menuBtn.isVisible({ timeout: 1000 }).catch(() => false);
+    const menuBtnVisible = await menuBtn.isVisible({ timeout: 3000 }).catch(() => false);
 
     if (menuBtnVisible) {
       // Click menu button to open menu
@@ -180,14 +184,17 @@ export class NotePage extends BasePage {
     // Handle confirmation dialog if it appears
     const confirmDialog = this.page.locator('dialog-confirm');
     const confirmVisible = await confirmDialog
-      .isVisible({ timeout: 2000 })
+      .isVisible({ timeout: 3000 })
       .catch(() => false);
     if (confirmVisible) {
-      await confirmDialog.locator('button[color="warn"]').click();
+      const warnBtn = confirmDialog.locator('button[color="warn"]');
+      await warnBtn.waitFor({ state: 'visible', timeout: 3000 });
+      await warnBtn.click();
+      await confirmDialog.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
     }
 
-    // Wait for note to be removed
-    await this.page.waitForTimeout(500);
+    // Wait for note to be removed from DOM
+    await note.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
   }
 
   /**

@@ -4,12 +4,12 @@
   display: flex;
   justify-content: space-around;
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--s3);
 
   .label {
     font-size: 0.875rem;
     opacity: 0.8;
-    margin-bottom: 4px;
+    margin-bottom: var(--s-half);
   }
 
   .value {
@@ -18,7 +18,7 @@
 }
 
 .chart-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--s4);
 
   .chart-wrapper {
     width: 100%;
@@ -49,7 +49,7 @@
 .edit-section {
   .date-label {
     font-weight: 600;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
   }
 
   mat-form-field {
@@ -58,7 +58,7 @@
 }
 
 .settings-btn {
-  margin-top: 24px;
+  margin-top: var(--s3);
   display: flex;
   justify-content: flex-end;
 }

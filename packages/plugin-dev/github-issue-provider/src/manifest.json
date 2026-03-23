@@ -1,0 +1,55 @@
+{
+  "id": "github-issue-provider",
+  "name": "GitHub Issues",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "13.0.0",
+  "description": "GitHub issue provider plugin",
+  "author": "Super Productivity",
+  "type": "issueProvider",
+  "icon": "icon.svg",
+  "iFrame": false,
+  "permissions": [],
+  "hooks": [],
+  "i18n": {
+    "languages": [
+      "en",
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "fa",
+      "fi",
+      "fr",
+      "hr",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "nb",
+      "nl",
+      "pl",
+      "pt",
+      "pt-br",
+      "ro",
+      "ro-md",
+      "ru",
+      "sk",
+      "sv",
+      "tr",
+      "uk",
+      "zh",
+      "zh-tw"
+    ]
+  },
+  "issueProvider": {
+    "pollIntervalMs": 600000,
+    "icon": "github",
+    "humanReadableName": "GitHub",
+    "issueProviderKey": "GITHUB",
+    "issueStrings": {
+      "singular": "Issue",
+      "plural": "Issues"
+    }
+  }
+}

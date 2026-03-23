@@ -33,6 +33,9 @@ npm run docker:shell
 # Top 20 users by storage (MOST USEFUL for your current investigation)
 ./scripts/docker-monitor.sh usage
 
+# Active user counts and engagement metrics
+./scripts/docker-monitor.sh active-users
+
 # Recent operations
 ./scripts/docker-monitor.sh ops --tail 100
 
@@ -120,6 +123,7 @@ If you prefer not to use the wrapper script:
 # Basic monitoring (uses compiled JS)
 docker exec -it supersync-server node dist/scripts/monitor.js usage
 docker exec -it supersync-server node dist/scripts/monitor.js stats
+docker exec -it supersync-server node dist/scripts/monitor.js active-users
 docker exec -it supersync-server node dist/scripts/monitor.js ops --user 29
 
 # Analysis (requires tsx - auto-installed on first use)
@@ -237,6 +241,7 @@ Run a command with `--save` first:
 ## Performance Notes
 
 - **Basic commands** (stats, usage, ops): < 5 seconds
+- **Active users**: 5-15 seconds (multiple aggregate queries)
 - **Quick suite**: ~30 seconds
 - **Full suite**: 1-3 minutes depending on data size
 - **User deep-dive**: 5-15 seconds per user

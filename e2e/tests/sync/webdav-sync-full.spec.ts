@@ -8,7 +8,6 @@ import {
   createSyncFolder,
   waitForSyncComplete,
   generateSyncFolderName,
-  dismissTourIfVisible,
 } from '../../utils/sync-helpers';
 
 test.describe('@webdav WebDAV Sync Full Flow', () => {
@@ -168,7 +167,6 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
       // Reload to ensure UI reflects synced state
       await pageB.reload();
       await waitForAppReady(pageB);
-      await dismissTourIfVisible(pageB);
       await workViewPageB.waitForTaskList();
 
       taskCountOnB = await pageB.locator('task').count();
@@ -213,7 +211,6 @@ test.describe('@webdav WebDAV Sync Full Flow', () => {
     // Reload to ensure UI reflects synced state
     await pageB2.reload();
     await waitForAppReady(pageB2);
-    await dismissTourIfVisible(pageB2);
     await workViewPageB2.waitForTaskList();
 
     // Final assertion - should have 2 tasks now

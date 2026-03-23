@@ -98,7 +98,7 @@ describe('ValidateStateService', () => {
   // This test requires a complete AppDataComplete object that passes Typia validation
   // first before cross-model validation runs. The empty state used here fails Typia
   // validation before reaching cross-model checks, so crossModelError is undefined.
-  xit('should handle isRelatedModelDataValid throwing errors gracefully', () => {
+  xit('should handle isRelatedModelDataValid throwing errors gracefully', async () => {
     // Force non-production environment to ensure devError throws
     const originalEnvProduction = environment.production;
     (environment as any).production = false;
@@ -133,7 +133,7 @@ describe('ValidateStateService', () => {
       };
 
       // Should not throw
-      const result = service.validateState(state);
+      const result = await service.validateState(state);
 
       expect(result.isValid).toBeFalse();
       expect(result.crossModelError).toBeDefined();
@@ -145,7 +145,7 @@ describe('ValidateStateService', () => {
     }
   });
 
-  it('should repair orphaned menu tree nodes when user confirms', () => {
+  it('should repair orphaned menu tree nodes when user confirms', async () => {
     // Force non-production environment to ensure devError throws
     const originalEnvProduction = environment.production;
     (environment as any).production = false;
@@ -178,7 +178,7 @@ describe('ValidateStateService', () => {
       };
 
       // Should repair
-      const result = service.validateAndRepair(state);
+      const result = await service.validateAndRepair(state);
 
       expect(result.isValid).toBeTrue();
       expect(result.wasRepaired).toBeTrue();
@@ -191,7 +191,7 @@ describe('ValidateStateService', () => {
     }
   });
 
-  it('should not repair when user declines confirmation', () => {
+  it('should not repair when user declines confirmation', async () => {
     // Force non-production environment to ensure devError throws
     const originalEnvProduction = environment.production;
     (environment as any).production = false;
@@ -224,7 +224,7 @@ describe('ValidateStateService', () => {
       };
 
       // Should not repair when user declines
-      const result = service.validateAndRepair(state);
+      const result = await service.validateAndRepair(state);
 
       expect(result.isValid).toBeFalse();
       expect(result.wasRepaired).toBeFalse();
@@ -250,7 +250,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(validState as any);
 
       // Mock validateAndRepair to return valid state (empty state doesn't pass full Typia validation)
-      spyOn(service, 'validateAndRepair').and.returnValue({
+      spyOn(service, 'validateAndRepair').and.resolveTo({
         isValid: true,
         wasRepaired: false,
       });
@@ -290,7 +290,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
 
       // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.returnValue({
+      spyOn(service, 'validateAndRepair').and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState: state,
@@ -312,7 +312,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
 
       // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.returnValue({
+      spyOn(service, 'validateAndRepair').and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState: state,
@@ -375,7 +375,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
 
       // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.returnValue({
+      spyOn(service, 'validateAndRepair').and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState: state,
@@ -394,7 +394,7 @@ describe('ValidateStateService', () => {
       mockStateSnapshotService.getStateSnapshot.and.returnValue(state as any);
 
       // Mock validateAndRepair to return repaired state
-      spyOn(service, 'validateAndRepair').and.returnValue({
+      spyOn(service, 'validateAndRepair').and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState: state,

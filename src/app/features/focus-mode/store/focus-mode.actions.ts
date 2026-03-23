@@ -21,7 +21,7 @@ export const startFocusPreparation = createAction('[FocusMode] Start Preparation
 
 export const startFocusSession = createAction(
   '[FocusMode] Start Session',
-  props<{ duration?: number; isManualSessionCompletion?: boolean }>(),
+  props<{ duration?: number }>(),
 );
 
 export const navigateToMainScreen = createAction('[FocusMode] Navigate To Main Screen');
@@ -79,4 +79,9 @@ export const completeTask = createAction('[FocusMode] Complete Task');
 export const adjustRemainingTime = createAction(
   '[FocusMode] Adjust Remaining Time',
   props<{ amountMs: number }>(),
+);
+
+export const setOvertimeEnabled = createAction(
+  '[FocusMode] Set Overtime Enabled',
+  props<{ enabled: boolean }>(),
 );

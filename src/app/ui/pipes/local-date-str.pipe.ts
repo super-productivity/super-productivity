@@ -2,7 +2,7 @@ import { inject, Pipe, PipeTransform } from '@angular/core';
 import { dateStrToUtcDate } from '../../util/date-str-to-utc-date';
 import { TranslateService } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { formatMonthDay } from '../../util/format-month-day.util';
 import { DateTimeFormatService } from '../../core/date-time-format/date-time-format.service';
 
@@ -18,7 +18,7 @@ export class LocalDateStrPipe implements PipeTransform {
     value: string | null | undefined,
     todayStr: string = getDbDateStr(),
   ): string | null {
-    if (typeof value !== 'string') {
+    if (typeof value !== 'string' || !isDBDateStr(value)) {
       return null;
     }
     if (value === todayStr) {

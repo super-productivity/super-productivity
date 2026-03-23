@@ -4,13 +4,15 @@ import { ConfigFormSection, SyncConfig } from '../global-config.model';
 import { SyncProviderId } from '../../../op-log/sync-providers/provider.const';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { IS_ELECTRON } from '../../../app.constants';
-import { fileSyncDroid, fileSyncElectron } from '../../../op-log/model/model-config';
+import {
+  loadSyncProviders,
+  LocalFileSyncPicker,
+} from '../../../op-log/sync-providers/sync-providers.factory';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 import { SUPER_SYNC_DEFAULT_BASE_URL } from '../../../op-log/sync-providers/super-sync/super-sync.model';
 import {
   closeAllDialogs,
-  openDisableEncryptionDialog,
   openDisableEncryptionDialogForFileBased,
   openEnableEncryptionDialog,
   openEnableEncryptionDialogForFileBased,
@@ -36,8 +38,9 @@ const createWebdavFormFields = (options: {
           {
             type: 'tpl',
             templateOptions: {
-              tag: 'p',
+              tag: 'div',
               text: options.infoText,
+              class: 'sync-warning',
             },
           },
         ]
@@ -151,8 +154,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         {
           type: 'tpl',
           templateOptions: {
-            tag: 'p',
+            tag: 'div',
             text: T.F.SYNC.FORM.LOCAL_FILE.INFO_TEXT,
+            class: 'sync-warning',
           },
         },
         {
@@ -160,8 +164,12 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'syncFolderPath',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
-            onClick: () => {
-              return fileSyncElectron.pickDirectory();
+            onClick: async () => {
+              const providers = await loadSyncProviders();
+              const localProvider = providers.find(
+                (p) => p.id === SyncProviderId.LocalFile,
+              );
+              return (localProvider as LocalFileSyncPicker | undefined)?.pickDirectory();
             },
           },
           expressions: {
@@ -181,8 +189,9 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         {
           type: 'tpl',
           templateOptions: {
-            tag: 'p',
+            tag: 'div',
             text: T.F.SYNC.FORM.LOCAL_FILE.INFO_TEXT,
+            class: 'sync-warning',
           },
         },
         {
@@ -190,9 +199,13 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
           key: 'safFolderUri',
           templateOptions: {
             text: T.F.SYNC.FORM.LOCAL_FILE.L_SYNC_FOLDER_PATH,
-            onClick: () => {
+            onClick: async () => {
               // NOTE: this actually sets the value in the model
-              return fileSyncDroid.setupSaf();
+              const providers = await loadSyncProviders();
+              const localProvider = providers.find(
+                (p) => p.id === SyncProviderId.LocalFile,
+              );
+              return (localProvider as LocalFileSyncPicker | undefined)?.setupSaf();
             },
           },
           expressions: {
@@ -301,14 +314,16 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             onClick: async (field: FormlyFieldConfig) => {
               const isSuperSync =
                 field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync;
-              const result = isSuperSync
-                ? await openEncryptionPasswordChangeDialog()
-                : await openEncryptionPasswordChangeDialogForFileBased();
-              return result?.success ? true : false;
+              await (isSuperSync
+                ? openEncryptionPasswordChangeDialog()
+                : openEncryptionPasswordChangeDialogForFileBased());
             },
           },
         },
+        // Hide disable encryption for SuperSync — encryption is mandatory
         {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
           type: 'btn',
           className: 'e2e-disable-encryption-btn',
           templateOptions: {
@@ -316,25 +331,18 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             btnType: 'primary',
             btnStyle: 'stroked',
             onClick: async (field: FormlyFieldConfig) => {
-              const isSuperSync =
-                field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync;
-              const result = isSuperSync
-                ? await openDisableEncryptionDialog()
-                : await openDisableEncryptionDialogForFileBased();
+              const result = await openDisableEncryptionDialogForFileBased();
               if (
                 result?.success &&
                 result?.encryptionRemoved &&
                 field?.parent?.parent?.model
               ) {
                 field.parent.parent.model.isEncryptionEnabled = false;
-                // Also clear encryptKey if we're in file-based provider context
-                if (!isSuperSync && field?.parent?.parent?.model) {
+                if (field?.parent?.parent?.model) {
                   field.parent.parent.model.encryptKey = '';
                 }
-                // Close the parent settings dialog
                 closeAllDialogs();
               }
-              return result?.success ? true : false;
             },
           },
         },
@@ -398,6 +406,10 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               window.open(baseUrl, '_blank');
             },
           },
+          expressionProperties: {
+            'templateOptions.btnStyle': (model: any) =>
+              model.accessToken ? 'stroked' : undefined,
+          },
         },
         {
           hideExpression: (m, v, field) =>
@@ -415,6 +427,41 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
               field?.parent?.parent?.model?.syncProvider === SyncProviderId.SuperSync,
           },
         },
+        // Encryption encouragement warning (shown when encryption is NOT enabled)
+        // Hidden during initial setup (encryption dialog opens automatically after save)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
+            field?.parent?.parent?.model?._isInitialSetup === true,
+          type: 'tpl',
+          templateOptions: {
+            tag: 'p',
+            class: 'encryption-warning',
+            text: T.F.SYNC.FORM.SUPER_SYNC.ENCRYPTION_ENCOURAGED,
+          },
+        },
+        // Enable encryption button for SuperSync (shown when encryption is disabled)
+        // Hidden during initial setup (encryption dialog opens automatically after save)
+        {
+          hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
+            field?.parent?.parent?.model?.syncProvider !== SyncProviderId.SuperSync ||
+            (field?.model?.isEncryptionEnabled ?? false) ||
+            field?.parent?.parent?.model?._isInitialSetup === true,
+          type: 'btn',
+          className: 'e2e-enable-encryption-btn',
+          templateOptions: {
+            text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
+            btnType: 'primary',
+            onClick: async (field: FormlyFieldConfig) => {
+              const result = await openEnableEncryptionDialog();
+              if (result?.success && field?.model) {
+                field.model.isEncryptionEnabled = true;
+              }
+              return result?.success ? true : false;
+            },
+          },
+        },
         // Advanced settings for SuperSync
         {
           type: 'collapsible',
@@ -422,27 +469,6 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
             field?.parent?.parent?.model.syncProvider !== SyncProviderId.SuperSync,
           props: { label: T.G.ADVANCED_CFG },
           fieldGroup: [
-            // Enable encryption button for SuperSync (shown when encryption is disabled)
-            {
-              // Note: Using (m, v, field) signature for btn type fields to ensure
-              // hideExpression works correctly with the btn component.
-              // Using ?? false to ensure button stays hidden if field is undefined.
-              hideExpression: (m: any, v: any, field?: FormlyFieldConfig) =>
-                field?.model?.isEncryptionEnabled ?? false,
-              type: 'btn',
-              className: 'e2e-enable-encryption-btn',
-              templateOptions: {
-                text: T.F.SYNC.FORM.SUPER_SYNC.BTN_ENABLE_ENCRYPTION,
-                btnType: 'primary',
-                onClick: async (field: FormlyFieldConfig) => {
-                  const result = await openEnableEncryptionDialog();
-                  if (result?.success && field?.model) {
-                    field.model.isEncryptionEnabled = true;
-                  }
-                  return result?.success ? true : false;
-                },
-              },
-            },
             // Server URL
             {
               key: 'baseUrl',

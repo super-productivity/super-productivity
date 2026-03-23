@@ -21,6 +21,32 @@
     <mat-icon>calendar_month</mat-icon>
     <span>iCal Other</span>
   </button>
+  @for (provider of pluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="openSetupDialog(provider.registeredKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
+  @for (provider of disabledPluginCalendarProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>calendar_month</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
 </div>
 
 <h4>Setup Issue Provider</h4>
@@ -39,13 +65,6 @@
   >
     <mat-icon svgIcon="trello"></mat-icon>
     <span>Trello</span>
-  </button>
-  <button
-    mat-raised-button
-    (click)="openSetupDialog('GITHUB')"
-  >
-    <mat-icon svgIcon="github"></mat-icon>
-    <span>GitHub</span>
   </button>
   <button
     mat-raised-button
@@ -91,13 +110,6 @@
   </button>
   <button
     mat-raised-button
-    (click)="openSetupDialog('CLICKUP')"
-  >
-    <mat-icon svgIcon="clickup"></mat-icon>
-    <span>ClickUp</span>
-  </button>
-  <button
-    mat-raised-button
     (click)="openSetupDialog('AZURE_DEVOPS')"
   >
     <mat-icon svgIcon="azure_devops"></mat-icon>
@@ -110,4 +122,30 @@
     <mat-icon svgIcon="nextcloud_deck"></mat-icon>
     <span>Nextcloud Deck</span>
   </button>
+  @for (provider of pluginProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="openSetupDialog(provider.registeredKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>extension</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
+  @for (provider of disabledPluginProviders; track provider.pluginId) {
+    <button
+      mat-raised-button
+      (click)="enablePluginAndOpenSetup(provider.pluginId, provider.issueProviderKey)"
+    >
+      @if (provider.icon && provider.icon !== 'extension') {
+        <mat-icon [svgIcon]="provider.icon"></mat-icon>
+      } @else {
+        <mat-icon>extension</mat-icon>
+      }
+      <span>{{ provider.name }}</span>
+    </button>
+  }
 </div>

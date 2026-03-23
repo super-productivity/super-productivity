@@ -50,6 +50,7 @@ import {
   selectTaskById,
   selectTaskByIdWithSubTaskData,
   selectTaskDetailTargetPanel,
+  selectTaskEntities,
   selectTaskFeatureState,
   selectTasksById,
   selectTasksByRepeatConfigId,
@@ -94,13 +95,14 @@ import { ArchiveService } from '../archive/archive.service';
 import { TaskArchiveService } from '../archive/task-archive.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
-import { getDbDateStr } from '../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../util/get-db-date-str';
 import { INBOX_PROJECT } from '../project/project.const';
 import { GlobalConfigService } from '../config/global-config.service';
 import { TaskLog } from '../../core/log';
 import { devError } from '../../util/dev-error';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
 import { TaskFocusService } from './task-focus.service';
+import { DeletedTaskIssueSidecarService } from '../issue/two-way-sync/deleted-task-issue-sidecar.service';
 
 @Injectable({
   providedIn: 'root',
@@ -116,6 +118,7 @@ export class TaskService {
   private readonly _taskArchiveService = inject(TaskArchiveService);
   private readonly _globalConfigService = inject(GlobalConfigService);
   private readonly _taskFocusService = inject(TaskFocusService);
+  private readonly _deletedTaskIssueSidecar = inject(DeletedTaskIssueSidecarService);
 
   currentTaskId$: Observable<string | null> = this._store.pipe(
     select(selectCurrentTaskId),
@@ -191,6 +194,7 @@ export class TaskService {
 
   private _lastFocusedTaskEl: HTMLElement | null = null;
   private _allTasks$: Observable<Task[]> = this._store.pipe(select(selectAllTasks));
+  private _taskEntities = this._store.selectSignal(selectTaskEntities);
 
   // Batch sync for time tracking: accumulates duration per task, syncs every 5 minutes
   private static readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -444,6 +448,22 @@ export class TaskService {
   }
 
   removeMultipleTasks(taskIds: string[]): void {
+    // Store issue metadata in the sidecar *before* dispatching, so the
+    // deleteIssueOnBulkTaskDelete$ effect can pick it up. This keeps
+    // full Task objects out of the action payload and the op-log.
+    const entities = this._taskEntities();
+    const tasks = taskIds
+      .map((id) => entities[id])
+      .filter((task): task is Task => !!task);
+    this._deletedTaskIssueSidecar.set(
+      tasks
+        .filter((t) => !!t.issueId && !!t.issueType && !!t.issueProviderId)
+        .map((t) => ({
+          issueId: t.issueId!,
+          issueType: t.issueType!,
+          issueProviderId: t.issueProviderId!,
+        })),
+    );
     this._store.dispatch(TaskSharedActions.deleteTasks({ taskIds }));
   }
 
@@ -1279,6 +1299,20 @@ export class TaskService {
 
       ...additional,
     };
+
+    // Guard against corrupted date strings (#6908)
+    if (d1.dueDay && typeof d1.dueDay === 'string' && !isDBDateStr(d1.dueDay)) {
+      d1.dueDay = undefined;
+      devError('createNewTaskWithDefaults: Invalid dueDay, clearing');
+    }
+    if (
+      d1.deadlineDay &&
+      typeof d1.deadlineDay === 'string' &&
+      !isDBDateStr(d1.deadlineDay)
+    ) {
+      d1.deadlineDay = undefined;
+      devError('createNewTaskWithDefaults: Invalid deadlineDay, clearing');
+    }
 
     if (!d1.projectId) {
       d1.projectId =

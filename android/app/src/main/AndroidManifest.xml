@@ -10,6 +10,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
   <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <application
     android:name=".App"
@@ -81,6 +82,16 @@
           android:scheme="com.super-productivity.app"
           android:host="oauth-callback" />
       </intent-filter>
+
+      <!-- OAuth callback handler for plugin authentication -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+          android:scheme="com.super-productivity.app"
+          android:host="plugin-oauth-callback" />
+      </intent-filter>
     </activity>
 
     <activity
@@ -118,24 +129,15 @@
       android:enabled="true"
       android:exported="false" />
 
-    <!-- Quick Add Widget -->
     <receiver
-      android:name=".widget.QuickAddWidgetProvider"
+      android:name=".receiver.BootReceiver"
+      android:enabled="true"
       android:exported="true"
-      android:label="@string/widget_quick_add_label">
+      android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
       <intent-filter>
-        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
       </intent-filter>
-      <meta-data
-        android:name="android.appwidget.provider"
-        android:resource="@xml/widget_quick_add_info" />
     </receiver>
 
-    <!-- Quick Add Dialog Activity -->
-    <activity
-      android:name=".widget.QuickAddActivity"
-      android:exported="false"
-      android:theme="@style/Theme.AppCompat.Light.Dialog"
-      android:excludeFromRecents="true" />
   </application>
 </manifest>

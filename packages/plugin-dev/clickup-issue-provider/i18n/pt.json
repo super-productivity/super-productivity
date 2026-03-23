@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "Chave API",
+    "API_KEY_LINK": "Obtenha a sua chave API pessoal",
+    "TEAM_IDS": "IDs de Workspace/Equipa (separados por vírgulas, vazio para todos)",
+    "USER_ID": "ID do Utilizador (para filtrar por responsável)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Índice",
+    "STATUS": "Status",
+    "PRIORITY": "Prioridade",
+    "ASSIGNEE": "Responsável",
+    "LABELS": "Etiquetas",
+    "DESCRIPTION": "Descrição"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Erro desconhecido. Verifique a sua chave API e tente novamente."
+  }
+}

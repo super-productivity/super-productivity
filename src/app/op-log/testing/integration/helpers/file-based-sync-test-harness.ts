@@ -12,7 +12,7 @@ import { SyncProviderId } from '../../../sync-providers/provider.const';
 import { EncryptAndCompressCfg } from '../../../core/types/sync.types';
 import { TestClient } from './test-client.helper';
 import { VectorClock } from '../../../core/operation.types';
-import { v4 as uuidV4 } from 'uuid';
+import { uuidv7 } from 'uuidv7';
 import { ArchiveDbAdapter } from '../../../../core/persistence/archive-db-adapter.service';
 import { StateSnapshotService } from '../../../backup/state-snapshot.service';
 
@@ -301,7 +301,7 @@ export class FileBasedSyncTestHarness {
         testClient.setVectorClock(currentClock);
 
         return {
-          id: uuidV4(),
+          id: uuidv7(),
           clientId,
           actionType,
           opType,
@@ -436,7 +436,7 @@ export const createTestSyncOperation = (
   payload: unknown,
   vectorClock: VectorClock = {},
 ): SyncOperation => ({
-  id: uuidV4(),
+  id: uuidv7(),
   clientId,
   actionType: 'TestAction',
   opType,

@@ -1,8 +1,9 @@
 # Hybrid Manifest & Snapshot Architecture for File-Based Sync
 
-**Status:** ✅ Implemented (December 2025)
+> **Status: Completed** (December 2025)
+
 **Context:** Optimizing WebDAV/Dropbox sync for the Operation Log architecture.
-**Related:** [Operation Log Architecture](./operation-log-architecture.md)
+**Related:** [Operation Log Architecture](../operation-log-architecture.md)
 
 > **Implementation Note:** This architecture is fully implemented in `OperationLogManifestService`, `OperationLogUploadService`, and `OperationLogDownloadService`. The embedded operations buffer, overflow file creation, and snapshot support are all operational.
 

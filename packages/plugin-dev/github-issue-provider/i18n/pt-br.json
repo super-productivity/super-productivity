@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "nome de usuário/nome do repositório",
+    "TOKEN": "Token de acesso",
+    "FILTER_USERNAME": "Nome de usuário (por exemplo, para filtrar alterações por você mesmo)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumo",
+    "STATE": "Status",
+    "ASSIGNEE": "Responsável",
+    "LABELS": "Etiquetas",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Descrição"
+  },
+  "FORM_HELP": "<p>Aqui você pode configurar o SuperProductivity para listar problemas abertos do GitHub para um repositório específico no painel de criação de tarefas na visualização de planejamento diário. Eles serão listados como sugestões e fornecerão um link para o problema, bem como mais informações sobre ele.</p><p> Além disso, você pode importar automaticamente todos os problemas abertos.</p><p> Para passar pelos limites de uso e acessar, você pode fornecer um token de acesso. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Mais informações sobre seus escopos podem ser encontradas aqui</a> .",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Erro ao mapear dados. O nome do seu repositório está correto?",
+    "ERR_UNKNOWN": "GitHub: Erro desconhecido {{statusCode}} {{errorMsg}}. Limite de taxa de API excedido?"
+  }
+}

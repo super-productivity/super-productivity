@@ -1,0 +1,21 @@
+.onboarding-pulse {
+  animation: onboarding-glow 2s ease-in-out infinite;
+}
+
+@keyframes onboarding-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--palette-primary-500) 40%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--palette-primary-500) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-pulse {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--palette-primary-500);
+  }
+}

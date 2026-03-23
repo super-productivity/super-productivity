@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "„korisničko ime/ime repozitorija” za git repozitorij koji želiš pratiti",
+    "TOKEN": "Token za pristup",
+    "FILTER_USERNAME": "Korisničko ime (npr. za izdvajanje vlastitih promjena)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "STATE": "Stanje",
+    "ASSIGNEE": "Odgovorna osoba",
+    "LABELS": "Etikete",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Opis"
+  },
+  "FORM_HELP": "<p>Ovdje možeš konfigurirati Super Productivity za prikaz popisa nezavršenih GitHub problema (online verzija ili instanca vlastitog histinga) za određeni projekt na ploči za stvaranje zadataka u prikazu dnevnog planiranja. U popisu će se ti problemi navesti kao prijedlozi s poveznicom na problem te s daljnjim informacija o problemu.</p> <p>Osim toga, sve neriješene probleme možeš automatski dodati u odlagalište zadataka i sinkronizirati ih.</p><p>Za zaobilaženje ograničenja upotrebe i za pristupanje, možeš zadati pristupni token. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Više informacija mogu se pronaći odvje</a>.",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Greška tijekom mapiranja podatka. Je li ime tvog repozitorija ispravno?",
+    "ERR_UNKNOWN": "GitHub: Nepoznata greška {{statusCode}} {{errorMsg}}. Je li ograničenje API stope prekoračeno?"
+  }
+}

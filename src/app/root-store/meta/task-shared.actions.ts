@@ -57,6 +57,9 @@ export const TaskSharedActions = createActionGroup({
       } satisfies PersistentActionMeta,
     }),
 
+    // Issue metadata for remote issue deletion is passed via
+    // DeletedTaskIssueSidecarService to avoid serializing full Task
+    // objects into the op-log. Only taskIds are persisted.
     deleteTasks: (taskProps: { taskIds: string[] }) => ({
       ...taskProps,
       meta: {
@@ -170,6 +173,42 @@ export const TaskSharedActions = createActionGroup({
         isPersistent: true,
         entityType: 'TASK',
         entityId: taskProps.id,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    // Task Deadlines
+    setDeadline: (taskProps: {
+      taskId: string;
+      deadlineDay?: string;
+      deadlineWithTime?: number;
+      deadlineRemindAt?: number;
+    }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    removeDeadline: (taskProps: { taskId: string }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
+        opType: OpType.Update,
+      } satisfies PersistentActionMeta,
+    }),
+
+    clearDeadlineReminder: (taskProps: { taskId: string }) => ({
+      ...taskProps,
+      meta: {
+        isPersistent: true,
+        entityType: 'TASK',
+        entityId: taskProps.taskId,
         opType: OpType.Update,
       } satisfies PersistentActionMeta,
     }),

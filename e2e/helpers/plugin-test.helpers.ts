@@ -249,7 +249,7 @@ export const waitForPluginInMenu = async (
 ): Promise<boolean> => {
   try {
     // Navigate to main view to see the menu
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
 
     // Wait for magic-side-nav to exist
     await page.waitForSelector('magic-side-nav', {

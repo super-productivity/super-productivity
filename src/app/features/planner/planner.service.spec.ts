@@ -27,6 +27,7 @@ describe('PlannerService', () => {
     timeLimit: 0,
     itemsTotal: 0,
     tasks: [],
+    deadlineTasks: [],
     noStartTimeRepeatProjections: [],
     allDayEvents: [],
     scheduledIItems: [],

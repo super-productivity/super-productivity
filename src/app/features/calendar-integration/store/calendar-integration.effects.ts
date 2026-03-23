@@ -14,12 +14,14 @@ import { selectTaskByIssueId } from '../../tasks/store/task.selectors';
 import { NavigateToTaskService } from '../../../core-ui/navigate-to-task/navigate-to-task.service';
 import { T } from '../../../t.const';
 import { isValidUrl } from '../../../util/is-valid-url';
+import { getPluralKey } from '../../../util/get-plural-key';
 import { distinctUntilChangedObject } from '../../../util/distinct-until-changed-object';
 import { selectCalendarProviders } from '../../issue/store/issue-provider.selectors';
 import { IssueProviderCalendar } from '../../issue/issue.model';
 import { IssueService } from '../../issue/issue.service';
 import { DateService } from '../../../core/date/date.service';
 import { TaskService } from '../../tasks/task.service';
+import { TranslateService, TranslateStore } from '@ngx-translate/core';
 import { Log } from '../../../core/log';
 import {
   getCalendarEventIdCandidates,
@@ -41,6 +43,8 @@ export class CalendarIntegrationEffects {
   private _navigateToTaskService = inject(NavigateToTaskService);
   private _issueService = inject(IssueService);
   private _dateService = inject(DateService);
+  private _translateService = inject(TranslateService);
+  private _translateStore = inject(TranslateStore);
 
   /**
    * Poll external calendar providers for events and auto-import them as tasks.
@@ -194,13 +198,19 @@ export class CalendarIntegrationEffects {
     this._bannerService.open({
       id: BannerId.CalendarEvent,
       ico: calProvider.icon || 'event',
-      msg: isInPast
-        ? nrOfAllBanners > 1
-          ? T.F.CALENDARS.BANNER.TXT_PAST_MULTIPLE
-          : T.F.CALENDARS.BANNER.TXT_PAST
-        : nrOfAllBanners > 1
-          ? T.F.CALENDARS.BANNER.TXT_MULTIPLE
-          : T.F.CALENDARS.BANNER.TXT,
+      msg:
+        nrOfAllBanners === 1
+          ? isInPast
+            ? T.F.CALENDARS.BANNER.TXT_PAST
+            : T.F.CALENDARS.BANNER.TXT
+          : getPluralKey(
+              this._translateService,
+              this._translateStore,
+              nrOfAllBanners - 1,
+              isInPast
+                ? 'F.CALENDARS.BANNER.TXT_PAST_MULTIPLE'
+                : 'F.CALENDARS.BANNER.TXT_MULTIPLE',
+            ),
       translateParams: {
         title: calEv.title,
         start,

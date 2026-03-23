@@ -4,13 +4,12 @@ import { isOperationSyncCapable } from '../../op-log/sync/operation-sync.util';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { SyncLog } from '../../core/log';
-import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
+import { clearSessionKeyCache } from '../../op-log/encryption/encryption';
 import { CleanSlateService } from '../../op-log/clean-slate/clean-slate.service';
 import { OperationLogUploadService } from '../../op-log/sync/operation-log-upload.service';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { isFullStateOpType } from '../../op-log/core/operation.types';
-import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 
 /**
  * Service for changing the encryption password for SuperSync.
@@ -27,10 +26,8 @@ export class EncryptionPasswordChangeService {
   private _providerManager = inject(SyncProviderManager);
   private _cleanSlateService = inject(CleanSlateService);
   private _uploadService = inject(OperationLogUploadService);
-  private _derivedKeyCache = inject(DerivedKeyCacheService);
   private _syncWrapper = inject(SyncWrapperService);
   private _opLogStore = inject(OperationLogStoreService);
-  private _wrappedProviderService = inject(WrappedProviderService);
 
   /**
    * Changes the encryption password using the clean slate approach.
@@ -97,7 +94,10 @@ export class EncryptionPasswordChangeService {
       // STEP 1: Create clean slate locally
       // This generates a new client ID, clears local ops, and creates a fresh SYNC_IMPORT
       SyncLog.normal('EncryptionPasswordChangeService: Creating clean slate...');
-      await this._cleanSlateService.createCleanSlate('ENCRYPTION_CHANGE');
+      await this._cleanSlateService.createCleanSlate(
+        'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
+      );
 
       // STEP 2: Verify the SYNC_IMPORT was stored
       // This catches any IndexedDB timing issues before we proceed
@@ -115,16 +115,14 @@ export class EncryptionPasswordChangeService {
       // STEP 3: Update config with new password BEFORE upload
       // This ensures the upload will use the new password for encryption
       SyncLog.normal('EncryptionPasswordChangeService: Updating encryption config...');
-      await syncProvider.setPrivateCfg({
+      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
         ...existingCfg,
         encryptKey: newPassword,
         isEncryptionEnabled: true,
       } as SuperSyncPrivateCfg);
 
       // Clear cached encryption keys to force re-derivation with new password
-      this._derivedKeyCache.clearCache();
-      // Clear cached adapters to ensure new encryption settings take effect
-      this._wrappedProviderService.clearCache();
+      clearSessionKeyCache();
 
       // STEP 4: Upload the SYNC_IMPORT with isCleanSlate=true flag
       // The server will delete all existing data before accepting the operation

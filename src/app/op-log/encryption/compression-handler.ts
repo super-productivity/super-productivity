@@ -2,6 +2,34 @@ import { CompressError, DecompressError } from '../core/errors/sync-errors';
 import { OpLog } from '../../core/log';
 
 /**
+ * Reads all bytes from a ReadableStream without using the Response constructor,
+ * which masks stream errors with "Failed to fetch" (WHATWG Fetch #676).
+ */
+const readAllBytes = async (
+  readable: ReadableStream<Uint8Array>,
+): Promise<Uint8Array> => {
+  const reader = readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    totalLength += value.length;
+  }
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+};
+
+/**
  * Compresses a string using gzip and returns the raw bytes.
  * Use this for binary transmission (e.g., HTTP with Content-Encoding: gzip).
  */
@@ -12,8 +40,7 @@ export async function compressWithGzip(input: string): Promise<Uint8Array> {
     const writer = stream.writable.getWriter();
     writer.write(new TextEncoder().encode(input));
     writer.close();
-    const compressed = await new Response(stream.readable).arrayBuffer();
-    return new Uint8Array(compressed);
+    return await readAllBytes(stream.readable);
   } catch (error) {
     OpLog.err(error);
     throw new CompressError(error);
@@ -31,7 +58,7 @@ export async function compressWithGzipToString(input: string): Promise<string> {
     const writer = stream.writable.getWriter();
     writer.write(new TextEncoder().encode(input));
     writer.close();
-    const compressed = await new Response(stream.readable).arrayBuffer();
+    const compressed = await readAllBytes(stream.readable);
 
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -42,7 +69,7 @@ export async function compressWithGzipToString(input: string): Promise<string> {
         resolve(base64);
       };
       reader.onerror = reject;
-      reader.readAsDataURL(new Blob([compressed]));
+      reader.readAsDataURL(new Blob([compressed as unknown as BlobPart]));
     });
   } catch (error) {
     OpLog.err(error);
@@ -88,7 +115,7 @@ export async function decompressGzipFromString(
 
     // Write and read concurrently - writer.close() can hang if we don't consume readable
     const writePromise = writer.write(bytes).then(() => writer.close());
-    const readPromise = new Response(stream.readable).arrayBuffer();
+    const readPromise = readAllBytes(stream.readable);
 
     const [, decompressed] = await Promise.all([writePromise, readPromise]);
     const decoded = new TextDecoder().decode(decompressed);

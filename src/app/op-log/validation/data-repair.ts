@@ -7,6 +7,7 @@ import { ProjectCopy } from '../../features/project/project.model';
 import { isDataRepairPossible } from './is-data-repair-possible.util';
 import { Task, TaskArchive, TaskCopy, TaskState } from '../../features/tasks/task.model';
 import { unique } from '../../util/unique';
+import { isDBDateStr } from '../../util/get-db-date-str';
 import { TODAY_TAG } from '../../features/tag/tag.const';
 import { TaskRepeatCfgCopy } from '../../features/task-repeat-cfg/task-repeat-cfg.model';
 import { IssueProvider } from '../../features/issue/issue.model';
@@ -17,6 +18,12 @@ import { IValidation } from 'typia';
 import { OpLog } from '../../core/log';
 import { repairMenuTree } from './repair-menu-tree';
 import { initialTimeTrackingState } from '../../features/time-tracking/store/time-tracking.reducer';
+import { RepairSummary } from '../core/operation.types';
+
+export interface DataRepairResult {
+  data: AppDataComplete;
+  repairSummary: RepairSummary;
+}
 
 /**
  * Entity state keys that have ids/entities structure.
@@ -36,12 +43,20 @@ const ENTITY_STATE_KEYS: (keyof AppDataCompleteLegacy)[] = [
 export const dataRepair = (
   data: AppDataComplete,
   errors: IValidation.IError[] = [],
-): AppDataComplete => {
+): DataRepairResult => {
   if (!isDataRepairPossible(data)) {
     throw new Error('Data repair attempted but not possible');
   }
 
-  // console.time('dataRepair');
+  const summary: RepairSummary = {
+    entityStateFixed: 0,
+    orphanedEntitiesRestored: 0,
+    invalidReferencesRemoved: 0,
+    relationshipsFixed: 0,
+    structureRepaired: 0,
+    typeErrorsFixed: 0,
+  };
+
   // NOTE deep copy is important to prevent readonly errors from frozen NgRx state
   // We detect if the state is frozen and only deep clone in that case for performance
   const isFrozen =
@@ -80,38 +95,42 @@ export const dataRepair = (
   // NOTE: We no longer merge archiveOld into archiveYoung during repair.
   // The dual-archive architecture keeps them separate for proper age-based archiving.
 
-  dataOut = _fixEntityStates(dataOut);
-  dataOut = _ensureTaskArrayProperties(dataOut);
-  dataOut = _removeMissingTasksFromListsOrRestoreFromArchive(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut);
-  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut);
-  dataOut = _addOrphanedTasksToProjectLists(dataOut);
-  dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut);
-  dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut);
-  dataOut = _cleanupOrphanedSubTasks(dataOut);
-  dataOut = _cleanupNonExistingTasksFromLists(dataOut);
-  dataOut = _cleanupNonExistingNotesFromLists(dataOut);
-  dataOut = _fixInconsistentProjectId(dataOut);
-  dataOut = _fixInconsistentTagId(dataOut);
-  dataOut = _setTaskProjectIdAccordingToParent(dataOut);
-  dataOut = _removeDuplicatesFromArchive(dataOut);
-  dataOut = _clearLegacyReminderIds(dataOut);
-  dataOut = _fixTaskRepeatMissingWeekday(dataOut);
-  dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut);
-  dataOut = _createInboxProjectIfNecessary(dataOut);
-  dataOut = _fixOrphanedNotes(dataOut);
-  dataOut = _removeNonExistentProjectIdsFromTasks(dataOut);
-  dataOut = _removeNonExistentTagsFromTasks(dataOut);
-  dataOut = _addInboxProjectIdIfNecessary(dataOut);
-  dataOut = _repairMenuTree(dataOut);
+  dataOut = _fixEntityStates(dataOut, summary);
+  dataOut = _ensureTaskArrayProperties(dataOut, summary);
+  dataOut = _removeMissingTasksFromListsOrRestoreFromArchive(dataOut, summary);
+  dataOut = _removeNonExistentProjectIdsFromIssueProviders(dataOut, summary);
+  dataOut = _removeNonExistentProjectIdsFromTaskRepeatCfg(dataOut, summary);
+  dataOut = _removeNonExistentRepeatCfgIdsFromTasks(dataOut, summary);
+  dataOut = _addOrphanedTasksToProjectLists(dataOut, summary);
+  dataOut = _moveArchivedSubTasksToUnarchivedParents(dataOut, summary);
+  dataOut = _moveUnArchivedSubTasksToArchivedParents(dataOut, summary);
+  dataOut = _cleanupOrphanedSubTasks(dataOut, summary);
+  dataOut = _cleanupNonExistingTasksFromLists(dataOut, summary);
+  dataOut = _cleanupNonExistingNotesFromLists(dataOut, summary);
+  dataOut = _fixInconsistentProjectId(dataOut, summary);
+  dataOut = _fixInconsistentTagId(dataOut, summary);
+  dataOut = _setTaskProjectIdAccordingToParent(dataOut, summary);
+  dataOut = _removeDuplicatesFromArchive(dataOut, summary);
+  dataOut = _clearLegacyReminderIds(dataOut, summary);
+  dataOut = _fixInvalidDueDateStrings(dataOut, summary);
+  dataOut = _fixTaskRepeatMissingWeekday(dataOut, summary);
+  dataOut = _fixTaskRepeatCfgInvalidQuickSetting(dataOut, summary);
+  dataOut = _createInboxProjectIfNecessary(dataOut, summary);
+  dataOut = _fixOrphanedNotes(dataOut, summary);
+  dataOut = _removeNonExistentProjectIdsFromTasks(dataOut, summary);
+  dataOut = _removeNonExistentTagsFromTasks(dataOut, summary);
+  dataOut = _addInboxProjectIdIfNecessary(dataOut, summary);
+  dataOut = _repairMenuTree(dataOut, summary);
   dataOut = autoFixTypiaErrors(dataOut, errors);
+  summary.typeErrorsFixed = errors.length;
 
-  // console.timeEnd('dataRepair');
-  return dataOut;
+  return { data: dataOut, repairSummary: summary };
 };
 
-const _ensureTaskArrayProperties = (data: AppDataComplete): AppDataComplete => {
+const _ensureTaskArrayProperties = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const taskStates: TaskState[] = [
     data.task,
     data.archiveYoung.task as TaskState,
@@ -140,34 +159,88 @@ const _ensureTaskArrayProperties = (data: AppDataComplete): AppDataComplete => {
 
   if (fixedCount > 0) {
     OpLog.warn(`[data-repair] Fixed ${fixedCount} missing array properties on tasks`);
+    summary.entityStateFixed += fixedCount;
   }
 
   return data;
 };
 
-const _fixTaskRepeatMissingWeekday = (data: AppDataComplete): AppDataComplete => {
+const _fixInvalidDueDateStrings = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
+  const taskStates: TaskState[] = [
+    data.task,
+    data.archiveYoung.task as TaskState,
+    data.archiveOld.task as TaskState,
+  ];
+  let fixedCount = 0;
+
+  for (const taskState of taskStates) {
+    for (const id of taskState.ids as string[]) {
+      const t = taskState.entities[id] as TaskCopy;
+      if (!t) continue;
+      if (typeof t.dueDay === 'string' && !isDBDateStr(t.dueDay)) {
+        OpLog.warn(`[data-repair] Clearing invalid dueDay "${t.dueDay}" on task ${id}`);
+        t.dueDay = undefined;
+        fixedCount++;
+      }
+      if (typeof t.deadlineDay === 'string' && !isDBDateStr(t.deadlineDay)) {
+        OpLog.warn(
+          `[data-repair] Clearing invalid deadlineDay "${t.deadlineDay}" on task ${id}`,
+        );
+        t.deadlineDay = undefined;
+        fixedCount++;
+      }
+    }
+  }
+
+  if (fixedCount > 0) {
+    summary.entityStateFixed += fixedCount;
+  }
+
+  return data;
+};
+
+const _fixTaskRepeatMissingWeekday = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   if (data.taskRepeatCfg && data.taskRepeatCfg.entities) {
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
-      cfg.monday = cfg.monday ?? false;
-      cfg.tuesday = cfg.tuesday ?? false;
-      cfg.wednesday = cfg.wednesday ?? false;
-      cfg.thursday = cfg.thursday ?? false;
-      cfg.friday = cfg.friday ?? false;
-      cfg.saturday = cfg.saturday ?? false;
-      cfg.sunday = cfg.sunday ?? false;
+      const days = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday',
+      ] as const;
+      for (const day of days) {
+        if (cfg[day] === undefined || cfg[day] === null) {
+          cfg[day] = false;
+          summary.entityStateFixed++;
+        }
+      }
     });
   }
   return data;
 };
 
 // Fix for issue #5802: repeat configs with date-dependent quickSetting but missing startDate
-const _fixTaskRepeatCfgInvalidQuickSetting = (data: AppDataComplete): AppDataComplete => {
+const _fixTaskRepeatCfgInvalidQuickSetting = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   if (data.taskRepeatCfg && data.taskRepeatCfg.entities) {
     const quickSettingsRequiringStartDate = [
       'WEEKLY_CURRENT_WEEKDAY',
       'YEARLY_CURRENT_DATE',
       'MONTHLY_CURRENT_DATE',
+      'MONTHLY_FIRST_DAY',
+      'MONTHLY_LAST_DAY',
     ];
     Object.keys(data.taskRepeatCfg.entities).forEach((key) => {
       const cfg = data.taskRepeatCfg.entities[key] as TaskRepeatCfgCopy;
@@ -180,10 +253,22 @@ const _fixTaskRepeatCfgInvalidQuickSetting = (data: AppDataComplete): AppDataCom
           `Fixing repeat config ${cfg.id}: ${cfg.quickSetting} with missing startDate -> CUSTOM`,
         );
         cfg.quickSetting = 'CUSTOM';
+        summary.entityStateFixed++;
       }
     });
   }
   return data;
+};
+
+const _getEntityIdCount = (
+  data: AppDataComplete,
+  key: keyof AppDataCompleteLegacy,
+): number => {
+  const currentState = data[key as keyof AppDataComplete];
+  if (currentState && typeof currentState === 'object' && 'ids' in currentState) {
+    return (currentState as AppBaseDataEntityLikeStates).ids?.length ?? 0;
+  }
+  return 0;
 };
 
 /**
@@ -207,21 +292,42 @@ const _resetEntityStateForKey = (
   }
 };
 
-const _fixEntityStates = (data: AppDataComplete): AppDataComplete => {
+const _fixEntityStates = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   ENTITY_STATE_KEYS.forEach((key) => {
+    const before = _getEntityIdCount(data, key);
     _resetEntityStateForKey(data, key);
+    const after = _getEntityIdCount(data, key);
+    if (before !== after) {
+      summary.entityStateFixed++;
+    }
   });
+
+  const archiveYoungBefore = (data.archiveYoung.task.ids as string[]).length;
   data.archiveYoung.task = _resetEntityIdsFromObjects(
     data.archiveYoung.task as TaskArchive,
   ) as TaskArchive;
+  if (archiveYoungBefore !== (data.archiveYoung.task.ids as string[]).length) {
+    summary.entityStateFixed++;
+  }
+
+  const archiveOldBefore = (data.archiveOld.task.ids as string[]).length;
   data.archiveOld.task = _resetEntityIdsFromObjects(
     data.archiveOld.task as TaskArchive,
   ) as TaskArchive;
+  if (archiveOldBefore !== (data.archiveOld.task.ids as string[]).length) {
+    summary.entityStateFixed++;
+  }
 
   return data;
 };
 
-const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete => {
+const _removeDuplicatesFromArchive = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   if (!data.task || !data.archiveYoung?.task || !data.archiveOld?.task) {
     return data;
   }
@@ -242,6 +348,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
     });
     if (duplicateYoungIds.length > 0) {
       OpLog.log(duplicateYoungIds.length + ' duplicates removed from archiveYoung.');
+      summary.entityStateFixed += duplicateYoungIds.length;
     }
   }
 
@@ -258,6 +365,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
     });
     if (duplicateOldIds.length > 0) {
       OpLog.log(duplicateOldIds.length + ' duplicates removed from archiveOld.');
+      summary.entityStateFixed += duplicateOldIds.length;
     }
   }
 
@@ -279,6 +387,7 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
         duplicateBetweenArchives.length +
           ' duplicates removed from archiveYoung (kept in archiveOld).',
       );
+      summary.entityStateFixed += duplicateBetweenArchives.length;
     }
   }
 
@@ -286,7 +395,10 @@ const _removeDuplicatesFromArchive = (data: AppDataComplete): AppDataComplete =>
 };
 
 // Clear any legacy reminderId values - reminders now use remindAt directly on tasks
-const _clearLegacyReminderIds = (data: AppDataComplete): AppDataComplete => {
+const _clearLegacyReminderIds = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   data.task.ids.forEach((id: string) => {
     const t = data.task.entities[id] as Task & { reminderId?: string };
     if (t.reminderId) {
@@ -295,6 +407,7 @@ const _clearLegacyReminderIds = (data: AppDataComplete): AppDataComplete => {
         reminderId?: string;
       };
       data.task.entities[id] = taskWithoutReminderId;
+      summary.invalidReferencesRemoved++;
     }
   });
   return data;
@@ -302,6 +415,7 @@ const _clearLegacyReminderIds = (data: AppDataComplete): AppDataComplete => {
 
 const _moveArchivedSubTasksToUnarchivedParents = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   // to avoid ambiguity
   const taskState: TaskState = data.task;
@@ -355,6 +469,7 @@ const _moveArchivedSubTasksToUnarchivedParents = (
       promotedYoungSubTaskIds,
     );
   }
+  summary.relationshipsFixed += orphanArchivedYoungSubTasks.length;
 
   // Handle orphaned subtasks in archiveOld
   const orphanArchivedOldSubTasks: TaskCopy[] = taskArchiveOldState.ids
@@ -403,12 +518,14 @@ const _moveArchivedSubTasksToUnarchivedParents = (
       promotedOldSubTaskIds,
     );
   }
+  summary.relationshipsFixed += orphanArchivedOldSubTasks.length;
 
   return data;
 };
 
 const _moveUnArchivedSubTasksToArchivedParents = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   // to avoid ambiguity
   const taskState: TaskState = data.task;
@@ -477,12 +594,14 @@ const _moveUnArchivedSubTasksToArchivedParents = (
       promotedUnArchivedSubTaskIds,
     );
   }
+  summary.relationshipsFixed += orphanUnArchivedSubTasks.length;
 
   return data;
 };
 
 const _removeMissingTasksFromListsOrRestoreFromArchive = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   const { task, project, tag, archiveYoung, archiveOld } = data;
   const taskIds: string[] = task.ids as string[];
@@ -493,6 +612,7 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
   project.ids.forEach((pId: string | number) => {
     const projectItem = project.entities[pId] as ProjectCopy;
 
+    const origTaskIdsLen = projectItem.taskIds.length;
     projectItem.taskIds = projectItem.taskIds.filter((id: string): boolean => {
       if (taskArchiveYoungIds.includes(id) || taskArchiveOldIds.includes(id)) {
         taskIdsToRestoreFromArchive.push(id);
@@ -500,7 +620,9 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
       }
       return taskIds.includes(id);
     });
+    summary.invalidReferencesRemoved += origTaskIdsLen - projectItem.taskIds.length;
 
+    const origBacklogLen = projectItem.backlogTaskIds.length;
     projectItem.backlogTaskIds = projectItem.backlogTaskIds.filter(
       (id: string): boolean => {
         if (taskArchiveYoungIds.includes(id) || taskArchiveOldIds.includes(id)) {
@@ -510,11 +632,15 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
         return taskIds.includes(id);
       },
     );
+    summary.invalidReferencesRemoved +=
+      origBacklogLen - projectItem.backlogTaskIds.length;
   });
 
   tag.ids.forEach((tId: string | number) => {
     const tagItem = tag.entities[tId] as TagCopy;
+    const origLen = tagItem.taskIds.length;
     tagItem.taskIds = tagItem.taskIds.filter((id) => taskIds.includes(id));
+    summary.invalidReferencesRemoved += origLen - tagItem.taskIds.length;
   });
 
   taskIdsToRestoreFromArchive.forEach((id) => {
@@ -539,6 +665,7 @@ const _removeMissingTasksFromListsOrRestoreFromArchive = (
     OpLog.log(
       taskIdsToRestoreFromArchive.length + ' missing tasks restored from archive.',
     );
+    summary.orphanedEntitiesRestored += taskIdsToRestoreFromArchive.length;
   }
   return data;
 };
@@ -563,7 +690,10 @@ const _resetEntityIdsFromObjects = <T extends AppBaseDataEntityLikeStates>(
   };
 };
 
-const _addOrphanedTasksToProjectLists = (data: AppDataComplete): AppDataComplete => {
+const _addOrphanedTasksToProjectLists = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const { task, project } = data;
   let allTaskIdsOnProjectLists: string[] = [];
 
@@ -600,12 +730,16 @@ const _addOrphanedTasksToProjectLists = (data: AppDataComplete): AppDataComplete
 
   if (orphanedTaskIds.length > 0) {
     OpLog.log(orphanedTaskIds.length + ' orphaned tasks found & restored.');
+    summary.orphanedEntitiesRestored += orphanedTaskIds.length;
   }
 
   return data;
 };
 
-const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete => {
+const _addInboxProjectIdIfNecessary = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const { task, archiveYoung, archiveOld } = data;
   const taskIds: string[] = task.ids;
   const taskArchiveYoungIds: string[] = archiveYoung.task.ids as string[];
@@ -630,6 +764,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
         taskIds: [...(inboxProject.taskIds as string[]), t.id],
       };
       t.projectId = INBOX_PROJECT.id;
+      summary.relationshipsFixed++;
     }
 
     // while we are at it, we also cleanup the today tag
@@ -646,6 +781,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
     if (!t.projectId) {
       OpLog.log('Set inbox project for missing project id from archive task ' + t.id);
       t.projectId = INBOX_PROJECT.id;
+      summary.relationshipsFixed++;
     }
     // while we are at it, we also cleanup the today tag
     if (t.tagIds?.includes(TODAY_TAG.id)) {
@@ -661,6 +797,7 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
     if (!t.projectId) {
       OpLog.log('Set inbox project for missing project id from old archive task ' + t.id);
       t.projectId = INBOX_PROJECT.id;
+      summary.relationshipsFixed++;
     }
     // while we are at it, we also cleanup the today tag
     if (t.tagIds?.includes(TODAY_TAG.id)) {
@@ -671,7 +808,10 @@ const _addInboxProjectIdIfNecessary = (data: AppDataComplete): AppDataComplete =
   return data;
 };
 
-const _createInboxProjectIfNecessary = (data: AppDataComplete): AppDataComplete => {
+const _createInboxProjectIfNecessary = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const { project } = data;
   if (!project.entities[INBOX_PROJECT.id]) {
     data.project.entities[INBOX_PROJECT.id] = {
@@ -679,6 +819,7 @@ const _createInboxProjectIfNecessary = (data: AppDataComplete): AppDataComplete 
     };
 
     data.project.ids = [INBOX_PROJECT.id, ...data.project.ids] as string[];
+    summary.structureRepaired++;
   }
 
   return data;
@@ -687,6 +828,7 @@ const _createInboxProjectIfNecessary = (data: AppDataComplete): AppDataComplete 
 // TODO replace with INBOX_PROJECT.id
 const _removeNonExistentProjectIdsFromTasks = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   const { task, project, archiveYoung, archiveOld } = data;
   const projectIds: string[] = project.ids as string[];
@@ -699,6 +841,7 @@ const _removeNonExistentProjectIdsFromTasks = (
     if (t.projectId && !projectIds.includes(t.projectId)) {
       OpLog.log('Delete missing project id from task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
+      summary.invalidReferencesRemoved++;
     }
   });
 
@@ -710,6 +853,7 @@ const _removeNonExistentProjectIdsFromTasks = (
     if (t.projectId && !projectIds.includes(t.projectId)) {
       OpLog.log('Delete missing project id from archive task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
+      summary.invalidReferencesRemoved++;
     }
   });
 
@@ -721,13 +865,17 @@ const _removeNonExistentProjectIdsFromTasks = (
     if (t.projectId && !projectIds.includes(t.projectId)) {
       OpLog.log('Delete missing project id from old archive task ' + t.projectId);
       t.projectId = INBOX_PROJECT.id;
+      summary.invalidReferencesRemoved++;
     }
   });
 
   return data;
 };
 
-const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete => {
+const _removeNonExistentTagsFromTasks = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const { task, tag, archiveYoung, archiveOld } = data;
   const tagIds: string[] = tag.ids as string[];
   const taskIds: string[] = task.ids;
@@ -809,6 +957,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
 
   if (removedCount > 0) {
     OpLog.log(`Total non-existent tags removed from tasks: ${removedCount}`);
+    summary.invalidReferencesRemoved += removedCount;
   }
 
   return data;
@@ -816,6 +965,7 @@ const _removeNonExistentTagsFromTasks = (data: AppDataComplete): AppDataComplete
 
 const _removeNonExistentProjectIdsFromIssueProviders = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   const { issueProvider, project } = data;
   if (!issueProvider?.ids || !project?.ids) return data;
@@ -826,6 +976,7 @@ const _removeNonExistentProjectIdsFromIssueProviders = (
     if (t.defaultProjectId && !projectIds.includes(t.defaultProjectId)) {
       OpLog.log('Delete missing project id from issueProvider ' + t.defaultProjectId);
       t.defaultProjectId = null;
+      summary.invalidReferencesRemoved++;
     }
   });
 
@@ -834,6 +985,7 @@ const _removeNonExistentProjectIdsFromIssueProviders = (
 
 const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   const { project, taskRepeatCfg } = data;
   if (!taskRepeatCfg?.ids || !project?.ids) return data;
@@ -847,12 +999,14 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
           'Delete missing project id from task repeat cfg ' + repeatCfg.projectId,
         );
         repeatCfg.projectId = null;
+        summary.invalidReferencesRemoved++;
       } else {
         taskRepeatCfg.ids = (taskRepeatCfg.ids as string[]).filter(
           (rid: string) => rid !== repeatCfg.id,
         );
         delete taskRepeatCfg.entities[repeatCfg.id];
         OpLog.log('Delete task repeat cfg with missing project id' + repeatCfg.projectId);
+        summary.invalidReferencesRemoved++;
       }
     }
   });
@@ -861,6 +1015,7 @@ const _removeNonExistentProjectIdsFromTaskRepeatCfg = (
 
 const _removeNonExistentRepeatCfgIdsFromTasks = (
   data: AppDataComplete,
+  summary: RepairSummary,
 ): AppDataComplete => {
   const { task, taskRepeatCfg, archiveYoung, archiveOld } = data;
   if (!taskRepeatCfg?.ids) return data;
@@ -906,12 +1061,16 @@ const _removeNonExistentRepeatCfgIdsFromTasks = (
 
   if (removedCount > 0) {
     OpLog.log(`Total non-existent repeatCfgIds cleared from tasks: ${removedCount}`);
+    summary.invalidReferencesRemoved += removedCount;
   }
 
   return data;
 };
 
-const _cleanupNonExistingTasksFromLists = (data: AppDataComplete): AppDataComplete => {
+const _cleanupNonExistingTasksFromLists = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const projectIds: string[] = data.project.ids as string[];
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
@@ -919,12 +1078,18 @@ const _cleanupNonExistingTasksFromLists = (data: AppDataComplete): AppDataComple
       OpLog.log(data.project);
       throw new Error('No project');
     }
+    const origTaskIdsLen = projectItem.taskIds.length;
     (projectItem as ProjectCopy).taskIds = projectItem.taskIds.filter(
       (tid) => !!data.task.entities[tid],
     );
+    summary.invalidReferencesRemoved += origTaskIdsLen - projectItem.taskIds.length;
+
+    const origBacklogLen = projectItem.backlogTaskIds.length;
     (projectItem as ProjectCopy).backlogTaskIds = projectItem.backlogTaskIds.filter(
       (tid) => !!data.task.entities[tid],
     );
+    summary.invalidReferencesRemoved +=
+      origBacklogLen - projectItem.backlogTaskIds.length;
   });
   const tagIds: string[] = data.tag.ids as string[];
   tagIds
@@ -934,14 +1099,19 @@ const _cleanupNonExistingTasksFromLists = (data: AppDataComplete): AppDataComple
         OpLog.log(data.tag);
         throw new Error('No tag');
       }
+      const origLen = tagItem.taskIds.length;
       (tagItem as TagCopy).taskIds = tagItem.taskIds.filter(
         (tid) => !!data.task.entities[tid],
       );
+      summary.invalidReferencesRemoved += origLen - tagItem.taskIds.length;
     });
   return data;
 };
 
-const _cleanupNonExistingNotesFromLists = (data: AppDataComplete): AppDataComplete => {
+const _cleanupNonExistingNotesFromLists = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const projectIds: string[] = data.project.ids as string[];
   projectIds.forEach((pid) => {
     const projectItem = data.project.entities[pid];
@@ -949,20 +1119,27 @@ const _cleanupNonExistingNotesFromLists = (data: AppDataComplete): AppDataComple
       OpLog.log(data.project);
       throw new Error('No project');
     }
+    const origLen = (projectItem as ProjectCopy).noteIds?.length ?? 0;
     (projectItem as ProjectCopy).noteIds = (projectItem as ProjectCopy).noteIds
       ? projectItem.noteIds.filter((tid) => !!data.note.entities[tid])
       : [];
+    summary.invalidReferencesRemoved += origLen - projectItem.noteIds.length;
   });
 
   // also cleanup today's notes
+  const origTodayLen = data.note.todayOrder?.length ?? 0;
   data.note.todayOrder = data.note.todayOrder
     ? data.note.todayOrder.filter((tid) => !!data.note.entities[tid])
     : [];
+  summary.invalidReferencesRemoved += origTodayLen - data.note.todayOrder.length;
 
   return data;
 };
 
-const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
+const _fixOrphanedNotes = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const noteIds: string[] = data.note.ids as string[];
   noteIds.forEach((nId) => {
     const note = data.note.entities[nId];
@@ -983,6 +1160,7 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
             ...project,
             noteIds: [...project.noteIds, note.id],
           };
+          summary.orphanedEntitiesRestored++;
         }
       } else {
         OpLog.log('Delete missing project id from note ' + note.id);
@@ -991,6 +1169,7 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
         if (!data.note.todayOrder.includes(note.id)) {
           data.note.todayOrder = [...data.note.todayOrder, note.id];
         }
+        summary.orphanedEntitiesRestored++;
       }
     } // orphaned note case
     else if (!data.note.todayOrder.includes(note.id)) {
@@ -999,13 +1178,17 @@ const _fixOrphanedNotes = (data: AppDataComplete): AppDataComplete => {
       if (!data.note.todayOrder.includes(note.id)) {
         data.note.todayOrder = [...data.note.todayOrder, note.id];
       }
+      summary.orphanedEntitiesRestored++;
     }
   });
 
   return data;
 };
 
-const _fixInconsistentProjectId = (data: AppDataComplete): AppDataComplete => {
+const _fixInconsistentProjectId = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const projectIds: string[] = data.project.ids as string[];
   projectIds
     .map((id) => data.project.entities[id])
@@ -1024,9 +1207,11 @@ const _fixInconsistentProjectId = (data: AppDataComplete): AppDataComplete => {
             (projectItem as ProjectCopy).taskIds = projectItem.taskIds.filter(
               (cid) => cid !== task.id,
             );
+            summary.relationshipsFixed++;
           } else {
             // if the task has no project id at all, then move it to the project
             (task as TaskCopy).projectId = projectItem.id;
+            summary.relationshipsFixed++;
           }
         }
       });
@@ -1039,9 +1224,11 @@ const _fixInconsistentProjectId = (data: AppDataComplete): AppDataComplete => {
           if (task.projectId) {
             (projectItem as ProjectCopy).backlogTaskIds =
               projectItem.backlogTaskIds.filter((cid) => cid !== task.id);
+            summary.relationshipsFixed++;
           } else {
             // if the task has no project id at all, then move it to the project
             (task as TaskCopy).projectId = projectItem.id;
+            summary.relationshipsFixed++;
           }
         }
       });
@@ -1050,7 +1237,10 @@ const _fixInconsistentProjectId = (data: AppDataComplete): AppDataComplete => {
   return data;
 };
 
-const _fixInconsistentTagId = (data: AppDataComplete): AppDataComplete => {
+const _fixInconsistentTagId = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const tagIds: string[] = data.tag.ids as string[];
   tagIds
     .map((id) => data.tag.entities[id])
@@ -1065,6 +1255,7 @@ const _fixInconsistentTagId = (data: AppDataComplete): AppDataComplete => {
           throw new Error('No task found');
         } else if (!task.tagIds?.includes(tagItem.id)) {
           (task as TaskCopy).tagIds = [...(task.tagIds || []), tagItem.id];
+          summary.relationshipsFixed++;
         }
       });
     });
@@ -1072,7 +1263,10 @@ const _fixInconsistentTagId = (data: AppDataComplete): AppDataComplete => {
   return data;
 };
 
-const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataComplete => {
+const _setTaskProjectIdAccordingToParent = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const taskIds: string[] = data.task.ids as string[];
   taskIds
     .map((id) => data.task.entities[id])
@@ -1090,6 +1284,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
           }
           if (subTask.projectId !== parentProjectId) {
             (subTask as TaskCopy).projectId = parentProjectId;
+            summary.relationshipsFixed++;
           }
         });
       }
@@ -1112,6 +1307,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
           }
           if (subTask.projectId !== parentProjectId) {
             (subTask as TaskCopy).projectId = parentProjectId;
+            summary.relationshipsFixed++;
           }
         });
       }
@@ -1134,6 +1330,7 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
           }
           if (subTask.projectId !== parentProjectId) {
             (subTask as TaskCopy).projectId = parentProjectId;
+            summary.relationshipsFixed++;
           }
         });
       }
@@ -1142,7 +1339,10 @@ const _setTaskProjectIdAccordingToParent = (data: AppDataComplete): AppDataCompl
   return data;
 };
 
-const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
+const _cleanupOrphanedSubTasks = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   const taskIds: string[] = data.task.ids as string[];
 
   taskIds
@@ -1160,6 +1360,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
           if (!data.task.entities[sid]) {
             OpLog.log('Delete orphaned sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
+            summary.relationshipsFixed++;
           }
           i -= 1;
         }
@@ -1182,6 +1383,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
           if (!data.archiveYoung.task.entities[sid]) {
             OpLog.log('Delete orphaned archive sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
+            summary.relationshipsFixed++;
           }
           i -= 1;
         }
@@ -1204,6 +1406,7 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
           if (!data.archiveOld.task.entities[sid]) {
             OpLog.log('Delete orphaned old archive sub task for ', taskItem);
             taskItem.subTaskIds.splice(i, 1);
+            summary.relationshipsFixed++;
           }
           i -= 1;
         }
@@ -1213,7 +1416,10 @@ const _cleanupOrphanedSubTasks = (data: AppDataComplete): AppDataComplete => {
   return data;
 };
 
-const _repairMenuTree = (data: AppDataComplete): AppDataComplete => {
+const _repairMenuTree = (
+  data: AppDataComplete,
+  summary: RepairSummary,
+): AppDataComplete => {
   if (!data.menuTree) {
     return data;
   }
@@ -1221,7 +1427,11 @@ const _repairMenuTree = (data: AppDataComplete): AppDataComplete => {
   const validProjectIds = new Set<string>(data.project.ids as string[]);
   const validTagIds = new Set<string>(data.tag.ids as string[]);
 
+  const before = JSON.stringify(data.menuTree);
   data.menuTree = repairMenuTree(data.menuTree, validProjectIds, validTagIds);
+  if (JSON.stringify(data.menuTree) !== before) {
+    summary.structureRepaired++;
+  }
 
   return data;
 };

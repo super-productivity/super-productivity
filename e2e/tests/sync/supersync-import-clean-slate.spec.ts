@@ -112,21 +112,113 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
 
       // Import the backup file (contains "E2E Import Test" tasks)
       const backupPath = ImportPage.getFixturePath('test-backup.json');
+
+      // Diagnostic: check ops BEFORE import
+      const preImportState = await clientA.page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const req = indexedDB.open('SUP_OPS');
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const ops = await new Promise<Array<{ seq: number }>>((resolve, reject) => {
+          const tx = db.transaction('ops', 'readonly');
+          const store = tx.objectStore('ops');
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        return { count: ops.length };
+      });
+      console.log('[Clean Slate] PRE-IMPORT IndexedDB op count:', preImportState.count);
+
       await importPage.importBackupFile(backupPath);
       console.log('[Clean Slate] Client A imported backup');
 
-      // Close and re-open page to pick up imported data with fresh Angular services.
-      // Using page.reload() can hang when active sync connections prevent navigation.
-      await clientA.page.close();
-      clientA.page = await clientA.context.newPage();
-      await clientA.page.goto('/');
+      // Diagnostic: check ops IMMEDIATELY after import (before goto)
+      const postImportState = await clientA.page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const req = indexedDB.open('SUP_OPS');
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const ops = await new Promise<
+          Array<{ seq: number; op: { o?: string }; syncedAt?: number }>
+        >((resolve, reject) => {
+          const tx = db.transaction('ops', 'readonly');
+          const store = tx.objectStore('ops');
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        return {
+          count: ops.length,
+          ops: ops.map((o) => ({ seq: o.seq, type: o.op?.o, syncedAt: !!o.syncedAt })),
+        };
+      });
+      console.log(
+        '[Clean Slate] POST-IMPORT IndexedDB op count:',
+        postImportState.count,
+        JSON.stringify(postImportState.ops),
+      );
+
+      // Navigate to app root to restart Angular with the imported backup state.
+      // IMPORTANT: Do NOT close and reopen the page - Playwright's browser contexts use
+      // in-memory-only IndexedDB ("Persistence not allowed"). Closing the page would
+      // destroy the imported backup data. Instead, navigate within the same page context
+      // to restart Angular while preserving the in-memory IndexedDB data.
+      await clientA.page.goto('/', { waitUntil: 'commit', timeout: 30000 });
       clientA.workView = new WorkViewPage(clientA.page, `A-${testRunId}`);
       clientA.sync = new SuperSyncPage(clientA.page);
       await waitForAppReady(clientA.page, { ensureRoute: false });
 
+      // Diagnostic: check what's in IndexedDB before sync
+      const dbState = await clientA.page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const req = indexedDB.open('SUP_OPS');
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        const ops = await new Promise<
+          Array<{
+            seq: number;
+            op: { o?: string; opType?: string; id?: string };
+            syncedAt?: number;
+            source?: string;
+          }>
+        >((resolve, reject) => {
+          const tx = db.transaction('ops', 'readonly');
+          const store = tx.objectStore('ops');
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+        db.close();
+        return {
+          count: ops.length,
+          ops: ops.map((o) => ({
+            seq: o.seq,
+            type: o.op?.o || o.op?.opType,
+            syncedAt: o.syncedAt,
+            source: o.source,
+          })),
+        };
+      });
+      console.log(
+        '[Clean Slate] IndexedDB op count:',
+        dbState.count,
+        'ops:',
+        JSON.stringify(dbState.ops),
+      );
+
       // Configure sync WITHOUT waiting for initial sync
       // (initial sync will show sync-import-conflict dialog since we have a local BackupImport)
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog = clientA.sync.syncImportConflictDialog;
@@ -145,6 +237,14 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
         await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
+
+      // Navigate to INBOX_PROJECT to verify imported tasks
+      // (test-backup.json tasks are in INBOX_PROJECT, not the TODAY virtual tag)
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
 
       // Wait for imported task to be visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
@@ -168,10 +268,17 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // ============ PHASE 5: Verify Clean Slate on Both Clients ============
       console.log('[Clean Slate] Phase 5: Verifying clean slate');
 
-      // Navigate back to work view to see tasks
-      await clientA.page.goto('/#/work-view');
+      // Navigate to INBOX_PROJECT to see imported tasks
+      // (test-backup.json tasks are in INBOX_PROJECT, not the TODAY virtual tag)
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
-      await clientB.page.goto('/#/work-view');
+      await clientB.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
 
       // Wait for imported task to appear
@@ -210,12 +317,13 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Clean Slate] ✓ Client B: All pre-import tasks are GONE');
 
       // Verify both clients have imported tasks
-      const importedTask1OnA = clientA.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
-      const importedTask1OnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTask1OnA = clientA.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
+      const importedTask1OnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
 
       await expect(importedTask1OnA).toBeVisible({ timeout: 5000 });
       await expect(importedTask1OnB).toBeVisible({ timeout: 5000 });
@@ -297,16 +405,18 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[Late Joiner] Client A imported backup');
 
-      // Close and re-open page to pick up imported data with fresh Angular services.
-      await clientA.page.close();
-      clientA.page = await clientA.context.newPage();
-      await clientA.page.goto('/');
+      // Navigate to restart Angular while preserving in-memory IndexedDB backup data.
+      await clientA.page.goto('/', { waitUntil: 'commit', timeout: 30000 });
       clientA.workView = new WorkViewPage(clientA.page, `A-${testRunId}`);
       clientA.sync = new SuperSyncPage(clientA.page);
       await waitForAppReady(clientA.page, { ensureRoute: false });
 
       // Configure sync WITHOUT waiting for initial sync
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog2 = clientA.sync.syncImportConflictDialog;
@@ -344,8 +454,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // ============ PHASE 4: Verify Clean Slate on Client B ============
       console.log('[Late Joiner] Phase 4: Verifying clean slate on Client B');
 
-      // Navigate back to work view to see tasks
-      await clientB.page.goto('/#/work-view');
+      // Navigate to INBOX_PROJECT to see imported tasks
+      await clientB.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
 
       // Wait for imported task
@@ -357,9 +470,10 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       console.log('[Late Joiner] ✓ Task-B-Local is GONE (not replayed)');
 
       // Verify imported task is present
-      const importedTaskOnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTaskOnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
       await expect(importedTaskOnB).toBeVisible({ timeout: 5000 });
       console.log('[Late Joiner] ✓ Client B has imported tasks');
 
@@ -453,16 +567,18 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       await importPage.importBackupFile(backupPath);
       console.log('[Pending Invalidation] Client A imported backup');
 
-      // Close and re-open page to pick up imported data with fresh Angular services.
-      await clientA.page.close();
-      clientA.page = await clientA.context.newPage();
-      await clientA.page.goto('/');
+      // Navigate to restart Angular while preserving in-memory IndexedDB backup data.
+      await clientA.page.goto('/', { waitUntil: 'commit', timeout: 30000 });
       clientA.workView = new WorkViewPage(clientA.page, `A-${testRunId}`);
       clientA.sync = new SuperSyncPage(clientA.page);
       await waitForAppReady(clientA.page, { ensureRoute: false });
 
       // Configure sync WITHOUT waiting for initial sync
-      await clientA.sync.setupSuperSync({ ...syncConfig, waitForInitialSync: false });
+      await clientA.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
 
       // Wait for either sync import conflict dialog OR sync completion
       const syncImportDialog3 = clientA.sync.syncImportConflictDialog;
@@ -480,6 +596,13 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
         await syncImportDialog3.waitFor({ state: 'hidden', timeout: 5000 });
         await clientA.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
       }
+
+      // Navigate to INBOX_PROJECT to verify imported tasks
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
 
       // Wait for imported task to be visible
       await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
@@ -512,8 +635,11 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       // ============ PHASE 6: Verify Clean Slate on Client B ============
       console.log('[Pending Invalidation] Phase 6: Verifying clean slate');
 
-      // Navigate back to work view to see tasks
-      await clientB.page.goto('/#/work-view');
+      // Navigate to INBOX_PROJECT to see imported tasks
+      await clientB.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientB.page.waitForLoadState('networkidle');
 
       // Wait for imported task to appear
@@ -529,14 +655,18 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       );
 
       // Verify imported task is present on B
-      const importedTaskOnB = clientB.page.locator(
-        'task:has-text("E2E Import Test - Active Task With Subtask")',
-      );
+      // Use .first() because the project page may show the task in both backlog and active sections
+      const importedTaskOnB = clientB.page
+        .locator('task:has-text("E2E Import Test - Active Task With Subtask")')
+        .first();
       await expect(importedTaskOnB).toBeVisible({ timeout: 5000 });
       console.log('[Pending Invalidation] ✓ Client B has imported tasks');
 
       // Also verify on Client A - should NOT have B's pending task
-      await clientA.page.goto('/#/work-view');
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
       await clientA.page.waitForLoadState('networkidle');
       const taskBPendingOnA = clientA.page.locator(`task:has-text("${taskBPending}")`);
       await expect(taskBPendingOnA).not.toBeVisible({ timeout: 5000 });
@@ -545,6 +675,144 @@ test.describe('@supersync @cleanslate Import Clean Slate Semantics', () => {
       );
 
       console.log('[Pending Invalidation] ✓ Pending invalidation test PASSED!');
+    } finally {
+      if (clientA) await closeClient(clientA);
+      if (clientB) await closeClient(clientB);
+    }
+  });
+
+  /**
+   * Scenario D.4: Remote ops concurrent with accepted remote import are silently filtered
+   *
+   * When Client B imports a backup and Client A accepts it (USE_REMOTE),
+   * any remaining old ops from before the import should be silently filtered
+   * on subsequent syncs — no dialog, no errors.
+   *
+   * Actions:
+   * 1. Client A creates tasks, syncs
+   * 2. Client B imports backup, syncs (creates SYNC_IMPORT)
+   * 3. Client A syncs, gets SYNC_IMPORT, accepts remote import (USE_REMOTE)
+   * 4. Client A syncs again — old ops should be silently filtered
+   *
+   * Verify:
+   * - No dialog on the second sync after accepting import
+   * - Sync completes successfully (IN_SYNC)
+   * - Only imported data remains
+   */
+  test('Remote ops concurrent with accepted remote import are silently filtered (D.4)', async ({
+    browser,
+    baseURL,
+    testRunId,
+  }) => {
+    const uniqueId = Date.now();
+    const appUrl = baseURL || 'http://localhost:4242';
+    let clientA: SimulatedE2EClient | null = null;
+    let clientB: SimulatedE2EClient | null = null;
+
+    try {
+      const user = await createTestUser(testRunId);
+      const syncConfig = getSuperSyncConfig(user);
+
+      // ============ PHASE 1: Client A creates tasks ============
+      console.log('[D.4] Phase 1: Client A creates tasks');
+
+      clientA = await createSimulatedClient(browser, appUrl, 'A', testRunId);
+      await clientA.sync.setupSuperSync(syncConfig);
+
+      const taskAOld = `Task-A-Old-${uniqueId}`;
+      await clientA.workView.addTask(taskAOld);
+      await clientA.sync.syncAndWait();
+      console.log(`[D.4] Client A created and synced: ${taskAOld}`);
+
+      // ============ PHASE 2: Client B imports backup ============
+      console.log('[D.4] Phase 2: Client B imports backup');
+
+      clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
+      await clientB.sync.setupSuperSync(syncConfig);
+
+      // Perform import on Client B
+      const importPage = new ImportPage(clientB.page);
+      await importPage.navigateToImportPage();
+      const backupPath = ImportPage.getFixturePath('test-backup.json');
+      await importPage.importBackupFile(backupPath);
+      console.log('[D.4] Client B imported backup');
+
+      // Navigate to restart Angular while preserving in-memory IndexedDB backup data.
+      await clientB.page.goto('/', { waitUntil: 'commit', timeout: 30000 });
+      clientB.workView = new WorkViewPage(clientB.page, `B-${testRunId}`);
+      clientB.sync = new SuperSyncPage(clientB.page);
+      await waitForAppReady(clientB.page, { ensureRoute: false });
+
+      // Configure sync WITHOUT waiting for initial sync
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        waitForInitialSync: false,
+        syncImportChoice: 'local',
+      });
+
+      // Wait for sync import conflict dialog or sync completion
+      const syncImportDialog = clientB.sync.syncImportConflictDialog;
+      const syncResult = await Promise.race([
+        syncImportDialog
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'dialog' as const),
+        clientB.sync.syncCheckIcon
+          .waitFor({ state: 'visible', timeout: 30000 })
+          .then(() => 'complete' as const),
+      ]);
+
+      if (syncResult === 'dialog') {
+        await clientB.sync.syncImportUseLocalBtn.click();
+        await syncImportDialog.waitFor({ state: 'hidden', timeout: 5000 });
+        await clientB.sync.syncCheckIcon.waitFor({ state: 'visible', timeout: 30000 });
+      }
+
+      // Client B syncs to upload SYNC_IMPORT
+      await clientB.sync.syncAndWait();
+      console.log('[D.4] Client B synced (SYNC_IMPORT uploaded)');
+
+      // ============ PHASE 3: Client A syncs and accepts remote import ============
+      console.log('[D.4] Phase 3: Client A syncs and accepts remote import');
+
+      // Client A syncs — should get SYNC_IMPORT, may show conflict dialog
+      // Use syncAndWait which handles dialogs automatically (uses remote by default)
+      await clientA.sync.syncAndWait();
+      console.log('[D.4] Client A accepted remote import');
+
+      // Wait for state to settle
+      await clientA.page.waitForTimeout(1000);
+
+      // ============ PHASE 4: Client A syncs AGAIN — old ops should be silently filtered ============
+      console.log(
+        '[D.4] Phase 4: Client A syncs again (old ops should be silently filtered)',
+      );
+
+      // This is the CRITICAL sync — any remaining old ops from before the import
+      // should be silently filtered by SyncImportFilterService with no dialog
+      await clientA.sync.syncAndWait();
+
+      // Verify no error
+      const hasError = await clientA.sync.hasSyncError();
+      expect(hasError).toBe(false);
+
+      // Verify sync is IN_SYNC
+      await expect(clientA.sync.syncCheckIcon).toBeVisible({ timeout: 5000 });
+
+      // Navigate to INBOX_PROJECT to verify imported tasks
+      await clientA.page.goto('/#/project/INBOX_PROJECT/tasks', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      await clientA.page.waitForLoadState('networkidle');
+
+      // Verify imported task is present
+      await waitForTask(clientA.page, 'E2E Import Test - Active Task With Subtask');
+
+      // Verify old task is gone (clean slate)
+      const oldTaskOnA = clientA.page.locator(`task:has-text("${taskAOld}")`);
+      await expect(oldTaskOnA).not.toBeVisible({ timeout: 5000 });
+
+      console.log('[D.4] ✓ Old ops silently filtered after accepting remote import');
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientB) await closeClient(clientB);

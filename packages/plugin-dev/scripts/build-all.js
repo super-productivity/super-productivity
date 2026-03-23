@@ -213,6 +213,90 @@ const plugins = [
       return 'Built and copied to assets';
     },
   },
+  {
+    name: 'github-issue-provider',
+    path: 'github-issue-provider',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/github-issue-provider',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  {
+    name: 'voice-reminder',
+    path: 'voice-reminder',
+    needsInstall: false,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/voice-reminder',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const files = ['manifest.json', 'plugin.js', 'icon.svg'];
+      for (const file of files) {
+        const src = path.join(pluginPath, file);
+        const dest = path.join(targetDir, file);
+        if (fs.existsSync(src)) {
+          fs.copyFileSync(src, dest);
+        }
+      }
+      // Copy i18n directory
+      const i18nSrc = path.join(pluginPath, 'i18n');
+      if (fs.existsSync(i18nSrc)) {
+        copyRecursive(i18nSrc, path.join(targetDir, 'i18n'));
+      }
+      return 'Copied to assets';
+    },
+  },
+  {
+    name: 'clickup-issue-provider',
+    path: 'clickup-issue-provider',
+    needsInstall: true,
+    copyToAssets: true,
+    buildCommand: async (pluginPath) => {
+      await execAsync(`cd ${pluginPath} && npm run build`);
+      const targetDir = path.join(
+        __dirname,
+        '../../../src/assets/bundled-plugins/clickup-issue-provider',
+      );
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+      const distPath = path.join(pluginPath, 'dist');
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        for (const file of files) {
+          const src = path.join(distPath, file);
+          const dest = path.join(targetDir, file);
+          copyRecursive(src, dest);
+        }
+      }
+      return 'Built and copied to assets';
+    },
+  },
+  // google-calendar-provider: disabled from bundled builds pending legal review.
+  // Source remains in packages/plugin-dev/google-calendar-provider/
+  // To re-enable: uncomment and add back to BUNDLED_PLUGIN_PATHS in plugin.service.ts
 ];
 
 async function buildPlugin(plugin) {
@@ -259,7 +343,13 @@ async function buildPlugin(plugin) {
     return { plugin: plugin.name, success: true, duration };
   } catch (error) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    log(`❌ ${plugin.name} - Build failed: ${error.message} (${duration}s)`, colors.red);
+    log(`❌ ${plugin.name} - Build failed (${duration}s)`, colors.red);
+    if (error.stdout) {
+      log(`  stdout: ${error.stdout}`, colors.red);
+    }
+    if (error.stderr) {
+      log(`  stderr: ${error.stderr}`, colors.red);
+    }
 
     return { plugin: plugin.name, success: false, error: error.message, duration };
   }

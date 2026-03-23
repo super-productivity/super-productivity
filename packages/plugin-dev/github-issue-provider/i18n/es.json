@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "nombreUsuario/nombreRepositorio",
+    "TOKEN": "Token de Acceso",
+    "FILTER_USERNAME": "Nombre de usuario (p. ej., para filtrar cambios hechos por ti mismo)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Resumen",
+    "STATE": "Estado",
+    "ASSIGNEE": "Asignado",
+    "LABELS": "Etiquetas",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Descripción"
+  },
+  "FORM_HELP": "<p>Aquí puedes configurar SuperProductivity para listar incidencias abiertas de GitHub para un repositorio específico en el panel de creación de tareas en la vista de planificación diaria. Se listarán como sugerencias y proporcionarán un enlace a la incidencia así como más información sobre ella.</p> <p>Además puedes importar automáticamente todas las incidencias abiertas.</p><p>Para superar los límites de uso y para acceder puedes proporcionar un token de acceso. <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>Más info sobre sus ámbitos se puede encontrar aquí</a>.",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Error al mapear los datos. ¿Es correcto el nombre de tu repositorio?",
+    "ERR_UNKNOWN": "GitHub: Error desconocido {{statusCode}} {{errorMsg}}. ¿Se ha excedido el límite de tasa de la API?"
+  }
+}

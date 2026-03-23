@@ -9,9 +9,7 @@
   border-radius: 20px;
   max-width: 66px;
   letter-spacing: -1px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @include truncateText();
   display: none;
 
   &:not(:empty) {
@@ -19,8 +17,8 @@
     line-height: 1;
     min-width: 20px;
     border: 1px solid;
-    padding: 4px;
-    margin-left: 4px;
+    padding: var(--s-half);
+    margin-left: var(--s-half);
   }
 }
 
@@ -33,17 +31,17 @@
 .quick-access {
   display: flex;
   justify-content: space-evenly;
-  border-bottom: 1px solid var(--extra-border-color);
+  @include extraBorder('-bottom');
   height: 48px;
 
   > button {
     height: 48px;
     min-width: 40px;
     flex-grow: 1;
-    border-radius: 4px !important;
+    border-radius: var(--card-border-radius) !important;
 
     ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: 4px !important;
+      border-radius: var(--card-border-radius) !important;
     }
   }
 

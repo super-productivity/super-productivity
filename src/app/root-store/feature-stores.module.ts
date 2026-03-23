@@ -15,7 +15,6 @@ import {
   FOCUS_MODE_FEATURE_KEY,
   focusModeReducer,
 } from '../features/focus-mode/store/focus-mode.reducer';
-import { FocusModeEffects } from '../features/focus-mode/store/focus-mode.effects';
 import { IDLE_FEATURE_KEY, idleReducer } from '../features/idle/store/idle.reducer';
 import { IdleEffects } from '../features/idle/store/idle.effects';
 import { issueProvidersFeature } from '../features/issue/store/issue-provider.reducer';
@@ -65,13 +64,12 @@ import { IS_ANDROID_WEB_VIEW } from '../util/is-android-web-view';
 import { AndroidEffects } from '../features/android/store/android.effects';
 import { AndroidFocusModeEffects } from '../features/android/store/android-focus-mode.effects';
 import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
+import { AndroidSyncBridgeEffects } from '../features/android/store/android-sync-bridge.effects';
 import { MobileNotificationEffects } from '../features/mobile/store/mobile-notification.effects';
 import { IS_NATIVE_PLATFORM } from '../util/is-native-platform';
-import { CaldavIssueEffects } from '../features/issue/providers/caldav/caldav-issue.effects';
 import { NextcloudDeckIssueEffects } from '../features/issue/providers/nextcloud-deck/nextcloud-deck-issue.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
-import { VoiceReminderEffects } from '../features/voice-reminder/store/voice-reminder.effects';
 import { DropboxEffects } from '../imex/sync/dropbox/store/dropbox.effects';
 import { FinishDayBeforeCloseEffects } from '../features/finish-day-before-close/finish-day-before-close.effects';
 import { GitlabIssueEffects } from '../features/issue/providers/gitlab/gitlab-issue.effects';
@@ -89,6 +87,7 @@ import { AppStateEffects } from './app-state/app-state.effects';
 import { appStateFeature } from './app-state/app-state.reducer';
 import { PluginHooksEffects } from '../plugins/plugin-hooks.effects';
 import { OperationLogEffects } from '../op-log/capture/operation-log.effects';
+import { IssueTwoWaySyncEffects } from '../features/issue/two-way-sync/issue-two-way-sync.effects';
 import {
   PLUGIN_USER_DATA_FEATURE_NAME,
   pluginUserDataReducer,
@@ -116,7 +115,7 @@ import {
     EffectsModule.forFeature([GlobalConfigEffects]),
 
     StoreModule.forFeature(FOCUS_MODE_FEATURE_KEY, focusModeReducer),
-    EffectsModule.forFeature([FocusModeEffects]),
+    // FocusModeEffects lazy-loaded in main.ts via requestIdleCallback
 
     StoreModule.forFeature(IDLE_FEATURE_KEY, idleReducer),
     EffectsModule.forFeature([IdleEffects]),
@@ -172,17 +171,21 @@ import {
     // EFFECTS ONLY
     EffectsModule.forFeature([
       ...(IS_ANDROID_WEB_VIEW
-        ? [AndroidEffects, AndroidFocusModeEffects, AndroidForegroundTrackingEffects]
+        ? [
+            AndroidEffects,
+            AndroidFocusModeEffects,
+            AndroidForegroundTrackingEffects,
+            AndroidSyncBridgeEffects,
+          ]
         : []),
     ]),
     EffectsModule.forFeature([
       ...(IS_NATIVE_PLATFORM ? [MobileNotificationEffects] : []),
     ]),
-    EffectsModule.forFeature([CaldavIssueEffects]),
+    EffectsModule.forFeature([IssueTwoWaySyncEffects]),
     EffectsModule.forFeature([NextcloudDeckIssueEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([ElectronEffects]),
-    EffectsModule.forFeature([VoiceReminderEffects]),
     EffectsModule.forFeature([DropboxEffects]),
     EffectsModule.forFeature([FinishDayBeforeCloseEffects]),
     EffectsModule.forFeature([GitlabIssueEffects]),

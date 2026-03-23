@@ -79,6 +79,8 @@ export class NextcloudDeckIssueEffects {
             this._nextcloudDeckApiService
               .updateCard$(cfg, boardId, targetStackId, cardId, {
                 title: issue.title,
+                description: issue.description,
+                duedate: issue.duedate,
                 done: task.isDone,
               })
               .pipe(catchError(() => EMPTY)),

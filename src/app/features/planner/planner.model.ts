@@ -15,6 +15,7 @@ export interface PlannerDay {
   timeLimit: number;
   itemsTotal: number;
   tasks: TaskCopy[];
+  deadlineTasks: TaskCopy[];
   noStartTimeRepeatProjections: NoStartTimeRepeatProjection[];
   allDayEvents: ScheduleFromCalendarEvent[];
   scheduledIItems: ScheduleItem[];

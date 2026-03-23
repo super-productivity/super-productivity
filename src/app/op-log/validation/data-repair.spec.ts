@@ -74,11 +74,11 @@ describe('dataRepair()', () => {
       },
     } as any);
 
-    expect(result.task).toEqual(taskState);
-    expect(result.archiveYoung.lastTimeTrackingFlush).toBe(0);
-    expect(result.archiveYoung.timeTracking).toBe(mock.archiveYoung.timeTracking);
-    expect(result.archiveYoung.task.ids).toEqual([]);
-    expect(Object.keys(result.archiveYoung.task.entities)).toEqual([]);
+    expect(result.data.task).toEqual(taskState);
+    expect(result.data.archiveYoung.lastTimeTrackingFlush).toBe(0);
+    expect(result.data.archiveYoung.timeTracking).toBe(mock.archiveYoung.timeTracking);
+    expect(result.data.archiveYoung.task.ids).toEqual([]);
+    expect(Object.keys(result.data.archiveYoung.task.entities)).toEqual([]);
   });
 
   it('should delete missing tasks for tags today list', () => {
@@ -109,7 +109,7 @@ describe('dataRepair()', () => {
         ...mock,
         tag: tagState,
         task: taskState,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: taskState as any,
@@ -157,7 +157,7 @@ describe('dataRepair()', () => {
         ...mock,
         project: projectState,
         task: taskState,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: taskState as any,
@@ -204,7 +204,7 @@ describe('dataRepair()', () => {
         ...mock,
         project: projectState,
         task: taskState,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: taskState as any,
@@ -259,7 +259,7 @@ describe('dataRepair()', () => {
       },
     });
 
-    const repairedTask = result.archiveYoung.task.entities['archived-1'] as Task;
+    const repairedTask = result.data.archiveYoung.task.entities['archived-1'] as Task;
 
     expect(repairedTask.tagIds).toEqual(['existingTag']);
   });
@@ -294,7 +294,7 @@ describe('dataRepair()', () => {
         note: {
           ...noteState,
         } as any,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       note: noteState as any,
@@ -351,7 +351,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchiveState,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       archiveYoung: {
@@ -405,7 +405,7 @@ describe('dataRepair()', () => {
         ...mock,
         project: projectState,
         task: taskState,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: taskState as any,
@@ -453,7 +453,7 @@ describe('dataRepair()', () => {
               },
             ]),
           } as any,
-        }),
+        }).data,
       ).toEqual({
         ...mock,
         task: {
@@ -548,7 +548,7 @@ describe('dataRepair()', () => {
               CCC: { ...DEFAULT_TASK, id: 'CCC', projectId: FAKE_PROJECT_ID },
             },
           } as any,
-        }),
+        }).data,
       ).toEqual({
         ...mock,
         task: {
@@ -575,7 +575,7 @@ describe('dataRepair()', () => {
               },
             } as any,
           },
-        }),
+        }).data,
       ).toEqual({
         ...mock,
         archiveYoung: {
@@ -637,7 +637,7 @@ describe('dataRepair()', () => {
           ...mock.task,
           ...createEmptyEntity(),
         } as any,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -727,7 +727,7 @@ describe('dataRepair()', () => {
         ...mock,
         project: projectState,
         task: taskState,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: taskState,
@@ -786,14 +786,14 @@ describe('dataRepair()', () => {
     });
 
     // The orphaned subtask should remain in archive but have parentId set to undefined
-    expect(result.archiveYoung.task.entities['orphanedSubTask']).toEqual({
+    expect(result.data.archiveYoung.task.entities['orphanedSubTask']).toEqual({
       ...DEFAULT_TASK,
       id: 'orphanedSubTask',
       title: 'Orphaned SubTask',
       parentId: undefined, // parentId should be set to undefined
       projectId: FAKE_PROJECT_ID,
     });
-    expect(result.archiveYoung.task.ids).toContain('orphanedSubTask');
+    expect(result.data.archiveYoung.task.ids).toContain('orphanedSubTask');
   });
 
   it('should move archived sub tasks back to their unarchived parents', () => {
@@ -840,7 +840,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchiveStateBefore,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -923,7 +923,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchiveStateBefore,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -1009,7 +1009,7 @@ describe('dataRepair()', () => {
         ...mock,
         project,
         task: taskStateBefore,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       project,
@@ -1060,7 +1060,7 @@ describe('dataRepair()', () => {
       dataRepair({
         ...mock,
         task: taskState,
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       task: {
@@ -1096,7 +1096,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchiveState,
         },
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       archiveYoung: {
@@ -1129,7 +1129,7 @@ describe('dataRepair()', () => {
       dataRepair({
         ...mock,
         issueProvider: issueProviderState,
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       issueProvider: {
@@ -1172,7 +1172,7 @@ describe('dataRepair()', () => {
       dataRepair({
         ...mock,
         taskRepeatCfg: taskRepeatCfgState,
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       taskRepeatCfg: {
@@ -1214,7 +1214,7 @@ describe('dataRepair()', () => {
       dataRepair({
         ...mock,
         taskRepeatCfg: taskRepeatCfgState,
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       taskRepeatCfg: {
@@ -1250,9 +1250,9 @@ describe('dataRepair()', () => {
     } as any);
 
     // repeatCfgId should be cleared from t1 since it doesn't exist
-    expect(result.task.entities.t1!.repeatCfgId).toBeUndefined();
+    expect(result.data.task.entities.t1!.repeatCfgId).toBeUndefined();
     // t2 should remain unchanged
-    expect(result.task.entities.t2!.repeatCfgId).toBeUndefined();
+    expect(result.data.task.entities.t2!.repeatCfgId).toBeUndefined();
   });
 
   it('should clear non-existent repeatCfgId from archived tasks', () => {
@@ -1277,7 +1277,9 @@ describe('dataRepair()', () => {
     } as any);
 
     // repeatCfgId should be cleared from archived task
-    expect(result.archiveYoung.task.entities['archived-t1']!.repeatCfgId).toBeUndefined();
+    expect(
+      result.data.archiveYoung.task.entities['archived-t1']!.repeatCfgId,
+    ).toBeUndefined();
   });
 
   it('should preserve valid repeatCfgId on tasks', () => {
@@ -1312,7 +1314,7 @@ describe('dataRepair()', () => {
     } as any);
 
     // repeatCfgId should be preserved since it exists
-    expect(result.task.entities.t1!.repeatCfgId).toBe('VALID_REPEAT_CFG');
+    expect(result.data.task.entities.t1!.repeatCfgId).toBe('VALID_REPEAT_CFG');
   });
 
   it('should remove from project list if task has wrong project id', () => {
@@ -1354,7 +1356,7 @@ describe('dataRepair()', () => {
         ...mock,
         project,
         task,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       project: {
@@ -1411,7 +1413,7 @@ describe('dataRepair()', () => {
         ...mock,
         project,
         task,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       project,
@@ -1467,7 +1469,7 @@ describe('dataRepair()', () => {
         ...mock,
         project,
         task,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       project,
@@ -1522,7 +1524,7 @@ describe('dataRepair()', () => {
         ...mock,
         tag,
         task,
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       tag,
@@ -1593,7 +1595,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchive,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -1671,7 +1673,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchive,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -1744,7 +1746,7 @@ describe('dataRepair()', () => {
           timeTracking: mock.archiveYoung.timeTracking,
           task: taskArchive,
         },
-      }),
+      }).data,
     ).toEqual({
       ...mock,
       task: {
@@ -1816,11 +1818,11 @@ describe('dataRepair()', () => {
     } as any);
 
     // Both tasks should have reminderId cleared (field removed)
-    expect((result.task.entities.TEST as any).reminderId).toBeUndefined();
-    expect((result.task.entities.TEST2 as any).reminderId).toBeUndefined();
+    expect((result.data.task.entities.TEST as any).reminderId).toBeUndefined();
+    expect((result.data.task.entities.TEST2 as any).reminderId).toBeUndefined();
     // dueWithTime should be preserved
-    expect(result.task.entities.TEST!.dueWithTime).toBe(12321);
-    expect(result.task.entities.TEST2!.dueWithTime).toBe(12321);
+    expect(result.data.task.entities.TEST!.dueWithTime).toBe(12321);
+    expect(result.data.task.entities.TEST2!.dueWithTime).toBe(12321);
   });
   it('should add defaults to taskRepeatCfgs', () => {
     const taskRepeatCfg = {
@@ -1875,7 +1877,7 @@ describe('dataRepair()', () => {
       dataRepair({
         ...mock,
         taskRepeatCfg: taskRepeatCfg,
-      } as any),
+      } as any).data,
     ).toEqual({
       ...mock,
       taskRepeatCfg: {
@@ -1997,14 +1999,14 @@ describe('dataRepair()', () => {
       },
     });
 
-    expect(result.task.entities['TASK1']?.tagIds).toEqual(['VALID_TAG']);
-    expect(result.task.entities['TASK2']?.tagIds).toEqual(['VALID_TAG']);
-    expect(result.task.entities['TASK3']?.tagIds).toEqual([]);
-    expect(result.task.entities['TASK4']?.tagIds).toEqual([]);
-    expect(result.archiveYoung.task.entities['ARCHIVE_TASK1']?.tagIds).toEqual([
+    expect(result.data.task.entities['TASK1']?.tagIds).toEqual(['VALID_TAG']);
+    expect(result.data.task.entities['TASK2']?.tagIds).toEqual(['VALID_TAG']);
+    expect(result.data.task.entities['TASK3']?.tagIds).toEqual([]);
+    expect(result.data.task.entities['TASK4']?.tagIds).toEqual([]);
+    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK1']?.tagIds).toEqual([
       'VALID_TAG',
     ]);
-    expect(result.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
+    expect(result.data.archiveYoung.task.entities['ARCHIVE_TASK2']?.tagIds).toEqual([]);
   });
 
   describe('should handle missing or undefined entity states (issue #6428)', () => {
@@ -2013,9 +2015,9 @@ describe('dataRepair()', () => {
         ...mock,
         issueProvider: undefined,
       } as any);
-      expect(result.issueProvider).toBeDefined();
-      expect(result.issueProvider.ids).toEqual([]);
-      expect(result.issueProvider.entities).toEqual({});
+      expect(result.data.issueProvider).toBeDefined();
+      expect(result.data.issueProvider.ids).toEqual([]);
+      expect(result.data.issueProvider.entities).toEqual({});
     });
 
     it('should not crash when issueProvider is null', () => {
@@ -2023,9 +2025,9 @@ describe('dataRepair()', () => {
         ...mock,
         issueProvider: null,
       } as any);
-      expect(result.issueProvider).toBeDefined();
-      expect(result.issueProvider.ids).toEqual([]);
-      expect(result.issueProvider.entities).toEqual({});
+      expect(result.data.issueProvider).toBeDefined();
+      expect(result.data.issueProvider.ids).toEqual([]);
+      expect(result.data.issueProvider.entities).toEqual({});
     });
 
     it('should not crash when taskRepeatCfg is undefined', () => {
@@ -2033,9 +2035,9 @@ describe('dataRepair()', () => {
         ...mock,
         taskRepeatCfg: undefined,
       } as any);
-      expect(result.taskRepeatCfg).toBeDefined();
-      expect(result.taskRepeatCfg.ids).toEqual([]);
-      expect(result.taskRepeatCfg.entities).toEqual({});
+      expect(result.data.taskRepeatCfg).toBeDefined();
+      expect(result.data.taskRepeatCfg.ids).toEqual([]);
+      expect(result.data.taskRepeatCfg.entities).toEqual({});
     });
 
     it('should not crash when multiple entity states are undefined', () => {
@@ -2047,16 +2049,16 @@ describe('dataRepair()', () => {
         metric: undefined,
         simpleCounter: undefined,
       } as any);
-      expect(result.issueProvider.ids).toEqual([]);
-      expect(result.issueProvider.entities).toEqual({});
-      expect(result.taskRepeatCfg.ids).toEqual([]);
-      expect(result.taskRepeatCfg.entities).toEqual({});
-      expect(result.note.ids).toEqual([]);
-      expect(result.note.entities).toEqual({});
-      expect(result.metric.ids).toEqual([]);
-      expect(result.metric.entities).toEqual({});
-      expect(result.simpleCounter.ids).toEqual([]);
-      expect(result.simpleCounter.entities).toEqual({});
+      expect(result.data.issueProvider.ids).toEqual([]);
+      expect(result.data.issueProvider.entities).toEqual({});
+      expect(result.data.taskRepeatCfg.ids).toEqual([]);
+      expect(result.data.taskRepeatCfg.entities).toEqual({});
+      expect(result.data.note.ids).toEqual([]);
+      expect(result.data.note.entities).toEqual({});
+      expect(result.data.metric.ids).toEqual([]);
+      expect(result.data.metric.entities).toEqual({});
+      expect(result.data.simpleCounter.ids).toEqual([]);
+      expect(result.data.simpleCounter.entities).toEqual({});
     });
 
     it('should not crash when entity state is an empty object without entities', () => {
@@ -2065,10 +2067,10 @@ describe('dataRepair()', () => {
         issueProvider: {},
         taskRepeatCfg: {},
       } as any);
-      expect(result.issueProvider.ids).toEqual([]);
-      expect(result.issueProvider.entities).toEqual({});
-      expect(result.taskRepeatCfg.ids).toEqual([]);
-      expect(result.taskRepeatCfg.entities).toEqual({});
+      expect(result.data.issueProvider.ids).toEqual([]);
+      expect(result.data.issueProvider.entities).toEqual({});
+      expect(result.data.taskRepeatCfg.ids).toEqual([]);
+      expect(result.data.taskRepeatCfg.entities).toEqual({});
     });
   });
 
@@ -2092,7 +2094,7 @@ describe('dataRepair()', () => {
         taskRepeatCfg: taskRepeatCfgState,
       } as any);
 
-      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+      expect(result.data.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
     });
 
     it('should change quickSetting to CUSTOM when YEARLY_CURRENT_DATE has no startDate', () => {
@@ -2114,7 +2116,7 @@ describe('dataRepair()', () => {
         taskRepeatCfg: taskRepeatCfgState,
       } as any);
 
-      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+      expect(result.data.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
     });
 
     it('should change quickSetting to CUSTOM when MONTHLY_CURRENT_DATE has no startDate', () => {
@@ -2136,7 +2138,7 @@ describe('dataRepair()', () => {
         taskRepeatCfg: taskRepeatCfgState,
       } as any);
 
-      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
+      expect(result.data.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual('CUSTOM');
     });
 
     it('should NOT change quickSetting when startDate is provided', () => {
@@ -2158,7 +2160,7 @@ describe('dataRepair()', () => {
         taskRepeatCfg: taskRepeatCfgState,
       } as any);
 
-      expect(result.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual(
+      expect(result.data.taskRepeatCfg.entities['TEST']?.quickSetting).toEqual(
         'WEEKLY_CURRENT_WEEKDAY',
       );
     });
@@ -2189,10 +2191,139 @@ describe('dataRepair()', () => {
         taskRepeatCfg: taskRepeatCfgState,
       } as any);
 
-      expect(result.taskRepeatCfg.entities['TEST_DAILY']?.quickSetting).toEqual('DAILY');
-      expect(result.taskRepeatCfg.entities['TEST_CUSTOM']?.quickSetting).toEqual(
+      expect(result.data.taskRepeatCfg.entities['TEST_DAILY']?.quickSetting).toEqual(
+        'DAILY',
+      );
+      expect(result.data.taskRepeatCfg.entities['TEST_CUSTOM']?.quickSetting).toEqual(
         'CUSTOM',
       );
+    });
+  });
+
+  it('should return repairSummary with invalidReferencesRemoved when tag references non-existent task', () => {
+    const task1: Task = {
+      ...DEFAULT_TASK,
+      id: 'task1',
+      title: 'existing task',
+      projectId: FAKE_PROJECT_ID,
+      tagIds: ['tag1'],
+    };
+    mock.task = {
+      ...mock.task,
+      ...fakeEntityStateFromArray<Task>([task1]),
+    } as any;
+    mock.tag = fakeEntityStateFromArray<Tag>([
+      {
+        ...DEFAULT_TAG,
+        id: 'tag1',
+        title: 'Tag 1',
+        taskIds: ['task1', 'non-existent-task'],
+      },
+      { ...TODAY_TAG, taskIds: [] },
+    ]);
+    (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['task1'];
+
+    const result = dataRepair(mock);
+    expect(result.repairSummary.invalidReferencesRemoved).toBeGreaterThan(0);
+  });
+
+  describe('invalid dueDay/deadlineDay sanitization (#6908)', () => {
+    it('should clear invalid dueDay from task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'INVALID_DUE',
+            title: 'INVALID_DUE',
+            projectId: FAKE_PROJECT_ID,
+            dueDay: '-/-/2026' as any,
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['INVALID_DUE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['INVALID_DUE']!.dueDay).toBeUndefined();
+    });
+
+    it('should clear invalid deadlineDay from task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'INVALID_DEADLINE',
+            title: 'INVALID_DEADLINE',
+            projectId: FAKE_PROJECT_ID,
+            deadlineDay: 'garbage' as any,
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['INVALID_DEADLINE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['INVALID_DEADLINE']!.deadlineDay).toBeUndefined();
+    });
+
+    it('should preserve valid dueDay on task', () => {
+      const taskState = {
+        ...mock.task,
+        ...fakeEntityStateFromArray<Task>([
+          {
+            ...DEFAULT_TASK,
+            id: 'VALID_DUE',
+            title: 'VALID_DUE',
+            projectId: FAKE_PROJECT_ID,
+            dueDay: '2026-03-21',
+          },
+        ]),
+      } as any;
+      (mock.project.entities[FAKE_PROJECT_ID] as any).taskIds = ['VALID_DUE'];
+
+      const result = dataRepair({
+        ...mock,
+        task: taskState,
+      });
+
+      expect(result.data.task.entities['VALID_DUE']!.dueDay).toBe('2026-03-21');
+    });
+
+    it('should clear invalid dueDay from archived task', () => {
+      const archiveTask: Task = {
+        ...DEFAULT_TASK,
+        id: 'ARCHIVED_INVALID',
+        title: 'ARCHIVED_INVALID',
+        projectId: FAKE_PROJECT_ID,
+        dueDay: '-/-/2026' as any,
+      };
+
+      const archiveTaskState: TaskArchive = {
+        ids: [archiveTask.id],
+        entities: {
+          [archiveTask.id]: archiveTask,
+        },
+      };
+
+      const result = dataRepair({
+        ...mock,
+        archiveYoung: {
+          ...mock.archiveYoung,
+          task: archiveTaskState,
+        },
+      });
+
+      expect(
+        result.data.archiveYoung.task.entities['ARCHIVED_INVALID']!.dueDay,
+      ).toBeUndefined();
     });
   });
 });

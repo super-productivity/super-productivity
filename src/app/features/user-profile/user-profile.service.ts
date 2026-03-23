@@ -3,13 +3,11 @@ import { DEFAULT_PROFILE_ID, ProfileMetadata, UserProfile } from './user-profile
 import { UserProfileStorageService } from './user-profile-storage.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { BackupService } from '../../op-log/backup/backup.service';
-import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { Log } from '../../core/log';
 import { nanoid } from 'nanoid';
 import { SnackService } from '../../core/snack/snack.service';
-import { Store } from '@ngrx/store';
-import { updateGlobalConfigSection } from '../config/store/global-config.actions';
 import { DEFAULT_GLOBAL_CONFIG } from '../config/default-global-config.const';
+import { AppDataComplete, MODEL_CONFIGS } from '../../op-log/model/model-config';
 import type { SyncWrapperService } from '../../imex/sync/sync-wrapper.service';
 
 /**
@@ -23,10 +21,8 @@ export class UserProfileService {
   private readonly _storageService = inject(UserProfileStorageService);
   private readonly _providerManager = inject(SyncProviderManager);
   private readonly _backupService = inject(BackupService);
-  private readonly _opLogStore = inject(OperationLogStoreService);
   private readonly _snackService = inject(SnackService);
   private readonly _injector = inject(Injector);
-  private readonly _store = inject(Store);
 
   // Lazy-loaded to avoid circular dependency:
   // UserProfileService → SyncWrapperService → DataInitService → UserProfileService
@@ -354,46 +350,43 @@ export class UserProfileService {
 
       // Step 7: Handle target profile data
       if (targetData) {
-        // Profile has existing data - import it
-        // importCompleteBackup will reload the window automatically
-        Log.log('UserProfileService: Importing target profile data (will reload app)');
+        // Profile has existing data - import it.
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData,
+        // fully replacing all NgRx feature state in-memory (no page reload needed).
+        Log.log('UserProfileService: Importing target profile data');
         await this._backupService.importCompleteBackup(
           targetData,
           false, // isSkipLegacyWarnings
-          false, // isSkipReload - let it reload automatically
+          false, // isSkipReload
         );
-        // App will reload here, no code after this will execute
       } else {
-        // Profile is empty (newly created) - clear the database and set up with profiles enabled
+        // Profile is empty (newly created) - import a clean default state with profiles enabled
         Log.log(
-          'UserProfileService: Target profile has no data, clearing database for fresh start',
-        );
-        // Clear all operations to start fresh
-        await this._opLogStore.clearAllOperations();
-
-        // IMPORTANT: Enable user profiles in the new profile's config
-        // Otherwise the user won't see the profile button to switch back
-        // We dispatch to NgRx to update the config
-        Log.log('UserProfileService: Enabling user profiles in new profile config');
-        const defaultConfig = DEFAULT_GLOBAL_CONFIG;
-        this._store.dispatch(
-          updateGlobalConfigSection({
-            sectionKey: 'appFeatures',
-            sectionCfg: {
-              ...defaultConfig.appFeatures,
-              isEnableUserProfiles: true,
-            } as any, // Type cast needed for section-specific config
-          }),
+          'UserProfileService: Target profile has no data, importing default empty state',
         );
 
-        Log.log(
-          'UserProfileService: Database cleared and profiles enabled, reloading app',
-        );
+        // Build a complete empty AppDataComplete from model defaults, with user profiles enabled
+        const emptyData: AppDataComplete = {} as AppDataComplete;
+        for (const [key, config] of Object.entries(MODEL_CONFIGS)) {
+          (emptyData as Record<string, unknown>)[key] = config.defaultData;
+        }
+        // IMPORTANT: Enable user profiles so the user can switch back
+        emptyData.globalConfig = {
+          ...DEFAULT_GLOBAL_CONFIG,
+          appFeatures: {
+            ...DEFAULT_GLOBAL_CONFIG.appFeatures,
+            isEnableUserProfiles: true,
+          },
+        };
 
-        // Reload manually for empty profile case
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
+        Log.log('UserProfileService: Importing empty default state');
+        // importCompleteBackup clears ops + state_cache and dispatches loadAllData,
+        // fully replacing all NgRx feature state in-memory (no page reload needed).
+        await this._backupService.importCompleteBackup(
+          emptyData,
+          true, // isSkipLegacyWarnings
+          false, // isSkipReload
+        );
       }
     } catch (error) {
       Log.err('UserProfileService: Failed to switch profile', error);

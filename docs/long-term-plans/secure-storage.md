@@ -1,5 +1,7 @@
 # Secure Credential Storage Implementation Plan
 
+> **Status: Planned**
+
 ## Overview
 
 Implement platform-specific secure storage for all sync provider credentials (SuperSync, WebDAV, Dropbox) with automatic silent migration from plaintext IndexedDB storage.

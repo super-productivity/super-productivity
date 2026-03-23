@@ -1,9 +1,44 @@
-import { TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS } from './task-repeat-cfg-form.const';
+import {
+  TASK_REPEAT_CFG_ADVANCED_FORM_CFG,
+  TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG,
+} from './task-repeat-cfg-form.const';
 import { TaskReminderOptionId } from '../../tasks/task.model';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('TaskRepeatCfgFormConfig', () => {
+  describe('startDate field parser (issue #6860)', () => {
+    const startDateField = TASK_REPEAT_CFG_ESSENTIAL_FORM_CFG.find(
+      (field) => field.key === 'startDate',
+    );
+    const parser = startDateField?.parsers?.[0] as (val: unknown) => unknown;
+
+    it('should have a parser defined', () => {
+      expect(parser).toBeDefined();
+    });
+
+    it('should convert Date objects to date strings', () => {
+      const date = new Date(2026, 2, 18);
+      expect(parser(date)).toBe(getDbDateStr(date));
+    });
+
+    it('should pass through string values unchanged', () => {
+      expect(parser('2026-03-18')).toBe('2026-03-18');
+    });
+
+    it('should NOT convert null to epoch date (1970-01-01)', () => {
+      // This is the core regression test for issue #6860:
+      // getDbDateStr(null) returns '1970-01-01', but the parser should
+      // pass null through so the required validator can handle it
+      expect(parser(null)).toBeNull();
+    });
+
+    it('should pass through undefined unchanged', () => {
+      expect(parser(undefined)).toBeUndefined();
+    });
+  });
+
   describe('remindAt field', () => {
-    const remindAtField = TASK_REPEAT_CFG_FORM_CFG_BEFORE_TAGS.flatMap((field) =>
+    const remindAtField = TASK_REPEAT_CFG_ADVANCED_FORM_CFG.flatMap((field) =>
       field.fieldGroup ? field.fieldGroup : [field],
     )
       .flatMap((field) => (field.fieldGroup ? field.fieldGroup : [field]))

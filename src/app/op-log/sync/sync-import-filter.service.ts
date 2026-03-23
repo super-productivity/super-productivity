@@ -6,6 +6,7 @@ import {
   VectorClockComparison,
   vectorClockToString,
 } from '../../core/util/vector-clock';
+import { MAX_VECTOR_CLOCK_SIZE } from '../core/operation-log.const';
 import { OpLog } from '../../core/log';
 
 /**
@@ -58,10 +59,12 @@ export class SyncImportFilterService {
    * | GREATER_THAN   | Op created after seeing import       | ✅ Keep |
    * | EQUAL          | Same causal history as import        | ✅ Keep |
    * | LESS_THAN      | Op dominated by import               | ❌ Filter|
-   * | CONCURRENT     | Op created without knowledge of import| ❌ Filter|
+   * | CONCURRENT     | See below                            | Depends |
    *
-   * CONCURRENT ops are filtered even if they come from a client the import
-   * didn't know about. This ensures a true "restore to point in time" semantic.
+   * CONCURRENT ops from **unknown clients** (import clock has no entry for the
+   * op's clientId) are KEPT when the import clock hasn't been pruned
+   * (size < MAX_VECTOR_CLOCK_SIZE). These represent independent timelines
+   * the import never intended to supersede. All other CONCURRENT ops are filtered.
    *
    * The import can be in the current batch OR in the local store from a
    * previous sync cycle. We check both to handle the case where old ops from
@@ -119,19 +122,20 @@ export class SyncImportFilterService {
       return { validOps: ops, invalidatedOps: [], isLocalUnsyncedImport: false };
     }
 
-    // Determine if the filtering import is a local unsynced import.
+    // Determine if the filtering import was created locally (by this client).
     // This is used to decide whether to show the conflict dialog.
     //
     // isLocalUnsyncedImport is TRUE only when:
     // 1. We're using the stored entry (not a batch import)
     // 2. The stored entry was created locally (source='local')
-    // 3. It hasn't been synced yet (no syncedAt)
+    // 3. The import has NOT been synced yet (!syncedAt)
     //
-    // When true, the dialog SHOULD show - user must choose between their local
-    // import and the remote data being filtered.
-    //
-    // When false (batch import, remote stored import, or synced local import),
-    // the dialog should NOT show - old ops are silently discarded.
+    // Once a local import has been synced to the server (syncedAt is set),
+    // the import is established as the new baseline. Old remote ops that are
+    // CONCURRENT with it are just stragglers that should be silently discarded
+    // — the user already made their choice when they created the import, and
+    // the server already has it. Showing the dialog again would cause an
+    // infinite loop since the dialog returns before lastServerSeq is persisted.
     const isLocalUnsyncedImport =
       usingStoredEntry &&
       !!storedEntry &&
@@ -168,12 +172,9 @@ export class SyncImportFilterService {
       // Clean Slate Semantics:
       // - GREATER_THAN: Op was created by a client that SAW the import → KEEP
       // - EQUAL: Same causal history as import → KEEP
-      // - CONCURRENT: Op created WITHOUT knowledge of import → FILTER
+      // - CONCURRENT + unknown client (not in import clock, clock not pruned) → KEEP
+      // - CONCURRENT (all other cases) → FILTER
       // - LESS_THAN: Op is dominated by import → FILTER
-      //
-      // CONCURRENT ops are filtered even from "unknown" clients. The import is
-      // an explicit user action to restore to a specific state - any concurrent
-      // work is intentionally discarded to ensure a clean slate.
       const comparison = compareVectorClocks(op.vectorClock, importClockForComparison);
 
       // DIAGNOSTIC LOGGING: Log vector clock comparison details
@@ -206,6 +207,51 @@ export class SyncImportFilterService {
         OpLog.normal(
           `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) despite CONCURRENT - same client as import.\n` +
             `  Client ${op.clientId} counter: op=${op.vectorClock[op.clientId]} > import=${importClockForComparison[op.clientId]} (post-import op).`,
+        );
+        validOps.push(op);
+      } else if (
+        comparison === VectorClockComparison.CONCURRENT &&
+        op.clientId !== latestImport.clientId &&
+        (op.vectorClock[latestImport.clientId] ?? 0) >=
+          (importClockForComparison[latestImport.clientId] ?? 0) &&
+        (importClockForComparison[latestImport.clientId] ?? 0) > 0
+      ) {
+        // Op was created by a DIFFERENT client with knowledge of the import.
+        // The SYNC_IMPORT incremented the importing client's counter, so any op whose
+        // clock includes that counter value (or higher) must have received the import
+        // (directly or transitively). CONCURRENT here is a clock-reset artifact: after
+        // receiving a SYNC_IMPORT, clients reset their working clock to minimal (only
+        // the import client's entry + own entry), so post-import ops lack entries for
+        // old/dead client IDs that are still in the import's stored clock.
+        //
+        // ASSUMPTION: This relies on the SYNC_IMPORT op persisting in the op log for
+        // filtering. Transitive propagation (client C learns import counter from client B
+        // without directly receiving the import) is safe because the filter only runs
+        // against ops that coexist with the SYNC_IMPORT in the log.
+        //
+        // NOTE: Ops from the import client itself are handled by the same-client check
+        // above (which requires strictly greater counter, not equal).
+        OpLog.normal(
+          `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) despite CONCURRENT ` +
+            `- op has import client ${latestImport.clientId} counter ` +
+            `${op.vectorClock[latestImport.clientId]} >= import counter ` +
+            `${importClockForComparison[latestImport.clientId]} (post-import via clock reset).`,
+        );
+        validOps.push(op);
+      } else if (
+        comparison === VectorClockComparison.CONCURRENT &&
+        importClockForComparison[op.clientId] === undefined &&
+        Object.keys(importClockForComparison).length < MAX_VECTOR_CLOCK_SIZE
+      ) {
+        // Import has NO knowledge of this client — independent timelines that never
+        // communicated. The import was created in complete ignorance of this client.
+        // Filtering would silently discard data the import never intended to supersede.
+        //
+        // Safety: only apply when clock hasn't been pruned (size < MAX_VECTOR_CLOCK_SIZE).
+        // If pruning occurred, a missing entry might be a pruned one, not truly unknown.
+        OpLog.normal(
+          `SyncImportFilterService: KEEPING op ${op.id} (${op.actionType}) despite CONCURRENT ` +
+            `- import has no knowledge of client ${op.clientId} (independent timeline).`,
         );
         validOps.push(op);
       } else {

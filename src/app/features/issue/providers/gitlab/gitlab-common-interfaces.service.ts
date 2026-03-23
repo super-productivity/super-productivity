@@ -1,55 +1,47 @@
 import { inject, Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { Task } from 'src/app/features/tasks/task.model';
-import { concatMap, first, map, switchMap } from 'rxjs/operators';
-import { IssueServiceInterface } from '../../issue-service-interface';
+import { firstValueFrom, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { Task, TaskCopy } from 'src/app/features/tasks/task.model';
+import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
+import { IssueData, SearchResultItem } from '../../issue.model';
 import { GitlabApiService } from './gitlab-api/gitlab-api.service';
-import { IssueData, IssueProviderGitlab, SearchResultItem } from '../../issue.model';
 import { GitlabCfg } from './gitlab.model';
 import { GitlabIssue } from './gitlab-issue.model';
 import { truncate } from '../../../../util/truncate';
 import { GITLAB_BASE_URL, GITLAB_POLL_INTERVAL } from './gitlab.const';
-import { isGitlabEnabled } from './is-gitlab-enabled.util';
-import { IssueProviderService } from '../../issue-provider.service';
 
 @Injectable({
   providedIn: 'root',
 })
-export class GitlabCommonInterfacesService implements IssueServiceInterface {
+export class GitlabCommonInterfacesService extends BaseIssueProviderService<GitlabCfg> {
   private readonly _gitlabApiService = inject(GitlabApiService);
-  private readonly _issueProviderService = inject(IssueProviderService);
 
-  pollInterval: number = GITLAB_POLL_INTERVAL;
+  readonly providerKey = 'GITLAB' as const;
+  readonly pollInterval: number = GITLAB_POLL_INTERVAL;
 
   isEnabled(cfg: GitlabCfg): boolean {
-    return isGitlabEnabled(cfg);
+    return !!cfg && cfg.isEnabled && !!cfg.project;
   }
 
   testConnection(cfg: GitlabCfg): Promise<boolean> {
-    return this._gitlabApiService
-      .searchIssueInProject$('', cfg)
-      .pipe(
-        map((res) => Array.isArray(res)),
-        first(),
-      )
-      .toPromise()
-      .then((result) => result ?? false);
+    return firstValueFrom(
+      this._gitlabApiService
+        .searchIssueInProject$('', cfg)
+        .pipe(map((res) => Array.isArray(res))),
+    ).then((result) => result ?? false);
   }
 
   issueLink(issueId: string, issueProviderId: string): Promise<string> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(
+    return firstValueFrom(
+      this._getCfgOnce$(issueProviderId).pipe(
         map((cfg) => {
           const project: string | null = cfg.project;
 
-          // Handle case where project is not configured
           if (!project) {
             return '';
           }
 
           // Extract just the numeric issue ID from formats like 'project/repo#123' or '#123'
-          // Note: issueId is intentionally stored as 'project/repo#123' to ensure uniqueness across different projects
-          // but for URL construction we only need the numeric part after the '#'
           const cleanIssueId = issueId.toString().replace(/^.*#/, '');
 
           if (cfg.gitlabBaseUrl) {
@@ -61,37 +53,32 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
             return `${GITLAB_BASE_URL}${project}/-/issues/${cleanIssueId}`;
           }
         }),
-      )
-      .toPromise()
-      .then((result) => result ?? '');
+      ),
+    ).then((result) => result ?? '');
   }
 
-  getById(issueId: string, issueProviderId: string): Promise<GitlabIssue> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(concatMap((gitlabCfg) => this._gitlabApiService.getById$(issueId, gitlabCfg)))
-      .toPromise()
-      .then((result) => {
-        if (!result) {
-          throw new Error('Failed to get GitLab issue');
-        }
-        return result;
-      });
+  getAddTaskData(issue: GitlabIssue): Partial<Task> & { title: string } {
+    return {
+      title: this._formatIssueTitle(issue),
+      issuePoints: issue.weight,
+      issueWasUpdated: false,
+      issueLastUpdated: new Date(issue.updated_at).getTime(),
+      issueId: issue.id,
+      isDone: issue.state === 'closed',
+      dueDay: issue.due_date || undefined,
+    };
   }
 
-  searchIssues(searchTerm: string, issueProviderId: string): Promise<SearchResultItem[]> {
-    return this._getCfgOnce$(issueProviderId)
-      .pipe(
-        switchMap((gitlabCfg) =>
-          this.isEnabled(gitlabCfg)
-            ? this._gitlabApiService.searchIssueInProject$(searchTerm, gitlabCfg)
-            : of([]),
-        ),
-      )
-      .toPromise()
-      .then((result) => result ?? []);
+  async getNewIssuesToAddToBacklog(
+    issueProviderId: string,
+    _allExistingIssueIds: number[] | string[],
+  ): Promise<IssueData[]> {
+    const cfg = await firstValueFrom(this._getCfgOnce$(issueProviderId));
+    return await firstValueFrom(this._gitlabApiService.getProjectIssues$(cfg));
   }
 
-  async getFreshDataForIssueTask(task: Task): Promise<{
+  // Uses comment filtering for update detection
+  override async getFreshDataForIssueTask(task: Task): Promise<{
     taskChanges: Partial<Task>;
     issue: GitlabIssue;
     issueTitle: string;
@@ -103,8 +90,10 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
       throw new Error('No issueId');
     }
 
-    const cfg = await this._getCfgOnce$(task.issueProviderId).toPromise();
-    const issue = await this._gitlabApiService.getById$(task.issueId, cfg).toPromise();
+    const cfg = await firstValueFrom(this._getCfgOnce$(task.issueProviderId));
+    const issue = await firstValueFrom(
+      this._gitlabApiService.getById$(task.issueId, cfg),
+    );
 
     const issueUpdate: number = new Date(issue.updated_at).getTime();
     const commentsByOthers =
@@ -124,79 +113,47 @@ export class GitlabCommonInterfacesService implements IssueServiceInterface {
       issueUpdate > (task.issueLastUpdated || 0);
 
     if (wasUpdated) {
+      // Exclude dueDay from polling updates to prevent overwriting
+      // user-set schedules (see issue #6792)
+      const taskData: Partial<TaskCopy> & { title: string } = {
+        ...this.getAddTaskData(issue),
+      };
+      delete taskData.dueDay;
       return {
         taskChanges: {
-          ...this.getAddTaskData(issue),
+          ...taskData,
           issueWasUpdated: true,
         },
         issue,
-        issueTitle: this._formatIssueTitleForSnack(issue),
+        issueTitle: truncate(this._formatIssueTitle(issue)),
       };
     }
     return null;
   }
 
-  async getFreshDataForIssueTasks(
-    tasks: Task[],
-  ): Promise<{ task: Task; taskChanges: Partial<Task>; issue: GitlabIssue }[]> {
-    return Promise.all(
-      tasks.map((task) =>
-        this.getFreshDataForIssueTask(task).then((refreshDataForTask) => ({
-          task,
-          refreshDataForTask,
-        })),
-      ),
-    ).then((items) => {
-      return items
-        .filter(({ refreshDataForTask }) => !!refreshDataForTask)
-        .map(({ refreshDataForTask, task }) => {
-          if (!refreshDataForTask) {
-            throw new Error('No refresh data for task js error');
-          }
-          return {
-            task,
-            taskChanges: refreshDataForTask.taskChanges,
-            issue: refreshDataForTask.issue,
-          };
-        });
-    });
+  protected _apiGetById$(
+    id: string | number,
+    cfg: GitlabCfg,
+  ): Observable<IssueData | null> {
+    return this._gitlabApiService.getById$(id.toString(), cfg);
   }
 
-  getAddTaskData(issue: GitlabIssue): Partial<Task> & { title: string } {
-    return {
-      title: this._formatIssueTitle(issue),
-      issuePoints: issue.weight,
-      issueWasUpdated: false,
-      issueLastUpdated: new Date(issue.updated_at).getTime(),
-      issueId: issue.id,
-      isDone: this._isIssueDone(issue),
-      // GitLab returns due_date as YYYY-MM-DD string, use it directly
-      // to avoid timezone conversion issues
-      dueDay: issue.due_date || undefined,
-    };
+  protected _apiSearchIssues$(
+    searchTerm: string,
+    cfg: GitlabCfg,
+  ): Observable<SearchResultItem[]> {
+    return this._gitlabApiService.searchIssueInProject$(searchTerm, cfg);
   }
 
-  async getNewIssuesToAddToBacklog(
-    issueProviderId: string,
-    allExistingIssueIds: number[] | string[],
-  ): Promise<IssueData[]> {
-    const cfg = await this._getCfgOnce$(issueProviderId).toPromise();
-    return await this._gitlabApiService.getProjectIssues$(cfg).toPromise();
+  protected _formatIssueTitleForSnack(issue: IssueData): string {
+    return truncate(this._formatIssueTitle(issue as GitlabIssue));
+  }
+
+  protected _getIssueLastUpdated(issue: IssueData): number {
+    return new Date((issue as GitlabIssue).updated_at).getTime();
   }
 
   private _formatIssueTitle(issue: GitlabIssue): string {
     return `#${issue.number} ${issue.title}`;
-  }
-
-  private _formatIssueTitleForSnack(issue: GitlabIssue): string {
-    return `${truncate(this._formatIssueTitle(issue))}`;
-  }
-
-  private _getCfgOnce$(issueProviderId: string): Observable<IssueProviderGitlab> {
-    return this._issueProviderService.getCfgOnce$(issueProviderId, 'GITLAB');
-  }
-
-  private _isIssueDone(issue: GitlabIssue): boolean {
-    return issue.state === 'closed';
   }
 }

@@ -2,7 +2,7 @@
   display: block;
 
   .help-text {
-    margin-bottom: 40px;
+    margin-bottom: var(--s5);
     border-width: 2px;
     border-left: 0;
     border-right: 0;
@@ -26,8 +26,8 @@
   }
 
   .help-icon-wrapper {
-    margin-top: 8px;
-    margin-bottom: 8px;
+    margin-top: var(--s);
+    margin-bottom: var(--s);
     text-align: center;
   }
 }

@@ -19,7 +19,7 @@
 
 h4 {
   text-align: center;
-  margin-top: 16px;
+  margin-top: var(--s2);
 }
 
 // keep in sync with src/app/features/issue-panel/issue-panel.component.scss#
@@ -27,8 +27,8 @@ h4 {
 .tab-header-item {
   min-width: 52px;
   min-height: 48px;
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: var(--s);
+  padding-right: var(--s);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,6 +54,6 @@ h4 {
   align-items: center;
   overflow: auto;
   gap: 12px;
-  margin: 4px;
-  margin-bottom: 16px;
+  margin: var(--s-half);
+  margin-bottom: var(--s2);
 }

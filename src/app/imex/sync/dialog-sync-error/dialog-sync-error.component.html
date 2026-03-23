@@ -1,0 +1,90 @@
+<mat-dialog-content>
+  <div style="text-align: center; margin-bottom: 16px">
+    <mat-icon
+      color="warn"
+      style="font-size: 48px; height: 48px; width: 48px"
+      aria-hidden="true"
+      >error
+    </mat-icon>
+  </div>
+
+  @if (data.type === 'incomplete-sync') {
+    <p>
+      <strong> {{ T.F.SYNC.D_INCOMPLETE_SYNC.P1 | translate }} </strong>
+    </p>
+
+    <p>
+      {{ T.F.SYNC.D_INCOMPLETE_SYNC.P2 | translate }}
+      <strong>{{ data.modelId }}</strong>
+    </p>
+
+    <p>{{ T.F.SYNC.D_INCOMPLETE_SYNC.T3 | translate }}</p>
+
+    <p>{{ T.F.SYNC.D_INCOMPLETE_SYNC.T4 | translate }}</p>
+    <p>{{ T.F.SYNC.D_INCOMPLETE_SYNC.T5 | translate }}</p>
+
+    <p style="text-align: center; margin-top: 16px">
+      <strong> {{ T.F.SYNC.D_INCOMPLETE_SYNC.T6 | translate }} </strong>
+    </p>
+  } @else {
+    <p>
+      <strong>{{ T.F.SYNC.D_INCOMPLETE_SYNC.INCOHERENT_P1 | translate }}</strong>
+    </p>
+    <p>{{ T.F.SYNC.D_INCOMPLETE_SYNC.INCOHERENT_P2 | translate }}</p>
+  }
+
+  <div style="text-align: center; margin-bottom: 16px">
+    <button
+      (click)="downloadBackup()"
+      color="primary"
+      mat-stroked-button
+      type="button"
+    >
+      <mat-icon aria-hidden="true">file_download</mat-icon>
+      {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_DOWNLOAD_BACKUP | translate }}
+    </button>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <div class="wrap-buttons">
+    <button
+      (click)="close()"
+      color="primary"
+      mat-button
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+
+    @if (data.type === 'incomplete-sync' && !IS_ANDROID_WEB_VIEW) {
+      <button
+        (click)="closeApp()"
+        color="primary"
+        mat-stroked-button
+      >
+        <mat-icon aria-hidden="true">power_settings_new</mat-icon>
+        {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_CLOSE_APP | translate }}
+      </button>
+    }
+
+    @if (data.type === 'incoherent-timestamps') {
+      <button
+        (click)="close('FORCE_UPDATE_LOCAL')"
+        color="warn"
+        mat-stroked-button
+      >
+        <mat-icon aria-hidden="true">file_download</mat-icon>
+        {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_FORCE_DOWNLOAD | translate }}
+      </button>
+    }
+
+    <button
+      (click)="close('FORCE_UPDATE_REMOTE')"
+      color="warn"
+      mat-stroked-button
+    >
+      <mat-icon aria-hidden="true">file_upload</mat-icon>
+      {{ T.F.SYNC.D_INCOMPLETE_SYNC.BTN_FORCE_UPLOAD | translate }}
+    </button>
+  </div>
+</mat-dialog-actions>

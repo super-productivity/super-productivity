@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API-avain",
+    "API_KEY_LINK": "Hanki henkilökohtainen API-avain",
+    "TEAM_IDS": "Työtila-/tiimi-ID:t (pilkuilla eroteltuina, tyhjä = kaikki)",
+    "USER_ID": "Käyttäjä-ID (suodatus vastuuhenkilön mukaan)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Yhteenveto",
+    "STATUS": "Tila",
+    "PRIORITY": "Prioriteetti",
+    "ASSIGNEE": "Vastuuhenkilö",
+    "LABELS": "Tunnisteet",
+    "DESCRIPTION": "Kuvaus"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Tuntematon virhe. Tarkista API-avaimesi ja yritä uudelleen."
+  }
+}

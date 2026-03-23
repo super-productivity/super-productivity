@@ -246,10 +246,12 @@ export class AddTaskBarIssueSearchService {
                     first(),
                     map((ctx) => ({
                       ...task,
-                      ctx: {
-                        ...ctx,
-                        icon: (ctx && ctx.icon) || null,
-                      },
+                      ctx: ctx
+                        ? {
+                            ...ctx,
+                            icon: ctx.icon || null,
+                          }
+                        : undefined,
                     })),
                   );
                 }),
@@ -264,7 +266,7 @@ export class AddTaskBarIssueSearchService {
 
   private _filterBacklog(searchText: string, task: Task): boolean {
     try {
-      return !!task.title.toLowerCase().match(searchText.toLowerCase());
+      return !!task.title?.toLowerCase().match(searchText.toLowerCase());
     } catch (e) {
       TaskLog.err('RegEx Error', e);
       return false;
@@ -273,7 +275,7 @@ export class AddTaskBarIssueSearchService {
 
   private async _getCtxForTaskSuggestion({
     projectId,
-  }: AddTaskSuggestion): Promise<Project> {
+  }: AddTaskSuggestion): Promise<Project | undefined> {
     return await this._projectService.getByIdOnce$(projectId).toPromise();
   }
 }

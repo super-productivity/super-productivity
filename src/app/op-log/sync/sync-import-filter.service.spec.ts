@@ -250,12 +250,11 @@ describe('SyncImportFilterService', () => {
 
       const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-      // Clean Slate Semantics: Only ops with knowledge of the latest import are kept.
-      // - First two Client A ops are CONCURRENT (no knowledge of latest import) → filtered
-      // - Third Client A op is GREATER_THAN (has latest import's clock) → kept
-      // - Both SYNC_IMPORTs are kept
-      expect(result.validOps.length).toBe(3); // 2 imports + 1 post-import op
-      expect(result.invalidatedOps.length).toBe(2); // 2 concurrent ops from Client A
+      // Client A is unknown to the latest import (latest import clock {clientB:1, clientC:1}
+      // has no entry for client-A), and import clock has 2 entries (< MAX=20).
+      // Independent timeline → all Client A ops KEPT.
+      expect(result.validOps.length).toBe(5); // 2 imports + 3 Client A ops
+      expect(result.invalidatedOps.length).toBe(0);
     });
 
     it('should filter pre-import ops when SYNC_IMPORT was downloaded in a PREVIOUS sync cycle', async () => {
@@ -315,10 +314,10 @@ describe('SyncImportFilterService', () => {
 
       const result = await service.filterOpsInvalidatedBySyncImport(oldOpsFromClientA);
 
-      // Clean Slate Semantics: CONCURRENT ops are filtered, even from unknown clients.
-      // These ops have no knowledge of the import, so they're invalidated.
-      expect(result.validOps.length).toBe(0);
-      expect(result.invalidatedOps.length).toBe(2);
+      // Client A is unknown to the import (not in import's clock), and import
+      // clock has 1 entry (< MAX=20). Independent timeline → KEPT.
+      expect(result.validOps.length).toBe(2);
+      expect(result.invalidatedOps.length).toBe(0);
       expect(opLogStoreSpy.getLatestFullStateOpEntry).toHaveBeenCalled();
     });
 
@@ -371,7 +370,7 @@ describe('SyncImportFilterService', () => {
     });
 
     describe('vector clock based filtering', () => {
-      it('should filter CONCURRENT ops (client had no knowledge of import)', async () => {
+      it('should KEEP CONCURRENT ops from unknown client (independent timeline)', async () => {
         const ops: Operation[] = [
           {
             id: '019afd70-0001-7000-0000-000000000000',
@@ -401,10 +400,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Clean Slate Semantics: CONCURRENT ops are filtered, even from unknown clients.
-        // Client B's op has no knowledge of the import, so it's invalidated.
-        expect(result.validOps.length).toBe(1); // Only SYNC_IMPORT
-        expect(result.invalidatedOps.length).toBe(1); // Client B's concurrent op
+        // Client B is unknown to the import (not in import's clock), and import
+        // clock has 1 entry (< MAX=20). Independent timeline → KEPT.
+        expect(result.validOps.length).toBe(2); // SYNC_IMPORT + Client B's op
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should filter LESS_THAN ops (dominated by import)', async () => {
@@ -541,11 +540,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Clean Slate Semantics: CONCURRENT ops are filtered based on vector clock,
-        // NOT UUIDv7 timestamp. Even though UUIDv7 is later, vector clock shows
-        // no knowledge of import, so it's filtered.
-        expect(result.validOps.length).toBe(1); // Only SYNC_IMPORT
-        expect(result.invalidatedOps.length).toBe(1); // Client B's concurrent op
+        // Client B is unknown to the import (not in import's clock), and import
+        // clock has 1 entry (< MAX=20) so no pruning. Independent timeline → KEPT.
+        expect(result.validOps.length).toBe(2); // SYNC_IMPORT + Client B's op
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should handle REPAIR operations the same as SYNC_IMPORT', async () => {
@@ -578,10 +576,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Clean Slate Semantics: REPAIR ops are handled the same as SYNC_IMPORT.
-        // CONCURRENT ops are filtered, even from unknown clients.
-        expect(result.validOps.length).toBe(1); // Only REPAIR
-        expect(result.invalidatedOps.length).toBe(1); // Client B's concurrent op
+        // Client B is unknown to the REPAIR (not in its clock), and clock has
+        // 1 entry (< MAX=20). Independent timeline → KEPT.
+        expect(result.validOps.length).toBe(2); // REPAIR + Client B's op
+        expect(result.invalidatedOps.length).toBe(0);
       });
     });
 
@@ -706,9 +704,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(unknownClientOp);
 
-        // Should be FILTERED - no knowledge of import means it's pre-import state
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Client B is unknown to the import (not in import's clock), and import
+        // clock has 1 entry (< MAX=20). Independent timeline → KEPT.
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should handle multiple clients scenario correctly', async () => {
@@ -850,9 +849,9 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should incorrectly filter ops when SYNC_IMPORT client was pruned (bug scenario)', async () => {
-        // This test documents the BUGGY behavior before the fix:
-        // When the import client's entry is pruned, new ops appear CONCURRENT
+      it('should KEEP ops from unknown client even when import entry was pruned from op clock', async () => {
+        // Previously documented as a bug, now fixed by the independent timeline recovery:
+        // import clock has 1 entry (< MAX=20), clientB is not in import clock → KEEP
 
         const existingSyncImport: Operation = {
           id: '019afd68-0050-7000-0000-000000000000',
@@ -877,7 +876,6 @@ describe('SyncImportFilterService', () => {
           }),
         );
 
-        // WITHOUT the fix: clientA was pruned from clock (low counter)
         const opWithPrunedClock: Operation[] = [
           {
             id: '019afd70-0001-7000-0000-000000000000',
@@ -887,7 +885,7 @@ describe('SyncImportFilterService', () => {
             entityId: 'new-task-1',
             payload: { title: 'My new task' },
             clientId: 'clientB',
-            vectorClock: { clientB: 9747 }, // clientA was pruned!
+            vectorClock: { clientB: 9747 }, // clientA was pruned from op's clock
             timestamp: Date.now(),
             schemaVersion: 1,
           },
@@ -895,10 +893,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(opWithPrunedClock);
 
-        // BUG: Op is CONCURRENT with import (clientA: 0 vs 1) → filtered
-        // This documents the buggy behavior that the fix prevents
-        expect(result.invalidatedOps.length).toBe(1);
-        expect(result.validOps.length).toBe(0);
+        // KEPT: import has no knowledge of clientB (not in import's clock),
+        // and import clock has 1 entry (< MAX=20) → independent timeline
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
     });
 
@@ -926,7 +924,8 @@ describe('SyncImportFilterService', () => {
         expect(result.filteringImport).toBeDefined();
         expect(result.filteringImport!.id).toBe('019afd68-0050-7000-0000-000000000000');
         expect(result.filteringImport!.opType).toBe(OpType.SyncImport);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-B not in import clock {clientA:5}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should return filteringImport when ops are filtered by stored SYNC_IMPORT', async () => {
@@ -968,8 +967,9 @@ describe('SyncImportFilterService', () => {
         expect(result.filteringImport).toBeDefined();
         expect(result.filteringImport!.id).toBe(storedImport.id);
         expect(result.filteringImport!.clientId).toBe('client-A');
-        expect(result.invalidatedOps.length).toBe(1);
-        expect(result.validOps.length).toBe(0);
+        // Unknown client (client-B not in import clock {clientA:5}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
+        expect(result.validOps.length).toBe(1);
       });
 
       it('should return undefined filteringImport when no import exists', async () => {
@@ -1101,7 +1101,8 @@ describe('SyncImportFilterService', () => {
 
         expect(result.filteringImport).toBeDefined();
         expect(result.filteringImport!.opType).toBe(OpType.BackupImport);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-B not in import clock {clientA:5}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
     });
 
@@ -1152,7 +1153,8 @@ describe('SyncImportFilterService', () => {
         ]);
 
         expect(result.isLocalUnsyncedImport).toBe(false);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-A not in import clock {clientB:1}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should set isLocalUnsyncedImport=true when stored import is local and unsynced', async () => {
@@ -1180,10 +1182,13 @@ describe('SyncImportFilterService', () => {
         const result = await service.filterOpsInvalidatedBySyncImport([oldOp]);
 
         expect(result.isLocalUnsyncedImport).toBe(true);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-B not in import clock {clientA:1}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should set isLocalUnsyncedImport=false when stored import is local but already synced', async () => {
+        // Once synced, the import is established — old straggler ops should be
+        // silently discarded without showing the conflict dialog.
         const storedImportOp = createOp({
           id: '019afd68-0050-7000-0000-000000000000',
           opType: OpType.SyncImport,
@@ -1207,7 +1212,8 @@ describe('SyncImportFilterService', () => {
         const result = await service.filterOpsInvalidatedBySyncImport([oldOp]);
 
         expect(result.isLocalUnsyncedImport).toBe(false);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-B not in import clock {clientA:1}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should set isLocalUnsyncedImport=false when stored import is remote', async () => {
@@ -1234,7 +1240,8 @@ describe('SyncImportFilterService', () => {
         const result = await service.filterOpsInvalidatedBySyncImport([oldOp]);
 
         expect(result.isLocalUnsyncedImport).toBe(false);
-        expect(result.invalidatedOps.length).toBe(1);
+        // Unknown client (client-C not in import clock {clientB:1}, size 1 < MAX) → KEPT
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should prefer batch import over stored import when determining isLocalUnsyncedImport', async () => {
@@ -1280,22 +1287,23 @@ describe('SyncImportFilterService', () => {
     });
 
     /* eslint-disable @typescript-eslint/naming-convention */
-    describe('CONCURRENT ops from new clients are filtered (clean slate semantics)', () => {
+    describe('CONCURRENT ops from unknown clients (independent timeline recovery)', () => {
       /**
-       * With MAX_VECTOR_CLOCK_SIZE=20, server-side pruning requires 21+ unique client
-       * IDs — extremely unlikely for a personal productivity app. CONCURRENT ops are
-       * now always filtered, enforcing strict clean-slate semantics for SYNC_IMPORT.
+       * When a SYNC_IMPORT has NO knowledge of a client (no entry in import's clock),
+       * and the import clock hasn't been pruned (size < MAX_VECTOR_CLOCK_SIZE),
+       * ops from that client are KEPT as independent timelines the import never
+       * intended to supersede.
        *
-       * The same-client check (separate describe block) still definitively keeps ops
-       * from the import's own client with a higher counter.
+       * When the import clock IS at MAX size, missing entries might be pruned ones,
+       * so we conservatively FILTER to maintain clean-slate safety.
        */
 
       // Helper: build a clock with exactly N entries
       const buildClock = (entries: Record<string, number>): Record<string, number> =>
         entries;
 
-      it('should FILTER ops from new client when server-side pruning causes CONCURRENT', async () => {
-        // SYNC_IMPORT with 10 entries
+      it('should KEEP ops from unknown client when import clock is below MAX size', async () => {
+        // SYNC_IMPORT with 10 entries (< MAX=20, so no pruning possible)
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1327,9 +1335,8 @@ describe('SyncImportFilterService', () => {
           }),
         );
 
-        // New mobile client A_DReS (NOT in import's clock) creates op after
-        // receiving import. Server pruned A_Zw6o:88, added A_DReS:1.
-        // This makes the clocks CONCURRENT — clean slate semantics filter it.
+        // New mobile client A_DReS (NOT in import's clock) — independent timeline.
+        // Import clock is below MAX so the missing entry means truly unknown, not pruned.
         const mobileOp = createOp({
           id: '019c42a0-0001-7000-0000-000000000000',
           opType: OpType.Create,
@@ -1353,14 +1360,13 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([mobileOp]);
 
-        // CONCURRENT ops are filtered under clean slate semantics.
-        // With MAX=20, pruning is extremely rare (21+ client IDs needed).
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
-        expect(result.invalidatedOps[0].clientId).toBe('A_DReS');
+        // KEPT: import has no knowledge of A_DReS and clock is below MAX (no pruning)
+        expect(result.validOps.length).toBe(1);
+        expect(result.validOps[0].clientId).toBe('A_DReS');
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should KEEP multiple ops from new client after import (server pruned different entries)', async () => {
+      it('should KEEP multiple ops from unknown client when import clock is below MAX', async () => {
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1431,12 +1437,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport(ops);
 
-        // Both ops are CONCURRENT with import → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(2);
+        // Both ops KEPT: import has no knowledge of A_DReS and clock is below MAX
+        expect(result.validOps.length).toBe(2);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER op from new client even when shared keys are GREATER than import', async () => {
+      it('should KEEP ops from unknown client even when shared keys are GREATER than import', async () => {
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1488,12 +1494,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([mobileOp]);
 
-        // Still CONCURRENT (has A_DReS which import doesn't, missing A_Zw6o) → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of A_DReS and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should still FILTER ops from new client with NO shared keys (genuinely unknown)', async () => {
+      it('should KEEP ops from unknown client with NO shared keys (independent timeline)', async () => {
         const importClock = buildClock({
           clientA: 5,
           clientB: 10,
@@ -1526,12 +1532,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([unknownOp]);
 
-        // Should still be filtered - no evidence this client saw the import
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of clientNew and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should still FILTER ops from new client with shared keys but LOWER values (genuinely concurrent)', async () => {
+      it('should KEEP ops from unknown client with shared keys but LOWER values', async () => {
         const importClock = buildClock({
           clientA: 100,
           clientB: 200,
@@ -1572,9 +1578,9 @@ describe('SyncImportFilterService', () => {
           genuinelyConcurrentOp,
         ]);
 
-        // Should be filtered - client has LESS knowledge than import for clientA
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of clientNew and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('should still FILTER ops from client that IS in import clock (not a new client)', async () => {
@@ -1635,7 +1641,7 @@ describe('SyncImportFilterService', () => {
         expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER op from new client even when import is in the same batch', async () => {
+      it('should KEEP op from unknown client even when import is in the same batch', async () => {
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1681,11 +1687,11 @@ describe('SyncImportFilterService', () => {
           mobileOp,
         ]);
 
-        expect(result.validOps.length).toBe(1); // only the import itself
-        expect(result.invalidatedOps.length).toBe(1); // mobile op filtered
+        expect(result.validOps.length).toBe(2); // import itself + mobile op (independent timeline)
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER op from new client when import has few entries', async () => {
+      it('should KEEP op from unknown client when import has few entries', async () => {
         const importClock = buildClock({
           clientA: 100,
           clientB: 200,
@@ -1728,12 +1734,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([newClientOp]);
 
-        // Should be FILTERED - CONCURRENT with import
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of clientNew and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER ops from new client when MULTIPLE entries were pruned (2+ entries dropped)', async () => {
+      it('should KEEP ops from unknown client when MULTIPLE entries were pruned from op clock', async () => {
         // Import has MAX entries. New client inherits clock, sees 2 more new clients,
         // resulting in MAX+3 entries. Server prunes back to MAX, dropping 3 import entries.
         const importClock = buildClock({
@@ -1794,12 +1800,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([mobileOp]);
 
-        // CONCURRENT with import → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of A_DReS and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER op from new client even when op clock has fewer than MAX entries', async () => {
+      it('should KEEP op from unknown client even when op clock has fewer entries than import', async () => {
         // Import has MAX entries. New client creates an op with fewer than MAX entries
         // (e.g., server pruned heavily or client only inherited a subset).
         // compareVectorClocks returns CONCURRENT due to asymmetric keys.
@@ -1852,14 +1858,13 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([mobileOp]);
 
-        // CONCURRENT with import → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of A_DReS and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should still FILTER ops from new client with NO shared keys when import is at MAX', async () => {
-        // Import has MAX entries but op has zero overlap - tests criteria #3
-        // at MAX size (not short-circuited by criteria #2)
+      it('should KEEP ops from completely unknown client with NO shared keys (independent timeline)', async () => {
+        // Import has 10 entries (below MAX=20), op has zero overlap
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1889,7 +1894,7 @@ describe('SyncImportFilterService', () => {
           }),
         );
 
-        // Completely unknown client with no shared keys
+        // Completely unknown client with no shared keys — independent timeline
         const unknownOp = createOp({
           id: '019c42a0-0001-7000-0000-000000000000',
           opType: OpType.Create,
@@ -1900,17 +1905,18 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([unknownOp]);
 
-        // Should be FILTERED - no shared keys means no evidence of seeing import
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of Z_unknown and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should FILTER genuinely concurrent client whose ID was pruned from import clock', async () => {
+      it('should KEEP unknown client ops even if they were once concurrent (import below MAX)', async () => {
+        // Import has 10 entries (below MAX=20). A_old1 is not in the import clock.
+        // Since the import clock hasn't been pruned, the missing entry means the
+        // import truly doesn't know about this client.
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
-          // A_old1 was pruned from the import clock (was an old entry with low counter)
-          // A_old1 is actually a pre-existing concurrent client, not a new client
           B_HSxu: 10774,
           B_pr52: 3642,
           BCL_174: 117821,
@@ -1938,9 +1944,6 @@ describe('SyncImportFilterService', () => {
           }),
         );
 
-        // A_old1 is a genuinely concurrent client (existed before import) whose ID
-        // was pruned from the import clock. Its op inherits some shared keys from
-        // a previous sync, making it look like a post-import client to the heuristic.
         const concurrentOp = createOp({
           id: '019c42a0-0001-7000-0000-000000000000',
           opType: OpType.Update,
@@ -1962,14 +1965,15 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([concurrentOp]);
 
-        // Correctly filtered as CONCURRENT — clean slate semantics
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
+        // KEPT: import has no knowledge of A_old1 and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
-      it('should still FILTER ops from new client with LOWER shared keys when import is at MAX', async () => {
-        // Import has MAX entries, op has shared keys but LOWER values - tests criteria #4
-        // at MAX size (not short-circuited by criteria #2)
+      it('should KEEP ops from unknown client with LOWER shared keys when import is below MAX', async () => {
+        // Import has 10 entries (below MAX=20). A_stale is not in import's clock.
+        // Even though the op has stale shared keys, the import has no knowledge
+        // of this client — independent timeline.
         const importClock = buildClock({
           A_bw1h: 227,
           A_wU5p: 95,
@@ -1999,7 +2003,7 @@ describe('SyncImportFilterService', () => {
           }),
         );
 
-        // New client has shared keys but saw OLDER state than import
+        // Unknown client with shared keys but stale values
         const staleOp = createOp({
           id: '019c42a0-0001-7000-0000-000000000000',
           opType: OpType.Create,
@@ -2022,7 +2026,131 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([staleOp]);
 
-        // Should be FILTERED - shared key A_bw1h (100 < 227) proves stale knowledge
+        // KEPT: import has no knowledge of A_stale and clock is below MAX
+        expect(result.validOps.length).toBe(1);
+        expect(result.invalidatedOps.length).toBe(0);
+      });
+
+      it('should FILTER unknown client ops when import clock is AT MAX_VECTOR_CLOCK_SIZE', async () => {
+        // Import has exactly MAX=20 entries. Missing clientId could be a pruned entry,
+        // not a truly unknown client. Conservatively filter.
+        const importClock: Record<string, number> = {};
+        for (let i = 0; i < 20; i++) {
+          importClock[`client_${String(i).padStart(2, '0')}`] = 100 + i;
+        }
+        expect(Object.keys(importClock).length).toBe(20);
+
+        opLogStoreSpy.getLatestFullStateOpEntry.and.returnValue(
+          Promise.resolve({
+            seq: 3,
+            op: createOp({
+              id: '019c4290-0a51-7184-0000-000000000000',
+              opType: OpType.SyncImport,
+              clientId: 'client_00',
+              entityType: 'ALL',
+              vectorClock: importClock,
+            }),
+            source: 'remote',
+            syncedAt: Date.now(),
+            appliedAt: Date.now(),
+          }),
+        );
+
+        // Unknown client not in MAX-size import — could be pruned
+        const unknownOp = createOp({
+          id: '019c42a0-0001-7000-0000-000000000000',
+          opType: OpType.Create,
+          clientId: 'Z_unknown',
+          entityId: 'task-1',
+          vectorClock: { Z_unknown: 5 },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([unknownOp]);
+
+        // FILTERED: import at MAX size, missing entry might be pruned
+        expect(result.validOps.length).toBe(0);
+        expect(result.invalidatedOps.length).toBe(1);
+      });
+
+      it('should FILTER unknown client ops when import clock EXCEEDS MAX_VECTOR_CLOCK_SIZE', async () => {
+        // Import has more than MAX entries (e.g., from migration before pruning).
+        // Missing clientId could definitely be pruned.
+        const importClock: Record<string, number> = {};
+        for (let i = 0; i < 25; i++) {
+          importClock[`client_${String(i).padStart(2, '0')}`] = 100 + i;
+        }
+        expect(Object.keys(importClock).length).toBe(25);
+
+        opLogStoreSpy.getLatestFullStateOpEntry.and.returnValue(
+          Promise.resolve({
+            seq: 3,
+            op: createOp({
+              id: '019c4290-0a51-7184-0000-000000000000',
+              opType: OpType.SyncImport,
+              clientId: 'client_00',
+              entityType: 'ALL',
+              vectorClock: importClock,
+            }),
+            source: 'remote',
+            syncedAt: Date.now(),
+            appliedAt: Date.now(),
+          }),
+        );
+
+        const unknownOp = createOp({
+          id: '019c42a0-0001-7000-0000-000000000000',
+          opType: OpType.Create,
+          clientId: 'Z_unknown',
+          entityId: 'task-1',
+          vectorClock: { Z_unknown: 5 },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([unknownOp]);
+
+        // FILTERED: import exceeds MAX, missing entry could be pruned
+        expect(result.validOps.length).toBe(0);
+        expect(result.invalidatedOps.length).toBe(1);
+      });
+
+      it('should FILTER ops from client that IS in import clock regardless of clock size', async () => {
+        // Import has 3 entries (below MAX). Op clientId IS in the import clock.
+        // This is a known client with a CONCURRENT op — should be filtered.
+        const importClock = buildClock({
+          clientA: 100,
+          clientB: 200,
+          clientC: 300,
+        });
+
+        opLogStoreSpy.getLatestFullStateOpEntry.and.returnValue(
+          Promise.resolve({
+            seq: 1,
+            op: createOp({
+              id: '019c4290-0a51-7184-0000-000000000000',
+              opType: OpType.SyncImport,
+              clientId: 'clientA',
+              entityType: 'ALL',
+              vectorClock: importClock,
+            }),
+            source: 'remote',
+            syncedAt: Date.now(),
+            appliedAt: Date.now(),
+          }),
+        );
+
+        // clientB IS in the import clock — import knows about this client
+        const knownClientOp = createOp({
+          id: '019c42a0-0001-7000-0000-000000000000',
+          opType: OpType.Create,
+          clientId: 'clientB',
+          entityId: 'task-1',
+          vectorClock: {
+            clientB: 150, // LESS than import's 200
+          },
+        });
+
+        const result = await service.filterOpsInvalidatedBySyncImport([knownClientOp]);
+
+        // FILTERED: import knows clientB (entry exists) and op is LESS_THAN
         expect(result.validOps.length).toBe(0);
         expect(result.invalidatedOps.length).toBe(1);
       });
@@ -2447,10 +2575,10 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([opFromK]);
 
-        // compareVectorClocks returns CONCURRENT (different unique keys) → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(1);
-        expect(result.invalidatedOps[0].clientId).toBe('clientK');
+        // clientK is NOT in import clock (CLOCK_SIZE_10 < MAX_VECTOR_CLOCK_SIZE) → KEPT
+        expect(result.validOps.length).toBe(1);
+        expect(result.validOps[0].clientId).toBe('clientK');
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('Test G: multiple new clients after import — progressive pruning, both filtered', async () => {
@@ -2511,12 +2639,12 @@ describe('SyncImportFilterService', () => {
 
         const result = await service.filterOpsInvalidatedBySyncImport([opFromK, opFromL]);
 
-        // Both ops are CONCURRENT with import → filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(2);
-        expect(result.invalidatedOps.map((op) => op.clientId)).toEqual(
+        // clientK and clientL NOT in import clock (CLOCK_SIZE_10 < MAX_VECTOR_CLOCK_SIZE) → KEPT
+        expect(result.validOps.length).toBe(2);
+        expect(result.validOps.map((op) => op.clientId)).toEqual(
           jasmine.arrayContaining(['clientK', 'clientL']),
         );
+        expect(result.invalidatedOps.length).toBe(0);
       });
 
       it('Test H: large import clock (15 entries) — new client ops still correctly filtered/kept', async () => {
@@ -2578,12 +2706,12 @@ describe('SyncImportFilterService', () => {
           concurrentOp,
         ]);
 
-        // Both ops are CONCURRENT with import → both filtered
-        expect(result.validOps.length).toBe(0);
-        expect(result.invalidatedOps.length).toBe(2);
-        expect(result.invalidatedOps.map((op) => op.clientId)).toEqual(
+        // clientK and old_client NOT in import clock (15 < MAX_VECTOR_CLOCK_SIZE) → KEPT
+        expect(result.validOps.length).toBe(2);
+        expect(result.validOps.map((op) => op.clientId)).toEqual(
           jasmine.arrayContaining(['clientK', 'old_client']),
         );
+        expect(result.invalidatedOps.length).toBe(0);
       });
     });
   });

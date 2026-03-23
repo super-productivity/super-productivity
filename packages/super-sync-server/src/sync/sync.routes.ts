@@ -754,132 +754,185 @@ export const syncRoutes = async (fastify: FastifyInstance): Promise<void> => {
   );
 
   // GET /api/sync/status - Get sync status
-  fastify.get('/status', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
+  fastify.get(
+    '/status',
+    {
+      config: {
+        rateLimit: {
+          max: 60,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
 
-      const latestSeq = await syncService.getLatestSeq(userId);
-      const devicesOnline = await syncService.getOnlineDeviceCount(userId);
+        const latestSeq = await syncService.getLatestSeq(userId);
+        const devicesOnline = await syncService.getOnlineDeviceCount(userId);
 
-      const cached = await syncService.getCachedSnapshot(userId);
-      const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
+        const cached = await syncService.getCachedSnapshot(userId);
+        const snapshotAge = cached ? Date.now() - cached.generatedAt : undefined;
 
-      const storageInfo = await syncService.getStorageInfo(userId);
+        const storageInfo = await syncService.getStorageInfo(userId);
 
-      Logger.debug(`[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`);
+        Logger.debug(
+          `[user:${userId}] Status: seq=${latestSeq}, devices=${devicesOnline}`,
+        );
 
-      const response: SyncStatusResponse = {
-        latestSeq,
-        devicesOnline,
-        snapshotAge,
-        storageUsedBytes: storageInfo.storageUsedBytes,
-        storageQuotaBytes: storageInfo.storageQuotaBytes,
-      };
+        const response: SyncStatusResponse = {
+          latestSeq,
+          devicesOnline,
+          snapshotAge,
+          storageUsedBytes: storageInfo.storageUsedBytes,
+          storageQuotaBytes: storageInfo.storageQuotaBytes,
+        };
 
-      return reply.send(response);
-    } catch (err) {
-      Logger.error(`Get status error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+        return reply.send(response);
+      } catch (err) {
+        Logger.error(`Get status error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
 
   // DELETE /api/sync/data - Delete all sync data for user
   // Used for encryption password changes
-  fastify.delete('/data', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
+  fastify.delete(
+    '/data',
+    {
+      config: {
+        rateLimit: {
+          max: 3,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
 
-      Logger.info(`[user:${userId}] DELETE ALL DATA requested`);
+        Logger.info(`[user:${userId}] DELETE ALL DATA requested`);
 
-      await syncService.deleteAllUserData(userId);
+        await syncService.deleteAllUserData(userId);
 
-      Logger.audit({
-        event: 'USER_DATA_DELETED',
-        userId,
-      });
+        Logger.audit({
+          event: 'USER_DATA_DELETED',
+          userId,
+        });
 
-      return reply.send({ success: true });
-    } catch (err) {
-      Logger.error(`Delete user data error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+        return reply.send({ success: true });
+      } catch (err) {
+        Logger.error(`Delete user data error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
+    },
+  );
 
   // GET /api/sync/restore-points - List available restore points
   fastify.get<{
     Querystring: { limit?: string };
-  }>('/restore-points', async (req, reply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
-      const limit = req.query.limit ? parseInt(req.query.limit, 10) : 30;
+  }>(
+    '/restore-points',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
+        const limit = req.query.limit ? parseInt(req.query.limit, 10) : 30;
 
-      if (isNaN(limit) || limit < 1 || limit > 100) {
-        return reply.status(400).send({
-          error: 'Invalid limit parameter (must be 1-100)',
-        });
+        if (isNaN(limit) || limit < 1 || limit > 100) {
+          return reply.status(400).send({
+            error: 'Invalid limit parameter (must be 1-100)',
+          });
+        }
+
+        Logger.debug(`[user:${userId}] Restore points requested (limit=${limit})`);
+
+        const restorePoints = await syncService.getRestorePoints(userId, limit);
+
+        Logger.info(
+          `[user:${userId}] Returning ${restorePoints.length} restore points`,
+        );
+
+        return reply.send({ restorePoints });
+      } catch (err) {
+        Logger.error(`Get restore points error: ${errorMessage(err)}`);
+        return reply.status(500).send({ error: 'Internal server error' });
       }
-
-      Logger.debug(`[user:${userId}] Restore points requested (limit=${limit})`);
-
-      const restorePoints = await syncService.getRestorePoints(userId, limit);
-
-      Logger.info(`[user:${userId}] Returning ${restorePoints.length} restore points`);
-
-      return reply.send({ restorePoints });
-    } catch (err) {
-      Logger.error(`Get restore points error: ${errorMessage(err)}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+    },
+  );
 
   // GET /api/sync/restore/:serverSeq - Get state snapshot at specific serverSeq
+  // Rate limited: Snapshot generation is CPU-intensive
   fastify.get<{
     Params: { serverSeq: string };
-  }>('/restore/:serverSeq', async (req, reply) => {
-    try {
-      const userId = getAuthUser(req).userId;
-      const syncService = getSyncService();
-      const targetSeq = parseInt(req.params.serverSeq, 10);
+  }>(
+    '/restore/:serverSeq',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '5 minutes',
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const userId = getAuthUser(req).userId;
+        const syncService = getSyncService();
+        const targetSeq = parseInt(req.params.serverSeq, 10);
 
-      if (isNaN(targetSeq) || targetSeq < 1) {
-        return reply.status(400).send({
-          error: 'Invalid serverSeq parameter (must be a positive integer)',
-        });
-      }
+        if (isNaN(targetSeq) || targetSeq < 1) {
+          return reply.status(400).send({
+            error: 'Invalid serverSeq parameter (must be a positive integer)',
+          });
+        }
 
-      Logger.info(`[user:${userId}] Restore snapshot requested at seq=${targetSeq}`);
-
-      const snapshot = await syncService.generateSnapshotAtSeq(userId, targetSeq);
-
-      Logger.info(`[user:${userId}] Restore snapshot generated at seq=${targetSeq}`);
-
-      return reply.send(snapshot);
-    } catch (err) {
-      const message = errorMessage(err);
-      if (
-        message.includes('exceeds latest sequence') ||
-        message.includes('must be at least')
-      ) {
-        Logger.warn(
-          `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,
-        );
-        return reply.status(400).send({ error: message });
-      }
-      // Handle encrypted ops error - this is a known limitation, not a server error
-      if (message.includes('ENCRYPTED_OPS_NOT_SUPPORTED')) {
         Logger.info(
-          `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops`,
+          `[user:${userId}] Restore snapshot requested at seq=${targetSeq}`,
         );
-        return reply.status(400).send({
-          error: message,
-          errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
-        });
+
+        const snapshot = await syncService.generateSnapshotAtSeq(userId, targetSeq);
+
+        Logger.info(
+          `[user:${userId}] Restore snapshot generated at seq=${targetSeq}`,
+        );
+
+        return reply.send(snapshot);
+      } catch (err) {
+        const message = errorMessage(err);
+        if (
+          message.includes('exceeds latest sequence') ||
+          message.includes('must be at least')
+        ) {
+          Logger.warn(
+            `[user:${getAuthUser(req).userId}] Invalid restore request: ${message}`,
+          );
+          return reply.status(400).send({ error: message });
+        }
+        // Handle encrypted ops error - this is a known limitation, not a server error
+        if (message.includes('ENCRYPTED_OPS_NOT_SUPPORTED')) {
+          Logger.info(
+            `[user:${getAuthUser(req).userId}] Restore blocked due to encrypted ops`,
+          );
+          return reply.status(400).send({
+            error: message,
+            errorCode: SYNC_ERROR_CODES.ENCRYPTED_OPS_NOT_SUPPORTED,
+          });
+        }
+        Logger.error(`Get restore snapshot error: ${message}`);
+        return reply.status(500).send({ error: 'Internal server error' });
       }
-      Logger.error(`Get restore snapshot error: ${message}`);
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
+    },
+  );
 };

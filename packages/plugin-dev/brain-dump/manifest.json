@@ -1,0 +1,21 @@
+{
+  "name": "Brain Dump",
+  "id": "brain-dump",
+  "manifestVersion": 1,
+  "version": "1.0.0",
+  "minSupVersion": "13.0.0",
+  "description": "Quickly capture many tasks at once. Each line becomes a task.",
+  "author": "Super Productivity",
+  "permissions": [
+    "getAllProjects",
+    "addTask",
+    "showSnack",
+    "openDialog",
+    "persistDataSynced",
+    "loadSyncedData"
+  ],
+  "hooks": [],
+  "iFrame": false,
+  "isSkipMenuEntry": true,
+  "icon": "icon.svg"
+}

@@ -17,7 +17,7 @@
 .badge {
   display: inline-block;
   pointer-events: none;
-  padding: 2px 6px;
+  padding: var(--s-quarter) 6px;
   font-size: 10px;
   line-height: 1;
   border-top-right-radius: var(--card-border-radius);

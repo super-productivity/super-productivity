@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "Kunci API",
+    "API_KEY_LINK": "Dapatkan kunci API pribadi Anda",
+    "TEAM_IDS": "ID Workspace/Tim (dipisahkan koma, kosongkan untuk semua)",
+    "USER_ID": "ID Pengguna (untuk memfilter berdasarkan penerima tugas)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Ringkasan",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritas",
+    "ASSIGNEE": "Penerima tugas",
+    "LABELS": "Label",
+    "DESCRIPTION": "Deskripsi"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Kesalahan tidak dikenal. Periksa kunci API Anda dan coba lagi."
+  }
+}

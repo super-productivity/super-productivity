@@ -1,5 +1,5 @@
 .tag-ico {
-  margin-right: 4px !important;
+  margin-right: var(--s-half) !important;
 }
 
 .tag-ico-emoji {
@@ -12,7 +12,7 @@
   vertical-align: middle;
   width: 24px;
   height: 24px;
-  margin-right: 4px !important;
+  margin-right: var(--s-half) !important;
   overflow: hidden;
   flex-shrink: 0;
 }

@@ -207,4 +207,10 @@ export interface ElectronAPI {
     manifest: PluginManifest,
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult>;
+
+  // Plugin OAuth
+  pluginOAuthStart(url: string): void;
+  onPluginOAuthCb(
+    listener: (data: { code?: string; error?: string; state?: string }) => void,
+  ): void;
 }

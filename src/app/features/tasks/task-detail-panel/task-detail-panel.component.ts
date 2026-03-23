@@ -53,6 +53,7 @@ import { getTaskRepeatInfoText } from './get-task-repeat-info-text.util';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
 import { DialogScheduleTaskComponent } from '../../planner/dialog-schedule-task/dialog-schedule-task.component';
+import { DialogDeadlineComponent } from '../dialog-deadline/dialog-deadline.component';
 import { Store } from '@ngrx/store';
 import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
 import { TaskTitleComponent } from '../../../ui/task-title/task-title.component';
@@ -68,10 +69,12 @@ import { TaskAttachmentListComponent } from '../task-attachment/task-attachment-
 import { TagEditComponent } from '../../tag/tag-edit/tag-edit.component';
 import { DialogSelectDateTimeComponent } from '../dialog-select-date-time/dialog-select-date-time.component';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
+import { LocalDateStrPipe } from 'src/app/ui/pipes/local-date-str.pipe';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
+import { isDeadlineOverdue as isDeadlineOverdueFn } from '../util/is-deadline-overdue';
 import { isMarkdownChecklist } from '../../markdown-checklist/is-markdown-checklist';
 import { Log } from '../../../core/log';
 import { isInputElement } from '../../../util/dom-element';
@@ -97,6 +100,7 @@ import { checkKeyCombo } from '../../../util/check-key-combo';
     TaskAttachmentListComponent,
     TagEditComponent,
     LocaleDatePipe,
+    LocalDateStrPipe,
     MsToStringPipe,
     TranslatePipe,
     IssueIconPipe,
@@ -289,7 +293,10 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return !!(
       !t.isDone &&
       ((t.dueWithTime && t.dueWithTime < Date.now()) ||
-        (t.dueDay && t.dueDay !== getDbDateStr() && t.dueDay < getDbDateStr()))
+        (t.dueDay &&
+          isDBDateStr(t.dueDay) &&
+          t.dueDay !== getDbDateStr() &&
+          t.dueDay < getDbDateStr()))
     );
   });
 
@@ -325,6 +332,18 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
     return task.dueWithTime || task.dueDay
       ? this.T.F.TASK.ADDITIONAL_INFO.DUE
       : this.T.F.TASK.ADDITIONAL_INFO.SCHEDULE_TASK;
+  });
+
+  isDeadlineOverdue = computed(() => isDeadlineOverdueFn(this.task(), getDbDateStr()));
+
+  deadlineLabelKey = computed(() => {
+    const t = this.task();
+    if (t.deadlineWithTime || t.deadlineDay) {
+      return this.isDeadlineOverdue()
+        ? this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_OVERDUE
+        : this.T.F.TASK.ADDITIONAL_INFO.DEADLINE_DUE_BY;
+    }
+    return this.T.F.TASK.ADDITIONAL_INFO.DEADLINE;
   });
 
   // EFFECTS
@@ -453,6 +472,14 @@ export class TaskDetailPanelComponent implements OnInit, AfterViewInit, OnDestro
 
   scheduleTask(): void {
     this._matDialog.open(DialogScheduleTaskComponent, {
+      autoFocus: false,
+      restoreFocus: true,
+      data: { task: this.task() },
+    });
+  }
+
+  openDeadlineDialog(): void {
+    this._matDialog.open(DialogDeadlineComponent, {
       autoFocus: false,
       restoreFocus: true,
       data: { task: this.task() },

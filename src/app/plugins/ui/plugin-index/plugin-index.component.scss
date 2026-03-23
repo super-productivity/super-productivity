@@ -53,7 +53,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: 16px;
+  gap: var(--s2);
 }
 
 .simple-error {

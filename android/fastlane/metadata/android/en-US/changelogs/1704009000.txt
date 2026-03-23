@@ -1,0 +1,9 @@
+- close pull_request_target pwn request vulnerability (#6879)
+- add shortcut to open note/checklist in fullscreen (#6869)
+- add markdown list auto-continuation (#6870)
+- fix recurring task tests failing in CI production builds
+- handle Linear issue state in isIssueDone (#6877)
+- improve Slovak translations
+- complete translations for all 26 languages
+- add package-lock.json registry check and pin npm registry (#6875)
+- match navigation bar color to system theme on startup (#6872)

@@ -76,4 +76,32 @@ describe('generateNotificationId', () => {
       expect(id).toBe(firstId);
     });
   });
+
+  // Cross-platform parity tests: these exact values must match the Kotlin
+  // implementation in SuperSyncBackgroundProvider.generateNotificationId().
+  // If these tests break, the background sync worker will cancel the wrong notifications.
+  describe('cross-platform parity with Kotlin port', () => {
+    it('should produce stable expected values for known inputs', () => {
+      // These values are computed once and must remain stable across both platforms.
+      // The Kotlin port uses the identical algorithm: hash = (hash << 5) - hash + charCode
+      expect(generateNotificationId('abc')).toBe(96354);
+      expect(generateNotificationId('task-123')).toBe(411361814);
+      expect(generateNotificationId('V1StGXR8_Z5jdHi6B-myT')).toBe(789368791);
+      expect(generateNotificationId('a')).toBe(97);
+    });
+
+    it('should produce correct dueday variant IDs', () => {
+      const taskId = 'my-task-id';
+      const standardId = generateNotificationId(taskId);
+      const dueDayId = generateNotificationId(taskId + '_dueday');
+      expect(standardId).toBe(24028350);
+      expect(dueDayId).toBe(771449659);
+      expect(standardId).not.toBe(dueDayId);
+    });
+
+    it('should handle long strings without overflow issues', () => {
+      const longId = 'X'.repeat(100);
+      expect(generateNotificationId(longId)).toBe(946169344);
+    });
+  });
 });

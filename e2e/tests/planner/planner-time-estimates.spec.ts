@@ -72,7 +72,7 @@ test.describe('Planner Time Estimates', () => {
     await plannerPage.waitForPlannerView();
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
 
     // Tasks should still be there

@@ -1,8 +1,10 @@
 import {
   APP_INITIALIZER,
   enableProdMode,
+  EnvironmentInjector,
   ErrorHandler,
   Injector,
+  createEnvironmentInjector,
   importProvidersFrom,
   provideZonelessChangeDetection,
   SecurityContext,
@@ -11,10 +13,15 @@ import { registerLocaleData } from '@angular/common';
 
 import { environment } from './environments/environment';
 import { IS_ELECTRON } from './app/app.constants';
-import { DEFAULT_LANGUAGE, LocalesImports } from './app/core/locale.constants';
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_LOCALE_DATA,
+  LocaleImportFns,
+} from './app/core/locale.constants';
 import { IS_ANDROID_WEB_VIEW } from './app/util/is-android-web-view';
 import { androidInterface } from './app/features/android/android-interface';
 import { IS_IOS_NATIVE, IS_NATIVE_PLATFORM } from './app/util/is-native-platform';
+import { DataInitStateService } from './app/core/data-init/data-init-state.service';
 // Type definitions for window.ea are in ./app/core/window-ea.d.ts
 import { App as CapacitorApp } from '@capacitor/app';
 import { GlobalErrorHandler } from './app/core/error-handler/global-error-handler.class';
@@ -33,10 +40,11 @@ import {
 import { FormlyConfigModule } from './app/ui/formly-config.module';
 import { markedOptionsFactory } from './app/ui/marked-options-factory';
 import { MaterialCssVarsModule } from 'angular-material-css-vars';
+import { DEFAULT_TODAY_TAG_COLOR } from './app/features/work-context/work-context.const';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatBottomSheetModule } from '@angular/material/bottom-sheet';
 import { ReminderModule } from './app/features/reminder/reminder.module';
-import { provideAnimations } from '@angular/platform-browser/animations';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   PreloadAllModules,
   provideRouter,
@@ -48,9 +56,10 @@ import { StoreModule } from '@ngrx/store';
 import { META_REDUCERS } from './app/root-store/meta/meta-reducer-registry';
 import { setOperationCaptureService } from './app/root-store/meta/task-shared-meta-reducers';
 import { OperationCaptureService } from './app/op-log/capture/operation-capture.service';
-import { EncryptionPasswordDialogOpenerInitService } from './app/imex/sync/encryption-password-dialog-opener-init.service';
+import { EncryptionPasswordDialogOpenerService } from './app/imex/sync/encryption-password-dialog-opener.service';
+import { DataInitService } from './app/core/data-init/data-init.service';
 import { EffectsModule } from '@ngrx/effects';
-import { StoreDevtoolsModule } from '@ngrx/store-devtools';
+// StoreDevtoolsModule lazy-loaded only in dev mode below
 import { ReactiveFormsModule } from '@angular/forms';
 import { ServiceWorkerModule } from '@angular/service-worker';
 import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
@@ -67,10 +76,13 @@ import { PLUGIN_INITIALIZER_PROVIDER } from './app/plugins/plugin-initializer';
 import { initializeMatMenuTouchFix } from './app/features/tasks/task-context-menu/mat-menu-touch-monkey-patch';
 import { Log } from './app/core/log';
 import { OperationWriteFlushService } from './app/op-log/sync/operation-write-flush.service';
+import { PluginOAuthRedirectHandler } from './app/plugins/oauth/plugin-oauth-redirect.handler';
+import { OAuthCallbackHandlerService } from './app/imex/sync/oauth-callback-handler.service';
 import { GlobalConfigService } from './app/features/config/global-config.service';
 import { LocaleDatePipe } from './app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from './app/core/date-time-format/date-time-format.service';
 import { CustomDateAdapter } from './app/core/date-time-format/custom-date-adapter';
+import { unlockAudioContext } from './app/util/audio-context';
 
 if (environment.production || environment.stage) {
   enableProdMode();
@@ -81,6 +93,10 @@ if (environment.production || environment.stage) {
 // Module-level injector for use in Capacitor lifecycle handlers.
 // Set after Angular bootstrap completes.
 let appInjector: Injector | null = null;
+
+// Register one-time user gesture listener to unlock AudioContext.
+// Required on iOS/Android where AudioContext starts suspended.
+unlockAudioContext();
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -103,11 +119,12 @@ bootstrapApplication(AppComponent, {
         },
         sanitize: { provide: SANITIZE, useValue: SecurityContext.HTML },
       }),
-      MaterialCssVarsModule.forRoot(),
+      MaterialCssVarsModule.forRoot({
+        primary: DEFAULT_TODAY_TAG_COLOR,
+      }),
       MatSidenavModule,
       MatBottomSheetModule,
       ReminderModule,
-      MaterialCssVarsModule.forRoot(),
       // External
       BrowserModule,
       // NOTE: both need to be present to use forFeature stores
@@ -134,13 +151,7 @@ bootstrapApplication(AppComponent, {
             }),
       }),
       EffectsModule.forRoot([]),
-      !environment.production && !environment.stage
-        ? StoreDevtoolsModule.instrument({
-            maxAge: 15,
-            logOnly: environment.production,
-            actionsBlocklist: ['[TimeTracking] Add time spent'],
-          })
-        : [],
+      // StoreDevtoolsModule lazy-loaded in dev mode after bootstrap
       ReactiveFormsModule,
       ServiceWorkerModule.register('ngsw-worker.js', {
         enabled:
@@ -195,7 +206,7 @@ bootstrapApplication(AppComponent, {
       provide: MAT_FORM_FIELD_DEFAULT_OPTIONS,
       useValue: { appearance: 'fill', subscriptSizing: 'dynamic' },
     },
-    provideAnimations(),
+    provideAnimationsAsync(),
     {
       provide: MATERIAL_ANIMATIONS,
       deps: [GlobalConfigService],
@@ -220,14 +231,46 @@ bootstrapApplication(AppComponent, {
       deps: [OperationCaptureService],
       multi: true,
     },
+    // Ensure DataInitService is instantiated at bootstrap.
+    // Its constructor triggers reInit() -> hydrateStore() -> loadAllData into NgRx.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_dataInit: DataInitService) => {
+        return () => {};
+      },
+      deps: [DataInitService],
+      multi: true,
+    },
     // Initialize encryption password dialog opener for static form config functions
     {
       provide: APP_INITIALIZER,
-      useFactory: (_initService: EncryptionPasswordDialogOpenerInitService) => {
-        // Service constructor initializes the module-level reference
+      useFactory: (_opener: EncryptionPasswordDialogOpenerService) => {
+        // Service constructor self-registers the module-level reference
         return () => {};
       },
-      deps: [EncryptionPasswordDialogOpenerInitService],
+      deps: [EncryptionPasswordDialogOpenerService],
+      multi: true,
+    },
+    // Ensure PluginOAuthRedirectHandler is instantiated at bootstrap.
+    // Its constructor registers platform-specific listeners (postMessage / Electron IPC)
+    // that bridge OAuth redirect callbacks to PluginOAuthService.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_handler: PluginOAuthRedirectHandler) => {
+        return () => {};
+      },
+      deps: [PluginOAuthRedirectHandler],
+      multi: true,
+    },
+    // Ensure OAuthCallbackHandlerService is instantiated at bootstrap on native platforms.
+    // Its constructor registers Capacitor's appUrlOpen listener that bridges
+    // both Dropbox and plugin OAuth redirect callbacks.
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (_handler: OAuthCallbackHandlerService) => {
+        return () => {};
+      },
+      deps: [OAuthCallbackHandlerService],
       multi: true,
     },
     // Note: ImmediateUploadService now initializes itself in constructor
@@ -237,30 +280,86 @@ bootstrapApplication(AppComponent, {
 }).then((appRef) => {
   appInjector = appRef.injector;
 
+  // Dismiss native startup overlay after all data is loaded (Android only)
+  if (IS_ANDROID_WEB_VIEW) {
+    appRef.injector.get(DataInitStateService).isAllDataLoadedInitially$.subscribe(() => {
+      import('./app/core/startup-overlay/startup-overlay.service').then((m) => {
+        appRef.injector.get(m.StartupOverlayService).processAndDismiss();
+      });
+    });
+  }
+
   // Initialize touch fix for Material menus
   initializeMatMenuTouchFix();
 
-  // Register default locale immediately for fast startup
-  registerLocaleData(LocalesImports[DEFAULT_LANGUAGE], DEFAULT_LANGUAGE);
+  // Register default locale immediately (statically imported, no network fetch)
+  registerLocaleData(DEFAULT_LOCALE_DATA, DEFAULT_LANGUAGE);
 
-  // Defer other locales to idle time for better initial load performance
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(() => {
-      Object.keys(LocalesImports).forEach((locale) => {
-        if (locale !== DEFAULT_LANGUAGE) {
-          registerLocaleData(LocalesImports[locale], locale);
-        }
-      });
+  // Lazily load and register remaining locales during idle time
+  const registerRemainingLocales = (): void => {
+    Object.keys(LocaleImportFns).forEach((locale) => {
+      if (locale !== DEFAULT_LANGUAGE) {
+        LocaleImportFns[locale as keyof typeof LocaleImportFns]().then((m) => {
+          registerLocaleData(m.default, locale);
+        });
+      }
     });
+  };
+
+  // Lazily load and register focus-mode effects during idle time.
+  // Safe to defer: focus-mode requires explicit user activation (clicking the
+  // focus button), which cannot happen before idle callback fires.
+  const registerLazyEffects = async (): Promise<void> => {
+    const { FocusModeEffects } =
+      await import('./app/features/focus-mode/store/focus-mode.effects');
+    const envInjector = appRef.injector.get(EnvironmentInjector);
+    createEnvironmentInjector(
+      [importProvidersFrom(EffectsModule.forFeature([FocusModeEffects]))],
+      envInjector,
+    );
+  };
+
+  // Lazily load store devtools only in dev mode
+  const registerStoreDevtools = async (): Promise<void> => {
+    if (environment.production || environment.stage) {
+      return;
+    }
+    const { StoreDevtoolsModule } = await import('@ngrx/store-devtools');
+    const envInjector = appRef.injector.get(EnvironmentInjector);
+    createEnvironmentInjector(
+      [
+        importProvidersFrom(
+          StoreDevtoolsModule.instrument({
+            maxAge: 15,
+            logOnly: false,
+            actionsBlocklist: ['[TimeTracking] Add time spent'],
+          }),
+        ),
+      ],
+      envInjector,
+    );
+  };
+
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(() => registerRemainingLocales());
+    requestIdleCallback(() =>
+      registerLazyEffects().catch((e) => Log.err('Failed to register lazy effects', e)),
+    );
+    requestIdleCallback(() =>
+      registerStoreDevtools().catch((e) => Log.err('Failed to register devtools', e)),
+    );
   } else {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      Object.keys(LocalesImports).forEach((locale) => {
-        if (locale !== DEFAULT_LANGUAGE) {
-          registerLocaleData(LocalesImports[locale], locale);
-        }
-      });
-    }, 0);
+    setTimeout(() => registerRemainingLocales(), 0);
+    setTimeout(
+      () =>
+        registerLazyEffects().catch((e) => Log.err('Failed to register lazy effects', e)),
+      0,
+    );
+    setTimeout(
+      () =>
+        registerStoreDevtools().catch((e) => Log.err('Failed to register devtools', e)),
+      0,
+    );
   }
 
   // TODO make asset caching work for electron

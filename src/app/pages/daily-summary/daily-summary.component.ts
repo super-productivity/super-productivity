@@ -36,7 +36,7 @@ import { DateService } from 'src/app/core/date/date.service';
 
 import { EntityState } from '@ngrx/entity';
 import { Action } from '@ngrx/store';
-import { TranslatePipe } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService, TranslateStore } from '@ngx-translate/core';
 
 import { IS_ELECTRON } from '../../app.constants';
 import { ConfettiService } from '../../core/confetti/confetti.service';
@@ -66,6 +66,7 @@ import { InlineInputComponent } from '../../ui/inline-input/inline-input.compone
 import { InlineMarkdownComponent } from '../../ui/inline-markdown/inline-markdown.component';
 import { MomentFormatPipe } from '../../ui/pipes/moment-format.pipe';
 import { IS_TOUCH_ONLY } from '../../util/is-touch-only';
+import { getPluralKey } from '../../util/get-plural-key';
 import { shareReplayUntil } from '../../util/share-replay-until';
 import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-in-markdown-txt';
 import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
@@ -122,6 +123,8 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly _simpleCounterService = inject(SimpleCounterService);
   private readonly _dateService = inject(DateService);
   private readonly _metricService = inject(MetricService);
+  private readonly _translateService = inject(TranslateService);
+  private readonly _translateStore = inject(TranslateStore);
 
   T: typeof T = T;
   _onDestroy$ = new Subject<void>();
@@ -466,8 +469,12 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Show snackbar notification
     this._snackService.open({
-      msg:
-        parentTaskCount > 1 ? T.PDS.ARCHIVED_TASKS.PLURAL : T.PDS.ARCHIVED_TASKS.SINGULAR,
+      msg: getPluralKey(
+        this._translateService,
+        this._translateStore,
+        parentTaskCount,
+        'PDS.ARCHIVED_TASKS',
+      ),
       translateParams: { count: parentTaskCount },
       type: 'SUCCESS',
       ico: 'archive',

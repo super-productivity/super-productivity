@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   inject,
   OnDestroy,
   OnInit,
@@ -13,6 +14,7 @@ import {
   MatDialogRef,
 } from '@angular/material/dialog';
 import { TaskService } from '../../tasks/task.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, Subscription } from 'rxjs';
 import { Task } from '../../tasks/task.model';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -69,6 +71,7 @@ export class DialogIdleComponent implements OnInit, OnDestroy {
     inject<MatDialogRef<DialogIdleComponent, DialogIdleReturnData>>(MatDialogRef);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private _destroyRef = inject(DestroyRef);
   data = inject<DialogIdlePassedData>(MAT_DIALOG_DATA);
 
   T: typeof T = T;
@@ -139,6 +142,7 @@ export class DialogIdleComponent implements OnInit, OnDestroy {
         },
       })
       .afterClosed()
+      .pipe(takeUntilDestroyed(this._destroyRef))
       .subscribe((res) => {
         if (res) {
           this._matDialogRef.close({

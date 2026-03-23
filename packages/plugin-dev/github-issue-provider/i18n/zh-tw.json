@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "使用者名稱/程式碼庫名稱",
+    "TOKEN": "存取權杖",
+    "FILTER_USERNAME": "使用者名稱（例如用於篩選自己的變更）",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概括",
+    "STATE": "地位",
+    "ASSIGNEE": "指派人",
+    "LABELS": "標籤",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在此您可以設定 SuperProductivity 在每日規劃檢視的工作建立面板中列出特定程式碼庫的開放 GitHub 議題。它們將作為建議列出，並提供議題的連結以及更多相關資訊。</p> <p>此外，您可以自動匯入所有開放議題。</p><p>為了繞過使用限制並存取，您可以提供存取權杖。<a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps'>更多關於範圍的資訊可以在這裡找到</a>。",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub：對應資料時發生錯誤。您的程式碼庫名稱是否正確？",
+    "ERR_UNKNOWN": "GitHub：未知錯誤 {{statusCode}} {{errorMsg}}。是否超過 API 使用限制？"
+  }
+}

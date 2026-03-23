@@ -1,12 +1,14 @@
 import { App, ipcMain, IpcMainEvent, Menu, nativeTheme, Tray } from 'electron';
+import { log } from 'electron-log/main';
 import { IPC } from './shared-with-frontend/ipc-events.const';
 import { getIsTrayShowCurrentTask, getIsTrayShowCurrentCountdown } from './shared-state';
 import { TaskCopy } from '../src/app/features/tasks/task.model';
 import { GlobalConfigState } from '../src/app/features/config/global-config.model';
 import { release } from 'os';
 import {
-  initOverlayIndicator,
+  updateOverlayAlwaysShow,
   updateOverlayEnabled,
+  updateOverlayOpacity,
   updateOverlayTask,
 } from './overlay-indicator/overlay-indicator';
 import { getWin } from './main-window';
@@ -43,11 +45,29 @@ const IS_MAC = process.platform === 'darwin';
 const IS_LINUX = process.platform === 'linux';
 const IS_WINDOWS = process.platform === 'win32';
 
-// Static GUID for Windows tray icon position persistence across updates.
-// This allows Windows to remember tray icon visibility/position even when
-// the executable path changes (e.g., after Microsoft Store updates).
-// WARNING: This GUID must never change once deployed.
-const WINDOWS_TRAY_GUID = 'f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d';
+// Stable GUIDs per Windows distribution type.
+// Windows ties tray icon GUIDs to the executable path (when unsigned).
+// Different distribution types have different exe paths, so they need
+// separate GUIDs to avoid silent tray creation failures.
+// WARNING: These GUIDs must never change once deployed per distribution type.
+// Changing a GUID makes Windows treat it as a new icon, resetting it to the
+// overflow area. Users would have to manually re-show it on the taskbar.
+// See: https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataa
+const WINDOWS_TRAY_GUIDS = {
+  portable: 'f7c06d50-4d3e-4f8d-b9a0-2c8e7f5a1b3d',
+  nsis: 'a2512177-8bee-4b70-a0a8-f3d18e0eab90',
+  store: '19b9d3fe-aa50-4792-917e-60ada97f3088',
+} as const;
+
+const getWindowsTrayGuid = (): string => {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) {
+    return WINDOWS_TRAY_GUIDS.portable;
+  }
+  if ((process as NodeJS.Process & { windowsStore?: boolean }).windowsStore) {
+    return WINDOWS_TRAY_GUIDS.store;
+  }
+  return WINDOWS_TRAY_GUIDS.nsis;
+};
 
 export const initIndicator = ({
   showApp,
@@ -77,7 +97,16 @@ export const initIndicator = ({
 
   const suf = shouldUseDarkColors ? '-d.png' : '-l.png';
   const trayIconPath = DIR + `stopped${suf}`;
-  tray = IS_WINDOWS ? new Tray(trayIconPath, WINDOWS_TRAY_GUID) : new Tray(trayIconPath);
+  if (IS_WINDOWS) {
+    try {
+      tray = new Tray(trayIconPath, getWindowsTrayGuid());
+    } catch (e) {
+      log('Tray creation with GUID failed, retrying without GUID:', e);
+      tray = new Tray(trayIconPath);
+    }
+  } else {
+    tray = new Tray(trayIconPath);
+  }
   tray.setContextMenu(createContextMenu());
 
   tray.on('click', () => {
@@ -103,29 +132,25 @@ function initListeners(): void {
   let isOverlayEnabled = false;
   // Listen for settings updates to handle overlay enable/disable
   ipcMain.on(IPC.UPDATE_SETTINGS, (ev, settings: GlobalConfigState) => {
-    const isOverlayEnabledNew = settings?.misc?.isOverlayIndicatorEnabled || false;
-    if (isOverlayEnabledNew === isOverlayEnabled) {
-      return;
+    const isOverlayEnabledNew = settings?.overlayIndicator?.isEnabled || false;
+
+    if (isOverlayEnabledNew !== isOverlayEnabled) {
+      isOverlayEnabled = isOverlayEnabledNew;
+      updateOverlayEnabled(isOverlayEnabled);
     }
 
-    isOverlayEnabled = isOverlayEnabledNew;
-    updateOverlayEnabled(isOverlayEnabled);
-
-    // Initialize overlay without shortcut (overlay doesn't need shortcut, that's for focus mode)
     if (isOverlayEnabled) {
-      initOverlayIndicator(isOverlayEnabled);
+      const opacity = settings?.overlayIndicator?.opacity ?? 95;
+      updateOverlayOpacity(opacity);
+      updateOverlayAlwaysShow(settings?.overlayIndicator?.isAlwaysShow || false);
+    } else {
+      updateOverlayAlwaysShow(false);
     }
   });
 
   ipcMain.on(IPC.SET_PROGRESS_BAR, (ev: IpcMainEvent, { progress }) => {
-    const suf = shouldUseDarkColors ? '-d' : '-l';
-    if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
-      const f = Math.min(Math.round(progress * 15), 15);
-      const t = DIR + `running-anim${suf}/${f || 0}.png`;
-      setTrayIcon(tray, t);
-    } else {
-      const t = DIR + `running${suf}.png`;
-      setTrayIcon(tray, t);
+    if (_isRunning) {
+      setTrayIcon(tray, getRunningIconPath(progress));
     }
 
     // Also update the context menu and tray title during the progress bar tick
@@ -285,6 +310,14 @@ function initListeners(): void {
           }
           _lastTrayMsg = trayMsg;
         }
+
+        // Set running icon immediately so it doesn't wait for the next tracking interval tick
+        if (currentTask && currentTask.title && !_lastIsFocusModeEnabled) {
+          const progress = currentTask.timeEstimate
+            ? currentTask.timeSpent / currentTask.timeEstimate
+            : undefined;
+          setTrayIcon(tray, getRunningIconPath(progress));
+        }
       }
     },
   );
@@ -404,6 +437,16 @@ function createContextMenu(msg?: string): Menu {
   template.push({ label: 'Quit', click: _quitApp });
 
   return Menu.buildFromTemplate(template);
+}
+
+// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
+function getRunningIconPath(progress?: number): string {
+  const suf = shouldUseDarkColors ? '-d' : '-l';
+  if (typeof progress === 'number' && progress > 0 && isFinite(progress)) {
+    const f = Math.min(Math.round(progress * 15), 15);
+    return DIR + `running-anim${suf}/${f || 0}.png`;
+  }
+  return DIR + `running${suf}.png`;
 }
 
 let curIco: string;

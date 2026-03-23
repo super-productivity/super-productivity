@@ -202,4 +202,42 @@ describe('TrackingReminderService', () => {
     sub.unsubscribe();
     discardPeriodicTasks();
   }));
+
+  it('is not suppressed when work session is paused', fakeAsync(() => {
+    store.overrideSelector(selectIsFocusModeEnabled, true);
+    store.overrideSelector(
+      selectTimer,
+      createMockTimer({ purpose: 'work', isRunning: false }),
+    );
+    store.refreshState();
+
+    const values: number[] = [];
+    const sub = service.remindCounter$.subscribe((v) => values.push(v));
+
+    tick(TRACKING_REMINDER_MIN_TIME + 1000);
+    expect(values.length).toBeGreaterThan(0);
+    expect(values[values.length - 1]).toBeGreaterThan(TRACKING_REMINDER_MIN_TIME);
+
+    sub.unsubscribe();
+    discardPeriodicTasks();
+  }));
+
+  it('is not suppressed when break is paused', fakeAsync(() => {
+    store.overrideSelector(selectIsFocusModeEnabled, true);
+    store.overrideSelector(
+      selectTimer,
+      createMockTimer({ purpose: 'break', isRunning: false }),
+    );
+    store.refreshState();
+
+    const values: number[] = [];
+    const sub = service.remindCounter$.subscribe((v) => values.push(v));
+
+    tick(TRACKING_REMINDER_MIN_TIME + 1000);
+    expect(values.length).toBeGreaterThan(0);
+    expect(values[values.length - 1]).toBeGreaterThan(TRACKING_REMINDER_MIN_TIME);
+
+    sub.unsubscribe();
+    discardPeriodicTasks();
+  }));
 });

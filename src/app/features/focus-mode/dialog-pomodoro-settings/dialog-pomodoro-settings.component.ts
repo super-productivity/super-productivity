@@ -7,6 +7,8 @@ import { T } from '../../../t.const';
 import { PomodoroConfig } from '../../config/global-config.model';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
+import { Store } from '@ngrx/store';
+import { resetCycles } from '../store/focus-mode.actions';
 
 const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
   {
@@ -37,6 +39,7 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
     key: 'cyclesBeforeLongerBreak',
     type: 'input',
     props: {
+      required: true,
       label: T.GCF.POMODORO.CYCLES_BEFORE_LONGER_BREAK,
       type: 'number',
       min: 1,
@@ -69,6 +72,13 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
       <div class="dialog-actions">
         <button
           mat-button
+          (click)="resetSessionCounter()"
+        >
+          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
+        </button>
+        <span class="spacer"></span>
+        <button
+          mat-button
           (click)="close()"
         >
           {{ T.G.CANCEL | translate }}
@@ -87,9 +97,12 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
     `
       .dialog-actions {
         display: flex;
-        justify-content: flex-end;
         gap: 8px;
         margin-top: 16px;
+      }
+
+      .spacer {
+        flex: 1;
       }
     `,
   ],
@@ -98,6 +111,7 @@ const POMODORO_DURATION_FIELDS: FormlyFieldConfig[] = [
 export class DialogPomodoroSettingsComponent {
   private readonly _dialogRef = inject(MatDialogRef<DialogPomodoroSettingsComponent>);
   private readonly _globalConfigService = inject(GlobalConfigService);
+  private readonly _store = inject(Store);
 
   T = T;
   form = new FormGroup({});
@@ -116,6 +130,10 @@ export class DialogPomodoroSettingsComponent {
     }
     this._globalConfigService.updateSection('pomodoro', this.model, true);
     this._dialogRef.close(this.model);
+  }
+
+  resetSessionCounter(): void {
+    this._store.dispatch(resetCycles());
   }
 
   close(): void {

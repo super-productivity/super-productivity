@@ -1,12 +1,9 @@
 import { environment } from '../../../environments/environment';
 
-import { getDefaultVoice } from '../voice-reminder/getAvailableVoices';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
 
 const minute = 60 * 1000;
-const defaultVoice = getDefaultVoice();
-
 const defaultTaskNotesTemplate = `**How can I best achieve it now?**
 
 **What do I want?**
@@ -30,6 +27,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isDonatePageEnabled: true,
     isEnableUserProfiles: false,
     isHabitsEnabled: true,
+    isFinishDayEnabled: true,
   },
   localization: {
     lng: undefined,
@@ -54,7 +52,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isDisableAnimations: false,
     isDisableCelebration: false,
     isShowProductivityTipLonger: false,
-    isOverlayIndicatorEnabled: false,
     customTheme: 'default',
     defaultStartPage: 0,
   },
@@ -90,7 +87,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     interval: 5 * minute,
     volume: 75,
     text: 'Your current task is: ${currentTaskTitle}',
-    voice: defaultVoice,
+    voice: '',
   },
   focusMode: {
     isSkipPreparation: false,
@@ -98,6 +95,11 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isPauseTrackingDuringBreak: false,
     isSyncSessionWithTracking: false,
     isStartInBackground: false,
+  },
+  overlayIndicator: {
+    isEnabled: false,
+    isAlwaysShow: false,
+    opacity: 95,
   },
   clipboardImages: {
     imagePath: null,
@@ -137,6 +139,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     triggerSync: 'Ctrl+S',
     taskEditTitle: null,
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesFullscreen: null,
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
     taskUnschedule: 'U',
@@ -186,6 +189,8 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     defaultTaskRemindOption: TaskReminderOptionId.AtStart, // The hard-coded default prior to this changeable setting
     isFocusWindow: false,
     useAlarmStyleReminders: false,
+    notifyOnDueDate: true,
+    dueDateNotificationHour: 9,
   },
   schedule: {
     isWorkStartEndEnabled: true,

@@ -168,8 +168,13 @@ describe('LWW Update Store Application Integration', () => {
         Action
       >;
 
+      // Include mock tasks so filterOrphanedTaskIdsFromEntityData doesn't remove them
       const initialState = createMockRootState(
-        {},
+        {
+          task1: { id: 'task1', title: 'T1', notes: '', done: false, modified: 1000 },
+          task2: { id: 'task2', title: 'T2', notes: '', done: false, modified: 1000 },
+          task3: { id: 'task3', title: 'T3', notes: '', done: false, modified: 1000 },
+        },
         {
           project1: {
             id: 'project1',
@@ -201,8 +206,11 @@ describe('LWW Update Store Application Integration', () => {
         Action
       >;
 
+      // Include mock task so filterOrphanedTaskIdsFromEntityData doesn't remove it
       const initialState = createMockRootState(
-        {},
+        {
+          task1: { id: 'task1', title: 'T1', notes: '', done: false, modified: 1000 },
+        },
         {},
         {
           tag1: {

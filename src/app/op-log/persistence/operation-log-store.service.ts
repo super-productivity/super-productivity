@@ -3,9 +3,9 @@ import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import {
   Operation,
   OperationLogEntry,
-  OpType,
   VectorClock,
   isFullStateOpType,
+  FULL_STATE_OP_TYPES,
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
@@ -98,7 +98,7 @@ interface OpLogDB extends DBSchema {
       [OPS_INDEXES.BY_ID]: string;
       [OPS_INDEXES.BY_SYNCED_AT]: number;
       // PERF: Compound index for efficient queries on remote ops by status
-      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: string;
+      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: [string, string];
     };
   };
   [STORE_NAMES.STATE_CACHE]: {
@@ -453,7 +453,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'] as any,
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -889,7 +889,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'] as any,
+        ['remote', 'failed'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -1334,12 +1334,7 @@ export class OperationLogStoreService {
     // Using the import's clock as the base (REPLACE) instead of the current clock (MERGE)
     // prevents clock bloat that causes server-side pruning to drop the import's entry,
     // which would make subsequent ops appear CONCURRENT with the import.
-    const fullStateOp = ops.find(
-      (op) =>
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair,
-    );
+    const fullStateOp = ops.find((op) => FULL_STATE_OP_TYPES.has(op.opType));
 
     const mergedClock = fullStateOp
       ? { ...fullStateOp.vectorClock }
@@ -1361,10 +1356,6 @@ export class OperationLogStoreService {
       }
     }
 
-    // Prune the merged clock to MAX_VECTOR_CLOCK_SIZE to break the
-    // inflate/prune cycle: without this, the union of all downloaded ops'
-    // clocks re-introduces pruned client IDs, exceeding the limit again.
-    // The server already prunes with the same algorithm on upload.
     const currentClientId = await this.clientIdProvider.loadClientId();
     if (!currentClientId) {
       Log.warn(
@@ -1372,9 +1363,43 @@ export class OperationLogStoreService {
           'This is unexpected during sync and may indicate data corruption.',
       );
     }
-    const clockToStore = currentClientId
-      ? limitVectorClockSize(mergedClock, currentClientId)
-      : mergedClock;
+
+    let clockToStore: Record<string, number>;
+
+    if (fullStateOp && currentClientId) {
+      // CLOCK RESET: After a full-state op (SYNC_IMPORT / BACKUP_IMPORT / REPAIR),
+      // reset the working clock to minimal — only the import client's entry and our
+      // own entry. This prevents dead client IDs from accumulating in the clock.
+      //
+      // The full import clock is preserved in the stored operation for
+      // SyncImportFilterService to use when filtering pre-import ops.
+      // Post-import ops are recognized by having the import client's counter
+      // (see SyncImportFilterService's import-client-counter exception).
+      clockToStore = {};
+      const importClientId = fullStateOp.clientId;
+      if (mergedClock[importClientId] !== undefined) {
+        clockToStore[importClientId] = mergedClock[importClientId];
+      }
+      if (
+        currentClientId !== importClientId &&
+        mergedClock[currentClientId] !== undefined
+      ) {
+        clockToStore[currentClientId] = mergedClock[currentClientId];
+      }
+      Log.log(
+        `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +
+          `  Full merged clock (${Object.keys(mergedClock).length} entries): ${vectorClockToString(mergedClock)}\n` +
+          `  Minimal clock (${Object.keys(clockToStore).length} entries): ${vectorClockToString(clockToStore)}`,
+      );
+    } else {
+      // Normal case: prune the merged clock to MAX_VECTOR_CLOCK_SIZE to break the
+      // inflate/prune cycle: without this, the union of all downloaded ops'
+      // clocks re-introduces pruned client IDs, exceeding the limit again.
+      // The server already prunes with the same algorithm on upload.
+      clockToStore = currentClientId
+        ? limitVectorClockSize(mergedClock, currentClientId)
+        : mergedClock;
+    }
 
     // DIAGNOSTIC LOGGING: Log merged clock after merge
     Log.debug(

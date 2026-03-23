@@ -98,7 +98,19 @@ export const selectIsResumingBreak = createSelector(
   (state) => state._isResumingBreak,
 );
 
-export const selectIsManualSessionCompletion = createSelector(
+// Overtime selectors
+export const selectIsOvertimeEnabled = createSelector(
   selectFocusModeState,
-  (state) => state.isManualSessionCompletion,
+  (state) => state._isOvertimeEnabled,
+);
+
+export const selectIsInOvertime = createSelector(
+  selectTimer,
+  selectIsOvertimeEnabled,
+  (timer, _isOvertimeEnabled) =>
+    _isOvertimeEnabled &&
+    timer.isRunning &&
+    timer.purpose === 'work' &&
+    timer.duration > 0 &&
+    timer.elapsed >= timer.duration,
 );

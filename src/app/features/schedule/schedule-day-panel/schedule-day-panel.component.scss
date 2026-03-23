@@ -3,7 +3,7 @@
 
   > * {
     inset: 4px;
-    margin: 4px;
+    margin: var(--s-half);
   }
 }
 
@@ -15,8 +15,8 @@
 .empty-state {
   position: sticky;
   top: 50%;
-  margin-left: 40px;
-  margin-right: 8px;
+  margin-left: var(--s5);
+  margin-right: var(--s);
   transform: translate(0, -50%);
   text-align: center;
   pointer-events: none;
@@ -27,7 +27,7 @@
 }
 
 .empty-state-text {
-  padding: 16px;
+  padding: var(--s2);
   font-size: 16px;
   color: var(--color-fg-less-important);
   font-weight: 500;

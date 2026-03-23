@@ -11,6 +11,7 @@ import { isSingleEmoji } from '../../../util/extract-first-emoji';
 export interface TagComponentTag {
   title: string;
   icon?: string;
+  svgIcon?: string;
   color?: string;
   theme?: {
     primary: string;

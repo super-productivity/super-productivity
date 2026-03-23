@@ -1,5 +1,6 @@
 import { initIpcInterfaces } from './ipc-handler';
-import electronLog, { info, log } from 'electron-log/main';
+import { initPluginOAuth } from './plugin-oauth';
+import electronLog, { info, log, warn } from 'electron-log/main';
 import {
   App,
   app,
@@ -51,18 +52,8 @@ let mainWin: BrowserWindow;
 let idleTimeHandler: IdleTimeHandler;
 
 export const startApp = (): void => {
-  // Initialize protocol handling
+  // Initialize protocol handling (registers second-instance listener for URL forwarding)
   initializeProtocolHandling(IS_DEV, app, () => mainWin);
-
-  // Handle single instance lock (not needed on macOS - OS handles it natively,
-  // and the singleton socket is blocked by the App Store sandbox)
-  if (!IS_MAC) {
-    const gotTheLock = app.requestSingleInstanceLock();
-    if (!gotTheLock) {
-      app.quit();
-      return;
-    }
-  }
 
   // LOAD IPC STUFF
   initIpcInterfaces();
@@ -143,9 +134,13 @@ export const startApp = (): void => {
     });
   }
 
-  // Allow invalid certificates for jira requests
+  // Allow invalid certificates for self-hosted services (Jira, GitLab, Redmine, etc.)
+  // WARNING: This bypasses certificate validation for ALL URLs. Many users rely on
+  // self-signed certificates for their self-hosted integrations, so removing this
+  // would be a breaking change. The trade-off is reduced TLS security in exchange
+  // for compatibility with self-hosted servers.
   appIN.on('certificate-error', (event, webContents, url, err, certificate, callback) => {
-    log(err);
+    warn(`Certificate error for ${url}: ${err}`);
     event.preventDefault();
     callback(true);
   });
@@ -181,8 +176,8 @@ export const startApp = (): void => {
     // check finished. Our idle detection on Wayland may spawn external commands
     // (gdbus/dbus-send/xprintidle/loginctl) which can take close to or longer than
     // the poll interval. Without this guard, multiple checks can run concurrently,
-    // causing timeouts and subsequent 0ms readings, which looks like “only one
-    // idle event was ever sent”. This ensures at most one check runs at a time.
+    // causing timeouts and subsequent 0ms readings, which looks like "only one
+    // idle event was ever sent". This ensures at most one check runs at a time.
     let isCheckingIdle = false;
     const sendIdleMsgIfOverMin = (
       idleTime: number,
@@ -249,8 +244,15 @@ export const startApp = (): void => {
     }, CONFIG.IDLE_PING_INTERVAL);
     // --------END IDLE HANDLING---------
 
+    // Track whether window was visible before suspend/lock so we only
+    // restore keyboard focus for windows that were actually in use.
+    // Using showOrFocus() unconditionally would surface hidden/minimized
+    // windows on every wake/unlock — a UX regression.
+    let wasVisibleBeforeSuspend = false;
+
     powerMonitor.on('suspend', () => {
       log('powerMonitor: System suspend detected');
+      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -258,6 +260,7 @@ export const startApp = (): void => {
 
     powerMonitor.on('lock-screen', () => {
       log('powerMonitor: Screen lock detected');
+      wasVisibleBeforeSuspend = mainWin.isVisible() && !mainWin.isMinimized();
       setIsLocked(true);
       suspendStart = Date.now();
       mainWin.webContents.send(IPC.SUSPEND);
@@ -269,6 +272,10 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
+      // Restore keyboard focus only if window was visible before suspend (electron#20464)
+      if (wasVisibleBeforeSuspend) {
+        showOrFocus(mainWin);
+      }
     });
 
     powerMonitor.on('unlock-screen', () => {
@@ -277,6 +284,10 @@ export const startApp = (): void => {
       setIsLocked(false);
       sendIdleMsgIfOverMin(idleTime);
       mainWin.webContents.send(IPC.RESUME);
+      // Restore keyboard focus only if window was visible before lock (electron#20464)
+      if (wasVisibleBeforeSuspend) {
+        showOrFocus(mainWin);
+      }
     });
 
     protocol.registerFileProtocol('file', (request, callback) => {
@@ -364,6 +375,8 @@ export const startApp = (): void => {
       quitApp,
       customUrl,
     });
+
+    initPluginOAuth(mainWin);
 
     // Process any pending protocol URLs after window is created
     setTimeout(() => {

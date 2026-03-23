@@ -1,0 +1,17 @@
+{
+  "name": "github-issue-provider",
+  "version": "1.0.0",
+  "description": "GitHub issue provider plugin",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

@@ -2,7 +2,7 @@
 // This is necessary because mat-menu renders in a global overlay container
 
 .menu-input-wrapper {
-  padding: 8px 16px;
+  padding: var(--s) var(--s2);
   min-width: 250px;
 
   .menu-input {

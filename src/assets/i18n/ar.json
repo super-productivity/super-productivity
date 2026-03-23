@@ -9,7 +9,8 @@
     "CONTEXT_MENU": {
       "CHANGE_BACKGROUND": "تغيير الخلفية"
     },
-    "UPDATE_WEB_APP": "نسخة جديدة متاحة. تحميل نسخة جديدة؟"
+    "UPDATE_WEB_APP": "نسخة جديدة متاحة. تحميل نسخة جديدة؟",
+    "SKIP_SYNC_WAIT": "تخطي انتظار المزامنة"
   },
   "BL": {
     "NO_TASKS": "لا توجد حاليًا أية مهام في الأعمال المتراكمة"
@@ -34,6 +35,24 @@
     "SEARCH_LABEL": "ابحث عن الصور",
     "SEARCH_PLACEHOLDER": "مثلا، الطبيعة، الجبال، التجريد",
     "TITLE": "اختر صورة خلفية من Unsplash"
+  },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "تعلّم اختصارات لوحة المفاتيح",
+      "NOTES": "صُمّم Super Productivity للاستخدام بلوحة المفاتيح. تعلّم الاختصارات للعمل بشكل أسرع.\n\n**كيف تبدأ:**\n1. افتح **القائمة الجانبية**\n2. انتقل إلى **المساعدة**\n3. انقر على **جولة التنقل بلوحة المفاتيح**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "أنشئ مشروعك الأول",
+      "NOTES": "تساعدك المشاريع على تنظيم مهامك حسب مجال العمل. لكل مشروع قائمة مهام خاصة به وقائمة انتظار.\n\n**كيفية إنشاء مشروع:**\n1. انقر على زر **+** بجوار **المشاريع** في الشريط الجانبي\n2. أعطه اسمًا واختر لونًا\n3. ابدأ بإضافة المهام إليه"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "إعداد المزامنة",
+      "NOTES": "حافظ على أمان بياناتك وإمكانية الوصول إليها عبر الأجهزة.\n\n**كيفية الإعداد:**\n1. افتح **الإعدادات** (أيقونة الترس في الشريط الجانبي)\n2. انتقل إلى **المزامنة**\n3. اختر مزوّدًا: Super Sync أو Dropbox أو WebDAV أو مزامنة الملفات المحلية\n4. اتبع تعليمات الإعداد"
+    },
+    "GO_FURTHER": {
+      "TITLE": "اكتشف المزيد",
+      "NOTES": "هناك الكثير لاكتشافه!\n\n**ميزات التطبيق** (في الإعدادات) — فعّل التكاملات والعادات وميزات أخرى. انتقل إلى **الإعدادات → ميزات التطبيق** لمعرفة ما هو متاح.\n\n**اللوحات** — تصور مهامك في لوحات كانبان قابلة للتخصيص. قم بتفعيلها في **ميزات التطبيق**، ثم ابحث عنها في **القائمة الجانبية**.\n\n**الجدول الزمني** — خطط ليومك بتعيين المهام لأوقات محددة. اسحب المهام إلى عرض **الجدول الزمني** في الشريط الجانبي.\n\n**التكاملات** — بعد تفعيلها في ميزات التطبيق، استورد المهام من Jira وGitHub وGitLab وGitea وOpenProject وCalDAV وغيرها الكثير. يمكنك أيضًا دمج تقويمك. قم بتكوينها في **لوحة مزوّد المهام**.\n\n**العادات** — تتبّع العادات والروتينات المتكررة. تجدها في **القائمة الجانبية** بعد التفعيل.\n\n**الإضافات** — أضف ميزات مثل مكافح التسويف أو الأتمتة أو التذكيرات الصوتية. انتقل إلى **الإعدادات → الإضافات**.\n\n**التخصيص** — السمات، الوضع الداكن، اختصارات لوحة المفاتيح، اللغة، ومساعدات الإنتاجية كلها في **الإعدادات**."
+    }
   },
   "F": {
     "ATTACHMENT": {
@@ -98,7 +117,14 @@
         "CALDAV_RESOURCE": "اسم مورد كالداف (التقويم)",
         "CALDAV_URL": "عنوان الرابط لـ كالداف (عنوان الرابط الأساسي)",
         "CALDAV_USER": "اسم مستخدم كالداف الخاص بك",
-        "IS_TRANSITION_ISSUES_ENABLED": "أكمل مهام كالداف تلقائيًا عند اكتمال المهمة"
+        "TWO_WAY_SYNC_BOTH": "كلا الاتجاهين (ثنائي الاتجاه)",
+        "TWO_WAY_SYNC_NOTES": "اتجاه مزامنة الملاحظات / الوصف",
+        "TWO_WAY_SYNC_OFF": "إيقاف",
+        "TWO_WAY_SYNC_PULL_ONLY": "سحب فقط (قراءة من CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "دفع فقط (كتابة إلى CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "مزامنة ثنائية الاتجاه (تجريبي)",
+        "TWO_WAY_SYNC_STATUS": "اتجاه مزامنة الحالة",
+        "TWO_WAY_SYNC_TITLE": "اتجاه مزامنة العنوان"
       },
       "FORM_SECTION": {
         "HELP": "<p>\nهنا يمكنك تهيئة الإنتاجية الفائقة لإدراج مهام كالداف غير المكتملة لمشروع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمهمة بالإضافة إلى مزيد من المعلومات عنها. \n</p>\n<p>\n.بالإضافة إلى ذلك، يمكنك إضافة جميع المهام غير المكتملة ومزامنتها تلقائيًا إلى المهام المتراكمة لديك \n</p>\n<p><a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>.</p>"
@@ -107,6 +133,13 @@
         "CALENDAR_NOT_FOUND": " كالداف : التقويم غير موجود\n\"{{calendarName}}\" ",
         "CALENDAR_READ_ONLY": "كالداف: التقويم للقراءة فقط\n\"{{calendarName}}\"",
         "ISSUE_NOT_FOUND": "كالداف : يبدو أن المهمة محذوفة من الخادم.\n\"{{issueId}}\""
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "الوصف",
+        "LABELS": "التسميات",
+        "MARK_AS_CHECKED": "وضع علامة محدد",
+        "STATUS": "الحالة",
+        "SUMMARY": "الملخص"
       }
     },
     "CALENDARS": {
@@ -114,9 +147,15 @@
         "ADD_AS_TASK": "إضافة كمهمة",
         "SHOW_TASK": "مهمة العرض",
         "TXT": "<strong>{{title}}</strong> \nتبدأ في\n <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> \nتبدأ في\n <strong>{{start}}</strong>!<br> ( \nو الاحداث ال\n{{nrOfOtherBanners}} \nالتالية هي مستحقة)",
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> \nتبدأ في\n <strong>{{start}}</strong>!<br> ( \nو الاحداث ال\n{{nrOfOtherBanners}} \nالتالية هي مستحقة)",
+          "ONE": "<strong>{{title}}</strong> يبدأ في <strong>{{start}}</strong>!<br> (و{{nrOfOtherBanners}} حدث آخر مستحق)"
+        },
         "TXT_PAST": "<strong>{{title}}</strong> \nبدأت في\n <strong>{{start}}</strong>!",
-        "TXT_PAST_MULTIPLE": "<strong>{{title}}</strong> \nتبدأ في\n <strong>{{start}}</strong>!<br> ( \nو الاحداث ال\n{{nrOfOtherBanners}} \nالتالية هي مستحقة)"
+        "TXT_PAST_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> \nتبدأ في\n <strong>{{start}}</strong>!<br> ( \nو الاحداث ال\n{{nrOfOtherBanners}} \nالتالية هي مستحقة)",
+          "ONE": "<strong>{{title}}</strong> بدأ في <strong>{{start}}</strong>!<br> (و{{nrOfOtherBanners}} حدث آخر مستحق)"
+        }
       },
       "EVENT_STRINGS": {
         "EVENT_STR": "حدث",
@@ -137,17 +176,6 @@
       "TITLE": "🙈 من فضلك سامحنا ، لكن ...",
       "TXT": "ستساعد المشروع بشكل كبير من خلال <strong>منحه تقييما جيدا ، إذا كنت ترغب في ذلك!</strong>"
     },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "يكرر العبارة المضبوطة مسبقاً، كل\n X\n عند تتبع الوقت لمهمة ما.",
-        "L_INTERVAL": "الفاصل الزمني لتكرار العبارة",
-        "L_TEXT": "نص",
-        "L_TEXT_DESCRIPTION": "على سبيل المثال: ”العمل على\n$currentTaskTitle”",
-        "L_VOICE": "حدد صوتا",
-        "L_VOICE_DESCRIPTION": "اختر صوتا",
-        "TITLE": "تذكير صوتي"
-      }
-    },
     "DROPBOX": {
       "S": {
         "OFFLINE": "دروب باكس: غير قادر على المزامنة ، لأنك غير متصل بالإنترنت",
@@ -167,7 +195,12 @@
         "POMODORO_BREAK_RUNNING": "بريك #{{cycleNr}} يركض",
         "POMODORO_SESSION_RUNNING": "جلسة بومودورو #{{cycleNr}} تعمل",
         "SESSION_RUNNING": "جلسة التركيز قيد التشغيل",
-        "TO_FOCUS_OVERLAY": "لتراكب التركيز"
+        "TO_FOCUS_OVERLAY": "لتراكب التركيز",
+        "END_FOCUS_SESSION": "إنهاء جلسة التركيز",
+        "END_SESSION": "إنهاء الجلسة",
+        "PAUSE": "إيقاف مؤقت",
+        "RESUME": "استئناف",
+        "START": "بدء"
       },
       "BACK_TO_PLANNING": "الرجوع الى التخطيط",
       "BREAK_RELAX_MSG": "خذ لحظة للاسترخاء",
@@ -208,7 +241,14 @@
       "START_FOCUS_SESSION": "إبدأ جلسة التركيز",
       "START_NEXT_FOCUS_SESSION": "إبدأ جلسة التركيز التالية",
       "SWITCH_TASK": "مهمة التبديل",
-      "WORKED_FOR": "قمت بالفعل بالعمل ل"
+      "WORKED_FOR": "قمت بالفعل بالعمل ل",
+      "GO_TO_PROCRASTINATION": "احصل على مساعدة عند التسويف",
+      "PAUSE_BREAK": "إيقاف الاستراحة مؤقتاً",
+      "POMODORO_SETTINGS": "إعدادات بومودورو",
+      "RESET_CYCLES": "إعادة تعيين عداد الجلسات",
+      "RESUME_BREAK": "استئناف الاستراحة",
+      "SELECT_TASK_FIRST": "اختر مهمة أولاً لبدء التتبع",
+      "START_BREAK": "بدء الاستراحة"
     },
     "GITEA": {
       "FORM": {
@@ -233,35 +273,6 @@
         "STATUS": "الحالة",
         "SUMMARY": "الملخص",
         "WRITE_A_COMMENT": "أكتب تعليقا"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "اسم المستخدم (مثل تصفية التغييرات بنفسك)",
-        "INVALID_TOKEN_MESSAGE": "ليست رمز GitHub صالحًا. يجب أن يبدأ بـ \"ghp_\".",
-        "IS_ASSIGNEE_FILTER": "قم بفلترة المشاكل المفروزة لي",
-        "REPO": "\"اسم المستخدم / repositoryName\" لمستودع git الذي تريد تتبعه",
-        "TOKEN": "رمز الوصول"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>هنا يمكنك تكوين SuperProductivity لسرد مشكلات GitHub المفتوحة لمستودع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات عنها.</p> <p>بالإضافة إلى ذلك ، يمكنك تلقائيًا إضافة جميع المشكلات المفتوحة ومزامنتها إلى تراكم المهام.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "المحال",
-        "AT": "ملخص",
-        "DESCRIPTION": "وصف",
-        "LABELS": "ملصقات",
-        "LAST_COMMENT": "آخر تعليق",
-        "LOAD_ALL_COMMENTS": "حمل جميع التعليقات العدد:\n{{nr}}",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "حمل الوصف و جميع التعليقات",
-        "MARK_AS_CHECKED": "وضع علامة على التحديثات على أنها محددة",
-        "STATUS": "الحالة",
-        "SUMMARY": "ملخص",
-        "WRITE_A_COMMENT": "أكتب تعليقا"
-      },
-      "S": {
-        "CONFIG_ERROR": "خدمة جيتهاب: حدث خطأ أثناء تحميل البيانات. هل أسم الريبوزيتوري الخاص بك صحيح؟",
-        "ERR_UNKNOWN": "جيثب: خطأ غير معروف {{statusCode}} {{errorMsg}}"
       }
     },
     "GITLAB": {
@@ -355,7 +366,28 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: بيانات محدثة لـ {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: بيانات محدثة لـ \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: استطلاع جديد {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: تغييرات الاقتراع للموقع {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: تغييرات الاقتراع للموقع {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "فشل الإنشاء التلقائي للمشكلة: {{errorMsg}}",
+        "CONNECTION_FAILED": "فشل الاتصال",
+        "CONNECTION_SUCCESS": "الاتصال يعمل!",
+        "PLUGIN_NOT_INSTALLED": "الإضافة المطلوبة \"{{pluginName}}\" غير مثبتة.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "فشل دفع المزامنة الثنائية: {{errorMsg}}"
+      },
+      "DIALOG": {
+        "ADVANCED_CONFIG": "إعدادات متقدمة",
+        "DELETE_CONFIRM": "هل أنت متأكد من حذف مزود المشكلات هذا؟ الحذف يعني أن <strong>جميع مهام المشكلات المستوردة سابقاً ستفقد مرجعها</strong>. لا يمكن التراجع عن هذا!"
+      },
+      "TWO_WAY_SYNC": {
+        "AUTO_CREATE_ISSUES": "إنشاء مشكلات تلقائياً للمهام الجديدة",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "إنشاء مشكلات تلقائياً لجميع المهام الجديدة المضافة إلى هذا المشروع.",
+        "BOTH": "كلا الاتجاهين (ثنائي الاتجاه)",
+        "NOTES": "اتجاه مزامنة الملاحظات / الوصف",
+        "OFF": "إيقاف",
+        "PULL_ONLY": "سحب فقط",
+        "PUSH_ONLY": "دفع فقط",
+        "SECTION": "مزامنة ثنائية الاتجاه (تجريبي)",
+        "STATUS": "اتجاه مزامنة الحالة",
+        "TITLE": "اتجاه مزامنة العنوان"
       }
     },
     "ISSUE_PANEL": {
@@ -430,7 +462,8 @@
         "HOST": "المضيف (على سبيل المثال: http://my-host.de:1234)",
         "PASSWORD": "الرمز / كلمة المرور",
         "USE_PAT": "استخدم رمز الوصول الشخصي بدلاً من كلمة المرور",
-        "USER_NAME": "البريد الإلكتروني / اسم المستخدم"
+        "USER_NAME": "البريد الإلكتروني / اسم المستخدم",
+        "WONKY_COOKIE_MODE": "وضع الكوكيز غير المستقر"
       },
       "FORM_SECTION": {
         "ADV_CFG": "التكوين المتقدم",
@@ -477,7 +510,15 @@
         "TIMED_OUT": "جيرا: انتهت مهلة الطلب",
         "TRANSITION": "جيرا: اضبط المشكلة \"{{issueKey}}\" على \"{{name}}\"",
         "TRANSITION_SUCCESS": "جيرا: عيّن العدد {{issueKey}} إلى <strong>{{chosenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "جيرا: التحولات تحميلها. استخدم التحديدات أدناه لتعيينها"
+        "TRANSITIONS_LOADED": "جيرا: التحولات تحميلها. استخدم التحديدات أدناه لتعيينها",
+        "UNABLE_TO_REASSIGN": "تعذرت إعادة التعيين"
+      },
+      "STEPPER": {
+        "CREDENTIALS": "بيانات الاعتماد",
+        "DONE": "تم",
+        "LOGIN_SUCCESS": "تم تسجيل الدخول بنجاح",
+        "TEST_CREDENTIALS": "اختبار بيانات الاعتماد",
+        "WELCOME_USER": "مرحباً {{userName}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -511,7 +552,8 @@
         "TIME_FRAME_2_WEEKS": "أسبوعان",
         "TIME_FRAME_LABEL": "الإطار الزمني",
         "TIME_FRAME_MAX": "ماكس",
-        "TIME_SPENT": "قضاء الوقت"
+        "TIME_SPENT": "قضاء الوقت",
+        "YEAR": "سنة"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "ديلي ستيت",
@@ -521,8 +563,6 @@
         "FOCUS_WORK_TIME": "وقت العمل المركز",
         "IMPACT_OF_WORK": "كيف تقيم تأثير عملك اليوم؟",
         "IMPACT_OF_WORK_HINT": "1: عدم وجود تقدم ملموس – 4: تأثير كبير",
-        "NOTES": "ويلاحظ ليوم غد",
-        "PRODUCTIVITY": "ما مدى كفاءة عملك؟",
         "PRODUCTIVITY_SCORE": "درجة الإنتاجية",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65٪ تأثير (مقياس 1-4) • 30٪ تركيز على هدف 4 ساعات • 5٪ إجمالي العمل (الحد الأقصى عند 10 ساعات)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "تفصيل الإنتاجية لمدة 7 أيام",
@@ -563,14 +603,36 @@
         "PLACEHOLDER_3": "أين انزلقت التركيزات - وكيف يمكنك حمايتها؟",
         "PLACEHOLDER_4": "أي مهمة أعطتك الطاقة؟ أي منها استنزفها؟",
         "PLACEHOLDER_5": "شيء واحد أكرره. هناك شيء واحد يجب تغييره.",
-        "TITLE": "ملاحظة تأمل"
+        "TITLE": "ملاحظة تأمل",
+        "REMINDER_CREATED": "تم إنشاء تذكير التأمل",
+        "REMINDER_ERROR": "خطأ في إنشاء تذكير التأمل",
+        "REMINDER_NEEDS_TEXT": "يرجى إدخال نص لإنشاء تذكير",
+        "REMINDER_TASK_TITLE": "🧘 تأمل: {{text}}",
+        "REMIND_LABEL": "تذكير لاحقاً"
       }
     },
     "NOTE": {
       "D_FULLSCREEN": {
         "VIEW_PARSED": "العرض في صورة ترميز معدل (غير قابل للتحرير)",
         "VIEW_SPLIT": "عرض العلامات المحررة وغير المحررة في طريقة عرض منقسمة",
-        "VIEW_TEXT_ONLY": "عرض كنص غير محرر"
+        "VIEW_TEXT_ONLY": "عرض كنص غير محرر",
+        "TOOLBAR": {
+          "BOLD": "غامق",
+          "BULLET_LIST": "قائمة نقطية",
+          "CODE_BLOCK": "كتلة برمجية",
+          "HEADING_1": "عنوان 1",
+          "HEADING_2": "عنوان 2",
+          "HEADING_3": "عنوان 3",
+          "INLINE_CODE": "كود مضمّن",
+          "INSERT_IMAGE": "إدراج صورة",
+          "INSERT_LINK": "إدراج رابط",
+          "INSERT_TABLE": "إدراج جدول",
+          "ITALIC": "مائل",
+          "NUMBERED_LIST": "قائمة مرقمة",
+          "QUOTE": "اقتباس",
+          "STRIKETHROUGH": "يتوسطه خط",
+          "TASK_LIST": "قائمة مهام"
+        }
       },
       "NOTE_CMP": {
         "DISABLE_PARSE": "تعطيل تحليل تخفيض السعر",
@@ -623,7 +685,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "يتطلب وحدة تتبع الوقت ليتم تمكينها لمشروع OpenProject",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "إظهار مربع حوار تتبع الوقت عند اكتمال المهام الفرعية",
         "PROJECT_ID": "معرف المشروع",
-        "PROJECT_ID_DESCRIPTION": "يمكن العثور عليها كجزء من عنوان url عند عرض المشروع في المتصفح.",
+        "PROJECT_ID_DESCRIPTION": "يمكن العثور عليها كجزء من عنوان URL عند عرض المشروع في المتصفح.",
         "SCOPE": "نطاق",
         "SCOPE_ALL": "الكل",
         "SCOPE_ASSIGNED": "تعيين لي",
@@ -665,7 +727,8 @@
       "EDIT_REPEATED_TASK": "تعديل المهمة المتكررة '{{taskName}}'",
       "NO_TASKS": "تم تحميل الانتقالات. استخدم التحديدات أدناه لتعيينها",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "لا توجد عناصر مجدولة"
+        "NO_SCHEDULED_ITEMS": "لا توجد عناصر مجدولة",
+        "NO_DEADLINES": "لا توجد مواعيد نهائية"
       },
       "S": {
         "REMOVED_PLAN_DATE": "تمت إزالة تاريخ الخطة للمهمة '{{taskTitle}}'",
@@ -703,7 +766,9 @@
         "L_IS_AUTO_CONTRAST": "ضبط ألوان النص تلقائيًا للحصول على أفضل قراءة",
         "L_IS_DISABLE_BACKGROUND_TINT": "تعطيل التدرج الخلفية الملونة",
         "L_THEME_COLOR": "لون الموضوع",
-        "TITLE": "موضوع"
+        "TITLE": "موضوع",
+        "D_BACKGROUND_OVERLAY_OPACITY": "شفافية تراكب الخلفية (داكن)",
+        "L_BACKGROUND_OVERLAY_OPACITY": "شفافية تراكب الخلفية (فاتح)"
       },
       "S": {
         "ARCHIVED": "المشروع المؤرشفة",
@@ -711,6 +776,12 @@
         "DELETED": "مشروع محذوف",
         "UNARCHIVED": "مشروع غير مؤسس",
         "UPDATED": "تحديث إعدادات المشروع"
+      },
+      "D_CONFIRM_DUPLICATE_BIG_PROJECT": {
+        "CANCEL": "إلغاء",
+        "MSG": "هذا المشروع كبير جداً. قد يستغرق النسخ بعض الوقت وقد يؤثر على الأداء. هل تريد المتابعة؟",
+        "OK": "نسخ على أي حال",
+        "TITLE": "نسخ مشروع كبير؟"
       }
     },
     "PROJECT_FOLDER": {
@@ -746,7 +817,10 @@
         "SCOPE": "النطاق",
         "SCOPE_ALL": "الكل",
         "SCOPE_ASSIGNED": "تم تعيينه لي",
-        "SCOPE_CREATED": "تم إنشاؤه بواسطتي"
+        "SCOPE_CREATED": "تم إنشاؤه بواسطتي",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "إظهار حوار تتبع الوقت",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "إظهار حوار تتبع الوقت عند إيقاف المؤقت",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "إظهار حوار تتبع الوقت لكل مهمة فرعية"
       },
       "FORM_SECTION": {
         "HELP": "<p>\nهنا يمكنك تهيئة ”الإنتاجية الفائقة“ لإدراج مشكلات ”ريدمين“ المفتوحة (سواءً كانت نسخته الإلكترونية أو مثيل مستضاف ذاتيًا) لمشروع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم سردها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات حولها\n</p><p>\nإضافةً على ذلك، يمكنك إستيراد المشاكل المفتوحة تلقائياً\n</p>",
@@ -758,6 +832,18 @@
         "MARK_AS_CHECKED": "وضع علامة تم التحقق من التحديثات",
         "PRIORITY": "الأولوية",
         "STATUS": "الحالة"
+      },
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "النشاط",
+        "INVALID_DATE": "تاريخ غير صالح",
+        "POST_TIME": "نشر الوقت",
+        "STARTED": "بدأ في",
+        "SUBMIT_TIME_FOR": "تقديم الوقت لـ",
+        "TIME_SPENT": "الوقت المستغرق",
+        "TITLE": "تتبع الوقت في Redmine"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "تم نشر الوقت بنجاح"
       }
     },
     "REFLECTION_NOTE": {
@@ -768,7 +854,10 @@
       "COUNTDOWN_BANNER": {
         "START_NOW": "ابدأ الآن",
         "TXT": "<strong>{{title}}</strong> يبدأ عند <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> يبدأ في <strong>{{start}}</strong>!<br> (و {{nrOfOtherBanners}} مهمة أخرى مستحقة)"
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> يبدأ في <strong>{{start}}</strong>!<br> (و {{nrOfOtherBanners}} مهمة أخرى مستحقة)",
+          "ONE": "{{title}} و{{nrOfOtherBanners}} تذكير آخر"
+        }
       },
       "S_ACTIVE_TASK_DUE": "المهمة التي تعمل عليها حاليًا أصبحت الآن مستحقة التسليم!<br/> ({{title}})",
       "S_REMINDER_ERR": "خطأ في واجهة التذكير"
@@ -783,7 +872,11 @@
       "PLAN_END_DAY": "خطة في نهاية اليوم",
       "PLAN_START_DAY": "التخطيط في بداية اليوم",
       "SHIFT_KEY_INFO": "اضغط باستمرار على زر Shift لتبديل وضع التخطيط اليومي",
-      "START": "بدء العمل"
+      "START": "بدء العمل",
+      "LUNCH_BREAK": "استراحة الغداء",
+      "MONTH": "شهر",
+      "NOW": "الآن",
+      "NO_TASKS": "لا توجد مهام مجدولة"
     },
     "SEARCH_BAR": {
       "INFO": "انقر فوق رمز القائمة للبحث عن المهام المؤرشفة",
@@ -815,11 +908,24 @@
         "TITLE": "عدادات بسيطة",
         "TYPE_CLICK_COUNTER": "انقر فوق العداد",
         "TYPE_REPEATED_COUNTDOWN": "العد التنازلي المتكرر",
-        "TYPE_STOPWATCH": "ساعة التوقيف"
+        "TYPE_STOPWATCH": "ساعة التوقيف",
+        "L_ICON_ON": "أيقونة (مفعّل)",
+        "L_IS_HIDE_BUTTON": "إخفاء الزر",
+        "L_STREAK_MODE": "وضع السلسلة",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "أيام محددة",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "تكرار أسبوعي",
+        "L_WEEKLY_FREQUENCY": "التكرار الأسبوعي"
       },
       "S": {
         "GOAL_REACHED_1": "لقد وصلت إلى هدفك اليوم!",
         "GOAL_REACHED_2": "مدة السلسلة الحالية:"
+      },
+      "HABIT_TRACKER": {
+        "ADD_HABIT": "إضافة عادة",
+        "DISABLED_HABITS": "العادات المعطلة",
+        "NEXT_WEEK": "الأسبوع القادم",
+        "PREV_WEEK": "الأسبوع السابق",
+        "TODAY": "اليوم"
       }
     },
     "SYNC": {
@@ -834,7 +940,9 @@
         "FOLLOW_LINK": "يرجى فتح الرابط التالي ونسخ رمز المصادقة المقدم هناك في حقل الإدخال أدناه.",
         "GET_AUTH_CODE": "احصل على رمز التفعيل",
         "L_AUTH_CODE": "ادخل رمز التصديق",
-        "TITLE": "تسجيل الدخول: {{provider}}"
+        "TITLE": "تسجيل الدخول: {{provider}}",
+        "FOLLOW_LINK_MOBILE": "افتح الرابط في المتصفح وأدخل رمز التفويض",
+        "WAITING_FOR_AUTH": "في انتظار التفويض..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "معلومات إضافية",
@@ -868,8 +976,10 @@
         "BTN_OVER_WRITE_REMOTE": "تغيير جهاز التحكم عن بعد والكتابة فوقه",
         "CHANGE_PW_AND_DECRYPT": "التغيير ومحاولة فك التشفير",
         "P1": "يتم تشفير بياناتك وفشل فك التشفير. الرجاء إدخال كلمة المرور الصحيحة!",
-        "P2": "يمكنك أيضا تغيير كلمة المرور الخاصة بك ، والتي ستحل محل جميع البيانات عن بعد.",
-        "PASSWORD": "شعار"
+        "PASSWORD": "شعار",
+        "P2_FORGOT_PW": "إذا نسيت كلمة المرور، يمكنك فرض الكتابة فوق البيانات البعيدة بكلمة مرور جديدة.",
+        "P3_PW_CHANGED": "إذا غيّرت كلمة المرور على جهاز آخر، أدخل كلمة المرور الجديدة أعلاه.",
+        "TITLE": "خطأ في فك التشفير"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "إغلاق التطبيق",
@@ -877,12 +987,13 @@
         "BTN_FORCE_UPLOAD": "فرض التحميل المحلي",
         "P1": "بيانات المزامنة عن بعد غير متماسكة!",
         "P2": "النموذج المتأثر:",
-        "T1": "المزامنة الأخيرة كانت غير مكتملة!",
-        "T2": "لم يتم تحميل بيانات الأرشيف الخاصة بك بشكل صحيح أثناء المزامنة الأخيرة:",
         "T3": "لديك خيارين:",
         "T4": "1. انتقل إلى جهازك الآخر وأكمل عملية المزامنة هناك.",
         "T5": "2. أو يمكنك استبدال البيانات البعيدة بالبيانات المحلية. ستضيع جميع التغييرات التي أجريتها عن بُعد!",
-        "T6": "من المستحسن إنشاء نسخة احتياطية للبيانات التي تقوم بكتابتها فوقها!!!"
+        "T6": "من المستحسن إنشاء نسخة احتياطية للبيانات التي تقوم بكتابتها فوقها!!!",
+        "BTN_FORCE_DOWNLOAD": "فرض التحميل",
+        "INCOHERENT_P1": "بيانات المزامنة غير متسقة. قد يكون هذا بسبب تحديث متقطع.",
+        "INCOHERENT_P2": "حاول فرض التحميل لاستبدال البيانات البعيدة ببياناتك المحلية."
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "حفظ وتمكين المزامنة",
@@ -897,16 +1008,148 @@
         "L_SYNC_INTERVAL": "فترة المزامنة",
         "L_SYNC_PROVIDER": "مزود المزامنة",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "مزامنة مسار المجلد"
+          "L_SYNC_FOLDER_PATH": "مزامنة مسار المجلد",
+          "INFO_TEXT": "مزامنة عبر ملف محلي أو مجلد شبكة.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "يرجى التأكد من أن مسار الملف صالح وأن لديك الأذونات المناسبة."
         },
         "TITLE": "مزامنة",
         "WEB_DAV": {
           "CORS_INFO": "<strong>تجريبي !!</strong> لإنجاز هذا العمل ، تحتاج إلى تعطيل أو تقييد CORS لمثال Nextcloud الخاص بك ، والذي قد يكون له تداعيات أمنية سلبية! يرجى <a href='https://github.com/nextcloud/server/issues/3131'>الرجوع إلى هذا الموضوع</a> لمزيد من المعلومات. استخدام على مسؤوليتك الخاصة!",
           "INFO": "تطبيقات WebDAV تختلف بشكل كبير للأسف. من المعروف أن Super Productivity يعمل بشكل جيد مع Nextcloud <strong>لكنه قد لا يعمل مع مزود الخدمة</strong>.",
-          "L_BASE_URL": "عنوان Url الأساسي",
+          "L_BASE_URL": "عنوان URL الأساسي",
           "L_PASSWORD": "كلمه السر",
           "L_SYNC_FOLDER_PATH": "مزامنة مسار المجلد",
-          "L_USER_NAME": "اسم المستخدم"
+          "L_USER_NAME": "اسم المستخدم",
+          "CONDITIONAL_HEADER_WARNING_MSG": "لا يدعم خادم WebDAV الخاص بك الترويسات الشرطية. قد يؤدي ذلك إلى تعارضات في المزامنة.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "تحذير ترويسة شرطية",
+          "D_SYNC_FOLDER_PATH": "مسار مجلد المزامنة",
+          "L_TEST_CONNECTION": "اختبار الاتصال",
+          "S_FILL_ALL_FIELDS": "يرجى ملء جميع الحقول",
+          "S_TEST_FAIL": "فشل اختبار الاتصال",
+          "S_TEST_SUCCESS": "نجح اختبار الاتصال!"
+        },
+        "BTN_CHANGE_PASSWORD": "تغيير كلمة المرور",
+        "BTN_DISABLE_ENCRYPTION": "تعطيل التشفير",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "تم التفويض بنجاح!",
+          "BTN_AUTHENTICATE": "تفويض Dropbox",
+          "BTN_REAUTHENTICATE": "إعادة تفويض Dropbox",
+          "INFO_TEXT": "يستخدم Dropbox لمزامنة بياناتك بين الأجهزة.",
+          "L_ACCESS_TOKEN": "رمز الوصول",
+          "REAUTH_SUCCESS": "تمت إعادة التفويض بنجاح!",
+          "STATUS_CONFIGURED": "Dropbox مُهيأ",
+          "STATUS_NOT_CONFIGURED": "Dropbox غير مُهيأ"
+        },
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "تغيير كلمة المرور",
+          "BTN_DISABLE_ENCRYPTION": "تعطيل التشفير",
+          "BTN_ENABLE_ENCRYPTION": "تفعيل التشفير",
+          "BTN_REMOVE_ENCRYPTION": "إزالة التشفير",
+          "CHANGE_PASSWORD_SUCCESS": "تم تغيير كلمة المرور بنجاح",
+          "CHANGE_PASSWORD_WARNING": "تأكد من تحديث كلمة المرور على جميع الأجهزة الأخرى.",
+          "DISABLE_ENCRYPTION_ITEM_1": "سيتم فك تشفير جميع البيانات المتزامنة",
+          "DISABLE_ENCRYPTION_ITEM_2": "ستُخزن البيانات بدون تشفير على الخادم",
+          "DISABLE_ENCRYPTION_ITEM_3": "ستحتاج الأجهزة الأخرى لإعادة المزامنة",
+          "DISABLE_ENCRYPTION_NOTE": "ملاحظة: سيتم تطبيق هذا على جميع الأجهزة المتصلة.",
+          "DISABLE_ENCRYPTION_SUCCESS": "تم تعطيل التشفير بنجاح",
+          "DISABLE_ENCRYPTION_TITLE": "تعطيل التشفير؟",
+          "DISABLE_ENCRYPTION_WARNING": "تحذير: تعطيل التشفير سيجعل بياناتك المتزامنة غير مشفرة.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "ما سيحدث:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "التشفير متاح فقط للمزامنة المبنية على الملفات.",
+          "ENABLE_ENCRYPTION_ITEM_1": "سيتم تشفير جميع البيانات المتزامنة",
+          "ENABLE_ENCRYPTION_ITEM_2": "ستُخزن البيانات مشفرة على الخادم",
+          "ENABLE_ENCRYPTION_ITEM_3": "ستحتاج الأجهزة الأخرى لإدخال كلمة المرور",
+          "ENABLE_ENCRYPTION_NOTE": "ملاحظة: احتفظ بكلمة المرور في مكان آمن. لا يمكن استعادة البيانات بدونها.",
+          "ENABLE_ENCRYPTION_NOT_READY": "يرجى إعداد المزامنة أولاً قبل تفعيل التشفير.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "كلمة المرور مطلوبة",
+          "ENABLE_ENCRYPTION_SUCCESS": "تم تفعيل التشفير بنجاح",
+          "ENABLE_ENCRYPTION_TITLE": "تفعيل التشفير؟",
+          "ENABLE_ENCRYPTION_WARNING": "تحذير: إذا فقدت كلمة المرور، لن تتمكن من الوصول إلى بياناتك المتزامنة.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "ما سيحدث:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "تغيير كلمة مرور التشفير",
+          "L_CONFIRM_PASSWORD": "تأكيد كلمة المرور",
+          "L_NEW_PASSWORD": "كلمة المرور الجديدة",
+          "L_REMOVE_ENCRYPTION": "إزالة التشفير",
+          "PASSWORDS_DONT_MATCH": "كلمات المرور غير متطابقة",
+          "PASSWORD_MIN_LENGTH": "يجب أن تكون كلمة المرور {{minLength}} أحرف على الأقل",
+          "REMOVE_ENCRYPTION_WARNING": "تحذير: ستتم إزالة التشفير من جميع البيانات المتزامنة."
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "اسم ملف المزامنة"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "متابعة الاستيراد",
+          "CURRENT_STATE": "الحالة الحالية",
+          "ENCRYPTION_DISABLED": "التشفير معطل",
+          "ENCRYPTION_ENABLED": "التشفير مفعل",
+          "IMPORTED_STATE": "الحالة المستوردة",
+          "ITEM_1": "سيتم تطبيق إعدادات التشفير المستوردة",
+          "ITEM_2": "قد يتطلب هذا إعادة إدخال كلمة المرور على الأجهزة الأخرى",
+          "ITEM_3": "تأكد من أن لديك كلمة المرور الصحيحة",
+          "NOTE": "ملاحظة: سيتم تطبيق هذا التغيير فوراً.",
+          "NOTE_DISABLING": "الاستيراد سيعطل التشفير.",
+          "NOTE_ENABLING": "الاستيراد سيفعل التشفير.",
+          "TITLE": "تحذير تغيير التشفير",
+          "WARNING_TEXT": "الاستيراد سيغير إعدادات التشفير.",
+          "WHAT_HAPPENS": "ما سيحدث:"
+        },
+        "L_MANUAL_SYNC_ONLY": "مزامنة يدوية فقط",
+        "PASSWORD_SET_INFO": "تم تعيين كلمة المرور",
+        "SUPER_SYNC": {
+          "ACCESS_TOKEN_DESCRIPTION": "رمز الوصول للمصادقة مع خادم SuperSync.",
+          "BTN_CHANGE_PASSWORD": "تغيير كلمة المرور",
+          "BTN_DISABLE_ENCRYPTION": "تعطيل التشفير",
+          "BTN_ENABLE_ENCRYPTION": "تفعيل التشفير",
+          "BTN_FORCE_OVERWRITE": "فرض الكتابة فوق الخادم",
+          "BTN_GET_TOKEN": "الحصول على رمز الوصول",
+          "CHANGE_PASSWORD_SUCCESS": "تم تغيير كلمة المرور بنجاح",
+          "CHANGE_PASSWORD_WARNING": "تأكد من تحديث كلمة المرور على جميع الأجهزة الأخرى.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "يرجى تفعيل التشفير أولاً.",
+          "DISABLE_ENCRYPTION_ITEM_1": "سيتم فك تشفير جميع البيانات المتزامنة",
+          "DISABLE_ENCRYPTION_ITEM_2": "ستُخزن البيانات بدون تشفير على الخادم",
+          "DISABLE_ENCRYPTION_ITEM_3": "ستحتاج الأجهزة الأخرى لإعادة المزامنة",
+          "DISABLE_ENCRYPTION_NOTE": "ملاحظة: سيتم تطبيق هذا على جميع الأجهزة المتصلة.",
+          "DISABLE_ENCRYPTION_NOT_READY": "يرجى إعداد المزامنة أولاً.",
+          "DISABLE_ENCRYPTION_SUCCESS": "تم تعطيل التشفير بنجاح",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "هذا متاح فقط لمزامنة SuperSync.",
+          "DISABLE_ENCRYPTION_TITLE": "تعطيل التشفير؟",
+          "DISABLE_ENCRYPTION_WARNING": "تحذير: تعطيل التشفير سيجعل بياناتك المتزامنة غير مشفرة.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "ما سيحدث:",
+          "E2E_ENCRYPTION_DESCRIPTION": "تشفير من طرف إلى طرف لبياناتك المتزامنة.",
+          "ENABLE_ENCRYPTION_ITEM_1": "سيتم تشفير جميع البيانات المتزامنة",
+          "ENABLE_ENCRYPTION_ITEM_2": "ستُخزن البيانات مشفرة على الخادم",
+          "ENABLE_ENCRYPTION_ITEM_3": "ستحتاج الأجهزة الأخرى لإدخال كلمة المرور",
+          "ENABLE_ENCRYPTION_NOTE": "ملاحظة: احتفظ بكلمة المرور في مكان آمن. لا يمكن استعادة البيانات بدونها.",
+          "ENABLE_ENCRYPTION_NOT_READY": "يرجى إعداد المزامنة أولاً قبل تفعيل التشفير.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "كلمة المرور مطلوبة",
+          "ENABLE_ENCRYPTION_SUCCESS": "تم تفعيل التشفير بنجاح",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "هذا متاح فقط لمزامنة SuperSync.",
+          "ENABLE_ENCRYPTION_TITLE": "تفعيل التشفير؟",
+          "ENABLE_ENCRYPTION_WARNING": "تحذير: إذا فقدت كلمة المرور، لن تتمكن من الوصول إلى بياناتك المتزامنة.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "ما سيحدث:",
+          "ENCRYPTION_ENCOURAGED": "يُنصح بشدة بتفعيل التشفير لحماية بياناتك.",
+          "ENCRYPTION_SETUP_INTRO": "أعد تشفير من طرف إلى طرف لحماية بياناتك المتزامنة.",
+          "ENCRYPTION_WARNING": "تحذير: البيانات المتزامنة غير مشفرة حالياً.",
+          "FORCE_OVERWRITE_CONFIRM": "هل أنت متأكد أنك تريد فرض الكتابة فوق بيانات الخادم؟",
+          "FORCE_OVERWRITE_INFO": "سيحل هذا محل جميع البيانات على الخادم ببياناتك المحلية.",
+          "FORCE_OVERWRITE_TITLE": "فرض الكتابة فوق الخادم؟",
+          "INFO_TEXT": "SuperSync يوفر مزامنة فورية بين الأجهزة.",
+          "LOGIN_INSTRUCTIONS": "سجل الدخول إلى حساب SuperSync للحصول على رمز الوصول.",
+          "L_ACCESS_TOKEN": "رمز الوصول",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "تغيير كلمة مرور التشفير",
+          "L_CONFIRM_PASSWORD": "تأكيد كلمة المرور",
+          "L_ENABLE_E2E_ENCRYPTION": "تفعيل التشفير من طرف إلى طرف",
+          "L_NEW_PASSWORD": "كلمة المرور الجديدة",
+          "L_REMOVE_ENCRYPTION": "إزالة التشفير",
+          "L_SERVER_URL": "رابط الخادم",
+          "PASSWORDS_DONT_MATCH": "كلمات المرور غير متطابقة",
+          "PASSWORD_MIN_LENGTH": "يجب أن تكون كلمة المرور {{minLength}} أحرف على الأقل",
+          "REMOVE_ENCRYPTION_WARNING": "تحذير: ستتم إزالة التشفير من جميع البيانات المتزامنة.",
+          "SERVER_URL_DESCRIPTION": "رابط خادم SuperSync الخاص بك.",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "تعطيل SuperSync",
+          "SETUP_ENCRYPTION_BTN": "إعداد التشفير",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "تحذير: إذا فقدت كلمة المرور، لن تتمكن من الوصول إلى بياناتك المتزامنة.",
+          "SETUP_ENCRYPTION_TITLE": "إعداد التشفير"
         }
       },
       "S": {
@@ -918,7 +1161,64 @@
         "INCOMPLETE_CFG": "فشلت مصادقة المزامنة. يرجى التحقق من التكوين الخاص بك!",
         "SUCCESS_DOWNLOAD": "البيانات المتزامنة من جهاز التحكم عن بعد",
         "SUCCESS_VIA_BUTTON": "تمت مزامنة البيانات بنجاح",
-        "UNKNOWN_ERROR": "خطأ غير معروف أثناء المزامنة. يرجى التحقق من وحدة التحكم."
+        "UNKNOWN_ERROR": "خطأ غير معروف أثناء المزامنة. يرجى التحقق من وحدة التحكم.",
+        "ARCHIVE_OPERATION_FAILED": "فشلت عملية الأرشيف: {{errorMsg}}",
+        "AUTH_SETUP_FAILED": "فشل إعداد المصادقة",
+        "AUTH_TOKEN_REJECTED": "تم رفض رمز المصادقة. يرجى إعادة المصادقة.",
+        "CHANGE_PASSWORD_FAILED": "فشل تغيير كلمة المرور: {{errorMsg}}",
+        "CLOCK_DRIFT_WARNING": "تحذير: يبدو أن ساعة جهازك غير متزامنة. قد يؤثر هذا على المزامنة.",
+        "COMPACTION_FAILED": "فشل ضغط البيانات: {{errorMsg}}",
+        "CONFLICT_DIALOG_TIMEOUT": "انتهت مهلة حوار التعارض",
+        "CONFLICT_RESOLUTION_FAILED": "فشل حل التعارض",
+        "DATA_REPAIRED": "تم إصلاح البيانات بنجاح",
+        "DECRYPTION_FAILED": "فشل فك التشفير. يرجى التحقق من كلمة المرور.",
+        "DEFERRED_ACTION_FAILED": "فشل الإجراء المؤجل: {{errorMsg}}",
+        "DIALOG_RESULT_ERROR": "خطأ في نتيجة الحوار",
+        "DISABLE_ENCRYPTION_FAILED": "فشل تعطيل التشفير: {{errorMsg}}",
+        "ENABLE_ENCRYPTION_FAILED": "فشل تفعيل التشفير: {{errorMsg}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "تم تعطيل التشفير على جهاز آخر. يرجى إعادة المزامنة.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "كلمة مرور التشفير مطلوبة",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "التشفير مطلوب لـ SuperSync",
+        "ERROR_PAYLOAD_TOO_LARGE": "حمولة كبيرة جداً. يرجى تقليل حجم البيانات.",
+        "ERROR_PERMISSION": "خطأ في الأذونات. يرجى التحقق من صلاحياتك.",
+        "ERROR_PERMISSION_FLATPAK": "خطأ في الأذونات. بالنسبة لـ Flatpak، قد تحتاج لمنح أذونات إضافية.",
+        "ERROR_PERMISSION_SNAP": "خطأ في الأذونات. بالنسبة لـ Snap، قد تحتاج لمنح أذونات إضافية.",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "تعذر قراءة البيانات البعيدة",
+        "FINISH_DAY_SYNC_ERROR": "خطأ في مزامنة إنهاء اليوم",
+        "FRESH_CLIENT_SYNC_CANCELLED": "تم إلغاء مزامنة العميل الجديد",
+        "HYDRATION_FAILED": "فشل تحميل البيانات: {{errorMsg}}",
+        "IMPORTING": "جاري الاستيراد...",
+        "INCOMPLETE_OP_SYNC": "مزامنة عمليات غير مكتملة",
+        "INITIAL_SYNC_ERROR": "خطأ في المزامنة الأولية",
+        "INTEGRITY_CHECK_FAILED": "فشل فحص السلامة",
+        "INVALID_AUTH_CODE": "رمز المصادقة غير صالح",
+        "INVALID_OPERATION_PAYLOAD": "حمولة العملية غير صالحة",
+        "LOCAL_CHANGES_DISCARDED": "تم حذف {{count}} تغيير(ات) محلية بسبب استيراد المزامنة",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "تم حذف التغييرات المحلية بسبب لقطة المزامنة",
+        "LOCAL_DATA_REPLACE_CANCELLED": "تم إلغاء استبدال البيانات المحلية",
+        "LOCK_TIMEOUT_ERROR": "انتهت مهلة القفل. يرجى المحاولة مرة أخرى.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "تم حل {{count}} تعارض(ات) تلقائياً",
+        "MIGRATION_FAILED": "فشل الترحيل: {{errorMsg}}",
+        "NEWER_VERSION_AVAILABLE": "إصدار أحدث متاح. يرجى تحديث التطبيق.",
+        "OPERATION_PERMANENTLY_FAILED": "فشلت العملية بشكل دائم: {{errorMsg}}",
+        "OVERWRITE_SERVER_FAILED": "فشل فرض الكتابة فوق الخادم: {{errorMsg}}",
+        "PARTIAL_APPLY_FAILURE": "فشل التطبيق الجزئي: {{errorMsg}}",
+        "PERSIST_FAILED": "فشل حفظ البيانات: {{errorMsg}}",
+        "REMOTE_DATA_TOO_OLD": "البيانات البعيدة قديمة جداً",
+        "REPLAY_LOCAL_OPS_FAILED": "فشل إعادة تشغيل العمليات المحلية: {{errorMsg}}",
+        "RESTORE_ERROR": "خطأ في الاستعادة: {{errorMsg}}",
+        "RESTORE_SUCCESS": "تمت الاستعادة بنجاح",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "فشل التحقق من ترحيل الخادم",
+        "STORAGE_QUOTA_EXCEEDED": "تم تجاوز حصة التخزين",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "تم استعادة التخزين بعد الضغط",
+        "TIMEOUT_ERROR": "انتهت المهلة. يرجى المحاولة مرة أخرى.",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "عمليات كثيرة جداً للتحميل. يرجى إعادة المزامنة.",
+        "UPLOAD_ERROR": "خطأ في الرفع: {{errorMsg}}",
+        "UPLOAD_OPS_REJECTED": "تم رفض عمليات الرفع",
+        "VECTOR_CLOCK_LIMIT_REACHED": "تم الوصول إلى حد ساعة المتجه",
+        "VERSION_TOO_OLD": "الإصدار قديم جداً. يرجى تحديث التطبيق.",
+        "VERSION_UNSUPPORTED": "إصدار غير مدعوم",
+        "WEB_CRYPTO_NOT_AVAILABLE": "واجهة Web Crypto غير متاحة"
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "مسح الكل",
@@ -947,6 +1247,80 @@
         "TOOLTIP_DELETE": "احذف هذه النسخة الاحتياطية",
         "TOOLTIP_REFRESH": "تحديث قائمة النسخ الاحتياطي",
         "TOOLTIP_RESTORE": "استعاد هذا النسخة الاحتياطية (سيستبدل جميع البيانات الحالية)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "استعادة من السجل",
+      "D_DATA_REPAIRED": {
+        "MSG": "تم إصلاح بياناتك تلقائياً. يرجى مراجعة بياناتك والتحقق مما إذا كان كل شيء يبدو صحيحاً.",
+        "TITLE": "تم إصلاح البيانات",
+        "UNKNOWN_ERROR": "حدث خطأ غير معروف أثناء الإصلاح."
+      },
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "سيحاول هذا إصلاح بياناتك المحلية. من المستحسن إنشاء نسخة احتياطية أولاً. هل تريد المتابعة؟",
+        "TITLE": "تأكيد إصلاح البيانات"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "فرض الكتابة فوق الخادم",
+        "BTN_SAVE_AND_SYNC": "حفظ ومزامنة",
+        "FORCE_OVERWRITE_CONFIRM": "هل أنت متأكد أنك تريد فرض الكتابة فوق البيانات البعيدة؟ هذا سيحل محل جميع البيانات البعيدة ببياناتك المحلية.",
+        "FORCE_OVERWRITE_INFO": "استخدم هذا إذا نسيت كلمة المرور أو إذا كانت البيانات البعيدة تالفة.",
+        "FORCE_OVERWRITE_TITLE": "فرض الكتابة فوق الخادم؟",
+        "MESSAGE": "أدخل كلمة المرور لفك تشفير بياناتك المتزامنة.",
+        "PASSWORD_LABEL": "كلمة مرور التشفير",
+        "TITLE": "أدخل كلمة مرور التشفير"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "تم العثور على بيانات بعيدة. هل تريد تحميل البيانات البعيدة واستبدال بياناتك المحلية؟",
+        "OK": "تحميل البيانات البعيدة",
+        "TITLE": "تم العثور على بيانات بعيدة"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "سيتم استبدال جميع بياناتك المحلية بالبيانات البعيدة. هل تريد المتابعة؟",
+        "TITLE": "استبدال البيانات المحلية؟"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "تعطيل المزامنة",
+        "PERM_FILE": "يحتاج التطبيق إذناً للوصول إلى الملفات.",
+        "TEXT": "يحتاج التطبيق إذنك للمزامنة.",
+        "TITLE": "إذن مطلوب"
+      },
+      "D_RESTORE": {
+        "BTN_RESTORE": "استعادة",
+        "CONFIRM_MSG": "هل أنت متأكد أنك تريد الاستعادة إلى هذه النقطة؟ سيتم استبدال جميع بياناتك الحالية.",
+        "CONFIRM_TITLE": "تأكيد الاستعادة",
+        "ERROR_LOADING": "خطأ في تحميل نقاط الاستعادة",
+        "ERROR_RESTORE": "خطأ في استعادة البيانات",
+        "INTRO": "اختر نقطة استعادة للعودة إليها.",
+        "LOADING": "جاري التحميل...",
+        "NO_POINTS": "لا توجد نقاط استعادة متاحة",
+        "TITLE": "الاستعادة من السجل",
+        "TYPE_BACKUP_IMPORT": "استيراد نسخة احتياطية",
+        "TYPE_REPAIR": "إصلاح",
+        "TYPE_SYNC_IMPORT": "استيراد مزامنة",
+        "WARNING": "تحذير: لا يمكن التراجع عن هذا الإجراء."
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "CONFIRM": "متابعة الترحيل",
+        "MESSAGE": "يتطلب الخادم ترحيل البيانات. سيؤدي هذا إلى تحديث بياناتك المتزامنة إلى تنسيق جديد.",
+        "SKIP": "تخطي",
+        "TITLE": "ترحيل الخادم مطلوب"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "{{count}} تغيير(ات) محلية ستُحذف",
+        "IMPORT_DATE": "تاريخ الاستيراد: {{date}}",
+        "MSG_INCOMING": "جهاز آخر قام باستيراد/استعادة البيانات. السبب: {{reason}}.",
+        "MSG_INCOMING_NO_OPS": "جهاز آخر قام باستيراد/استعادة البيانات. لا توجد تغييرات محلية متأثرة.",
+        "MSG_LOCAL_FILTERS": "لديك {{count}} تغيير(ات) محلية ستُحذف لأنها سابقة للاستيراد.",
+        "REASON_BACKUP_RESTORE": "استعادة نسخة احتياطية",
+        "REASON_FILE_IMPORT": "استيراد ملف",
+        "REASON_FORCE_UPLOAD": "فرض الرفع",
+        "REASON_PASSWORD_CHANGED": "تم تغيير كلمة المرور",
+        "REASON_REPAIR": "إصلاح البيانات",
+        "REASON_SERVER_MIGRATION": "ترحيل الخادم",
+        "REASON_UNKNOWN": "سبب غير معروف",
+        "RECOMMEND_SERVER": "يوصى باستخدام البيانات البعيدة (الخادم).",
+        "TITLE": "تعارض استيراد المزامنة",
+        "USE_LOCAL": "استخدام البيانات المحلية",
+        "USE_REMOTE": "استخدام البيانات البعيدة"
       }
     },
     "TAG": {
@@ -968,7 +1342,8 @@
         "TITLE": "الإعدادات الأساسية"
       },
       "S": {
-        "UPDATED": "تم تحديث إعدادات العلامات"
+        "UPDATED": "تم تحديث إعدادات العلامات",
+        "ARCHIVE_CLEANUP_FAILED": "فشل تنظيف الأرشيف: {{errorMsg}}"
       },
       "TTL": {
         "ADD_NEW_TAG": "إضافة علامة جديدة"
@@ -1013,7 +1388,11 @@
         "TOOLTIP_CLEAR_ESTIMATE": "تقدير واضح",
         "TOOLTIP_CLEAR_TAGS": "العلامات الواضحة",
         "TOOLTIP_DISABLE_SEARCH": "تعطيل البحث عن المشكلة (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "تفعيل البحث عن المشكلة (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "تفعيل البحث عن المشكلة (Ctrl+2)",
+        "REPEAT_BUTTON": "تكرار",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "تبديل الإضافة للأعلى أو الأسفل",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "تبديل الإضافة إلى قائمة الانتظار / اليوم",
+        "TOOLTIP_CLEAR_REPEAT": "مسح التكرار"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "إضافة مرفق",
@@ -1027,11 +1406,21 @@
         "SCHEDULE_TASK": "جدولة مهمة",
         "SUB_TASKS": "المهام الفرعية ({{nr}})",
         "TIME": "زمن",
-        "TITLE_PLACEHOLDER": "أدخل عنوانا"
+        "TITLE_PLACEHOLDER": "أدخل عنوانا",
+        "COMPLETED_ON": "اكتمل في",
+        "CREATED_ON": "أُنشئ في",
+        "DEADLINE": "الموعد النهائي",
+        "DEADLINE_DUE_BY": "مستحق بحلول",
+        "DEADLINE_OVERDUE": "متأخر",
+        "FROM_PARENT": "من الأصل",
+        "ISSUE": "المشكلة",
+        "REMINDER": "التذكير"
       },
       "B": {
         "ADD_HALF_HOUR": "أضف 1/2 هو",
-        "ESTIMATE_EXCEEDED": "تم تجاوز تقدير الوقت لـ \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "تم تجاوز تقدير الوقت لـ \"{{title}}\"",
+        "ADD_ALL_TO_TODAY": "إضافة الكل لليوم",
+        "DEADLINES_TODAY": "المواعيد النهائية اليوم"
       },
       "CMP": {
         "ADD_SUB_TASK": "إضافة المهمة الفرعية",
@@ -1062,7 +1451,10 @@
         "TRACK_TIME": "بدء تتبع الوقت",
         "TRACK_TIME_STOP": "وقفة تتبع الوقت",
         "UNSCHEDULE_TASK": "إلغاء جدولة المهمة",
-        "UPDATE_ISSUE_DATA": "تحديث بيانات القضية"
+        "UPDATE_ISSUE_DATA": "تحديث بيانات القضية",
+        "EDIT_DEADLINE": "تعديل الموعد النهائي",
+        "REMOVE_DEADLINE": "إزالة الموعد النهائي",
+        "SET_DEADLINE": "تحديد موعد نهائي"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "هل تريد إنشاء العلامة الجديدة {{tagsTxt}}؟",
@@ -1088,7 +1480,13 @@
         "SNOOZE_ALL": "تأجيل الكل",
         "START": "بدء المهمة",
         "UNSCHEDULE": "إلغاء الجدولة",
-        "UNSCHEDULE_ALL": "إلغاء جدولة الكل"
+        "UNSCHEDULE_ALL": "إلغاء جدولة الكل",
+        "CLEAR_ALL_REMINDERS": "مسح جميع التذكيرات",
+        "CLEAR_REMINDER": "مسح التذكير",
+        "DEADLINE_REMINDER": "تذكير الموعد النهائي",
+        "DEADLINE_SECTION": "المواعيد النهائية",
+        "DUE_SECTION": "المستحقة",
+        "TASK_REMINDERS": "تذكيرات المهام"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "جدولة الشهر القادم",
@@ -1143,7 +1541,10 @@
         "REMINDER_ADDED": "المهمة المجدولة \"{{title}}\"",
         "REMINDER_DELETED": "تذكير محذوف للمهمة",
         "REMINDER_UPDATED": "تذكير محدث للمهمة \"{{title}}\"",
-        "TASK_CREATED": "المهمة التي تم تكوينها \"{{taskTitle}}\""
+        "TASK_CREATED": "المهمة التي تم تكوينها \"{{taskTitle}}\"",
+        "DEADLINE_REMOVED": "تمت إزالة الموعد النهائي",
+        "DEADLINE_SET": "تم تحديد الموعد النهائي",
+        "TASK_ALREADY_EXISTS": "المهمة موجودة بالفعل"
       },
       "SELECT_OR_CREATE": "حدد أو أنشئ المهمة",
       "SUMMARY_TABLE": {
@@ -1152,6 +1553,27 @@
         "SPENT_TOTAL": "إجمالي الإنفاق",
         "TASK": "مهمة",
         "TOGGLE_DONE": "الامم المتحدة / / علامة كما فعلت"
+      },
+      "D_CONFIRM_DELETE": {
+        "MSG": "هل أنت متأكد أنك تريد حذف هذه المهمة؟",
+        "OK": "حذف"
+      },
+      "D_DEADLINE": {
+        "ADD_TIME": "إضافة وقت",
+        "QA_NEXT_MONTH": "الشهر القادم",
+        "QA_NEXT_WEEK": "الأسبوع القادم",
+        "QA_TODAY": "اليوم",
+        "QA_TOMORROW": "غداً",
+        "REMIND_AT": "تذكير في",
+        "REMOVE_DEADLINE": "إزالة الموعد النهائي",
+        "RO_10M": "قبل 10 دقائق",
+        "RO_15M": "قبل 15 دقيقة",
+        "RO_1H": "قبل ساعة",
+        "RO_30M": "قبل 30 دقيقة",
+        "RO_5M": "قبل 5 دقائق",
+        "RO_AT_DEADLINE": "عند الموعد النهائي",
+        "RO_NEVER": "أبداً",
+        "SET_DEADLINE": "تحديد موعد نهائي"
       }
     },
     "TASK_REPEAT": {
@@ -1198,11 +1620,11 @@
         "ADD": "إضافة تكرار مهمة التكوين",
         "ADVANCED_CFG": "التكوين المتقدم",
         "EDIT": "تحرير كرر مهمة التكوين",
-        "HELP1": "والمهام المتكررة مخصصة للأعمال اليومية ، مثل: \"المؤسسة\" أو \"الاجتماع اليومي\" أو \"مراجعة الكود\" أو \"التحقق من رسائل البريد الإلكتروني\" أو المهام المماثلة التي من المحتمل أن تحدث مرارًا وتكرارًا.",
-        "HELP2": "بمجرد التهيئة ، ستتم إعادة إنشاء مهمة متكررة في كل يوم يتم تحديده أدناه بمجرد فتح المشروع وسيتم وضع علامة تلقائيًا على أنه مكتمل في نهاية اليوم. سيتم التعامل معها كحالات مختلفة. حتى تتمكن من إضافة المهام الفرعية بحرية",
-        "HELP3": "لا يمكن تكرار المهام المستوردة من Jira أو Git Issues. سيتم أيضًا حذف جميع التذكيرات في مهمة متكررة.",
-        "HELP4": "ملاحظة حول حقل الأمر: الإشارة إلى أمر الإنشاء المهام القابلة للتكرار. ساري المفعول فقط للمهام القابلة للتكرار التي تم إنشاؤها في نفس الوقت. تعني القيمة الأقل أن المهمة ستكون أعلى في القائمة ، ورقمًا أقل سيكون أقل. تعني القيمة الأكبر من 0 أنه تم إنشاء العناصر في أسفل المهام العادية.",
-        "TAG_LABEL": "علامات لإضافتها"
+        "TAG_LABEL": "علامات لإضافتها",
+        "HEATMAP_LABEL": "الخريطة الحرارية",
+        "TIME_SPENT_THIS_MONTH": "الوقت المستغرق هذا الشهر",
+        "TIME_SPENT_THIS_WEEK": "الوقت المستغرق هذا الأسبوع",
+        "TIME_SPENT_TOTAL": "إجمالي الوقت المستغرق"
       },
       "F": {
         "C_DAY": "يوم",
@@ -1217,8 +1639,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "عند تفعيلها، يتم إعادة إنشاء المهام الفرعية من أحدث مثيل مهمة مع المهمة المتكررة",
         "MONDAY": "الإثنين",
         "NOTES": "ملاحظات افتراضية",
-        "ORDER": "طلب",
-        "ORDER_DESCRIPTION": "ترتيب إنشاء المهام القابلة للتكرار. يؤثر فقط على المهام القابلة للتكرار التي تم إنشاؤها في نفس الوقت. تعني القيمة الأقل أنه سيتم إنشاء مهمة في أعلى القائمة ، وعدد أقل سيكون أقل. تعني القيمة الأكبر من 0 أنه تم إنشاء العناصر في أسفل المهام العادية.",
         "Q_CUSTOM": "تكوين تكرار مخصص",
         "Q_DAILY": "كل يوم",
         "Q_MONDAY_TO_FRIDAY": "كل يوم اثنين إلى جمعة",
@@ -1241,8 +1661,13 @@
         "THURSDAY": "الخميس",
         "TITLE": "عنوان المهمة",
         "TUESDAY": "الثلاثاء",
-        "WEDNESDAY": "الأربعاء"
-      }
+        "WEDNESDAY": "الأربعاء",
+        "Q_MONTHLY_FIRST_DAY": "أول يوم في الشهر",
+        "Q_MONTHLY_LAST_DAY": "آخر يوم في الشهر",
+        "SKIP_OVERDUE": "تخطي المتأخر",
+        "SKIP_OVERDUE_DESCRIPTION": "تخطي إنشاء المهام للتواريخ المتأخرة عند فتح التطبيق"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "فشل فتح حوار التكرار"
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1263,18 +1688,18 @@
         "GROUP_SCHEDULED_DATE": "التاريخ المحدد",
         "GROUP_TAG": "العلامه",
         "RESET_ALL": "إعادة تعيين الكل",
+        "SAVE_SORT": "حفظ كإعداد افتراضي",
         "SCHEDULED_NEXT_MONTH": "الشهر المقبل",
         "SCHEDULED_NEXT_WEEK": "الأسبوع القادم",
         "SCHEDULED_THIS_MONTH": "هذا الشهر",
         "SCHEDULED_THIS_WEEK": "هذا الأسبوع",
         "SCHEDULED_TODAY": "اليوم",
         "SCHEDULED_TOMORROW": "غداً",
+        "SORT": "فرز",
         "SORT_CREATION_DATE": "تاريخ الإنشاء",
         "SORT_DEFAULT": "افتراضي",
         "SORT_NAME": "اسم",
-        "SORT_PERMANENT": "الفرز (دائم)",
         "SORT_SCHEDULED_DATE": "التاريخ المحدد",
-        "SORT_TEMPORARY": "فرز (مؤقت)",
         "TIME_1HOUR": "> 1 ساعة",
         "TIME_2HOUR": "> 2 ساعة",
         "TIME_10MIN": "> 10 دقائق",
@@ -1316,6 +1741,31 @@
         "TASK": "مهمة",
         "TRACK_TO": "تتبع إلى:",
         "UNTRACKED_TIME": "الوقت الذي لم يتم تعقبه:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "ضغط",
+        "CONFIRM_MSG": "هل أنت متأكد أنك تريد ضغط الأرشيف؟ لا يمكن التراجع عن هذا.",
+        "CONFIRM_TITLE": "تأكيد الضغط",
+        "ESTIMATED_SAVINGS": "التوفير المقدر: {{savings}}",
+        "INTRO": "ضغط الأرشيف يزيل البيانات غير الضرورية لتوفير المساحة.",
+        "ISSUE_FIELDS_TO_CLEAR": "حقول المشكلات للمسح: {{count}}",
+        "LOADING": "جاري التحليل...",
+        "NOTES_TO_CLEAR": "ملاحظات للمسح: {{count}}",
+        "NO_DATA": "لا توجد بيانات للضغط",
+        "SUBTASKS_TO_DELETE": "مهام فرعية للحذف: {{count}}",
+        "TITLE": "ضغط الأرشيف",
+        "WARNING": "تحذير: لا يمكن التراجع عن هذا الإجراء."
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "يكرر العبارة المضبوطة مسبقاً، كل\n X\n عند تتبع الوقت لمهمة ما.",
+        "L_INTERVAL": "الفاصل الزمني لتكرار العبارة",
+        "L_TEXT": "نص",
+        "L_TEXT_DESCRIPTION": "على سبيل المثال: ”العمل على\n$currentTaskTitle”",
+        "L_VOICE": "حدد صوتا",
+        "L_VOICE_DESCRIPTION": "اختر صوتا",
+        "TITLE": "تذكير صوتي"
       }
     },
     "WORKLOG": {
@@ -1326,7 +1776,9 @@
         "TASKS": "مهام",
         "TOTAL_TIME": "إجمالي الوقت المستغرق:",
         "WEEK_NR": "الأسبوع {{nr}}",
-        "WORKED": "عمل"
+        "WORKED": "عمل",
+        "RESTORE_TASK_FROM_ARCHIVE": "استعادة المهمة من الأرشيف",
+        "VIEW_TASK_DETAILS": "عرض تفاصيل المهمة"
       },
       "D_CONFIRM_RESTORE": "هل أنت متأكد من رغبتك في نقل المهمة <strong>\"{{title}}\"</strong> إلى قائمة مهام اليوم؟",
       "D_EXPORT_TITLE": "تصدير  {{start}}-{{end}}",
@@ -1373,6 +1825,38 @@
         "NO_DATA": "لا توجد مهام هذا الأسبوع حتى الآن.",
         "TITLE": "عنوان"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "تم لصق الصورة بنجاح",
+      "SIZE_EXCEEDED": "حجم الصورة ({{actualSize}}) يتجاوز الحد الأقصى المسموح ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "تم تجاوز حصة التخزين. يرجى تحرير مساحة أو تقليل أحجام الصور."
+    },
+    "NEXTCLOUD_DECK": {
+      "FORM": {
+        "BASE_URL": "رابط القاعدة",
+        "FILTER_BY_ASSIGNEE": "تصفية حسب المكلّف",
+        "IS_TRANSITION_ISSUES_ENABLED": "تفعيل نقل المشكلات",
+        "PASSWORD": "كلمة المرور",
+        "POLL_INTERVAL_MINUTES": "فترة الاستطلاع (بالدقائق)",
+        "TITLE_TEMPLATE": "قالب العنوان",
+        "TITLE_TEMPLATE_DESCRIPTION": "قالب العنوان للمهام الجديدة المنشأة من بطاقات Deck",
+        "USERNAME": "اسم المستخدم"
+      },
+      "FORM_SECTION": {
+        "HELP": "مساعدة"
+      },
+      "ISSUE_CONTENT": {
+        "ASSIGNED_USERS": "المستخدمون المعينون",
+        "DECK_DESCRIPTION": "وصف Deck",
+        "LABELS": "التسميات",
+        "STACK": "المكدس"
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "لم يتم العثور على اللوحة",
+        "CARD_NOT_FOUND": "لم يتم العثور على البطاقة",
+        "ERR_CREDENTIALS_MISSING": "بيانات الاعتماد مفقودة",
+        "ERR_LOAD_BOARDS": "خطأ في تحميل اللوحات"
+      }
     }
   },
   "FILE_IMEX": {
@@ -1396,7 +1880,8 @@
     "S_ERR_INVALID_URL": "فشل الاستيراد: تم توفير عنوان URL غير صالح",
     "S_ERR_NETWORK": "فشل الاستيراد: خطأ في الشبكة أثناء جلب البيانات من URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "خطأ: تعذر فك تشفير معلمة URL للاستيراد. يرجى التأكد من تنسيقها بشكل صحيح.",
-    "URL_PLACEHOLDER": "أدخل عنوان URL للاستيراد منه"
+    "URL_PLACEHOLDER": "أدخل عنوان URL للاستيراد منه",
+    "BTN_COMPRESS_ARCHIVE": "ضغط الأرشيف"
   },
   "G": {
     "ADD": "يضيف",
@@ -1428,10 +1913,20 @@
     "SUBMIT": "يُقدِّم",
     "TITLE": "عنوان",
     "TODAY_TAG_TITLE": "اليوم",
-    "TRACKING_INTERVAL_DESCRIPTION": "تتبع الوقت باستخدام هذه الفترة الزمنية بالمللي ثانية. قد ترغب في تغيير هذا لتقليل عمليات الكتابة على القرص. راجع المشكلة رقم 2355.",
     "UNDO": "فك",
     "WITHOUT_PROJECT": "بدون مشروع",
-    "YESTERDAY": "في الامس"
+    "YESTERDAY": "في الامس",
+    "APPLY": "تطبيق",
+    "CONTINUE": "متابعة",
+    "DONT_SHOW_AGAIN": "لا تُظهر مرة أخرى",
+    "DUPLICATE": "نسخ",
+    "NEXT": "التالي",
+    "PASSWORD_STRENGTH_FAIR": "متوسط",
+    "PASSWORD_STRENGTH_STRONG": "قوي",
+    "PASSWORD_STRENGTH_WEAK": "ضعيف",
+    "PROCESSING": "جاري المعالجة...",
+    "SHARE": "مشاركة",
+    "TOGGLE_PASSWORD_VISIBILITY": "تبديل رؤية كلمة المرور"
   },
   "GCF": {
     "AUTO_BACKUPS": {
@@ -1454,7 +1949,12 @@
     "FOCUS_MODE": {
       "HELP": "يفتح وضع التركيز شاشة خالية من عوامل التشتيت لمساعدتك على التركيز على مهمتك الحالية.",
       "L_SKIP_PREPARATION_SCREEN": "تخطي شاشة التحضير (التمدد وما إلى ذلك)",
-      "TITLE": "وضع التركيز"
+      "TITLE": "وضع التركيز",
+      "L_IS_PLAY_TICK": "تشغيل صوت النقر",
+      "L_MANUAL_BREAK_START": "بدء الاستراحة يدوياً",
+      "L_PAUSE_TRACKING_DURING_BREAK": "إيقاف التتبع أثناء الاستراحة",
+      "L_START_IN_BACKGROUND": "بدء في الخلفية",
+      "L_SYNC_SESSION_WITH_TRACKING": "مزامنة الجلسة مع التتبع"
     },
     "IDLE": {
       "HELP": "<div><p>عند تمكين معالجة وقت الخمول ، سيتم فتح مربع حوار بعد فترة زمنية محددة للتحقق مما إذا كانت المهمة التي ترغب في تتبع وقتك عليها ، وعندما تكون خاملة.</p></div>",
@@ -1520,7 +2020,8 @@
       "TRIGGER_SYNC": "تشغيل المزامنة (إذا تم تكوينها)",
       "ZOOM_DEFAULT": "التكبير الافتراضي (سطح المكتب فقط)",
       "ZOOM_IN": "تكبير (سطح المكتب فقط)",
-      "ZOOM_OUT": "التصغير (سطح المكتب فقط)"
+      "ZOOM_OUT": "التصغير (سطح المكتب فقط)",
+      "TASK_UNSCHEDULE": "إلغاء جدولة المهمة"
     },
     "LANG": {
       "AR": "عربي",
@@ -1544,6 +2045,7 @@
       "SK": "السلوفاكية",
       "TIME_LOCALE": "موقع تنسيق الوقت",
       "TIME_LOCALE_AUTO": "نظام الإعداد الافتراضي",
+      "TIME_LOCALE_CS_CZ": "التشيكية - 24 ساعة",
       "TIME_LOCALE_DE_DE": "الألمانية - 24 ساعة",
       "TIME_LOCALE_DESCRIPTION": "اختر موقعا لتنسيق الوقت. المواقع المختلفة تستخدم قواعد مختلفة (تنسيق 12 ساعة مقابل 24 ساعة)",
       "TIME_LOCALE_EN_GB": "النسخة الإنجليزية (المملكة المتحدة) - 24 ساعة",
@@ -1555,16 +2057,22 @@
       "TIME_LOCALE_KO_KR": "الكورية - 12 ساعة صباحا/مساء",
       "TIME_LOCALE_PT_BR": "البرتغالية (البرازيل) - 24 ساعة",
       "TIME_LOCALE_RU_RU": "الروسية - 24 ساعة",
-      "TIME_LOCALE_TR_TR": "تركيا - 24 ساعة",
-      "TIME_LOCALE_ZH_CN": "الصينية (المبسطة) - 24 ساعة",
-      "TIME_LOCALE_CS_CZ": "التشيكية - 24 ساعة",
       "TIME_LOCALE_SK_SK": "السلوفاكية - 24 ساعة",
+      "TIME_LOCALE_TR_TR": "تركيا - 24 ساعة",
       "TIME_LOCALE_UK_UA": "الأوكرانية - 24 ساعة",
+      "TIME_LOCALE_ZH_CN": "الصينية (المبسطة) - 24 ساعة",
       "TITLE": "لغة",
       "TR": "تركية",
       "UK": "الأوكرانية",
       "ZH": "الصينية (المبسطة)",
-      "ZH_TW": "الصينية (تقليدية)"
+      "ZH_TW": "الصينية (تقليدية)",
+      "FI": "الفنلندية",
+      "PT_BR": "البرتغالية (البرازيل)",
+      "RO": "الرومانية",
+      "RO_MD": "الرومانية (مولدوفا)",
+      "SV": "السويدية",
+      "TIME_LOCALE_RO_MD": "الرومانية (مولدوفا)",
+      "TIME_LOCALE_RO_RO": "الرومانية (رومانيا)"
     },
     "MISC": {
       "DARK_MODE": "الوضع الداكن",
@@ -1588,17 +2096,10 @@
       "THEME": "موضوع",
       "THEME_EXPERIMENTAL": "الموضوع (تجريبي)",
       "THEME_SELECT_LABEL": "اختيار الموضوع",
-      "TITLE": "متفرقات الإعدادات"
-    },
-    "TASKS": {
-      "DEFAULT_PROJECT": "المشروع الافتراضي لإنشاء المهام الجديدة فيه",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "إضافة علامة اليوم تلقائيًا للعمل على المهام الجديدة",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "عند الانتهاء من جميع المهام الفرعية، يتم تلقائيًا وضع علامة على المهمة الرئيسية كمكتملة",
-      "IS_CONFIRM_BEFORE_DELETE": "تأكيد قبل حذف المهام",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "تمكين تنسيق Markdown في ملاحظات المهام",
-      "IS_TRAY_SHOW_CURRENT": "إظهار المهمة الحالية في الدرج / قائمة الحالة (سطح المكتب فقط)",
-      "NOTES_TEMPLATE": "قالب وصف المهمة",
-      "TITLE": "المهام"
+      "TITLE": "متفرقات الإعدادات",
+      "DEFAULT_START_PAGE": "صفحة البداية الافتراضية",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR": "استخدام شريط عنوان مخصص",
+      "IS_USE_CUSTOM_WINDOW_TITLE_BAR_HINT": "يتطلب إعادة تشغيل التطبيق"
     },
     "POMODORO": {
       "BREAK_DURATION": "مدة الاستراحة القصيرة",
@@ -1610,7 +2111,14 @@
       "COUNTDOWN_DURATION": "إظهار الشعار X قبل التذكير الفعلي",
       "DEFAULT_TASK_REMIND_OPTION": "اختيار خيار التذكير الافتراضي عند إنشاء المهام",
       "IS_COUNTDOWN_BANNER_ENABLED": "إظهار لافتة العد التنازلي قبل استحقاق التذكيرات",
-      "TITLE": "تذكيرات"
+      "TITLE": "تذكيرات",
+      "DISABLE_REMINDERS": "تعطيل التذكيرات",
+      "DUE_DATE_NOTIFICATION_HOUR": "ساعة إشعار تاريخ الاستحقاق",
+      "HELP": "إعدادات التذكيرات والإشعارات.",
+      "IS_FOCUS_WINDOW": "تركيز النافذة عند التذكير",
+      "NOTIFY_ON_DUE_DATE": "إشعار عند تاريخ الاستحقاق",
+      "USE_ALARM_STYLE_REMINDERS": "استخدام تذكيرات بنمط المنبه",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "عرض التذكيرات كمنبه بدلاً من إشعار"
     },
     "SCHEDULE": {
       "HELP": "يجب أن توفر لك ميزة الجدول الزمني نظرة عامة سريعة على كيفية أداء المهام المخططة بمرور الوقت. يمكنك العثور عليه في القائمة اليمنى ضمن <a href='#/schedule'>\"المخطط الزمني\"</a>.",
@@ -1622,14 +2130,19 @@
       "L_WORK_START": "بداية يوم العمل",
       "LUNCH_BREAK_START_END_DESCRIPTION": "على سبيل المثال 13:00",
       "TITLE": "الجدول الزمني",
-      "WORK_START_END_DESCRIPTION": "على سبيل المثال 17:00"
+      "WORK_START_END_DESCRIPTION": "على سبيل المثال 17:00",
+      "MONTH": "شهر"
     },
     "SHORT_SYNTAX": {
       "HELP": "<p>هنا يمكنك التحكم في خيارات بناء الجملة القصيرة عند إنشاء مهمة</p>",
       "IS_ENABLE_DUE": "تمكين بناء الجملة القصيرة (@<Due time>)",
       "IS_ENABLE_PROJECT": "تمكين بناء الجملة القصيرة للمشروع (+<Project name>)",
       "IS_ENABLE_TAG": "تمكين بناء الجملة القصيرة للعلامة (#<Tag>)",
-      "TITLE": "بناء الجملة القصير"
+      "TITLE": "بناء الجملة القصير",
+      "URL_BEHAVIOR_EXTRACT": "استخراج العنوان",
+      "URL_BEHAVIOR_KEEP": "الاحتفاظ بالرابط",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "الاحتفاظ وإرفاق",
+      "URL_BEHAVIOR_LABEL": "سلوك الروابط"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "صوت تذكيري لأخذ استراحة",
@@ -1654,6 +2167,16 @@
       "SNOOZE_TIME": "غفوة الوقت عند مطالبتك بأخذ قسط من الراحة",
       "TITLE": "التذكير بالاستراحة"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "المشروع الافتراضي لإنشاء المهام الجديدة فيه",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "إضافة علامة اليوم تلقائيًا للعمل على المهام الجديدة",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "عند الانتهاء من جميع المهام الفرعية، يتم تلقائيًا وضع علامة على المهمة الرئيسية كمكتملة",
+      "IS_CONFIRM_BEFORE_DELETE": "تأكيد قبل حذف المهام",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "تمكين تنسيق Markdown في ملاحظات المهام",
+      "IS_TRAY_SHOW_CURRENT": "إظهار المهمة الحالية في الدرج / قائمة الحالة (سطح المكتب فقط)",
+      "NOTES_TEMPLATE": "قالب وصف المهمة",
+      "TITLE": "المهام"
+    },
     "TIME_TRACKING": {
       "HELP": "تذكير تتبع الوقت هو عبارة عن لافتة تظهر في حالة نسيانك بدء تتبع الوقت.",
       "L_DEFAULT_ESTIMATE": "تقدير الوقت الافتراضي للمهام الجديدة",
@@ -1664,9 +2187,57 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "نافذة تطبيق التركيز عندما يكون التذكير نشطا (سطح المكتب فقط)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "إعلام عند عرض تذكير تتبع الوقت",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "إظهار تذكير التتبع على تطبيق الهاتف المحمول",
-      "L_TRACKING_INTERVAL": "فترة تتبع الوقت (تجريبي)",
       "L_TRACKING_REMINDER_MIN_TIME": "الوقت المستغرق للانتظار قبل عرض لافتة تذكير التتبع",
       "TITLE": "تتبع الوقت"
+    },
+    "APP_FEATURES": {
+      "BOARDS": "اللوحات",
+      "DONATE_PAGE": "صفحة التبرع",
+      "FOCUS_MODE": "وضع التركيز",
+      "HABITS": "العادات",
+      "HELP": "المساعدة",
+      "ISSUES_PANEL": "لوحة المشكلات",
+      "PLANNER": "المخطط",
+      "PROJECT_NOTES": "ملاحظات المشروع",
+      "SCHEDULE": "الجدول",
+      "SCHEDULE_DAY_PANEL": "لوحة جدول اليوم",
+      "SEARCH": "البحث",
+      "SYNC_BUTTON": "زر المزامنة",
+      "TIME_TRACKING": "تتبع الوقت",
+      "TITLE": "ميزات التطبيق",
+      "USER_PROFILES": "ملفات المستخدمين",
+      "USER_PROFILES_HINT": "إنشاء ملفات تعريف مختلفة لسياقات مختلفة (مثل العمل والشخصي).",
+      "USER_PROFILES_WARNING": "تحذير: تغيير الملف الشخصي سيعيد تحميل التطبيق."
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "حذف",
+      "DELETE_ALL": "حذف الكل",
+      "DELETE_ALL_SUCCESS": "تم حذف جميع الصور",
+      "DELETE_SUCCESS": "تم حذف الصورة",
+      "ERROR_DELETING": "خطأ في حذف الصورة",
+      "ERROR_DELETING_ALL": "خطأ في حذف جميع الصور",
+      "ERROR_LOADING": "خطأ في تحميل الصور",
+      "HELP": "إدارة الصور الملصوقة من الحافظة. يتم تخزين الصور محلياً.",
+      "LOADING": "جاري التحميل...",
+      "MANAGER_TITLE": "مدير الصور",
+      "MANAGE_DESCRIPTION": "إدارة وحذف الصور الملصوقة من الحافظة.",
+      "MANAGE_TITLE": "إدارة الصور",
+      "NO_IMAGES": "لا توجد صور",
+      "OPEN_MANAGER": "فتح المدير",
+      "PATH_DESCRIPTION": "مسار تخزين الصور الملصوقة.",
+      "PATH_LABEL": "مسار التخزين",
+      "PATH_PLACEHOLDER": "أدخل مسار التخزين",
+      "PATH_TITLE": "مسار تخزين الصور",
+      "SELECT_PATH": "اختيار المسار",
+      "SELECT_PATH_TITLE": "اختيار مسار التخزين",
+      "SORT_BY": "ترتيب حسب",
+      "SORT_LARGEST": "الأكبر أولاً",
+      "SORT_NEWEST": "الأحدث أولاً",
+      "SORT_OLDEST": "الأقدم أولاً",
+      "SORT_SMALLEST": "الأصغر أولاً",
+      "TITLE": "صور الحافظة",
+      "TOTAL_IMAGES": "إجمالي الصور: {{count}}",
+      "TOTAL_SIZE": "الحجم الإجمالي: {{size}}"
     }
   },
   "GLOBAL_RELATIVE_TIME": {
@@ -1710,7 +2281,11 @@
     "SHARE_FAILED": "فشل المشاركة. يرجى النسخ يدويا.",
     "SHARE_FAILED_FALLBACK": "فشل المشاركة. نسخ إلى لوحة الكتابة بدلا من ذلك.",
     "SHARE_UNAVAILABLE_FALLBACK": "تم النسخ إلى لوحة الكتابة.",
-    "UNPLANNED_TODAY_TASKS": "جميع المهام من اليوم غير مخططة"
+    "UNPLANNED_TODAY_TASKS": "جميع المهام من اليوم غير مخططة",
+    "DUPLICATE_PROJECT_ERROR": "خطأ في نسخ المشروع",
+    "DUPLICATE_PROJECT_SUCCESS": "تم نسخ المشروع بنجاح",
+    "OPEN_SETTINGS_ERROR": "خطأ في فتح الإعدادات",
+    "SAVE_BLOCKED_DURING_SYNC": "تم حظر الحفظ أثناء المزامنة"
   },
   "GPB": {
     "ASSETS": "جارٍ تحميل الأصول ...",
@@ -1718,7 +2293,6 @@
     "DBX_GEN_TOKEN": "Dropbox: إنشاء رمز مميز ...",
     "DBX_META": "Dropbox: احصل على ملف تعريف ...",
     "DBX_UPLOAD": "Dropbox: تحميل ملف ...",
-    "GITHUB_LOAD_ISSUE": "GitHub: تحميل بيانات العدد ...",
     "JIRA_LOAD_ISSUE": "Jira: تحميل بيانات العدد ...",
     "SYNC": "مزامنة البيانات...",
     "UNKNOWN": "تحميل البيانات البعيدة",
@@ -1763,20 +2337,70 @@
     "TOGGLE_TRACK_TIME": "بدء / إيقاف تتبع الوقت",
     "TRIGGER_SYNC": "تشغيل المزامنة يدويًا",
     "UNPLAN_ALL_TASKS": "إلغاء التخطيط لجميع المهام",
-    "WORKLOG": "سجل العمل"
+    "WORKLOG": "سجل العمل",
+    "DISABLE_FEATURE": "تعطيل الميزة",
+    "DONATE": "تبرع",
+    "DUPLICATE_PROJECT": "نسخ المشروع",
+    "FEATURE_DISABLED_SNACK": "تم تعطيل الميزة. يمكنك تفعيلها من الإعدادات.",
+    "HABITS": "العادات",
+    "NOTES": "الملاحظات",
+    "NOTES_PANEL_INFO": "الملاحظات خاصة بالسياق الحالي",
+    "NO_PROJECT_INFO": "لم يتم اختيار مشروع",
+    "NO_TAG_INFO": "لم يتم اختيار وسم",
+    "NO_TASKS_TO_TRACK": "لا توجد مهام للتتبع",
+    "OPEN_APP_FEATURES": "فتح ميزات التطبيق",
+    "PROCRASTINATE": "تأجيل",
+    "PROJECT_SETTINGS": "إعدادات المشروع",
+    "SHOW_TRACKED_TASK": "إظهار المهمة المتتبعة",
+    "TASKS": "المهام",
+    "TASK_LIST": "قائمة المهام",
+    "TOGGLE_SHOW_BOOKMARKS": "تبديل إظهار الإشارات المرجعية"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "هل تريد تنزيل نسخة احتياطية من بياناتك القديمة (يمكن استخدامها مع الإصدارات القديمة من الإنتاجية الفائقة)؟",
     "DETECTED_LEGACY": "تم اكتشاف البيانات القديمة. سنقوم بترحيله من أجلك!",
     "E_MIGRATION_FAILED": "فشل الترحيل! مع خطأ:",
     "E_RESTART_FAILED": "فشلت إعادة التشغيل التلقائية. يرجى إعادة تشغيل التطبيق يدويا!",
-    "SUCCESS": "تم الترحيل بالكامل! إعادة تشغيل التطبيق الآن ..."
+    "SUCCESS": "تم الترحيل بالكامل! إعادة تشغيل التطبيق الآن ...",
+    "DIALOG_MESSAGE": "يحتاج التطبيق لترحيل بياناتك إلى تنسيق جديد. قد يستغرق هذا بضع لحظات.",
+    "DIALOG_TITLE": "ترحيل البيانات",
+    "STATUS_BACKUP": "إنشاء نسخة احتياطية...",
+    "STATUS_COMPLETE": "اكتمل الترحيل!",
+    "STATUS_MIGRATING": "جاري الترحيل...",
+    "STATUS_PREPARING": "جاري التحضير..."
+  },
+  "ONBOARDING": {
+    "TITLE": "كيف تريد استخدام Super Productivity؟",
+    "SUBTITLE": "اختر إعدادًا يناسب طريقة عملك. يمكنك تغيير هذا لاحقًا في الإعدادات.",
+    "PRIVACY_HINT": "بياناتك تبقى آمنة على جهازك. لا يتم إرسال أي شيء إلى خادم.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "قائمة مهام بسيطة",
+        "DESCRIPTION": "مدير مهام نظيف مع مشاريع وعلامات وملاحظات. بدون إضافات."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "تتبع الوقت",
+        "DESCRIPTION": "تتبع الوقت الذي تستغرقه المهام. مثالي لفوترة الساعات أو فهم أين يذهب وقتك."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "حزمة الإنتاجية",
+        "DESCRIPTION": "خطط ليومك، وابنِ عادات، وركز بعمق، وتتبع وقتك. كل ذلك في مكان واحد."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "انقر على + لإضافة مهمتك الأولى",
+      "CREATE_TASK_TOUCH": "اضغط على + لإضافة مهمتك الأولى",
+      "EXPLORE": "لا تتردد في النقر والاستكشاف! يمكنك العثور على المساعدة في الشريط الجانبي.",
+      "EXPLORE_TOUCH": "لا تتردد في الاستكشاف! يمكنك العثور على المساعدة في القائمة.",
+      "OR_PRESS": "أو اضغط",
+      "SKIP_ARIA": "إغلاق التلميح"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "إضافة مهام من اليوم",
     "ARCHIVED_TASKS": {
-      "PLURAL": " تم أرشفة{{count}} المهام الأصلية التي تم إنجازها",
-      "SINGULAR": " تم أرشفة مهمة{{count}} الوالد المنجزة"
+      "ONE": " تم أرشفة مهمة{{count}} الوالد المنجزة",
+      "OTHER": " تم أرشفة{{count}} المهام الأصلية التي تم إنجازها"
     },
     "BREAK_LABEL": "فترات الراحة (عدد / وقت)",
     "CELEBRATE": "توقف لحظة للاحتفال <i>!</i>",
@@ -1810,7 +2434,8 @@
     "TIME_SPENT_AND_ESTIMATE_LABEL": "الوقت المستغرق / المقدر",
     "TIME_SPENT_ESTIMATE_TITLE": "الوقت المستغرق: إجمالي الوقت الذي يقضيه اليوم. المهام المؤرشفة غير المدرجة. - الوقت المقدر: الوقت المقدر للمهام التي عملت عليها اليوم مطروحًا منها الوقت الذي تقضيه بالفعل معهم في أيام أخرى.",
     "TIME_SPENT_TODAY_BY_TAG": "الوقت المستغرق اليوم حسب العلامة",
-    "WEEK": "أسبوع"
+    "WEEK": "أسبوع",
+    "END_OF_DAYS_RITUALS_PLACEHOLDER": "ماذا أنجزت اليوم؟ ما الذي يمكن تحسينه؟"
   },
   "PLUGINS": {
     "ACTION_TYPE_NOT_ALLOWED": "نوع الإجراء '{{type}}' غير مسموح به",
@@ -1831,7 +2456,6 @@
     "ERROR": "خطأ",
     "ERROR_LOADING_PLUGIN": "خطأ في تحميل الإضافة",
     "EXPERIMENTAL_WARNING": "نظام الإضافات في مرحلة تجريبية ويجب استخدامه بحذر شديد.",
-    "EXPERIMENTAL_WARNING_TITLE": "ميزة تجريبية - تحذير أمني",
     "FAILED_TO_CLEAR_CACHE": "فشل في مسح ذاكرة التخزين المؤقت للإضافة",
     "FAILED_TO_EXECUTE_SCRIPT": "فشل في تنفيذ Node.js السكريبت",
     "FAILED_TO_EXTRACT_ZIP": "فشل في استخراج ملف ZIP الخاص بالإضافة",
@@ -1892,10 +2516,15 @@
     "UNABLE_TO_PERSIST_DATA": "غير قادر على حفظ البيانات إلى تخزين الإضافات",
     "UNKNOWN_ERROR": "حدث خطأ غير معروف",
     "UPLOAD_PLUGIN_INSTRUCTION": "رفع ملف ZIP لإضافة لتثبيته:",
-    "VALIDATION_FAILED": "فشل التحقق"
+    "VALIDATION_FAILED": "فشل التحقق",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "سيؤدي تعطيل هذه الإضافة إلى إزالة مزودي المشكلات المرتبطين بها. هل تريد المتابعة؟",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "فشل تحميل إضافات المجتمع",
+    "INDEX_HTML_NOT_LOADED": "لم يتم تحميل index.html",
+    "LANGUAGES": "اللغات"
   },
   "PM": {
-    "TITLE": "مقاييس المشروع"
+    "TITLE": "مقاييس المشروع",
+    "ALL_TASKS_TITLE": "جميع المهام"
   },
   "PS": {
     "GLOBAL_SETTINGS": "الاعدادات العامة",
@@ -1905,7 +2534,19 @@
     "PROJECT_SETTINGS": "إعدادات محددة للمشروع",
     "PROVIDE_FEEDBACK": "تقديم التغذية الراجعة",
     "SYNC_EXPORT": "المزامنة والتصدير",
-    "TAG_SETTINGS": "الإعدادات الخاصة بالعلامة"
+    "TAG_SETTINGS": "الإعدادات الخاصة بالعلامة",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "فشل النسخ إلى الحافظة",
+    "RELOAD": "إعادة تحميل",
+    "TABS": {
+      "GENERAL": "عام",
+      "PLUGINS": "الإضافات",
+      "PRODUCTIVITY": "الإنتاجية",
+      "SYNC_BACKUP": "المزامنة والنسخ الاحتياطي",
+      "TASKS": "المهام",
+      "TIME_TRACKING": "تتبع الوقت"
+    },
+    "TOGGLE_DARK_MODE": "تبديل الوضع الداكن",
+    "UPDATE_APP": "تحديث التطبيق"
   },
   "SCHEDULE": {
     "LAST": "آخر: ",
@@ -1915,7 +2556,10 @@
     "NO_SCHEDULED_TITLE": "المهام المجدولة لليوم",
     "REPEATED_TASKS": "المهام المتكررة",
     "SCHEDULED_TASKS": "المهام المجدولة",
-    "SCHEDULED_TASKS_WITH_TIME": "المهام المجدولة مع التذكير"
+    "SCHEDULED_TASKS_WITH_TIME": "المهام المجدولة مع التذكير",
+    "NO_DEADLINES": "لا توجد مواعيد نهائية",
+    "START_TASK": "بدء المهمة",
+    "TASKS_WITH_DEADLINES": "المهام ذات المواعيد النهائية"
   },
   "USER_PROFILES": {
     "ACTIVE": "نشط",
@@ -1963,6 +2607,43 @@
     "TODAY_REMAINING": "المتبقي اليوم:",
     "WITHOUT_BREAK": "بدون انقطاع:",
     "WORKING_TODAY": "عمل اليوم:",
-    "WORKING_TODAY_ARCHIVED": "وقت العمل اليوم على المهام المؤرشفة"
+    "WORKING_TODAY_ARCHIVED": "وقت العمل اليوم على المهام المؤرشفة",
+    "RECURRING_TASKS": "المهام المتكررة"
+  },
+  "DONATE_PAGE": {
+    "BUTTON_TEXT": "تبرع عبر GitHub Sponsors",
+    "INTRO_1": "Super Productivity ممول بالكامل من المجتمع. لا يوجد تتبع ولا إعلانات ولا جمع بيانات — مهامك تبقى على جهازك.",
+    "INTRO_2": "إذا كنت تقدّر هذا النهج وتريد الحفاظ على صحة المشروع وتطوره، فإن التبرع الطوعي محل تقدير كبير."
+  },
+  "GLOBAL": {
+    "COPY_SUFFIX": "(نسخة)"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "تم رفض إذن المنبه الدقيق. قد لا تعمل التذكيرات بدقة.",
+    "TASK_ALREADY_COMPLETED": "المهمة مكتملة بالفعل",
+    "TASK_MARKED_DONE": "تم وضع علامة منتهية على المهمة"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "يحتاج التطبيق لإعداد بياناتك. قد يستغرق هذا بضع لحظات.",
+    "DIALOG_TITLE": "إعداد البيانات"
+  },
+  "THEMES": {
+    "SCHEDULED_TASKS_WITH_TIME": "المهام المجدولة مع الوقت",
+    "SELECT_THEME": "اختيار السمة",
+    "amber": "كهرماني",
+    "blue": "أزرق",
+    "blue-grey": "أزرق رمادي",
+    "cyan": "سماوي",
+    "deep-orange": "برتقالي غامق",
+    "deep-purple": "بنفسجي غامق",
+    "green": "أخضر",
+    "indigo": "نيلي",
+    "light-blue": "أزرق فاتح",
+    "light-green": "أخضر فاتح",
+    "lime": "ليموني",
+    "pink": "وردي",
+    "purple": "بنفسجي",
+    "teal": "أخضر مزرق",
+    "yellow": "أصفر"
   }
 }

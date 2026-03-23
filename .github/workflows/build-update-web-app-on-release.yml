@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2
         with:
           egress-policy: audit
           allowed-endpoints: >
@@ -24,7 +24,7 @@ jobs:
             objects.githubusercontent.com:443
             registry.npmjs.org:443
 
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Check out Git repository
@@ -38,14 +38,14 @@ jobs:
           ssh://git@github.com/
 
       - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: 22
       - name: Get npm cache directory
         id: npm-cache-dir
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+          echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}

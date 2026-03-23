@@ -31,9 +31,9 @@ progress-bar {
   min-height: var(--bar-height);
   display: flex;
   align-items: center;
-  z-index: 44;
+  z-index: var(--z-right-panel);
   border-radius: var(--card-border-radius);
-  margin: 8px;
+  margin: var(--s);
   border-bottom: 2px solid var(--c-primary) !important;
 
   ::ng-deep textarea {
@@ -42,8 +42,8 @@ progress-bar {
   }
 
   task-title {
-    padding-top: 4px;
-    padding-bottom: 4px;
+    padding-top: var(--s-half);
+    padding-bottom: var(--s-half);
     margin-top: 0;
     color: var(--text-color);
   }
@@ -55,7 +55,7 @@ progress-bar {
   padding: var(--s);
   margin: 0;
   flex-grow: 1;
-  margin-top: 4px;
+  margin-top: var(--s-half);
   line-height: 1.4;
   min-height: 40px;
   font-size: 17px;
@@ -103,4 +103,16 @@ progress-bar {
   font-weight: bold;
   display: flex;
   z-index: 2;
+}
+
+.add-btn-wrapper {
+  text-align: center;
+}
+
+.attachment-list-panel-content-wrapper {
+  padding-bottom: var(--s);
+}
+
+.local-attachments-heading {
+  margin-bottom: 0;
 }

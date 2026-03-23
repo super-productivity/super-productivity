@@ -120,6 +120,9 @@ export class TagPage extends BasePage {
       await tagNameInput.waitFor({ state: 'hidden', timeout: 3000 });
     }
 
+    // Wait for Angular to process the tag toggle before closing overlays
+    await this.page.waitForTimeout(300);
+
     // Close the toggle menu (it stays open for multi-tag selection) and wait for cleanup
     await this.ensureOverlaysClosed();
 

@@ -28,7 +28,9 @@ export class DropboxEffects {
           if (syncCfg.syncProvider !== SyncProviderId.Dropbox) {
             return;
           }
-          const provider = this._providerManager.getProviderById(SyncProviderId.Dropbox);
+          const provider = await this._providerManager.getProviderById(
+            SyncProviderId.Dropbox,
+          );
           if (!provider) {
             return;
           }

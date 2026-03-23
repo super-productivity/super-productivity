@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { SyncConfigService } from '../sync-config.service';
 import { EncryptionPasswordChangeService } from '../encryption-password-change.service';
 import { SnackService } from '../../../core/snack/snack.service';
@@ -73,7 +74,9 @@ export class DialogEnterEncryptionPasswordComponent {
     this.isLoading.set(true);
     try {
       await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
-      this._matDialogRef.close({ password: this.passwordVal });
+      const pw = this.passwordVal;
+      this.passwordVal = '';
+      this._matDialogRef.close({ password: pw });
     } catch (error) {
       SyncLog.err('Failed to save encryption password', error);
       this._snackService.open({
@@ -90,16 +93,17 @@ export class DialogEnterEncryptionPasswordComponent {
       return;
     }
 
-    const confirmed = await this._matDialog
-      .open(DialogConfirmComponent, {
-        data: {
-          title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
-          message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
-          okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
-        },
-      })
-      .afterClosed()
-      .toPromise();
+    const confirmed = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            title: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_TITLE,
+            message: T.F.SYNC.D_ENTER_PASSWORD.FORCE_OVERWRITE_CONFIRM,
+            okTxt: T.F.SYNC.D_ENTER_PASSWORD.BTN_FORCE_OVERWRITE,
+          },
+        })
+        .afterClosed(),
+    );
 
     if (!confirmed) {
       return;
@@ -115,7 +119,8 @@ export class DialogEnterEncryptionPasswordComponent {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this._snackService.open({
         type: 'ERROR',
-        msg: `Failed to overwrite server data: ${message}`,
+        msg: T.F.SYNC.S.OVERWRITE_SERVER_FAILED,
+        translateParams: { message },
       });
     } finally {
       this.isLoading.set(false);

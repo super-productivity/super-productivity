@@ -83,7 +83,7 @@ describe('SyncHydrationService', () => {
     mockOpLogStore.getLastSeq.and.resolveTo(10);
     mockOpLogStore.saveStateCache.and.resolveTo(undefined);
     mockOpLogStore.setVectorClock.and.resolveTo(undefined);
-    mockValidateStateService.validateAndRepair.and.returnValue({
+    mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     });
@@ -283,18 +283,22 @@ describe('SyncHydrationService', () => {
       );
     });
 
-    it('should update vector clock store after sync', async () => {
+    it('should update vector clock store after sync with minimal clock', async () => {
       mockVectorClockService.getCurrentVectorClock.and.resolveTo({ localClient: 5 });
       mockOpLogStore.loadStateCache.and.resolveTo({ vectorClock: { remote: 3 } } as any);
 
       await service.hydrateFromRemoteSync({});
 
+      // After SYNC_IMPORT, the working clock is reset to minimal (only own entry).
+      // The full merged clock is stored in the SYNC_IMPORT operation for filtering.
       expect(mockOpLogStore.setVectorClock).toHaveBeenCalledWith(
         jasmine.objectContaining({
           localClient: 6,
-          remote: 3,
         }),
       );
+      // Remote entries should NOT be in the minimal working clock
+      const setClockArg = mockOpLogStore.setVectorClock.calls.mostRecent().args[0];
+      expect(setClockArg['remote']).toBeUndefined();
     });
 
     it('should dispatch loadAllData with synced data', async () => {
@@ -315,7 +319,7 @@ describe('SyncHydrationService', () => {
     it('should use repaired state when validation detects issues', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
       const repairedState = { task: { ids: ['t1'], repaired: true } } as any;
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState,
@@ -335,7 +339,7 @@ describe('SyncHydrationService', () => {
 
     it('should use original data when no repair needed', async () => {
       const downloadedData = { task: { ids: ['t1'] } };
-      mockValidateStateService.validateAndRepair.and.returnValue({
+      mockValidateStateService.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: false,
       });
@@ -454,7 +458,7 @@ describe('SyncHydrationService', () => {
 
       it('should still validate and repair when createSyncImportOp is false', async () => {
         const repairedState = { task: { repaired: true } } as any;
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: true,
           wasRepaired: true,
           repairedState,

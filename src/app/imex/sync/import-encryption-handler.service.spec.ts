@@ -1,8 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ImportEncryptionHandlerService } from './import-encryption-handler.service';
-import { SnapshotUploadData, SnapshotUploadService } from './snapshot-upload.service';
+import { SnapshotUploadService } from './snapshot-upload.service';
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
-import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import {
   OperationSyncCapable,
@@ -15,7 +14,6 @@ describe('ImportEncryptionHandlerService', () => {
   let service: ImportEncryptionHandlerService;
   let mockSnapshotUploadService: jasmine.SpyObj<SnapshotUploadService>;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
-  let mockEncryptionService: jasmine.SpyObj<OperationEncryptionService>;
   let mockSyncProvider: jasmine.SpyObj<
     SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable
   >;
@@ -58,34 +56,19 @@ describe('ImportEncryptionHandlerService', () => {
     mockProviderManager.setProviderConfig.and.resolveTo();
 
     mockSnapshotUploadService = jasmine.createSpyObj('SnapshotUploadService', [
-      'gatherSnapshotData',
-      'uploadSnapshot',
-      'updateLastServerSeq',
+      'deleteAndReuploadWithNewEncryption',
     ]);
-    mockSnapshotUploadService.gatherSnapshotData.and.resolveTo({
-      syncProvider: mockSyncProvider,
-      existingCfg: mockExistingCfg,
-      state: { task: [] },
-      vectorClock: { testClient1: 1 },
-      clientId: 'testClient1',
-    } as unknown as SnapshotUploadData);
-    mockSnapshotUploadService.uploadSnapshot.and.resolveTo({
+    mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.resolveTo({
       accepted: true,
       serverSeq: 1,
+      existingCfg: mockExistingCfg,
     });
-    mockSnapshotUploadService.updateLastServerSeq.and.resolveTo();
-
-    mockEncryptionService = jasmine.createSpyObj('OperationEncryptionService', [
-      'encryptPayload',
-    ]);
-    mockEncryptionService.encryptPayload.and.resolveTo('encrypted-data');
 
     TestBed.configureTestingModule({
       providers: [
         ImportEncryptionHandlerService,
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: SnapshotUploadService, useValue: mockSnapshotUploadService },
-        { provide: OperationEncryptionService, useValue: mockEncryptionService },
       ],
     });
 
@@ -152,75 +135,36 @@ describe('ImportEncryptionHandlerService', () => {
   });
 
   describe('handleEncryptionStateChange', () => {
-    it('should return error result when provider validation fails', async () => {
-      mockSnapshotUploadService.gatherSnapshotData.and.rejectWith(
-        new Error('No active provider'),
-      );
-
-      const result = await service.handleEncryptionStateChange(
-        createMockImportedData(),
-        undefined,
-        false,
-      );
-
-      expect(result.encryptionStateChanged).toBeFalse();
-      expect(result.serverDataDeleted).toBeFalse();
-      expect(result.error).toContain('No active provider');
-    });
-
-    it('should delete server data before uploading', async () => {
-      await service.handleEncryptionStateChange(
-        createMockImportedData(),
-        undefined,
-        false,
-      );
-
-      expect(mockSyncProvider.deleteAllData).toHaveBeenCalledTimes(1);
-      expect(mockSyncProvider.deleteAllData).toHaveBeenCalledBefore(
-        mockSnapshotUploadService.uploadSnapshot,
-      );
-    });
-
-    it('should update provider config before uploading', async () => {
+    it('should delegate to deleteAndReuploadWithNewEncryption with correct params when enabling', async () => {
       await service.handleEncryptionStateChange(
         createMockImportedData(),
         'new-key',
         true,
       );
 
-      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
-        SyncProviderId.SuperSync,
-        jasmine.objectContaining({
-          encryptKey: 'new-key',
-          isEncryptionEnabled: true,
-        }),
-      );
-      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledBefore(
-        mockSnapshotUploadService.uploadSnapshot,
-      );
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).toHaveBeenCalledWith({
+        encryptKey: 'new-key',
+        isEncryptionEnabled: true,
+        logPrefix: 'ImportEncryptionHandlerService',
+      });
     });
 
-    it('should encrypt payload when encryption is enabled', async () => {
-      await service.handleEncryptionStateChange(
-        createMockImportedData(),
-        'new-key',
-        true,
-      );
-
-      expect(mockEncryptionService.encryptPayload).toHaveBeenCalledWith(
-        { task: [] },
-        'new-key',
-      );
-    });
-
-    it('should NOT encrypt payload when encryption is disabled', async () => {
+    it('should delegate to deleteAndReuploadWithNewEncryption with correct params when disabling', async () => {
       await service.handleEncryptionStateChange(
         createMockImportedData(),
         undefined,
         false,
       );
 
-      expect(mockEncryptionService.encryptPayload).not.toHaveBeenCalled();
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).toHaveBeenCalledWith({
+        encryptKey: undefined,
+        isEncryptionEnabled: false,
+        logPrefix: 'ImportEncryptionHandlerService',
+      });
     });
 
     it('should return success result on successful upload', async () => {
@@ -236,8 +180,10 @@ describe('ImportEncryptionHandlerService', () => {
       expect(result.error).toBeUndefined();
     });
 
-    it('should return error result when upload fails', async () => {
-      mockSnapshotUploadService.uploadSnapshot.and.rejectWith(new Error('Network error'));
+    it('should return error result when deleteAndReuploadWithNewEncryption fails', async () => {
+      mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
+        new Error('Network error'),
+      );
 
       const result = await service.handleEncryptionStateChange(
         createMockImportedData(),
@@ -250,18 +196,20 @@ describe('ImportEncryptionHandlerService', () => {
       expect(result.error).toContain('Network error');
     });
 
-    it('should update lastServerSeq after successful upload', async () => {
-      await service.handleEncryptionStateChange(
+    it('should return error result when provider validation fails', async () => {
+      mockSnapshotUploadService.deleteAndReuploadWithNewEncryption.and.rejectWith(
+        new Error('No active sync provider. Please enable sync first.'),
+      );
+
+      const result = await service.handleEncryptionStateChange(
         createMockImportedData(),
         undefined,
         false,
       );
 
-      expect(mockSnapshotUploadService.updateLastServerSeq).toHaveBeenCalledWith(
-        mockSyncProvider as any,
-        1,
-        'ImportEncryptionHandlerService',
-      );
+      expect(result.encryptionStateChanged).toBeTrue();
+      expect(result.serverDataDeleted).toBeFalse();
+      expect(result.error).toContain('No active sync provider');
     });
   });
 
@@ -273,7 +221,9 @@ describe('ImportEncryptionHandlerService', () => {
       const result = await service.handleImportEncryptionIfNeeded(importedData);
 
       expect(result).toBeNull();
-      expect(mockSyncProvider.deleteAllData).not.toHaveBeenCalled();
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).not.toHaveBeenCalled();
     });
 
     it('should handle encryption state change when detected', async () => {
@@ -284,7 +234,9 @@ describe('ImportEncryptionHandlerService', () => {
 
       expect(result).not.toBeNull();
       expect(result?.encryptionStateChanged).toBeTrue();
-      expect(mockSyncProvider.deleteAllData).toHaveBeenCalled();
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).toHaveBeenCalled();
     });
 
     it('should pass correct encryption key from imported data', async () => {
@@ -292,13 +244,13 @@ describe('ImportEncryptionHandlerService', () => {
 
       await service.handleImportEncryptionIfNeeded(importedData);
 
-      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
-        SyncProviderId.SuperSync,
-        jasmine.objectContaining({
-          encryptKey: 'imported-encryption-key',
-          isEncryptionEnabled: true,
-        }),
-      );
+      expect(
+        mockSnapshotUploadService.deleteAndReuploadWithNewEncryption,
+      ).toHaveBeenCalledWith({
+        encryptKey: 'imported-encryption-key',
+        isEncryptionEnabled: true,
+        logPrefix: 'ImportEncryptionHandlerService',
+      });
     });
   });
 });

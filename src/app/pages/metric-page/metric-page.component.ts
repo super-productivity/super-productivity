@@ -5,7 +5,6 @@ import { MetricComponent } from '../../features/metric/metric.component';
 @Component({
   selector: 'metric-page',
   templateUrl: './metric-page.component.html',
-  styleUrls: ['./metric-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MetricComponent],
 })

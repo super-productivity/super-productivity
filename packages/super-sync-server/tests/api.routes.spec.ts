@@ -149,7 +149,9 @@ describe('API Routes - Replace Token', () => {
     });
 
     expect(response.statusCode).toBe(401);
-    expect(response.json().error).toBe('Invalid token');
+    expect(response.json().error).toBe(
+      'Token was revoked. Please log in again to get a new token.',
+    );
   });
 });
 

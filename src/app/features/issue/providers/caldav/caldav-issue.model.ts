@@ -1,4 +1,9 @@
-export type CaldavIssueStatus = 'NEEDS-ACTION' | 'COMPLETED' | 'IN-PROCESS' | 'CANCELLED';
+export enum CaldavIssueStatus {
+  NEEDS_ACTION = 'NEEDS-ACTION',
+  COMPLETED = 'COMPLETED',
+  IN_PROCESS = 'IN-PROCESS',
+  CANCELLED = 'CANCELLED',
+}
 
 export type CaldavIssueReduced = Readonly<{
   id: string;

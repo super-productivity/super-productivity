@@ -124,6 +124,13 @@ describe('CapacitorReminderService', () => {
     });
   });
 
+  describe('ensureExactAlarmPermission', () => {
+    it('should return true on non-Android platforms', async () => {
+      const result = await service.ensureExactAlarmPermission();
+      expect(result).toBe(true);
+    });
+  });
+
   describe('with native platform', () => {
     let nativeService: CapacitorReminderService;
     let nativePlatformSpy: jasmine.SpyObj<CapacitorPlatformService>;

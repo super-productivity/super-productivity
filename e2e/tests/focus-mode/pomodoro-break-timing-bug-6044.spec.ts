@@ -133,20 +133,11 @@ const skipBreakAndStartNextSession = async (page: Page): Promise<void> => {
   const breakScreen = page.locator('focus-mode-break');
   await expect(breakScreen).toBeVisible({ timeout: 5000 });
 
-  // Look for skip button (might be labeled differently)
+  // Click the "Skip break" button
   const skipButton = page.locator('focus-mode-break button', {
-    hasText: /skip|start/i,
+    hasText: /skip break/i,
   });
-
-  // If there's a skip button, click it
-  const hasSkipButton = await skipButton.count();
-  if (hasSkipButton > 0) {
-    await skipButton.first().click();
-  } else {
-    // Otherwise, look for any primary action button on the break screen
-    const primaryButton = page.locator('focus-mode-break button.mat-primary').first();
-    await primaryButton.click();
-  }
+  await skipButton.click();
 
   // Wait for session to start
   await expect(breakScreen).not.toBeVisible({ timeout: 5000 });

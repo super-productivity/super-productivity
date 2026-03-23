@@ -9,7 +9,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { TaskService } from '../../tasks/task.service';
 import { TaskArchiveService } from '../../archive/task-archive.service';
 import { from } from 'rxjs';
-import { filter, first, map, switchMap } from 'rxjs/operators';
+import { filter, first, switchMap } from 'rxjs/operators';
 import { Task } from '../../tasks/task.model';
 import { DateAdapter } from '@angular/material/core';
 import {
@@ -19,7 +19,10 @@ import {
   HeatmapComponent,
 } from '../../../ui/heatmap/heatmap.component';
 import { T } from '../../../t.const';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 import { TranslateModule } from '@ngx-translate/core';
+import { calcRepeatTaskSeriesTimeSpent } from '../calc-repeat-task-series-time-spent.util';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 
 @Component({
   selector: 'repeat-task-heatmap',
@@ -37,14 +40,31 @@ export class RepeatTaskHeatmapComponent {
 
   readonly repeatCfgId = input.required<string>();
 
-  private readonly _rawHeatmapData = toSignal(
+  private readonly _loadedTasks = toSignal(
     toObservable(this.repeatCfgId).pipe(
       filter((id): id is string => !!id),
       switchMap((repeatCfgId) => from(this._loadTasksForRepeatCfg(repeatCfgId))),
-      map((tasks) => this._buildHeatmapData(tasks)),
     ),
     { initialValue: null },
   );
+
+  private readonly _rawHeatmapData = computed(() => {
+    const tasks = this._loadedTasks();
+    return tasks ? this._buildHeatmapData(tasks) : null;
+  });
+
+  readonly formattedTimeSummary = computed(() => {
+    const tasks = this._loadedTasks();
+    if (!tasks || tasks.length === 0) {
+      return null;
+    }
+    const summary = calcRepeatTaskSeriesTimeSpent(tasks);
+    return {
+      total: msToString(summary.total),
+      thisWeek: msToString(summary.thisWeek),
+      thisMonth: msToString(summary.thisMonth),
+    };
+  });
 
   readonly heatmapData = computed<HeatmapData | null>(() => {
     const rawData = this._rawHeatmapData();
@@ -111,7 +131,7 @@ export class RepeatTaskHeatmapComponent {
     // Initialize all days in the past year
     const currentDate = new Date(oneYearAgo);
     while (currentDate <= now) {
-      const dateStr = this._getDateStr(currentDate);
+      const dateStr = getDbDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
         dateStr,
@@ -183,13 +203,6 @@ export class RepeatTaskHeatmapComponent {
     };
   }
 
-  private _getDateStr(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
   private _buildWeeksGrid(
     dayMap: Map<string, DayData>,
     startDate: Date,
@@ -215,7 +228,7 @@ export class RepeatTaskHeatmapComponent {
       const week: WeekData = { days: [] };
 
       for (let i = 0; i < 7; i++) {
-        const dateStr = this._getDateStr(currentDate);
+        const dateStr = getDbDateStr(currentDate);
         const dayData = dayMap.get(dateStr);
 
         if (currentDate >= startDate && currentDate <= endDate) {

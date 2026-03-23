@@ -1,28 +1,28 @@
 .test-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--s3);
 
   h1 {
-    margin-bottom: 8px;
+    margin-bottom: var(--s);
   }
 
   > p {
     color: var(--text-color-muted);
-    margin-bottom: 32px;
+    margin-bottom: var(--s4);
   }
 }
 
 .test-section {
-  margin-bottom: 48px;
-  padding: 24px;
+  margin-bottom: var(--s6);
+  padding: var(--s3);
   background: var(--card-bg);
   border-radius: 8px;
   box-shadow: var(--card-shadow);
 
   h2 {
     margin-top: 0;
-    margin-bottom: 16px;
+    margin-bottom: var(--s2);
     font-size: 18px;
     font-weight: 500;
   }
@@ -36,5 +36,5 @@
 }
 
 .tab-content {
-  padding: 24px;
+  padding: var(--s3);
 }

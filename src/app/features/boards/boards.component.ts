@@ -18,6 +18,7 @@ import { CdkDropListGroup } from '@angular/cdk/drag-drop';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { selectAllBoards } from './store/boards.selectors';
 import { LS } from '../../core/persistence/storage-keys.const';
+import { setSelectedTask } from '../tasks/store/task.actions';
 import { TranslatePipe } from '@ngx-translate/core';
 import { BoardEditComponent } from './board-edit/board-edit.component';
 import { DEFAULT_BOARD_CFG } from './boards.const';
@@ -81,6 +82,7 @@ export class BoardsComponent {
   // propagation.
   onTabChange(index: number): void {
     setTimeout(() => this.selectedTabIndex.set(index));
+    this.store.dispatch(setSelectedTask({ id: null }));
   }
 
   get componentElement(): HTMLElement {

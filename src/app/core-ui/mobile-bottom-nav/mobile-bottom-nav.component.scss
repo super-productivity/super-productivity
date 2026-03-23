@@ -13,10 +13,10 @@
   box-sizing: border-box;
   background: var(--bottom-nav-bg);
   border-top: 1px solid var(--separator-color);
-  box-shadow: var(--whiteframe-shadow-8dp);
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.12);
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 0 var(--s);
   padding-bottom: calc(env(safe-area-inset-bottom) / 2);
   z-index: var(--z-mobile-bottom-nav);
   display: flex;
@@ -36,7 +36,7 @@
     height: var(--bottom-nav-height);
     min-width: 64px;
     border-radius: 16px;
-    transition: all 0.2s ease;
+    transition: var(--transition-standard);
 
     &:hover {
       background-color: var(--mat-surface-container-high);
@@ -54,7 +54,8 @@
     &.active {
       background: var(--sidenav-item-active-bg);
       color: var(--sidenav-active-text);
-      box-shadow: var(--whiteframe-shadow-1dp);
+      box-shadow: 0 -1px 1px var(--c-dark-10);
+      margin-bottom: var(--s-quarter);
 
       mat-icon {
         color: var(--sidenav-active-text);
@@ -72,17 +73,19 @@
   .add-task-button {
     width: 56px;
     height: 56px;
-    margin-left: 8px;
-    margin-right: 8px;
-    margin-bottom: 24px;
-    box-shadow: var(--mat-fab-container-elevation-shadow);
-    transition: all 0.2s ease;
+    margin-left: var(--s);
+    margin-right: var(--s);
+    margin-bottom: var(--s3);
+    box-shadow:
+      0 -2px 6px rgba(0, 0, 0, 0.15),
+      0 2px 4px var(--c-dark-20);
+    transition: var(--transition-standard);
 
     &:hover {
       transform: scale(1.05);
       box-shadow:
-        var(--mat-fab-container-elevation-shadow),
-        0 8px 16px rgba(0, 0, 0, 0.2);
+        0 -3px 8px rgba(0, 0, 0, 0.18),
+        0 4px 8px rgba(0, 0, 0, 0.25);
     }
 
     &:active {
@@ -91,8 +94,8 @@
 
     &.smaller {
       height: 40px;
-      margin-left: 8px;
-      margin-right: 8px;
+      margin-left: var(--s);
+      margin-right: var(--s);
       margin-bottom: 0px;
     }
 
@@ -115,4 +118,24 @@
 .add-task-button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+}
+
+@keyframes slide-up-from-bottom {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+.mobile-bottom-nav.entrance {
+  animation: slide-up-from-bottom 400ms ease-out 250ms backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-nav.entrance {
+    animation: none;
+  }
 }

@@ -12,7 +12,7 @@ test.describe('Planner Scheduled Tasks', () => {
   test('should navigate to planner with tasks', async ({ page, workViewPage }) => {
     // Add a task that looks like it has a schedule
     await workViewPage.addTask('Meeting at 2pm');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
 
     // Navigate to planner
     await plannerPage.navigateToPlanner();
@@ -27,7 +27,7 @@ test.describe('Planner Scheduled Tasks', () => {
     await workViewPage.addTask('Morning standup at 9am');
     await workViewPage.addTask('Lunch meeting at 12pm');
     await workViewPage.addTask('Review session at 3pm');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
 
     // Verify tasks were created
     await expect(page.locator('task')).toHaveCount(3);
@@ -46,14 +46,14 @@ test.describe('Planner Scheduled Tasks', () => {
   }) => {
     // Add a task with time reference
     await workViewPage.addTask('Call client at 10:30am');
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('task', { state: 'visible', timeout: 10000 });
 
     // Navigate to planner
     await plannerPage.navigateToPlanner();
     await plannerPage.waitForPlannerView();
 
     // Go back to work view
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
 
     // Task should still exist

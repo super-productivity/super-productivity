@@ -1,0 +1,8 @@
+{
+  "name": "brain-dump",
+  "version": "1.0.0",
+  "description": "Brain dump plugin for Super Productivity",
+  "scripts": {
+    "build": "echo 'No build needed for simple plugin'"
+  }
+}

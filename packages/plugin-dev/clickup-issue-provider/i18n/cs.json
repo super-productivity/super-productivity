@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API klíč",
+    "API_KEY_LINK": "Získejte svůj osobní API klíč",
+    "TEAM_IDS": "ID pracovních prostorů/týmů (oddělené čárkou, prázdné = všechny)",
+    "USER_ID": "ID uživatele (pro filtrování podle přiřazené osoby)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Shrnutí",
+    "STATUS": "Stav",
+    "PRIORITY": "Priorita",
+    "ASSIGNEE": "Přiřazený",
+    "LABELS": "Štítky",
+    "DESCRIPTION": "Popis"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Neznámá chyba. Zkontrolujte API klíč a zkuste to znovu."
+  }
+}

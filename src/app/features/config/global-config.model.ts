@@ -20,6 +20,7 @@ export type AppFeaturesConfig = Readonly<{
   isDonatePageEnabled: boolean;
   isEnableUserProfiles: boolean;
   isHabitsEnabled: boolean;
+  isFinishDayEnabled: boolean;
 }>;
 
 export type MiscConfig = Readonly<{
@@ -32,7 +33,6 @@ export type MiscConfig = Readonly<{
   isDisableCelebration?: boolean;
   isShowProductivityTipLonger?: boolean;
   isTrayShowCurrentCountdown?: boolean;
-  isOverlayIndicatorEnabled?: boolean;
   isUseCustomWindowTitleBar?: boolean;
   customTheme?: string;
   defaultStartPage?: number;
@@ -46,6 +46,8 @@ export type MiscConfig = Readonly<{
   isTurnOffMarkdown?: boolean; // Deprecated
   defaultProjectId?: string | null | false; // Deprecated
   taskNotesTpl?: string; // Deprecated
+  isOverlayIndicatorEnabled?: boolean; // Deprecated – moved to overlayIndicator.isEnabled
+  overlayIndicatorOpacity?: number; // Deprecated – moved to overlayIndicator.opacity
 }>;
 
 export type TasksConfig = Readonly<{
@@ -105,7 +107,7 @@ export type PomodoroConfig = Readonly<{
   duration?: number | null;
   breakDuration?: number | null;
   longerBreakDuration?: number | null;
-  cyclesBeforeLongerBreak: number;
+  cyclesBeforeLongerBreak?: number | null;
 }>;
 
 // NOTE: needs to be writable due to how we use it
@@ -194,6 +196,8 @@ export type ReminderConfig = Readonly<{
   isFocusWindow?: boolean;
   // Android only: use alarm-style notifications (louder, more intrusive)
   useAlarmStyleReminders?: boolean;
+  notifyOnDueDate?: boolean;
+  dueDateNotificationHour?: number;
 }>;
 
 export type TrackingReminderConfigOld = Readonly<{
@@ -202,9 +206,9 @@ export type TrackingReminderConfigOld = Readonly<{
   minTime: number;
 }>;
 
-// @todo - rename to VoiceReminderConfig
-// @todo - but save DominaModeConfig for backward compatibility
-// @todo - and make migration when loading old config
+/**
+ * @deprecated Exists only for migration to the voice-reminder plugin. Can be removed once migration is no longer needed.
+ */
 export type DominaModeConfig = Readonly<{
   isEnabled: boolean;
   text: string;
@@ -220,6 +224,12 @@ export type FocusModeConfig = Readonly<{
   isSyncSessionWithTracking?: boolean;
   isStartInBackground?: boolean;
   isManualBreakStart?: boolean;
+}>;
+
+export type OverlayIndicatorConfig = Readonly<{
+  isEnabled?: boolean;
+  isAlwaysShow?: boolean;
+  opacity?: number;
 }>;
 
 export type ClipboardImagesConfig = Readonly<{
@@ -250,6 +260,7 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
+  overlayIndicator: OverlayIndicatorConfig;
   clipboardImages?: ClipboardImagesConfig;
 
   sync: SyncConfig;
@@ -267,7 +278,8 @@ export type GlobalSectionConfig =
   | ReminderConfig
   | DailySummaryNote
   | SyncConfig
-  | ClipboardImagesConfig;
+  | ClipboardImagesConfig
+  | OverlayIndicatorConfig;
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 
 export interface LimitedFormlyFieldConfig<FormModel> extends Omit<
@@ -281,7 +293,6 @@ export type CustomCfgSection =
   | 'FILE_IMPORT_EXPORT'
   | 'JIRA_CFG'
   | 'OPENPROJECT_CFG'
-  | 'CLICKUP_CFG'
   | 'CLIPBOARD_IMAGES_CFG';
 
 // Intermediate model

@@ -13,7 +13,6 @@ export const PROGRESS_BAR_LABEL_MAP: { [key: string]: string } = {
 
   POLL: T.F.ISSUE.S.POLLING_CHANGES,
 
-  '/issues/': T.GPB.GITHUB_LOAD_ISSUE,
   '/issue/': T.GPB.JIRA_LOAD_ISSUE,
 
   [T.GPB.WEB_DAV_DOWNLOAD]: T.GPB.WEB_DAV_DOWNLOAD,

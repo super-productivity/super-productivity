@@ -50,6 +50,7 @@ import { IS_MOUSE_PRIMARY } from '../../../util/is-mouse-primary';
 import { getIssueProviderHelpLink } from '../../issue/mapping-helper/get-issue-provider-help-link';
 import { ISSUE_PROVIDER_HUMANIZED } from '../../issue/issue.const';
 import { IssuePanelCalendarAgendaComponent } from '../issue-panel-calendar-agenda/issue-panel-calendar-agenda.component';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 import { standardListAnimation } from '../../../ui/animations/standard-list.ani';
 import { MatIconButton } from '@angular/material/button';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -94,6 +95,7 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
   private _issueService = inject(IssueService);
   private _matDialog = inject(MatDialog);
   private _store = inject(Store);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   issueProvider = input.required<IssueProvider>();
   issueProvider$ = toObservable(this.issueProvider);
@@ -101,6 +103,11 @@ export class IssueProviderTabComponent implements OnDestroy, AfterViewInit {
   searchText = signal('');
   searchTxt$ = toObservable(this.searchText);
 
+  useAgendaView = computed(
+    () =>
+      this.issueProvider().issueProviderKey === 'ICAL' ||
+      this._pluginRegistry.getUseAgendaView(this.issueProvider().issueProviderKey),
+  );
   issueProviderTooltip = computed(() => getIssueProviderTooltip(this.issueProvider()));
   issueProviderHelpLink = computed(() =>
     getIssueProviderHelpLink(this.issueProvider().issueProviderKey),

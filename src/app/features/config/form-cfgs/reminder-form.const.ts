@@ -2,6 +2,7 @@ import { ConfigFormSection, ReminderConfig } from '../global-config.model';
 import { TASK_REMINDER_OPTIONS } from '../../planner/dialog-schedule-task/task-reminder-options.const';
 import { T } from '../../../t.const';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
+import { IS_NATIVE_PLATFORM } from '../../../util/is-native-platform';
 
 export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
   title: T.GCF.REMINDER.TITLE,
@@ -56,6 +57,29 @@ export const REMINDER_FORM_CFG: ConfigFormSection<ReminderConfig> = {
             templateOptions: {
               label: T.GCF.REMINDER.USE_ALARM_STYLE_REMINDERS,
               description: T.GCF.REMINDER.USE_ALARM_STYLE_REMINDERS_DESCRIPTION,
+            },
+          },
+        ]
+      : []),
+    ...(IS_NATIVE_PLATFORM
+      ? [
+          {
+            key: 'notifyOnDueDate' as const,
+            type: 'checkbox',
+            templateOptions: {
+              label: T.GCF.REMINDER.NOTIFY_ON_DUE_DATE,
+            },
+          },
+          {
+            key: 'dueDateNotificationHour' as const,
+            type: 'input',
+            hideExpression: (m: ReminderConfig) => !m.notifyOnDueDate,
+            templateOptions: {
+              type: 'number',
+              label: T.GCF.REMINDER.DUE_DATE_NOTIFICATION_HOUR,
+              min: 0,
+              max: 23,
+              required: true,
             },
           },
         ]

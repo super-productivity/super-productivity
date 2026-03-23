@@ -33,7 +33,7 @@
   #projectMenu {
     .mat-mdc-menu-content {
       // Add padding to prevent edge touches
-      padding: 8px 0;
+      padding: var(--s) 0;
 
       .mat-mdc-menu-item {
         // Add delay to touch responsiveness
@@ -41,7 +41,7 @@
 
         &:first-child {
           // Extra padding on first item to prevent accidental selection
-          margin-top: 8px;
+          margin-top: var(--s);
         }
       }
     }

@@ -2,8 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { IValidation } from 'typia';
 import { Action, Store } from '@ngrx/store';
 import { TranslateService } from '@ngx-translate/core';
-import { validateFull } from './validation-fn';
-import { dataRepair } from './data-repair';
 import { isDataRepairPossible } from './is-data-repair-possible.util';
 import { RepairSummary } from '../core/operation.types';
 import { OpLog } from '../../core/log';
@@ -15,6 +13,21 @@ import { CLIENT_ID_PROVIDER } from '../util/client-id.provider';
 import { HydrationStateService } from '../apply/hydration-state.service';
 import { T } from '../../t.const';
 import { alertDialog, confirmDialog } from '../../util/native-dialogs';
+
+let _validateFullPromise:
+  | Promise<typeof import('./validation-fn').validateFull>
+  | undefined;
+const _loadValidateFull = (): Promise<typeof import('./validation-fn').validateFull> => {
+  if (!_validateFullPromise) {
+    _validateFullPromise = import('./validation-fn')
+      .then((m) => m.validateFull)
+      .catch((err) => {
+        _validateFullPromise = undefined;
+        throw err;
+      });
+  }
+  return _validateFullPromise;
+};
 
 /**
  * Result of validating application state.
@@ -88,7 +101,7 @@ export class ValidateStateService {
 
     const currentState = this.stateSnapshotService.getStateSnapshot();
 
-    const result = this.validateAndRepair(
+    const result = await this.validateAndRepair(
       currentState as unknown as Record<string, unknown>,
     );
 
@@ -170,10 +183,11 @@ export class ValidateStateService {
    *                potentially corrupted data. If the data doesn't match the
    *                AppDataComplete structure, Typia validation will catch it.
    */
-  validateState(state: Record<string, unknown>): StateValidationResult {
+  async validateState(state: Record<string, unknown>): Promise<StateValidationResult> {
     // Cast required because validateFull expects AppDataComplete, but we intentionally
     // accept a looser type to validate potentially corrupted data. If the structure
     // doesn't match, Typia validation will return errors.
+    const validateFull = await _loadValidateFull();
     const fullResult = validateFull(state as AppDataComplete);
 
     if (fullResult.isValid) {
@@ -230,14 +244,15 @@ export class ValidateStateService {
    * operation will still be valid and the REPAIR op in the log reflects what
    * was applied.
    *
-   * ## Repair Summary Limitations
-   * The `_createRepairSummary()` method currently only counts typia errors.
-   * More sophisticated diff-based counting could be added later to track
-   * specific repair actions (orphaned entities, invalid references, etc).
+   * ## Repair Summary
+   * The `dataRepair()` function returns a `RepairSummary` with accurate
+   * counts of what was fixed during the repair process.
    */
-  validateAndRepair(state: Record<string, unknown>): ValidateAndRepairResult {
+  async validateAndRepair(
+    state: Record<string, unknown>,
+  ): Promise<ValidateAndRepairResult> {
     // First, validate the state
-    const validationResult = this.validateState(state);
+    const validationResult = await this.validateState(state);
 
     if (validationResult.isValid) {
       return {
@@ -279,17 +294,13 @@ export class ValidateStateService {
     // User confirmed - proceed with repair
     try {
       const typiaErrors = validationResult.typiaErrors as IValidation.IError[];
-      const repairedState = dataRepair(state as AppDataComplete, typiaErrors);
-
-      // Create repair summary based on validation errors
-      const repairSummary = this._createRepairSummary(
-        validationResult,
-        state,
-        repairedState,
-      );
+      const { dataRepair } = await import('./data-repair');
+      const repairResult = dataRepair(state as AppDataComplete, typiaErrors);
+      const repairedState = repairResult.data;
+      const repairSummary = repairResult.repairSummary;
 
       // Validate the repaired state to confirm it's now valid
-      const revalidationResult = this.validateState(repairedState);
+      const revalidationResult = await this.validateState(repairedState);
       if (!revalidationResult.isValid) {
         OpLog.err('[ValidateStateService] State still invalid after repair');
         // Notify user that repair failed - they confirmed but it didn't work
@@ -324,25 +335,5 @@ export class ValidateStateService {
         error: `Repair failed: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
-  }
-
-  /**
-   * Creates a repair summary with counts of what was fixed.
-   * Simple stub that primarily counts typia errors - more sophisticated
-   * counting can be added later if needed.
-   */
-  private _createRepairSummary(
-    validationResult: StateValidationResult,
-    _original: Record<string, unknown>,
-    _repaired: Record<string, unknown>,
-  ): RepairSummary {
-    return {
-      entityStateFixed: 0,
-      orphanedEntitiesRestored: 0,
-      invalidReferencesRemoved: 0,
-      relationshipsFixed: 0,
-      structureRepaired: 0,
-      typeErrorsFixed: validationResult.typiaErrors.length,
-    };
   }
 }

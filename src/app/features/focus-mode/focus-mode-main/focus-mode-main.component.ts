@@ -374,7 +374,6 @@ export class FocusModeMainComponent {
       this._store.dispatch(
         startFocusSession({
           duration,
-          isManualSessionCompletion: !!config?.isManualBreakStart,
         }),
       );
       return;
@@ -389,7 +388,6 @@ export class FocusModeMainComponent {
     this._store.dispatch(
       startFocusSession({
         duration,
-        isManualSessionCompletion: !!this.focusModeConfig()?.isManualBreakStart,
       }),
     );
     // Main UI state transitions are now handled by the store

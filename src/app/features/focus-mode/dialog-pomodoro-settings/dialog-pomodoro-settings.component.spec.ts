@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialogRef } from '@angular/material/dialog';
+import { Store } from '@ngrx/store';
 import { GlobalConfigService } from '../../config/global-config.service';
 import { DialogPomodoroSettingsComponent } from './dialog-pomodoro-settings.component';
 import { EnvironmentInjector, runInInjectionContext } from '@angular/core';
@@ -31,6 +32,7 @@ describe('DialogPomodoroSettingsComponent', () => {
       providers: [
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
+        { provide: Store, useValue: jasmine.createSpyObj('Store', ['dispatch']) },
       ],
     });
 
@@ -82,12 +84,14 @@ describe('DialogPomodoroSettingsComponent', () => {
       expect(longBreakField?.type).toBe('duration');
     });
 
-    it('should have cyclesBeforeLongerBreak field', () => {
+    it('should have cyclesBeforeLongerBreak field with required and min validation', () => {
       const cyclesField = component.fields.find(
         (f) => f.key === 'cyclesBeforeLongerBreak',
       );
       expect(cyclesField).toBeTruthy();
       expect(cyclesField?.type).toBe('input');
+      expect(cyclesField?.props?.required).toBe(true);
+      expect(cyclesField?.props?.min).toBe(1);
     });
   });
 

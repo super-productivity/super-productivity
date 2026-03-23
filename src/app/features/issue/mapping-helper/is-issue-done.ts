@@ -1,14 +1,10 @@
 import { SearchResultItem } from '../issue.model';
+import { isLinearIssueDone } from '../providers/linear/linear-issue-map.util';
 
 const ISSUE_DONE_STATE_NAME_GUESSES = ['closed', 'done', 'completed', 'resolved'];
 
 export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
   switch (searchResultItem.issueType) {
-    case 'GITHUB':
-      return (
-        (searchResultItem as SearchResultItem<'GITHUB'>).issueData.state === 'closed'
-      );
-
     case 'GITLAB':
       return (
         (searchResultItem as SearchResultItem<'GITLAB'>).issueData.state === 'closed'
@@ -35,7 +31,23 @@ export const isIssueDone = (searchResultItem: SearchResultItem): boolean => {
     case 'CALDAV':
       return false;
 
-    default:
+    case 'LINEAR':
+      return isLinearIssueDone(
+        (searchResultItem as SearchResultItem<'LINEAR'>).issueData,
+      );
+
+    default: {
+      // Handle plugin providers and migrated providers (e.g. 'GITHUB')
+      // PluginIssue uses 'state', PluginSearchResult uses 'status'
+      const issueData = searchResultItem.issueData as {
+        state?: string;
+        status?: string;
+      };
+      const stateOrStatus = issueData?.state ?? issueData?.status;
+      if (typeof stateOrStatus === 'string') {
+        return ISSUE_DONE_STATE_NAME_GUESSES.includes(stateOrStatus.toLowerCase());
+      }
       return false;
+    }
   }
 };

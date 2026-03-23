@@ -1,7 +1,10 @@
 import { inject, Injectable } from '@angular/core';
+import { generateCalendarTaskId } from '../calendar-integration/generate-calendar-task-id';
 import {
+  BuiltInIssueProviderKey,
   IssueData,
   IssueDataReduced,
+  IssueIntegrationCfg,
   IssueProvider,
   IssueProviderKey,
   SearchResultItem,
@@ -12,18 +15,17 @@ import { forkJoin, from, merge, Observable, of, Subject } from 'rxjs';
 import {
   CALDAV_TYPE,
   GITEA_TYPE,
-  GITHUB_TYPE,
   GITLAB_TYPE,
   ICAL_TYPE,
   ISSUE_PROVIDER_HUMANIZED,
   ISSUE_PROVIDER_ICON_MAP,
   ISSUE_STR_MAP,
+  DEFAULT_ISSUE_STRS,
   JIRA_TYPE,
   OPEN_PROJECT_TYPE,
   TRELLO_TYPE,
   REDMINE_TYPE,
   LINEAR_TYPE,
-  CLICKUP_TYPE,
   AZURE_DEVOPS_TYPE,
   NEXTCLOUD_DECK_TYPE,
 } from './issue.const';
@@ -31,7 +33,6 @@ import { TaskService } from '../tasks/task.service';
 import { IssueTask, Task, TaskCopy } from '../tasks/task.model';
 import { IssueServiceInterface } from './issue-service-interface';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GithubCommonInterfacesService } from './providers/github/github-common-interfaces.service';
 import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
 import { catchError, map, switchMap } from 'rxjs/operators';
 import { IssueLog } from '../../core/log';
@@ -41,7 +42,7 @@ import { OpenProjectCommonInterfacesService } from './providers/open-project/ope
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
-import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
+// ClickUp is now a plugin — no built-in service needed
 import { AzureDevOpsCommonInterfacesService } from './providers/azure-devops/azure-devops-common-interfaces.service';
 import { NextcloudDeckCommonInterfacesService } from './providers/nextcloud-deck/nextcloud-deck-common-interfaces.service';
 import { SnackService } from '../../core/snack/snack.service';
@@ -52,6 +53,7 @@ import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { WorkContextType } from '../work-context/work-context.model';
 import { WorkContextService } from '../work-context/work-context.service';
 import { ProjectService } from '../project/project.service';
+import { _MISSING_PROJECT_ } from '../project/project.const';
 import { IssueProviderService } from './issue-provider.service';
 import { CalendarIntegrationService } from '../calendar-integration/calendar-integration.service';
 import { getCalendarEventIdCandidates } from '../calendar-integration/get-calendar-event-id-candidates';
@@ -63,6 +65,8 @@ import { TODAY_TAG } from '../tag/tag.const';
 import typia from 'typia';
 import { GlobalProgressBarService } from '../../core-ui/global-progress-bar/global-progress-bar.service';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
+import { PluginIssueProviderAdapterService } from '../../plugins/issue-provider/plugin-issue-provider-adapter.service';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 @Injectable({
   providedIn: 'root',
@@ -71,14 +75,12 @@ export class IssueService {
   private _taskService = inject(TaskService);
   private _jiraCommonInterfacesService = inject(JiraCommonInterfacesService);
   private _trelloCommonInterfacesService = inject(TrelloCommonInterfacesService);
-  private _githubCommonInterfacesService = inject(GithubCommonInterfacesService);
   private _gitlabCommonInterfacesService = inject(GitlabCommonInterfacesService);
   private _caldavCommonInterfaceService = inject(CaldavCommonInterfacesService);
   private _openProjectInterfaceService = inject(OpenProjectCommonInterfacesService);
   private _giteaInterfaceService = inject(GiteaCommonInterfacesService);
   private _redmineInterfaceService = inject(RedmineCommonInterfacesService);
   private _linearCommonInterfaceService = inject(LinearCommonInterfacesService);
-  private _clickUpCommonInterfaceService = inject(ClickUpCommonInterfacesService);
   private _azureDevOpsCommonInterfaceService = inject(AzureDevOpsCommonInterfacesService);
   private _nextcloudDeckCommonInterfaceService = inject(
     NextcloudDeckCommonInterfacesService,
@@ -93,10 +95,11 @@ export class IssueService {
   private _store = inject(Store);
   private _globalProgressBarService = inject(GlobalProgressBarService);
   private _navigateToTaskService = inject(NavigateToTaskService);
+  private _pluginAdapter = inject(PluginIssueProviderAdapterService);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   ISSUE_SERVICE_MAP: { [key: string]: IssueServiceInterface } = {
     [GITLAB_TYPE]: this._gitlabCommonInterfacesService,
-    [GITHUB_TYPE]: this._githubCommonInterfacesService,
     [JIRA_TYPE]: this._jiraCommonInterfacesService,
     [CALDAV_TYPE]: this._caldavCommonInterfaceService,
     [OPEN_PROJECT_TYPE]: this._openProjectInterfaceService,
@@ -104,7 +107,6 @@ export class IssueService {
     [REDMINE_TYPE]: this._redmineInterfaceService,
     [ICAL_TYPE]: this._calendarCommonInterfaceService,
     [LINEAR_TYPE]: this._linearCommonInterfaceService,
-    [CLICKUP_TYPE]: this._clickUpCommonInterfaceService,
     [AZURE_DEVOPS_TYPE]: this._azureDevOpsCommonInterfaceService,
     [NEXTCLOUD_DECK_TYPE]: this._nextcloudDeckCommonInterfaceService,
 
@@ -117,9 +119,13 @@ export class IssueService {
   } = {};
 
   testConnection(issueProviderCfg: IssueProvider): Promise<boolean> {
-    return this.ISSUE_SERVICE_MAP[issueProviderCfg.issueProviderKey].testConnection(
-      issueProviderCfg,
-    );
+    const service = this._getService(issueProviderCfg.issueProviderKey);
+    if (!service) {
+      return Promise.resolve(false);
+    }
+    // Cast is safe: for built-in providers, IssueProvider extends IssueIntegrationCfg;
+    // for plugin providers, the adapter internally casts to IssueProviderPluginType
+    return service.testConnection(issueProviderCfg as IssueIntegrationCfg);
   }
 
   getById(
@@ -127,7 +133,11 @@ export class IssueService {
     id: string | number,
     issueProviderId: string,
   ): Promise<IssueData | null> {
-    return this.ISSUE_SERVICE_MAP[issueType].getById(id, issueProviderId);
+    const service = this._getService(issueType);
+    if (!service) {
+      return Promise.resolve(null);
+    }
+    return service.getById(id, issueProviderId);
   }
 
   // Keep Observable version for components that need real-time updates via refresh
@@ -143,7 +153,11 @@ export class IssueService {
     if (!this.ISSUE_REFRESH_MAP[issueProviderId][id]) {
       this.ISSUE_REFRESH_MAP[issueProviderId][id] = new Subject<IssueData>();
     }
-    return from(this.ISSUE_SERVICE_MAP[issueType].getById(id, issueProviderId)).pipe(
+    const service = this._getService(issueType);
+    if (!service) {
+      return of(null);
+    }
+    return from(service.getById(id, issueProviderId)).pipe(
       switchMap((issue) => merge(of(issue), this.ISSUE_REFRESH_MAP[issueProviderId][id])),
     );
   }
@@ -158,10 +172,11 @@ export class IssueService {
     if (searchTerm.replace(/[^\p{L}\p{N}]+/gu, '').length === 0 && !isEmptySearch) {
       return Promise.resolve([]);
     }
-    return this.ISSUE_SERVICE_MAP[issueProviderKey].searchIssues(
-      searchTerm,
-      issueProviderId,
-    );
+    const service = this._getService(issueProviderKey);
+    if (!service) {
+      return Promise.resolve([]);
+    }
+    return service.searchIssues(searchTerm, issueProviderId);
   }
 
   searchAllEnabledIssueProviders$(
@@ -185,11 +200,11 @@ export class IssueService {
             ),
             catchError((err: unknown) => {
               this._snackService.open({
-                svgIco: ISSUE_PROVIDER_ICON_MAP[provider.issueProviderKey],
+                svgIco: this._getProviderIcon(provider.issueProviderKey),
                 msg: T.F.ISSUE.S.ERR_GENERIC,
                 type: 'ERROR',
                 translateParams: {
-                  issueProviderName: ISSUE_PROVIDER_HUMANIZED[provider.issueProviderKey],
+                  issueProviderName: this._getProviderName(provider.issueProviderKey),
                   errTxt: getErrorTxt(err),
                 },
               });
@@ -208,19 +223,23 @@ export class IssueService {
     issueId: string | number,
     issueProviderId: string,
   ): Promise<string> {
-    return this.ISSUE_SERVICE_MAP[issueType].issueLink(issueId, issueProviderId);
+    const service = this._getService(issueType);
+    if (!service) {
+      return Promise.resolve('');
+    }
+    return service.issueLink(issueId, issueProviderId);
   }
 
   getPollInterval(providerKey: IssueProviderKey): number {
-    return this.ISSUE_SERVICE_MAP[providerKey].pollInterval;
+    return this._getPollInterval(providerKey);
   }
 
   getMappedAttachments(
     issueType: IssueProviderKey,
     issueDataIN: IssueData,
   ): TaskAttachment[] {
-    const service = this.ISSUE_SERVICE_MAP[issueType];
-    if (!service.getMappedAttachments) {
+    const service = this._getService(issueType);
+    if (!service?.getMappedAttachments) {
       return [];
     }
     return service.getMappedAttachments(issueDataIN);
@@ -230,23 +249,24 @@ export class IssueService {
     providerKey: IssueProviderKey,
     issueProviderId: string,
   ): Promise<void> {
-    if (!this.ISSUE_SERVICE_MAP[providerKey].getNewIssuesToAddToBacklog) {
+    const service = this._getService(providerKey);
+    if (!service?.getNewIssuesToAddToBacklog) {
       return;
     }
     this._snackService.open({
-      svgIco: ISSUE_PROVIDER_ICON_MAP[providerKey],
+      svgIco: this._getProviderIcon(providerKey),
       msg: T.F.ISSUE.S.POLLING_BACKLOG,
       isSpinner: true,
       translateParams: {
-        issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
-        issuesStr: this._translateService.instant(ISSUE_STR_MAP[providerKey].ISSUES_STR),
+        issueProviderName: this._getProviderName(providerKey),
+        issuesStr: this._translateService.instant(
+          this._getIssueStrings(providerKey).ISSUES_STR,
+        ),
       },
     });
 
     const allExistingIssueIds: string[] | number[] =
       await this._taskService.getAllIssueIdsForProviderEverywhere(issueProviderId);
-
-    const service = this.ISSUE_SERVICE_MAP[providerKey];
     const potentialIssuesToAdd = await service.getNewIssuesToAddToBacklog!(
       issueProviderId,
       allExistingIssueIds,
@@ -270,24 +290,24 @@ export class IssueService {
     if (issuesToAdd.length === 1) {
       const issueTitle = this._getAddTaskData(providerKey, issuesToAdd[0]).title;
       this._snackService.open({
-        svgIco: ISSUE_PROVIDER_ICON_MAP[providerKey],
-        // ico: 'cloud_download',
+        svgIco: this._getProviderIcon(providerKey),
         msg: T.F.ISSUE.S.IMPORTED_SINGLE_ISSUE,
         translateParams: {
-          issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
-          issueStr: this._translateService.instant(ISSUE_STR_MAP[providerKey].ISSUE_STR),
+          issueProviderName: this._getProviderName(providerKey),
+          issueStr: this._translateService.instant(
+            this._getIssueStrings(providerKey).ISSUE_STR,
+          ),
           issueTitle,
         },
       });
     } else if (issuesToAdd.length > 1) {
       this._snackService.open({
-        svgIco: ISSUE_PROVIDER_ICON_MAP[providerKey],
-        // ico: 'cloud_download',
+        svgIco: this._getProviderIcon(providerKey),
         msg: T.F.ISSUE.S.IMPORTED_MULTIPLE_ISSUES,
         translateParams: {
-          issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
+          issueProviderName: this._getProviderName(providerKey),
           issuesStr: this._translateService.instant(
-            ISSUE_STR_MAP[providerKey].ISSUES_STR,
+            this._getIssueStrings(providerKey).ISSUES_STR,
           ),
           nr: issuesToAdd.length,
         },
@@ -305,8 +325,8 @@ export class IssueService {
     if (!issueId || !issueType || !issueProviderId) {
       throw new Error('No issue task');
     }
-    const service = this.ISSUE_SERVICE_MAP[issueType];
-    if (!service.getFreshDataForIssueTask) {
+    const service = this._getService(issueType);
+    if (!service?.getFreshDataForIssueTask) {
       throw new Error(
         `Issue method getFreshDataForIssueTask not available for ${issueType}`,
       );
@@ -330,21 +350,23 @@ export class IssueService {
 
       if (isNotifySuccess) {
         this._snackService.open({
-          svgIco: ISSUE_PROVIDER_ICON_MAP[issueType],
+          svgIco: this._getProviderIcon(issueType),
           msg: T.F.ISSUE.S.ISSUE_UPDATE_SINGLE,
           translateParams: {
-            issueProviderName: ISSUE_PROVIDER_HUMANIZED[issueType],
-            issueStr: this._translateService.instant(ISSUE_STR_MAP[issueType].ISSUE_STR),
+            issueProviderName: this._getProviderName(issueType),
+            issueStr: this._translateService.instant(
+              this._getIssueStrings(issueType).ISSUE_STR,
+            ),
             issueTitle: update.issueTitle,
           },
         });
       }
     } else if (isNotifyNoUpdateRequired) {
       this._snackService.open({
-        svgIco: ISSUE_PROVIDER_ICON_MAP[issueType],
+        svgIco: this._getProviderIcon(issueType),
         msg: T.F.ISSUE.S.ISSUE_NO_UPDATE_REQUIRED,
         translateParams: {
-          issueProviderName: ISSUE_PROVIDER_HUMANIZED[issueType],
+          issueProviderName: this._getProviderName(issueType),
         },
       });
     }
@@ -373,8 +395,10 @@ export class IssueService {
         tasksIssueIdsByIssueProviderKey[providerKey],
       );
       const pollingLabelParams = {
-        issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
-        issuesStr: this._translateService.instant(ISSUE_STR_MAP[providerKey].ISSUES_STR),
+        issueProviderName: this._getProviderName(providerKey),
+        issuesStr: this._translateService.instant(
+          this._getIssueStrings(providerKey).ISSUES_STR,
+        ),
       };
 
       this._globalProgressBarService.countUp('POLL', {
@@ -387,7 +411,11 @@ export class IssueService {
         issue: IssueData;
       }[] = [];
       try {
-        updates = await this.ISSUE_SERVICE_MAP[providerKey].getFreshDataForIssueTasks(
+        const service = this._getService(providerKey);
+        if (!service) {
+          continue;
+        }
+        updates = await service.getFreshDataForIssueTasks(
           tasksIssueIdsByIssueProviderKey[providerKey],
         );
       } finally {
@@ -406,24 +434,24 @@ export class IssueService {
 
         if (updates.length === 1) {
           this._snackService.open({
-            svgIco: ISSUE_PROVIDER_ICON_MAP[providerKey],
+            svgIco: this._getProviderIcon(providerKey),
             msg: T.F.ISSUE.S.ISSUE_UPDATE_SINGLE,
             translateParams: {
-              issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
+              issueProviderName: this._getProviderName(providerKey),
               issueStr: this._translateService.instant(
-                ISSUE_STR_MAP[providerKey].ISSUE_STR,
+                this._getIssueStrings(providerKey).ISSUE_STR,
               ),
               issueTitle: updates[0].taskChanges.title || updates[0].task.title,
             },
           });
         } else if (updates.length > 1) {
           this._snackService.open({
-            svgIco: ISSUE_PROVIDER_ICON_MAP[providerKey],
+            svgIco: this._getProviderIcon(providerKey),
             msg: T.F.ISSUE.S.ISSUE_UPDATE_MULTIPLE,
             translateParams: {
-              issueProviderName: ISSUE_PROVIDER_HUMANIZED[providerKey],
+              issueProviderName: this._getProviderName(providerKey),
               issuesStr: this._translateService.instant(
-                ISSUE_STR_MAP[providerKey].ISSUES_STR,
+                this._getIssueStrings(providerKey).ISSUES_STR,
               ),
               nr: updates.length,
             },
@@ -470,6 +498,14 @@ export class IssueService {
       )
     ) {
       return undefined;
+    }
+
+    // For calendar events, use deterministic ID to prevent duplicates across devices
+    if (issueProviderKey === ICAL_TYPE) {
+      additional = {
+        ...additional,
+        id: generateCalendarTaskId(issueProviderId, issueDataReduced.id.toString()),
+      };
     }
 
     const {
@@ -554,7 +590,7 @@ export class IssueService {
       }
 
       // Handle subtasks if provider supports it
-      if (this.ISSUE_SERVICE_MAP[issueProviderKey].getSubTasks && taskId) {
+      if (this._getService(issueProviderKey)?.getSubTasks && taskId) {
         await this._addSubTasks(
           issueDataReduced,
           taskId,
@@ -573,8 +609,8 @@ export class IssueService {
     issueProviderId: string,
     issueProviderKey: IssueProviderKey,
   ): Promise<void> {
-    const provider = this.ISSUE_SERVICE_MAP[issueProviderKey];
-    if (!provider.getSubTasks) {
+    const provider = this._getService(issueProviderKey);
+    if (!provider?.getSubTasks) {
       return;
     }
     try {
@@ -710,8 +746,8 @@ export class IssueService {
           translateParams: {
             title: res.task.title,
             contextTitle: res.task.projectId
-              ? (await this._projectService.getByIdOnce$(res.task.projectId).toPromise())
-                  ?.title
+              ? ((await this._projectService.getByIdOnce$(res.task.projectId).toPromise())
+                  ?.title ?? _MISSING_PROJECT_)
               : 'another tag',
           },
         });
@@ -722,14 +758,56 @@ export class IssueService {
     return false;
   }
 
+  private _getService(key: IssueProviderKey): IssueServiceInterface | undefined {
+    // Registry-first: check plugin registry before built-in map.
+    // This handles both 'plugin:*' keys AND migrated keys like 'GITHUB'.
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginAdapter;
+    }
+    return this.ISSUE_SERVICE_MAP[key];
+  }
+
+  private _getProviderIcon(key: IssueProviderKey): string {
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getIcon(key);
+    }
+    return ISSUE_PROVIDER_ICON_MAP[key as BuiltInIssueProviderKey];
+  }
+
+  private _getProviderName(key: IssueProviderKey): string {
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getName(key);
+    }
+    return ISSUE_PROVIDER_HUMANIZED[key as BuiltInIssueProviderKey];
+  }
+
+  private _getIssueStrings(key: IssueProviderKey): {
+    ISSUE_STR: string;
+    ISSUES_STR: string;
+  } {
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getIssueStrings(key);
+    }
+    return ISSUE_STR_MAP[key] ?? DEFAULT_ISSUE_STRS;
+  }
+
+  private _getPollInterval(key: IssueProviderKey): number {
+    if (this._pluginRegistry.hasProvider(key)) {
+      return this._pluginRegistry.getPollIntervalMs(key);
+    }
+    const service = this.ISSUE_SERVICE_MAP[key];
+    return service?.pollInterval ?? 0;
+  }
+
   private _getAddTaskData(
     issueProviderKey: IssueProviderKey,
     issueReduced: IssueDataReduced,
   ): IssueTask {
-    if (!this.ISSUE_SERVICE_MAP[issueProviderKey].getAddTaskData) {
+    const service = this._getService(issueProviderKey);
+    if (!service?.getAddTaskData) {
       throw new Error('Issue method not available');
     }
-    const r = this.ISSUE_SERVICE_MAP[issueProviderKey].getAddTaskData(issueReduced);
+    const r = service.getAddTaskData(issueReduced);
     typia.assert<IssueTask>(r);
     return r;
   }

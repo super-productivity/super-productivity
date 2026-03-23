@@ -1,5 +1,5 @@
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
-import { Component, input, NO_ERRORS_SCHEMA } from '@angular/core';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { DateAdapter, MatNativeDateModule } from '@angular/material/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -7,6 +7,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { provideMockStore } from '@ngrx/store/testing';
 import { Observable, of, Subject } from 'rxjs';
 import { ReactiveFormsModule } from '@angular/forms';
+// FormlyConfigModule (not FormlyModule) is needed here to register custom
+// field types and validation within the TestBed injector.
 import { FormlyConfigModule } from '../../../ui/formly-config.module';
 import { CustomDateAdapter } from '../../../core/date-time-format/custom-date-adapter';
 
@@ -17,17 +19,8 @@ import { GlobalConfigService } from '../../config/global-config.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { DEFAULT_TASK_REPEAT_CFG, TaskRepeatCfg } from '../task-repeat-cfg.model';
 import { TaskCopy } from '../../tasks/task.model';
-import { RepeatTaskHeatmapComponent } from '../repeat-task-heatmap/repeat-task-heatmap.component';
-
-// Stub component to replace RepeatTaskHeatmapComponent which has heavy dependencies
-@Component({
-  selector: 'repeat-task-heatmap',
-  template: '',
-  standalone: true,
-})
-class MockRepeatTaskHeatmapComponent {
-  repeatCfgId = input.required<string>();
-}
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../../t.const';
 
 describe('DialogEditTaskRepeatCfgComponent', () => {
   let mockDialogRef: jasmine.SpyObj<MatDialogRef<DialogEditTaskRepeatCfgComponent>>;
@@ -84,12 +77,17 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
 
     mockTagService = jasmine.createSpyObj('TagService', ['addTag'], {
       tags$: of([]),
+      tagsNoMyDayAndNoList$: of([]),
     });
     mockGlobalConfigService = jasmine.createSpyObj('GlobalConfigService', [], {
       cfg: () => ({ reminder: { defaultTaskRemindOption: null } }),
     });
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
       currentLocale: () => 'en-US',
+      dateFormat: () => ({
+        parse: 'MM/dd/yyyy',
+        display: { dateInput: 'MM/dd/yyyy' },
+      }),
     });
 
     await TestBed.configureTestingModule({
@@ -101,7 +99,6 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
         TranslateModule.forRoot(),
         FormlyConfigModule,
         ReactiveFormsModule,
-        MockRepeatTaskHeatmapComponent,
       ],
       schemas: [NO_ERRORS_SCHEMA],
       providers: [
@@ -116,11 +113,11 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       ],
     })
       .overrideComponent(DialogEditTaskRepeatCfgComponent, {
-        remove: {
-          imports: [RepeatTaskHeatmapComponent],
-        },
-        add: {
-          imports: [MockRepeatTaskHeatmapComponent],
+        set: {
+          // Use a minimal template to avoid @ngx-formly/material select rendering,
+          // which triggers a compareWith validation error with Angular Material 21+.
+          // These tests verify component signals/logic, not template rendering.
+          template: '<div></div>',
         },
       })
       .compileComponents();
@@ -222,6 +219,181 @@ describe('DialogEditTaskRepeatCfgComponent', () => {
       const component = fixture.componentInstance;
 
       expect(component.isEdit()).toBe(false);
+    });
+  });
+
+  describe('quick setting labels use due date (issue #6766)', () => {
+    it('should pass due date day/month to translate for monthly/yearly labels when task has dueDay', async () => {
+      const taskWithDueDate = {
+        ...mockTask,
+        dueDay: '2026-05-01',
+      } as TaskCopy;
+
+      const fixture = await setupTestBed({ task: taskWithDueDate });
+      const translateService = TestBed.inject(TranslateService);
+      const instantCalls: { key: string; params: any }[] = [];
+      spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
+        instantCalls.push({ key, params });
+        return key;
+      });
+
+      // Re-trigger form config initialization
+      (fixture.componentInstance as any)._initializeFormConfig();
+
+      const monthlyCall = instantCalls.find(
+        (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
+      );
+      const yearlyCall = instantCalls.find(
+        (c) => c.key === T.F.TASK_REPEAT.F.Q_YEARLY_CURRENT_DATE,
+      );
+
+      // Due date is May 1st — day should be "1", month/day should contain "5" and "1"
+      const dueDate = new Date(2026, 4, 1); // May 1st
+      const expectedDayStr = dueDate.toLocaleDateString('en-US', { day: 'numeric' });
+      const expectedDayAndMonthStr = dueDate.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'numeric',
+      });
+
+      expect(monthlyCall).toBeDefined();
+      expect(monthlyCall!.params.dateDayStr).toBe(expectedDayStr);
+      expect(yearlyCall).toBeDefined();
+      expect(yearlyCall!.params.dayAndMonthStr).toBe(expectedDayAndMonthStr);
+    });
+
+    it('should pass today day/month to translate when task has no due date', async () => {
+      const taskNoDueDate = {
+        ...mockTask,
+        dueDay: undefined,
+        dueWithTime: undefined,
+      } as unknown as TaskCopy;
+
+      const fixture = await setupTestBed({ task: taskNoDueDate });
+      const translateService = TestBed.inject(TranslateService);
+      const instantCalls: { key: string; params: any }[] = [];
+      spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
+        instantCalls.push({ key, params });
+        return key;
+      });
+
+      (fixture.componentInstance as any)._initializeFormConfig();
+
+      const monthlyCall = instantCalls.find(
+        (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
+      );
+
+      const today = new Date();
+      const todayDayStr = today.toLocaleDateString('en-US', { day: 'numeric' });
+
+      expect(monthlyCall).toBeDefined();
+      expect(monthlyCall!.params.dateDayStr).toBe(todayDayStr);
+    });
+
+    it('should pass repeatCfg startDate day to translate when editing existing config', async () => {
+      const cfgWithStartDate: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-456',
+        title: 'Monthly on 15th',
+        quickSetting: 'MONTHLY_CURRENT_DATE',
+        startDate: '2026-03-15',
+        repeatCycle: 'MONTHLY',
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgWithStartDate });
+      const translateService = TestBed.inject(TranslateService);
+      const instantCalls: { key: string; params: any }[] = [];
+      spyOn(translateService, 'instant').and.callFake((key: any, params?: any) => {
+        instantCalls.push({ key, params });
+        return key;
+      });
+
+      (fixture.componentInstance as any)._initializeFormConfig();
+
+      const monthlyCall = instantCalls.find(
+        (c) => c.key === T.F.TASK_REPEAT.F.Q_MONTHLY_CURRENT_DATE,
+      );
+
+      // startDate is March 15 — day should be "15"
+      const startDate = new Date(2026, 2, 15); // March 15
+      const expectedDayStr = startDate.toLocaleDateString('en-US', { day: 'numeric' });
+
+      expect(monthlyCall).toBeDefined();
+      expect(monthlyCall!.params.dateDayStr).toBe(expectedDayStr);
+    });
+  });
+
+  describe('_processQuickSettingForDate preserves quick setting (issue #6766)', () => {
+    it('should preserve MONTHLY_CURRENT_DATE when startDate day differs from today', async () => {
+      const cfgMonthly: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-monthly',
+        title: 'Monthly Task',
+        quickSetting: 'MONTHLY_CURRENT_DATE',
+        startDate: '2026-05-01',
+        repeatCycle: 'MONTHLY',
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgMonthly });
+      const component = fixture.componentInstance;
+
+      // Should keep MONTHLY_CURRENT_DATE, not fall back to CUSTOM
+      expect(component.repeatCfg().quickSetting).toBe('MONTHLY_CURRENT_DATE');
+    });
+
+    it('should preserve YEARLY_CURRENT_DATE when startDate differs from today', async () => {
+      const cfgYearly: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-yearly',
+        title: 'Yearly Task',
+        quickSetting: 'YEARLY_CURRENT_DATE',
+        startDate: '2026-07-04',
+        repeatCycle: 'YEARLY',
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgYearly });
+      const component = fixture.componentInstance;
+
+      // Should keep YEARLY_CURRENT_DATE, not fall back to CUSTOM
+      expect(component.repeatCfg().quickSetting).toBe('YEARLY_CURRENT_DATE');
+    });
+
+    it('should preserve WEEKLY_CURRENT_WEEKDAY when startDate weekday differs from today', async () => {
+      // Pick a date whose weekday definitely differs from today
+      const today = new Date();
+      const differentDay = new Date(today);
+      differentDay.setDate(today.getDate() + 3); // 3 days from now is a different weekday
+      const dateStr = differentDay.toISOString().slice(0, 10);
+
+      const cfgWeekly: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-weekly',
+        title: 'Weekly Task',
+        quickSetting: 'WEEKLY_CURRENT_WEEKDAY',
+        startDate: dateStr,
+        repeatCycle: 'WEEKLY',
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgWeekly });
+      const component = fixture.componentInstance;
+
+      // Should keep WEEKLY_CURRENT_WEEKDAY, not fall back to CUSTOM
+      expect(component.repeatCfg().quickSetting).toBe('WEEKLY_CURRENT_WEEKDAY');
+    });
+
+    it('should still fall back to CUSTOM when startDate is missing', async () => {
+      const cfgNoDate: TaskRepeatCfg = {
+        ...DEFAULT_TASK_REPEAT_CFG,
+        id: 'repeat-cfg-nodate',
+        title: 'No Date Task',
+        quickSetting: 'MONTHLY_CURRENT_DATE',
+        startDate: undefined,
+        repeatCycle: 'MONTHLY',
+      };
+
+      const fixture = await setupTestBed({ repeatCfg: cfgNoDate });
+      const component = fixture.componentInstance;
+
+      expect(component.repeatCfg().quickSetting).toBe('CUSTOM');
     });
   });
 

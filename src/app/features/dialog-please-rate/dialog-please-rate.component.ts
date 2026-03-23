@@ -24,7 +24,6 @@ import { MatIcon } from '@angular/material/icon';
     TranslatePipe,
   ],
   templateUrl: './dialog-please-rate.component.html',
-  styleUrl: './dialog-please-rate.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DialogPleaseRateComponent {

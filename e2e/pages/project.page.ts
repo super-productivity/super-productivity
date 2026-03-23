@@ -21,7 +21,9 @@ export class ProjectPage extends BasePage {
       'button[aria-label="Create New Project"], button:has-text("Create Project")',
     );
     this.projectAccordion = page.locator('nav-item button:has-text("Projects")');
-    this.projectNameInput = page.getByRole('textbox', { name: 'Project Name' });
+    this.projectNameInput = page
+      .locator('dialog-create-project input[type="text"]')
+      .first();
     this.submitBtn = page.locator('dialog-create-project button[type=submit]');
     this.workCtxMenu = page.locator('work-context-menu');
     // Use more specific selector to avoid matching titles in other areas
@@ -109,11 +111,13 @@ export class ProjectPage extends BasePage {
     // Wait for the dialog to appear and be fully initialized
     await this.projectNameInput.waitFor({ state: 'visible', timeout: 10000 });
 
-    // Fill has built-in waiting for element to be editable, but Angular forms
-    // need a moment to wire up. Add a small delay for form initialization.
-    await this.page.waitForTimeout(500);
+    // Wait for Angular form to wire up by checking the submit button is present
+    await this.submitBtn.waitFor({ state: 'visible', timeout: 5000 });
 
     await this.projectNameInput.fill(prefixedProjectName);
+
+    // Wait for the submit button to be enabled (Angular form validation completes)
+    await expect(this.submitBtn).toBeEnabled({ timeout: 5000 });
     await this.submitBtn.click();
 
     // Wait for dialog to close by waiting for input to be hidden
@@ -132,8 +136,11 @@ export class ProjectPage extends BasePage {
   async navigateToProjectByName(projectName: string): Promise<void> {
     const fullProjectName = this.applyPrefix(projectName);
 
-    // Wait for Angular to fully render after any navigation
-    await this.page.waitForTimeout(2000);
+    // Wait for the route wrapper to be visible (Angular navigation complete)
+    await this.page
+      .locator('.route-wrapper, main, [role="main"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 10000 });
 
     // Helper function to check if we're already on the project
     const isAlreadyOnProject = async (): Promise<boolean> => {

@@ -1,0 +1,20 @@
+{
+  "name": "clickup-issue-provider",
+  "version": "1.0.0",
+  "description": "ClickUp issue provider plugin",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:../../plugin-api"
+  }
+}

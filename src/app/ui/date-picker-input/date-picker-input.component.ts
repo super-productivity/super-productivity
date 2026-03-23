@@ -17,8 +17,12 @@ import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-f
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from 'src/app/t.const';
 import { getDbDateStr } from 'src/app/util/get-db-date-str';
+import { dateStrToUtcDate } from 'src/app/util/date-str-to-utc-date';
 
 type DateValue = Date | null;
+
+export const DATE_PICKER_MIN_DEFAULT = '1900-01-01';
+export const DATE_PICKER_MAX_DEFAULT = '2999-12-31';
 
 @Component({
   selector: 'date-picker-input',
@@ -50,8 +54,8 @@ export class DatePickerInputComponent implements ControlValueAccessor {
   dateTimeFormatService = inject(DateTimeFormatService);
 
   label = input<string>('');
-  min = input<Date | string>('1900-01-01');
-  max = input<Date | string>('2999-12-31');
+  min = input<Date | string | undefined>(DATE_PICKER_MIN_DEFAULT);
+  max = input<Date | string | undefined>(DATE_PICKER_MAX_DEFAULT);
 
   required = input<boolean>(false);
   isInvalid = input<boolean | undefined>(undefined); // boolean - validation control by parent, undefined - internal validation
@@ -63,20 +67,36 @@ export class DatePickerInputComponent implements ControlValueAccessor {
     return value instanceof Date ? value : new Date(value);
   }
 
-  formatDate(value: Date | string): string {
+  formatDate(value: Date | string | undefined): string {
     if (!value) return '';
     return getDbDateStr(this.toDate(value));
   }
 
   validateDate(value: Date): boolean {
-    const minDate = this.toDate(this.min());
-    const maxDate = this.toDate(this.max());
-    return value >= minDate && value <= maxDate;
+    const minVal = this.min();
+    const maxVal = this.max();
+    if (minVal != null) {
+      const minDate = this.toDate(minVal);
+      if (!isNaN(minDate.getTime()) && value < minDate) return false;
+    }
+    if (maxVal != null) {
+      const maxDate = this.toDate(maxVal);
+      if (!isNaN(maxDate.getTime()) && value > maxDate) return false;
+    }
+    return true;
   }
 
   writeValue(value: unknown): void {
-    if (!value || !(value instanceof Date)) this.innerValue = null;
-    else this.innerValue = this.toDate(value);
+    if (!value) {
+      this.innerValue = null;
+    } else if (value instanceof Date) {
+      this.innerValue = value;
+    } else if (typeof value === 'string') {
+      const parsed = dateStrToUtcDate(value);
+      this.innerValue = isNaN(parsed.getTime()) ? null : parsed;
+    } else {
+      this.innerValue = null;
+    }
   }
 
   onValueChange(value: DateValue): void {

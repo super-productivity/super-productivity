@@ -14,7 +14,7 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ShortcutService } from './core-ui/shortcut/shortcut.service';
 import { GlobalConfigService } from './features/config/global-config.service';
 import { LayoutService } from './core-ui/layout/layout.service';
@@ -22,7 +22,7 @@ import { SnackService } from './core/snack/snack.service';
 import { IS_ELECTRON } from './app.constants';
 import { expandAnimation } from './ui/animations/expand.ani';
 import { warpRouteAnimation } from './ui/animations/warp-route';
-import { combineLatest, merge, Observable, Subscription, timer } from 'rxjs';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { fadeAnimation } from './ui/animations/fade.ani';
 import { BannerService } from './core/banner/banner.service';
 import { LS } from './core/persistence/storage-keys.const';
@@ -31,11 +31,10 @@ import { T } from './t.const';
 import { GlobalThemeService } from './core/theme/global-theme.service';
 import { LanguageService } from './core/language/language.service';
 import { WorkContextService } from './features/work-context/work-context.service';
-import { ImexViewService } from './imex/imex-meta/imex-view.service';
 import { SyncTriggerService } from './imex/sync/sync-trigger.service';
 import { ActivatedRoute, RouterOutlet } from '@angular/router';
-import { filter, map, take } from 'rxjs/operators';
-import { isOnline$ } from './util/is-online';
+import { concatMap, first, take } from 'rxjs/operators';
+
 import { IS_MOBILE } from './util/is-mobile';
 import { warpAnimation, warpInAnimation } from './ui/animations/warp.ani';
 import { AddTaskBarComponent } from './features/tasks/add-task-bar/add-task-bar.component';
@@ -45,9 +44,7 @@ import { MainHeaderComponent } from './core-ui/main-header/main-header.component
 import { BannerComponent } from './core/banner/banner/banner.component';
 import { GlobalProgressBarComponent } from './core-ui/global-progress-bar/global-progress-bar.component';
 import { FocusModeOverlayComponent } from './features/focus-mode/focus-mode-overlay/focus-mode-overlay.component';
-import { ShepherdComponent } from './features/shepherd/shepherd.component';
-import { ShepherdService } from './features/shepherd/shepherd.service';
-import { AsyncPipe, DOCUMENT } from '@angular/common';
+import { DOCUMENT } from '@angular/common';
 import { RightPanelComponent } from './features/right-panel/right-panel.component';
 import { selectIsOverlayShown } from './features/focus-mode/store/focus-mode.selectors';
 import { Store } from '@ngrx/store';
@@ -55,26 +52,28 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MarkdownPasteService } from './features/tasks/markdown-paste.service';
 import { TaskService } from './features/tasks/task.service';
-import { MatButton } from '@angular/material/button';
 import { MatMenuItem } from '@angular/material/menu';
 import { MatIcon } from '@angular/material/icon';
-import { DialogUnsplashPickerComponent } from './ui/dialog-unsplash-picker/dialog-unsplash-picker.component';
 import { NoteStartupBannerService } from './features/note/note-startup-banner.service';
 import { ProjectService } from './features/project/project.service';
 import { TagService } from './features/tag/tag.service';
 import { ContextMenuComponent } from './ui/context-menu/context-menu.component';
-import { WorkContextThemeCfg } from './features/work-context/work-context.model';
+import { WorkContextType } from './features/work-context/work-context.model';
+import type { WorkContextSettingsDialogData } from './features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 import { isInputElement } from './util/dom-element';
 import { MobileBottomNavComponent } from './core-ui/mobile-bottom-nav/mobile-bottom-nav.component';
 import { StartupService } from './core/startup/startup.service';
+import { DataInitStateService } from './core/data-init/data-init-state.service';
+import { ExampleTasksService } from './core/example-tasks/example-tasks.service';
 import { KeyboardLayoutService } from './core/keyboard-layout/keyboard-layout.service';
 import { setKeyboardLayoutService } from './util/check-key-combo';
+import { OnboardingPresetSelectionComponent } from './features/onboarding/onboarding-preset-selection.component';
+import { OnboardingHintComponent } from './features/onboarding/onboarding-hint.component';
+import { OnboardingHintService } from './features/onboarding/onboarding-hint.service';
 
-const w = window as Window & { productivityTips?: string[][]; randomIndex?: number };
-const productivityTip: string[] | undefined =
-  w.productivityTips && w.randomIndex !== undefined
-    ? w.productivityTips[w.randomIndex]
-    : undefined;
+const ONBOARDING_PRESET_EXIT_DELAY = 1000;
+const ONBOARDING_ENTRANCE_COMPLETE_DELAY = 2000;
+const ENTRANCE_ANIMATION_DURATION = 1500;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -103,14 +102,13 @@ interface BeforeInstallPromptEvent extends Event {
     RouterOutlet,
     GlobalProgressBarComponent,
     FocusModeOverlayComponent,
-    ShepherdComponent,
-    AsyncPipe,
-    MatButton,
     MatMenuItem,
     MatIcon,
     TranslatePipe,
     ContextMenuComponent,
     MobileBottomNavComponent,
+    OnboardingPresetSelectionComponent,
+    OnboardingHintComponent,
   ],
 })
 export class AppComponent implements OnDestroy, AfterViewInit {
@@ -131,23 +129,25 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   private _ngZone = inject(NgZone);
   private _document = inject(DOCUMENT, { optional: true });
   private _startupService = inject(StartupService);
+  // Injected for side-effect: creates example tasks on first run
+  private _exampleTasksService = inject(ExampleTasksService);
   private _keyboardLayoutService = inject(KeyboardLayoutService);
+  private _dataInitStateService = inject(DataInitStateService);
+  readonly onboardingHintService = inject(OnboardingHintService);
 
-  readonly syncTriggerService = inject(SyncTriggerService);
-  readonly imexMetaService = inject(ImexViewService);
+  private _syncTriggerService = inject(SyncTriggerService);
   readonly workContextService = inject(WorkContextService);
   readonly layoutService = inject(LayoutService);
   readonly globalThemeService = inject(GlobalThemeService);
-  readonly shepherdService = inject(ShepherdService);
   readonly _store = inject(Store);
   readonly T = T;
   readonly isShowMobileButtonNav = this.layoutService.isShowMobileBottomNav;
 
-  productivityTipTitle: string = productivityTip?.[0] || '';
-  productivityTipText: string = productivityTip?.[1] || '';
-  showSkipSyncButton = signal(false);
-
   @ViewChild('routeWrapper', { read: ElementRef }) routeWrapper?: ElementRef<HTMLElement>;
+
+  @HostBinding('class.isWorkViewScrolled') get isWorkViewScrolledClass(): boolean {
+    return this.layoutService.isWorkViewScrolled();
+  }
 
   @HostBinding('@.disabled') get isDisableAnimations(): boolean {
     return this._isDisableAnimations();
@@ -159,16 +159,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   });
 
   isRTL: boolean = false;
-
-  isShowUi$: Observable<boolean> = combineLatest([
-    this.syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$,
-    this.imexMetaService.isDataImportInProgress$,
-  ]).pipe(
-    map(
-      ([afterInitialIsReady, isDataImportInProgress]) =>
-        afterInitialIsReady && !isDataImportInProgress,
-    ),
-  );
 
   private _isOverlayShownFromStore = toSignal(this._store.select(selectIsOverlayShown), {
     initialValue: false,
@@ -191,11 +181,38 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     { initialValue: null },
   );
 
+  isShowOnboardingPresets = signal(
+    !localStorage.getItem(LS.ONBOARDING_PRESET_DONE) &&
+      !localStorage.getItem(LS.IS_SKIP_TOUR),
+  );
+
   private _subs: Subscription = new Subscription();
   private _intervalTimer?: NodeJS.Timeout;
 
   constructor() {
     this._startupService.init();
+
+    // Skip onboarding for existing users with data
+    if (this.isShowOnboardingPresets()) {
+      this._dataInitStateService.isAllDataLoadedInitially$
+        .pipe(
+          concatMap(() => this._projectService.list$),
+          first(),
+        )
+        .subscribe((projectList) => {
+          if (projectList.length > 2) {
+            localStorage.setItem(LS.ONBOARDING_PRESET_DONE, 'true');
+            this.isShowOnboardingPresets.set(false);
+          }
+        });
+    }
+
+    // Clear app entrance animation after it completes
+    if (this.isAppEntrance()) {
+      setTimeout(() => {
+        this.isAppEntrance.set(false);
+      }, ENTRANCE_ANIMATION_DURATION);
+    }
 
     // Use effect to react to language RTL changes
     effect(() => {
@@ -215,25 +232,10 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     // init theme and body class handlers
     this._globalThemeService.init();
 
-    this.syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
+    this._syncTriggerService.afterInitialSyncDoneAndDataLoadedInitially$
       .pipe(take(1))
       .subscribe(() => {
         void this._noteStartupBannerService.showLastNoteIfNeeded();
-      });
-
-    // Show skip sync button immediately if offline, otherwise after 3 seconds
-    merge(
-      // Immediate trigger if offline
-      isOnline$.pipe(
-        filter((isOnline) => !isOnline),
-        take(1),
-      ),
-      // Fallback after 3 seconds regardless
-      timer(3000),
-    )
-      .pipe(take(1), takeUntilDestroyed())
-      .subscribe(() => {
-        this.showSkipSyncButton.set(true);
       });
 
     // ! For keyboard shortcuts to work correctly with any layouts (QWERTZ/AZERTY/etc) - user's keyboard layout must be presaved
@@ -245,10 +247,6 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     } else {
       setTimeout(() => this._keyboardLayoutService.saveUserLayout(), 0);
     }
-  }
-
-  skipInitialSync(): void {
-    this.syncTriggerService.setInitialSyncDone(true);
   }
 
   @HostListener('document:paste', ['$event']) onPaste(ev: ClipboardEvent): void {
@@ -307,7 +305,11 @@ export class AppComponent implements OnDestroy, AfterViewInit {
   @HostListener('window:beforeinstallprompt', ['$event']) onBeforeInstallPrompt(
     e: BeforeInstallPromptEvent,
   ): void {
-    if (IS_ELECTRON || localStorage.getItem(LS.WEB_APP_INSTALL)) {
+    if (
+      IS_ELECTRON ||
+      localStorage.getItem(LS.WEB_APP_INSTALL) ||
+      OnboardingHintService.isOnboardingInProgress()
+    ) {
       return;
     }
 
@@ -356,52 +358,40 @@ export class AppComponent implements OnDestroy, AfterViewInit {
     return baseOpacity * 0.01;
   });
 
-  changeBackgroundFromUnsplash(): void {
-    const dialogRef = this._matDialog.open(DialogUnsplashPickerComponent, {
-      width: '900px',
-      maxWidth: '95vw',
+  async openSettings(): Promise<void> {
+    const isForProject =
+      this.workContextService.activeWorkContextType === WorkContextType.PROJECT;
+    const contextId = this.workContextService.activeWorkContextId;
+    if (!contextId) {
+      return;
+    }
+    const entity = isForProject
+      ? await firstValueFrom(this._projectService.getByIdOnce$(contextId))
+      : await firstValueFrom(this._tagService.getTagById$(contextId).pipe(first()));
+
+    const { DialogWorkContextSettingsComponent } =
+      await import('./features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
+    this._matDialog.open(DialogWorkContextSettingsComponent, {
+      restoreFocus: true,
+      backdropClass: 'cdk-overlay-transparent-backdrop',
+      data: {
+        isProject: isForProject,
+        entity,
+      } as WorkContextSettingsDialogData,
     });
+  }
 
-    dialogRef.afterClosed().subscribe((result) => {
-      if (result) {
-        // Get current work context
-        this.workContextService.activeWorkContext$
-          .pipe(take(1))
-          .subscribe((activeContext) => {
-            if (!activeContext) {
-              this._snackService.open({
-                type: 'ERROR',
-                msg: 'No active work context',
-              });
-              return;
-            }
+  isAppEntrance = signal(!this.isShowOnboardingPresets());
 
-            // Extract the URL from the result object
-            const backgroundUrl = result.url || result;
-            const isDarkMode = this._globalThemeService.isDarkTheme();
-            const contextKey: keyof WorkContextThemeCfg = isDarkMode
-              ? 'backgroundImageDark'
-              : 'backgroundImageLight';
-
-            // Update the theme based on context type
-            if (activeContext.type === 'PROJECT') {
-              this._projectService.update(activeContext.id, {
-                theme: {
-                  ...(activeContext.theme || {}),
-                  [contextKey]: backgroundUrl,
-                },
-              });
-            } else if (activeContext.type === 'TAG') {
-              this._tagService.updateTag(activeContext.id, {
-                theme: {
-                  ...(activeContext.theme || {}),
-                  [contextKey]: backgroundUrl,
-                },
-              });
-            }
-          });
-      }
-    });
+  onPresetSelected(): void {
+    this.isAppEntrance.set(true);
+    setTimeout(() => {
+      this.isShowOnboardingPresets.set(false);
+    }, ONBOARDING_PRESET_EXIT_DELAY);
+    setTimeout(() => {
+      this.isAppEntrance.set(false);
+      this.onboardingHintService.startAfterPresetSelection();
+    }, ONBOARDING_ENTRANCE_COMPLETE_DELAY);
   }
 
   ngAfterViewInit(): void {

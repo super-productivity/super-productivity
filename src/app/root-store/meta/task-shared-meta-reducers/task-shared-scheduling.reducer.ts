@@ -184,8 +184,10 @@ const handlePlanTasksForToday = (
   const today = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const offsetMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
 
-  // Filter out tasks that are already in today or whose parent is in today
+  // Filter out tasks that don't exist, are already in today, or whose parent is in today
   const newTasksForToday = taskIds.filter((taskId) => {
+    // Skip tasks that don't exist in the store (can happen during sync)
+    if (!state[TASK_FEATURE_NAME].entities[taskId]) return false;
     if (todayTag.taskIds.includes(taskId)) return false;
     const parentId = parentTaskMap[taskId];
     return !parentId || !todayTag.taskIds.includes(parentId);

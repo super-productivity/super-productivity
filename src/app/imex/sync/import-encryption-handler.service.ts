@@ -4,9 +4,7 @@ import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SuperSyncPrivateCfg } from '../../op-log/sync-providers/super-sync/super-sync.model';
 import { SyncLog } from '../../core/log';
 import { AppDataComplete } from '../../op-log/model/model-config';
-import { OperationEncryptionService } from '../../op-log/sync/operation-encryption.service';
 import { SnapshotUploadService } from './snapshot-upload.service';
-import { isCryptoSubtleAvailable } from '../../op-log/encryption/encryption';
 
 export interface EncryptionStateChangeResult {
   encryptionStateChanged: boolean;
@@ -26,17 +24,13 @@ const LOG_PREFIX = 'ImportEncryptionHandlerService';
  * 2. The current state is uploaded as a fresh snapshot with correct encryption
  * 3. The sync provider config is updated to match the imported settings
  *
- * This is necessary because:
- * - Encrypted and unencrypted operations cannot coexist on the server
- * - A fresh snapshot ensures all clients get a consistent state
- * - The import represents a "tabula rasa" for the sync state
+ * Delegates the delete-and-reupload mechanics to SnapshotUploadService.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class ImportEncryptionHandlerService {
   private _providerManager = inject(SyncProviderManager);
-  private _encryptionService = inject(OperationEncryptionService);
   private _snapshotUploadService = inject(SnapshotUploadService);
 
   /**
@@ -114,87 +108,12 @@ export class ImportEncryptionHandlerService {
       hasKey: !!newEncryptKey,
     });
 
-    // Validate provider - use try/catch since this service returns results instead of throwing
-    let snapshotData;
     try {
-      snapshotData = await this._snapshotUploadService.gatherSnapshotData(LOG_PREFIX);
-    } catch (validationError) {
-      const errorMessage =
-        validationError instanceof Error
-          ? validationError.message
-          : 'Provider validation failed';
-      return {
-        encryptionStateChanged: false,
-        serverDataDeleted: false,
-        snapshotUploaded: false,
-        error: errorMessage,
-      };
-    }
-
-    const { syncProvider, existingCfg, state, vectorClock, clientId } = snapshotData;
-
-    // CRITICAL: Check crypto availability BEFORE deleting server data
-    // to prevent data loss if encryption will fail (only needed when enabling encryption)
-    if (isEncryptionEnabled && !isCryptoSubtleAvailable()) {
-      return {
-        encryptionStateChanged: false,
-        serverDataDeleted: false,
-        snapshotUploaded: false,
-        error:
-          'Cannot enable encryption: WebCrypto API is not available. ' +
-          'Encryption requires a secure context (HTTPS). ' +
-          'On Android, encryption is not supported.',
-      };
-    }
-
-    try {
-      // 1. Delete all server data (encrypted ops can't mix with unencrypted)
-      SyncLog.normal(`${LOG_PREFIX}: Deleting server data...`);
-      await syncProvider.deleteAllData();
-
-      // 2. Update sync provider config with new encryption settings BEFORE upload
-      // IMPORTANT: Use providerManager.setProviderConfig() instead of direct setPrivateCfg()
-      // to ensure the currentProviderPrivateCfg$ observable is updated, which is needed
-      // for the settings form to correctly show isEncryptionEnabled state.
-      SyncLog.normal(`${LOG_PREFIX}: Updating provider config...`);
-      await this._providerManager.setProviderConfig(SyncProviderId.SuperSync, {
-        ...existingCfg,
+      await this._snapshotUploadService.deleteAndReuploadWithNewEncryption({
         encryptKey: isEncryptionEnabled ? newEncryptKey : undefined,
         isEncryptionEnabled,
-      } as SuperSyncPrivateCfg);
-
-      // 3. Prepare snapshot payload (encrypt if needed)
-      SyncLog.normal(`${LOG_PREFIX}: Uploading fresh snapshot...`);
-      let snapshotPayload: unknown = state;
-
-      // If encryption is enabled, manually encrypt the snapshot
-      // (unlike other services, import handler encrypts explicitly)
-      if (isEncryptionEnabled && newEncryptKey) {
-        snapshotPayload = await this._encryptionService.encryptPayload(
-          state,
-          newEncryptKey,
-        );
-      }
-
-      // 4. Upload snapshot
-      const result = await this._snapshotUploadService.uploadSnapshot(
-        syncProvider,
-        snapshotPayload,
-        clientId,
-        vectorClock,
-        isEncryptionEnabled && !!newEncryptKey,
-      );
-
-      if (!result.accepted) {
-        throw new Error(`Snapshot upload failed: ${result.error}`);
-      }
-
-      // 5. Update lastServerSeq
-      await this._snapshotUploadService.updateLastServerSeq(
-        syncProvider,
-        result.serverSeq,
-        LOG_PREFIX,
-      );
+        logPrefix: LOG_PREFIX,
+      });
 
       SyncLog.normal(`${LOG_PREFIX}: Encryption state change handled successfully!`);
 
@@ -233,6 +152,14 @@ export class ImportEncryptionHandlerService {
     if (!checkResult.willChange) {
       SyncLog.normal(
         'ImportEncryptionHandlerService: No encryption state change detected',
+      );
+      return null;
+    }
+
+    // Never let imports disable encryption — encryption is mandatory for SuperSync
+    if (checkResult.currentEnabled && !checkResult.importedEnabled) {
+      SyncLog.normal(
+        'ImportEncryptionHandlerService: Import would disable encryption — skipping',
       );
       return null;
     }

@@ -20,8 +20,8 @@ android {
         minSdkVersion 24
         targetSdkVersion 35
         compileSdk 35
-        versionCode 17_02_01_9000
-        versionName "17.2.1"
+        versionCode 17_05_02_9000
+        versionName "17.5.2"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [
                 hostName       : "app.super-productivity.com",
@@ -98,6 +98,8 @@ dependencies {
     implementation "com.google.code.gson:gson:2.10.1"
     implementation "androidx.core:core-ktx:1.16.0"
     implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     implementation 'androidx.lifecycle:lifecycle-process:2.8.7'
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation "com.anggrayudi:storage:1.5.4"

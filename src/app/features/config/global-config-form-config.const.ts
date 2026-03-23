@@ -11,12 +11,12 @@ import { TIME_TRACKING_FORM_CFG } from './form-cfgs/time-tracking-form.const';
 import { IS_ELECTRON } from '../../app.constants';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { SCHEDULE_FORM_CFG } from './form-cfgs/schedule-form.const';
-import { VOICE_REMINDER_FORM } from './form-cfgs/voice-reminder-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
 import { CLIPBOARD_IMAGES_FORM } from './form-cfgs/clipboard-images-form.const';
 import { TASKS_SETTINGS_FORM_CFG } from './form-cfgs/tasks-settings-form.const';
+import { OVERLAY_INDICATOR_FORM_CFG } from './form-cfgs/overlay-indicator-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -30,6 +30,7 @@ export const GLOBAL_GENERAL_FORM_CONFIG: ConfigFormConfig = [
   LANGUAGE_SELECTION_FORM_FORM,
   APP_FEATURES_FORM_CFG,
   MISC_SETTINGS_FORM_CFG,
+  OVERLAY_INDICATOR_FORM_CFG,
   KEYBOARD_SETTINGS_FORM_CFG,
   CLIPBOARD_IMAGES_FORM,
 ].filter(filterGlobalConfigForm);
@@ -56,7 +57,6 @@ export const GLOBAL_PRODUCTIVITY_FORM_CONFIG: ConfigFormConfig = [
   FOCUS_MODE_FORM_CFG,
   TAKE_A_BREAK_FORM_CFG,
   EVALUATION_SETTINGS_FORM_CFG,
-  ...(!window.ea?.isSnap() && !!window.speechSynthesis ? [VOICE_REMINDER_FORM] : []),
 ].filter(filterGlobalConfigForm);
 
 export const GLOBAL_TASKS_FORM_CONFIG: ConfigFormConfig = [

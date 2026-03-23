@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "\"brukernavn / repositoryName\" for git-depotet du vil spore",
+    "TOKEN": "Tilgangstoken",
+    "FILTER_USERNAME": "Brukernavn (f.eks. for å filtrere ut endringer selv)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammendrag",
+    "STATE": "Status",
+    "ASSIGNEE": "Oppdragsgiver",
+    "LABELS": "Etiketter",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Beskrivelse"
+  },
+  "FORM_HELP": "<p>Her kan du konfigurere SuperProductivity til å liste åpne GitHub-problemer for et bestemt repo i oppgavelagerpanelet i den daglige planvisningen. De vil bli oppført som forslag og vil gi en lenke til problemet, samt mer informasjon om det.</p><p> I tillegg kan du automatisk legge til og synkronisere alle åpne problemer i oppgaven din.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Feil under tilordning av data. Er navnet på depotet ditt riktig?",
+    "ERR_UNKNOWN": "GitHub: Ukjent feil {{statusCode}} {{errorMsg}}. Grensen for api-rate overskredet?"
+  }
+}

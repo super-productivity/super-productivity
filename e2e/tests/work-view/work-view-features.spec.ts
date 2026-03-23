@@ -37,7 +37,7 @@ test.describe('Work View Features', () => {
     await firstTask.hover();
 
     // Click the done button
-    const doneBtn = firstTask.locator('.task-done-btn');
+    const doneBtn = firstTask.locator('.done-toggle');
     await doneBtn.waitFor({ state: 'visible' });
     await doneBtn.click();
 
@@ -119,7 +119,7 @@ test.describe('Work View Features', () => {
     await expect(page.locator('.page-settings')).toBeVisible({ timeout: 10000 });
 
     // Navigate back
-    await page.goto('/#/tag/TODAY');
+    await page.goto('/#/tag/TODAY/tasks');
     await workViewPage.waitForTaskList();
 
     // Verify task is still there

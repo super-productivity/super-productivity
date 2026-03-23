@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "username/repositoryName",
+    "TOKEN": "アクセストークン",
+    "FILTER_USERNAME": "ユーザー名（例：自分で変更を除外するため）",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "概要",
+    "STATE": "状態",
+    "ASSIGNEE": "担当者",
+    "LABELS": "ラベル",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "説明"
+  },
+  "FORM_HELP": "<p>ここでは、毎日の計画ビューのタスク作成パネルに、特定のリポジトリの未解決のGitHub issueを一覧表示するようにSuperProductivityを設定できます。それらは提案としてリストされ、課題へのリンクとそれに関する詳細情報を提供します。</p> <p>さらに、未解決の課題をすべて自動的にタスクバックログに追加して同期できます。</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub：データのマッピング中にエラーが発生しました。リポジトリ名は正しいですか？",
+    "ERR_UNKNOWN": "GitHub：不明なエラー {{statusCode}} {{errorMsg}}"
+  }
+}

@@ -15,7 +15,10 @@ import { PlannerService } from '../planner.service';
 import { PlannerDayComponent } from '../planner-day/planner-day.component';
 import { AsyncPipe } from '@angular/common';
 import { Store } from '@ngrx/store';
-import { selectUndoneOverdue } from '../../tasks/store/task.selectors';
+import {
+  selectUndoneOverdue,
+  selectUndoneOverdueDeadlineTasks,
+} from '../../tasks/store/task.selectors';
 import { PlannerDayOverdueComponent } from '../planner-day-overdue/planner-day-overdue.component';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
@@ -38,6 +41,7 @@ export class PlannerPlanViewComponent {
   private _elRef = inject(ElementRef);
 
   overdue$ = this._store.select(selectUndoneOverdue);
+  overdueDeadlines$ = this._store.select(selectUndoneOverdueDeadlineTasks);
   days$: Observable<PlannerDay[]> = this._plannerService.days$;
   isLoadingMore$ = this._plannerService.isLoadingMore$;
 
@@ -65,6 +69,8 @@ export class PlannerPlanViewComponent {
         this._setupVisibleDayObserver(elements);
       }
     });
+
+    this._setupScrollBorderDetection();
 
     // Cleanup observers and timers on component destroy
     this._destroyRef.onDestroy(() => {
@@ -143,6 +149,17 @@ export class PlannerPlanViewComponent {
       }
     }, 100);
     this._pendingTimers.push(timer);
+  }
+
+  private _setupScrollBorderDetection(): void {
+    const host = this._elRef.nativeElement as HTMLElement;
+    const onScroll = (): void => {
+      host.classList.toggle('isScrolled', host.scrollTop !== 0);
+    };
+    host.addEventListener('scroll', onScroll, { passive: true });
+    this._destroyRef.onDestroy(() => {
+      host.removeEventListener('scroll', onScroll);
+    });
   }
 
   private _setupVisibleDayObserver(elements: readonly ElementRef[]): void {

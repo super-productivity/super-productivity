@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "\"نام کاربری / مخزن نام\" برای مخزن git مورد نظر برای پیگیری",
+    "TOKEN": "توکن دسترسی",
+    "FILTER_USERNAME": "نام کاربری (مثلا برای فیلتر کردن تغییراتی که خودتان انجام دادید)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "خلاصه",
+    "STATE": "وضعیت",
+    "ASSIGNEE": "مسئول",
+    "LABELS": "برچسب ها",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "توضیحات"
+  },
+  "FORM_HELP": "<p>Here you can configure SuperProductivity to list open GitHub issues for a specific repository in the task creation panel in the daily planning view. They will be listed as suggestions and will provide a link to the issue as well as more information about it.</p> <p>In addition you can automatically add and sync all open issues to your task backlog.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: خطا در هنگام نقشه برداری داده ها. آیا نام مخزن شما صحیح است؟",
+    "ERR_UNKNOWN": "GitHub: خطای ناشناخته{{errorMsg}} {{statusCode}} . محدودیت نرخ Api بیش از?"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "username/repositoryName",
+    "TOKEN": "Token di accesso",
+    "FILTER_USERNAME": "Nome utente (es. per filtrare le modifiche fatte da te)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "STATE": "Stato",
+    "ASSIGNEE": "Assegnatario",
+    "LABELS": "Etichette",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Descrizione"
+  },
+  "FORM_HELP": "<p>Qui puoi configurare SuperProductivity per aggiungere la lista degli issue di una specifica repository nel pannello di creazione attività nella vista pianificazione giornaliera. Saranno mostrati come suggerimenti e forniranno un link all'issue ed alcune informazioni su di esso.</p> <p>Inoltre puoi aggiungere e sincronizzare automaticamente tutti gli issue aperti alle attività arretrate.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Errore durante la mappatura dati. Il nome del tuo repository è corretto?",
+    "ERR_UNKNOWN": "GitHub: Errore sconosciuto {{statusCode}} {{errorMsg}}. Limite di frequenza API superato?"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "\"اسم المستخدم / repositoryName\" لمستودع git الذي تريد تتبعه",
+    "TOKEN": "رمز الوصول",
+    "FILTER_USERNAME": "اسم المستخدم (مثل تصفية التغييرات بنفسك)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "ملخص",
+    "STATE": "الحالة",
+    "ASSIGNEE": "المحال",
+    "LABELS": "ملصقات",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "وصف"
+  },
+  "FORM_HELP": "<p>هنا يمكنك تكوين SuperProductivity لسرد مشكلات GitHub المفتوحة لمستودع معين في لوحة إنشاء المهام في عرض التخطيط اليومي. سيتم إدراجها كاقتراحات وستوفر رابطًا للمشكلة بالإضافة إلى مزيد من المعلومات عنها.</p> <p>بالإضافة إلى ذلك ، يمكنك تلقائيًا إضافة جميع المشكلات المفتوحة ومزامنتها إلى تراكم المهام.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "خدمة جيتهاب: حدث خطأ أثناء تحميل البيانات. هل أسم الريبوزيتوري الخاص بك صحيح؟",
+    "ERR_UNKNOWN": "جيثب: خطأ غير معروف {{statusCode}} {{errorMsg}}"
+  }
+}

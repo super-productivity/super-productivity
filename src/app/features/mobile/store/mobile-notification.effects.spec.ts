@@ -5,6 +5,7 @@ import { MobileNotificationEffects } from './mobile-notification.effects';
 import { SnackService } from '../../../core/snack/snack.service';
 import { CapacitorReminderService } from '../../../core/platform/capacitor-reminder.service';
 import { CapacitorPlatformService } from '../../../core/platform/capacitor-platform.service';
+import { GlobalConfigService } from '../../config/global-config.service';
 
 describe('MobileNotificationEffects', () => {
   let effects: MobileNotificationEffects;
@@ -36,9 +37,16 @@ describe('MobileNotificationEffects', () => {
               'ensurePermissions',
               'scheduleReminder',
               'cancelReminder',
+              'checkExactAlarmPermission',
             ]),
           },
           { provide: CapacitorPlatformService, useValue: platformService },
+          {
+            provide: GlobalConfigService,
+            useValue: jasmine.createSpyObj('GlobalConfigService', [], {
+              cfg$: { subscribe: () => {} },
+            }),
+          },
         ],
       });
 
@@ -55,6 +63,10 @@ describe('MobileNotificationEffects', () => {
 
     it('should have scheduleNotifications$ as false on non-native', () => {
       expect(effects.scheduleNotifications$).toBe(false);
+    });
+
+    it('should have scheduleDueDateNotifications$ as false on non-native', () => {
+      expect(effects.scheduleDueDateNotifications$).toBe(false);
     });
   });
 });
