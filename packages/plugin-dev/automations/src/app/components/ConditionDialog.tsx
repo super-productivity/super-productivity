@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show } from 'solid-js';
 import { Condition, ConditionType } from '../../types';
 import { Dialog } from './Dialog';
 
@@ -7,8 +7,8 @@ interface ConditionDialogProps {
   onClose: () => void;
   onSave: (condition: Condition) => void;
   initialCondition?: Condition;
-  projects?: any[];
-  tags?: any[];
+  projects?: { id: string; title: string }[];
+  tags?: { id: string; title: string }[];
   allowedTypes?: ConditionType[];
 }
 
@@ -34,7 +34,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
   const availableTypes = () =>
     props.allowedTypes ? allTypes.filter((t) => props.allowedTypes!.includes(t)) : allTypes;
 
-  const regexError = (): string => {
+  const regexError = createMemo((): string => {
     const currentCondition = condition();
     if (
       !supportsRegex(currentCondition.type) ||
@@ -50,7 +50,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
     } catch (error) {
       return error instanceof Error ? error.message : 'Invalid regular expression';
     }
-  };
+  });
 
   createEffect(() => {
     if (props.isOpen) {
@@ -158,11 +158,11 @@ export function ConditionDialog(props: ConditionDialogProps) {
                 </button>
               )}
             </div>
-            {regexError() && (
+            <Show when={regexError()}>
               <small class="field-error" role="alert">
                 Invalid regex: {regexError()}
               </small>
-            )}
+            </Show>
           </>
         )}
       </label>

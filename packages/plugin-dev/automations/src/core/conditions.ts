@@ -1,12 +1,21 @@
 import { Condition } from '../types';
 import { IAutomationCondition } from './definitions';
 
+const MAX_REGEX_PATTERN_LENGTH = 200;
+
 const matchesTitleWithRegex = (
   ctx: Parameters<IAutomationCondition['check']>[0],
   title: string,
   pattern: string,
   shouldMatchFromStart = false,
 ): boolean => {
+  if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
+    ctx.plugin.log.warn(
+      `[Automation] Regex pattern too long (${pattern.length} chars, max ${MAX_REGEX_PATTERN_LENGTH}). Skipping.`,
+    );
+    return false;
+  }
+
   try {
     const regex = new RegExp(pattern, 'i');
     if (!shouldMatchFromStart) {
@@ -40,15 +49,9 @@ export const ConditionTitleStartsWith: IAutomationCondition = {
   name: 'Title starts with',
   check: async (ctx, event, value, condition) => {
     if (!event.task || !value) return false;
-    const matches = isRegexCondition(condition)
+    return isRegexCondition(condition)
       ? matchesTitleWithRegex(ctx, event.task.title, value, true)
       : event.task.title.toLowerCase().startsWith(value.toLowerCase());
-    if (!matches) {
-      ctx.plugin.log.debug(
-        `[Automation] titleStartsWith condition failed: "${event.task.title}" does not start with "${value}"`,
-      );
-    }
-    return matches;
   },
 };
 

@@ -62,7 +62,7 @@ export const ActionMoveToProject: IAutomationAction = {
       return;
     }
     const projects = await ctx.dataCache.getProjects();
-    const project = projects.find((p) => p.title === value || p.id === value);
+    const project = projects.find((p) => p.id === value || p.title === value);
 
     if (!project) {
       ctx.plugin.log.warn(
@@ -76,9 +76,6 @@ export const ActionMoveToProject: IAutomationAction = {
       return;
     }
 
-    ctx.plugin.log.info(
-      `[Automation] Calling ctx.plugin.updateTask for task ${event.task.id} to project ${project.id}`,
-    );
     await ctx.plugin.updateTask(event.task.id, { projectId: project.id });
     ctx.plugin.log.info(`[Automation] Action: Moved task to project "${project.title}"`);
   },

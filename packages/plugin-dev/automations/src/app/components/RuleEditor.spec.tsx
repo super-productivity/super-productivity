@@ -53,7 +53,7 @@ describe('RuleEditor', () => {
     const selects = actionDialog!.querySelectorAll('select');
     const valueSelect = selects[1] as HTMLSelectElement | undefined;
     expect(valueSelect).toBeDefined();
-    expect(valueSelect?.querySelector('option[value="Project A"]')).not.toBeNull();
+    expect(valueSelect?.querySelector('option[value="p1"]')).not.toBeNull();
   });
 
   it('allows enabling regex for title conditions and persists it in the rule summary', () => {

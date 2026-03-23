@@ -7,7 +7,7 @@ interface ActionDialogProps {
   onClose: () => void;
   onSave: (action: Action) => void;
   initialAction?: Action;
-  projects?: any[];
+  projects?: { id: string; title: string }[];
   allowedTypes?: ActionType[];
 }
 
@@ -102,7 +102,7 @@ export function ActionDialog(props: ActionDialogProps) {
           >
             <option value="">Select Project</option>
             {props.projects.map((p) => (
-              <option value={p.title}>{p.title}</option>
+              <option value={p.id}>{p.title}</option>
             ))}
           </select>
         ) : (

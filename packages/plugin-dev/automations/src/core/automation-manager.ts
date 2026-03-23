@@ -161,22 +161,11 @@ export class AutomationManager {
           const isMatchingTrigger = triggerImpl.matches(event, rule.trigger.value);
 
           if (!isMatchingTrigger) {
-            // Only log if it was specifically a taskUpdated event to avoid noise for other event types
-            if (event.type === 'taskUpdated' && rule.trigger.type === 'taskUpdated') {
-              this.plugin.log.debug(
-                `[Automation] Rule "${rule.name}" trigger "${rule.trigger.type}" did NOT match event`,
-              );
-            }
             continue;
           }
 
           const matches = await this.conditionEvaluator.allConditionsMatch(rule.conditions, event);
           if (!matches) {
-            if (event.type === 'taskUpdated' || event.type === 'taskCreated') {
-              this.plugin.log.info(
-                `[Automation] Rule "${rule.name}" matched trigger but conditions did NOT match`,
-              );
-            }
             continue;
           }
 

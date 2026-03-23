@@ -11,7 +11,7 @@ export interface TaskEvent {
   type: AutomationTriggerType;
   task?: Task;
   previousTaskState?: unknown; // only used for "updated"
-  changes?: any;
+  changes?: Record<string, unknown>;
 }
 
 export type ConditionType =

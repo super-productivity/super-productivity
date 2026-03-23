@@ -36,6 +36,7 @@ import { ProjectService } from '../features/project/project.service';
 import { TagService } from '../features/tag/tag.service';
 import typia from 'typia';
 import { first, map, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { selectTaskByIdWithSubTaskData } from '../features/tasks/store/task.selectors';
 import { PluginUserPersistenceService } from './plugin-user-persistence.service';
 import { PluginConfigService } from './plugin-config.service';
@@ -449,7 +450,6 @@ export class PluginBridgeService implements OnDestroy {
       updates.parentId,
     );
 
-    const { firstValueFrom } = await import('rxjs');
     const { projectId, ...otherUpdates } = updates;
 
     if (projectId !== undefined) {

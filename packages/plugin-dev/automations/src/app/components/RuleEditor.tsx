@@ -7,8 +7,8 @@ import { ActionDialog } from './ActionDialog';
 interface RuleEditorProps {
   isOpen: boolean;
   rule: AutomationRule;
-  projects?: any[];
-  tags?: any[];
+  projects?: { id: string; title: string }[];
+  tags?: { id: string; title: string }[];
   onSave: (rule: AutomationRule) => void;
   onDelete: (rule: AutomationRule) => void;
   onCancel: () => void;
