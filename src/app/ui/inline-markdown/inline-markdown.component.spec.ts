@@ -102,7 +102,7 @@ describe('InlineMarkdownComponent', () => {
       expect(mockTextareaEl.nativeElement.setSelectionRange).toHaveBeenCalledWith(7, 7);
     });
 
-    it('should insert _ at cursor and pace cursor between pairs of _ when pressing Ctrl + I with no selection', () => {
+    it('should insert _ at cursor and place cursor between pairs of _ when pressing Ctrl + I with no selection', () => {
       mockTextareaEl.nativeElement.selectionStart = 5;
       mockTextareaEl.nativeElement.selectionEnd = 5;
       const ev = new KeyboardEvent('keydown', { key: 'i', ctrlKey: true });
