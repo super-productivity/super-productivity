@@ -194,6 +194,12 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if (ev.type !== 'keydown') {
       return;
     }
+    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'i')) {
+      ev.preventDefault();
+      const marker = ev.key === 'b' ? '**' : '_';
+      this._wrapSelectionWithMarker(marker);
+      return;
+    }
     const result = handleListKeydown(
       textarea.value,
       textarea.selectionStart,
@@ -210,12 +216,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       this.modelCopy.set(result.text);
       this.resizeTextareaToFit();
       this.changed.emit(result.text);
-    }
-    if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'b' || ev.key === 'i')) {
-      ev.preventDefault();
-      const marker = ev.key === 'b' ? '**' : '_';
-      this._wrapSelectionWithMarker(marker);
-      return;
     }
   }
 
