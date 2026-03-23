@@ -529,7 +529,10 @@ export class IssueService {
       }
 
       const result: Partial<TaskCopy> = {};
-      if (defaultNote) {
+      if (
+        defaultNote &&
+        !(additionalFromProviderIssueService as Partial<TaskCopy>).notes
+      ) {
         result.notes = defaultNote;
       }
 
