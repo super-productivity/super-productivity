@@ -21,8 +21,10 @@ const URL_REGEX = /(?:(?:https?|file):\/\/\S{1,2000}(?=\s|$)|www\.\S{1,2000}(?=\
 // Markdown link regex: [title](url)
 // The URL group allows one level of balanced parentheses so that links like
 // https://en.wikipedia.org/wiki/C_(programming_language) are captured whole.
-// The first alternative uses [^()]+ (not *) to prevent catastrophic backtracking.
-const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(((?:[^()]+|\([^()]*\))*)\)/g;
+// Uses an "unrolled loop" to prevent catastrophic backtracking: [^()]* greedily
+// consumes non-parens, then each iteration of the outer * MUST start with a
+// literal '(' — so there's only one way to partition the input.
+const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
 // Pre-compiled regexes and lookup tables — avoids per-call overhead.
 const HTML_ESCAPE_RE = /[&<>"']/g;
