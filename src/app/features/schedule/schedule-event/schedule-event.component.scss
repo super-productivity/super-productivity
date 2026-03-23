@@ -323,9 +323,12 @@
   }
 
   // Override inherited pointer-events: none from :host > * so links are clickable.
+  // position: relative + z-index: 4 lifts links above the ::before overlay (z-index: 3).
   a {
     pointer-events: auto;
     cursor: pointer;
+    position: relative;
+    z-index: 4;
   }
 }
 
