@@ -125,7 +125,7 @@ jobs:
       # Release to edge if no tag and to candidate if tag
       - #otherwise it would be executed twice
         if: false == startsWith(github.ref, 'refs/tags/v')
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
           max_attempts: 2
           timeout_minutes: 11
