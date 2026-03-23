@@ -487,7 +487,6 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
 
     // Persist changes
     this.modelCopy.set(newValue);
-    this._model = newValue;
     this.changed.emit(newValue);
     this.resizeTextareaToFit();
   }
