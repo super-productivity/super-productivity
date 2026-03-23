@@ -31,6 +31,8 @@ import { DateAdapter } from '@angular/material/core';
 import { lsGetJSON, lsSetJSON } from '../../util/ls-util';
 import { LS } from '../../core/persistence/storage-keys.const';
 import { LanguageService } from 'src/app/core/language/language.service';
+import { TranslateService } from '@ngx-translate/core';
+import { T } from '../../t.const';
 
 @Injectable({ providedIn: 'root' })
 export class TaskViewCustomizerService {
@@ -40,6 +42,7 @@ export class TaskViewCustomizerService {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _languageService = inject(LanguageService);
+  private _translateService = inject(TranslateService);
   private _collator: Intl.Collator | null = null;
   private _collatorLocale: string | null = null;
 
@@ -325,7 +328,11 @@ export class TaskViewCustomizerService {
         } else if (groupType === GROUP_OPTION_TYPE.deadline) {
           const key =
             task.deadlineDay ||
-            (task.deadlineWithTime ? getDbDateStr(task.deadlineWithTime) : 'No deadline');
+            (task.deadlineWithTime
+              ? getDbDateStr(task.deadlineWithTime)
+              : this._translateService.instant(
+                  T.F.TASK_VIEW.CUSTOMIZER.GROUP_DEADLINE_NONE,
+                ));
           acc[key] = acc[key] || [];
           acc[key].push(task);
         }

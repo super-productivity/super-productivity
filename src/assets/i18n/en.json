@@ -1712,6 +1712,7 @@
         "FILTER_TIME_SPENT": "Time Spent",
         "GROUP_BY": "Group By",
         "GROUP_DEADLINE": "Deadline",
+        "GROUP_DEADLINE_NONE": "No deadline",
         "GROUP_DEFAULT": "No Group",
         "GROUP_PROJECT": "Project",
         "GROUP_SCHEDULED_DATE": "Scheduled Date",
