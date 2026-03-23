@@ -13,10 +13,10 @@ const WS_DOWNLOAD_DEBOUNCE_MS = 500;
 /**
  * Triggers operation downloads when WebSocket notifications arrive.
  *
- * Pipeline: newOpsNotification$ → filter(!syncInProgress) → debounce(500ms) → exhaustMap(download)
+ * Pipeline: newOpsNotification$ → debounce(500ms) → filter(!syncInProgress) → exhaustMap(download)
  *
  * Uses exhaustMap to ignore new notifications while a download is in progress.
- * The existing OperationLogDownloadService handles the actual download - no new code path.
+ * Reuses the existing OperationLogSyncService.downloadRemoteOps() code path.
  */
 @Injectable({
   providedIn: 'root',
@@ -36,8 +36,8 @@ export class WsTriggeredDownloadService implements OnDestroy {
 
     this._subscription = this._wsService.newOpsNotification$
       .pipe(
-        filter(() => !this._providerManager.isSyncInProgress),
         debounceTime(WS_DOWNLOAD_DEBOUNCE_MS),
+        filter(() => !this._providerManager.isSyncInProgress),
         exhaustMap((notification) => this._downloadOps(notification.latestSeq)),
       )
       .subscribe();
@@ -56,6 +56,11 @@ export class WsTriggeredDownloadService implements OnDestroy {
   }
 
   private async _downloadOps(latestSeq: number): Promise<void> {
+    if (this._providerManager.isSyncInProgress) {
+      SyncLog.log('WsTriggeredDownloadService: Sync in progress, skipping WS download');
+      return;
+    }
+
     try {
       const rawProvider = this._providerManager.getActiveProvider();
       if (!rawProvider) {
