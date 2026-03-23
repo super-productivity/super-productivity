@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ConditionTitleContains,
   ConditionTitleStartsWith,
   ConditionProjectIs,
   ConditionHasTag,
+  ConditionWeekdayIs,
 } from './conditions';
 import { AutomationContext } from './definitions';
 import { Condition, TaskEvent } from '../types';
@@ -95,6 +96,29 @@ describe('Conditions', () => {
         ),
       ).toBe(false);
       expect(mockPlugin.log.warn).toHaveBeenCalled();
+    });
+
+    it('should reject regex patterns exceeding max length', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      const longPattern = 'a'.repeat(201);
+      const condition: Condition = { type: 'titleContains', value: longPattern, isRegex: true };
+      expect(
+        await ConditionTitleContains.check(mockContext, event, longPattern, condition),
+      ).toBe(false);
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Regex pattern too long'),
+      );
+    });
+
+    it('should reject regex patterns with nested quantifiers', async () => {
+      const event = { task: { title: 'aaaaaaaaaaX' } } as unknown as TaskEvent;
+      const condition: Condition = { type: 'titleContains', value: '(a+)+$', isRegex: true };
+      expect(
+        await ConditionTitleContains.check(mockContext, event, '(a+)+$', condition),
+      ).toBe(false);
+      expect(mockPlugin.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('nested quantifiers'),
+      );
     });
   });
 
@@ -199,6 +223,55 @@ describe('Conditions', () => {
       } as unknown as TaskEvent;
 
       expect(await ConditionHasTag.check(mockContext, event, 'Urgent')).toBe(false);
+    });
+  });
+
+  describe('ConditionWeekdayIs', () => {
+    beforeEach(() => {
+      // Set to Wednesday, 2026-03-25
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2026, 2, 25, 12, 0, 0));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should return true when current day matches full name', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'Wednesday')).toBe(true);
+    });
+
+    it('should return true when current day matches 3-letter abbreviation', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'Wed')).toBe(true);
+    });
+
+    it('should return false when day does not match', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'Monday')).toBe(false);
+    });
+
+    it('should support comma-separated days', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'Mon,Wed,Fri')).toBe(true);
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'Mon,Tue,Fri')).toBe(false);
+    });
+
+    it('should be case insensitive', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'WEDNESDAY')).toBe(true);
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'wednesday')).toBe(true);
+    });
+
+    it('should reject short abbreviations (< 3 chars)', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, 'We')).toBe(false);
+    });
+
+    it('should return false for empty value', async () => {
+      const event = { task: { title: 'Test' } } as unknown as TaskEvent;
+      expect(await ConditionWeekdayIs.check(mockContext, event, '')).toBe(false);
     });
   });
 });

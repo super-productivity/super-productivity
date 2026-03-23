@@ -76,7 +76,11 @@ export function ActionDialog(props: ActionDialogProps) {
           <button class="btn-outline" onClick={props.onClose}>
             Cancel
           </button>
-          <button class="btn-primary" onClick={() => props.onSave(action())}>
+          <button
+            class="btn-primary"
+            disabled={action().type !== 'deleteTask' && !action().value.trim()}
+            onClick={() => props.onSave(action())}
+          >
             Save
           </button>
         </div>

@@ -186,6 +186,19 @@ describe('Actions', () => {
         expect.objectContaining({ htmlContent: '<p>Alert</p>' }),
       );
     });
+
+    it('should escape HTML special characters', async () => {
+      await ActionDisplayDialog.execute(
+        mockContext,
+        {} as TaskEvent,
+        '<script>alert("xss")</script>',
+      );
+      expect(mockPlugin.openDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          htmlContent: '<p>&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;</p>',
+        }),
+      );
+    });
   });
 
   describe('ActionWebhook', () => {
@@ -197,14 +210,34 @@ describe('Actions', () => {
       vi.restoreAllMocks();
     });
 
-    it('should send POST request to webhook url', async () => {
-      const event = { type: 'taskCompleted' } as TaskEvent;
+    it('should send POST request with sanitized task data', async () => {
+      const event = {
+        type: 'taskCompleted',
+        task: {
+          id: 't1',
+          title: 'Test',
+          projectId: 'p1',
+          isDone: true,
+          tagIds: ['tag1'],
+          notes: 'secret notes',
+          timeSpent: 12345,
+        },
+      } as unknown as TaskEvent;
       await ActionWebhook.execute(mockContext, event, 'http://example.com');
       expect(fetch).toHaveBeenCalledWith(
         'http://example.com',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(event),
+          body: JSON.stringify({
+            type: 'taskCompleted',
+            task: {
+              id: 't1',
+              title: 'Test',
+              projectId: 'p1',
+              isDone: true,
+              tagIds: ['tag1'],
+            },
+          }),
         }),
       );
     });

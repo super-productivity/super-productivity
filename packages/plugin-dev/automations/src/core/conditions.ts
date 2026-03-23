@@ -2,6 +2,7 @@ import { Condition } from '../types';
 import { IAutomationCondition } from './definitions';
 
 const MAX_REGEX_PATTERN_LENGTH = 200;
+const DANGEROUS_REGEX_PATTERN = /(\([^)]*[+*][^)]*\))[+*]/;
 
 const matchesTitleWithRegex = (
   ctx: Parameters<IAutomationCondition['check']>[0],
@@ -12,6 +13,13 @@ const matchesTitleWithRegex = (
   if (pattern.length > MAX_REGEX_PATTERN_LENGTH) {
     ctx.plugin.log.warn(
       `[Automation] Regex pattern too long (${pattern.length} chars, max ${MAX_REGEX_PATTERN_LENGTH}). Skipping.`,
+    );
+    return false;
+  }
+
+  if (DANGEROUS_REGEX_PATTERN.test(pattern)) {
+    ctx.plugin.log.warn(
+      `[Automation] Regex pattern rejected: contains nested quantifiers that may cause catastrophic backtracking.`,
     );
     return false;
   }
@@ -62,7 +70,7 @@ export const ConditionProjectIs: IAutomationCondition = {
     if (!event.task || !event.task.projectId || !value) return false;
     const projects = await ctx.dataCache.getProjects();
     const project = projects.find((p) => p.id === event.task?.projectId);
-    return project ? project.title === value : false;
+    return project ? project.id === value || project.title === value : false;
   },
 };
 
@@ -72,7 +80,7 @@ export const ConditionHasTag: IAutomationCondition = {
   check: async (ctx, event, value) => {
     if (!event.task || !event.task.tagIds || !value) return false;
     const tags = await ctx.dataCache.getTags();
-    const tag = tags.find((t) => t.title === value);
+    const tag = tags.find((t) => t.id === value || t.title === value);
     return tag ? event.task.tagIds.includes(tag.id) : false;
   },
 };

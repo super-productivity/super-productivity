@@ -113,7 +113,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
           >
             <option value="">Select Project</option>
             {props.projects.map((p) => (
-              <option value={p.title}>{p.title}</option>
+              <option value={p.id}>{p.title}</option>
             ))}
           </select>
         ) : condition().type === 'hasTag' && props.tags ? (
@@ -123,7 +123,7 @@ export function ConditionDialog(props: ConditionDialogProps) {
           >
             <option value="">Select Tag</option>
             {props.tags.map((t) => (
-              <option value={t.title}>{t.title}</option>
+              <option value={t.id}>{t.title}</option>
             ))}
           </select>
         ) : (
