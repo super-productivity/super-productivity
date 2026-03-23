@@ -521,7 +521,9 @@ export class IssueService {
         .getCfgOnce$(issueProviderId, issueProviderKey)
         .toPromise();
       const defaultProjectId = providerCfg.defaultProjectId;
-      const defaultTagIds = providerCfg.defaultTagIds || [];
+      const defaultTagIds = (providerCfg.defaultTagIds || []).filter(
+        (id) => id !== TODAY_TAG.id,
+      );
       const defaultNote = providerCfg.defaultNote;
 
       if (typeof this._workContextService.activeWorkContextId !== 'string') {
@@ -567,7 +569,6 @@ export class IssueService {
       // Default plan for today unless a precise time is provided by provider
       dueDay: getDbDateStr(),
       ...additionalFromProviderIssueService,
-      // NOTE: if we were to add tags, this could be overwritten here
       ...(await getTaskDefaults()),
       ...additional,
     };
