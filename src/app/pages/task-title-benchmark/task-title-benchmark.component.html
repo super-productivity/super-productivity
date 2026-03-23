@@ -20,14 +20,6 @@
         >
           {{ isRunning() ? 'Running...' : 'Run Benchmark' }}
         </button>
-
-        <button
-          mat-raised-button
-          (click)="toggleLinkRendering()"
-          [disabled]="isRunning()"
-        >
-          Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}
-        </button>
       </div>
 
       @if (isRunning()) {
@@ -41,8 +33,7 @@
 Initial Render Time: {{ results()!.renderTimeMs.toFixed(2) }} ms
 Average FPS (scrolling): {{ results()!.avgFps.toFixed(1) }}
 Min FPS: {{ results()!.minFps.toFixed(1) }}
-Max FPS: {{ results()!.maxFps.toFixed(1) }}
-Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}</pre
+Max FPS: {{ results()!.maxFps.toFixed(1) }}</pre
           >
           <button
             mat-raised-button
@@ -61,7 +52,6 @@ Link Rendering: {{ linkRenderingEnabled() ? 'ON' : 'OFF' }}</pre
         <task-title
           [value]="task.title"
           [readonly]="true"
-          [renderLinks]="linkRenderingEnabled()"
         ></task-title>
       </div>
     }

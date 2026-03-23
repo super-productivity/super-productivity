@@ -60,7 +60,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
     isEnableDue: true,
     isEnableTag: true,
     urlBehavior: 'keep',
-    isEnableLinkRendering: true,
   },
   evaluation: {
     isHideEvaluationSheet: false,

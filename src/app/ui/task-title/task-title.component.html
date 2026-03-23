@@ -9,7 +9,7 @@
     @if (hasContent && hasUrlsOrMarkdown()) {
       <span
         class="display-value"
-        [innerHTML]="tmpValue() | renderLinks: renderLinks()"
+        [innerHTML]="tmpValue() | renderLinks"
       ></span>
     } @else {
       <span

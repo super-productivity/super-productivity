@@ -8,7 +8,6 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { GlobalConfigService } from '../../config/global-config.service';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
@@ -74,12 +73,7 @@ export class ScheduleEventComponent {
   private _issueService = inject(IssueService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskService = inject(TaskService);
-  private _globalConfigService = inject(GlobalConfigService);
-
-  readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
-
   readonly titleHasLinks = computed(() => {
-    if (!this.isLinkRenderingEnabled()) return false;
     const t = this.title();
     return !!t && hasLinkHints(t);
   });

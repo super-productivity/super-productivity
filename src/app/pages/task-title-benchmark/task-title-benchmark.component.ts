@@ -27,7 +27,6 @@ export class TaskTitleBenchmarkComponent {
   readonly tasks = signal<BenchmarkTask[]>([]);
   readonly isRunning = signal(false);
   readonly results = signal<BenchmarkResult | null>(null);
-  readonly linkRenderingEnabled = signal(false);
 
   private readonly TASK_COUNT = 5000;
   private readonly TASKS_PER_TYPE = Math.floor(this.TASK_COUNT / 3);
@@ -178,10 +177,6 @@ export class TaskTitleBenchmarkComponent {
     });
   }
 
-  toggleLinkRendering(): void {
-    this.linkRenderingEnabled.set(!this.linkRenderingEnabled());
-  }
-
   getTasksByType(type: BenchmarkTask['type']): number {
     return this.tasks().filter((t) => t.type === type).length;
   }
@@ -196,7 +191,7 @@ export class TaskTitleBenchmarkComponent {
 Average FPS (scrolling): ${results.avgFps.toFixed(1)}
 Min FPS: ${results.minFps.toFixed(1)}
 Max FPS: ${results.maxFps.toFixed(1)}
-Link Rendering: ${this.linkRenderingEnabled() ? 'ON' : 'OFF'}`;
+Link Rendering: ON`;
 
     navigator.clipboard.writeText(text).then(
       () => {

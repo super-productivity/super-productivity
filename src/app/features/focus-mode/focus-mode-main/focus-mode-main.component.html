@@ -64,7 +64,6 @@
         @fade
         (valueEdited)="updateTaskTitleIfChanged($event.wasChanged, $event.newVal)"
         [value]="ct.title"
-        [renderLinks]="isLinkRenderingEnabled()"
         class="task-title"
       ></task-title>
     } @else {

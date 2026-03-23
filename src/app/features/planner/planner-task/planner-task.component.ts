@@ -12,7 +12,6 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { GlobalConfigService } from '../../config/global-config.service';
 import { TaskCopy } from '../../tasks/task.model';
 import { EMPTY, Observable } from 'rxjs';
 import { TaskService } from '../../tasks/task.service';
@@ -51,12 +50,7 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   private _taskService = inject(TaskService);
   private _cd = inject(ChangeDetectorRef);
   private _projectService = inject(ProjectService);
-  private _globalConfigService = inject(GlobalConfigService);
-
-  readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
-
   get titleHasLinks(): boolean {
-    if (!this.isLinkRenderingEnabled()) return false;
     const title = this.task?.title;
     return !!title && hasLinkHints(title);
   }

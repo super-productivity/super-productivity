@@ -38,7 +38,6 @@ export class TaskTitleComponent implements OnDestroy {
   T: typeof T = T;
 
   readonly readonly = input<boolean>(false); // When true, disables editing and only displays the value
-  readonly renderLinks = input<boolean>(true); // When true, renders URLs and markdown as clickable links
 
   // Reset value only if user is not currently editing (prevents overwriting edits during sync)
   @Input() set resetToLastExternalValueTrigger(value: unknown) {
@@ -74,9 +73,6 @@ export class TaskTitleComponent implements OnDestroy {
 
   /** Fast pre-check: does the title contain URL or markdown hints? */
   readonly hasUrlsOrMarkdown = computed<boolean>(() => {
-    if (!this.renderLinks()) {
-      return false;
-    }
     const text = this.tmpValue();
     return !!text && hasLinkHints(text);
   });

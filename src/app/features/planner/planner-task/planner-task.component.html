@@ -20,7 +20,7 @@
     @if (titleHasLinks) {
       <div
         class="title"
-        [innerHTML]="task.title | renderLinks: isLinkRenderingEnabled()"
+        [innerHTML]="task.title | renderLinks"
       ></div>
     } @else {
       <div class="title">{{ task.title }}</div>

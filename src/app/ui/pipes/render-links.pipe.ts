@@ -206,12 +206,9 @@ const _buildLinksHtml = (text: string): string => {
 export class RenderLinksPipe implements PipeTransform {
   private _sanitizer = inject(DomSanitizer);
 
-  transform(text: string, renderLinks: boolean = true): SafeHtml {
+  transform(text: string): SafeHtml {
     if (!text) {
       return '';
-    }
-    if (!renderLinks) {
-      return this._sanitizer.bypassSecurityTrustHtml(_escapeHtml(text));
     }
 
     // Fast pre-check: skip expensive regex for plain-text tasks
