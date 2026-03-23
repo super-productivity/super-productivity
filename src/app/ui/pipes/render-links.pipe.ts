@@ -6,6 +6,12 @@ export const LINK_HINT_PROTOCOL = '://';
 export const LINK_HINT_WWW = 'www.';
 export const LINK_HINT_MARKDOWN = '](';
 
+/** Check if text might contain URLs or markdown links (fast string check, no regex). */
+export const hasLinkHints = (text: string): boolean =>
+  text.includes(LINK_HINT_PROTOCOL) ||
+  text.includes(LINK_HINT_WWW) ||
+  text.includes(LINK_HINT_MARKDOWN);
+
 // URL regex matching URLs with protocol (http, https, file) or www prefix.
 // ftp://, ssh://, blob:, etc. are intentionally excluded — they are either
 // non-browsable or handled by _isUrlSchemeSafe's denylist for markdown links.
@@ -66,8 +72,8 @@ const _ariaLabelForUrl = (href: string): string => {
 
 /** Strip trailing punctuation and unmatched closing parentheses from a URL. */
 const _stripUrlTrailing = (raw: string): string => {
-  let url = raw.replace(TRAILING_PUNCT_RE, '');
-  // Count parens with a loop instead of creating match arrays.
+  const url = raw.replace(TRAILING_PUNCT_RE, '');
+  // Count parens then strip excess trailing ')' in a single slice.
   let opens = 0;
   let closes = 0;
   for (let i = 0; i < url.length; i++) {
@@ -75,11 +81,12 @@ const _stripUrlTrailing = (raw: string): string => {
     if (c === 40) opens++;
     else if (c === 41) closes++;
   }
-  while (url.endsWith(')') && closes > opens) {
-    url = url.slice(0, -1);
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 41 && closes > opens) {
+    end--;
     closes--;
   }
-  return url;
+  return end < url.length ? url.substring(0, end) : url;
 };
 
 const _isUrlSchemeSafe = (url: string): boolean => {
@@ -205,9 +212,7 @@ export class RenderLinksPipe implements PipeTransform {
     }
 
     // Fast pre-check: skip expensive regex for plain-text tasks
-    const hasUrlHint = text.includes(LINK_HINT_PROTOCOL) || text.includes(LINK_HINT_WWW);
-    const hasMarkdownHint = text.includes(LINK_HINT_MARKDOWN);
-    if (!hasUrlHint && !hasMarkdownHint) {
+    if (!hasLinkHints(text)) {
       return this._sanitizer.bypassSecurityTrustHtml(_escapeHtml(text));
     }
 

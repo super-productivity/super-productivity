@@ -74,7 +74,11 @@
     ...
     <!-- -->
   } @else {
-    <span [innerHTML]="title() | renderLinks: isLinkRenderingEnabled()"></span>
+    @if (titleHasLinks()) {
+      <span [innerHTML]="title() | renderLinks: isLinkRenderingEnabled()"></span>
+    } @else {
+      {{ title() }}
+    }
   }
 </div>
 

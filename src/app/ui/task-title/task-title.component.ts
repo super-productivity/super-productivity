@@ -15,12 +15,7 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
-import {
-  LINK_HINT_MARKDOWN,
-  LINK_HINT_PROTOCOL,
-  LINK_HINT_WWW,
-  RenderLinksPipe,
-} from '../pipes/render-links.pipe';
+import { hasLinkHints, RenderLinksPipe } from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
@@ -77,23 +72,13 @@ export class TaskTitleComponent implements OnDestroy {
   readonly tmpValue = signal(''); // Current editing value
   readonly textarea = viewChild<ElementRef<HTMLTextAreaElement>>('textAreaElement');
 
-  /**
-   * Fast pre-check: does the title contain URL or markdown hints?
-   * Uses shared constants from RenderLinksPipe to stay in sync.
-   */
+  /** Fast pre-check: does the title contain URL or markdown hints? */
   readonly hasUrlsOrMarkdown = computed<boolean>(() => {
     if (!this.renderLinks()) {
       return false;
     }
     const text = this.tmpValue();
-    if (!text) {
-      return false;
-    }
-    return (
-      text.includes(LINK_HINT_PROTOCOL) ||
-      text.includes(LINK_HINT_WWW) ||
-      text.includes(LINK_HINT_MARKDOWN)
-    );
+    return !!text && hasLinkHints(text);
   });
 
   readonly valueEdited = output<{

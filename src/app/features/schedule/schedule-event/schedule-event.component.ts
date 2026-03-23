@@ -9,7 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { GlobalConfigService } from '../../config/global-config.service';
-import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
+import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
 import { MatIcon } from '@angular/material/icon';
@@ -77,6 +77,12 @@ export class ScheduleEventComponent {
   private _globalConfigService = inject(GlobalConfigService);
 
   readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
+
+  readonly titleHasLinks = computed(() => {
+    if (!this.isLinkRenderingEnabled()) return false;
+    const t = this.title();
+    return !!t && hasLinkHints(t);
+  });
 
   readonly T: typeof T = T;
   readonly isDragPreview = input<boolean>(false);
