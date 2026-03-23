@@ -1,6 +1,11 @@
 import { inject, Pipe, PipeTransform } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
+/** Hint substrings used for fast pre-checks to skip regex when no URLs/markdown are present. */
+export const LINK_HINT_PROTOCOL = '://';
+export const LINK_HINT_WWW = 'www.';
+export const LINK_HINT_MARKDOWN = '](';
+
 // URL regex matching URLs with protocol (http, https, file) or www prefix.
 // ftp://, ssh://, blob:, etc. are intentionally excluded — they are either
 // non-browsable or handled by _isUrlSchemeSafe's denylist for markdown links.
@@ -10,7 +15,8 @@ const URL_REGEX = /(?:(?:https?|file):\/\/\S{1,2000}(?=\s|$)|www\.\S{1,2000}(?=\
 // Markdown link regex: [title](url)
 // The URL group allows one level of balanced parentheses so that links like
 // https://en.wikipedia.org/wiki/C_(programming_language) are captured whole.
-const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(((?:[^()]*|\([^()]*\))*)\)/g;
+// The first alternative uses [^()]+ (not *) to prevent catastrophic backtracking.
+const MARKDOWN_LINK_REGEX = /\[([^\]]+)\]\(((?:[^()]+|\([^()]*\))*)\)/g;
 
 /**
  * Pipe that renders URLs and markdown links as clickable <a> tags.
@@ -35,8 +41,8 @@ export class RenderLinksPipe implements PipeTransform {
     }
 
     // Fast pre-check: skip expensive regex for plain-text tasks
-    const hasUrlHint = text.includes('://') || text.includes('www.');
-    const hasMarkdownHint = text.includes('](');
+    const hasUrlHint = text.includes(LINK_HINT_PROTOCOL) || text.includes(LINK_HINT_WWW);
+    const hasMarkdownHint = text.includes(LINK_HINT_MARKDOWN);
     if (!hasUrlHint && !hasMarkdownHint) {
       return this._sanitizer.bypassSecurityTrustHtml(this._escapeHtml(text));
     }
@@ -159,15 +165,12 @@ export class RenderLinksPipe implements PipeTransform {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private _isUrlSchemeSafe(url: string): boolean {
     const lowerUrl = url.trim().toLowerCase();
-    const dangerousSchemes = ['javascript:', 'data:', 'vbscript:'];
-    if (dangerousSchemes.some((scheme) => lowerUrl.startsWith(scheme))) {
-      return false;
-    }
     if (
       lowerUrl.startsWith('http://') ||
       lowerUrl.startsWith('https://') ||
@@ -176,10 +179,13 @@ export class RenderLinksPipe implements PipeTransform {
     ) {
       return true;
     }
-    if (!lowerUrl.includes('://')) {
-      return true;
+    // Reject any URL that looks like it has a scheme (letters followed by colon).
+    // This catches javascript:, data:, vbscript:, tel:, mailto:, ftp://, ssh://, etc.
+    // Does NOT match host:port (e.g. www.example.com:8080) because dots precede the colon.
+    if (/^[a-z]+:/i.test(lowerUrl)) {
+      return false;
     }
-    return false;
+    return true;
   }
 
   private _normalizeHref(url: string): string {

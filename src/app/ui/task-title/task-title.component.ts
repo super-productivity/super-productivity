@@ -15,7 +15,12 @@ import { T } from 'src/app/t.const';
 import { TranslateModule } from '@ngx-translate/core';
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { Log } from '../../core/log';
-import { RenderLinksPipe } from '../pipes/render-links.pipe';
+import {
+  LINK_HINT_MARKDOWN,
+  LINK_HINT_PROTOCOL,
+  LINK_HINT_WWW,
+  RenderLinksPipe,
+} from '../pipes/render-links.pipe';
 
 /**
  * Inline-editable text field for task titles.
@@ -74,23 +79,21 @@ export class TaskTitleComponent implements OnDestroy {
 
   /**
    * Fast pre-check: does the title contain URL or markdown hints?
-   * Used to choose between innerHTML (pipe handles link rendering) and plain text interpolation.
-   * False positives (e.g. text with "://" but no valid URL) are handled gracefully by the pipe.
-   *
-   * NOTE: The hint strings ('://', 'www.', '](') intentionally mirror the pre-check inside
-   * RenderLinksPipe.transform(). This duplication is deliberate: it avoids calling the pipe
-   * at all for plain-text tasks (the common case). If the pipe's pre-check hints ever change,
-   * update this computed signal to match.
+   * Uses shared constants from RenderLinksPipe to stay in sync.
    */
   readonly hasUrlsOrMarkdown = computed<boolean>(() => {
     if (!this.renderLinks()) {
-      return false; // ~0 cost when disabled
+      return false;
     }
     const text = this.tmpValue();
     if (!text) {
       return false;
     }
-    return text.includes('://') || text.includes('www.') || text.includes('](');
+    return (
+      text.includes(LINK_HINT_PROTOCOL) ||
+      text.includes(LINK_HINT_WWW) ||
+      text.includes(LINK_HINT_MARKDOWN)
+    );
   });
 
   readonly valueEdited = output<{

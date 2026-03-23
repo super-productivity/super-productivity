@@ -42,10 +42,14 @@
       <div class="parent-title">{{ parentTitle }}</div>
     }
 
-    <div
-      class="title"
-      [innerHTML]="task.title | renderLinks: isLinkRenderingEnabled()"
-    ></div>
+    @if (titleHasLinks) {
+      <div
+        class="title"
+        [innerHTML]="task.title | renderLinks: isLinkRenderingEnabled()"
+      ></div>
+    } @else {
+      <div class="title">{{ task.title }}</div>
+    }
 
     <tag-list
       [isShowProjectTagAlways]="true"

@@ -60,6 +60,14 @@ describe('RenderLinksPipe', () => {
       expect(result).toContain('&amp;');
     });
 
+    it('should escape single quotes to prevent attribute injection', () => {
+      const result = html(
+        pipe.transform("Task with 'quotes' and https://example.com", true),
+      );
+      expect(result).not.toContain("'quotes'");
+      expect(result).toContain('&#39;quotes&#39;');
+    });
+
     it('should return plain text (no anchor tags) when no URLs are present', () => {
       const result = html(pipe.transform('Just plain text task', true));
       expect(result).not.toContain('<a ');
@@ -226,6 +234,20 @@ describe('RenderLinksPipe', () => {
       const result = html(pipe.transform('[SSH](ssh://server.example.com)', true));
       expect(result).toContain('SSH');
       expect(result).not.toContain('<a ');
+    });
+
+    it('should reject tel: URLs in markdown links', () => {
+      const result = html(pipe.transform('[Call us](tel:+1234567890)', true));
+      expect(result).toContain('Call us');
+      expect(result).not.toContain('<a ');
+      expect(result).not.toContain('href=');
+    });
+
+    it('should reject mailto: URLs in markdown links', () => {
+      const result = html(pipe.transform('[Email](mailto:user@example.com)', true));
+      expect(result).toContain('Email');
+      expect(result).not.toContain('<a ');
+      expect(result).not.toContain('href=');
     });
   });
 

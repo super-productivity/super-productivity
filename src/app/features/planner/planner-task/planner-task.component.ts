@@ -30,7 +30,12 @@ import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
 import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { Log } from '../../../core/log';
-import { RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
+import {
+  LINK_HINT_MARKDOWN,
+  LINK_HINT_PROTOCOL,
+  LINK_HINT_WWW,
+  RenderLinksPipe,
+} from '../../../ui/pipes/render-links.pipe';
 
 @Component({
   selector: 'planner-task',
@@ -57,6 +62,17 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   private _globalConfigService = inject(GlobalConfigService);
 
   readonly isLinkRenderingEnabled = this._globalConfigService.isLinkRenderingEnabled;
+
+  get titleHasLinks(): boolean {
+    if (!this.isLinkRenderingEnabled()) return false;
+    const title = this.task?.title;
+    if (!title) return false;
+    return (
+      title.includes(LINK_HINT_PROTOCOL) ||
+      title.includes(LINK_HINT_WWW) ||
+      title.includes(LINK_HINT_MARKDOWN)
+    );
+  }
 
   // TODO: Skipped for migration because:
   //  This input is used in a control flow expression (e.g. `@if` or `*ngIf`)
