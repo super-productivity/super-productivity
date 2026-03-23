@@ -211,9 +211,7 @@ describe('SuperSyncProvider', () => {
       expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
     });
 
-    it('should call privateCfg.load for each server seq operation (relies on SyncCredentialStore caching)', async () => {
-      // Note: We removed redundant caching in SuperSyncProvider since SyncCredentialStore
-      // already has its own in-memory caching.
+    it('should call privateCfg.load only once for server seq operations (result is cached)', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
       localStorageSpy.getItem.and.returnValue('10');
 
@@ -222,40 +220,8 @@ describe('SuperSyncProvider', () => {
       await provider.getLastServerSeq();
       await provider.getLastServerSeq();
 
-      // privateCfg.load is called for each operation, but SyncCredentialStore caches internally
-      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(3);
-    });
-  });
-
-  describe('file operations (not supported)', () => {
-    it('should throw error for getFileRev', async () => {
-      await expectAsync(provider.getFileRev('/path', null)).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
-    });
-
-    it('should throw error for downloadFile', async () => {
-      await expectAsync(provider.downloadFile('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
-    });
-
-    it('should throw error for uploadFile', async () => {
-      await expectAsync(provider.uploadFile('/path', 'data', null)).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
-    });
-
-    it('should throw error for removeFile', async () => {
-      await expectAsync(provider.removeFile('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
-    });
-
-    it('should throw error for listFiles', async () => {
-      await expectAsync(provider.listFiles('/path')).toBeRejectedWithError(
-        'SuperSync uses operation-based sync only. File operations not supported.',
-      );
+      // privateCfg.load is called only once because _getServerSeqKey caches the result
+      expect(mockPrivateCfgStore.load).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -948,6 +948,31 @@ describe('WebdavApi', () => {
         lastModified: 'Wed, 15 Jan 2025 15:00:00 GMT',
       });
     });
+
+    it('should throw InvalidDataSPError when upload data is empty string', async () => {
+      await expectAsync(
+        api.upload({
+          path: '/sync/sync-data.json',
+          data: '',
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
+
+      // Should NOT have made any HTTP request
+      expect(mockHttpAdapter.request).not.toHaveBeenCalled();
+    });
+
+    it('should throw InvalidDataSPError when upload data is whitespace only', async () => {
+      await expectAsync(
+        api.upload({
+          path: '/sync/sync-data.json',
+          data: '   ',
+          expectedRev: null,
+        }),
+      ).toBeRejectedWith(jasmine.any(InvalidDataSPError));
+
+      expect(mockHttpAdapter.request).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {

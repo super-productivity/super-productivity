@@ -747,7 +747,55 @@ describe('OperationLogUploadService', () => {
         expect(result.rejectedCount).toBe(0);
       });
 
-      it('should mark regular ops as synced when full-state op is uploaded', async () => {
+      it('should mark regular ops as synced when full-state op is uploaded (ops before snapshot)', async () => {
+        // Regular op id 'op-0' sorts BEFORE full-state op id 'op-1',
+        // meaning the regular op was created before the snapshot and is included in it.
+        const regularEntry = createMockEntry(1, 'op-0', 'client-1');
+        const fullStateEntry = createFullStateEntry(
+          2,
+          'op-1',
+          'client-1',
+          OpType.BackupImport,
+        );
+        mockOpLogStore.getUnsynced.and.returnValue(
+          Promise.resolve([regularEntry, fullStateEntry]),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        // Full-state op goes via snapshot
+        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
+        // Regular ops created BEFORE snapshot are marked as synced (already included)
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(2);
+        // markSynced called for full-state op (seq 2) and regular ops before snapshot (seq 1)
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+      });
+
+      it('should mark regular ops as synced when Repair op is uploaded (ops before snapshot)', async () => {
+        // Regular op id 'op-0' sorts BEFORE full-state op id 'op-1'
+        const regularEntry = createMockEntry(1, 'op-0', 'client-1');
+        const fullStateEntry = createFullStateEntry(2, 'op-1', 'client-1', OpType.Repair);
+        mockOpLogStore.getUnsynced.and.returnValue(
+          Promise.resolve([regularEntry, fullStateEntry]),
+        );
+
+        const result = await service.uploadPendingOps(mockApiProvider);
+
+        // Full-state op goes via snapshot
+        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
+        // Regular ops created BEFORE snapshot are marked as synced (already included)
+        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        expect(result.uploadedCount).toBe(2);
+        // markSynced called for full-state op (seq 2) and regular ops before snapshot (seq 1)
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
+        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
+      });
+
+      it('should upload regular ops created AFTER full-state snapshot', async () => {
+        // Full-state op id 'op-1' sorts BEFORE regular op id 'op-2',
+        // meaning the regular op was created AFTER the snapshot and is NOT included in it.
         const fullStateEntry = createFullStateEntry(
           1,
           'op-1',
@@ -758,34 +806,22 @@ describe('OperationLogUploadService', () => {
         mockOpLogStore.getUnsynced.and.returnValue(
           Promise.resolve([fullStateEntry, regularEntry]),
         );
-
-        const result = await service.uploadPendingOps(mockApiProvider);
-
-        // Full-state op goes via snapshot
-        expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
-        // Regular ops are marked as synced (already included in full-state snapshot)
-        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
-        expect(result.uploadedCount).toBe(2);
-        // markSynced called for full-state op (seq 1) and regular ops (seq 2)
-        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
-        expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
-      });
-
-      it('should mark regular ops as synced when Repair op is uploaded', async () => {
-        const fullStateEntry = createFullStateEntry(1, 'op-1', 'client-1', OpType.Repair);
-        const regularEntry = createMockEntry(2, 'op-2', 'client-1');
-        mockOpLogStore.getUnsynced.and.returnValue(
-          Promise.resolve([fullStateEntry, regularEntry]),
+        mockApiProvider.uploadOps.and.returnValue(
+          Promise.resolve({
+            results: [{ opId: 'op-2', accepted: true }],
+            latestSeq: 2,
+            newOps: [],
+          }),
         );
 
         const result = await service.uploadPendingOps(mockApiProvider);
 
         // Full-state op goes via snapshot
         expect(mockApiProvider.uploadSnapshot).toHaveBeenCalled();
-        // Regular ops are marked as synced (already included in full-state snapshot)
-        expect(mockApiProvider.uploadOps).not.toHaveBeenCalled();
+        // Regular op created AFTER snapshot must be uploaded separately
+        expect(mockApiProvider.uploadOps).toHaveBeenCalled();
         expect(result.uploadedCount).toBe(2);
-        // markSynced called for full-state op (seq 1) and regular ops (seq 2)
+        // markSynced called for full-state op (seq 1) only; regular op synced via upload
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([1]);
         expect(mockOpLogStore.markSynced).toHaveBeenCalledWith([2]);
       });

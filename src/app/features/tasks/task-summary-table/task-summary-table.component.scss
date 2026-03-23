@@ -90,7 +90,7 @@
 
 .repeat-task-icon {
   vertical-align: middle;
-  margin-right: 4px;
+  margin-right: var(--s-half);
   transform: rotate(45deg);
   opacity: 0.7;
 }
@@ -122,6 +122,27 @@
     flex-grow: 1;
     text-align: start;
     display: block;
+  }
+
+  .view-details-btn {
+    flex-shrink: 0;
+    opacity: 0.4;
+
+    :host-context(.isMousePrimary) & {
+      opacity: 0;
+    }
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  :host-context(.isMousePrimary) &:hover .view-details-btn {
+    opacity: 0.4;
+
+    &:hover {
+      opacity: 1;
+    }
   }
 
   ::ng-deep .inline-input-wrapper {

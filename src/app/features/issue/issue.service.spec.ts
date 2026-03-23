@@ -19,7 +19,6 @@ import { TODAY_TAG } from '../tag/tag.const';
 import { ICalIssueReduced } from './providers/calendar/calendar.model';
 import { SnackParams } from '../../core/snack/snack.model';
 import { JiraCommonInterfacesService } from './providers/jira/jira-common-interfaces.service';
-import { GithubCommonInterfacesService } from './providers/github/github-common-interfaces.service';
 import { TrelloCommonInterfacesService } from './providers/trello/trello-common-interfaces.service';
 import { GitlabCommonInterfacesService } from './providers/gitlab/gitlab-common-interfaces.service';
 import { CaldavCommonInterfacesService } from './providers/caldav/caldav-common-interfaces.service';
@@ -27,7 +26,6 @@ import { OpenProjectCommonInterfacesService } from './providers/open-project/ope
 import { GiteaCommonInterfacesService } from './providers/gitea/gitea-common-interfaces.service';
 import { RedmineCommonInterfacesService } from './providers/redmine/redmine-common-interfaces.service';
 import { LinearCommonInterfacesService } from './providers/linear/linear-common-interfaces.service';
-import { ClickUpCommonInterfacesService } from './providers/clickup/clickup-common-interfaces.service';
 import { CalendarCommonInterfacesService } from './providers/calendar/calendar-common-interfaces.service';
 
 describe('IssueService', () => {
@@ -139,7 +137,6 @@ describe('IssueService', () => {
         { provide: GlobalProgressBarService, useValue: globalProgressBarServiceSpy },
         { provide: NavigateToTaskService, useValue: navigateToTaskServiceSpy },
         { provide: JiraCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: GithubCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: TrelloCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: GitlabCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: CaldavCommonInterfacesService, useValue: mockCommonInterfaceService },
@@ -150,7 +147,6 @@ describe('IssueService', () => {
         { provide: GiteaCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: RedmineCommonInterfacesService, useValue: mockCommonInterfaceService },
         { provide: LinearCommonInterfacesService, useValue: mockCommonInterfaceService },
-        { provide: ClickUpCommonInterfacesService, useValue: mockCommonInterfaceService },
         {
           provide: CalendarCommonInterfacesService,
           useValue: mockCommonInterfaceService,

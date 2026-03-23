@@ -1,5 +1,9 @@
 # JWT-Derived Encryption for SuperSync
 
+> **Status: Archived — Superseded**
+>
+> JWT-derived keys are unsuitable due to token refresh invalidating encryption keys. Password-based encryption was implemented instead — see `../sync-and-op-log/supersync-encryption-architecture.md`.
+
 ## Goal
 
 Provide automatic "encryption at rest" for lazy users who don't want to enter a passphrase. This protects against database leaks while maintaining zero UX friction.

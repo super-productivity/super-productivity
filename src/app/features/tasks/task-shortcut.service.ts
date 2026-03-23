@@ -87,6 +87,23 @@ export class TaskShortcutService {
       return false;
     }
 
+    // Ctrl+C / Cmd+C: copy focused task title to clipboard
+    if ((ev.ctrlKey || ev.metaKey) && ev.code === 'KeyC') {
+      const selection = window.getSelection();
+      const hasTextSelected = selection !== null && selection.toString().length > 0;
+      if (!hasTextSelected) {
+        const taskComponent = this._taskFocusService.lastFocusedTaskComponent();
+        if (taskComponent) {
+          const title = taskComponent.task().title;
+          navigator.clipboard?.writeText(title).catch((err) => {
+            Log.warn('Failed to copy task title to clipboard:', err);
+          });
+          ev.preventDefault();
+          return true;
+        }
+      }
+    }
+
     const isShiftOrCtrlPressed = ev.shiftKey || ev.ctrlKey;
 
     // Check if the focused task's context menu is open - if so, skip arrow navigation shortcuts
@@ -103,6 +120,11 @@ export class TaskShortcutService {
     }
     if (checkKeyCombo(ev, keys.taskToggleDetailPanelOpen)) {
       this._handleTaskShortcut(focusedTaskId, 'toggleShowDetailPanel');
+      ev.preventDefault();
+      return true;
+    }
+    if (checkKeyCombo(ev, keys.taskOpenNotesFullscreen)) {
+      this._handleTaskShortcut(focusedTaskId, 'openNotesFullscreen');
       ev.preventDefault();
       return true;
     }

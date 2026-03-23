@@ -24,6 +24,7 @@ describe('TaskShortcutService', () => {
     togglePlay: 'Y',
     taskEditTitle: 'Enter',
     taskToggleDetailPanelOpen: 'I',
+    taskOpenNotesFullscreen: 'Shift+N',
     taskOpenEstimationDialog: 'T',
     taskSchedule: 'S',
     taskToggleDone: 'D',

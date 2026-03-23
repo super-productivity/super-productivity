@@ -47,6 +47,14 @@ export async function pageRoutes(fastify: FastifyInstance) {
   // Password reset page - shows form to enter new password
   fastify.get<{ Querystring: ResetPasswordQuery }>(
     '/reset-password',
+    {
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
     async (req, reply) => {
       const { token } = req.query;
       if (!token) {
@@ -198,6 +206,14 @@ export async function pageRoutes(fastify: FastifyInstance) {
   // Passkey recovery page - allows user to register a new passkey
   fastify.get<{ Querystring: RecoverPasskeyQuery }>(
     '/recover-passkey',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
     async (req, reply) => {
       const { token } = req.query;
       if (!token) {

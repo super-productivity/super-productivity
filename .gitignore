@@ -75,6 +75,7 @@ src/app/**/*.js.map
 # added
 build/hub
 electron/**/*.js
+!electron/scripts/bundle-preload.js
 electron/**/*.js.map
 
 # mac os deployment
@@ -90,7 +91,7 @@ electron-builder.win-store.yaml
 ./src/environments/versions.ts
 /src/environments/environment.js
 /src/environments/environment.js.map
-/.claude/settings.local.json
+/.claude/
 .aider*
 
 /packages/plugin-api/dist/**/*.*
@@ -116,3 +117,5 @@ test-results/
 data/
 /.actrc
 /.secrets.example
+
+.worktrees/

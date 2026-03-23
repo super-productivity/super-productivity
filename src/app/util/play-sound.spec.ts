@@ -32,7 +32,7 @@ describe('playSound', () => {
 
     mockAudioContext = {
       state: 'running',
-      resume: jasmine.createSpy('resume'),
+      resume: jasmine.createSpy('resume').and.returnValue(Promise.resolve()),
       close: jasmine.createSpy('close'),
       createBufferSource: jasmine
         .createSpy('createBufferSource')
@@ -51,6 +51,7 @@ describe('playSound', () => {
     // Create fetch spy by assigning a jasmine spy directly to window.fetch
     fetchSpy = jasmine.createSpy('fetch').and.returnValue(
       Promise.resolve({
+        ok: true,
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       } as Response),
     );
@@ -66,147 +67,111 @@ describe('playSound', () => {
     closeAudioContext();
   });
 
-  it('should create an AudioContext', (done) => {
-    playSound('test.mp3');
+  it('should create an AudioContext', async () => {
+    await playSound('test.mp3');
 
-    setTimeout(() => {
-      expect((window as any).AudioContext).toHaveBeenCalled();
-      done();
-    }, 10);
+    expect((window as any).AudioContext).toHaveBeenCalled();
   });
 
-  it('should fetch the audio file', (done) => {
-    playSound('test.mp3');
+  it('should fetch the audio file', async () => {
+    await playSound('test.mp3');
 
-    setTimeout(() => {
-      expect(fetchSpy).toHaveBeenCalledWith('./assets/snd/test.mp3');
-      done();
-    }, 10);
+    expect(fetchSpy).toHaveBeenCalledWith('./assets/snd/test.mp3');
   });
 
-  it('should create a new buffer source for each playback', (done) => {
-    playSound('test.mp3');
+  it('should create a new buffer source for each playback', async () => {
+    await playSound('test.mp3');
 
-    setTimeout(() => {
-      expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
-      done();
-    }, 10);
+    expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
   });
 
-  it('should start playback after buffer is assigned', (done) => {
-    playSound('test.mp3');
+  it('should start playback after buffer is assigned', async () => {
+    await playSound('test.mp3');
 
-    setTimeout(() => {
-      expect(mockBufferSource.start).toHaveBeenCalledWith(0);
-      done();
-    }, 10);
+    expect(mockBufferSource.start).toHaveBeenCalledWith(0);
   });
 
-  it('should connect directly to destination at full volume', (done) => {
-    playSound('test.mp3', 100);
+  it('should connect directly to destination at full volume', async () => {
+    await playSound('test.mp3', 100);
 
-    setTimeout(() => {
-      expect(mockBufferSource.connect).toHaveBeenCalledWith(mockAudioContext.destination);
-      expect(mockAudioContext.createGain).not.toHaveBeenCalled();
-      done();
-    }, 10);
+    expect(mockBufferSource.connect).toHaveBeenCalledWith(mockAudioContext.destination);
+    expect(mockAudioContext.createGain).not.toHaveBeenCalled();
   });
 
-  it('should use gain node for volume adjustment', (done) => {
-    playSound('test.mp3', 50);
+  it('should use gain node for volume adjustment', async () => {
+    await playSound('test.mp3', 50);
 
-    setTimeout(() => {
-      expect(mockAudioContext.createGain).toHaveBeenCalled();
-      expect(mockGainNode.gain.value).toBe(0.5);
-      expect(mockBufferSource.connect).toHaveBeenCalledWith(mockGainNode);
-      expect(mockGainNode.connect).toHaveBeenCalledWith(mockAudioContext.destination);
-      done();
-    }, 10);
+    expect(mockAudioContext.createGain).toHaveBeenCalled();
+    expect(mockGainNode.gain.value).toBe(0.5);
+    expect(mockBufferSource.connect).toHaveBeenCalledWith(mockGainNode);
+    expect(mockGainNode.connect).toHaveBeenCalledWith(mockAudioContext.destination);
   });
 
-  it('should handle errors gracefully', (done) => {
+  it('should handle errors gracefully', async () => {
     const consoleErrorSpy = spyOn(console, 'error');
     fetchSpy.and.returnValue(Promise.reject(new Error('Test error')));
 
-    playSound('nonexistent.mp3');
+    await playSound('nonexistent.mp3');
 
-    setTimeout(() => {
-      expect(consoleErrorSpy).toHaveBeenCalled();
-      done();
-    }, 10);
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
-  it('should reuse the same AudioContext for multiple sounds', (done) => {
-    playSound('test1.mp3');
+  it('should reuse the same AudioContext for multiple sounds', async () => {
+    await playSound('test1.mp3');
+    await playSound('test2.mp3');
 
-    setTimeout(() => {
-      playSound('test2.mp3');
-
-      setTimeout(() => {
-        // AudioContext should only be created once
-        expect((window as any).AudioContext).toHaveBeenCalledTimes(1);
-        done();
-      }, 10);
-    }, 10);
+    expect((window as any).AudioContext).toHaveBeenCalledTimes(1);
   });
 
-  it('should cache audio buffers and not re-fetch', (done) => {
-    playSound('cached-test.mp3');
+  it('should cache audio buffers and not re-fetch', async () => {
+    await playSound('cached-test.mp3');
 
-    setTimeout(() => {
-      // Reset createBufferSource call count to verify it's called again
-      mockAudioContext.createBufferSource.calls.reset();
-      mockBufferSource.connect.calls.reset();
-      mockBufferSource.start.calls.reset();
+    mockAudioContext.createBufferSource.calls.reset();
+    mockBufferSource.connect.calls.reset();
+    mockBufferSource.start.calls.reset();
 
-      playSound('cached-test.mp3');
+    await playSound('cached-test.mp3');
 
-      setTimeout(() => {
-        // Fetch should only be called once for the same file
-        expect(fetchSpy).toHaveBeenCalledTimes(1);
-        // But we should still create a new buffer source (required by Web Audio API)
-        expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
-        done();
-      }, 10);
-    }, 10);
+    // Fetch should only be called once for the same file
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // But we should still create a new buffer source (required by Web Audio API)
+    expect(mockAudioContext.createBufferSource).toHaveBeenCalled();
   });
 
-  it('should set onended handler to clean up audio nodes', (done) => {
-    playSound('test.mp3');
+  it('should set onended handler to clean up audio nodes', async () => {
+    await playSound('test.mp3');
 
-    setTimeout(() => {
-      expect(mockBufferSource.onended).toBeDefined();
-      expect(typeof mockBufferSource.onended).toBe('function');
-      done();
-    }, 10);
+    expect(mockBufferSource.onended).toBeDefined();
+    expect(typeof mockBufferSource.onended).toBe('function');
   });
 
-  it('should disconnect source node when onended is called', (done) => {
-    playSound('test.mp3', 100);
+  it('should disconnect source node when onended is called', async () => {
+    await playSound('test.mp3', 100);
 
-    setTimeout(() => {
-      // Trigger the onended handler
-      if (mockBufferSource.onended) {
-        mockBufferSource.onended();
-      }
+    if (mockBufferSource.onended) {
+      mockBufferSource.onended();
+    }
 
-      expect(mockBufferSource.disconnect).toHaveBeenCalled();
-      done();
-    }, 10);
+    expect(mockBufferSource.disconnect).toHaveBeenCalled();
   });
 
-  it('should disconnect both source and gain nodes when using volume adjustment', (done) => {
-    playSound('test.mp3', 50);
+  it('should disconnect both source and gain nodes when using volume adjustment', async () => {
+    await playSound('test.mp3', 50);
 
-    setTimeout(() => {
-      // Trigger the onended handler
-      if (mockBufferSource.onended) {
-        mockBufferSource.onended();
-      }
+    if (mockBufferSource.onended) {
+      mockBufferSource.onended();
+    }
 
-      expect(mockBufferSource.disconnect).toHaveBeenCalled();
-      expect(mockGainNode.disconnect).toHaveBeenCalled();
-      done();
-    }, 10);
+    expect(mockBufferSource.disconnect).toHaveBeenCalled();
+    expect(mockGainNode.disconnect).toHaveBeenCalled();
+  });
+
+  it('should resume a suspended AudioContext before playing', async () => {
+    mockAudioContext.state = 'suspended';
+
+    await playSound('test.mp3');
+
+    expect(mockAudioContext.resume).toHaveBeenCalled();
+    expect(mockBufferSource.start).toHaveBeenCalledWith(0);
   });
 });

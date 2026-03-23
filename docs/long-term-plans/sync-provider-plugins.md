@@ -1,5 +1,7 @@
 # Design: Sync Provider Plugins
 
+> **Status: Planned**
+
 ## Goal
 
 Enable community developers to build sync providers (Google Drive, OneDrive, S3, etc.) as plugins, using the existing plugin system's runtime loading and sandboxed execution.

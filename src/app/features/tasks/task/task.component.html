@@ -14,32 +14,18 @@
     #blockRightEl
     class="block-right bg-400"
   >
-    <!--NOTE: non observable should be enough as we only need the initial value-->
-    @if (t.repeatCfgId) {
-      <mat-icon svgIcon="repeat"></mat-icon>
-    } @else {
-      <mat-icon>today</mat-icon>
-    }
+    <mat-icon>more_horiz</mat-icon>
   </div>
 }
 
 <div
   #innerWrapperEl
   class="inner-wrapper"
-  (touchstart)="onTouchStart($event)"
 >
-  <div
-    #projectMenuTriggerEl
-    [matMenuTriggerFor]="projectMenu"
-    style="visibility: hidden"
-  ></div>
-
   <div class="box"></div>
 
   <div
     panGesture
-    (longPressIOS)="openContextMenu($event)"
-    (contextmenu)="openContextMenu($event)"
     (panend)="onPanEnd()"
     (panleft)="onPanLeft($event)"
     (panright)="onPanRight($event)"
@@ -49,61 +35,56 @@
     [class.isPreventPointerEventsWhilePanning]="isPreventPointerEventsWhilePanning"
     class="first-line"
   >
-    @if (t.isDone) {
-      <button
-        (click)="toggleTaskDone()"
-        [title]="T.F.TASK.CMP.TOGGLE_DONE | translate"
-        class="check-done"
-        mat-icon-button
-      >
-        <mat-icon
-          @swirl
-          class="undo"
-          >undo
-        </mat-icon>
-        <mat-icon
-          @swirl
-          class="check"
-          >check
-        </mat-icon>
-      </button>
-    }
-
     <div
       class="title-and-left-btns-wrapper"
       (click)="titleBarClick($event)"
     >
       <div
-        (click)="focusSelf()"
-        class="drag-handle"
+        (click)="toggleTaskDone(); $event.stopPropagation()"
+        (keydown.enter)="toggleTaskDone(); $event.stopPropagation()"
+        (keydown.space)="
+          toggleTaskDone(); $event.stopPropagation(); $event.preventDefault()
+        "
+        role="checkbox"
+        [attr.aria-checked]="t.isDone"
+        [attr.aria-label]="T.F.TASK.CMP.TOGGLE_DONE | translate"
+        tabindex="0"
+        class="done-toggle"
+        [class.is-done]="showDoneAnimation() || t.isDone"
+        [class.is-current]="isCurrent()"
       >
-        <mat-icon class="drag-handle-ico">drag_indicator</mat-icon>
-        @if (isCurrent()) {
-          <mat-icon class="play-icon-indicator">play_arrow</mat-icon>
-        }
-
-        <div class="type-ico-wrapper">
-          @if (t.repeatCfgId) {
-            <div>
-              @if (!isRepeatTaskCreatedToday()) {
-                <div class="repeat-date-badge">{{ t.created | shortDate2 }}</div>
-              }
-              <mat-icon
-                [style.transform]="isCurrent() ? 'scale(1.4)' : ''"
-                svgIcon="repeat"
-              >
-              </mat-icon>
-            </div>
+        <svg
+          class="done-toggle-svg"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <!-- Background circle (always visible) -->
+          <circle
+            class="done-circle"
+            cx="12"
+            cy="12"
+            r="10"
+          />
+          @if (isCurrent() && !t.isDone && !showDoneAnimation()) {
+            <!-- Progress ring (only rendered for current task) -->
+            <circle
+              class="progress-ring"
+              cx="12"
+              cy="12"
+              r="10"
+            />
+            <!-- Play triangle (only rendered for current task) -->
+            <polygon
+              class="play-indicator"
+              points="10,7 10,17 17,12"
+            />
           }
-          @if (t.issueId) {
-            <div>
-              @if (t.issuePoints) {
-                <div class="mini-badge bgc-primary">{{ t.issuePoints }}</div>
-              }
-              <mat-icon [svgIcon]="t.issueType | issueIcon"></mat-icon>
-            </div>
-          }
-        </div>
+          <!-- Checkmark (shown when done) -->
+          <polyline
+            class="done-check"
+            points="8,12 11,15 16,9"
+          />
+        </svg>
       </div>
 
       <div class="title-and-tags-wrapper">
@@ -123,10 +104,12 @@
           class="task-title"
         ></task-title>
 
-        <tag-list
-          [task]="t"
-          [isShowProjectTagNever]="isInSubTaskList()"
-        ></tag-list>
+        @if (t.tagIds?.length || t.projectId || t.repeatCfgId || t.issueId) {
+          <tag-list
+            [task]="t"
+            [isShowProjectTagNever]="isInSubTaskList()"
+          ></tag-list>
+        }
       </div>
     </div>
 
@@ -245,6 +228,27 @@
             </div>
           </button>
         }
+        @if (hasDeadline()) {
+          <button
+            (click)="openDeadlineDialog()"
+            [title]="T.F.TASK.ADDITIONAL_INFO.DEADLINE | translate"
+            class="ico-btn deadline-btn"
+            [color]="isDeadlineOverdue() ? 'warn' : ''"
+            mat-icon-button
+          >
+            <mat-icon>flag</mat-icon>
+            <div class="time-badge">
+              @if (t.deadlineWithTime) {
+                {{ t.deadlineWithTime | shortPlannedAt }}
+              } @else if (t.deadlineDay) {
+                {{
+                  t.deadlineDay
+                    | localDateStr: globalTrackingIntervalService.todayDateStr()
+                }}
+              }
+            </div>
+          </button>
+        }
 
         <div>
           @if (isShowToggleButton()) {
@@ -326,24 +330,31 @@
   ></task-context-menu>
 }
 
-<mat-menu
-  #projectMenu="matMenu"
-  (closed)="focusSelf()"
-  (menuOpened)="_loadProjectListIfNeeded()"
->
-  <ng-template matMenuContent>
-    @if (moveToProjectList()) {
-      @for (project of moveToProjectList(); track trackByProjectId($index, project)) {
-        <button
-          (click)="moveTaskToProject(project.id)"
-          mat-menu-item
-        >
-          {{ project.title }}
-        </button>
+@if (isProjectMenuLoaded()) {
+  <div
+    #projectMenuTriggerEl
+    [matMenuTriggerFor]="projectMenu"
+    style="position: absolute; visibility: hidden; pointer-events: none"
+  ></div>
+  <mat-menu
+    #projectMenu="matMenu"
+    (closed)="focusSelf()"
+    (menuOpened)="_loadProjectListIfNeeded()"
+  >
+    <ng-template matMenuContent>
+      @if (moveToProjectList()) {
+        @for (project of moveToProjectList(); track trackByProjectId($index, project)) {
+          <button
+            (click)="moveTaskToProject(project.id)"
+            mat-menu-item
+          >
+            {{ project.title }}
+          </button>
+        }
       }
-    }
-  </ng-template>
-</mat-menu>
+    </ng-template>
+  </mat-menu>
+}
 
 @if (isTagMenuVisible()) {
   <tag-toggle-menu-list

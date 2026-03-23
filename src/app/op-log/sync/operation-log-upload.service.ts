@@ -111,12 +111,13 @@ export class OperationLogUploadService {
       const fullStateOps = pendingOps.filter((entry) =>
         FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
-      const regularOps = pendingOps.filter(
+      let regularOps = pendingOps.filter(
         (entry) => !FULL_STATE_OP_TYPES.has(entry.op.opType as OpType),
       );
 
       // Upload full-state operations via snapshot endpoint
       let fullStateOpUploaded = false;
+      let lastUploadedFullStateOpId: string | undefined;
       for (const entry of fullStateOps) {
         // BackupImport/Repair: always wipe server (recovery operations replace all state)
         // SyncImport: only wipe when explicitly requested (preserves SYNC_IMPORT_EXISTS check)
@@ -133,9 +134,12 @@ export class OperationLogUploadService {
           uploadedCount++;
           if (result.serverSeq !== undefined) {
             await syncProvider.setLastServerSeq(result.serverSeq);
+            lastKnownServerSeq = result.serverSeq;
+            highestReceivedSeq = Math.max(highestReceivedSeq, result.serverSeq);
           }
-          // Track that a full-state op was uploaded - regular ops should be skipped
+          // Track that a full-state op was uploaded - regular ops before it are already included
           fullStateOpUploaded = true;
+          lastUploadedFullStateOpId = entry.op.id;
         } else {
           // Special handling for SYNC_IMPORT_EXISTS: another client already uploaded
           // a SYNC_IMPORT. We should delete our local SYNC_IMPORT and let the normal
@@ -171,23 +175,42 @@ export class OperationLogUploadService {
         }
       }
 
-      // Skip regular ops processing if none exist or if a full-state op was uploaded.
-      // After a full-state upload, all regular ops are already reflected in the snapshot,
-      // so they should be marked as synced rather than uploaded separately.
+      // Skip regular ops processing if none exist
       if (regularOps.length === 0) {
         return;
       }
 
-      if (fullStateOpUploaded) {
-        // Mark all regular ops as synced - they're already included in the full-state snapshot
-        const regularSeqs = regularOps.map((entry) => entry.seq);
-        await this.opLogStore.markSynced(regularSeqs);
-        uploadedCount += regularSeqs.length;
-        OpLog.normal(
-          `OperationLogUploadService: Marked ${regularSeqs.length} regular ops as synced ` +
-            `(already included in full-state snapshot)`,
+      if (fullStateOpUploaded && lastUploadedFullStateOpId) {
+        // After a full-state upload, only regular ops created BEFORE the snapshot
+        // are reflected in it. Ops created AFTER the snapshot still need uploading.
+        // UUIDv7 IDs are time-ordered, so string comparison works for ordering.
+        const opsBeforeSnapshot = regularOps.filter(
+          (entry) => entry.op.id < lastUploadedFullStateOpId!,
         );
-        return;
+        const opsAfterSnapshot = regularOps.filter(
+          (entry) => entry.op.id >= lastUploadedFullStateOpId!,
+        );
+
+        if (opsBeforeSnapshot.length > 0) {
+          const seqs = opsBeforeSnapshot.map((entry) => entry.seq);
+          await this.opLogStore.markSynced(seqs);
+          uploadedCount += seqs.length;
+          OpLog.normal(
+            `OperationLogUploadService: Marked ${seqs.length} regular ops as synced ` +
+              `(already included in full-state snapshot)`,
+          );
+        }
+
+        if (opsAfterSnapshot.length === 0) {
+          return;
+        }
+
+        // Continue with uploading ops created after the snapshot
+        OpLog.normal(
+          `OperationLogUploadService: ${opsAfterSnapshot.length} regular ops were created ` +
+            `after the snapshot and still need uploading.`,
+        );
+        regularOps = opsAfterSnapshot;
       }
 
       // Convert to SyncOperation format

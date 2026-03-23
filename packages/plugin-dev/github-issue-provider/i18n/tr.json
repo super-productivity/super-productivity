@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "kullanıcı adı/depoAdı",
+    "TOKEN": "Erişim Simgesi",
+    "FILTER_USERNAME": "Kullanıcı adı (örneğin değişiklikleri kendiniz filtrelemek için)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "STATE": "Durum",
+    "ASSIGNEE": "Atanan",
+    "LABELS": "Etiketler",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Açıklama"
+  },
+  "FORM_HELP": "<p>Burada Süper Verimliliği, günlük planlama görünümünde görev oluşturma panelinde belirli bir depo için açık GitHub sorunlarını listeleyecek şekilde yapılandırabilirsiniz. Öneriler olarak listelenecekler ve konuyla ilgili daha fazla bilgi sunacaklar.</p> <p>Ek olarak, tüm açık sorunları otomatik olarak görev biriktirme listesine ekleyebilir ve senkronize edebilirsiniz.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Veri eşlenirken hata oluştu. Depo adınız doğru mu?",
+    "ERR_UNKNOWN": "GitHub: Bilinmeyen hata {{statusCode}} {{errorMsg}}. Api Hızı sınırı aşıldı?"
+  }
+}

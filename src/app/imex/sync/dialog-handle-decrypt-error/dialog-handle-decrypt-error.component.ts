@@ -13,6 +13,8 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { SyncConfigService } from '../sync-config.service';
+import { SnackService } from '../../../core/snack/snack.service';
+import { SyncLog } from '../../../core/log';
 
 @Component({
   selector: 'dialog-handle-decrypt-error',
@@ -34,6 +36,7 @@ import { SyncConfigService } from '../sync-config.service';
 })
 export class DialogHandleDecryptErrorComponent {
   private _syncConfigService = inject(SyncConfigService);
+  private _snackService = inject(SnackService);
 
   private _matDialogRef =
     inject<MatDialogRef<DialogHandleDecryptErrorComponent>>(MatDialogRef);
@@ -42,16 +45,35 @@ export class DialogHandleDecryptErrorComponent {
   passwordVal: string = '';
 
   async updatePWAndForceUpload(): Promise<void> {
-    await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
-    this._matDialogRef.close({ isForceUpload: true });
+    try {
+      await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
+      this.passwordVal = '';
+      this._matDialogRef.close({ isForceUpload: true });
+    } catch (error) {
+      SyncLog.err('Failed to save encryption password for force upload', error);
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.PERSIST_FAILED,
+      });
+    }
   }
 
   async updatePwAndResync(): Promise<void> {
-    await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
-    this._matDialogRef.close({ isReSync: true });
+    try {
+      await this._syncConfigService.updateEncryptionPassword(this.passwordVal);
+      this.passwordVal = '';
+      this._matDialogRef.close({ isReSync: true });
+    } catch (error) {
+      SyncLog.err('Failed to save encryption password for resync', error);
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.SYNC.S.PERSIST_FAILED,
+      });
+    }
   }
 
   cancel(): void {
+    this.passwordVal = '';
     this._matDialogRef.close({});
   }
 }

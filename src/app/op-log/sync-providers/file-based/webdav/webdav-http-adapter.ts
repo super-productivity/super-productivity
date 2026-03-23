@@ -60,7 +60,10 @@ export class WebDavHttpAdapter {
         // This bypasses CapacitorHttp which has issues with WebDAV responses
         // (empty bodies on Android/Koofr, broken JSON auto-parsing on iOS).
         SyncLog.log(
-          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}`,
+          `${WebDavHttpAdapter.L}.request() using WebDavHttp for ${options.method}` +
+            (options.body != null
+              ? ` (body: ${options.body.length} chars)`
+              : ' (no body)'),
         );
         const webdavResponse = await WebDavHttp.request({
           url: options.url,
@@ -71,6 +74,12 @@ export class WebDavHttpAdapter {
         response = this._convertWebDavResponse(webdavResponse);
       } else {
         // Use fetch for other platforms
+        SyncLog.log(
+          `${WebDavHttpAdapter.L}.request() using fetch for ${options.method}` +
+            (options.body != null
+              ? ` (body: ${options.body.length} chars)`
+              : ' (no body)'),
+        );
         try {
           const fetchResponse = await fetch(options.url, {
             method: options.method,

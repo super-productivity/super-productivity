@@ -3,7 +3,7 @@ import {
   IssueContentConfig,
   IssueFieldType,
 } from '../../issue-content/issue-content.model';
-import { CaldavIssue } from './caldav-issue.model';
+import { CaldavIssue, CaldavIssueStatus } from './caldav-issue.model';
 import { IssueProviderKey } from '../../issue.model';
 
 export const CALDAV_ISSUE_CONTENT_CONFIG: IssueContentConfig<CaldavIssue> = {
@@ -39,13 +39,13 @@ export const CALDAV_ISSUE_CONTENT_CONFIG: IssueContentConfig<CaldavIssue> = {
       label: 'Status',
       value: (issue: CaldavIssue) => {
         switch (issue.status) {
-          case 'NEEDS-ACTION':
+          case CaldavIssueStatus.NEEDS_ACTION:
             return 'Needs Action';
-          case 'COMPLETED':
+          case CaldavIssueStatus.COMPLETED:
             return 'Completed';
-          case 'IN-PROCESS':
+          case CaldavIssueStatus.IN_PROCESS:
             return 'In Process';
-          case 'CANCELLED':
+          case CaldavIssueStatus.CANCELLED:
             return 'Cancelled';
           default:
             return issue.status || '';

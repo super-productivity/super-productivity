@@ -14,7 +14,7 @@
 .image-item {
   position: relative;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 
   img {
     width: 100%;

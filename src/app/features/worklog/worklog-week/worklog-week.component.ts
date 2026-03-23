@@ -21,6 +21,7 @@ import { MsToClockStringPipe } from '../../../ui/duration/ms-to-clock-string.pip
 import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MetricService } from '../../metric/metric.service';
+import { DialogViewArchivedTaskComponent } from '../../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 
 @Component({
   selector: 'worklog-week',
@@ -95,6 +96,13 @@ export class WorklogWeekComponent {
 
   trackByLogEntry(i: number, logEntry: WorklogDataForDay): string {
     return logEntry.task.id;
+  }
+
+  viewTaskDetails(task: Task): void {
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
   }
 
   focusSummaryFor(dateStr: string): { count: number; total: number } | undefined {

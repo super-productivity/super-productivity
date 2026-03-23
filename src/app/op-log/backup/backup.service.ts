@@ -8,8 +8,6 @@ import { Operation, OpType, ActionType } from '../core/operation.types';
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { uuidv7 } from '../../util/uuid-v7';
 import { loadAllData } from '../../root-store/meta/load-all-data.action';
-import { validateFull } from '../validation/validation-fn';
-import { dataRepair } from '../validation/data-repair';
 import { isDataRepairPossible } from '../validation/is-data-repair-possible.util';
 import { OpLog } from '../../core/log';
 import {
@@ -20,7 +18,6 @@ import {
 import { CompleteBackup } from '../core/types/sync.types';
 import { ArchiveDbAdapter } from '../../core/persistence/archive-db-adapter.service';
 import { ArchiveModel } from '../../features/archive/archive.model';
-import { isLegacyBackupData, migrateLegacyBackup } from './migrate-legacy-backup';
 
 /**
  * Service for handling backup import and export operations.
@@ -92,6 +89,8 @@ export class BackupService {
       }
 
       // 2. Migrate legacy backups (pre-v14) that have the old data shape
+      const { isLegacyBackupData, migrateLegacyBackup } =
+        await import('./migrate-legacy-backup');
       if (isLegacyBackupData(backupData as unknown as Record<string, unknown>)) {
         OpLog.normal(
           'BackupService: Detected legacy backup format, running migration...',
@@ -102,6 +101,7 @@ export class BackupService {
       }
 
       // 3. Validate data
+      const { validateFull } = await import('../validation/validation-fn');
       const validationResult = validateFull(backupData);
       let validatedData = backupData;
 
@@ -121,7 +121,8 @@ export class BackupService {
             'errors' in validationResult.typiaResult
               ? validationResult.typiaResult.errors
               : [];
-          validatedData = dataRepair(backupData, errors);
+          const { dataRepair } = await import('../validation/data-repair');
+          validatedData = dataRepair(backupData, errors).data;
         } else {
           throw new Error('Data validation failed and repair not possible');
         }
@@ -129,6 +130,14 @@ export class BackupService {
 
       // 4. Persist to operation log
       await this._persistImportToOperationLog(validatedData);
+
+      // 4b. Reset all sync providers' lastServerSeq to 0.
+      // After a backup import, the client must re-sync from the beginning to ensure
+      // that any ops on the server (which may conflict with the backup) are properly
+      // filtered by the local BACKUP_IMPORT operation.
+      // Without this reset, the sync would start from the old seq and skip server ops,
+      // meaning the BACKUP_IMPORT filter never runs and old ops are not filtered.
+      this._resetAllLastServerSeqs();
 
       // 5. Dispatch to NgRx
       this._store.dispatch(loadAllData({ appDataComplete: validatedData }));
@@ -195,6 +204,7 @@ export class BackupService {
       vectorClock: newClock,
       timestamp: Date.now(),
       schemaVersion: CURRENT_SCHEMA_VERSION,
+      syncImportReason: 'BACKUP_RESTORE',
     };
 
     await this._opLogStore.append(op, 'local');
@@ -212,6 +222,35 @@ export class BackupService {
     });
 
     OpLog.normal('BackupService: Import persisted to operation log.');
+  }
+
+  /**
+   * Resets all sync providers' lastServerSeq to 0 in localStorage.
+   *
+   * After a backup import, the client must re-sync from the beginning to ensure
+   * that server ops are properly filtered by the local BACKUP_IMPORT operation.
+   * Without this reset, the sync downloads from the old seq, skipping server ops,
+   * so the BACKUP_IMPORT filter never runs.
+   *
+   * We clear all keys matching the SuperSync prefix to handle any active provider.
+   */
+  private _resetAllLastServerSeqs(): void {
+    const PREFIX = 'super_sync_last_server_seq_';
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    if (keysToRemove.length > 0) {
+      OpLog.normal(
+        `BackupService: Reset ${keysToRemove.length} lastServerSeq(s) to 0 after backup import.`,
+      );
+    }
   }
 
   /**

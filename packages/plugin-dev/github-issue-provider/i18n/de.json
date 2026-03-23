@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "\"Benutzername / Repositoryname\" für das Git-Repository, das Sie verfolgen möchten",
+    "TOKEN": "Zugangstoken",
+    "FILTER_USERNAME": "Benutzername (z. B. um Änderungen selbst herauszufiltern)",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATE": "Status",
+    "ASSIGNEE": "Bearbeiter",
+    "LABELS": "Labels",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "FORM_HELP": "<p>Hier können Sie SuperProductivity so konfigurieren, dass offene GitHub-Issues für ein bestimmtes Repository im Aufgabenerstellungsbereich in der Tagesplanungsansicht aufgelistet werden. Sie werden als Vorschläge aufgeführt und enthalten einen Link zum Thema sowie weitere Informationen dazu.</p> <p>Außerdem können Sie alle offenen Issues automatisch zu Ihrem Aufgaben-Backlog hinzufügen und synchronisieren.</p>",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: Fehler beim Zuordnen von Daten. Ist Ihr Repository-Name korrekt?",
+    "ERR_UNKNOWN": "GitHub: Unbekannter Fehler {{statusCode}} {{errorMsg}}. Wurde das Api-Anfrage-Limit überschritten?"
+  }
+}

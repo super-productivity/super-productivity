@@ -15,17 +15,18 @@ import { selectCurrentTask } from '../../tasks/store/task.selectors';
 import { getTodayStr } from '../../tasks/util/get-today-str';
 import { TaskService } from '../../tasks/task.service';
 import { T } from '../../../t.const';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'task-tracking-info',
   standalone: true,
-  imports: [MatIcon, MatTooltipModule, MsToStringPipe],
+  imports: [MatIcon, MatTooltipModule, MsToStringPipe, TranslateModule],
   template: `
     @if (currentTask() && (showTitle() || currentTaskTimeToday() > 0)) {
       <div
         class="task-tracking-info"
         (click)="onTaskClick()"
-        [matTooltip]="T.F.FOCUS_MODE.PAUSE_TRACKING"
+        [matTooltip]="T.F.FOCUS_MODE.PAUSE_TRACKING | translate"
         role="button"
         tabindex="0"
         [attr.aria-label]="T.F.FOCUS_MODE.PAUSE_TRACKING_FOR_CURRENT_TASK"

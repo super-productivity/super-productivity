@@ -4,6 +4,7 @@
 # Usage:
 #   ./scripts/docker-monitor.sh stats
 #   ./scripts/docker-monitor.sh usage
+#   ./scripts/docker-monitor.sh active-users
 #   ./scripts/docker-monitor.sh ops --user 29
 #   ./scripts/docker-monitor.sh analyze operation-sizes --user 29
 #   ./scripts/docker-monitor.sh analyze user-deep-dive --user 27
@@ -38,7 +39,7 @@ shift || true
 
 case "$COMMAND" in
   # Basic monitoring commands (compiled scripts)
-  stats|usage|usage-history|logs|ops)
+  stats|usage|usage-history|active-users|logs|ops)
     echo -e "${YELLOW}Running: monitor.js $COMMAND $@${NC}"
     docker exec -it "$CONTAINER_NAME" node dist/scripts/monitor.js "$COMMAND" "$@"
     ;;
@@ -105,6 +106,8 @@ Basic Monitoring (uses compiled scripts):
   stats                         System vitals and DB status
   usage                         Top 20 users by storage
   usage-history [--tail N]      View usage trends
+  active-users [--threshold N]  Active user counts and engagement
+    [--limit N]
   ops [--user ID] [--tail N]    Recent operations analysis
   logs [--tail N] [--search X]  View server logs
 

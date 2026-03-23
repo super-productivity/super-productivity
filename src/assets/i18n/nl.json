@@ -41,6 +41,24 @@
     "INTRO_1": "Super Productivity wordt volledig gefinancierd door de gemeenschap. Er is geen tracking, geen advertenties en geen gegevensverzameling — je taken blijven op je apparaat.",
     "INTRO_2": "Als je deze aanpak waardeert en het project gezond en in ontwikkeling wilt houden, wordt een vrijwillige donatie zeer op prijs gesteld."
   },
+  "EXAMPLE_TASKS": {
+    "LEARN_KEYBOARD_SHORTCUTS": {
+      "TITLE": "Leer de sneltoetsen",
+      "NOTES": "Super Productivity is ontworpen om met het toetsenbord te gebruiken. Leer de sneltoetsen om sneller te werken.\n\n**Hoe te beginnen:**\n1. Open het **zijbalkmenu**\n2. Ga naar **Help**\n3. Klik op **Toetsenbordnavigatie-tour**"
+    },
+    "CREATE_PROJECT": {
+      "TITLE": "Maak je eerste project aan",
+      "NOTES": "Projecten helpen je om je taken per werkgebied te organiseren. Elk project heeft een eigen takenlijst en backlog.\n\n**Hoe maak je een project aan:**\n1. Klik op de **+**-knop naast **Projecten** in de zijbalk\n2. Geef het een naam en kies een kleur\n3. Begin met het toevoegen van taken"
+    },
+    "SET_UP_SYNC": {
+      "TITLE": "Synchronisatie instellen",
+      "NOTES": "Houd je gegevens veilig en toegankelijk op al je apparaten.\n\n**Hoe in te stellen:**\n1. Open de **Instellingen** (tandwielpictogram in de zijbalk)\n2. Ga naar **Synchronisatie**\n3. Kies een provider: Super Sync, Dropbox, WebDAV of lokale bestandssynchronisatie\n4. Volg de installatie-instructies"
+    },
+    "GO_FURTHER": {
+      "TITLE": "Ontdek meer",
+      "NOTES": "Er valt nog veel meer te ontdekken!\n\n**App-functies** (in Instellingen) — Schakel integraties, gewoonten en andere functies in. Ga naar **Instellingen → App-functies** om te zien wat beschikbaar is.\n\n**Borden** — Bekijk je taken in aanpasbare Kanban-borden. Schakel ze in bij **App-functies** en vind ze in het **zijmenu**.\n\n**Planning** — Plan je dag door taken op specifieke tijden in te plannen. Sleep taken naar de **Planning**-weergave in de zijbalk.\n\n**Integraties** — Eenmaal ingeschakeld bij App-functies, importeer taken vanuit Jira, GitHub, GitLab, Gitea, OpenProject, CalDAV en nog veel meer. Je kunt ook je agenda integreren. Configureer ze in het **Ticketprovider-paneel**.\n\n**Gewoonten** — Houd terugkerende gewoonten en routines bij. Vind ze in het **zijbalkmenu** zodra ze zijn ingeschakeld.\n\n**Plugins** — Voeg functies toe zoals de Uitstelgedrag-breker, Automatiseringen of Spraakherinneringen. Ga naar **Instellingen → Plugins**.\n\n**Aanpassen** — Thema's, donkere modus, sneltoetsen, taal en productiviteitshulpmiddelen vind je allemaal in de **Instellingen**."
+    }
+  },
   "F": {
     "ATTACHMENT": {
       "DIALOG_EDIT": {
@@ -104,10 +122,24 @@
         "CALDAV_RESOURCE": "De naam van de CalDav-resource (de kalender)",
         "CALDAV_URL": "CalDav-URL (de basis-URL)",
         "CALDAV_USER": "Uw CalDav-gebruikersnaam",
-        "IS_TRANSITION_ISSUES_ENABLED": "Voltooi automatisch CalDav-taken na voltooiing van de taak"
+        "TWO_WAY_SYNC_OFF": "Uit",
+        "TWO_WAY_SYNC_BOTH": "Beide (bidirectioneel)",
+        "TWO_WAY_SYNC_NOTES": "Notities / Beschrijving synchronisatierichting",
+        "TWO_WAY_SYNC_PULL_ONLY": "Alleen ophalen (lezen van CalDAV)",
+        "TWO_WAY_SYNC_PUSH_ONLY": "Alleen verzenden (schrijven naar CalDAV)",
+        "TWO_WAY_SYNC_SECTION": "Tweerichtingssynchronisatie (experimenteel)",
+        "TWO_WAY_SYNC_STATUS": "Status synchronisatierichting",
+        "TWO_WAY_SYNC_TITLE": "Titel synchronisatierichting"
       },
       "FORM_SECTION": {
         "HELP": "<p>Hier kunt u SuperProductivity configureren om niet-voltooide CalDav-taken voor een specifiek project weer te geven in het taakaanmaakpaneel in de dagelijkse planningsweergave. Ze worden vermeld als suggesties en bieden een link naar de taak en meer informatie erover.</p> <p>Bovendien kunt u automatisch alle niet-voltooide taken toevoegen aan en synchroniseren met uw backlog.</p>"
+      },
+      "ISSUE_CONTENT": {
+        "DESCRIPTION": "Beschrijving",
+        "LABELS": "Labels",
+        "STATUS": "Status",
+        "SUMMARY": "Samenvatting",
+        "MARK_AS_CHECKED": "Markeren als afgevinkt"
       },
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: agenda \"{{calendarName}}\" niet gevonden",
@@ -120,9 +152,15 @@
         "ADD_AS_TASK": "Als Taak toevoegen",
         "SHOW_TASK": "Taak weergeven",
         "TXT": "<strong>{{title}}</strong> begint om <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> begint om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken zijn verschuldigd)",
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> begint om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken zijn verschuldigd)",
+          "ONE": "<strong>{{title}}</strong> begint om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} ander evenement staat gepland)"
+        },
         "TXT_PAST": "<strong>{{title}}</strong> gestart om <strong>{{start}}</strong>!",
-        "TXT_PAST_MULTIPLE": "<strong>{{title}}</strong> gestart om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken zijn verschuldigd)"
+        "TXT_PAST_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> gestart om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken zijn verschuldigd)",
+          "ONE": "<strong>{{title}}</strong> is begonnen om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} ander evenement staat gepland)"
+        }
       },
       "EVENT_STRINGS": {
         "EVENT_STR": "Evenement",
@@ -142,17 +180,6 @@
       "BTN_DONT_BOTHER": "Val me niet meer lastig",
       "TITLE": "🙈 Vergeef ons alstublieft, maar...",
       "TXT": "Je zou het project enorm helpen door het <strong>een goede beoordeling te geven, als je het leuk vindt!</strong>"
-    },
-    "VOICE_REMINDER": {
-      "FORM": {
-        "HELP": "Herhaalt de geconfigureerde zin elke X bij het bijhouden van de tijd voor een taak.",
-        "L_INTERVAL": "Interval om zin te herhalen",
-        "L_TEXT": "Tekst",
-        "L_TEXT_DESCRIPTION": "Bijvoorbeeld: \"Werk aan ${currentTaskTitle}!\"",
-        "L_VOICE": "Selecteer een stem",
-        "L_VOICE_DESCRIPTION": "Kies een stem",
-        "TITLE": "Spraakherinnering"
-      }
     },
     "DROPBOX": {
       "S": {
@@ -177,7 +204,8 @@
         "RESUME": "CV",
         "SESSION_RUNNING": "Focussessie is aan het draaien",
         "START": "Start",
-        "TO_FOCUS_OVERLAY": "Naar Focus Overlay"
+        "TO_FOCUS_OVERLAY": "Naar Focus Overlay",
+        "END_FOCUS_SESSION": "Focussessie beëindigen"
       },
       "BACK_TO_PLANNING": "Terug naar Planning",
       "BREAK_RELAX_MSG": "Neem een moment om te ontspannen",
@@ -220,7 +248,12 @@
       "START_FOCUS_SESSION": "Start Focus Sessie",
       "START_NEXT_FOCUS_SESSION": "Start volgende Focus Sessie",
       "SWITCH_TASK": "Taak wisselen",
-      "WORKED_FOR": "Je hebt gewerkt voor"
+      "WORKED_FOR": "Je hebt gewerkt voor",
+      "GO_TO_PROCRASTINATION": "Hulp bij uitstellen",
+      "PAUSE_BREAK": "Pauze onderbreken",
+      "RESET_CYCLES": "Sessieteller resetten",
+      "RESUME_BREAK": "Pauze hervatten",
+      "SELECT_TASK_FIRST": "Selecteer eerst een taak om te beginnen met tijdregistratie"
     },
     "GITEA": {
       "FORM": {
@@ -245,35 +278,6 @@
         "STATUS": "Status",
         "SUMMARY": "Samenvatting",
         "WRITE_A_COMMENT": "Schrijf een opmerking"
-      }
-    },
-    "GITHUB": {
-      "FORM": {
-        "FILTER_USER": "Gebruikersnaam (bijv. Om wijzigingen zelf uit te filteren)",
-        "INVALID_TOKEN_MESSAGE": "Geen geldig GitHub token. Het moet beginnen met \"ghp_\".",
-        "IS_ASSIGNEE_FILTER": "Importeer alleen problemen die aan mij zijn toegewezen naar de achterstand",
-        "REPO": "\"gebruikersnaam/repositoryName\" voor de git repository die je wilt volgen",
-        "TOKEN": "Toegangstoken"
-      },
-      "FORM_SECTION": {
-        "HELP": "<p>Hier kunt u SuperProductivity configureren om openstaande GitHub-problemen voor een specifieke repository weer te geven in het paneel voor het maken van taken in de dagelijkse planningsweergave. Ze worden vermeld als suggesties en bieden een link naar het probleem en meer informatie erover.</p> <p>Daarnaast kunt u automatisch alle openstaande problemen toevoegen en synchroniseren met uw backlog.</p>"
-      },
-      "ISSUE_CONTENT": {
-        "ASSIGNEE": "Toegewezen aan",
-        "AT": "Bij",
-        "DESCRIPTION": "Omschrijving",
-        "LABELS": "Etiketten",
-        "LAST_COMMENT": "Laatste opmerking",
-        "LOAD_ALL_COMMENTS": "Laad alle {{nr}} opmerkingen",
-        "LOAD_DESCRIPTION_AND_ALL_COMMENTS": "Laad opmerkingen & alle opmerkingen",
-        "MARK_AS_CHECKED": "Markeer updates als aangevinkt",
-        "STATUS": "Toestand",
-        "SUMMARY": "Overzicht",
-        "WRITE_A_COMMENT": "Schrijf een reactie"
-      },
-      "S": {
-        "CONFIG_ERROR": "GitHub: Fout tijdens het mappen van gegevens. Is je repositorynaam correct?",
-        "ERR_UNKNOWN": "GitHub: onbekende fout {{statusCode}} {{errorMsg}}. API-limiet overschreden?"
       }
     },
     "GITLAB": {
@@ -330,6 +334,10 @@
       },
       "DEFAULT_PROJECT_DESCRIPTION": "Project toegewezen aan taken die zijn aangemaakt vanuit issues.",
       "DEFAULT_PROJECT_LABEL": "Standaard Superproductiviteitsproject",
+      "DIALOG": {
+        "ADVANCED_CONFIG": "Geavanceerde Configuratie",
+        "DELETE_CONFIRM": "Weet je zeker dat je deze issueprovider wilt verwijderen? Verwijdering betekent dat <strong>alle eerder geïmporteerde issuetaken hun referentie verliezen</strong>. Dit kan niet ongedaan worden gemaakt!"
+      },
       "HOW_TO_GET_A_TOKEN": "Hoe krijg ik een token?",
       "ISSUE_CONTENT": {
         "ASSIGNEE": "Toegewezen persoon",
@@ -367,7 +375,24 @@
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: bijgewerkte gegevens voor {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: bijgewerkte gegevens voor \"{{issueTitle}}\"",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling voor nieuwe {{issuesStr}}",
-        "POLLING_CHANGES": "{{issueProviderName}}: pollingwijzigingen voor {{issuesStr}}"
+        "POLLING_CHANGES": "{{issueProviderName}}: pollingwijzigingen voor {{issuesStr}}",
+        "AUTO_CREATE_FAILED": "Automatisch aanmaken van issue mislukt: {{errorMsg}}",
+        "CONNECTION_FAILED": "Verbinding mislukt",
+        "CONNECTION_SUCCESS": "Verbinding werkt!",
+        "PLUGIN_NOT_INSTALLED": "Vereiste plugin \"{{pluginName}}\" is niet geïnstalleerd.",
+        "TWO_WAY_SYNC_PUSH_FAILED": "Tweerichtingssynchronisatie verzenden mislukt: {{errorMsg}}"
+      },
+      "TWO_WAY_SYNC": {
+        "OFF": "Uit",
+        "AUTO_CREATE_ISSUES": "Automatisch issues aanmaken voor nieuwe taken",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Maakt automatisch een issue aan wanneer je een nieuwe hoofdtaak toevoegt aan het standaardproject. Vereist dat een standaardproject is ingesteld.",
+        "BOTH": "Beide (bidirectioneel)",
+        "NOTES": "Notities / Beschrijving synchronisatierichting",
+        "PULL_ONLY": "Alleen ophalen",
+        "PUSH_ONLY": "Alleen verzenden",
+        "SECTION": "Tweerichtingssynchronisatie (experimenteel)",
+        "STATUS": "Status synchronisatierichting",
+        "TITLE": "Titel synchronisatierichting"
       }
     },
     "ISSUE_PANEL": {
@@ -442,7 +467,8 @@
         "HOST": "Host (bijv .: http://my-host.de:1234)",
         "PASSWORD": "Token / wachtwoord",
         "USE_PAT": "Persoonlijke toegangstoken gebruiken in plaats van wachtwoord",
-        "USER_NAME": "E-mail / gebruikersnaam"
+        "USER_NAME": "E-mail / gebruikersnaam",
+        "WONKY_COOKIE_MODE": "Wonky Cookie Fallback-authenticatie (alleen desktop-app)"
       },
       "FORM_SECTION": {
         "ADV_CFG": "Geavanceerde configuratie",
@@ -489,7 +515,15 @@
         "TIMED_OUT": "Jira: Time-out voor verzoek",
         "TRANSITION": "Jira: Stel probleem \"{{issueKey}}\" in op \"{{name}}\"",
         "TRANSITION_SUCCESS": "Jira: Stel probleem {{issueKey}} in op <strong>{{gekozenTransition}}</strong>",
-        "TRANSITIONS_LOADED": "Jira: Overgangen geladen. Gebruik de onderstaande selecties om ze toe te wijzen"
+        "TRANSITIONS_LOADED": "Jira: Overgangen geladen. Gebruik de onderstaande selecties om ze toe te wijzen",
+        "UNABLE_TO_REASSIGN": "Jira: Kan ticket niet aan jezelf toewijzen, omdat je geen gebruikersnaam hebt opgegeven. Ga naar de instellingen."
+      },
+      "STEPPER": {
+        "CREDENTIALS": "Inloggegevens",
+        "DONE": "Je bent nu klaar.",
+        "LOGIN_SUCCESS": "Inloggen gelukt!",
+        "TEST_CREDENTIALS": "Inloggegevens testen",
+        "WELCOME_USER": "Welkom {{user}}!"
       }
     },
     "MARKDOWN_PASTE": {
@@ -523,7 +557,8 @@
         "TIME_FRAME_2_WEEKS": "2 weken",
         "TIME_FRAME_LABEL": "Tijdframe",
         "TIME_FRAME_MAX": "Max",
-        "TIME_SPENT": "Tijd besteed"
+        "TIME_SPENT": "Tijd besteed",
+        "YEAR": "Jaar"
       },
       "EVAL_FORM": {
         "DAILY_STATE": "Dagelijkse Staat",
@@ -533,8 +568,6 @@
         "FOCUS_WORK_TIME": "Gefocuste werktijd",
         "IMPACT_OF_WORK": "Hoe beoordeel je de impact van je werk vandaag?",
         "IMPACT_OF_WORK_HINT": "1: Geen betekenisvolle vooruitgang \u001f610 4: Aanzienlijke impact",
-        "NOTES": "Aantekeningen voor morgen",
-        "PRODUCTIVITY": "Hoe efficiënt heb je gewerkt?",
         "PRODUCTIVITY_SCORE": "Productiviteitsscore",
         "PRODUCTIVITY_SCORE_TOOLTIP": "65% Impact (1-4 schaal) \u001f4af 30% Focus op 4u doel \u001f4aa 5% totale werktijd (maximaal 10u)",
         "SCORE_BREAKDOWN_TITLE_PRODUCTIVITY": "7-daagse productiviteitsverdeling",
@@ -575,7 +608,39 @@
         "PLACEHOLDER_3": "Waar verslapte de focus - en hoe kun je die beschermen?",
         "PLACEHOLDER_4": "Welke taak gaf je energie? Welke putte het uit?",
         "PLACEHOLDER_5": "Eén ding om te herhalen. Eén ding om te veranderen.",
+        "REMIND_LABEL": "Herinner me hier morgen aan",
+        "REMINDER_CREATED": "Reflectieherinnering gepland voor morgen",
+        "REMINDER_ERROR": "Kon de herinnering niet plannen",
+        "REMINDER_NEEDS_TEXT": "Schrijf een reflectie voordat je om een herinnering vraagt",
+        "REMINDER_TASK_TITLE": "Bekijk reflectienotitie opnieuw",
         "TITLE": "Reflectienotitie"
+      }
+    },
+    "NEXTCLOUD_DECK": {
+      "ISSUE_CONTENT": {
+        "LABELS": "Labels",
+        "ASSIGNED_USERS": "Toegewezen gebruikers",
+        "DECK_DESCRIPTION": "Deck-beschrijving",
+        "STACK": "Stapel"
+      },
+      "FORM": {
+        "BASE_URL": "Nextcloud Basis-URL",
+        "FILTER_BY_ASSIGNEE": "Alleen aan mij toegewezen kaarten importeren",
+        "IS_TRANSITION_ISSUES_ENABLED": "Voltooiingsstatus en titel terugsynchroniseren naar Nextcloud Deck",
+        "PASSWORD": "Je Nextcloud app-wachtwoord",
+        "POLL_INTERVAL_MINUTES": "Polling-interval (minuten)",
+        "TITLE_TEMPLATE": "Taaktitelsjabloon",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variabelen: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Voorbeeld: [{BOARD}: {COLUMN}] {CARD_TITLE}. Laat leeg voor alleen de kaarttitel.",
+        "USERNAME": "Je Nextcloud gebruikersnaam"
+      },
+      "FORM_SECTION": {
+        "HELP": "Configureer je Nextcloud Deck-integratie om kaarten als taken te importeren. Gebruik een app-wachtwoord voor authenticatie."
+      },
+      "S": {
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Bord niet gevonden",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Kaart \"{{issueId}}\" lijkt te zijn verwijderd op de server.",
+        "ERR_CREDENTIALS_MISSING": "Voer eerst de Nextcloud-URL, gebruikersnaam en wachtwoord in.",
+        "ERR_LOAD_BOARDS": "Kan Deck-borden niet laden. Controleer je inloggegevens."
       }
     },
     "NOTE": {
@@ -652,7 +717,7 @@
         "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vereist dat de tijdregistratiemodule is ingeschakeld voor het OpenProject-project",
         "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Dialoogvenster voor tijdregistratie weergeven wanneer subtaken zijn voltooid",
         "PROJECT_ID": "Project-ID",
-        "PROJECT_ID_DESCRIPTION": "Kan worden gevonden als onderdeel van de url, bij het bekijken van het project in de browser.",
+        "PROJECT_ID_DESCRIPTION": "Kan worden gevonden als onderdeel van de URL, bij het bekijken van het project in de browser.",
         "SCOPE": "strekking",
         "SCOPE_ALL": "Allemaal",
         "SCOPE_ASSIGNED": "Toegewezen aan mij",
@@ -694,7 +759,8 @@
       "EDIT_REPEATED_TASK": "Herhaalde taak '{{taskName}}' bewerken",
       "NO_TASKS": "Geen taken",
       "PLAN_VIEW": {
-        "NO_SCHEDULED_ITEMS": "Geen geplande items"
+        "NO_SCHEDULED_ITEMS": "Geen geplande items",
+        "NO_DEADLINES": "Geen deadlines"
       },
       "S": {
         "REMOVED_PLAN_DATE": "Plangegevens voor taak '{{taskTitle}}' verwijderd",
@@ -738,7 +804,9 @@
         "L_IS_AUTO_CONTRAST": "Automatisch ingestelde tekstkleuren voor de beste leesbaarheid",
         "L_IS_DISABLE_BACKGROUND_TINT": "Schakel gekleurde achtergrondgradiënt uit",
         "L_THEME_COLOR": "Thema kleur",
-        "TITLE": "Thema"
+        "TITLE": "Thema",
+        "D_BACKGROUND_OVERLAY_OPACITY": "Pas deze waarde aan om de achtergrond meer of minder transparant te maken. De standaard is 20%.",
+        "L_BACKGROUND_OVERLAY_OPACITY": "Achtergrondafbeelding donkerder/lichter maken voor beter contrast"
       },
       "S": {
         "ARCHIVED": "Gearchiveerd project",
@@ -773,6 +841,15 @@
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
     "REDMINE": {
+      "DIALOG_TRACK_TIME": {
+        "ACTIVITY": "Activiteit",
+        "STARTED": "Gestart",
+        "TIME_SPENT": "Tijd besteed",
+        "INVALID_DATE": "De ingevoerde waarde is geen datum!",
+        "POST_TIME": "Tijd versturen",
+        "SUBMIT_TIME_FOR": "Tijd naar Redmine versturen voor",
+        "TITLE": "Redmine: Werklog indienen"
+      },
       "FORM": {
         "API_KEY": "API-toegangssleutel",
         "HOST": "Host (e.g.: https://redmine.org)",
@@ -781,7 +858,10 @@
         "SCOPE": "Omvang",
         "SCOPE_ALL": "Allemaal",
         "SCOPE_ASSIGNED": "Aan mij toegewezen",
-        "SCOPE_CREATED": "Aangemaakt door mij"
+        "SCOPE_CREATED": "Aangemaakt door mij",
+        "IS_SHOW_TIME_TRACKING_DIALOG": "Tijdregistratiedialoog tonen om te rapporteren aan Redmine",
+        "IS_SHOW_TIME_TRACKING_DIALOG_DESCRIPTION": "Vereist dat de tijdregistratiemodule is ingeschakeld voor het Redmine-project",
+        "IS_SHOW_TIME_TRACKING_DIALOG_FOR_EACH_SUB_TASK": "Tijdregistratiedialoog tonen wanneer subtaken zijn voltooid"
       },
       "FORM_SECTION": {
         "HELP": "<p>Hier kunt u SuperProductivity configureren om open Redmine (hetzij de online versie of een zelf gehoste instantie) problemen voor een specifiek project te tonen in het taakcreatiepaneel in de dagelijkse planningsweergave. Ze worden weergegeven als suggesties en geven een link naar het probleem en meer informatie erover.</p><p>Daarnaast kun je automatisch alle openstaande kwesties importeren.</p>",
@@ -793,6 +873,9 @@
         "MARK_AS_CHECKED": "Markeer wijzigingen als gecontroleerd",
         "PRIORITY": "Prioriteit",
         "STATUS": "Status"
+      },
+      "S": {
+        "POST_TIME_SUCCESS": "Redmine: Tijdregistratie succesvol aangemaakt voor {{issueTitle}}"
       }
     },
     "REFLECTION_NOTE": {
@@ -803,7 +886,10 @@
       "COUNTDOWN_BANNER": {
         "START_NOW": "Nu beginnen",
         "TXT": "<strong>{{title}}</strong> start om <strong>{{start}}</strong>!",
-        "TXT_MULTIPLE": "<strong>{{title}}</strong> start om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken verschuldigd)"
+        "TXT_MULTIPLE": {
+          "OTHER": "<strong>{{title}}</strong> start om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taken verschuldigd)",
+          "ONE": "<strong>{{title}}</strong> begint om <strong>{{start}}</strong>!<br> (en {{nrOfOtherBanners}} andere taak staat gepland)"
+        }
       },
       "S_ACTIVE_TASK_DUE": "De taak waaraan je momenteel werkt is nu af!<br/> ({{title}})",
       "S_REMINDER_ERR": "Fout voor herinneringsinterface"
@@ -815,10 +901,14 @@
       },
       "END": "Einde van het werk",
       "INSERT_BEFORE": "Voor",
+      "MONTH": "Maand",
+      "NOW": "Nu",
       "PLAN_END_DAY": "Plan aan het einde van de dag",
       "PLAN_START_DAY": "Plan aan het begin van de dag",
       "SHIFT_KEY_INFO": "Houd Shift ingedrukt om dagplanningsmodus te wisselen",
-      "START": "werk start"
+      "START": "werk start",
+      "LUNCH_BREAK": "Lunchpauze",
+      "NO_TASKS": "Er zijn momenteel geen taken. Voeg taken toe via de plus (+) knop in de bovenste balk."
     },
     "SEARCH_BAR": {
       "INFO": "Klik op het lijstpictogram om te zoeken naar gearchiveerde taken",
@@ -850,7 +940,20 @@
         "TITLE": "Eenvoudige tellers",
         "TYPE_CLICK_COUNTER": "Klik op teller",
         "TYPE_REPEATED_COUNTDOWN": "Herhaald aftellen",
-        "TYPE_STOPWATCH": "Stopwatch"
+        "TYPE_STOPWATCH": "Stopwatch",
+        "L_ICON_ON": "Icoon wanneer ingeschakeld",
+        "L_IS_HIDE_BUTTON": "Werkbalkknop verbergen",
+        "L_STREAK_MODE": "Reekstraceringsmodus",
+        "L_STREAK_MODE_SPECIFIC_DAYS": "Specifieke weekdagen",
+        "L_STREAK_MODE_WEEKLY_FREQUENCY": "Wekelijkse frequentie (bijv. 3 keer per week)",
+        "L_WEEKLY_FREQUENCY": "Voltooiingen per week"
+      },
+      "HABIT_TRACKER": {
+        "NEXT_WEEK": "Volgende week",
+        "TODAY": "Vandaag",
+        "ADD_HABIT": "Nieuwe gewoonte toevoegen",
+        "DISABLED_HABITS": "Uitgeschakelde gewoontes",
+        "PREV_WEEK": "Vorige week"
       },
       "S": {
         "GOAL_REACHED_1": "Je hebt je doel voor vandaag bereikt!",
@@ -869,7 +972,9 @@
         "FOLLOW_LINK": "Open de volgende link en kopieer de daar verstrekte auth-code in het onderstaande invoerveld.",
         "GET_AUTH_CODE": "Krijg de autorisatiecode",
         "L_AUTH_CODE": "Voer de authenticatiecode in",
-        "TITLE": "Inloggen: {{provider}}"
+        "TITLE": "Inloggen: {{provider}}",
+        "FOLLOW_LINK_MOBILE": "Tik op de onderstaande knop om te autoriseren. Je wordt automatisch teruggeleid naar de app.",
+        "WAITING_FOR_AUTH": "Wachten op authenticatie..."
       },
       "D_CONFLICT": {
         "ADDITIONAL_INFO": "Aanvullende info",
@@ -903,8 +1008,10 @@
         "BTN_OVER_WRITE_REMOTE": "Wijzigen en overschrijven op afstand",
         "CHANGE_PW_AND_DECRYPT": "Wijzig & Probeer te ontsleutelen",
         "P1": "Uw gegevens zijn versleuteld en de decodering is mislukt. Voer het juiste wachtwoord in!",
-        "P2": "U kunt ook uw wachtwoord wijzigen, waardoor alle externe gegevens worden overschreven.",
-        "PASSWORD": "Wachtwoord"
+        "PASSWORD": "Wachtwoord",
+        "P2_FORGOT_PW": "Als je je <strong>wachtwoord bent vergeten</strong>, voer dan het juiste wachtwoord in en klik op \"Ontsleuteling opnieuw proberen\".",
+        "P3_PW_CHANGED": "Als je je <strong>wachtwoord op een ander apparaat hebt gewijzigd</strong>, voer dan je nieuwe wachtwoord in en klik op \"Externe gegevens overschrijven\". Dit uploadt je lokale gegevens naar de server.",
+        "TITLE": "Ontsleuteling mislukt"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "App sluiten",
@@ -912,18 +1019,75 @@
         "BTN_FORCE_UPLOAD": "Upload lokaal forceren",
         "P1": "De gegevens voor synchronisatie op afstand zijn onsamenhangend!",
         "P2": "Betrokken model:",
-        "T1": "Laatste synchronisatie was onvolledig!",
-        "T2": "Je archiefgegevens zijn niet goed geüpload tijdens de laatste synchronisatie:",
         "T3": "Je hebt 2 opties:",
         "T4": "1. Ga naar je andere apparaat en voltooi daar de synchronisatie.",
         "T5": "2. Of je kunt de gegevens op afstand overschrijven met je lokale gegevens. Alle wijzigingen op afstand\n    verloren gaan!",
-        "T6": "Het maken van een back-up van de gegevens die je overschrijft wordt aanbevolen!!!"
+        "T6": "Het maken van een back-up van de gegevens die je overschrijft wordt aanbevolen!!!",
+        "BTN_FORCE_DOWNLOAD": "Externe gegevens forceren",
+        "INCOHERENT_P1": "De datum van je externe gegevens is uit de toekomst",
+        "INCOHERENT_P2": "Controleer de tijdsinstellingen op je systemen!"
       },
       "D_INITIAL_CFG": {
         "SAVE_AND_ENABLE": "Opslaan & Synchronisatie Inschakelen",
         "TITLE": "Synchronisatie Configureren"
       },
+      "D_RESTORE": {
+        "BTN_RESTORE": "Herstellen",
+        "CONFIRM_MSG": "Weet je absoluut zeker dat je wilt herstellen naar <strong>{{timestamp}}</strong>?<br><br>Dit zal <strong>al je huidige gegevens volledig vervangen</strong> en <strong>kan niet ongedaan worden gemaakt</strong>.",
+        "CONFIRM_TITLE": "Herstel bevestigen",
+        "ERROR_LOADING": "Kan herstelpunten niet laden",
+        "ERROR_RESTORE": "Kan gegevens niet herstellen",
+        "INTRO": "Selecteer een tijdstip om je gegevens naar te herstellen:",
+        "LOADING": "Herstelpunten laden...",
+        "NO_POINTS": "Geen herstelpunten beschikbaar. Herstelpunten worden aangemaakt wanneer je synchroniseert of gegevens importeert.",
+        "TITLE": "Herstellen uit geschiedenis",
+        "TYPE_BACKUP_IMPORT": "Backup-herstel",
+        "TYPE_REPAIR": "Automatische reparatie",
+        "TYPE_SYNC_IMPORT": "Volledige synchronisatie-import",
+        "WARNING": "Dit vervangt AL je huidige gegevens met de geselecteerde backup. Deze actie kan niet ongedaan worden gemaakt!"
+      },
+      "D_SERVER_MIGRATION_CONFIRM": {
+        "SKIP": "Overslaan",
+        "CONFIRM": "Lokale gegevens uploaden",
+        "MESSAGE": "Deze synchronisatieserver bevat al gegevens. Wil je je lokale gegevens uploaden om samen te voegen? Als je dit overslaat, worden sommige lokale wijzigingen mogelijk niet gesynchroniseerd.",
+        "TITLE": "Server bevat al gegevens"
+      },
       "FORM": {
+        "BTN_CHANGE_PASSWORD": "Wachtwoord wijzigen",
+        "FILE_BASED": {
+          "BTN_CHANGE_PASSWORD": "Wachtwoord wijzigen",
+          "L_CONFIRM_PASSWORD": "Bevestig wachtwoord",
+          "PASSWORD_MIN_LENGTH": "Wachtwoord moet minimaal 8 tekens zijn",
+          "PASSWORDS_DONT_MATCH": "Wachtwoorden komen niet overeen",
+          "BTN_DISABLE_ENCRYPTION": "Versleuteling uitschakelen",
+          "BTN_ENABLE_ENCRYPTION": "Versleuteling inschakelen",
+          "BTN_REMOVE_ENCRYPTION": "Versleuteling verwijderen",
+          "CHANGE_PASSWORD_SUCCESS": "Versleutelingswachtwoord succesvol gewijzigd",
+          "CHANGE_PASSWORD_WARNING": "WAARSCHUWING: Dit zal je gegevens opnieuw uploaden met het nieuwe wachtwoord. Alle andere apparaten hebben het nieuwe wachtwoord nodig voor synchronisatie.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Je huidige gegevens worden opnieuw geüpload zonder versleuteling",
+          "DISABLE_ENCRYPTION_ITEM_2": "Alle andere apparaten synchroniseren de onversleutelde gegevens",
+          "DISABLE_ENCRYPTION_ITEM_3": "Je kunt versleuteling op elk moment opnieuw inschakelen",
+          "DISABLE_ENCRYPTION_NOTE": "Je lokale gegevens worden NIET verwijderd.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Versleuteling succesvol uitgeschakeld",
+          "DISABLE_ENCRYPTION_TITLE": "Versleuteling uitschakelen?",
+          "DISABLE_ENCRYPTION_WARNING": "WAARSCHUWING: Dit zal je gegevens opnieuw uploaden zonder versleuteling.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Wat er zal gebeuren:",
+          "ENABLE_ENCRYPTION_FILE_BASED_ONLY": "Deze functie is alleen beschikbaar voor bestandsgebaseerde synchronisatieproviders.",
+          "ENABLE_ENCRYPTION_ITEM_1": "Je huidige gegevens worden opnieuw geüpload met versleuteling",
+          "ENABLE_ENCRYPTION_ITEM_2": "Alle andere apparaten hebben dit versleutelingswachtwoord nodig",
+          "ENABLE_ENCRYPTION_ITEM_3": "Je kunt versleuteling op elk moment uitschakelen",
+          "ENABLE_ENCRYPTION_NOT_READY": "Synchronisatie is niet ingeschakeld of geconfigureerd.",
+          "ENABLE_ENCRYPTION_NOTE": "Je lokale gegevens worden NIET verwijderd.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Voer eerst een versleutelingswachtwoord in.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Versleuteling succesvol ingeschakeld",
+          "ENABLE_ENCRYPTION_TITLE": "Versleuteling inschakelen?",
+          "ENABLE_ENCRYPTION_WARNING": "WAARSCHUWING: Dit zal je gegevens opnieuw uploaden met versleuteling. Als je je versleutelingswachtwoord vergeet, kunnen je gegevens niet worden hersteld.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Wat er zal gebeuren:",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Versleutelingswachtwoord wijzigen",
+          "L_NEW_PASSWORD": "Nieuw versleutelingswachtwoord",
+          "L_REMOVE_ENCRYPTION": "Of versleuteling verwijderen",
+          "REMOVE_ENCRYPTION_WARNING": "Het verwijderen van versleuteling zal je gegevens opnieuw uploaden zonder versleuteling. Alle apparaten moeten opnieuw worden geconfigureerd."
+        },
         "L_ENABLE_COMPRESSION": "Compressie inschakelen (snellere data overdracht)",
         "L_ENABLE_ENCRYPTION": "End-to-end encryptie inschakelen (experiment) - Maak je data ontoegankelijk voor je sync provider",
         "L_ENABLE_SYNCING": "Schakel synchronisatie in",
@@ -932,7 +1096,65 @@
         "L_SYNC_INTERVAL": "Synchronisatie-interval",
         "L_SYNC_PROVIDER": "Synchronisatieprovider",
         "LOCAL_FILE": {
-          "L_SYNC_FOLDER_PATH": "Map pad synchroniseren"
+          "L_SYNC_FOLDER_PATH": "Map pad synchroniseren",
+          "INFO_TEXT": "<strong>Waarschuwing:</strong> Gebruik <strong>geen</strong> bestandssynchronisatietools zoals Syncthing, Resilio of soortgelijke om deze map tussen apparaten te synchroniseren — ze <strong>zullen</strong> gegevensbeschadiging en conflicten veroorzaken. Gebruik voor synchronisatie tussen meerdere apparaten WebDAV, Dropbox of SuperSync.",
+          "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Bestandstoegang nodig"
+        },
+        "SUPER_SYNC": {
+          "BTN_CHANGE_PASSWORD": "Wachtwoord wijzigen",
+          "L_CONFIRM_PASSWORD": "Bevestig wachtwoord",
+          "PASSWORD_MIN_LENGTH": "Wachtwoord moet minimaal 8 tekens zijn",
+          "PASSWORDS_DONT_MATCH": "Wachtwoorden komen niet overeen",
+          "SETUP_ENCRYPTION_BTN": "Stel wachtwoord in",
+          "ACCESS_TOKEN_DESCRIPTION": "Plak het token dat je hebt gekopieerd van de serverloginpagina",
+          "BTN_DISABLE_ENCRYPTION": "Versleuteling uitschakelen",
+          "BTN_ENABLE_ENCRYPTION": "Versleuteling inschakelen",
+          "BTN_FORCE_OVERWRITE": "Server geforceerd overschrijven",
+          "BTN_GET_TOKEN": "Server openen en token ophalen",
+          "CHANGE_PASSWORD_SUCCESS": "Versleutelingswachtwoord succesvol gewijzigd",
+          "CHANGE_PASSWORD_WARNING": "WAARSCHUWING: Dit verwijdert permanent ALLE synchronisatiegeschiedenis en backups op de server. Eerdere versies kunnen niet worden hersteld. Je huidige gegevens worden opnieuw geüpload met het nieuwe wachtwoord. Alle andere apparaten hebben het nieuwe wachtwoord nodig.",
+          "DISABLE_ENCRYPTION_ENABLE_FIRST": "Schakel eerst synchronisatie in en sla je SuperSync-configuratie op, probeer het dan opnieuw.",
+          "DISABLE_ENCRYPTION_ITEM_1": "Alle synchronisatiegeschiedenis en backups op de server worden verwijderd",
+          "DISABLE_ENCRYPTION_ITEM_2": "Je huidige gegevens worden opnieuw geüpload zonder versleuteling",
+          "DISABLE_ENCRYPTION_ITEM_3": "Alle andere apparaten synchroniseren de onversleutelde gegevens",
+          "DISABLE_ENCRYPTION_NOT_READY": "Synchronisatie is niet ingeschakeld of geconfigureerd.",
+          "DISABLE_ENCRYPTION_NOTE": "Je lokale gegevens worden NIET verwijderd. Je kunt versleuteling op elk moment opnieuw inschakelen.",
+          "DISABLE_ENCRYPTION_SUCCESS": "Versleuteling succesvol uitgeschakeld",
+          "DISABLE_ENCRYPTION_SUPERSYNC_ONLY": "Deze functie is alleen beschikbaar voor SuperSync.",
+          "DISABLE_ENCRYPTION_TITLE": "Versleuteling uitschakelen?",
+          "DISABLE_ENCRYPTION_WARNING": "WAARSCHUWING: Dit verwijdert permanent ALLE versleutelde synchronisatiegegevens op de server. Dit is noodzakelijk omdat versleutelde en onversleutelde bewerkingen niet gemengd kunnen worden.",
+          "DISABLE_ENCRYPTION_WHAT_HAPPENS": "Wat er zal gebeuren:",
+          "E2E_ENCRYPTION_DESCRIPTION": "Langzamer, maar veiliger",
+          "ENABLE_ENCRYPTION_ITEM_1": "Alle synchronisatiegeschiedenis en backups op de server worden verwijderd",
+          "ENABLE_ENCRYPTION_ITEM_2": "Je huidige gegevens worden opnieuw geüpload met versleuteling",
+          "ENABLE_ENCRYPTION_ITEM_3": "Alle andere apparaten moeten dit versleutelingswachtwoord invoeren",
+          "ENABLE_ENCRYPTION_NOT_READY": "Synchronisatie is niet ingeschakeld of geconfigureerd.",
+          "ENABLE_ENCRYPTION_NOTE": "Je lokale gegevens worden NIET verwijderd. Je kunt versleuteling op elk moment uitschakelen.",
+          "ENABLE_ENCRYPTION_PASSWORD_REQUIRED": "Voer eerst een versleutelingswachtwoord in.",
+          "ENABLE_ENCRYPTION_SUCCESS": "Versleuteling succesvol ingeschakeld",
+          "ENABLE_ENCRYPTION_SUPERSYNC_ONLY": "Deze functie is alleen beschikbaar voor SuperSync.",
+          "ENABLE_ENCRYPTION_TITLE": "Versleuteling inschakelen?",
+          "ENABLE_ENCRYPTION_WARNING": "WAARSCHUWING: Dit verwijdert permanent ALLE onversleutelde synchronisatiegegevens op de server. Dit is noodzakelijk omdat versleutelde en onversleutelde bewerkingen niet gemengd kunnen worden. Als je je versleutelingswachtwoord vergeet, kunnen je gegevens niet worden hersteld.",
+          "ENABLE_ENCRYPTION_WHAT_HAPPENS": "Wat er zal gebeuren:",
+          "ENCRYPTION_ENCOURAGED": "Versleuteling is vereist voor SuperSync. Schakel versleuteling in om je gegevens te beschermen.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync versleutelt je gegevens met een wachtwoord voordat ze je apparaat verlaten</strong>, waardoor misbruik of lekken van je privégegevens vrijwel onmogelijk is.",
+          "ENCRYPTION_WARNING": "WAARSCHUWING: Als je je versleutelingswachtwoord vergeet, kunnen je gegevens niet worden hersteld. Dit wachtwoord staat los van je inlogwachtwoord. Je moet hetzelfde wachtwoord op alle apparaten gebruiken.",
+          "FORCE_OVERWRITE_CONFIRM": "Dit zal <strong>alle gegevens op de server verwijderen</strong> en je lokale gegevens met het nieuwe wachtwoord uploaden. Niet-gesynchroniseerde lokale wijzigingen gaan mogelijk verloren. Weet je zeker dat je wilt doorgaan?",
+          "FORCE_OVERWRITE_INFO": "Als je niet kunt synchroniseren omdat je het huidige versleutelingswachtwoord niet kent, kun je de server overschrijven met je lokale gegevens en een nieuw wachtwoord.",
+          "FORCE_OVERWRITE_TITLE": "Servergegevens overschrijven?",
+          "INFO_TEXT": "SuperSync houdt je taken gesynchroniseerd op al je apparaten in realtime. Je gegevens worden veilig opgeslagen op de synchronisatieserver. Let op: SuperSync is momenteel in bèta.",
+          "L_ACCESS_TOKEN": "Toegangstoken",
+          "L_CHANGE_ENCRYPTION_PASSWORD": "Versleutelingswachtwoord wijzigen",
+          "L_ENABLE_E2E_ENCRYPTION": "End-to-end-versleuteling inschakelen",
+          "L_NEW_PASSWORD": "Nieuw versleutelingswachtwoord",
+          "L_REMOVE_ENCRYPTION": "Of versleuteling verwijderen",
+          "L_SERVER_URL": "Server-URL",
+          "LOGIN_INSTRUCTIONS": "Klik op de onderstaande knop om de serverloginpagina te openen. Na het inloggen kopieer je je toegangstoken en plak je het hier.",
+          "REMOVE_ENCRYPTION_WARNING": "Het verwijderen van versleuteling verwijdert alle servergegevens en uploadt je gegevens opnieuw zonder versleuteling. Alle apparaten moeten opnieuw worden geconfigureerd.",
+          "SERVER_URL_DESCRIPTION": "Laat ongewijzigd voor de officiële server, of voer een aangepaste server-URL in",
+          "SETUP_DISABLE_SUPERSYNC_BTN": "SuperSync uitschakelen",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Gebruik hetzelfde wachtwoord op alle apparaten. Een vergeten wachtwoord kan worden gereset door externe gegevens te overschrijven.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Wachtwoord instellen"
         },
         "TITLE": "Synchroniseren",
         "WEB_DAV": {
@@ -946,8 +1168,42 @@
           "L_USER_NAME": "Gebruikersnaam",
           "S_FILL_ALL_FIELDS": "Vul eerst alle WebDAV-velden in",
           "S_TEST_FAIL": "Verbindingstest mislukt: {{error}} - Doel-URL: {{url}}",
-          "S_TEST_SUCCESS": "Verbindingstest geslaagd! Doel-URL: {{url}}"
-        }
+          "S_TEST_SUCCESS": "Verbindingstest geslaagd! Doel-URL: {{url}}",
+          "CONDITIONAL_HEADER_WARNING_MSG": "Je WebDAV-server ondersteunt geen conditionele headers (If-Unmodified-Since). Dit betekent dat Super Productivity geen gelijktijdige wijzigingen van andere apparaten kan detecteren tijdens het uploaden.<br><br>Synchronisatie werkt nog steeds, maar er is een klein risico op gegevensconflicten als je tegelijkertijd wijzigingen aanbrengt op meerdere apparaten.",
+          "CONDITIONAL_HEADER_WARNING_TITLE": "Verminderde synchronisatieveiligheid"
+        },
+        "BTN_DISABLE_ENCRYPTION": "Versleuteling uitschakelen",
+        "DROPBOX": {
+          "AUTH_SUCCESS": "Dropbox-authenticatie geslaagd! Inloggegevens opgeslagen.",
+          "BTN_AUTHENTICATE": "Authenticeren met Dropbox",
+          "BTN_REAUTHENTICATE": "Opnieuw authenticeren met Dropbox",
+          "INFO_TEXT": "Dropbox-authenticatie gebruikt OAuth. Klik op de onderstaande knop om te authenticeren met je Dropbox-account.",
+          "L_ACCESS_TOKEN": "Toegangstoken (gegenereerd uit Auth Code)",
+          "REAUTH_SUCCESS": "Dropbox herauthenticatie geslaagd! Inloggegevens bijgewerkt.",
+          "STATUS_CONFIGURED": "Dropbox is geconfigureerd en klaar om te synchroniseren",
+          "STATUS_NOT_CONFIGURED": "Niet geconfigureerd - authenticeer om synchronisatie in te schakelen"
+        },
+        "GOOGLE": {
+          "L_SYNC_FILE_NAME": "Synchronisatiebestandsnaam"
+        },
+        "IMPORT_ENCRYPTION_WARNING": {
+          "BTN_CONTINUE": "Importeren en versleuteling wijzigen",
+          "CURRENT_STATE": "Je huidige configuratie",
+          "ENCRYPTION_DISABLED": "Niet versleuteld",
+          "ENCRYPTION_ENABLED": "Versleuteld",
+          "IMPORTED_STATE": "Na import",
+          "ITEM_1": "Alle synchronisatiegeschiedenis en backups op de server worden permanent verwijderd",
+          "ITEM_2": "Je geïmporteerde gegevens worden geüpload met de nieuwe versleutelingsinstellingen",
+          "ITEM_3": "Alle andere apparaten moeten synchroniseren en hun versleutelingsinstellingen bijwerken",
+          "NOTE": "Je lokale gegevens worden vervangen door de geïmporteerde gegevens, ongeacht deze keuze.",
+          "NOTE_DISABLING": "Belangrijk: Zonder versleuteling kan iedereen met toegang tot je synchronisatieserver je gegevens lezen.",
+          "NOTE_ENABLING": "Belangrijk: Versleuteling vereist een wachtwoord. Als je dit wachtwoord vergeet, kunnen je gegevens NIET worden hersteld!",
+          "TITLE": "Versleutelingsinstellingen worden gewijzigd",
+          "WARNING_TEXT": "De backup die je importeert heeft andere versleutelingsinstellingen. Versleutelde en onversleutelde gegevens kunnen niet naast elkaar bestaan op de server, dus alle servergegevens moeten worden verwijderd.",
+          "WHAT_HAPPENS": "Wat er zal gebeuren:"
+        },
+        "L_MANUAL_SYNC_ONLY": "Alleen handmatig synchroniseren (automatische synchronisatie uitschakelen)",
+        "PASSWORD_SET_INFO": "🔒 Versleutelingswachtwoord is ingesteld."
       },
       "S": {
         "ALREADY_IN_SYNC": "Al gesynchroniseerd",
@@ -961,7 +1217,61 @@
         "INCOMPLETE_CFG": "Verificatie voor synchronisatie is mislukt. Controleer uw configuratie!",
         "SUCCESS_DOWNLOAD": "Gesynchroniseerde gegevens van op afstand",
         "SUCCESS_VIA_BUTTON": "Gegevens succesvol gesynchroniseerd",
-        "UNKNOWN_ERROR": "Onbekende fout tijdens het synchroniseren. Controleer de console."
+        "UNKNOWN_ERROR": "Onbekende fout tijdens het synchroniseren. Controleer de console.",
+        "ARCHIVE_OPERATION_FAILED": "Archiefbewerking mislukt. Sommige opschoning is mogelijk niet voltooid.",
+        "AUTH_SETUP_FAILED": "Authenticatie instellen mislukt. Als je de webapp gebruikt, zorg er dan voor dat je via HTTPS toegang hebt. Probeer anders de stabiele versie of meld dit als een bug.",
+        "AUTH_TOKEN_REJECTED": "Synchronisatietoken geweigerd door de server: {{reason}}. Haal een nieuw token op.",
+        "CHANGE_PASSWORD_FAILED": "Wachtwoord wijzigen mislukt: {{message}}",
+        "CLOCK_DRIFT_WARNING": "De klok van je apparaat lijkt {{minutes}} minuten af te wijken. Dit kan synchronisatieproblemen veroorzaken.",
+        "COMPACTION_FAILED": "Database-opschoning mislukt. App kan vertragen.",
+        "CONFLICT_DIALOG_TIMEOUT": "Synchronisatieconflictdialoog is verlopen en geannuleerd. Synchronisatie wordt bij de volgende trigger opnieuw geprobeerd.",
+        "CONFLICT_RESOLUTION_FAILED": "Synchronisatieconflictoplossing mislukt. Herlaad de app.",
+        "DATA_REPAIRED": "Gegevens automatisch gerepareerd ({{count}} problemen opgelost)",
+        "DECRYPTION_FAILED": "Kan gesynchroniseerde gegevens niet ontsleutelen. Controleer je versleutelingswachtwoord.",
+        "DEFERRED_ACTION_FAILED": "Sommige wijzigingen tijdens synchronisatie konden niet worden opgeslagen. Herlaad om te herstellen.",
+        "DIALOG_RESULT_ERROR": "Er is een fout opgetreden bij het verwerken van het synchronisatiedialoog. Probeer het opnieuw.",
+        "DISABLE_ENCRYPTION_FAILED": "Versleuteling uitschakelen mislukt: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Versleuteling inschakelen mislukt: {{message}}",
+        "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Versleuteling is uitgeschakeld op een ander apparaat. Je synchronisatie-instellingen zijn bijgewerkt.",
+        "ENCRYPTION_PASSWORD_REQUIRED": "Versleutelde gegevens ontvangen maar er is geen versleutelingswachtwoord geconfigureerd. Stel je versleutelingswachtwoord in bij de synchronisatie-instellingen.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Versleuteling is vereist voor SuperSync. Stel een versleutelingswachtwoord in om te blijven synchroniseren.",
+        "ERROR_PAYLOAD_TOO_LARGE": "Synchronisatiefout: Je gegevens zijn te groot om te uploaden.\n\nDit gebeurt wanneer je veel gearchiveerde taken hebt. Je gegevens zijn NIET gesynchroniseerd!\n\nNeem contact op met ondersteuning voor hulp.",
+        "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Fout bij synchroniseren. Kan externe gegevens niet lezen. Misschien heb je versleuteling ingeschakeld en komt je lokale wachtwoord niet overeen met het wachtwoord waarmee de externe gegevens zijn versleuteld?",
+        "FINISH_DAY_SYNC_ERROR": "Synchronisatiefout bij het afsluiten van de dag. Probeer het opnieuw.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Initiële synchronisatie geannuleerd. Externe gegevens zijn niet toegepast.",
+        "HYDRATION_FAILED": "Kan gegevens niet laden. Herlaad de app.",
+        "IMPORTING": "Gegevens importeren",
+        "INCOMPLETE_OP_SYNC": "Synchronisatie onvolledig: {{count}} bewerkingsbestand(en) konden niet worden gedownload",
+        "INITIAL_SYNC_ERROR": "Initiële synchronisatie mislukt",
+        "INTEGRITY_CHECK_FAILED": "Gegevensintegriteitsprobleem gedetecteerd. Automatische reparatie geprobeerd. Als je problemen ervaart, herlaad dan de app.",
+        "INVALID_AUTH_CODE": "De autorisatiecode is geweigerd. Probeer opnieuw te authenticeren en zorg ervoor dat je de code exact kopieert.",
+        "INVALID_OPERATION_PAYLOAD": "Ongeldige bewerking gedetecteerd. Wijzigingen worden mogelijk niet opgeslagen - herlaad de app.",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} lokale wijziging(en) verwijderd - item(s) zijn verwijderd op een ander apparaat",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} niet-opgeslagen lokale wijziging(en) verwijderd - synchronisatie heeft nieuwere gegevens gedownload",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Synchronisatie geannuleerd. Je lokale gegevens zijn behouden.",
+        "LOCK_TIMEOUT_ERROR": "Synchronisatie time-out bij het wachten op een vorige bewerking. Probeer het opnieuw.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Synchronisatieconflicten automatisch opgelost: {{localWins}} lokale overwinning(en), {{remoteWins}} externe overwinning(en)",
+        "MIGRATION_FAILED": "Sommige synchronisatiegegevens konden niet worden gemigreerd en zijn overgeslagen. Dit kan duiden op gegevensbeschadiging of een bug.",
+        "NEWER_VERSION_AVAILABLE": "Sommige wijzigingen zijn van een nieuwere app-versie. Overweeg bij te werken voor volledige compatibiliteit.",
+        "OPERATION_PERMANENTLY_FAILED": "Sommige synchronisatiebewerkingen zijn mislukt en konden niet worden toegepast. Gegevens zijn mogelijk onvolledig.",
+        "OVERWRITE_SERVER_FAILED": "Servergegevens overschrijven mislukt: {{message}}",
+        "PARTIAL_APPLY_FAILURE": "Sommige synchronisatiebewerkingen konden niet worden toegepast. Gegevens zijn gevalideerd.",
+        "PERSIST_FAILED": "Kan wijzigingen niet opslaan. Status is mogelijk inconsistent - herlaad de app.",
+        "REMOTE_DATA_TOO_OLD": "Externe gegevens zijn te oud om te verwerken. Werk je externe app bij.",
+        "REPLAY_LOCAL_OPS_FAILED": "Kan lokale bewerkingen na import niet opnieuw afspelen. Sommige recente wijzigingen gaan mogelijk verloren. Gegevens zijn gevalideerd.",
+        "RESTORE_ERROR": "Kan gegevens niet herstellen",
+        "RESTORE_SUCCESS": "Gegevens succesvol hersteld",
+        "SERVER_MIGRATION_VALIDATION_FAILED": "Kan gegevens niet naar server migreren - lokale gegevensvalidatie mislukt. Probeer een backup te importeren.",
+        "STORAGE_QUOTA_EXCEEDED": "Synchronisatieserveropslag is vol. Je wijzigingen worden NIET gesynchroniseerd! Archiveer oude taken of upgrade je plan.",
+        "STORAGE_RECOVERED_AFTER_COMPACTION": "Opslag was bijna vol. Oude gegevens succesvol opgeschoond.",
+        "TIMEOUT_ERROR": "Synchronisatiebewerking time-out. {{suggestion}}",
+        "TOO_MANY_OPS_TO_DOWNLOAD": "Te veel synchronisatiebewerkingen om te downloaden. Sommige wijzigingen ontbreken mogelijk.",
+        "UPLOAD_ERROR": "Onbekende uploadfout (instellingen correct?): {{err}}",
+        "UPLOAD_OPS_REJECTED": "{{count}} bewerking(en) zijn permanent geweigerd door de server en worden niet gesynchroniseerd.",
+        "VECTOR_CLOCK_LIMIT_REACHED": "Synchronisatie heeft {{originalSize}} apparaten/browsers bijgehouden, waarmee de limiet van {{maxSize}} is overschreden. Inactieve apparaatgegevens zijn opgeschoond. Overweeg een synchronisatiereset als je problemen ervaart.",
+        "VERSION_TOO_OLD": "Je app-versie is te oud voor de gesynchroniseerde gegevens. Werk bij!",
+        "VERSION_UNSUPPORTED": "Kan niet synchroniseren: gegevens vereisen een nieuwere app-versie. Werk bij.",
+        "WEB_CRYPTO_NOT_AVAILABLE": "Versleuteling is niet beschikbaar op dit apparaat. Op Android vereist versleuteling een beveiligde context (HTTPS) die niet beschikbaar is. Schakel versleuteling uit in de synchronisatie-instellingen of synchroniseer vanuit een desktop-webbrowser."
       },
       "SAFETY_BACKUP": {
         "BTN_CLEAR_ALL": "Alles wissen",
@@ -990,6 +1300,59 @@
         "TOOLTIP_DELETE": "Deze back-up verwijderen",
         "TOOLTIP_REFRESH": "Back-uplijst vernieuwen",
         "TOOLTIP_RESTORE": "Deze back-up herstellen (vervangt alle huidige gegevens)"
+      },
+      "BTN_RESTORE_FROM_HISTORY": "Herstellen uit geschiedenis",
+      "D_DATA_REPAIR_CONFIRM": {
+        "MSG": "Je gegevens lijken beschadigd te zijn. Wil je automatische reparatie proberen? Dit kan leiden tot klein gegevensverlies.",
+        "TITLE": "Gegevensbeschadiging gedetecteerd"
+      },
+      "D_DATA_REPAIRED": {
+        "MSG": "Je gegevens zijn automatisch gerepareerd ({{count}} problemen opgelost). Dit zou normaal niet moeten gebeuren. Als dit zich herhaaldelijk voordoet, meld het dan.",
+        "TITLE": "Gegevensreparatie uitgevoerd",
+        "UNKNOWN_ERROR": "Onbekende synchronisatiefout: {{err}}"
+      },
+      "D_ENTER_PASSWORD": {
+        "BTN_FORCE_OVERWRITE": "Lokale gegevens gebruiken",
+        "BTN_SAVE_AND_SYNC": "Opslaan en synchroniseren",
+        "FORCE_OVERWRITE_CONFIRM": "Dit zal <strong>alle gegevens op de server verwijderen</strong> en je lokale gegevens versleuteld met dit wachtwoord uploaden. Doorgaan?",
+        "FORCE_OVERWRITE_INFO": "Als je liever je lokale gegevens behoudt, kun je de server overschrijven.",
+        "FORCE_OVERWRITE_TITLE": "Servergegevens overschrijven?",
+        "MESSAGE": "De synchronisatieserver bevat versleutelde gegevens, maar er is geen versleutelingswachtwoord geconfigureerd op dit apparaat. Voer je versleutelingswachtwoord in om je gegevens te ontsleutelen en synchroniseren.",
+        "PASSWORD_LABEL": "Versleutelingswachtwoord",
+        "TITLE": "Versleutelingswachtwoord vereist"
+      },
+      "D_FRESH_CLIENT_CONFIRM": {
+        "MESSAGE": "Dit lijkt een nieuwe installatie te zijn. Externe gegevens met {{count}} wijzigingen zijn gevonden. Wil je deze downloaden en je lokale gegevens overschrijven?",
+        "OK": "Externe gegevens downloaden",
+        "TITLE": "Initiële synchronisatie"
+      },
+      "D_LOCAL_DATA_REPLACE_CONFIRM": {
+        "MESSAGE": "Je hebt {{count}} niet-gesynchroniseerde lokale wijzigingen die zullen worden vervangen door externe gegevens. Wil je doorgaan?",
+        "TITLE": "Lokale gegevens vervangen?"
+      },
+      "D_PERMISSION": {
+        "DISABLE_SYNC": "Synchronisatie uitschakelen",
+        "PERM_FILE": "Toestemming geven",
+        "TEXT": "<p>Je bestandstoegang voor lokale synchronisatie is ingetrokken.</p>",
+        "TITLE": "Synchronisatie: Lokale bestandstoegang geweigerd"
+      },
+      "D_SYNC_IMPORT_CONFLICT": {
+        "FILTERED_CHANGES": "Betreffende wijzigingen",
+        "IMPORT_DATE": "Importdatum",
+        "MSG_INCOMING": "Je gegevens zijn volledig vervangen op een ander apparaat. Je hebt {{filteredOpCount}} lokale wijzigingen die mogelijk niet worden overgenomen.",
+        "MSG_INCOMING_NO_OPS": "Je gegevens zijn volledig vervangen op een ander apparaat. Dit apparaat zal synchroniseren naar de nieuwe staat.",
+        "MSG_LOCAL_FILTERS": "Je lokale gegevens zijn geïmporteerd/hersteld, maar de server heeft {{filteredOpCount}} wijzigingen van andere apparaten die niet automatisch samengevoegd kunnen worden.",
+        "REASON_BACKUP_RESTORE": "Reden: Een backup is hersteld op een ander apparaat.",
+        "REASON_FILE_IMPORT": "Reden: Een gegevensbestand is geïmporteerd op een ander apparaat.",
+        "REASON_FORCE_UPLOAD": "Reden: Een ander apparaat heeft zijn lokale gegevens geforceerd geüpload.",
+        "REASON_PASSWORD_CHANGED": "Reden: Het versleutelingswachtwoord is gewijzigd op een ander apparaat.",
+        "REASON_REPAIR": "Reden: Er is een automatische gegevensreparatie uitgevoerd.",
+        "REASON_SERVER_MIGRATION": "Reden: Gegevens zijn gemigreerd naar een nieuwe synchronisatieserver.",
+        "REASON_UNKNOWN": "Reden: Een volledige statusvervanging is uitgevoerd.",
+        "RECOMMEND_SERVER": "Aanbevolen: Accepteer de servergegevens om gesynchroniseerd te blijven met het andere apparaat.",
+        "TITLE": "Synchronisatieconflict gedetecteerd",
+        "USE_LOCAL": "Mijn gegevens gebruiken",
+        "USE_REMOTE": "Servergegevens gebruiken"
       }
     },
     "TAG": {
@@ -1011,7 +1374,8 @@
         "TITLE": "Basis instellingen"
       },
       "S": {
-        "UPDATED": "Taginstellingen zijn bijgewerkt"
+        "UPDATED": "Taginstellingen zijn bijgewerkt",
+        "ARCHIVE_CLEANUP_FAILED": "Kan gearchiveerde gegevens voor verwijderd label niet opschonen"
       },
       "TTL": {
         "ADD_NEW_TAG": "Nieuwe tag toevoegen"
@@ -1043,6 +1407,7 @@
         "ESTIMATE_BUTTON": "Schatting",
         "PLACEHOLDER_CREATE": "Een taak titel #tag @16:00",
         "PLACEHOLDER_SEARCH": "Bestaande taak of issues toevoegen...",
+        "REPEAT_BUTTON": "Herhalen",
         "SEARCH_INFO_TEXT": "Zoek en voeg issues en taken toe uit archief en andere projecten",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Vandaag",
@@ -1056,25 +1421,38 @@
         "TOOLTIP_CLEAR_ESTIMATE": "Schatting wissen",
         "TOOLTIP_CLEAR_TAGS": "Tags wissen",
         "TOOLTIP_DISABLE_SEARCH": "Zoeken naar issues uitschakelen (Ctrl+2)",
-        "TOOLTIP_ENABLE_SEARCH": "Zoeken naar issues inschakelen (Ctrl+2)"
+        "TOOLTIP_ENABLE_SEARCH": "Zoeken naar issues inschakelen (Ctrl+2)",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Schakelen tussen toevoegen aan backlog / vandaag",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Schakelen tussen toevoegen boven- / onderaan lijst",
+        "TOOLTIP_CLEAR_REPEAT": "Herhalingsinstelling wissen"
       },
       "ADDITIONAL_INFO": {
         "ADD_ATTACHMENT": "Voeg bijlage toe",
         "ADD_SUB_TASK": "Subtaak toevoegen",
         "ATTACHMENTS": "Bijlagen ({{nr}})",
+        "DEADLINE": "Deadline",
         "DUE": "Gepland op",
         "LOCAL_ATTACHMENTS": "Lokale bijlagen",
         "NOTES": "Opmerkingen",
         "PARENT": "Ouder",
+        "REMINDER": "Herinnering",
         "REPEAT": "Herhaling",
         "SCHEDULE_TASK": "Taak plannen",
         "SUB_TASKS": "Subtaken ({{nr}})",
         "TIME": "Tijd",
-        "TITLE_PLACEHOLDER": "Voer een titel in"
+        "TITLE_PLACEHOLDER": "Voer een titel in",
+        "COMPLETED_ON": "Voltooid op",
+        "CREATED_ON": "Aangemaakt op",
+        "DEADLINE_DUE_BY": "Vervalt op",
+        "DEADLINE_OVERDUE": "Te laat!",
+        "FROM_PARENT": "(van bovenliggende taak)",
+        "ISSUE": "Issue-link"
       },
       "B": {
         "ADD_HALF_HOUR": "Voeg 1/2 uur toe",
-        "ESTIMATE_EXCEEDED": "Geschatte tijd overschreden voor \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "Geschatte tijd overschreden voor \"{{title}}\"",
+        "ADD_ALL_TO_TODAY": "Alles aan vandaag toevoegen",
+        "DEADLINES_TODAY": "{{count}} ta(a)k(en) met deadline vandaag nog niet ingepland"
       },
       "CMP": {
         "ADD_SUB_TASK": "Subtaak toevoegen",
@@ -1105,7 +1483,14 @@
         "TRACK_TIME": "Begin met het bijhouden van de tijd",
         "TRACK_TIME_STOP": "Pauzeer de volgtijd",
         "UNSCHEDULE_TASK": "Taak ongepland",
-        "UPDATE_ISSUE_DATA": "Update probleemgegevens"
+        "UPDATE_ISSUE_DATA": "Update probleemgegevens",
+        "EDIT_DEADLINE": "Deadline bewerken",
+        "REMOVE_DEADLINE": "Deadline verwijderen",
+        "SET_DEADLINE": "Deadline instellen"
+      },
+      "D_CONFIRM_DELETE": {
+        "OK": "Verwijderen",
+        "MSG": "Weet je zeker dat je de taak \"{{title}}\" wilt verwijderen?"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
         "MSG": "Wil je de nieuwe tag {{tagsTxt}}aanmaken?",
@@ -1115,6 +1500,23 @@
         "MSG": "Wilt u de nieuwe tags {{tagsTxt}}aanmaken?",
         "OK": "Labels maken"
       },
+      "D_DEADLINE": {
+        "QA_NEXT_MONTH": "Volgende maand",
+        "QA_NEXT_WEEK": "Volgende week",
+        "QA_TODAY": "Vandaag",
+        "QA_TOMORROW": "Morgen",
+        "RO_NEVER": "Nooit",
+        "ADD_TIME": "Tijd toevoegen",
+        "REMIND_AT": "Herinneren om",
+        "REMOVE_DEADLINE": "Deadline verwijderen",
+        "RO_1H": "1 uur ervoor",
+        "RO_5M": "5 minuten ervoor",
+        "RO_10M": "10 minuten ervoor",
+        "RO_15M": "15 minuten ervoor",
+        "RO_30M": "30 minuten ervoor",
+        "RO_AT_DEADLINE": "Op de deadline",
+        "SET_DEADLINE": "Deadline instellen"
+      },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "Voeg alles toe aan vandaag",
         "ADD_TO_TODAY": "Voeg toe aan vandaag",
@@ -1123,6 +1525,7 @@
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Alle herinneringen negeren (Blijf in Vandaag)",
         "DISMISS_REMINDER_KEEP_TODAY": "Herinnering negeren (Blijf in Vandaag)",
         "DONE": "Gedaan",
+        "DUE_SECTION": "Gepland",
         "DUE_TASK": "Gepaste taak",
         "DUE_TASKS": "Geplande taken",
         "RESCHEDULE_EDIT": "Bewerken (opnieuw plannen)",
@@ -1131,7 +1534,12 @@
         "SNOOZE_ALL": "Snooze All",
         "START": "Begin",
         "UNSCHEDULE": "Ongepland",
-        "UNSCHEDULE_ALL": "Alles uitplannen"
+        "UNSCHEDULE_ALL": "Alles uitplannen",
+        "CLEAR_ALL_REMINDERS": "Alle herinneringen wissen",
+        "CLEAR_REMINDER": "Herinnering wissen",
+        "DEADLINE_REMINDER": "Deadlineherinnering",
+        "DEADLINE_SECTION": "Deadlines",
+        "TASK_REMINDERS": "Taakherinneringen"
       },
       "D_SCHEDULE_TASK": {
         "QA_NEXT_MONTH": "Volgende maand plannen",
@@ -1187,7 +1595,9 @@
         "REMINDER_DELETED": "Herinnering voor taak verwijderd",
         "REMINDER_UPDATED": "Herinnering voor taak \"{{title}}\" bijgewerkt",
         "TASK_ALREADY_EXISTS": "Taak <strong>{{title}}<\\/strong> bestaat al",
-        "TASK_CREATED": "Taak \"{{taskTitle}}\" gemaakt"
+        "TASK_CREATED": "Taak \"{{taskTitle}}\" gemaakt",
+        "DEADLINE_REMOVED": "Deadline verwijderd",
+        "DEADLINE_SET": "Deadline ingesteld voor {{date}}"
       },
       "SELECT_OR_CREATE": "Selecteer of maak een taak",
       "SUMMARY_TABLE": {
@@ -1242,11 +1652,11 @@
         "ADD": "Voeg herhaalde taakconfiguratie toe",
         "ADVANCED_CFG": "Uitgebreide configuratie",
         "EDIT": "Herhaal taakconfiguratie bewerken",
-        "HELP1": "Herhalende taken zijn bedoeld voor dagelijkse taken, bijvoorbeeld: \"Organisatie\", \"Dagelijkse vergadering\", \"Code review\", \"E-mails controleren\" of soortgelijke taken die waarschijnlijk steeds weer zullen voorkomen.",
-        "HELP2": "Eenmaal geconfigureerd, wordt een herhalende taak opnieuw gemaakt op elke hieronder geselecteerde dag zodra u uw project opent en wordt automatisch gemarkeerd als voltooid aan het einde van de dag. Ze worden als verschillende instanties behandeld. U kunt dus vrijelijk subtaken toevoegen enz.",
-        "HELP3": "Taken geïmporteerd uit Jira of Git-problemen kunnen niet worden herhaald. Alle herinneringen worden ook verwijderd bij een herhalende taak.",
-        "HELP4": "Een opmerking over het bestelveld: Verwijzend naar herhaalbare taken voor de aanmaakvolgorde. Alleen van kracht voor herhaalbare taken die tegelijkertijd worden gemaakt. Een lagere waarde betekent dat een taak hoger in de lijst komt te staan, een lager getal dat deze lager komt te staan. Een waarde groter dan 0 betekent dat items onderaan normale taken worden gemaakt.",
-        "TAG_LABEL": "Tags om toe te voegen"
+        "HEATMAP_LABEL": "Activiteit",
+        "TAG_LABEL": "Tags om toe te voegen",
+        "TIME_SPENT_THIS_MONTH": "Deze maand",
+        "TIME_SPENT_THIS_WEEK": "Deze week",
+        "TIME_SPENT_TOTAL": "Totaal"
       },
       "F": {
         "C_DAY": "Dag",
@@ -1261,8 +1671,6 @@
         "INHERIT_SUBTASKS_DESCRIPTION": "Wanneer ingeschakeld, worden subtaken van de meest recente taakinstantie opnieuw aangemaakt met de herhalende taak",
         "MONDAY": "maandag",
         "NOTES": "Standaard notities",
-        "ORDER": "Bestellen",
-        "ORDER_DESCRIPTION": "Aanmaakvolgorde van herhaalbare taken. Heeft alleen invloed op herhaalbare taken die tegelijkertijd zijn gemaakt. Een lagere waarde betekent dat een taak hoger in de lijst wordt gemaakt, een lager aantal dat het verderop in de lijst staat. Een waarde groter dan 0 betekent dat items onderaan normale taken worden gemaakt.",
         "Q_CUSTOM": "Aangepaste herhalingsconfiguratie",
         "Q_DAILY": "Iedere dag",
         "Q_MONDAY_TO_FRIDAY": "Iedere maandag tot vrijdag",
@@ -1285,8 +1693,13 @@
         "THURSDAY": "donderdag",
         "TITLE": "Titel voor taak",
         "TUESDAY": "dinsdag",
-        "WEDNESDAY": "woensdag"
-      }
+        "WEDNESDAY": "woensdag",
+        "Q_MONTHLY_FIRST_DAY": "Elke maand op de eerste dag",
+        "Q_MONTHLY_LAST_DAY": "Elke maand op de laatste dag",
+        "SKIP_OVERDUE": "Verlopen instanties overslaan",
+        "SKIP_OVERDUE_DESCRIPTION": "Wanneer ingeschakeld en de app wordt geopend na het missen van een geplande herhaling (bijv. een wekelijkse taak waarbij vandaag geen geplande dag is), wordt de gemiste instantie stilletjes overgeslagen in plaats van als verlopen taak aangemaakt"
+      },
+      "SNACK_REPEAT_DIALOG_FAIL": "Kan herhalingsconfiguratie niet openen. Je kunt het configureren via het taakmenu."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1307,18 +1720,18 @@
         "GROUP_SCHEDULED_DATE": "Geplande datum",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Reset alles",
+        "SAVE_SORT": "Opslaan als standaard",
         "SCHEDULED_NEXT_MONTH": "Volgende maand",
         "SCHEDULED_NEXT_WEEK": "Volgende week",
         "SCHEDULED_THIS_MONTH": "Deze maand",
         "SCHEDULED_THIS_WEEK": "Deze week",
         "SCHEDULED_TODAY": "Vandaag",
         "SCHEDULED_TOMORROW": "Morgen",
+        "SORT": "Sorteren",
         "SORT_CREATION_DATE": "Creatiedatum",
         "SORT_DEFAULT": "Standaard",
         "SORT_NAME": "Naam",
-        "SORT_PERMANENT": "Sorteren (permanent)",
         "SORT_SCHEDULED_DATE": "Geplande datum",
-        "SORT_TEMPORARY": "Sorteren (tijdelijk)",
         "TIME_1HOUR": "> 1 Uur",
         "TIME_2HOUR": "> 2 Uren",
         "TIME_10MIN": "> 10 Minuten",
@@ -1360,6 +1773,31 @@
         "TASK": "taak",
         "TRACK_TO": "Track naar:",
         "UNTRACKED_TIME": "Niet-bijgehouden tijd:"
+      },
+      "D_ARCHIVE_COMPRESS": {
+        "BTN_COMPRESS": "Archief comprimeren",
+        "CONFIRM_MSG": "Weet je zeker dat je het archief wilt comprimeren? Dit verwijdert permanent de hierboven vermelde gegevens!",
+        "CONFIRM_TITLE": "Archiefcompressie bevestigen",
+        "ESTIMATED_SAVINGS": "Geschatte ruimtebesparing",
+        "INTRO": "Dit comprimeert je gearchiveerde taken door oude gegevens te verwijderen. Deze bewerking wordt gesynchroniseerd naar alle apparaten.",
+        "ISSUE_FIELDS_TO_CLEAR": "Issue-velden om te wissen",
+        "LOADING": "Archief analyseren...",
+        "NO_DATA": "Geen gegevens om te comprimeren. Je archief is al geoptimaliseerd.",
+        "NOTES_TO_CLEAR": "Taaknotities om te wissen (ouder dan 1 jaar)",
+        "SUBTASKS_TO_DELETE": "Subtaken om te verwijderen (tijd samengevoegd met bovenliggende taak)",
+        "TITLE": "Archief comprimeren",
+        "WARNING": "Deze bewerking kan niet ongedaan worden gemaakt. Zorg ervoor dat je een backup hebt voordat je doorgaat!"
+      }
+    },
+    "VOICE_REMINDER": {
+      "FORM": {
+        "HELP": "Herhaalt de geconfigureerde zin elke X bij het bijhouden van de tijd voor een taak.",
+        "L_INTERVAL": "Interval om zin te herhalen",
+        "L_TEXT": "Tekst",
+        "L_TEXT_DESCRIPTION": "Bijvoorbeeld: \"Werk aan ${currentTaskTitle}!\"",
+        "L_VOICE": "Selecteer een stem",
+        "L_VOICE_DESCRIPTION": "Kies een stem",
+        "TITLE": "Spraakherinnering"
       }
     },
     "WORKLOG": {
@@ -1370,7 +1808,9 @@
         "TASKS": "Taken",
         "TOTAL_TIME": "Totaal bestede tijd:",
         "WEEK_NR": "Week {{nr}}",
-        "WORKED": "Werkte"
+        "WORKED": "Werkte",
+        "RESTORE_TASK_FROM_ARCHIVE": "Taak uit archief herstellen",
+        "VIEW_TASK_DETAILS": "Taakdetails bekijken"
       },
       "D_CONFIRM_RESTORE": "Weet u zeker dat u de taak <strong>\"{{title}}\"</strong> naar uw takenlijst van vandaag wilt verplaatsen?",
       "D_EXPORT_TITLE": "Worklog Export {{start}} - {{end}}",
@@ -1417,6 +1857,11 @@
         "NO_DATA": "Nog geen taken deze week.",
         "TITLE": "Titel"
       }
+    },
+    "CLIPBOARD_IMAGE": {
+      "PASTE_SUCCESS": "Afbeelding succesvol geplakt",
+      "SIZE_EXCEEDED": "Afbeeldingsgrootte ({{actualSize}}) overschrijdt de maximaal toegestane grootte ({{maxSize}})",
+      "STORAGE_QUOTA_EXCEEDED": "Opslagquotum overschreden. Maak ruimte vrij of verklein de afbeeldingen."
     }
   },
   "FILE_IMEX": {
@@ -1440,15 +1885,18 @@
     "S_ERR_INVALID_URL": "Import mislukt: Ongeldige URL opgegeven",
     "S_ERR_NETWORK": "Import mislukt: Netwerkfout bij het ophalen van gegevens van URL",
     "S_IMPORT_FROM_URL_ERR_DECODE": "Fout: Kon de URL-parameter voor import niet decoderen. Zorg ervoor dat deze correct is geformatteerd.",
-    "URL_PLACEHOLDER": "Voer de URL in om te importeren"
+    "URL_PLACEHOLDER": "Voer de URL in om te importeren",
+    "BTN_COMPRESS_ARCHIVE": "Archief comprimeren"
   },
   "G": {
     "ADD": "Voeg  toe",
     "ADVANCED_CFG": "Geavanceerde Configuratie",
+    "APPLY": "Toepassen",
     "CANCEL": "annuleren",
     "CLOSE": "Sluiten",
     "COMPLETE": "Volledig",
     "CONFIRM": "Bevestigen",
+    "CONTINUE": "Doorgaan",
     "DELETE": "Verwijderen",
     "DISMISS": "Afwijzen",
     "DO_IT": "Doe het!",
@@ -1464,36 +1912,46 @@
     "MINUTES": "{{m}} minuten",
     "MOVE_BACKWARD": "Terug Bewegen",
     "MOVE_FORWARD": "Vooruit Bewegen",
+    "NEXT": "Volgende",
     "NO_CON": "Je bent momenteel offline. Maak opnieuw verbinding met internet.",
     "NONE": "Geen",
     "OK": "OK",
     "OVERDUE": "Achterstallig",
+    "PASSWORD_STRENGTH_FAIR": "Eerlijk",
+    "PASSWORD_STRENGTH_STRONG": "Sterk",
+    "PASSWORD_STRENGTH_WEAK": "Zwak",
+    "PROCESSING": "Verwerking",
     "REMOVE": "Verwijderen",
     "SAVE": "Opslaan",
+    "SHARE": "Delen",
     "SUBMIT": "Stuur  in",
     "TITLE": "Titel",
     "TODAY_TAG_TITLE": "Vandaag",
-    "TRACKING_INTERVAL_DESCRIPTION": "Volg de tijd met dit interval in milliseconden. Je zou dit kunnen veranderen om het schrijven naar schijf te verminderen. Zie probleem #2355.",
     "UNDO": "Ongedaan maken",
     "WITHOUT_PROJECT": "Zonder project",
-    "YESTERDAY": "Gisteren"
+    "YESTERDAY": "Gisteren",
+    "DONT_SHOW_AGAIN": "Niet meer tonen",
+    "TOGGLE_PASSWORD_VISIBILITY": "Wachtwoordzichtbaarheid omschakelen"
   },
   "GCF": {
     "APP_FEATURES": {
       "BOARDS": "Borden",
       "DONATE_PAGE": "Doneerpagina",
       "FOCUS_MODE": "Focusmodus",
+      "HABITS": "Gewoonten",
       "HELP": "Specifieke app-functies in- of uitschakelen in de hele gebruikersinterface.",
       "ISSUES_PANEL": "Problemenpaneel",
       "PLANNER": "Planner",
       "PROJECT_NOTES": "Projectnotities",
       "SCHEDULE": "Schema",
       "SCHEDULE_DAY_PANEL": "Schema Dag Paneel",
+      "SEARCH": "Zoeken",
       "SYNC_BUTTON": "Synchronisatieknop",
       "TIME_TRACKING": "Stopwatch Tijdregistratie",
       "TITLE": "App-functies",
       "USER_PROFILES": "Gebruikersprofielen (Experimenteel)",
-      "USER_PROFILES_HINT": "Staat u toe verschillende gebruikersprofielen te maken en te wisselen, elk met aparte instellingen, taken en synchronisatieconfiguraties. De knop voor profielbeheer verschijnt rechtsboven wanneer ingeschakeld. Opmerking: het uitschakelen van deze functie verbergt de gebruikersinterface maar behoudt uw profielgegevens (Experimentele functie, geen garanties. Zorg ervoor dat u een back-up hebt)."
+      "USER_PROFILES_HINT": "Staat u toe verschillende gebruikersprofielen te maken en te wisselen, elk met aparte instellingen, taken en synchronisatieconfiguraties. De knop voor profielbeheer verschijnt rechtsboven wanneer ingeschakeld. Opmerking: het uitschakelen van deze functie verbergt de gebruikersinterface maar behoudt uw profielgegevens (Experimentele functie, geen garanties. Zorg ervoor dat u een back-up hebt).",
+      "USER_PROFILES_WARNING": "<strong>Experimentele functie:</strong> Deze functie is nog in ontwikkeling en kan in een toekomstige update worden verwijderd of aanzienlijk worden gewijzigd. Gebruik op eigen risico en zorg voor backups van je gegevens."
     },
     "AUTO_BACKUPS": {
       "HELP": "Sla alle gegevens automatisch op in uw app-map om deze gereed te hebben voor het geval er iets misgaat.",
@@ -1503,10 +1961,40 @@
     },
     "CALENDARS": {
       "BROWSER_WARNING": "Vanwege cross origin beperkingen <b>zal dit waarschijnlijk NIET werken met de browserversie van Super Productivity.<br />  <a href=\"https://super-productivity.com/download/\">Download de desktopversie</a> om deze functie te gebruiken!</b>",
-      "CAL_PATH": "Url van de iCal-bron",
+      "CAL_PATH": "URL van de iCal-bron",
       "CHECK_UPDATES": "Elke X controleren op updates op afstand",
       "HELP": "Je kunt kalenders integreren om eraan herinnerd te worden en ze toevoegen als taken binnen Super Productivity. De integratie maakt gebruik van de iCal-indeling. Om dit te laten werken moeten uw agenda's toegankelijk zijn via het internet of via het bestandssysteem.",
       "SHOW_BANNER_THRESHOLD": "Toon een melding X voor de gebeurtenis (leeg voor uitgeschakeld)"
+    },
+    "CLIPBOARD_IMAGES": {
+      "DELETE": "Afbeelding verwijderen",
+      "SELECT_PATH": "Selecteer map",
+      "SORT_BY": "Sorteer op",
+      "SORT_LARGEST": "Grootste eerst",
+      "SORT_NEWEST": "Nieuwste eerst",
+      "SORT_OLDEST": "Oudste eerst",
+      "SORT_SMALLEST": "Kleinste eerst",
+      "DELETE_ALL": "Alles verwijderen",
+      "DELETE_ALL_SUCCESS": "Alle klembordafbeeldingen succesvol verwijderd",
+      "DELETE_SUCCESS": "Klembordafbeelding succesvol verwijderd",
+      "ERROR_DELETING": "Kan klembordafbeelding niet verwijderen",
+      "ERROR_DELETING_ALL": "Kan niet alle klembordafbeeldingen verwijderen",
+      "ERROR_LOADING": "Kan klembordafbeeldingen niet laden",
+      "HELP": "Beheer afbeeldingen die vanuit het klembord zijn geplakt. In de browserversie worden afbeeldingen opgeslagen in IndexedDB. Configureer voor de desktopversie het opslagpad.",
+      "LOADING": "Afbeeldingen laden...",
+      "MANAGE_DESCRIPTION": "Bekijk en verwijder afbeeldingen die zijn opgeslagen door te plakken in markdownvelden",
+      "MANAGE_TITLE": "Opgeslagen afbeeldingen beheren",
+      "MANAGER_TITLE": "Klembordafbeeldingen",
+      "NO_IMAGES": "Geen klembordafbeeldingen opgeslagen",
+      "OPEN_MANAGER": "Afbeeldingen beheren",
+      "PATH_DESCRIPTION": "Configureer waar klembordafbeeldingen op je bestandssysteem worden opgeslagen (laat leeg voor standaardlocatie)",
+      "PATH_LABEL": "Afbeeldingsopslagpad",
+      "PATH_PLACEHOLDER": "Laat leeg voor standaardlocatie",
+      "PATH_TITLE": "Opslaglocatie",
+      "SELECT_PATH_TITLE": "Map voor klembordafbeeldingen selecteren",
+      "TITLE": "Klembordafbeeldingen",
+      "TOTAL_IMAGES": "Totaal afbeeldingen",
+      "TOTAL_SIZE": "Totale grootte"
     },
     "EVALUATION": {
       "IS_HIDE_EVALUATION_SHEET": "Evaluatieblad verbergen op dagelijkse samenvatting",
@@ -1586,7 +2074,8 @@
       "TRIGGER_SYNC": "Triggersynchronisatie (indien geconfigureerd)",
       "ZOOM_DEFAULT": "Zoomstandaard (alleen desktop)",
       "ZOOM_IN": "Inzoomen (alleen desktop)",
-      "ZOOM_OUT": "Uitzoomen (alleen desktop)"
+      "ZOOM_OUT": "Uitzoomen (alleen desktop)",
+      "TASK_UNSCHEDULE": "Taak uit planning verwijderen"
     },
     "LANG": {
       "AR": "عربى",
@@ -1613,6 +2102,7 @@
       "SV": "Zweeds",
       "TIME_LOCALE": "Datum- en tijdnotatie locale",
       "TIME_LOCALE_AUTO": "Systeemstandaard",
+      "TIME_LOCALE_CS_CZ": "Tsjechisch: 24-uurs, DD. MM. JJJJ",
       "TIME_LOCALE_DE_DE": "Duits: 24 uur, DD.MM.JJJJ",
       "TIME_LOCALE_DESCRIPTION": "OPMERKING: deze opties kunnen nu het tijdinvoertype (12/24 uur) niet wijzigen omdat dit wordt geregeld door uw besturingssysteem",
       "TIME_LOCALE_EN_GB": "Engels (VK): 24 uur, DD/MM/JJJJ",
@@ -1624,16 +2114,19 @@
       "TIME_LOCALE_KO_KR": "Koreaans: 12-uurs AM/PM, JJJJ. MM. DD",
       "TIME_LOCALE_PT_BR": "Portugees (Brazilië): 24-uurs, DD/MM/JJJJ",
       "TIME_LOCALE_RU_RU": "Russisch: 24-uurs, DD.MM.JJJJ",
-      "TIME_LOCALE_TR_TR": "Turks: 24-uurs, DD.MM.JJJJ",
-      "TIME_LOCALE_ZH_CN": "Chinees (Vereenvoudigd): 24-uurs, JJJJ/MM/DD",
-      "TIME_LOCALE_CS_CZ": "Tsjechisch: 24-uurs, DD. MM. JJJJ",
       "TIME_LOCALE_SK_SK": "Slovakisch: 24-uurs, DD. MM. JJJJ",
+      "TIME_LOCALE_TR_TR": "Turks: 24-uurs, DD.MM.JJJJ",
       "TIME_LOCALE_UK_UA": "Oekraïens: 24-uurs, DD.MM.JJJJ",
+      "TIME_LOCALE_ZH_CN": "Chinees (Vereenvoudigd): 24-uurs, JJJJ/MM/DD",
       "TITLE": "Taal",
       "TR": "Türkçe",
       "UK": "Українська",
       "ZH": "中文（简体）",
-      "ZH_TW": "中文(繁體)"
+      "ZH_TW": "中文(繁體)",
+      "RO": "Română",
+      "RO_MD": "Română (Moldova)",
+      "TIME_LOCALE_RO_MD": "Roemeens (Moldavië): 24-uurs, DD.MM.JJJJ",
+      "TIME_LOCALE_RO_RO": "Roemeens: 24-uurs, DD.MM.JJJJ"
     },
     "MISC": {
       "DARK_MODE": "Donkere modus",
@@ -1662,16 +2155,6 @@
       "THEME_SELECT_LABEL": "Selecteer thema",
       "TITLE": "Diverse instellingen"
     },
-    "TASKS": {
-      "DEFAULT_PROJECT": "Standaardproject om te gebruiken voor taken als er geen is opgegeven",
-      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Voeg automatisch de tag voor vandaag toe aan taken",
-      "IS_AUTO_MARK_PARENT_AS_DONE": "Markeer de bovenliggende taak als voltooid wanneer alle subtaken zijn voltooid",
-      "IS_CONFIRM_BEFORE_DELETE": "Bevestig voordat u taken verwijdert",
-      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Markdown-opmaak inschakelen in taaknotities",
-      "IS_TRAY_SHOW_CURRENT": "Toon huidige taak in het systeemvak / statusmenu (alleen desktop mac/windows)",
-      "NOTES_TEMPLATE": "Sjabloon voor taaknotities bij het maken van nieuwe taken",
-      "TITLE": "Taken"
-    },
     "POMODORO": {
       "BREAK_DURATION": "Duur van korte pauzes",
       "CYCLES_BEFORE_LONGER_BREAK": "Start een langere pauze na X werksessies",
@@ -1683,7 +2166,13 @@
       "DEFAULT_TASK_REMIND_OPTION": "Standaard herinneringsoptie geselecteerd bij het aanmaken van taken",
       "DISABLE_REMINDERS": "Alle herinneringen uitschakelen",
       "IS_COUNTDOWN_BANNER_ENABLED": "Aftelbanner tonen voordat herinneringen klaar zijn",
-      "TITLE": "Herinneringen"
+      "TITLE": "Herinneringen",
+      "DUE_DATE_NOTIFICATION_HOUR": "Uur om meldingen voor vervaldata te tonen (0-23)",
+      "HELP": "<p><strong>Belangrijk:</strong> Herinneringen gebruiken <strong>lokale meldingen</strong>, geen push-meldingen. Dit betekent dat de app minstens één keer op je apparaat geopend moet zijn om herinneringen in te plannen. Herinneringen die op een ander apparaat zijn ingesteld, verschijnen pas na synchronisatie op het doelapparaat.</p><p>Op <strong>iOS</strong> zorg je ervoor dat meldingen zijn ingeschakeld voor Super Productivity in je apparaatinstellingen onder 'Instellingen' > 'Meldingen'.</p>",
+      "IS_FOCUS_WINDOW": "App-venster naar voren brengen wanneer herinnering wordt geactiveerd",
+      "NOTIFY_ON_DUE_DATE": "Meldingen tonen voor taken die vandaag vervallen",
+      "USE_ALARM_STYLE_REMINDERS": "Alarmachtige meldingen gebruiken (alleen Android)",
+      "USE_ALARM_STYLE_REMINDERS_DESCRIPTION": "Wanneer ingeschakeld, gebruiken herinneringen luidere alarmgeluiden en meer opdringerige meldingen. Aanbevolen voor kritieke herinneringen."
     },
     "SCHEDULE": {
       "HELP": "De tijdlijnfunctie zou u een snel overzicht moeten geven van hoe uw geplande taken in de loop van de tijd verlopen. U vindt het in het menu aan de linkerkant onder <a href='#/schedule'>'Tijdlijn'</a>.",
@@ -1694,6 +2183,7 @@
       "L_WORK_END": "Einde van de werkdag",
       "L_WORK_START": "Start van de werkdag",
       "LUNCH_BREAK_START_END_DESCRIPTION": "bijv. 13:00",
+      "MONTH": "Maand",
       "TITLE": "Tijdlijn",
       "WORK_START_END_DESCRIPTION": "bijv. 17:00"
     },
@@ -1702,7 +2192,11 @@
       "IS_ENABLE_DUE": "Korte syntaxis inschakelen (@<Due time>)",
       "IS_ENABLE_PROJECT": "Korte syntaxis project inschakelen (+<Project name>)",
       "IS_ENABLE_TAG": "Tag korte syntaxis inschakelen (#<Tag>)",
-      "TITLE": "Korte syntaxis"
+      "TITLE": "Korte syntaxis",
+      "URL_BEHAVIOR_EXTRACT": "URL naar bijlagen extraheren",
+      "URL_BEHAVIOR_KEEP": "URL in taaktitel behouden",
+      "URL_BEHAVIOR_KEEP_AND_ATTACH": "URL in taaktitel behouden en aan bijlagen toevoegen",
+      "URL_BEHAVIOR_LABEL": "URL-gedrag bij het toevoegen van taken"
     },
     "SOUND": {
       "BREAK_REMINDER_SOUND": "Herinneringsgeluid pauze",
@@ -1727,6 +2221,16 @@
       "SNOOZE_TIME": "Snoozetijd wanneer u wordt gevraagd om een pauze te nemen",
       "TITLE": "Pauzeherinnering"
     },
+    "TASKS": {
+      "DEFAULT_PROJECT": "Standaardproject om te gebruiken voor taken als er geen is opgegeven",
+      "IS_AUTO_ADD_WORKED_ON_TO_TODAY": "Voeg automatisch de tag voor vandaag toe aan taken",
+      "IS_AUTO_MARK_PARENT_AS_DONE": "Markeer de bovenliggende taak als voltooid wanneer alle subtaken zijn voltooid",
+      "IS_CONFIRM_BEFORE_DELETE": "Bevestig voordat u taken verwijdert",
+      "IS_MARKDOWN_FORMATTING_IN_NOTES_ENABLED": "Markdown-opmaak inschakelen in taaknotities",
+      "IS_TRAY_SHOW_CURRENT": "Toon huidige taak in het systeemvak / statusmenu (alleen desktop mac/windows)",
+      "NOTES_TEMPLATE": "Sjabloon voor taaknotities bij het maken van nieuwe taken",
+      "TITLE": "Taken"
+    },
     "TIME_TRACKING": {
       "HELP": "De herinnering voor tijdregistratie is een banner die wordt weergegeven als je bent vergeten om tijdregistratie te starten.",
       "L_DEFAULT_ESTIMATE": "Standaard tijdsinschatting voor nieuwe taken",
@@ -1737,7 +2241,6 @@
       "L_IS_TRACKING_REMINDER_FOCUS_WINDOW": "App-venster richten wanneer herinnering actief is (alleen desktop)",
       "L_IS_TRACKING_REMINDER_NOTIFY": "Melding wanneer een herinnering voor tijdregistratie wordt weergegeven",
       "L_IS_TRACKING_REMINDER_SHOW_ON_MOBILE": "Traceerherinnering weergeven op mobiele app",
-      "L_TRACKING_INTERVAL": "Tijd tracking interval (EXPERIMENTEEL)",
       "L_TRACKING_REMINDER_MIN_TIME": "Wachttijd voordat traceerherinnering wordt weergegeven Banner",
       "TITLE": "Tijdregistratie"
     }
@@ -1788,7 +2291,9 @@
     "SHARE_FAILED": "Delen mislukt. Kopieer handmatig.",
     "SHARE_FAILED_FALLBACK": "Delen mislukt. In plaats daarvan gekopieerd naar klembord.",
     "SHARE_UNAVAILABLE_FALLBACK": "Gekopieerd naar klembord.",
-    "UNPLANNED_TODAY_TASKS": "Alle taken van Vandaag ontpland"
+    "UNPLANNED_TODAY_TASKS": "Alle taken van Vandaag ontpland",
+    "OPEN_SETTINGS_ERROR": "Kan instellingen niet openen",
+    "SAVE_BLOCKED_DURING_SYNC": "Synchronisatie bezig - sommige wijzigingen moeten mogelijk opnieuw worden opgeslagen"
   },
   "GPB": {
     "ASSETS": "Activa laden ...",
@@ -1796,7 +2301,6 @@
     "DBX_GEN_TOKEN": "Dropbox: Genereer token ...",
     "DBX_META": "Dropbox: haal bestandsmeta op ...",
     "DBX_UPLOAD": "Dropbox: Upload bestand ...",
-    "GITHUB_LOAD_ISSUE": "GitHub: Probleemgegevens laden ...",
     "JIRA_LOAD_ISSUE": "Jira: Probleemgegevens laden ...",
     "SYNC": "Gegevens synchroniseren...",
     "UNKNOWN": "Externe gegevens laden",
@@ -1816,6 +2320,7 @@
     "DUPLICATE_PROJECT": "Duplicaat",
     "ENTER_FOCUS_MODE": "Voer Focusmodus in",
     "GO_TO_TASK_LIST": "Ga naar takenlijst",
+    "HABITS": "Gewoonten",
     "HELP": "Help",
     "HM": {
       "CALENDARS": "Howto: Kalenders verbinden",
@@ -1829,8 +2334,11 @@
     },
     "METRICS": "Metrische gegevens",
     "NO_TASKS_TO_TRACK": "Voeg eerst een taak toe om tijd bij te houden",
+    "NOTES": "Notities",
+    "OPEN_APP_FEATURES": "Open instellingen",
     "PLANNER": "Planner",
     "PROJECT_MENU": "Project Menu",
+    "PROJECT_SETTINGS": "Projectinstellingen",
     "PROJECTS": "Projecten",
     "QUICK_HISTORY": "Snelle geschiedenis",
     "SCHEDULE": "Schema",
@@ -1839,25 +2347,68 @@
     "SHARE_TASK_LIST_MARKDOWN": "De takenlijst delen",
     "SIDE_PANEL_MENU": "Zijpaneelmenu",
     "TAGS": "Tags",
+    "TASK_LIST": "Takenlijst",
+    "TASKS": "Taken",
     "TOGGLE_SHOW_ISSUE_PANEL": "Toon/Verberg Probleem Paneel",
     "TOGGLE_SHOW_NOTES": "Projectnotities tonen / verbergen",
     "TOGGLE_TRACK_TIME": "Start / stop volgtijd",
     "TRIGGER_SYNC": "Synchronisatie handmatig activeren",
     "UNPLAN_ALL_TASKS": "Alle taken ontplannen",
-    "WORKLOG": "Werklogboek"
+    "WORKLOG": "Werklogboek",
+    "DISABLE_FEATURE": "Functie uitschakelen",
+    "FEATURE_DISABLED_SNACK": "\"{{featureName}}\" uitgeschakeld. Opnieuw inschakelen in App-functies instellingen.",
+    "NO_PROJECT_INFO": "Geen projecten beschikbaar. Je kunt een nieuw project aanmaken door op de knop 'Project aanmaken' te klikken.",
+    "NO_TAG_INFO": "Er zijn momenteel geen labels. Je kunt labels toevoegen door `#jeLabelNaam` in te voeren bij het toevoegen of bewerken van taken.",
+    "NOTES_PANEL_INFO": "Notities kunnen alleen worden getoond in de planning en de reguliere takenlijstweergave.",
+    "PROCRASTINATE": "Uitstellen",
+    "SHOW_TRACKED_TASK": "Bijgehouden taak tonen",
+    "TOGGLE_SHOW_BOOKMARKS": "Bladwijzers tonen/verbergen"
   },
   "MIGRATE": {
     "C_DOWNLOAD_BACKUP": "Wilt u een back-up downloaden van uw verouderde gegevens (kan worden gebruikt met oudere versies van Super Productivity)?",
     "DETECTED_LEGACY": "Verouderde gegevens gedetecteerd. Wij migreren het voor u!",
     "E_MIGRATION_FAILED": "Migratie mislukt! met fout:",
     "E_RESTART_FAILED": "Automatisch opnieuw opstarten is mislukt. Start de app handmatig opnieuw!",
-    "SUCCESS": "Migratie helemaal klaar! App nu opnieuw opstarten..."
+    "STATUS_COMPLETE": "Migratie Voltooid!",
+    "SUCCESS": "Migratie helemaal klaar! App nu opnieuw opstarten...",
+    "DIALOG_MESSAGE": "We werken bij hoe je gegevens worden opgeslagen voor betere synchronisatiebetrouwbaarheid. Een backup wordt automatisch gedownload.",
+    "DIALOG_TITLE": "Je gegevens worden gemigreerd",
+    "STATUS_BACKUP": "Backup van je gegevens maken...",
+    "STATUS_MIGRATING": "Gegevens migreren...",
+    "STATUS_PREPARING": "Migratie voorbereiden..."
+  },
+  "ONBOARDING": {
+    "TITLE": "Hoe wil je Super Productivity gebruiken?",
+    "SUBTITLE": "Kies een instelling die bij je werkwijze past. Je kunt dit later altijd wijzigen in Instellingen.",
+    "PRIVACY_HINT": "Je gegevens blijven veilig op je apparaat. Er wordt niets naar een server verzonden.",
+    "PRESETS": {
+      "SIMPLE_TODO": {
+        "TITLE": "Eenvoudige takenlijst",
+        "DESCRIPTION": "Een overzichtelijke taakbeheerder met projecten, tags en notities. Zonder extra's."
+      },
+      "TIME_TRACKER": {
+        "TITLE": "Tijdregistratie",
+        "DESCRIPTION": "Registreer hoeveel tijd taken kosten. Ideaal voor het factureren van uren of om te begrijpen waar je tijd naartoe gaat."
+      },
+      "PRODUCTIVITY_PRO": {
+        "TITLE": "Productiviteitspakket",
+        "DESCRIPTION": "Plan je dag, bouw gewoontes op, focus diep en registreer je tijd. Alles op één plek."
+      }
+    },
+    "HINTS": {
+      "CREATE_TASK": "Klik op + om je eerste taak toe te voegen",
+      "CREATE_TASK_TOUCH": "Tik op + om je eerste taak toe te voegen",
+      "EXPLORE": "Klik gerust rond en ontdek alles! Je vindt hulp in de zijbalk.",
+      "EXPLORE_TOUCH": "Tik gerust rond en ontdek alles! Je vindt hulp in het menu.",
+      "OR_PRESS": "of druk op",
+      "SKIP_ARIA": "Hint sluiten"
+    }
   },
   "PDS": {
     "ADD_TASKS_FROM_TODAY": "Taken toevoegen vanaf vandaag",
     "ARCHIVED_TASKS": {
-      "PLURAL": "{{count}} voltooide hoofdtaken zijn gearchiveerd",
-      "SINGULAR": "{{count}} voltooide hoofdtaken is gearchiveerd"
+      "ONE": "{{count}} voltooide hoofdtaken is gearchiveerd",
+      "OTHER": "{{count}} voltooide hoofdtaken zijn gearchiveerd"
     },
     "BREAK_LABEL": "Pauzes (nr / tijd)",
     "CELEBRATE": "Neem even de tijd om <i>te vieren!</i>",
@@ -1913,7 +2464,6 @@
     "ERROR": "Fout",
     "ERROR_LOADING_PLUGIN": "Fout bij het laden van plugin",
     "EXPERIMENTAL_WARNING": "Het pluginsysteem bevindt zich in een experimentele fase en moet met uiterste voorzichtigheid worden gebruikt.",
-    "EXPERIMENTAL_WARNING_TITLE": "Experimentele functie - Beveiligingswaarschuwing",
     "FAILED_TO_CLEAR_CACHE": "Kon plugincache niet wissen",
     "FAILED_TO_EXECUTE_SCRIPT": "Kon Node.js-script niet uitvoeren",
     "FAILED_TO_EXTRACT_ZIP": "Kon plugin ZIP-bestand niet uitpakken",
@@ -1927,6 +2477,7 @@
     "GRANT_PERMISSION": "Toestemming verlenen",
     "HOOKS": "Hooks",
     "ID": "ID:",
+    "INDEX_HTML_NOT_LOADED": "Plugin index.html niet geladen",
     "INSTALL_PLUGIN": "Plugin installeren",
     "INSTALL_WARNING": "Zorg ervoor dat u de bron van een plugin vertrouwt en de gevraagde machtigingen begrijpt voordat u een plugin installeert.",
     "INSTALLING": "Bezig met installeren...",
@@ -1974,10 +2525,14 @@
     "UNABLE_TO_PERSIST_DATA": "Kan gegevens niet opslaan in pluginopslag",
     "UNKNOWN_ERROR": "Er is een onbekende fout opgetreden",
     "UPLOAD_PLUGIN_INSTRUCTION": "Upload een plugin ZIP-bestand om het te installeren:",
-    "VALIDATION_FAILED": "Validatie mislukt"
+    "VALIDATION_FAILED": "Validatie mislukt",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Deze plugin biedt issue-integratie die momenteel in gebruik is ({{count}} issueprovider(s)). Het uitschakelen zal tijdelijk de issuesynchronisatie voor die providers verbreken totdat de plugin opnieuw wordt ingeschakeld. Weet je zeker dat je \"{{name}}\" wilt uitschakelen?",
+    "FAILED_TO_LOAD_COMMUNITY_PLUGINS": "Kan lijst met communityplugins niet laden",
+    "LANGUAGES": "Talen:"
   },
   "PM": {
-    "TITLE": "Projectstatistieken"
+    "TITLE": "Projectstatistieken",
+    "ALL_TASKS_TITLE": "Statistieken (alle taken)"
   },
   "PS": {
     "GLOBAL_SETTINGS": "Algemene instellingen",
@@ -1986,8 +2541,20 @@
     "PRIVACY_POLICY": "Privébeleid",
     "PROJECT_SETTINGS": "Projectspecifieke instellingen",
     "PROVIDE_FEEDBACK": "Geef feedback",
+    "RELOAD": "Opnieuw laden",
     "SYNC_EXPORT": "Synchroniseren en exporteren",
-    "TAG_SETTINGS": "Label specifieke instellingen"
+    "TABS": {
+      "GENERAL": "Algemeen",
+      "PLUGINS": "Plugins",
+      "PRODUCTIVITY": "Productiviteit",
+      "TASKS": "Taken",
+      "SYNC_BACKUP": "Synchronisatie en backup",
+      "TIME_TRACKING": "Tijd en tracking"
+    },
+    "TAG_SETTINGS": "Label specifieke instellingen",
+    "FAILED_TO_COPY_TO_CLIPBOARD": "Kopiëren naar klembord mislukt",
+    "TOGGLE_DARK_MODE": "Donkere modus omschakelen",
+    "UPDATE_APP": "App bijwerken"
   },
   "SCHEDULE": {
     "LAST": "Laatste:",
@@ -1997,7 +2564,29 @@
     "NO_SCHEDULED_TITLE": "Geplande taken voor de dag",
     "REPEATED_TASKS": "Herhaalde taken",
     "SCHEDULED_TASKS": "Geplande taken",
-    "SCHEDULED_TASKS_WITH_TIME": "Geplande taken met herinnering"
+    "SCHEDULED_TASKS_WITH_TIME": "Geplande taken met herinnering",
+    "NO_DEADLINES": "Er zijn momenteel geen taken met deadlines. Je kunt een deadline instellen via het contextmenu of detailpaneel van de taak.",
+    "START_TASK": "Taak starten en herinnering verwijderen",
+    "TASKS_WITH_DEADLINES": "Taken met deadlines"
+  },
+  "THEMES": {
+    "amber": "Amber",
+    "blue": "Blauw",
+    "green": "Groen",
+    "indigo": "Indigo",
+    "pink": "Roze",
+    "purple": "Paars",
+    "SELECT_THEME": "Selecteer thema",
+    "teal": "Groenblauw",
+    "yellow": "Geel",
+    "blue-grey": "blauwgrijs",
+    "cyan": "cyaan",
+    "deep-orange": "dieporanje",
+    "deep-purple": "dieppaars",
+    "light-blue": "lichtblauw",
+    "light-green": "lichtgroen",
+    "lime": "limoen",
+    "SCHEDULED_TASKS_WITH_TIME": "Geplande taken met starttijd"
   },
   "USER_PROFILES": {
     "ACTIVE": "Actief",
@@ -2045,6 +2634,16 @@
     "TODAY_REMAINING": "Vandaag over:",
     "WITHOUT_BREAK": "Zonder pauze:",
     "WORKING_TODAY": "Vandaag werken:",
-    "WORKING_TODAY_ARCHIVED": "Tijd die vandaag is besteed aan gearchiveerde taken"
+    "WORKING_TODAY_ARCHIVED": "Tijd die vandaag is besteed aan gearchiveerde taken",
+    "RECURRING_TASKS": "Terugkerende taken"
+  },
+  "NOTIFICATION": {
+    "EXACT_ALARM_DENIED": "Exacte alarmtoestemming geweigerd. Herinneringen kunnen tot 15 minuten vertraagd zijn.",
+    "TASK_ALREADY_COMPLETED": "Taak al voltooid",
+    "TASK_MARKED_DONE": "Taak als voltooid gemarkeerd"
+  },
+  "PRE_MIGRATION": {
+    "DIALOG_MESSAGE": "We werken bij hoe je gegevens worden opgeslagen voor betere synchronisatiebetrouwbaarheid.<br><br>Een backup van je gegevens wordt automatisch gedownload. Je kunt deze backup gebruiken om je gegevens te herstellen indien nodig (Bestand > Importeren).",
+    "DIALOG_TITLE": "Systeemupdate"
   }
 }

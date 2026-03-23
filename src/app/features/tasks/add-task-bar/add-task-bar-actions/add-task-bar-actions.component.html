@@ -130,6 +130,35 @@
       <mat-icon>close</mat-icon>
     </button>
   }
+
+  <button
+    #repeatMenuTrigger
+    mat-button
+    class="action-btn"
+    data-test="add-task-bar-repeat-btn"
+    [matMenuTriggerFor]="repeatMenu"
+    [class.has-value]="state().repeatQuickSetting"
+    [class.menu-open]="isRepeatMenuOpen()"
+    (click)="onRepeatMenuClick()"
+  >
+    <mat-icon class="repeat-icon">repeat</mat-icon>
+    <span>{{
+      repeatDisplay() || (T.F.TASK.ADD_TASK_BAR.REPEAT_BUTTON | translate)
+    }}</span>
+  </button>
+
+  @if (state().repeatQuickSetting) {
+    <button
+      mat-button
+      class="clear-btn"
+      data-test="add-task-bar-clear-repeat-btn"
+      (click)="clearRepeatSetting(); $event.stopPropagation()"
+      [matTooltip]="T.F.TASK.ADD_TASK_BAR.TOOLTIP_CLEAR_REPEAT | translate"
+      matTooltipPosition="above"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  }
 </div>
 
 <!-------------- Menus ------------------->
@@ -196,6 +225,22 @@
       mat-menu-item
       (click)="onEstimateInput(option.value)"
     >
+      {{ option.label }}
+    </button>
+  }
+</mat-menu>
+
+<mat-menu #repeatMenu="matMenu">
+  @for (option of repeatQuickOptions(); track option.value) {
+    <button
+      mat-menu-item
+      (click)="selectRepeatQuickSetting(option.value)"
+    >
+      @if (option.value === 'CUSTOM') {
+        <mat-icon>tune</mat-icon>
+      } @else {
+        <mat-icon>repeat</mat-icon>
+      }
       {{ option.label }}
     </button>
   }

@@ -1,11 +1,11 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 import {
   Operation,
   OperationLogEntry,
-  OpType,
   VectorClock,
   isFullStateOpType,
+  FULL_STATE_OP_TYPES,
 } from '../core/operation.types';
 import { StorageQuotaExceededError } from '../core/errors/sync-errors';
 import { toEntityKey } from '../util/entity-key.util';
@@ -23,6 +23,7 @@ import {
   BACKUP_KEY,
   OPS_INDEXES,
   ArchiveStoreEntry,
+  ProfileDataStoreEntry,
 } from './db-keys.const';
 import {
   DUPLICATE_OPERATION_ERROR_MSG,
@@ -35,7 +36,8 @@ import {
   IDB_OPEN_RETRY_BASE_DELAY_MS,
 } from '../core/operation-log.const';
 import { IndexedDBOpenError } from '../core/errors/indexed-db-open.error';
-import { vectorClockToString } from '../../core/util/vector-clock';
+import { limitVectorClockSize, vectorClockToString } from '../../core/util/vector-clock';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../util/client-id.provider';
 
 /**
  * Vector clock entry stored in the vector_clock object store.
@@ -96,7 +98,7 @@ interface OpLogDB extends DBSchema {
       [OPS_INDEXES.BY_ID]: string;
       [OPS_INDEXES.BY_SYNCED_AT]: number;
       // PERF: Compound index for efficient queries on remote ops by status
-      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: string;
+      [OPS_INDEXES.BY_SOURCE_AND_STATUS]: [string, string];
     };
   };
   [STORE_NAMES.STATE_CACHE]: {
@@ -145,6 +147,14 @@ interface OpLogDB extends DBSchema {
     key: string; // SINGLETON_KEY ('current')
     value: ArchiveStoreEntry;
   };
+  /**
+   * Stores profile data (CompleteBackup) for user profile switching.
+   * Moved from localStorage to avoid 5-10 MB quota limits.
+   */
+  [STORE_NAMES.PROFILE_DATA]: {
+    key: string; // profile ID
+    value: ProfileDataStoreEntry;
+  };
 }
 
 /**
@@ -159,6 +169,7 @@ interface OpLogDB extends DBSchema {
   providedIn: 'root',
 })
 export class OperationLogStoreService {
+  private clientIdProvider: ClientIdProvider = inject(CLIENT_ID_PROVIDER);
   private _db?: IDBPDatabase<OpLogDB>;
   private _initPromise?: Promise<void>;
 
@@ -174,7 +185,15 @@ export class OperationLogStoreService {
   private _vectorClockCache: VectorClock | null = null;
 
   async init(): Promise<void> {
-    this._db = await this._openDbWithRetry();
+    const db = await this._openDbWithRetry();
+    db.addEventListener('close', () => {
+      Log.warn(
+        '[OpLogStore] IndexedDB connection closed by browser. Will re-open on next access.',
+      );
+      this._db = undefined;
+      this._initPromise = undefined;
+    });
+    this._db = db;
   }
 
   /**
@@ -434,7 +453,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'pending'] as any,
+        ['remote', 'pending'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -870,7 +889,7 @@ export class OperationLogStoreService {
       storedEntries = await this.db.getAllFromIndex(
         STORE_NAMES.OPS,
         OPS_INDEXES.BY_SOURCE_AND_STATUS,
-        ['remote', 'failed'] as any,
+        ['remote', 'failed'],
       );
     } catch (e) {
       // Fallback for databases created before version 3 index migration
@@ -1140,6 +1159,7 @@ export class OperationLogStoreService {
         STORE_NAMES.VECTOR_CLOCK,
         STORE_NAMES.ARCHIVE_YOUNG,
         STORE_NAMES.ARCHIVE_OLD,
+        STORE_NAMES.PROFILE_DATA,
       ],
       'readwrite',
     );
@@ -1149,6 +1169,7 @@ export class OperationLogStoreService {
     await tx.objectStore(STORE_NAMES.VECTOR_CLOCK).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_YOUNG).clear();
     await tx.objectStore(STORE_NAMES.ARCHIVE_OLD).clear();
+    await tx.objectStore(STORE_NAMES.PROFILE_DATA).clear();
     await tx.done;
     // Invalidate all caches
     this._appliedOpIdsCache = null;
@@ -1313,12 +1334,7 @@ export class OperationLogStoreService {
     // Using the import's clock as the base (REPLACE) instead of the current clock (MERGE)
     // prevents clock bloat that causes server-side pruning to drop the import's entry,
     // which would make subsequent ops appear CONCURRENT with the import.
-    const fullStateOp = ops.find(
-      (op) =>
-        op.opType === OpType.SyncImport ||
-        op.opType === OpType.BackupImport ||
-        op.opType === OpType.Repair,
-    );
+    const fullStateOp = ops.find((op) => FULL_STATE_OP_TYPES.has(op.opType));
 
     const mergedClock = fullStateOp
       ? { ...fullStateOp.vectorClock }
@@ -1340,19 +1356,64 @@ export class OperationLogStoreService {
       }
     }
 
+    const currentClientId = await this.clientIdProvider.loadClientId();
+    if (!currentClientId) {
+      Log.warn(
+        '[OpLogStore] mergeRemoteOpClocks: Cannot prune clock - no client ID available. ' +
+          'This is unexpected during sync and may indicate data corruption.',
+      );
+    }
+
+    let clockToStore: Record<string, number>;
+
+    if (fullStateOp && currentClientId) {
+      // CLOCK RESET: After a full-state op (SYNC_IMPORT / BACKUP_IMPORT / REPAIR),
+      // reset the working clock to minimal — only the import client's entry and our
+      // own entry. This prevents dead client IDs from accumulating in the clock.
+      //
+      // The full import clock is preserved in the stored operation for
+      // SyncImportFilterService to use when filtering pre-import ops.
+      // Post-import ops are recognized by having the import client's counter
+      // (see SyncImportFilterService's import-client-counter exception).
+      clockToStore = {};
+      const importClientId = fullStateOp.clientId;
+      if (mergedClock[importClientId] !== undefined) {
+        clockToStore[importClientId] = mergedClock[importClientId];
+      }
+      if (
+        currentClientId !== importClientId &&
+        mergedClock[currentClientId] !== undefined
+      ) {
+        clockToStore[currentClientId] = mergedClock[currentClientId];
+      }
+      Log.log(
+        `[OpLogStore] mergeRemoteOpClocks: RESET clock to minimal after ${fullStateOp.opType}\n` +
+          `  Full merged clock (${Object.keys(mergedClock).length} entries): ${vectorClockToString(mergedClock)}\n` +
+          `  Minimal clock (${Object.keys(clockToStore).length} entries): ${vectorClockToString(clockToStore)}`,
+      );
+    } else {
+      // Normal case: prune the merged clock to MAX_VECTOR_CLOCK_SIZE to break the
+      // inflate/prune cycle: without this, the union of all downloaded ops'
+      // clocks re-introduces pruned client IDs, exceeding the limit again.
+      // The server already prunes with the same algorithm on upload.
+      clockToStore = currentClientId
+        ? limitVectorClockSize(mergedClock, currentClientId)
+        : mergedClock;
+    }
+
     // DIAGNOSTIC LOGGING: Log merged clock after merge
     Log.debug(
       `[OpLogStore] mergeRemoteOpClocks: AFTER merge\n` +
-        `  Merged clock: ${vectorClockToString(mergedClock)}`,
+        `  Merged clock: ${vectorClockToString(clockToStore)}`,
     );
 
     // Update the vector clock store
     await this.db.put(
       STORE_NAMES.VECTOR_CLOCK,
-      { clock: mergedClock, lastUpdate: Date.now() },
+      { clock: clockToStore, lastUpdate: Date.now() },
       SINGLETON_KEY,
     );
-    this._vectorClockCache = mergedClock;
+    this._vectorClockCache = clockToStore;
   }
 
   /**
@@ -1437,6 +1498,44 @@ export class OperationLogStoreService {
       }
       throw e;
     }
+  }
+  // ============================================================
+  // Profile Data Storage
+  // ============================================================
+
+  /**
+   * Saves profile data (CompleteBackup) for a specific profile.
+   */
+  async saveProfileData(
+    profileId: string,
+    data: ProfileDataStoreEntry['data'],
+  ): Promise<void> {
+    await this._ensureInit();
+    await this.db.put(STORE_NAMES.PROFILE_DATA, {
+      id: profileId,
+      data,
+      lastModified: Date.now(),
+    });
+  }
+
+  /**
+   * Loads profile data (CompleteBackup) for a specific profile.
+   * Returns null if no data exists for the given profile ID.
+   */
+  async loadProfileData(
+    profileId: string,
+  ): Promise<ProfileDataStoreEntry['data'] | null> {
+    await this._ensureInit();
+    const entry = await this.db.get(STORE_NAMES.PROFILE_DATA, profileId);
+    return entry?.data ?? null;
+  }
+
+  /**
+   * Deletes profile data for a specific profile.
+   */
+  async deleteProfileData(profileId: string): Promise<void> {
+    await this._ensureInit();
+    await this.db.delete(STORE_NAMES.PROFILE_DATA, profileId);
   }
 }
 

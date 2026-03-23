@@ -76,7 +76,7 @@
     width: 100%;
     height: auto;
     max-height: 30vh;
-    margin: auto auto 8px;
+    margin: auto auto var(--s);
     object-fit: cover;
   }
 }

@@ -23,7 +23,7 @@
   padding-top: var(--s3);
   margin: var(--s) calc(var(--s) * -3) var(--s);
   font-size: 22px;
-  border-top: 1px solid var(--extra-border-color);
+  @include extraBorder('-top');
 }
 
 .simple-counter {

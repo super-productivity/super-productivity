@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API Anahtarı",
+    "API_KEY_LINK": "Kişisel API anahtarınızı alın",
+    "TEAM_IDS": "Çalışma alanı/Takım ID'leri (virgülle ayrılmış, tümü için boş bırakın)",
+    "USER_ID": "Kullanıcı ID (atanan kişiye göre filtreleme için)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Özet",
+    "STATUS": "Durum",
+    "PRIORITY": "Öncelik",
+    "ASSIGNEE": "Atanan",
+    "LABELS": "Etiketler",
+    "DESCRIPTION": "Açıklama"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Bilinmeyen hata. API anahtarınızı kontrol edin ve tekrar deneyin."
+  }
+}

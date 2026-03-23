@@ -10,6 +10,8 @@ import {
 } from '../../core/operation.types';
 import { uuidv7 } from '../../../util/uuid-v7';
 import { resetTestUuidCounter } from './helpers/test-client.helper';
+import { CLIENT_ID_PROVIDER, ClientIdProvider } from '../../util/client-id.provider';
+import { MAX_VECTOR_CLOCK_SIZE } from '../../core/operation-log.const';
 
 /**
  * Integration tests for Vector Clock Sync (Performance Optimization)
@@ -362,6 +364,139 @@ describe('Vector Clock Sync Integration', () => {
       expect(clock).not.toBeNull();
       expect(Object.keys(clock!).length).toBe(8);
       expect(clock!['client-7']).toBe(8);
+    });
+  });
+
+  describe('mergeRemoteOpClocks Pruning', () => {
+    const LOCAL_CLIENT_ID = 'local-client';
+
+    // Helper to create a remote op from a specific client
+    const createRemoteOp = (clientId: string, counter: number): Operation => ({
+      id: uuidv7(),
+      actionType: '[Task] Update' as ActionType,
+      opType: OpType.Update,
+      entityType: 'TASK' as EntityType,
+      entityId: 'task1',
+      payload: { title: 'Test' },
+      clientId,
+      vectorClock: { [clientId]: counter },
+      timestamp: Date.now(),
+      schemaVersion: 1,
+    });
+
+    beforeEach(() => {
+      // Re-configure TestBed with CLIENT_ID_PROVIDER mock
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          VectorClockService,
+          {
+            provide: CLIENT_ID_PROVIDER,
+            useValue: {
+              loadClientId: () => Promise.resolve(LOCAL_CLIENT_ID),
+            } as ClientIdProvider,
+          },
+        ],
+      });
+
+      opLogStore = TestBed.inject(OperationLogStoreService);
+      vectorClockService = TestBed.inject(VectorClockService);
+    });
+
+    beforeEach(async () => {
+      await opLogStore.init();
+      await opLogStore._clearAllDataForTesting();
+      resetTestUuidCounter();
+    });
+
+    it('should prune merged clock to MAX_VECTOR_CLOCK_SIZE when remote ops have many distinct clients', async () => {
+      // Set local clock
+      await opLogStore.setVectorClock({ [LOCAL_CLIENT_ID]: 5 });
+
+      // Create 25 remote ops, each from a different client with unique clocks
+      const remoteOps: Operation[] = [];
+      for (let i = 0; i < 25; i++) {
+        const clientId = `client-${String(i).padStart(2, '0')}`;
+        remoteOps.push(createRemoteOp(clientId, i + 10));
+      }
+
+      await opLogStore.mergeRemoteOpClocks(remoteOps);
+
+      const clock = await opLogStore.getVectorClock();
+      expect(clock).not.toBeNull();
+
+      // Should be pruned to MAX_VECTOR_CLOCK_SIZE
+      const entries = Object.keys(clock!);
+      expect(entries.length).toBeLessThanOrEqual(MAX_VECTOR_CLOCK_SIZE);
+
+      // Local client must be preserved
+      expect(clock![LOCAL_CLIENT_ID]).toBe(5);
+
+      // Highest-counter clients should be preserved (client-24 has counter 34)
+      expect(clock!['client-24']).toBe(34);
+    });
+
+    it('should preserve all entries when remote ops have fewer than MAX clients', async () => {
+      await opLogStore.setVectorClock({ [LOCAL_CLIENT_ID]: 1 });
+
+      // Create 5 remote ops from different clients
+      const remoteOps: Operation[] = [];
+      for (let i = 0; i < 5; i++) {
+        const clientId = `client-${String(i).padStart(2, '0')}`;
+        remoteOps.push(createRemoteOp(clientId, i + 1));
+      }
+
+      await opLogStore.mergeRemoteOpClocks(remoteOps);
+
+      const clock = await opLogStore.getVectorClock();
+      expect(clock).not.toBeNull();
+
+      // 6 entries: local + 5 remote — no pruning needed
+      expect(Object.keys(clock!).length).toBe(6);
+      expect(clock![LOCAL_CLIENT_ID]).toBe(1);
+      for (let i = 0; i < 5; i++) {
+        expect(clock![`client-${String(i).padStart(2, '0')}`]).toBe(i + 1);
+      }
+    });
+
+    it('should handle null client ID gracefully (no pruning, no crash)', async () => {
+      // Re-configure with null client ID
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          OperationLogStoreService,
+          VectorClockService,
+          {
+            provide: CLIENT_ID_PROVIDER,
+            useValue: {
+              loadClientId: () => Promise.resolve(null),
+            } as ClientIdProvider,
+          },
+        ],
+      });
+
+      opLogStore = TestBed.inject(OperationLogStoreService);
+      await opLogStore.init();
+      await opLogStore._clearAllDataForTesting();
+
+      await opLogStore.setVectorClock({ someClient: 1 });
+
+      // Create 25 remote ops — more than MAX_VECTOR_CLOCK_SIZE
+      const remoteOps: Operation[] = [];
+      for (let i = 0; i < 25; i++) {
+        const clientId = `client-${String(i).padStart(2, '0')}`;
+        remoteOps.push(createRemoteOp(clientId, i + 10));
+      }
+
+      // Should not throw
+      await opLogStore.mergeRemoteOpClocks(remoteOps);
+
+      const clock = await opLogStore.getVectorClock();
+      expect(clock).not.toBeNull();
+
+      // With null client ID, clock is NOT pruned — all entries kept
+      expect(Object.keys(clock!).length).toBe(26); // 1 local + 25 remote
     });
   });
 });

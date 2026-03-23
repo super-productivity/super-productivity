@@ -4,7 +4,7 @@ This guide explains how to add a new issue tracker integration to Super Producti
 
 ## Overview
 
-Super Productivity supports multiple issue tracker integrations (called "Issue Providers" in the codebase), including GitHub, GitLab, Jira, and others. Adding a new integration requires implementing specific interfaces and services to communicate with the external service.
+Super Productivity supports multiple issue tracker integrations (called "Issue Providers" in the codebase), including Jira, GitLab, Gitea, Redmine, Open Project, CalDAV, Calendar (iCal), Trello, ClickUp, Linear, Azure DevOps, and Nextcloud Deck. GitHub has been migrated to a plugin-based provider. Adding a new integration requires implementing specific interfaces and services to communicate with the external service.
 
 ## Integration Architecture
 
@@ -146,18 +146,22 @@ You'll need to update several core files to register your new integration:
 
 #### 1. Update `issue.model.ts`
 
-Add your provider to the `IssueProviderKey` type:
+Add your provider to the `BuiltInIssueProviderKey` type:
 
 ```typescript
-export type IssueProviderKey =
+export type BuiltInIssueProviderKey =
   | 'JIRA'
-  | 'GITHUB'
   | 'GITLAB'
   | 'CALDAV'
   | 'ICAL'
   | 'OPEN_PROJECT'
   | 'GITEA'
+  | 'TRELLO'
   | 'REDMINE'
+  | 'LINEAR'
+  | 'CLICKUP'
+  | 'AZURE_DEVOPS'
+  | 'NEXTCLOUD_DECK'
   | 'MY_PROVIDER'; // Add your provider here
 ```
 
@@ -219,15 +223,19 @@ export const MY_PROVIDER_TYPE: IssueProviderKey = 'MY_PROVIDER';
 Add your provider to `ISSUE_PROVIDER_TYPES`:
 
 ```typescript
-export const ISSUE_PROVIDER_TYPES: IssueProviderKey[] = [
+export const ISSUE_PROVIDER_TYPES: BuiltInIssueProviderKey[] = [
   GITLAB_TYPE,
-  GITHUB_TYPE,
   JIRA_TYPE,
   CALDAV_TYPE,
   ICAL_TYPE,
   OPEN_PROJECT_TYPE,
   GITEA_TYPE,
+  TRELLO_TYPE,
   REDMINE_TYPE,
+  LINEAR_TYPE,
+  CLICKUP_TYPE,
+  AZURE_DEVOPS_TYPE,
+  NEXTCLOUD_DECK_TYPE,
   MY_PROVIDER_TYPE, // Add your provider here
 ];
 ```

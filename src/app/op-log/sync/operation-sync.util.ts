@@ -1,6 +1,6 @@
 import { ActionType, OpType, Operation } from '../core/operation.types';
 import {
-  SyncProviderServiceInterface,
+  SyncProviderBase,
   OperationSyncCapable,
   SyncOperation,
 } from '../sync-providers/provider.interface';
@@ -18,8 +18,8 @@ const FILE_BASED_PROVIDER_IDS: Set<SyncProviderId> = new Set([
  * This is for providers like SuperSync that have a dedicated API endpoint.
  */
 export const isOperationSyncCapable = (
-  provider: SyncProviderServiceInterface<SyncProviderId>,
-): provider is SyncProviderServiceInterface<SyncProviderId> & OperationSyncCapable => {
+  provider: SyncProviderBase<SyncProviderId>,
+): provider is SyncProviderBase<SyncProviderId> & OperationSyncCapable => {
   return (
     'supportsOperationSync' in provider &&
     (provider as unknown as OperationSyncCapable).supportsOperationSync === true
@@ -31,7 +31,7 @@ export const isOperationSyncCapable = (
  * File-based providers (WebDAV, Dropbox, LocalFile) use file storage for sync.
  */
 export const isFileBasedProvider = (
-  provider: SyncProviderServiceInterface<SyncProviderId>,
+  provider: SyncProviderBase<SyncProviderId>,
 ): boolean => {
   return FILE_BASED_PROVIDER_IDS.has(provider.id);
 };

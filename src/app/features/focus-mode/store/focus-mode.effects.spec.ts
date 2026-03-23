@@ -681,10 +681,18 @@ describe('FocusModeEffects', () => {
       it('should dispatch startFocusSession when strategy.shouldAutoStartNextSession is true', (done) => {
         actions$ = of(actions.completeBreak({ pausedTaskId: null }));
         store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+        store.overrideSelector(selectFocusModeConfig, {
+          isSkipPreparation: false,
+          isManualBreakStart: false,
+        });
         store.refreshState();
 
         effects.autoStartSessionOnBreakComplete$.pipe(take(1)).subscribe((action) => {
-          expect(action).toEqual(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+          expect(action).toEqual(
+            actions.startFocusSession({
+              duration: 25 * 60 * 1000,
+            }),
+          );
           done();
         });
       });
@@ -729,6 +737,18 @@ describe('FocusModeEffects', () => {
           done();
         });
       });
+
+      // Bug #6726 fix: Don't override user's task switch during break
+      it('should NOT dispatch setCurrentTask when pausedTaskId exists but a different task is already being tracked', (done) => {
+        const pausedTaskId = 'original-task-id';
+        currentTaskId$.next('different-task-id');
+        actions$ = of(actions.completeBreak({ pausedTaskId }));
+
+        effects.resumeTrackingOnBreakComplete$.pipe(toArray()).subscribe((actionsArr) => {
+          expect(actionsArr.length).toBe(0);
+          done();
+        });
+      });
     });
 
     describe('combined behavior', () => {
@@ -754,7 +774,11 @@ describe('FocusModeEffects', () => {
       store.refreshState();
 
       effects.skipBreak$.subscribe((action) => {
-        expect(action).toEqual(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+        expect(action).toEqual(
+          actions.startFocusSession({
+            duration: 25 * 60 * 1000,
+          }),
+        );
         done();
       });
     });
@@ -797,6 +821,31 @@ describe('FocusModeEffects', () => {
       effects.skipBreak$.pipe(take(1)).subscribe((action) => {
         expect(action).toEqual(setCurrentTask({ id: pausedTaskId }));
         done();
+      });
+    });
+
+    // Bug #6726 fix: Don't override user's task switch during break
+    it('should NOT dispatch setCurrentTask when pausedTaskId exists but a different task is already being tracked', (done) => {
+      const pausedTaskId = 'original-task-id';
+      currentTaskId$.next('different-task-id');
+      actions$ = of(actions.skipBreak({ pausedTaskId }));
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.refreshState();
+
+      strategyFactoryMock.getStrategy.and.returnValue({
+        initialSessionDuration: 25 * 60 * 1000,
+        shouldStartBreakAfterSession: false,
+        shouldAutoStartNextSession: false,
+        getBreakDuration: () => null,
+      });
+
+      const result: any[] = [];
+      effects.skipBreak$.subscribe({
+        next: (action) => result.push(action),
+        complete: () => {
+          expect(result.length).toBe(0);
+          done();
+        },
       });
     });
   });
@@ -1089,7 +1138,11 @@ describe('FocusModeEffects', () => {
       }, 10);
 
       effects.syncTrackingStartToSession$.pipe(take(1)).subscribe((action) => {
-        expect(action).toEqual(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+        expect(action).toEqual(
+          actions.startFocusSession({
+            duration: 25 * 60 * 1000,
+          }),
+        );
         done();
       });
     });
@@ -1196,6 +1249,34 @@ describe('FocusModeEffects', () => {
         // Should not start new session when on Break screen
         done();
       }, 50);
+    });
+
+    // Bug #6726 fix: When user starts tracking during active break, skipBreak should NOT carry stale pausedTaskId
+    it('should dispatch skipBreak with pausedTaskId undefined when user starts tracking during break', (done) => {
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: true,
+        isSkipPreparation: false,
+      });
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({ isRunning: true, purpose: 'break' }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectCurrentScreen, FocusScreen.Break);
+      store.overrideSelector(selectors.selectPausedTaskId, 'original-task-id');
+      store.overrideSelector(selectors.selectIsResumingBreak, false);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      setTimeout(() => {
+        currentTaskId$.next('new-task-id');
+      }, 10);
+
+      effects.syncTrackingStartToSession$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.skipBreak({ pausedTaskId: undefined }));
+        done();
+      });
     });
 
     it('should NOT dispatch when isFocusModeEnabled is false', (done) => {
@@ -2359,9 +2440,34 @@ describe('FocusModeEffects', () => {
       }, 50);
     });
 
-    // Bug #6206: completeFocusSession must be dispatched even when isManualBreakStart=true
-    // The screen transition to SessionDone depends on this action being dispatched
-    it('should dispatch completeFocusSession when timer completes even with isManualBreakStart=true', (done) => {
+    // Overtime: when _isOvertimeEnabled is true, the tick reducer keeps the timer running,
+    // so detectSessionCompletion$ should never fire. This guard handles the edge case
+    // where the user pauses during overtime (isRunning becomes false).
+    it('should NOT dispatch when _isOvertimeEnabled is true (pause during overtime)', (done) => {
+      store.overrideSelector(
+        selectors.selectTimer,
+        createMockTimer({
+          isRunning: false,
+          purpose: 'work',
+          duration: 25 * 60 * 1000,
+          elapsed: 26 * 60 * 1000,
+        }),
+      );
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectors.selectIsOvertimeEnabled, true);
+      store.refreshState();
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      setTimeout(() => {
+        done(); // If no emission occurred, test passes
+      }, 50);
+    });
+
+    // Bug #6206 updated: with overtime, isManualBreakStart=true causes the timer to keep
+    // running (via _isOvertimeEnabled). The user completes the session manually.
+    // When _isOvertimeEnabled is false (non-manual-break sessions), auto-completion still works.
+    it('should dispatch completeFocusSession when timer stops with _isOvertimeEnabled=false', (done) => {
       store.overrideSelector(
         selectors.selectTimer,
         createMockTimer({
@@ -2372,17 +2478,87 @@ describe('FocusModeEffects', () => {
         }),
       );
       store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
-      store.overrideSelector(selectFocusModeConfig, {
-        isSyncSessionWithTracking: false,
-        isManualBreakStart: true,
-        isSkipPreparation: false,
-      });
+      store.overrideSelector(selectors.selectIsOvertimeEnabled, false);
       store.refreshState();
 
       effects = TestBed.inject(FocusModeEffects);
 
       effects.detectSessionCompletion$.pipe(take(1)).subscribe((action) => {
         expect(action).toEqual(actions.completeFocusSession({ isManual: false }));
+        done();
+      });
+    });
+  });
+
+  describe('setOvertimeOnSessionStart$', () => {
+    it('should enable overtime for Pomodoro with isManualBreakStart=true', (done) => {
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+        isManualBreakStart: true,
+        isSkipPreparation: false,
+      });
+      store.refreshState();
+      actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.setOvertimeOnSessionStart$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.setOvertimeEnabled({ enabled: true }));
+        done();
+      });
+    });
+
+    it('should NOT enable overtime when isManualBreakStart is false', (done) => {
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Pomodoro);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+        isManualBreakStart: false,
+        isSkipPreparation: false,
+      });
+      store.refreshState();
+      actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.setOvertimeOnSessionStart$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.setOvertimeEnabled({ enabled: false }));
+        done();
+      });
+    });
+
+    it('should NOT enable overtime for Flowtime mode', (done) => {
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Flowtime);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+        isManualBreakStart: true,
+        isSkipPreparation: false,
+      });
+      store.refreshState();
+      actions$ = of(actions.startFocusSession({ duration: 0 }));
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.setOvertimeOnSessionStart$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.setOvertimeEnabled({ enabled: false }));
+        done();
+      });
+    });
+
+    it('should NOT enable overtime for Countdown mode', (done) => {
+      store.overrideSelector(selectors.selectMode, FocusModeMode.Countdown);
+      store.overrideSelector(selectFocusModeConfig, {
+        isSyncSessionWithTracking: false,
+        isManualBreakStart: true,
+        isSkipPreparation: false,
+      });
+      store.refreshState();
+      actions$ = of(actions.startFocusSession({ duration: 25 * 60 * 1000 }));
+
+      effects = TestBed.inject(FocusModeEffects);
+
+      effects.setOvertimeOnSessionStart$.pipe(take(1)).subscribe((action) => {
+        expect(action).toEqual(actions.setOvertimeEnabled({ enabled: false }));
         done();
       });
     });

@@ -6,6 +6,7 @@ import {
   replaceToken,
   requestLoginMagicLink,
   verifyLoginMagicLink,
+  registerWithMagicLink,
   getJwtSecret,
   JWT_EXPIRY,
 } from './auth';
@@ -63,6 +64,13 @@ const PasskeyRecoveryCompleteSchema = z.object({
 });
 
 // Magic Link Schemas
+const MagicLinkRegisterSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  termsAccepted: z.boolean().refine((val) => val === true, {
+    message: 'You must accept the Terms of Service',
+  }),
+});
+
 const MagicLinkRequestSchema = z.object({
   email: z.string().email('Invalid email format'),
 });
@@ -79,6 +87,7 @@ type PasskeyLoginVerifyBody = z.infer<typeof PasskeyLoginVerifySchema>;
 type PasskeyRecoveryRequestBody = z.infer<typeof PasskeyRecoveryRequestSchema>;
 type PasskeyRecoveryOptionsBody = z.infer<typeof PasskeyRecoveryOptionsSchema>;
 type PasskeyRecoveryCompleteBody = z.infer<typeof PasskeyRecoveryCompleteSchema>;
+type MagicLinkRegisterBody = z.infer<typeof MagicLinkRegisterSchema>;
 type MagicLinkRequestBody = z.infer<typeof MagicLinkRequestSchema>;
 type MagicLinkVerifyBody = z.infer<typeof MagicLinkVerifySchema>;
 
@@ -102,6 +111,7 @@ const SAFE_ERROR_MESSAGES = new Set([
   'If an account with that email exists, a login link has been sent.',
   'Failed to send login email. Please try again later.',
   'Invalid or expired login link',
+  'Too many verification attempts. Please try again later or contact support.',
 ]);
 
 // Returns a safe error message for clients (hides internal details)
@@ -476,6 +486,40 @@ export const apiRoutes = async (fastify: FastifyInstance): Promise<void> => {
   // ============================================
   // MAGIC LINK ENDPOINTS
   // ============================================
+
+  // Register with magic link (email-only, no passkey)
+  fastify.post<{ Body: MagicLinkRegisterBody }>(
+    '/register/magic-link',
+    {
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '15 minutes',
+        },
+      },
+    },
+    async (req, reply) => {
+      try {
+        const parseResult = MagicLinkRegisterSchema.safeParse(req.body);
+        if (!parseResult.success) {
+          return reply.status(400).send({
+            error: 'Validation failed',
+            details: parseResult.error.issues,
+          });
+        }
+        const { email } = parseResult.data;
+
+        const result = await registerWithMagicLink(email, Date.now());
+        return reply.status(201).send(result);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        Logger.error(`Magic link registration error: ${errMsg}`);
+        return reply.status(400).send({
+          error: getSafeErrorMessage(err, 'Registration failed. Please try again.'),
+        });
+      }
+    },
+  );
 
   // Request magic link login email
   fastify.post<{ Body: MagicLinkRequestBody }>(

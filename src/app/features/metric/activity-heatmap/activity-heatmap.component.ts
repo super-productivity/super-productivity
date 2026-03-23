@@ -22,6 +22,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatIcon } from '@angular/material/icon';
 import { SnackService } from '../../../core/snack/snack.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { msToString } from '../../../ui/duration/ms-to-string.pipe';
 import { ShareService } from '../../../core/share/share.service';
 import {
   DayData,
@@ -182,7 +184,7 @@ export class ActivityHeatmapComponent {
     // Initialize all days in the specified year
     const currentDate = new Date(startDate);
     while (currentDate <= endDate) {
-      const dateStr = this._getDateStr(currentDate);
+      const dateStr = getDbDateStr(currentDate);
       dayMap.set(dateStr, {
         date: new Date(currentDate),
         dateStr,
@@ -198,6 +200,8 @@ export class ActivityHeatmapComponent {
     let maxTime = 0;
     const taskCountPerDay = new Map<string, Set<string>>();
     tasks.forEach((task) => {
+      // Skip parent tasks — their timeSpentOnDay aggregates subtask time
+      if (task.subTaskIds && task.subTaskIds.length > 0) return;
       if (task.timeSpentOnDay) {
         Object.keys(task.timeSpentOnDay).forEach((dateStr) => {
           const dateYear = parseInt(dateStr.substring(0, 4), 10);
@@ -269,7 +273,7 @@ export class ActivityHeatmapComponent {
     // Initialize all days in the specified year
     const curDate = new Date(startDate);
     while (curDate <= endDate) {
-      const dateStr = this._getDateStr(curDate);
+      const dateStr = getDbDateStr(curDate);
       dayMap.set(dateStr, {
         date: new Date(curDate),
         dateStr,
@@ -337,13 +341,6 @@ export class ActivityHeatmapComponent {
     };
   }
 
-  private _getDateStr(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
   private _buildWeeksGrid(
     dayMap: Map<string, DayData>,
     startDate: Date,
@@ -370,7 +367,7 @@ export class ActivityHeatmapComponent {
 
       // Add 7 days for this week
       for (let i = 0; i < 7; i++) {
-        const dateStr = this._getDateStr(currentDate);
+        const dateStr = getDbDateStr(currentDate);
         const dayData = dayMap.get(dateStr);
 
         // Only include days within our range
@@ -446,17 +443,7 @@ export class ActivityHeatmapComponent {
     if (!day) {
       return '';
     }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${this._formatTime(day.timeSpent)}`;
-  }
-
-  private _formatTime(ms: number): string {
-    const hours = Math.floor(ms / (1000 * 60 * 60));
-    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
+    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }
 
   private _extractAvailableYears(tasks: Task[]): number[] {

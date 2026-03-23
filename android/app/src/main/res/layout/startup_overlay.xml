@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/startup_overlay_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <!-- FAB button shown initially -->
+    <ImageButton
+        android:id="@+id/startup_fab"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="8dp"
+        android:src="@drawable/ic_add_thin"
+        android:scaleType="center"
+        android:contentDescription="@string/startup_overlay_add_task"
+        android:elevation="2dp" />
+
+    <!-- Input bar, hidden initially -->
+    <LinearLayout
+        android:id="@+id/startup_overlay_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/startup_task_feedback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <EditText
+            android:id="@+id/startup_task_input"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:hint="@string/startup_overlay_hint"
+            android:inputType="text"
+            android:imeOptions="actionDone"
+            android:maxLines="1"
+            android:background="@android:color/transparent"
+            android:textSize="16sp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:gravity="center_vertical" />
+
+    </LinearLayout>
+
+</FrameLayout>

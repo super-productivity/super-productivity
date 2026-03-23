@@ -667,6 +667,89 @@ describe('FocusModeReducer', () => {
     });
   });
 
+  describe('overtime', () => {
+    it('should keep work timer running when _isOvertimeEnabled is true and elapsed >= duration', () => {
+      const startTime = Date.now() - 1500000;
+      const overtimeState = {
+        ...initialState,
+        _isOvertimeEnabled: true,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const result = focusModeReducer(overtimeState, a.tick());
+
+      expect(result.timer.isRunning).toBe(true);
+      expect(result.timer.elapsed).toBeGreaterThanOrEqual(1500000);
+    });
+
+    it('should still stop work timer when _isOvertimeEnabled is false', () => {
+      const startTime = Date.now() - 1500000;
+      const normalState = {
+        ...initialState,
+        _isOvertimeEnabled: false,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 1500000,
+          duration: 1500000,
+          purpose: 'work' as const,
+        },
+      };
+
+      const result = focusModeReducer(normalState, a.tick());
+
+      expect(result.timer.isRunning).toBe(false);
+    });
+
+    it('should still stop break timer even when _isOvertimeEnabled is true', () => {
+      const startTime = Date.now() - 300000;
+      const breakState = {
+        ...initialState,
+        _isOvertimeEnabled: true,
+        timer: {
+          isRunning: true,
+          startedAt: startTime,
+          elapsed: 300000,
+          duration: 300000,
+          purpose: 'break' as const,
+        },
+      };
+
+      const result = focusModeReducer(breakState, a.tick());
+
+      expect(result.timer.isRunning).toBe(false);
+    });
+
+    it('setOvertimeEnabled should set the flag', () => {
+      const result = focusModeReducer(
+        initialState,
+        a.setOvertimeEnabled({ enabled: true }),
+      );
+
+      expect(result._isOvertimeEnabled).toBe(true);
+    });
+
+    it('completeFocusSession should reset _isOvertimeEnabled', () => {
+      const state = { ...initialState, _isOvertimeEnabled: true };
+      const result = focusModeReducer(state, a.completeFocusSession({ isManual: true }));
+
+      expect(result._isOvertimeEnabled).toBe(false);
+    });
+
+    it('cancelFocusSession should reset _isOvertimeEnabled', () => {
+      const state = { ...initialState, _isOvertimeEnabled: true };
+      const result = focusModeReducer(state, a.cancelFocusSession());
+
+      expect(result._isOvertimeEnabled).toBe(false);
+    });
+  });
+
   describe('FOCUS_MODE_FEATURE_KEY', () => {
     it('should export the correct feature key', () => {
       expect(FOCUS_MODE_FEATURE_KEY).toBe('focusMode');

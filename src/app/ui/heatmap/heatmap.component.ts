@@ -9,6 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DateAdapter } from '@angular/material/core';
+import { msToString } from '../duration/ms-to-string.pipe';
 
 export interface DayData {
   date: Date;
@@ -76,16 +77,6 @@ export class HeatmapComponent {
     if (!day) {
       return '';
     }
-    return `${day.dateStr}: ${day.taskCount} tasks, ${this._formatTime(day.timeSpent)}`;
-  }
-
-  private _formatTime(ms: number): string {
-    const hours = Math.floor(ms / (1000 * 60 * 60));
-    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
+    return `${day.dateStr}: ${day.taskCount} tasks, ${msToString(day.timeSpent)}`;
   }
 }

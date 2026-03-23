@@ -39,6 +39,8 @@ import { BOARDS_FEATURE_NAME } from '../../features/boards/store/boards.reducer'
 import { menuTreeFeatureKey } from '../../features/menu-tree/store/menu-tree.reducer';
 import { plannerFeatureKey } from '../../features/planner/store/planner.reducer';
 import { TIME_TRACKING_FEATURE_KEY } from '../../features/time-tracking/store/time-tracking.reducer';
+import { appStateFeatureKey } from '../../root-store/app-state/app-state.reducer';
+import { getDbDateStr } from '../../util/get-db-date-str';
 
 /**
  * Creates a minimal valid AppDataComplete state.
@@ -133,6 +135,9 @@ export const createValidTask = (id: string, overrides: Partial<Task> = {}): Task
   timeSpent: 0,
   dueDay: undefined,
   dueWithTime: undefined,
+  deadlineDay: undefined,
+  deadlineWithTime: undefined,
+  deadlineRemindAt: undefined,
   attachments: [],
   ...overrides,
 });
@@ -375,6 +380,7 @@ export const appDataToRootState = (data: AppDataComplete): RootState => {
     [plannerFeatureKey]: data.planner,
     [BOARDS_FEATURE_NAME]: data.boards,
     [TIME_TRACKING_FEATURE_KEY]: data.timeTracking,
+    [appStateFeatureKey]: { todayStr: getDbDateStr(), startOfNextDayDiffMs: 0 },
   } as RootState;
 };
 

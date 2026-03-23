@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "Chiave API",
+    "API_KEY_LINK": "Ottieni la tua chiave API personale",
+    "TEAM_IDS": "ID Workspace/Team (separati da virgola, vuoto per tutti)",
+    "USER_ID": "ID Utente (per filtrare per assegnatario)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Riepilogo",
+    "STATUS": "Stato",
+    "PRIORITY": "Priorità",
+    "ASSIGNEE": "Assegnatario",
+    "LABELS": "Etichette",
+    "DESCRIPTION": "Descrizione"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Errore sconosciuto. Controlla la chiave API e riprova."
+  }
+}

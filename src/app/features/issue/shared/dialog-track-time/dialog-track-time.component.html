@@ -1,0 +1,157 @@
+<form
+  (submit)="$event.preventDefault(); submit()"
+  class="mat-body"
+  name="time-estimate-form"
+>
+  <h1 mat-dialog-title>
+    <mat-icon
+      class="dialog-header-icon"
+      [svgIcon]="data.issueIcon"
+    ></mat-icon>
+    <span>{{ data.t.title | translate }}</span>
+  </h1>
+
+  <mat-dialog-content>
+    <p>
+      {{ data.t.submitFor | translate }}<br />
+      <strong>
+        @if (data.issueUrl) {
+          <a
+            [href]="data.issueUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ data.issueLabel }}</a
+          >
+        } @else {
+          {{ data.issueLabel }}
+        }</strong
+      >.
+    </p>
+    @if (data.t.currentlyLogged) {
+      <p>
+        {{ data.t.currentlyLogged | translate }}
+        <strong>{{ timeLogged | msToString }}</strong>
+      </p>
+    }
+
+    <div class="form-wrapper">
+      <mat-label>{{ data.t.timeSpent | translate }}</mat-label>
+      <mat-form-field>
+        <input
+          [(ngModel)]="timeSpent"
+          inputDuration="optional"
+          matInput
+          name="timeSpent"
+          required
+          type="text"
+        />
+
+        <div
+          class="suffix-wrapper"
+          matSuffix
+          [matMenuTriggerFor]="contextMenu"
+          [matTooltip]="data.t.timeSpentTooltip | translate"
+        >
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon class="suffix-icon">add</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            type="button"
+          >
+            <mat-icon class="suffix-icon">timer</mat-icon>
+          </button>
+        </div>
+      </mat-form-field>
+
+      <mat-menu #contextMenu="matMenu">
+        <ng-template matMenuContent>
+          @for (opt of defaultTimeOptions; track opt) {
+            <button
+              mat-menu-item
+              type="button"
+              (click)="fill(opt.value)"
+            >
+              {{ opt.label | translate }} ({{
+                getTimeToLogForMode(opt.value) | msToString
+              }})
+            </button>
+          }
+        </ng-template>
+      </mat-menu>
+
+      @if (defaultTimeCheckboxContent) {
+        <mat-checkbox
+          [@expandFade]
+          [checked]="defaultTimeCheckboxContent.isChecked"
+          (change)="defaultTimeCheckboxContent.isChecked = $event.checked"
+          class="default-time-checkbox"
+          >{{ defaultTimeCheckboxContent.label | translate }}
+        </mat-checkbox>
+      }
+
+      <mat-form-field>
+        <mat-label>{{ data.t.started | translate }}</mat-label>
+        <input
+          [(ngModel)]="started"
+          matInput
+          name="date"
+          required
+          type="datetime-local"
+        />
+        <mat-error>{{ data.t.invalidDate | translate }}</mat-error>
+      </mat-form-field>
+
+      @if (data.activities$) {
+        <mat-form-field>
+          <mat-label>{{ data.t.activity | translate }}</mat-label>
+          <mat-select
+            [(ngModel)]="activityId"
+            name="activity"
+          >
+            @for (activity of data.activities$ | async; track activity) {
+              <mat-option [value]="activity.id"> {{ activity.name }} </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+
+      <mat-form-field>
+        <mat-label>{{ data.t.comment | translate }}</mat-label>
+        <textarea
+          [(ngModel)]="comment"
+          cdkAutosizeMaxRows="5"
+          cdkAutosizeMinRows="2"
+          cdkTextareaAutosize
+          matInput
+          name="comment"
+        ></textarea>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <div class="wrap-buttons">
+      <button
+        (click)="close()"
+        color="primary"
+        mat-button
+        type="button"
+      >
+        {{ T.G.CANCEL | translate }}
+      </button>
+      <button
+        color="primary"
+        mat-stroked-button
+        type="submit"
+      >
+        <mat-icon>save</mat-icon>
+        {{ data.t.submit | translate }}
+      </button>
+    </div>
+  </mat-dialog-actions>
+</form>

@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "Cheie API",
+    "API_KEY_LINK": "Obțineți cheia API personală",
+    "TEAM_IDS": "ID-uri Workspace/Echipă (separate prin virgulă, gol pentru toate)",
+    "USER_ID": "ID Utilizator (pentru filtrare după responsabil)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Summary",
+    "STATUS": "Status",
+    "PRIORITY": "Priority",
+    "ASSIGNEE": "Assignee",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Description"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Eroare necunoscută. Verificați cheia API și încercați din nou."
+  }
+}

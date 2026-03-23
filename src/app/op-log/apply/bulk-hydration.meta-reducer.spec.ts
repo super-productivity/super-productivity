@@ -689,6 +689,65 @@ describe('bulkHydrationMetaReducer', () => {
       expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_MOVE_TO_ARCHIVE);
     });
 
+    it('should skip LWW Update for entity deleted (not archived) in same batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const deleteOp = createMockOperation({
+        id: 'delete-op',
+        actionType: ActionType.TASK_SHARED_DELETE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        payload: {
+          actionPayload: {
+            task: { id: TASK_ID, tagIds: [], subTaskIds: [], subTasks: [] },
+          },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [deleteOp, createLwwUpdateOp(TASK_ID)];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Only the delete op should be applied, LWW Update skipped
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_DELETE);
+    });
+
+    it('should skip LWW Update for entity in deleteTasks (TASK_SHARED_DELETE_MULTIPLE) batch', () => {
+      const reducer = bulkHydrationMetaReducer(mockReducer);
+      const state = createMockState();
+
+      const deleteMultipleOp = createMockOperation({
+        id: 'delete-multiple-op',
+        actionType: ActionType.TASK_SHARED_DELETE_MULTIPLE,
+        opType: OpType.Delete,
+        entityType: 'TASK',
+        entityId: TASK_ID,
+        entityIds: [TASK_ID, TASK_ID_2],
+        payload: {
+          actionPayload: { taskIds: [TASK_ID, TASK_ID_2] },
+          entityChanges: [],
+        },
+      });
+
+      const operations = [
+        deleteMultipleOp,
+        createLwwUpdateOp(TASK_ID),
+        createLwwUpdateOp(TASK_ID_2),
+      ];
+      const action = bulkApplyHydrationOperations({ operations });
+
+      reducer(state, action);
+
+      // Only the delete op should be applied, both LWW Updates skipped
+      expect(mockReducer).toHaveBeenCalledTimes(1);
+      expect(reducerCalls[0].action.type).toBe(ActionType.TASK_SHARED_DELETE_MULTIPLE);
+    });
+
     it('should filter using entityId fallback when entityIds array is missing', () => {
       const reducer = bulkHydrationMetaReducer(mockReducer);
       const state = createMockState();

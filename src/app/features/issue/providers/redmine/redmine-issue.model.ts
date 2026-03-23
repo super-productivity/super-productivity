@@ -52,6 +52,7 @@ export type RedmineIssue = Readonly<{
   title: string;
   description: string;
   done_ratio: number;
+  spent_hours?: number;
   custom_fields: RedmineCustomField[];
   created_on: string;
   updated_on: string;
@@ -79,6 +80,15 @@ export type RedmineSearchResult = Readonly<{
   total_count: number;
   offset: number;
   limit: number;
+}>;
+
+export type RedmineTimeEntry = Readonly<{
+  id: number;
+  hours: number;
+}>;
+
+export type RedmineTimeEntriesResult = Readonly<{
+  time_entries: RedmineTimeEntry[];
 }>;
 
 export type RedmineIssueResult = Readonly<{

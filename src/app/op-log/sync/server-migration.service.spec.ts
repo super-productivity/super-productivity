@@ -1,12 +1,15 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { of } from 'rxjs';
 import { ServerMigrationService } from './server-migration.service';
 import { OperationLogStoreService } from '../persistence/operation-log-store.service';
 import { VectorClockService } from './vector-clock.service';
 import { ValidateStateService } from '../validation/validate-state.service';
 import { StateSnapshotService } from '../backup/state-snapshot.service';
 import { SnackService } from '../../core/snack/snack.service';
+import { UserInputWaitStateService } from '../../imex/sync/user-input-wait-state.service';
 import {
   SyncProviderServiceInterface,
   OperationSyncCapable,
@@ -26,6 +29,8 @@ describe('ServerMigrationService', () => {
   let stateSnapshotServiceSpy: jasmine.SpyObj<StateSnapshotService>;
   let snackServiceSpy: jasmine.SpyObj<SnackService>;
   let clientIdProviderSpy: jasmine.SpyObj<ClientIdProvider>;
+  let matDialogSpy: jasmine.SpyObj<MatDialog>;
+  let userInputWaitStateSpy: jasmine.SpyObj<UserInputWaitStateService>;
   let defaultProvider: OperationSyncProvider;
 
   // Type for operation-sync-capable provider
@@ -75,6 +80,11 @@ describe('ServerMigrationService', () => {
     ]);
     snackServiceSpy = jasmine.createSpyObj('SnackService', ['open']);
     clientIdProviderSpy = jasmine.createSpyObj('ClientIdProvider', ['loadClientId']);
+    matDialogSpy = jasmine.createSpyObj('MatDialog', ['open']);
+    userInputWaitStateSpy = jasmine.createSpyObj('UserInputWaitStateService', [
+      'startWaiting',
+    ]);
+    userInputWaitStateSpy.startWaiting.and.returnValue(() => {});
 
     // Default mock returns
     opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
@@ -83,7 +93,7 @@ describe('ServerMigrationService', () => {
     vectorClockServiceSpy.getCurrentVectorClock.and.returnValue(
       Promise.resolve({ 'test-client': 5 }),
     );
-    validateStateServiceSpy.validateAndRepair.and.returnValue({
+    validateStateServiceSpy.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     } as any);
@@ -117,6 +127,8 @@ describe('ServerMigrationService', () => {
         { provide: StateSnapshotService, useValue: stateSnapshotServiceSpy },
         { provide: SnackService, useValue: snackServiceSpy },
         { provide: CLIENT_ID_PROVIDER, useValue: clientIdProviderSpy },
+        { provide: MatDialog, useValue: matDialogSpy },
+        { provide: UserInputWaitStateService, useValue: userInputWaitStateSpy },
       ],
     });
 
@@ -142,17 +154,54 @@ describe('ServerMigrationService', () => {
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
     });
 
-    it('should skip if server has data (latestSeq !== 0)', async () => {
+    it('should skip if server has data and client has no synced ops', async () => {
       const provider = createMockSyncProvider();
       (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(0));
       (provider.downloadOps as jasmine.Spy).and.returnValue(
         Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
       );
+      opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(false));
 
       await service.checkAndHandleMigration(provider);
 
-      expect(opLogStoreSpy.hasSyncedOps).not.toHaveBeenCalled();
+      expect(matDialogSpy.open).not.toHaveBeenCalled();
       expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('should show confirmation dialog when server has data and client has synced ops', async () => {
+      const provider = createMockSyncProvider();
+      (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(0));
+      (provider.downloadOps as jasmine.Spy).and.returnValue(
+        Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
+      );
+      opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
+      matDialogSpy.open.and.returnValue({
+        afterClosed: () => of(false),
+      } as MatDialogRef<unknown>);
+
+      await service.checkAndHandleMigration(provider);
+
+      expect(matDialogSpy.open).toHaveBeenCalled();
+      expect(opLogStoreSpy.append).not.toHaveBeenCalled();
+    });
+
+    it('should create SYNC_IMPORT when user confirms migration to non-empty server', async () => {
+      const provider = createMockSyncProvider();
+      (provider.getLastServerSeq as jasmine.Spy).and.returnValue(Promise.resolve(0));
+      (provider.downloadOps as jasmine.Spy).and.returnValue(
+        Promise.resolve({ ops: [], latestSeq: 5, hasMore: false }),
+      );
+      opLogStoreSpy.hasSyncedOps.and.returnValue(Promise.resolve(true));
+      matDialogSpy.open.and.returnValue({
+        afterClosed: () => of(true),
+      } as MatDialogRef<unknown>);
+
+      await service.checkAndHandleMigration(provider);
+
+      expect(opLogStoreSpy.append).toHaveBeenCalled();
+      const appendedOp = opLogStoreSpy.append.calls.mostRecent().args[0];
+      expect(appendedOp.opType).toBe(OpType.SyncImport);
+      expect(appendedOp.syncImportReason).toBe('SERVER_MIGRATION');
     });
 
     it('should skip if client has no previously synced ops (fresh client)', async () => {
@@ -211,7 +260,7 @@ describe('ServerMigrationService', () => {
     });
 
     it('should abort if state validation fails', async () => {
-      validateStateServiceSpy.validateAndRepair.and.returnValue({
+      validateStateServiceSpy.validateAndRepair.and.resolveTo({
         isValid: false,
         wasRepaired: false,
         error: 'Validation failed',
@@ -235,7 +284,7 @@ describe('ServerMigrationService', () => {
         tag: { ids: [], entities: {} },
       };
 
-      validateStateServiceSpy.validateAndRepair.and.returnValue({
+      validateStateServiceSpy.validateAndRepair.and.resolveTo({
         isValid: true,
         wasRepaired: true,
         repairedState,

@@ -10,9 +10,13 @@ import { WorkContextService } from '../../work-context/work-context.service';
 import { WorkContextType } from '../../work-context/work-context.model';
 import { selectTagFeatureState } from '../store/tag.reducer';
 import { selectProjectFeatureState } from '../../project/store/project.selectors';
+import { selectTaskRepeatCfgFeatureState } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { DEFAULT_TAG } from '../tag.const';
 import { DEFAULT_PROJECT } from '../../project/project.const';
+import { TranslateService } from '@ngx-translate/core';
+import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 describe('TagListComponent', () => {
   let component: TagListComponent;
@@ -71,6 +75,8 @@ describe('TagListComponent', () => {
           return tagState$.asObservable();
         } else if (selector === selectProjectFeatureState) {
           return projectState$.asObservable();
+        } else if (selector === selectTaskRepeatCfgFeatureState) {
+          return of({ ids: [], entities: {} });
         }
         return of(null);
       },
@@ -80,11 +86,32 @@ describe('TagListComponent', () => {
       activeWorkContextTypeAndId$: workContext$.asObservable(),
     };
 
+    const translateServiceMock = {
+      instant: (key: string) => key,
+    };
+
+    const dateTimeFormatServiceMock = {
+      currentLocale: () => 'en',
+    };
+
+    const pluginRegistryMock = {
+      registrationVersion: () => 0,
+      hasProvider: () => false,
+      getIcon: () => 'extension',
+      getHumanReadableName: () => 'Plugin',
+    };
+
     await TestBed.configureTestingModule({
       imports: [TagListComponent, NoopAnimationsModule],
       providers: [
         { provide: Store, useValue: storeMock },
         { provide: WorkContextService, useValue: workContextServiceMock },
+        { provide: TranslateService, useValue: translateServiceMock },
+        { provide: DateTimeFormatService, useValue: dateTimeFormatServiceMock },
+        {
+          provide: PluginIssueProviderRegistryService,
+          useValue: pluginRegistryMock,
+        },
       ],
     }).compileComponents();
 

@@ -17,7 +17,7 @@
     >
     </mat-progress-spinner>
     <div class="timer-text">
-      {{ remainingTime() | msToClockString: true }}
+      {{ remainingTime() | msToMinuteClockString }}
     </div>
     @if (remainingTime() > 0) {
       @if (isBreakPaused()) {
@@ -55,6 +55,15 @@
         <mat-icon>edit_calendar</mat-icon>
         {{ T.F.FOCUS_MODE.BACK_TO_PLANNING | translate }}
       </button>
+      @if (isPomodoro()) {
+        <button
+          mat-stroked-button
+          (click)="resetCycles()"
+        >
+          <mat-icon>restart_alt</mat-icon>
+          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
+        </button>
+      }
       <button
         mat-stroked-button
         (click)="skipBreak()"
@@ -72,6 +81,16 @@
         <mat-icon>done_all</mat-icon>
         {{ T.G.COMPLETE | translate }}
       </button>
+
+      @if (isPomodoro()) {
+        <button
+          mat-stroked-button
+          (click)="resetCycles()"
+        >
+          <mat-icon>restart_alt</mat-icon>
+          {{ T.F.FOCUS_MODE.RESET_CYCLES | translate }}
+        </button>
+      }
 
       <button
         mat-raised-button

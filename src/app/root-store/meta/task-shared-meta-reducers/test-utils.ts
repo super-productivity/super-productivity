@@ -9,6 +9,8 @@ import { Project } from '../../../features/project/project.model';
 import { DEFAULT_PROJECT } from '../../../features/project/project.const';
 import { DEFAULT_TAG } from '../../../features/tag/tag.const';
 import { Action } from '@ngrx/store';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 
 // =============================================================================
 // TEST HELPERS
@@ -71,6 +73,10 @@ export const createBaseState = (): RootState => {
     planner: {
       days: {},
       addPlannedTasksDialogLastShown: undefined,
+    },
+    [appStateFeatureKey]: {
+      todayStr: getDbDateStr(),
+      startOfNextDayDiffMs: 0,
     },
   } as Partial<RootState> as RootState;
 };

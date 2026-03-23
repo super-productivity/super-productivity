@@ -33,26 +33,26 @@
 
 :host::ng-deep {
   .tpl .warning-box {
-    margin: 16px;
-    margin-bottom: 32px;
+    margin: var(--s2);
+    margin-bottom: var(--s4);
     font-weight: bold;
     display: flex;
     align-items: center;
 
     &:before {
       @include materialIcon('warning');
-      margin-right: 8px;
+      margin-right: var(--s);
     }
   }
 
   .tpl hr {
-    margin-bottom: 32px;
+    margin-bottom: var(--s4);
 
     border-color: var(--separator-color);
   }
 
   .sub-section-heading {
-    margin-top: 32px;
+    margin-top: var(--s4);
   }
 
   .sub-section-heading,
@@ -62,5 +62,5 @@
 }
 
 .success-info {
-  margin: 0 16px;
+  margin: 0 var(--s2);
 }

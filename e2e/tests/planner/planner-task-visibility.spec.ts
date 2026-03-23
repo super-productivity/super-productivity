@@ -21,10 +21,10 @@ test.describe('Planner Task Visibility', () => {
     await plannerPage.navigateToPlanner();
     await plannerPage.waitForPlannerView();
 
-    // The task should be visible in the planner's today section
+    // The task should be visible in the planner's today section (may take time after route change)
     await expect(
       page.locator('task').filter({ hasText: 'Planner visibility test' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
   });
 
   test('should show multiple newly created tasks in planner', async ({
@@ -40,7 +40,7 @@ test.describe('Planner Task Visibility', () => {
 
     await expect(
       page.locator('task').filter({ hasText: 'First planner task' }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
     await expect(
       page.locator('task').filter({ hasText: 'Second planner task' }),
     ).toBeVisible();

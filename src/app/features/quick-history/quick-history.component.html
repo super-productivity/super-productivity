@@ -99,7 +99,11 @@
                           class="title"
                           colspan
                         >
-                          <span class="task-title">{{ logEntry.task.title }}</span>
+                          <span
+                            (click)="viewTaskDetails(logEntry.task)"
+                            class="task-title task-title-clickable"
+                            >{{ logEntry.task.title }}</span
+                          >
                         </td>
                         <td class="worked">
                           @if (

@@ -41,7 +41,6 @@ export interface ModelCfg<T extends ModelBase> {
    */
   cacheOnLoad?: boolean;
 
-  validate?: <R>(data: R | T) => IValidation<R | T>;
   repair?: (data: any) => T; // any is intentional: repair handles malformed data
 
   defaultData?: T;

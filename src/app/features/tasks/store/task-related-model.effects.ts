@@ -13,7 +13,7 @@ import { Store } from '@ngrx/store';
 import { selectTodayTaskIds } from '../../work-context/store/work-context.selectors';
 import { LOCAL_ACTIONS } from '../../../util/local-actions.token';
 import { HydrationStateService } from '../../../op-log/apply/hydration-state.service';
-import { getDbDateStr } from '../../../util/get-db-date-str';
+import { DateService } from '../../../core/date/date.service';
 
 @Injectable()
 export class TaskRelatedModelEffects {
@@ -22,6 +22,7 @@ export class TaskRelatedModelEffects {
   private _globalConfigService = inject(GlobalConfigService);
   private _store = inject(Store);
   private _hydrationState = inject(HydrationStateService);
+  private _dateService = inject(DateService);
 
   // EFFECTS ===> EXTERNAL
   // ---------------------
@@ -65,7 +66,8 @@ export class TaskRelatedModelEffects {
         mergeMap(({ task }) => this._taskService.getByIdOnce$(task.id as string)),
         // Skip if task is already scheduled for today (avoids no-op dispatch)
         filter(
-          (task: Task) => !!task && !task.parentId && task.dueDay !== getDbDateStr(),
+          (task: Task) =>
+            !!task && !task.parentId && task.dueDay !== this._dateService.todayStr(),
         ),
         map((task) =>
           TaskSharedActions.planTasksForToday({

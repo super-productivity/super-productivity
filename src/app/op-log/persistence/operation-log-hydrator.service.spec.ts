@@ -179,7 +179,7 @@ describe('OperationLogHydratorService', () => {
     mockSchemaMigrationService.needsMigration.and.returnValue(false);
     mockSchemaMigrationService.operationNeedsMigration.and.returnValue(false);
     mockSchemaMigrationService.migrateOperations.and.callFake((ops) => ops);
-    mockValidateStateService.validateAndRepair.and.returnValue({
+    mockValidateStateService.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     });
@@ -299,7 +299,7 @@ describe('OperationLogHydratorService', () => {
         const snapshot = createMockSnapshot({ schemaVersion: undefined });
         const repairedState = { ...mockState, repaired: true };
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: false,
           wasRepaired: true,
           repairedState,
@@ -320,7 +320,7 @@ describe('OperationLogHydratorService', () => {
         const repairedState = { ...mockState, repaired: true };
         const repairSummary = { entityStateFixed: 1 } as any;
         mockOpLogStore.loadStateCache.and.returnValue(Promise.resolve(snapshot));
-        mockValidateStateService.validateAndRepair.and.returnValue({
+        mockValidateStateService.validateAndRepair.and.resolveTo({
           isValid: false,
           wasRepaired: true,
           repairedState,
@@ -506,7 +506,7 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(() => {
+        mockValidateStateService.validateAndRepair.and.callFake(async () => {
           callOrder.push('validate');
           return { isValid: true, wasRepaired: false };
         });
@@ -1096,7 +1096,7 @@ describe('OperationLogHydratorService', () => {
 
         // Track order of operations
         const callOrder: string[] = [];
-        mockValidateStateService.validateAndRepair.and.callFake(() => {
+        mockValidateStateService.validateAndRepair.and.callFake(async () => {
           callOrder.push('validate');
           return { isValid: true, wasRepaired: false };
         });

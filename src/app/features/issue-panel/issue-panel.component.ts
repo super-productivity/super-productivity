@@ -28,6 +28,8 @@ import { CdkDrag, CdkDragDrop, CdkDropList } from '@angular/cdk/drag-drop';
 import { moveItemInArray } from '../../util/move-item-in-array';
 import { IssueProviderActions } from '../issue/store/issue-provider.actions';
 import { IssueIconPipe } from '../issue/issue-icon/issue-icon.pipe';
+import { TranslatePipe } from '@ngx-translate/core';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
 
 @Component({
   selector: 'issue-panel',
@@ -44,6 +46,7 @@ import { IssueIconPipe } from '../issue/issue-icon/issue-icon.pipe';
     CdkDropList,
     CdkDrag,
     IssueIconPipe,
+    TranslatePipe,
   ],
   templateUrl: './issue-panel.component.html',
   styleUrl: './issue-panel.component.scss',
@@ -55,6 +58,7 @@ export class IssuePanelComponent {
   private _store = inject(Store);
   private _matDialog = inject(MatDialog);
   private _workContextService = inject(WorkContextService);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   selectedTabIndex = signal(0);
   isShowIntro = signal(false);
@@ -65,13 +69,15 @@ export class IssuePanelComponent {
       issueProvider: IssueProvider;
       initials?: string | null;
       tooltip: string;
+      missingPluginName?: string;
     }[]
   > = computed(
     () =>
       this.issueProviders()?.map((p) => ({
-        issueProvider: p,
+        issueProvider: this._withPluginAvailability(p),
         initials: getIssueProviderInitials(p),
         tooltip: getIssueProviderTooltip(p),
+        missingPluginName: this._getMissingPluginName(p),
       })) || [],
   );
 
@@ -101,6 +107,30 @@ export class IssuePanelComponent {
         ids: newItems.map((p) => p.issueProvider.id),
       }),
     );
+  }
+
+  private _isPluginServed(p: IssueProvider): boolean {
+    return !!(p as { pluginId?: string }).pluginId;
+  }
+
+  private _withPluginAvailability(p: IssueProvider): IssueProvider {
+    if (
+      this._isPluginServed(p) &&
+      !this._pluginRegistry.hasProvider(p.issueProviderKey)
+    ) {
+      return { ...p, isEnabled: false };
+    }
+    return p;
+  }
+
+  private _getMissingPluginName(p: IssueProvider): string | undefined {
+    if (
+      this._isPluginServed(p) &&
+      !this._pluginRegistry.hasProvider(p.issueProviderKey)
+    ) {
+      return (p as { pluginId?: string }).pluginId || p.issueProviderKey;
+    }
+    return undefined;
   }
 
   private _setSelectedTabIndex(): void {

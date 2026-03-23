@@ -1,5 +1,6 @@
 import {
   ActionType,
+  FULL_STATE_OP_TYPES,
   Operation,
   OperationLogEntry,
   OpType,
@@ -75,6 +76,16 @@ export class SimulatedClient {
     });
 
     await this.store.append(op, 'local');
+
+    // After creating a SYNC_IMPORT locally, reset the working clock to minimal.
+    // This matches the real behavior in SyncHydrationService.hydrateFromRemoteSync()
+    // where the working clock is reset to only the importing client's entry.
+    if (FULL_STATE_OP_TYPES.has(opType)) {
+      const minimalClock: Record<string, number> = {};
+      minimalClock[this.clientId] = op.vectorClock[this.clientId];
+      this.testClient.setVectorClock(minimalClock);
+    }
+
     return op;
   }
 
@@ -257,12 +268,34 @@ export class SimulatedClient {
    * clock with only its own entry.
    */
   private async _applyRemoteOps(serverOps: ServerSyncOperation[]): Promise<void> {
+    // Check if any op is a full-state operation (SYNC_IMPORT / BACKUP_IMPORT / REPAIR).
+    // If so, reset the clock to minimal (import client + own client) instead of merging,
+    // matching the real behavior in OperationLogStoreService.mergeRemoteOpClocks().
+    const fullStateOp = serverOps.find((sop) =>
+      FULL_STATE_OP_TYPES.has(sop.op.opType as OpType),
+    );
+
+    if (fullStateOp) {
+      // Reset to minimal: only import client's entry + own entry
+      const minimalClock: Record<string, number> = {};
+      const importClientId = fullStateOp.op.clientId;
+      if (fullStateOp.op.vectorClock[importClientId] !== undefined) {
+        minimalClock[importClientId] = fullStateOp.op.vectorClock[importClientId];
+      }
+      if (this.clientId !== importClientId) {
+        // Preserve our own counter from the import's clock (or 0 if not present)
+        const ownCounterInImport = fullStateOp.op.vectorClock[this.clientId] ?? 0;
+        const ownCounterCurrent = this.testClient.getCurrentClock()[this.clientId] ?? 0;
+        minimalClock[this.clientId] = Math.max(ownCounterInImport, ownCounterCurrent);
+      }
+      this.testClient.setVectorClock(minimalClock);
+    }
+
     for (const serverOp of serverOps) {
-      // Always merge the remote clock into our local knowledge.
-      // This must happen regardless of whether the op is already in the
-      // shared store, because this client's TestClient needs to learn
-      // about the remote causal history.
-      this.testClient.mergeRemoteClock(serverOp.op.vectorClock);
+      if (!fullStateOp) {
+        // Normal case: merge the remote clock into our local knowledge.
+        this.testClient.mergeRemoteClock(serverOp.op.vectorClock);
+      }
 
       // Skip store write if already have this op (shared DB between clients)
       if (await this.store.hasOp(serverOp.op.id)) {

@@ -245,10 +245,13 @@ export class DialogSimpleCounterEditComponent {
     const date = this.selectedDateStr();
     if (date === this.todayStr) return 'Today';
 
-    return new Date(date).toLocaleDateString(this._dateTimeFormatService.currentLocale, {
-      day: 'numeric',
-      month: 'numeric',
-    });
+    return new Date(date).toLocaleDateString(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        day: 'numeric',
+        month: 'numeric',
+      },
+    );
   }
 
   private _getChartDates(): string[] {
@@ -274,10 +277,13 @@ export class DialogSimpleCounterEditComponent {
     const date = new Date(dateStr);
     const dayOfWeek = date.getDay();
 
-    const baseLabel = date.toLocaleDateString(this._dateTimeFormatService.currentLocale, {
-      month: 'numeric',
-      day: 'numeric',
-    });
+    const baseLabel = date.toLocaleDateString(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        month: 'numeric',
+        day: 'numeric',
+      },
+    );
 
     if (!counter.isTrackStreaks || !counter.streakWeekDays?.[dayOfWeek]) {
       return baseLabel;

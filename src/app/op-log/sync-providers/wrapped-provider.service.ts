@@ -1,6 +1,11 @@
-import { inject, Injectable } from '@angular/core';
+import { DestroyRef, inject, Injectable } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { SyncProviderId } from './provider.const';
-import { SyncProviderServiceInterface, OperationSyncCapable } from './provider.interface';
+import {
+  SyncProviderBase,
+  FileSyncProvider,
+  OperationSyncCapable,
+} from './provider.interface';
 import { FileBasedSyncAdapterService } from './file-based/file-based-sync-adapter.service';
 import { SyncProviderManager } from './provider-manager.service';
 import { isOperationSyncCapable, isFileBasedProvider } from '../sync/operation-sync.util';
@@ -36,9 +41,22 @@ import { OpLog } from '../../core/log';
 export class WrappedProviderService {
   private _fileBasedAdapter = inject(FileBasedSyncAdapterService);
   private _providerManager = inject(SyncProviderManager);
+  private _destroyRef = inject(DestroyRef);
 
   /** Cache of wrapped adapters per provider ID */
   private _cache = new Map<string, OperationSyncCapable>();
+
+  constructor() {
+    // Auto-invalidate cache when provider config changes
+    this._providerManager.providerConfigChanged$
+      .pipe(takeUntilDestroyed(this._destroyRef))
+      .subscribe(() => {
+        this._cache.clear();
+        OpLog.normal(
+          'WrappedProviderService: Cache auto-invalidated due to config change',
+        );
+      });
+  }
 
   /**
    * Gets an OperationSyncCapable version of the provider.
@@ -47,7 +65,7 @@ export class WrappedProviderService {
    * @returns OperationSyncCapable provider, or null if provider doesn't support sync
    */
   async getOperationSyncCapable(
-    provider: SyncProviderServiceInterface<SyncProviderId> | null,
+    provider: SyncProviderBase<SyncProviderId> | null,
   ): Promise<OperationSyncCapable | null> {
     if (!provider) {
       return null;
@@ -60,7 +78,7 @@ export class WrappedProviderService {
 
     // File-based providers need wrapping
     if (isFileBasedProvider(provider)) {
-      return this._getOrCreateAdapter(provider);
+      return this._getOrCreateAdapter(provider as FileSyncProvider<SyncProviderId>);
     }
 
     // Unknown provider type
@@ -72,7 +90,7 @@ export class WrappedProviderService {
    * Gets or creates a wrapped adapter for a file-based provider.
    */
   private async _getOrCreateAdapter(
-    provider: SyncProviderServiceInterface<SyncProviderId>,
+    provider: FileSyncProvider<SyncProviderId>,
   ): Promise<OperationSyncCapable> {
     const cached = this._cache.get(provider.id);
     if (cached) {
@@ -103,7 +121,8 @@ export class WrappedProviderService {
 
   /**
    * Clears the adapter cache.
-   * Call this when encryption settings change to force adapter recreation.
+   * @deprecated Cache is now auto-invalidated when provider config changes via SyncProviderManager.
+   * Kept as an escape hatch for edge cases.
    */
   clearCache(): void {
     this._cache.clear();

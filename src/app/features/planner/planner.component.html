@@ -1,45 +1,12 @@
-<!--<better-simple-drawer-->
-<!--  [isOpen]="isPanelOpen"-->
-<!--  [sideWidth]="300"-->
-<!--  cdkDropListGroup-->
-<!--&gt;-->
-<!--  <ng-container better-drawer-content>-->
+@if (layoutService.isXs()) {
+  <planner-calendar-nav
+    [visibleDayDate]="planView.visibleDayDate()"
+    [daysWithTasks]="daysWithTasks()"
+    (dayTapped)="planView.scrollToDay($event)"
+  />
+}
 <planner-plan-view
+  #planView
   cdkDropListGroup
   cdkScrollable
-></planner-plan-view>
-
-<!--    <div class="controls">-->
-<!--      <mat-button-toggle-group>-->
-<!--        <mat-button-toggle-->
-<!--          value="SPLIT"-->
-<!--          class="hide-xs"-->
-<!--        >-->
-<!--          <mat-icon>vertical_split</mat-icon>-->
-<!--          Plan-->
-<!--        </mat-button-toggle>-->
-<!--        <mat-button-toggle value="PARSED">-->
-<!--          <mat-icon>photo</mat-icon>-->
-<!--          Flow-->
-<!--        </mat-button-toggle>-->
-<!--      </mat-button-toggle-group>-->
-
-<!--      &lt;!&ndash;      <div class="day-selector">&ndash;&gt;-->
-<!--      &lt;!&ndash;        <button mat-icon-button>&ndash;&gt;-->
-<!--      &lt;!&ndash;          <mat-icon>chevron_left</mat-icon>&ndash;&gt;-->
-<!--      &lt;!&ndash;        </button>&ndash;&gt;-->
-<!--      &lt;!&ndash;        <div class="start-date">27.3</div>&ndash;&gt;-->
-<!--      &lt;!&ndash;        <button mat-icon-button>&ndash;&gt;-->
-<!--      &lt;!&ndash;          <mat-icon>chevron_right</mat-icon>&ndash;&gt;-->
-<!--      &lt;!&ndash;        </button>&ndash;&gt;-->
-<!--      &lt;!&ndash;      </div>&ndash;&gt;-->
-<!--      &lt;!&ndash;  <button mat-icon-button>&ndash;&gt;-->
-<!--      &lt;!&ndash;    <mat-icon>settings</mat-icon>&ndash;&gt;-->
-<!--      &lt;!&ndash;  </button>&ndash;&gt;-->
-<!--    </div>-->
-<!--  </ng-container>-->
-
-<!--  <ng-container better-drawer-side>-->
-<!--    <add-task-panel-planner (closePanel)="isPanelOpen = false"></add-task-panel-planner>-->
-<!--  </ng-container>-->
-<!--</better-simple-drawer>-->
+/>

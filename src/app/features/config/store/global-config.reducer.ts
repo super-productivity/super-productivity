@@ -67,6 +67,7 @@ export const selectTimelineConfig = createSelector(
   (cfg): ScheduleConfig => cfg?.schedule ?? DEFAULT_GLOBAL_CONFIG.schedule,
 );
 
+/** @deprecated Exists only for migration to the voice-reminder plugin. */
 export const selectIsDominaModeConfig = createSelector(
   selectConfigFeatureState,
   (cfg): DominaModeConfig => cfg?.dominaMode ?? DEFAULT_GLOBAL_CONFIG.dominaMode,
@@ -118,6 +119,7 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     // These settings should remain local to each client:
     // - syncProvider: Each client can use different providers (Dropbox, WebDAV, etc.)
     // - isEnabled: Each client independently controls whether sync is enabled
+    // - isEncryptionEnabled: Encryption state must not be overwritten by imports
     //
     // If oldState.sync.syncProvider is null, we're on first load (using initialGlobalConfigState)
     // and should use the incoming values (from snapshot). Otherwise, preserve local values.
@@ -130,6 +132,10 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
     const isEnabled = hasLocalSettings
       ? oldState.sync.isEnabled
       : incomingSyncConfig.isEnabled;
+
+    const isEncryptionEnabled = hasLocalSettings
+      ? oldState.sync.isEncryptionEnabled
+      : incomingSyncConfig.isEncryptionEnabled;
 
     return {
       ...appDataComplete.globalConfig,
@@ -148,10 +154,20 @@ export const globalConfigReducer = createReducer<GlobalConfigState>(
         ...DEFAULT_GLOBAL_CONFIG.shortSyntax,
         ...appDataComplete.globalConfig.shortSyntax,
       },
+      overlayIndicator: {
+        ...DEFAULT_GLOBAL_CONFIG.overlayIndicator,
+        ...appDataComplete.globalConfig.overlayIndicator,
+        // Migrate deprecated misc.isOverlayIndicatorEnabled
+        ...(appDataComplete.globalConfig.misc?.isOverlayIndicatorEnabled !== undefined &&
+        appDataComplete.globalConfig.overlayIndicator?.isEnabled === undefined
+          ? { isEnabled: appDataComplete.globalConfig.misc.isOverlayIndicatorEnabled }
+          : {}),
+      },
       sync: {
         ...incomingSyncConfig,
         syncProvider,
         isEnabled,
+        isEncryptionEnabled,
       },
     };
   }),

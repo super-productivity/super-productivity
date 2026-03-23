@@ -25,6 +25,14 @@
 
       &:hover {
         background-color: rgba(0, 0, 0, 0.04) !important;
+
+        .view-details-btn {
+          opacity: 0.4;
+
+          &:hover {
+            opacity: 1;
+          }
+        }
       }
 
       &::ng-deep {
@@ -46,6 +54,10 @@
               font-weight: 500;
             }
 
+            .task-archived {
+              text-decoration: line-through;
+            }
+
             .task-icons {
               display: flex;
               align-items: center;
@@ -61,6 +73,18 @@
 
               .archive-icon {
                 color: var(--text-color-muted);
+              }
+
+              .view-details-btn {
+                opacity: 0.4;
+
+                :host-context(.isMousePrimary) & {
+                  opacity: 0;
+                }
+
+                &:hover {
+                  opacity: 1;
+                }
               }
             }
           }

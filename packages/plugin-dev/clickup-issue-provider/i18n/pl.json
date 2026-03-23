@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "Klucz API",
+    "API_KEY_LINK": "Uzyskaj osobisty klucz API",
+    "TEAM_IDS": "ID przestrzeni roboczych/zespołów (oddzielone przecinkami, puste = wszystkie)",
+    "USER_ID": "ID użytkownika (do filtrowania wg przypisanego)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Podsumowanie",
+    "STATUS": "Status",
+    "PRIORITY": "Priorytet",
+    "ASSIGNEE": "Przypisany",
+    "LABELS": "Kategorie",
+    "DESCRIPTION": "Opis"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Nieznany błąd. Sprawdź klucz API i spróbuj ponownie."
+  }
+}

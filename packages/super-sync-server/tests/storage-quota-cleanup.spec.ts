@@ -212,7 +212,7 @@ vi.mock('../src/db', () => {
 
 // Mock auth module
 vi.mock('../src/auth', () => ({
-  verifyToken: vi.fn().mockResolvedValue({ userId: 1, email: 'test@test.com' }),
+  verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
 }));
 
 // Mock zlib for snapshot compression

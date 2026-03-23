@@ -8,9 +8,10 @@ import {
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
 import { TODAY_TAG } from '../../../features/tag/tag.const';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { unique } from '../../../util/unique';
-import { isToday } from '../../../util/is-today.util';
+import { isTodayWithOffset } from '../../../util/is-today.util';
+import { getDbDateStr } from '../../../util/get-db-date-str';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
 import { moveItemBeforeItem } from '../../../util/move-item-before-item';
 import {
   ActionHandlerMap,
@@ -47,7 +48,13 @@ const handleScheduleTaskWithTime = (
   }
 
   const todayTag = getTag(state, TODAY_TAG.id);
-  const isScheduledForToday = isToday(dueWithTime);
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const startOfNextDayDiffMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+  const isScheduledForToday = isTodayWithOffset(
+    dueWithTime,
+    todayStr,
+    startOfNextDayDiffMs,
+  );
   const isCurrentlyInToday = todayTag.taskIds.includes(task.id);
 
   // If task is already correctly scheduled, don't change state (unless backlog move requested)
@@ -119,13 +126,14 @@ const handleUnScheduleTask = (
   isLeaveInToday = false,
 ): RootState => {
   // First, update the task entity to clear scheduling data
+  const todayStrForUnschedule = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
   const updatedState = {
     ...state,
     [TASK_FEATURE_NAME]: taskAdapter.updateOne(
       {
         id: taskId,
         changes: {
-          dueDay: isLeaveInToday ? getDbDateStr() : undefined,
+          dueDay: isLeaveInToday ? todayStrForUnschedule : undefined,
           dueWithTime: undefined,
           remindAt: undefined,
         },
@@ -173,10 +181,13 @@ const handlePlanTasksForToday = (
   isClearScheduledTime?: boolean,
 ): RootState => {
   const todayTag = getTag(state, TODAY_TAG.id);
-  const today = getDbDateStr();
+  const today = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const offsetMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
 
-  // Filter out tasks that are already in today or whose parent is in today
+  // Filter out tasks that don't exist, are already in today, or whose parent is in today
   const newTasksForToday = taskIds.filter((taskId) => {
+    // Skip tasks that don't exist in the store (can happen during sync)
+    if (!state[TASK_FEATURE_NAME].entities[taskId]) return false;
     if (todayTag.taskIds.includes(taskId)) return false;
     const parentId = parentTaskMap[taskId];
     return !parentId || !todayTag.taskIds.includes(parentId);
@@ -217,7 +228,7 @@ const handlePlanTasksForToday = (
     // However, if isClearScheduledTime is true (from reminder dialog), always clear the time
     const shouldClearTime = isClearScheduledTime
       ? !!task?.dueWithTime
-      : task?.dueWithTime && !isToday(task.dueWithTime);
+      : task?.dueWithTime && !isTodayWithOffset(task.dueWithTime, today, offsetMs);
 
     return {
       id: taskId,

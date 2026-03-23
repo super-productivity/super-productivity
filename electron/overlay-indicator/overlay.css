@@ -9,26 +9,25 @@ body {
   overflow: hidden;
   background: transparent;
   user-select: none;
+  -webkit-context-menu: none;
+  --scale: 1;
+  --opacity: 0.95;
 }
 
-/* Prevent all auxiliary button interactions */
 body,
 body * {
   pointer-events: auto;
 }
 
-/* Disable right-click context menu globally */
-body {
-  -webkit-context-menu: none;
-}
-
+/* ── Main container ── */
 #overlay-container {
   display: flex;
   align-items: center;
+  width: 100%;
   height: 100vh;
-  padding: 8px;
-  background-color: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
+  padding: calc(4px * var(--scale));
+  background-color: rgba(255, 255, 255, var(--opacity));
+  border-radius: calc(8px * var(--scale));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition:
     background-color 0.3s,
@@ -38,28 +37,27 @@ body {
 
 @media (prefers-color-scheme: dark) {
   #overlay-container {
-    background-color: rgba(32, 32, 32, 0.95);
+    background-color: rgba(32, 32, 32, var(--opacity));
     color: #e0e0e0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   }
 }
 
+/* ── Content area ── */
 #content {
   flex: 1;
-  padding: 0 16px;
+  padding: 0 calc(8px * var(--scale));
   min-width: 0;
   display: flex;
-  justify-content: center;
-  align-content: center;
+  align-items: center;
 }
 
 #task-title {
-  font-size: 16px;
+  font-size: calc(20px * var(--scale));
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 4px;
   color: #333;
 }
 
@@ -70,12 +68,13 @@ body {
 }
 
 #time-display {
-  font-size: 16px;
+  font-size: calc(20px * var(--scale));
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: #666;
   margin-left: auto;
-  padding-left: 16px;
+  padding-left: calc(8px * var(--scale));
+  white-space: nowrap;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -84,15 +83,13 @@ body {
   }
 }
 
-/* Mode-specific colors */
+/* ── Mode-specific colors ── */
 .mode-pomodoro #time-display {
   color: #dc3545;
 }
-
 .mode-focus #time-display {
   color: #007bff;
 }
-
 .mode-task #time-display {
   color: #28a745;
 }
@@ -101,27 +98,29 @@ body {
   .mode-pomodoro #time-display {
     color: #ff6b7a;
   }
-
   .mode-focus #time-display {
     color: #5cb3ff;
   }
-
   .mode-task #time-display {
     color: #5dd66f;
   }
 }
 
+/* ── Show-main button ── */
 #show-main {
-  width: 32px;
-  height: 32px;
+  width: calc(32px * var(--scale));
+  height: calc(32px * var(--scale));
+  min-width: 20px;
+  min-height: 20px;
   border: none;
   background: rgba(0, 0, 0, 0.05);
   border-radius: 4px;
   cursor: pointer;
   color: #666;
-  font-size: 12px;
+  font-size: calc(12px * var(--scale));
   transition: all 0.2s;
   -webkit-app-region: no-drag;
+  flex-shrink: 0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -146,13 +145,25 @@ body {
   transform: scale(0.95);
 }
 
-/* Handle resize cursor on edges */
-body {
-  resize: both;
+/* ── Responsive width breakpoints ── */
+.size-tiny #task-title {
+  display: none;
 }
 
-/* Make sure content doesn't overflow on resize */
-#overlay-container {
-  width: 100%;
-  height: 100%;
+.size-tiny #show-main {
+  display: none;
+}
+
+.size-tiny #overlay-container {
+  justify-content: center;
+}
+
+.size-tiny #content {
+  padding: 0 calc(4px * var(--scale));
+  justify-content: center;
+}
+
+.size-tiny #time-display {
+  margin-left: 0;
+  padding-left: 0;
 }

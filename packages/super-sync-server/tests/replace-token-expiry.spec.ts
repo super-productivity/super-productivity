@@ -14,15 +14,40 @@ vi.mock('../src/auth', async (importOriginal) => {
   return {
     ...actual,
     // Keep verifyToken mocked (from setup.ts pattern)
-    verifyToken: vi.fn().mockResolvedValue({ userId: 1, email: 'test@test.com' }),
+    verifyToken: vi.fn().mockResolvedValue({ valid: true, userId: 1, email: 'test@test.com' }),
   };
 });
 
 // Spy on jwt.sign to capture its arguments
-vi.mock('jsonwebtoken', () => ({
-  sign: (...args: unknown[]) => jwtSignSpy(...args),
-  verify: vi.fn(),
-}));
+// Must include JsonWebTokenError/TokenExpiredError since auth.ts destructures them from the jwt namespace
+vi.mock('jsonwebtoken', () => {
+  class JsonWebTokenError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'JsonWebTokenError';
+    }
+  }
+  class TokenExpiredError extends JsonWebTokenError {
+    expiredAt: Date;
+    constructor(message: string, expiredAt: Date) {
+      super(message);
+      this.name = 'TokenExpiredError';
+      this.expiredAt = expiredAt;
+    }
+  }
+  return {
+    default: {
+      sign: (...args: unknown[]) => jwtSignSpy(...args),
+      verify: vi.fn(),
+      JsonWebTokenError,
+      TokenExpiredError,
+    },
+    sign: (...args: unknown[]) => jwtSignSpy(...args),
+    verify: vi.fn(),
+    JsonWebTokenError,
+    TokenExpiredError,
+  };
+});
 
 // Mock logger to suppress output
 vi.mock('../src/logger', () => ({

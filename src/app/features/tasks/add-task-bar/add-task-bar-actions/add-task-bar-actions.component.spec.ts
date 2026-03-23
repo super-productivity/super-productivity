@@ -66,7 +66,7 @@ describe('AddTaskBarActionsComponent', () => {
     });
   };
   const mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', ['-'], {
-    currentLocale: 'en-US',
+    currentLocale: () => 'en-US',
   });
 
   beforeEach(async () => {
@@ -326,7 +326,7 @@ describe('AddTaskBarActionsComponent', () => {
           {
             provide: DateTimeFormatService,
             useValue: jasmine.createSpyObj('DateTimeFormatService', ['-'], {
-              currentLocale: 'de-de',
+              currentLocale: () => 'de-de',
             }),
           },
           {

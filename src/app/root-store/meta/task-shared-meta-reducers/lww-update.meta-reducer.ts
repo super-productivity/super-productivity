@@ -21,9 +21,10 @@ import {
   taskAdapter,
 } from '../../../features/tasks/store/task.reducer';
 import { Task } from '../../../features/tasks/task.model';
-import { unique } from '../../../util/unique';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { OpLog } from '../../../core/log';
+import { appStateFeatureKey } from '../../app-state/app-state.reducer';
+import { getDbDateStr, isDBDateStr } from '../../../util/get-db-date-str';
+import { isTodayWithOffset } from '../../../util/is-today.util';
 
 /**
  * Updates project.taskIds arrays when a task's projectId changes via LWW Update.
@@ -96,7 +97,7 @@ const syncProjectTaskIds = (
         {
           id: newProjectId,
           changes: {
-            taskIds: unique([...newProject.taskIds, taskId]),
+            taskIds: [...newProject.taskIds, taskId],
           },
         },
         projectState,
@@ -179,7 +180,7 @@ const syncTagTaskIds = (
           {
             id: tagId,
             changes: {
-              taskIds: unique([...tag.taskIds, taskId]),
+              taskIds: [...tag.taskIds, taskId],
             },
           },
           tagState,
@@ -200,11 +201,11 @@ const syncTagTaskIds = (
 };
 
 /**
- * Updates TODAY_TAG.taskIds when a task's dueDay changes via LWW Update.
+ * Updates TODAY_TAG.taskIds when a task's dueDay or dueWithTime changes via LWW Update.
  *
- * TODAY_TAG is a virtual tag where membership is determined by task.dueDay,
- * not by task.tagIds. When LWW Update recreates a task or changes its dueDay,
- * we must update TODAY_TAG.taskIds accordingly.
+ * TODAY_TAG is a virtual tag where membership is determined by task.dueDay OR
+ * task.dueWithTime (mutually exclusive). When LWW Update recreates a task or
+ * changes either field, we must update TODAY_TAG.taskIds accordingly.
  *
  * See: docs/ai/today-tag-architecture.md
  */
@@ -213,10 +214,21 @@ const syncTodayTagTaskIds = (
   taskId: string,
   oldDueDay: string | undefined,
   newDueDay: string | undefined,
+  oldDueWithTime: number | undefined,
+  newDueWithTime: number | undefined,
 ): RootState => {
-  const todayStr = getDbDateStr();
-  const wasToday = oldDueDay === todayStr;
-  const isNowToday = newDueDay === todayStr;
+  const todayStr = state[appStateFeatureKey]?.todayStr ?? getDbDateStr();
+  const offsetMs = state[appStateFeatureKey]?.startOfNextDayDiffMs ?? 0;
+
+  const isDueToday = (
+    dueDay: string | undefined,
+    dueWithTime: number | undefined,
+  ): boolean =>
+    dueDay === todayStr ||
+    (!!dueWithTime && isTodayWithOffset(dueWithTime, todayStr, offsetMs));
+
+  const wasToday = isDueToday(oldDueDay, oldDueWithTime);
+  const isNowToday = isDueToday(newDueDay, newDueWithTime);
 
   // No change in TODAY membership
   if (wasToday === isNowToday) {
@@ -238,7 +250,7 @@ const syncTodayTagTaskIds = (
         {
           id: TODAY_TAG.id,
           changes: {
-            taskIds: unique([...todayTag.taskIds, taskId]),
+            taskIds: [...todayTag.taskIds, taskId],
           },
         },
         tagState,
@@ -321,7 +333,7 @@ const syncParentSubTaskIds = (
         {
           id: newParentId,
           changes: {
-            subTaskIds: unique([...newParent.subTaskIds, taskId]),
+            subTaskIds: [...newParent.subTaskIds, taskId],
           },
         },
         taskState,
@@ -338,6 +350,60 @@ const syncParentSubTaskIds = (
     ...state,
     [TASK_FEATURE_NAME]: taskState,
   };
+};
+
+/**
+ * Filters orphaned taskIds (and backlogTaskIds for PROJECT) from entity data
+ * before applying LWW updates. This prevents TAG and PROJECT entities from
+ * referencing tasks that no longer exist in the store.
+ *
+ * This is necessary because LWW conflict resolution replaces entire entities
+ * without checking whether referenced tasks still exist locally.
+ */
+const filterOrphanedTaskIdsFromEntityData = (
+  entityData: Record<string, unknown>,
+  entityType: string,
+  rootState: RootState,
+): Record<string, unknown> => {
+  if (entityType !== 'TAG' && entityType !== 'PROJECT') {
+    return entityData;
+  }
+
+  const taskState = rootState[TASK_FEATURE_NAME];
+  if (!taskState) {
+    return entityData;
+  }
+  const existingTaskIds = new Set(taskState.ids as string[]);
+
+  let filtered = entityData;
+
+  if (Array.isArray(entityData['taskIds'])) {
+    const original = entityData['taskIds'] as string[];
+    const cleaned = original.filter((id) => existingTaskIds.has(id));
+    if (cleaned.length !== original.length) {
+      const removed = original.filter((id) => !existingTaskIds.has(id));
+      OpLog.warn(
+        `lwwUpdateMetaReducer: Filtered orphaned taskIds from ${entityType} LWW Update`,
+        { entityId: entityData['id'], removed },
+      );
+      filtered = { ...filtered, taskIds: cleaned };
+    }
+  }
+
+  if (entityType === 'PROJECT' && Array.isArray(entityData['backlogTaskIds'])) {
+    const original = entityData['backlogTaskIds'] as string[];
+    const cleaned = original.filter((id) => existingTaskIds.has(id));
+    if (cleaned.length !== original.length) {
+      const removed = original.filter((id) => !existingTaskIds.has(id));
+      OpLog.warn(
+        `lwwUpdateMetaReducer: Filtered orphaned backlogTaskIds from PROJECT LWW Update`,
+        { entityId: entityData['id'], removed },
+      );
+      filtered = { ...filtered, backlogTaskIds: cleaned };
+    }
+  }
+
+  return filtered;
 };
 
 /**
@@ -400,12 +466,15 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     // NOTE: This assumes no entity state has top-level 'type' or 'meta' keys.
     // If a singleton or adapter state gains such a key, it would be silently dropped.
     const actionAny = action as unknown as Record<string, unknown>;
-    const entityData: Record<string, unknown> = {};
+    let entityData: Record<string, unknown> = {};
     for (const key of Object.keys(actionAny)) {
       if (key !== 'type' && key !== 'meta') {
         entityData[key] = actionAny[key];
       }
     }
+
+    // Filter orphaned taskIds/backlogTaskIds for TAG and PROJECT entities
+    entityData = filterOrphanedTaskIdsFromEntityData(entityData, entityType, rootState);
 
     // Singleton entities: replace entire feature state with the winning data
     if (isSingletonEntity(config)) {
@@ -440,6 +509,20 @@ export const lwwUpdateMetaReducer: MetaReducer = (
     }
 
     const entityId = entityData['id'] as string;
+
+    // Sanitize date string fields to prevent corrupted data from sync (#6908)
+    if (entityType === 'TASK') {
+      for (const field of ['dueDay', 'deadlineDay'] as const) {
+        const val = entityData[field];
+        if (typeof val === 'string' && !isDBDateStr(val)) {
+          entityData[field] = undefined;
+          devError(
+            `lwwUpdateMetaReducer: Invalid ${field} "${val}" on task ${entityId}, clearing`,
+          );
+        }
+      }
+    }
+
     const existingEntity = (
       featureState as unknown as {
         entities?: Record<string, Record<string, unknown>>;
@@ -497,7 +580,12 @@ export const lwwUpdateMetaReducer: MetaReducer = (
       // Sync project.taskIds when projectId changes
       const oldProjectId = existingEntity?.projectId as string | undefined;
       const newProjectId = entityData['projectId'] as string | undefined;
-      const isSubTask = !!(entityData['parentId'] || existingEntity?.parentId);
+      // Use the NEW parentId to decide subtask status: if the LWW update
+      // clears parentId (promoting to main task), we should add it to project.taskIds.
+      // Fall back to existing only when the LWW update doesn't include parentId at all.
+      const isSubTask = !!('parentId' in entityData
+        ? entityData['parentId']
+        : existingEntity?.parentId);
 
       updatedState = syncProjectTaskIds(
         updatedState,
@@ -513,10 +601,19 @@ export const lwwUpdateMetaReducer: MetaReducer = (
 
       updatedState = syncTagTaskIds(updatedState, entityId, oldTagIds, newTagIds);
 
-      // Sync TODAY_TAG.taskIds when dueDay changes (virtual tag based on dueDay)
+      // Sync TODAY_TAG.taskIds when dueDay or dueWithTime changes (virtual tag based on dueDay/dueWithTime)
       const oldDueDay = existingEntity?.dueDay as string | undefined;
       const newDueDay = entityData['dueDay'] as string | undefined;
-      updatedState = syncTodayTagTaskIds(updatedState, entityId, oldDueDay, newDueDay);
+      const oldDueWithTime = existingEntity?.dueWithTime as number | undefined;
+      const newDueWithTime = entityData['dueWithTime'] as number | undefined;
+      updatedState = syncTodayTagTaskIds(
+        updatedState,
+        entityId,
+        oldDueDay,
+        newDueDay,
+        oldDueWithTime,
+        newDueWithTime,
+      );
 
       // Sync parent.subTaskIds when parentId changes
       const oldParentId = existingEntity?.parentId as string | undefined;

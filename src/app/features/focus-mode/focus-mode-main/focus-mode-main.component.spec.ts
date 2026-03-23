@@ -110,6 +110,8 @@ describe('FocusModeMainComponent', () => {
       focusModeConfig: jasmine.createSpy().and.returnValue({
         isSkipPreparation: false,
       }),
+      isInOvertime: jasmine.createSpy().and.returnValue(false),
+      isSessionPaused: jasmine.createSpy().and.returnValue(false),
     });
 
     await TestBed.configureTestingModule({
@@ -317,13 +319,12 @@ describe('FocusModeMainComponent', () => {
       });
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.changeTaskNotes('New notes')).toThrowError(
-        'Task is not loaded',
-      );
+      expect(() => component.changeTaskNotes('New notes')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
     it('should handle whitespace differences in comparison', () => {
@@ -482,13 +483,12 @@ describe('FocusModeMainComponent', () => {
       expect(mockTaskService.update).not.toHaveBeenCalled();
     });
 
-    it('should throw error when no task loaded', () => {
+    it('should not update and not throw when no task loaded', () => {
       currentTaskSubject.next(null);
       fixture.detectChanges();
 
-      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).toThrowError(
-        'No task data',
-      );
+      expect(() => component.updateTaskTitleIfChanged(true, 'New Title')).not.toThrow();
+      expect(mockTaskService.update).not.toHaveBeenCalled();
     });
   });
 
@@ -628,6 +628,7 @@ describe('FocusModeMainComponent - notes panel (issue #5752)', () => {
       focusModeConfig: signal({
         isSkipPreparation: false,
       }),
+      isInOvertime: signal(false),
     };
 
     await TestBed.configureTestingModule({
@@ -821,6 +822,7 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       mode: signal(FocusModeMode.Pomodoro),
       mainState: signal(FocusMainUIState.Preparation),
       focusModeConfig: focusModeConfigSignal,
+      isInOvertime: signal(false),
     };
 
     await TestBed.configureTestingModule({
@@ -901,6 +903,29 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
     });
   });
 
+  describe('finishCurrentTask - session state captured before dispatch (issue #6127)', () => {
+    it('should use pre-dispatch session state when effects pause the session during dispatch', () => {
+      const isSessionRunningSignal = (TestBed.inject(FocusModeService) as any)
+        .isSessionRunning;
+      isSessionRunningSignal.set(true);
+      fixture.detectChanges();
+
+      // Simulate the NgRx effect chain: dispatching updateTask triggers
+      // autoSetNextTask$ → syncTrackingStopToSession$ → pauseFocusSession(),
+      // which sets isSessionRunning to false before finishCurrentTask continues.
+      (mockStore.dispatch as jasmine.Spy).and.callFake(() => {
+        isSessionRunningSignal.set(false);
+      });
+
+      component.finishCurrentTask();
+
+      // The task selector should open because the session WAS running
+      // before the dispatch, even though effects paused it during dispatch.
+      expect(component.isTaskSelectorOpen()).toBe(true);
+      expect(mockStore.dispatch).not.toHaveBeenCalledWith(actions.selectFocusTask());
+    });
+  });
+
   describe('startSession with sync tracking', () => {
     it('should open task selector when sync is enabled and no task selected', () => {
       focusModeConfigSignal.set({
@@ -955,7 +980,9 @@ describe('FocusModeMainComponent - sync with tracking (issue #6009)', () => {
       component.startSession();
 
       expect(mockStore.dispatch).toHaveBeenCalledWith(
-        actions.startFocusSession({ duration: 1500000 }),
+        actions.startFocusSession({
+          duration: 1500000,
+        }),
       );
     });
   });

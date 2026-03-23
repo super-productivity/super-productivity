@@ -24,7 +24,8 @@ import {
   PluginNodeConsentDialogComponent,
   PluginNodeConsentDialogData,
 } from './ui/plugin-node-consent-dialog/plugin-node-consent-dialog-simple.component';
-import { first } from 'rxjs/operators';
+import { first, take } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import { PluginCleanupService } from './plugin-cleanup.service';
 import { PluginLoaderService } from './plugin-loader.service';
 import { validatePluginManifest } from './util/validate-manifest.util';
@@ -32,6 +33,23 @@ import { TranslateService } from '@ngx-translate/core';
 import { T } from '../t.const';
 import { PluginLog } from '../core/log';
 import { PluginI18nService } from './plugin-i18n.service';
+import { Store } from '@ngrx/store';
+import { issueProvidersFeature } from '../features/issue/store/issue-provider.reducer';
+import { selectIsDominaModeConfig } from '../features/config/store/global-config.reducer';
+import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+
+const BUNDLED_PLUGIN_PATHS = [
+  'assets/bundled-plugins/yesterday-tasks-plugin',
+  'assets/bundled-plugins/sync-md',
+  'assets/bundled-plugins/api-test-plugin',
+  'assets/bundled-plugins/procrastination-buster',
+  'assets/bundled-plugins/automations',
+  'assets/bundled-plugins/github-issue-provider',
+  'assets/bundled-plugins/clickup-issue-provider',
+  'assets/bundled-plugins/brain-dump',
+  'assets/bundled-plugins/voice-reminder',
+] as const;
 
 @Injectable({
   providedIn: 'root',
@@ -50,6 +68,11 @@ export class PluginService implements OnDestroy {
   private readonly _pluginLoader = inject(PluginLoaderService);
   private readonly _translateService = inject(TranslateService);
   private readonly _pluginI18nService = inject(PluginI18nService);
+  private readonly _store = inject(Store);
+  private readonly _pluginIssueProviderRegistry = inject(
+    PluginIssueProviderRegistryService,
+  );
+  private readonly _syncAdapterRegistry = inject(IssueSyncAdapterRegistryService);
 
   private _isInitialized = false;
   private _loadedPlugins: PluginInstance[] = [];
@@ -92,12 +115,8 @@ export class PluginService implements OnDestroy {
 
   private async _discoverBuiltInPlugins(): Promise<void> {
     const pluginPaths = [
-      'assets/bundled-plugins/yesterday-tasks-plugin',
-      'assets/bundled-plugins/sync-md',
-      'assets/bundled-plugins/api-test-plugin',
-      'assets/bundled-plugins/procrastination-buster',
-      'assets/bundled-plugins/ai-productivity-prompts',
-      'assets/bundled-plugins/automations',
+      ...BUNDLED_PLUGIN_PATHS,
+      'assets/bundled-plugins/ai-productivity-prompts', // discover-only
     ];
 
     // Only load manifests for discovery
@@ -107,9 +126,52 @@ export class PluginService implements OnDestroy {
         const manifest = await this._http.get<PluginManifest>(manifestUrl).toPromise();
 
         if (manifest) {
-          const isEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
+          let isEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
             manifest.id,
           );
+
+          // Auto-enable bundled plugins that replace built-in issue providers,
+          // but only if the user has never interacted with the plugin before.
+          // If metadata exists (even with isEnabled: false), the user explicitly disabled it.
+          if (!isEnabled && manifest.issueProvider?.issueProviderKey) {
+            const hasMetadata =
+              await this._pluginMetaPersistenceService.hasPluginMetadata(manifest.id);
+            if (!hasMetadata) {
+              const shouldAutoEnable = await this._shouldAutoEnableMigrationPlugin(
+                manifest.issueProvider.issueProviderKey,
+              );
+              if (shouldAutoEnable) {
+                isEnabled = true;
+                await this._pluginMetaPersistenceService.setPluginEnabled(
+                  manifest.id,
+                  true,
+                );
+                PluginLog.log(
+                  `Auto-enabled bundled plugin '${manifest.id}' (replaces built-in ${manifest.issueProvider.issueProviderKey} provider)`,
+                );
+              }
+            }
+          }
+
+          // Auto-enable voice-reminder plugin if domina mode was enabled,
+          // and migrate config so users keep their settings.
+          if (!isEnabled && manifest.id === 'voice-reminder') {
+            const hasMetadata =
+              await this._pluginMetaPersistenceService.hasPluginMetadata(manifest.id);
+            if (!hasMetadata) {
+              const migrated = await this._migrateVoiceReminderFromDominaMode();
+              if (migrated) {
+                isEnabled = true;
+                await this._pluginMetaPersistenceService.setPluginEnabled(
+                  manifest.id,
+                  true,
+                );
+                PluginLog.log(
+                  `Auto-enabled voice-reminder plugin (migrated from domina mode config)`,
+                );
+              }
+            }
+          }
 
           // Create plugin state without loading code
           const state: PluginState = {
@@ -157,13 +219,7 @@ export class PluginService implements OnDestroy {
   }
 
   private async _loadBuiltInPlugins(): Promise<void> {
-    const pluginPaths = [
-      'assets/bundled-plugins/yesterday-tasks-plugin',
-      'assets/bundled-plugins/sync-md',
-      'assets/bundled-plugins/api-test-plugin',
-      'assets/bundled-plugins/procrastination-buster',
-      'assets/bundled-plugins/automations',
-    ];
+    const pluginPaths = [...BUNDLED_PLUGIN_PATHS];
 
     // KISS: No preloading - just load plugins directly
     await this._loadPluginsFromPaths(pluginPaths, 'built-in');
@@ -227,6 +283,96 @@ export class PluginService implements OnDestroy {
     for (const state of pluginsToLoad) {
       await this.activatePlugin(state.manifest.id);
     }
+  }
+
+  /**
+   * Check if a migration plugin should be auto-enabled because existing
+   * issue providers with the matching key exist in the store.
+   */
+  private async _shouldAutoEnableMigrationPlugin(
+    issueProviderKey: string,
+  ): Promise<boolean> {
+    try {
+      const allProviders = await this._store
+        .select(issueProvidersFeature.selectAll)
+        .pipe(take(1))
+        .toPromise();
+      return allProviders?.some((p) => p.issueProviderKey === issueProviderKey) ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Migrate domina mode (voice reminder) config to the voice-reminder plugin.
+   * Returns true if migration was performed (domina mode was enabled).
+   */
+  private async _migrateVoiceReminderFromDominaMode(): Promise<boolean> {
+    try {
+      const cfg = await firstValueFrom(
+        this._store.select(selectIsDominaModeConfig).pipe(take(1)),
+      );
+      if (!cfg?.isEnabled) {
+        return false;
+      }
+      const pluginData = JSON.stringify({
+        isEnabled: cfg.isEnabled,
+        text: cfg.text,
+        interval: cfg.interval,
+        volume: cfg.volume,
+        voice: cfg.voice || '',
+      });
+      this._pluginUserPersistenceService.persistPluginUserData(
+        'voice-reminder',
+        pluginData,
+      );
+      return true;
+    } catch (e) {
+      PluginLog.err('Failed to migrate voice reminder config from domina mode:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Returns discovered issue provider plugins that are NOT yet enabled.
+   * Used by the issue-provider setup overview to show available plugins.
+   */
+  getDisabledIssueProviderPlugins(): Array<{
+    pluginId: string;
+    name: string;
+    icon: string;
+    issueProviderKey: string;
+    useAgendaView: boolean;
+  }> {
+    const result: Array<{
+      pluginId: string;
+      name: string;
+      icon: string;
+      issueProviderKey: string;
+      useAgendaView: boolean;
+    }> = [];
+    for (const [, state] of this._pluginStates()) {
+      if (!state.isEnabled && state.manifest.type === 'issueProvider') {
+        result.push({
+          pluginId: state.manifest.id,
+          name: state.manifest.name,
+          icon: state.manifest.issueProvider?.icon || 'extension',
+          issueProviderKey:
+            state.manifest.issueProvider?.issueProviderKey ??
+            `plugin:${state.manifest.id}`,
+          useAgendaView: state.manifest.issueProvider?.useAgendaView ?? false,
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Enable and activate a plugin. Returns the activated instance.
+   */
+  async enableAndActivatePlugin(pluginId: string): Promise<PluginInstance | null> {
+    await this._pluginMetaPersistenceService.setPluginEnabled(pluginId, true);
+    return this.activatePlugin(pluginId, true);
   }
 
   private _updatePluginIcons(): void {
@@ -937,6 +1083,16 @@ export class PluginService implements OnDestroy {
         PluginLog.info(`Plugin ${manifest.id} info:`, codeAnalysis.info);
       }
 
+      // Teardown existing plugin runtime if re-uploading same ID
+      const existingState = this._getPluginState(manifest.id);
+      if (existingState) {
+        this._teardownPluginRuntime(manifest.id);
+        // Clear stale assets from previous version
+        this._pluginIndexHtml.delete(manifest.id);
+        this._pluginIcons.delete(manifest.id);
+        this._pluginIconsSignal.set(new Map(this._pluginIcons));
+      }
+
       // Check if plugin is enabled (default to true for new uploads)
       const isPluginEnabled = await this._pluginMetaPersistenceService.isPluginEnabled(
         manifest.id,
@@ -1172,6 +1328,65 @@ export class PluginService implements OnDestroy {
     PluginLog.log(`Uploaded plugin ${pluginId} removed completely`);
   }
 
+  /**
+   * Clear all uploaded plugins from memory. Called when IndexedDB cache is cleared
+   * so that in-memory state matches the empty cache.
+   */
+  clearUploadedPluginsFromMemory(): void {
+    const states = this._pluginStates();
+    const uploadedIds: string[] = [];
+    for (const [pluginId, state] of states.entries()) {
+      if (state.type === 'uploaded') {
+        uploadedIds.push(pluginId);
+      }
+    }
+    for (const pluginId of uploadedIds) {
+      this._teardownPluginRuntime(pluginId);
+      this._pluginPaths.delete(pluginId);
+      this._pluginIndexHtml.delete(pluginId);
+      this._pluginIcons.delete(pluginId);
+    }
+    // Batch-delete all uploaded plugin states in a single signal update
+    this._pluginStates.update((current) => {
+      const updated = new Map(current);
+      for (const pluginId of uploadedIds) {
+        updated.delete(pluginId);
+      }
+      return updated;
+    });
+    this._pluginIconsSignal.set(new Map(this._pluginIcons));
+  }
+
+  /**
+   * Teardown plugin runtime (hooks, runner, loaded-plugins list, side panel)
+   * without changing isEnabled or _pluginStates. Used for re-upload and reload.
+   */
+  private _teardownPluginRuntime(pluginId: string): void {
+    // Close the side panel if this plugin is active
+    const activePluginId = this.getActiveSidePanelPluginId();
+    if (activePluginId === pluginId) {
+      this.setActiveSidePanelPlugin(null);
+    }
+
+    // Remove from loaded plugins list
+    const index = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
+    if (index !== -1) {
+      this._loadedPlugins.splice(index, 1);
+    }
+
+    // Unregister issue provider and sync adapter from their registries
+    const registeredKey = this._pluginIssueProviderRegistry.getRegisteredKey(pluginId);
+    this._pluginIssueProviderRegistry.unregister(pluginId);
+    if (registeredKey) {
+      this._syncAdapterRegistry.unregister(registeredKey);
+    }
+
+    // Unregister hooks, translations, and unload from runner
+    this._pluginHooks.unregisterPluginHooks(pluginId);
+    this._pluginI18nService.unloadPluginTranslations(pluginId);
+    this._pluginRunner.unloadPlugin(pluginId);
+  }
+
   unloadPlugin(pluginId: string): boolean {
     // In lazy loading mode, update plugin state
     const state = this._getPluginState(pluginId);
@@ -1179,12 +1394,7 @@ export class PluginService implements OnDestroy {
       return false;
     }
 
-    // Check if this plugin is active in the side panel
-    const activePluginId = this.getActiveSidePanelPluginId();
-    if (activePluginId === pluginId) {
-      // Close the side panel if this plugin is active
-      this.setActiveSidePanelPlugin(null);
-    }
+    this._teardownPluginRuntime(pluginId);
 
     // Update state to not-loaded and disabled
     const updatedState: PluginState = {
@@ -1195,31 +1405,24 @@ export class PluginService implements OnDestroy {
     };
     this._setPluginState(pluginId, updatedState);
 
-    // Remove from loaded plugins list
-    const index = this._loadedPlugins.findIndex((p) => p.manifest.id === pluginId);
-    if (index !== -1) {
-      this._loadedPlugins.splice(index, 1);
-    }
-
-    // Unregister hooks
-    this._pluginHooks.unregisterPluginHooks(pluginId);
-
-    // Unload from runner
-    return this._pluginRunner.unloadPlugin(pluginId);
+    return true;
   }
 
   async reloadPlugin(pluginId: string): Promise<boolean> {
-    // In lazy loading mode, unload and re-activate
     const state = this._getPluginState(pluginId);
     if (!state) {
       PluginLog.err(`Cannot reload plugin ${pluginId}: not found`);
       return false;
     }
 
-    // Unload the plugin first
-    this.unloadPlugin(pluginId);
+    // Teardown runtime without disabling, so activatePlugin can re-enable
+    this._teardownPluginRuntime(pluginId);
+    this._setPluginState(pluginId, {
+      ...state,
+      status: 'not-loaded',
+      instance: undefined,
+    });
 
-    // Re-activate it
     const instance = await this.activatePlugin(pluginId);
     return instance !== null && instance.loaded;
   }

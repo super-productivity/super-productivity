@@ -1,6 +1,6 @@
 # Plan: Replace PFAPI with Operation Log Sync for All Providers
 
-> **STATUS: COMPLETED (January 2026)**
+> **Status: Completed** (January 2026)
 >
 > This plan has been fully implemented. The entire `src/app/pfapi/` directory has been deleted.
 > All sync providers now use the unified operation log system via `FileBasedSyncAdapter`.

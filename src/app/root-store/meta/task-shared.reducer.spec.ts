@@ -18,6 +18,7 @@ import {
   plannerFeatureKey,
   plannerInitialState,
 } from '../../features/planner/store/planner.reducer';
+import { appStateFeatureKey } from '../app-state/app-state.reducer';
 
 describe('taskSharedMetaReducer', () => {
   let mockReducer: jasmine.Spy;
@@ -227,6 +228,7 @@ describe('taskSharedMetaReducer', () => {
         entities: { project1: mockProject },
       },
       [plannerFeatureKey]: plannerInitialState,
+      [appStateFeatureKey]: { todayStr: getDbDateStr(), startOfNextDayDiffMs: 0 },
     } as any as RootState;
   });
 
@@ -1866,6 +1868,18 @@ describe('taskSharedMetaReducer', () => {
   describe('planTasksForToday action', () => {
     it('should add new tasks to the top of Today tag', () => {
       const testState = createStateWithExistingTasks([], [], [], ['existing-task']);
+      // Add task entities that will be planned for today
+      testState[TASK_FEATURE_NAME].entities['task1'] = createMockTask({
+        id: 'task1',
+        tagIds: [],
+        projectId: undefined,
+      });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({
+        id: 'task2',
+        tagIds: [],
+        projectId: undefined,
+      });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -1885,6 +1899,13 @@ describe('taskSharedMetaReducer', () => {
         [],
         ['task1', 'existing-task'],
       );
+      // Add task2 entity (task1 and existing-task already exist from createStateWithExistingTasks)
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({
+        id: 'task2',
+        tagIds: [],
+        projectId: undefined,
+      });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['task1', 'task2'],
         parentTaskMap: {},
@@ -1899,6 +1920,19 @@ describe('taskSharedMetaReducer', () => {
 
     it('should handle parentTaskMap filtering', () => {
       const testState = createStateWithExistingTasks([], [], [], ['parent-task']);
+      // Add task entities for subtask1 and task2
+      testState[TASK_FEATURE_NAME].entities['subtask1'] = createMockTask({
+        id: 'subtask1',
+        parentId: 'parent-task',
+        tagIds: [],
+        projectId: undefined,
+      });
+      testState[TASK_FEATURE_NAME].entities['task2'] = createMockTask({
+        id: 'task2',
+        tagIds: [],
+        projectId: undefined,
+      });
+      (testState[TASK_FEATURE_NAME].ids as string[]).push('subtask1', 'task2');
       const action = TaskSharedActions.planTasksForToday({
         taskIds: ['subtask1', 'task2'],
         parentTaskMap: { subtask1: 'parent-task' },
@@ -2441,13 +2475,25 @@ describe('taskSharedMetaReducer', () => {
       );
     });
 
-    it('should not change state when task is not in Today and not planned for today', () => {
+    it('should update planner days but not Today tag when task is not in Today and planned for different day', () => {
       const testState = createStateWithExistingTasks([], [], [], ['other-task']);
       const task = createMockTask({ id: 'task1' });
       const action = createPlanTaskForDayAction(task, 'tomorrow', false);
 
-      metaReducer(testState, action);
-      expect(mockReducer).toHaveBeenCalledWith(testState, action);
+      expectStateUpdate(
+        {
+          // Today tag should be unchanged
+          ...expectTagUpdate('TODAY', { taskIds: ['other-task'] }),
+          // Planner days should have the task added to 'tomorrow'
+          [plannerFeatureKey]: jasmine.objectContaining({
+            days: jasmine.objectContaining({
+              tomorrow: ['task1'],
+            }),
+          }),
+        },
+        action,
+        testState,
+      );
     });
   });
 

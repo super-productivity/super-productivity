@@ -32,6 +32,7 @@ import {
 } from './file-based-sync.types';
 import { OpLog } from '../../../core/log';
 import {
+  InvalidDataSPError,
   RemoteFileNotFoundAPIError,
   UploadRevToMatchMismatchAPIError,
 } from '../../core/errors/sync-errors';
@@ -445,6 +446,7 @@ export class FileBasedSyncAdapterService {
       newData,
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
+    this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadWithRetry');
 
     try {
       await provider.uploadFile(
@@ -497,6 +499,10 @@ export class FileBasedSyncAdapterService {
           freshNewData,
           FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
         );
+      this._assertUploadDataNotEmpty(
+        freshUploadData,
+        'FileBasedSyncAdapter._uploadWithRetry(retry)',
+      );
 
       // Compare against previous attempt's rev (not original revToMatch)
       const isServerRevInconsistent = freshRev === previousRev;
@@ -839,6 +845,7 @@ export class FileBasedSyncAdapterService {
       syncData,
       FILE_BASED_SYNC_CONSTANTS.FILE_VERSION,
     );
+    this._assertUploadDataNotEmpty(uploadData, 'FileBasedSyncAdapter._uploadSnapshot');
     await provider.uploadFile(
       FILE_BASED_SYNC_CONSTANTS.SYNC_FILE,
       uploadData,
@@ -916,6 +923,15 @@ export class FileBasedSyncAdapterService {
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
+
+  private _assertUploadDataNotEmpty(uploadData: string, context: string): void {
+    if (!uploadData || uploadData.trim().length === 0) {
+      throw new InvalidDataSPError(
+        `${context}: compressAndEncryptData() produced empty output. ` +
+          `This should never happen and indicates a serialization or compression failure.`,
+      );
+    }
+  }
 
   /**
    * Downloads and decrypts the sync file.

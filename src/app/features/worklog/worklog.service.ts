@@ -245,7 +245,7 @@ export class WorklogService {
         nonArchiveTaskIds,
         workStartEndForWorkContext,
         this._dateAdapter.getFirstDayOfWeek(),
-        this._dateTimeFormatService.currentLocale,
+        this._dateTimeFormatService.currentLocale(),
       );
       return {
         worklog,
@@ -278,7 +278,7 @@ export class WorklogService {
         nonArchiveTaskIds,
         workStartEndForWorkContext,
         this._dateAdapter.getFirstDayOfWeek(),
-        this._dateTimeFormatService.currentLocale,
+        this._dateTimeFormatService.currentLocale(),
       );
     }
     return null;

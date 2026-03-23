@@ -21,10 +21,10 @@ export const GITEA_ISSUE_CONTENT_CONFIG: IssueContentConfig<GiteaIssue> = {
     },
     {
       label: T.F.ISSUE.ISSUE_CONTENT.ASSIGNEE,
-      type: IssueFieldType.LINK,
-      value: (issue: GiteaIssue) => issue.assignee?.login,
-      getLink: (issue: GiteaIssue) => (issue as any).assignee?.html_url || '',
-      isVisible: (issue: GiteaIssue) => !!issue.assignee,
+      type: IssueFieldType.TEXT,
+      value: (issue: GiteaIssue) =>
+        issue.assignees?.map((a) => a.login || a.username).join(', '),
+      isVisible: (issue: GiteaIssue) => (issue.assignees?.length ?? 0) > 0,
     },
     {
       label: T.F.ISSUE.ISSUE_CONTENT.LABELS,

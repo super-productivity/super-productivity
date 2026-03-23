@@ -4,64 +4,58 @@ const container = document.getElementById('overlay-container') as HTMLDivElement
 const taskTitle = document.getElementById('task-title') as HTMLDivElement;
 const timeDisplay = document.getElementById('time-display') as HTMLDivElement;
 
-// Prevent all right-click events
-document.addEventListener(
-  'contextmenu',
-  (e) => {
+// ── Right-click prevention ──
+const blockRightClick = (e: MouseEvent): false | void => {
+  if (e.type === 'contextmenu' || e.button === 2) {
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
     return false;
-  },
-  true,
-);
+  }
+};
+document.addEventListener('contextmenu', blockRightClick, true);
+document.addEventListener('mousedown', blockRightClick, true);
+document.addEventListener('mouseup', blockRightClick, true);
 
-// Also prevent mousedown for right-click
-document.addEventListener(
-  'mousedown',
-  (e) => {
-    if (e.button === 2) {
-      // Right mouse button
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      return false;
-    }
-  },
-  true,
-);
-
-// Prevent mouseup for right-click
-document.addEventListener(
-  'mouseup',
-  (e) => {
-    if (e.button === 2) {
-      // Right mouse button
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      return false;
-    }
-  },
-  true,
-);
-
-// Handle show main button
+// ── Show main button ──
 showMainBtn.addEventListener('click', () => {
   window.overlayAPI.showMainWindow();
 });
 
-// Listen for content updates
+// ── Content updates ──
 window.overlayAPI.onUpdateContent((data) => {
-  // Clear existing mode classes
   container.classList.remove('mode-pomodoro', 'mode-focus', 'mode-task', 'mode-idle');
-
-  // Update mode
   if (data.mode) {
     container.classList.add(`mode-${data.mode}`);
   }
-
-  // Update content
   taskTitle.textContent = data.title || 'No active task';
   timeDisplay.textContent = data.time || '--:--';
 });
+
+// ── Opacity updates ──
+window.overlayAPI.onUpdateOpacity((opacity) => {
+  document.body.style.setProperty('--opacity', opacity.toString());
+});
+
+// ── Responsive class + scale updates ──
+const REFERENCE_HEIGHT = 80;
+const BP_FULL = 80;
+
+const updateResponsiveState = (): void => {
+  const w = document.documentElement.clientWidth;
+  const h = document.documentElement.clientHeight;
+
+  document.body.classList.remove('size-full', 'size-tiny');
+  if (w >= BP_FULL) {
+    document.body.classList.add('size-full');
+  } else {
+    document.body.classList.add('size-tiny');
+  }
+
+  const scale = Math.max(0.8, Math.min(2, h / REFERENCE_HEIGHT));
+  document.body.style.setProperty('--scale', scale.toString());
+};
+
+const resizeObserver = new ResizeObserver(updateResponsiveState);
+resizeObserver.observe(document.documentElement);
+updateResponsiveState();

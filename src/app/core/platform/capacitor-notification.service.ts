@@ -12,7 +12,8 @@ import { Subject } from 'rxjs';
  * Notification action IDs for reminder notifications
  */
 export const NOTIFICATION_ACTION = {
-  SNOOZE: 'snooze',
+  SNOOZE_10M: 'snooze_10m',
+  SNOOZE_1H: 'snooze_1h',
   DONE: 'done',
 } as const;
 
@@ -84,20 +85,24 @@ export class CapacitorNotificationService {
     }
 
     try {
-      // Register action types with Snooze and Done buttons
+      // Register action types with Done, Snooze 10m, and Snooze 1h buttons
       await LocalNotifications.registerActionTypes({
         types: [
           {
             id: REMINDER_ACTION_TYPE_ID,
             actions: [
               {
-                id: NOTIFICATION_ACTION.SNOOZE,
-                title: 'Snooze',
-              },
-              {
                 id: NOTIFICATION_ACTION.DONE,
                 title: 'Done',
                 destructive: true,
+              },
+              {
+                id: NOTIFICATION_ACTION.SNOOZE_10M,
+                title: 'Snooze 10m',
+              },
+              {
+                id: NOTIFICATION_ACTION.SNOOZE_1H,
+                title: 'Snooze 1h',
               },
             ],
           },

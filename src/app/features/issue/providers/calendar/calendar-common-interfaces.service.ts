@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
-import { firstValueFrom, Observable } from 'rxjs';
+import { firstValueFrom, Observable, of } from 'rxjs';
 import { Task, TaskCopy } from '../../../tasks/task.model';
-import { IssueServiceInterface } from '../../issue-service-interface';
+import { BaseIssueProviderService } from '../../base/base-issue-provider.service';
 import {
   IssueData,
   IssueDataReduced,
@@ -11,9 +11,7 @@ import {
 import { CalendarIntegrationService } from '../../../calendar-integration/calendar-integration.service';
 import { first, map, switchMap } from 'rxjs/operators';
 import { matchesAnyCalendarEventId } from '../../../calendar-integration/get-calendar-event-id-candidates';
-import { IssueProviderService } from '../../issue-provider.service';
-import { CalendarProviderCfg, ICalIssueReduced } from './calendar.model';
-import { HttpClient } from '@angular/common/http';
+import { ICalIssueReduced } from './calendar.model';
 import { ICAL_TYPE } from '../../issue.const';
 import { getDbDateStr } from '../../../../util/get-db-date-str';
 import { CALENDAR_POLL_INTERVAL } from './calendar.const';
@@ -21,34 +19,33 @@ import { CALENDAR_POLL_INTERVAL } from './calendar.const';
 @Injectable({
   providedIn: 'root',
 })
-export class CalendarCommonInterfacesService implements IssueServiceInterface {
+export class CalendarCommonInterfacesService extends BaseIssueProviderService<IssueProviderCalendar> {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
-  private _issueProviderService = inject(IssueProviderService);
-  private _http = inject(HttpClient);
+
+  readonly providerKey = 'ICAL' as const;
+  readonly pollInterval: number = CALENDAR_POLL_INTERVAL;
 
   isEnabled(cfg: IssueProviderCalendar): boolean {
     return cfg.isEnabled && cfg.icalUrl?.length > 0;
   }
 
-  pollInterval: number = CALENDAR_POLL_INTERVAL;
-
-  issueLink(issueId: number, issueProviderId: string): Promise<string> {
-    return Promise.resolve('NONE');
-  }
-
-  testConnection(cfg: CalendarProviderCfg): Promise<boolean> {
+  // Uses CalendarIntegrationService for connection testing
+  testConnection(cfg: IssueProviderCalendar): Promise<boolean> {
     return this._calendarIntegrationService.testConnection(cfg);
   }
 
-  getById(id: number, issueProviderId: string): Promise<IssueData | null> {
+  issueLink(_issueId: number, _issueProviderId: string): Promise<string> {
+    return Promise.resolve('NONE');
+  }
+
+  // Calendar events aren't fetched by ID
+  override getById(_id: number, _issueProviderId: string): Promise<IssueData | null> {
     return Promise.resolve(null);
   }
 
   getAddTaskData(
     calEv: ICalIssueReduced,
   ): Partial<Readonly<TaskCopy>> & { title: string } {
-    // For all-day events, use dueDay instead of dueWithTime
-    // This prevents them from cluttering the schedule timeline
     const dueDateFields = calEv.isAllDay
       ? { dueDay: getDbDateStr(calEv.start) }
       : { dueWithTime: calEv.start };
@@ -66,7 +63,8 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     };
   }
 
-  async searchIssues(
+  // Searches calendar events by title match
+  override async searchIssues(
     query: string,
     issueProviderId: string,
   ): Promise<SearchResultItem[]> {
@@ -91,7 +89,8 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     return result ?? [];
   }
 
-  async getFreshDataForIssueTask(task: Task): Promise<{
+  // Delegates to getFreshDataForIssueTasks for single-task refresh
+  override async getFreshDataForIssueTask(task: Task): Promise<{
     taskChanges: Partial<Task>;
     issue: IssueData;
     issueTitle: string;
@@ -105,14 +104,14 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
     };
   }
 
-  async getFreshDataForIssueTasks(tasks: Task[]): Promise<
+  // Compares event fields (time, title, duration) instead of timestamps
+  override async getFreshDataForIssueTasks(tasks: Task[]): Promise<
     {
       task: Readonly<Task>;
       taskChanges: Partial<Readonly<Task>>;
       issue: IssueData;
     }[]
   > {
-    // Group tasks by provider to minimize fetches
     const tasksByProvider = new Map<string, Task[]>();
     for (const task of tasks) {
       if (!task.issueProviderId || !task.issueId) continue;
@@ -165,13 +164,35 @@ export class CalendarCommonInterfacesService implements IssueServiceInterface {
   }
 
   async getNewIssuesToAddToBacklog(
-    issueProviderId: string,
-    allExistingIssueIds: number[],
+    _issueProviderId: string,
+    _allExistingIssueIds: number[],
   ): Promise<IssueDataReduced[]> {
     return [];
   }
 
-  private _getCfgOnce$(issueProviderId: string): Observable<IssueProviderCalendar> {
-    return this._issueProviderService.getCfgOnce$(issueProviderId, 'ICAL');
+  // Not used since getById, searchIssues, getFreshData* are all overridden
+  protected _apiGetById$(
+    _id: string | number,
+    _cfg: IssueProviderCalendar,
+  ): Observable<IssueData | null> {
+    return of(null);
+  }
+
+  protected _apiSearchIssues$(
+    _searchTerm: string,
+    _cfg: IssueProviderCalendar,
+  ): Observable<SearchResultItem[]> {
+    return of([]);
+  }
+
+  protected _formatIssueTitleForSnack(issue: IssueData): string {
+    return (issue as unknown as ICalIssueReduced).title;
+  }
+
+  // Calendar compares event fields directly, not timestamps.
+  // Safe: both getFreshDataForIssueTask and getFreshDataForIssueTasks are overridden,
+  // which are the only callers of _getIssueLastUpdated.
+  protected _getIssueLastUpdated(_issue: IssueData): number {
+    return 0;
   }
 }

@@ -9,6 +9,7 @@ import {
   input,
   OnDestroy,
   OnInit,
+  signal,
   viewChild,
 } from '@angular/core';
 import { GlobalConfigService } from '../../config/global-config.service';
@@ -27,8 +28,6 @@ import { LongPressIOSDirective } from '../../../ui/longpress/longpress-ios.direc
 import { TagListComponent } from '../../tag/tag-list/tag-list.component';
 import { InlineInputComponent } from '../../../ui/inline-input/inline-input.component';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
-import { IssueIconPipe } from '../../issue/issue-icon/issue-icon.pipe';
-import { ShortDate2Pipe } from '../../../ui/pipes/short-date2.pipe';
 import { Log } from '../../../core/log';
 import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pipe';
 
@@ -45,8 +44,6 @@ import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pi
     InlineInputComponent,
     TaskContextMenuComponent,
     MsToStringPipe,
-    IssueIconPipe,
-    ShortDate2Pipe,
     RenderLinksPipe,
   ],
 })
@@ -73,11 +70,10 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   readonly day = input<string | undefined>();
   readonly tagsToHide = input<string[]>();
 
-  isRepeatTaskCreatedToday = false;
-
   readonly T = T;
   readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
   parentTitle: string | null = null;
+  isContextMenuLoaded = signal(false);
 
   moveToProjectList$!: Observable<Project[]>;
 
@@ -95,11 +91,16 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
     return this.task.id === this._taskService.currentTaskId();
   }
 
+  @HostListener('contextmenu', ['$event'])
+  onContextMenu(event: MouseEvent): void {
+    this.openContextMenu(event);
+  }
+
   @HostListener('click', ['$event'])
   async clickHandler(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement | null;
     if (target?.tagName === 'A' || target?.closest('a')) {
-      return; // Let link clicks propagate without opening the task panel
+      return;
     }
     if (this.task) {
       // Use bottom panel on mobile, dialog on desktop
@@ -149,6 +150,15 @@ export class PlannerTaskComponent extends BaseComponent implements OnInit, OnDes
   }
 
   openContextMenu(event: TouchEvent | MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!this.isContextMenuLoaded()) {
+      this.isContextMenuLoaded.set(true);
+      setTimeout(() => {
+        this.taskContextMenu()?.open(event);
+      });
+      return;
+    }
     this.taskContextMenu()?.open(event);
   }
 

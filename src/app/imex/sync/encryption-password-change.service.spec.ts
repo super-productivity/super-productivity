@@ -3,22 +3,18 @@ import { EncryptionPasswordChangeService } from './encryption-password-change.se
 import { SyncProviderManager } from '../../op-log/sync-providers/provider-manager.service';
 import { CleanSlateService } from '../../op-log/clean-slate/clean-slate.service';
 import { OperationLogUploadService } from '../../op-log/sync/operation-log-upload.service';
-import { DerivedKeyCacheService } from '../../op-log/encryption/derived-key-cache.service';
 import { SyncProviderId } from '../../op-log/sync-providers/provider.const';
 import { SyncWrapperService } from './sync-wrapper.service';
 import { OperationLogStoreService } from '../../op-log/persistence/operation-log-store.service';
 import { OpType } from '../../op-log/core/operation.types';
-import { WrappedProviderService } from '../../op-log/sync-providers/wrapped-provider.service';
 
 describe('EncryptionPasswordChangeService', () => {
   let service: EncryptionPasswordChangeService;
   let mockProviderManager: jasmine.SpyObj<any>;
   let mockCleanSlateService: jasmine.SpyObj<CleanSlateService>;
   let mockUploadService: jasmine.SpyObj<OperationLogUploadService>;
-  let mockDerivedKeyCache: jasmine.SpyObj<DerivedKeyCacheService>;
   let mockSyncWrapper: jasmine.SpyObj<SyncWrapperService>;
   let mockOpLogStore: jasmine.SpyObj<OperationLogStoreService>;
-  let mockWrappedProviderService: jasmine.SpyObj<WrappedProviderService>;
   let mockSyncProvider: jasmine.SpyObj<any>;
 
   const TEST_PASSWORD = 'new-secure-password-123';
@@ -43,6 +39,9 @@ describe('EncryptionPasswordChangeService', () => {
       getActiveProvider: jasmine
         .createSpy('getActiveProvider')
         .and.returnValue(mockSyncProvider),
+      setProviderConfig: jasmine
+        .createSpy('setProviderConfig')
+        .and.returnValue(Promise.resolve()),
     };
 
     mockCleanSlateService = jasmine.createSpyObj('CleanSlateService', [
@@ -61,8 +60,6 @@ describe('EncryptionPasswordChangeService', () => {
         piggybackedOps: [],
       }),
     );
-
-    mockDerivedKeyCache = jasmine.createSpyObj('DerivedKeyCacheService', ['clearCache']);
 
     // Mock SyncWrapperService - runWithSyncBlocked should just execute the callback
     mockSyncWrapper = jasmine.createSpyObj('SyncWrapperService', ['runWithSyncBlocked']);
@@ -88,20 +85,14 @@ describe('EncryptionPasswordChangeService', () => {
       }
     });
 
-    mockWrappedProviderService = jasmine.createSpyObj('WrappedProviderService', [
-      'clearCache',
-    ]);
-
     TestBed.configureTestingModule({
       providers: [
         EncryptionPasswordChangeService,
         { provide: SyncProviderManager, useValue: mockProviderManager },
         { provide: CleanSlateService, useValue: mockCleanSlateService },
         { provide: OperationLogUploadService, useValue: mockUploadService },
-        { provide: DerivedKeyCacheService, useValue: mockDerivedKeyCache },
         { provide: SyncWrapperService, useValue: mockSyncWrapper },
         { provide: OperationLogStoreService, useValue: mockOpLogStore },
-        { provide: WrappedProviderService, useValue: mockWrappedProviderService },
       ],
     });
     service = TestBed.inject(EncryptionPasswordChangeService);
@@ -114,18 +105,19 @@ describe('EncryptionPasswordChangeService', () => {
       // Should create clean slate
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalledWith(
         'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
       );
 
       // Should update config with new password
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true,
         }),
       );
 
-      // Should clear derived key cache
-      expect(mockDerivedKeyCache.clearCache).toHaveBeenCalled();
+      // clearSessionKeyCache() is called directly (module-level function, not spyable)
 
       // Should upload with isCleanSlate flag
       expect(mockUploadService.uploadPendingOps).toHaveBeenCalledWith(mockSyncProvider, {
@@ -144,7 +136,8 @@ describe('EncryptionPasswordChangeService', () => {
 
       await service.changePassword(TEST_PASSWORD);
 
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true,
@@ -285,17 +278,17 @@ describe('EncryptionPasswordChangeService', () => {
       );
 
       // Should have set password to new value
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
         }),
       );
 
       // Should NOT revert - only one call to setPrivateCfg
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledTimes(1);
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledTimes(1);
 
-      // Should have cleared cache only once (on change, not on revert)
-      expect(mockDerivedKeyCache.clearCache).toHaveBeenCalledTimes(1);
+      // clearSessionKeyCache() is called directly (module-level function, not spyable)
     });
 
     it('should throw error if no operations are uploaded', async () => {
@@ -369,17 +362,13 @@ describe('EncryptionPasswordChangeService', () => {
         callOrder.push('createCleanSlate');
       });
 
-      mockSyncProvider.setPrivateCfg.and.callFake(async () => {
-        callOrder.push('setPrivateCfg');
+      mockProviderManager.setProviderConfig.and.callFake(async () => {
+        callOrder.push('setProviderConfig');
       });
 
-      mockDerivedKeyCache.clearCache.and.callFake(() => {
-        callOrder.push('clearDerivedKeyCache');
-      });
-
-      mockWrappedProviderService.clearCache.and.callFake(() => {
-        callOrder.push('clearWrappedProviderCache');
-      });
+      // clearSessionKeyCache() is called directly (module-level function, not spyable)
+      // so we can't track its order, but it runs between setProviderConfig and uploadPendingOps
+      // WrappedProviderService cache is now auto-invalidated via providerConfigChanged$
 
       mockUploadService.uploadPendingOps.and.callFake(async () => {
         callOrder.push('uploadPendingOps');
@@ -397,9 +386,9 @@ describe('EncryptionPasswordChangeService', () => {
         'getUnsynced(1)', // Check for unsynced user ops
         'createCleanSlate',
         'getUnsynced(2)', // Verify SYNC_IMPORT was stored
-        'setPrivateCfg',
-        'clearDerivedKeyCache',
-        'clearWrappedProviderCache',
+        'setProviderConfig',
+        // clearSessionKeyCache() runs here (not trackable - module-level function)
+        // WrappedProviderService cache is auto-invalidated via providerConfigChanged$
         'uploadPendingOps',
       ]);
     });
@@ -428,7 +417,8 @@ describe('EncryptionPasswordChangeService', () => {
       await service.changePassword(TEST_PASSWORD);
 
       // Verify BOTH fields are set in the new config
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           encryptKey: TEST_PASSWORD,
           isEncryptionEnabled: true, // MUST be true!
@@ -452,7 +442,8 @@ describe('EncryptionPasswordChangeService', () => {
       await service.changePassword(TEST_PASSWORD);
 
       // Verify all other fields are preserved
-      expect(mockSyncProvider.setPrivateCfg).toHaveBeenCalledWith(
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledWith(
+        SyncProviderId.SuperSync,
         jasmine.objectContaining({
           baseUrl: 'https://custom-server.com',
           accessToken: 'my-access-token',
@@ -486,7 +477,7 @@ describe('EncryptionPasswordChangeService', () => {
       );
     });
 
-    it('should clear caches once on upload failure (no revert)', async () => {
+    it('should not revert config on upload failure', async () => {
       // When upload fails, we keep the new password config for retry.
       // User must retry with the SAME password to complete the upload.
       // This prevents inconsistent state where SYNC_IMPORT would be
@@ -515,10 +506,10 @@ describe('EncryptionPasswordChangeService', () => {
 
       await expectAsync(service.changePassword(TEST_PASSWORD)).toBeRejected();
 
-      // Should have cleared caches only once (no revert):
-      // After setting new password (before upload attempt)
-      expect(mockDerivedKeyCache.clearCache).toHaveBeenCalledTimes(1);
-      expect(mockWrappedProviderService.clearCache).toHaveBeenCalledTimes(1);
+      // clearSessionKeyCache() is called directly (module-level function, not spyable)
+      // WrappedProviderService cache is auto-invalidated via providerConfigChanged$
+      // Config should only be set once (no revert)
+      expect(mockProviderManager.setProviderConfig).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error if SYNC_IMPORT was not stored after clean slate', async () => {
@@ -542,7 +533,7 @@ describe('EncryptionPasswordChangeService', () => {
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalled();
 
       // Should NOT have updated config (failed before reaching that step)
-      expect(mockSyncProvider.setPrivateCfg).not.toHaveBeenCalled();
+      expect(mockProviderManager.setProviderConfig).not.toHaveBeenCalled();
     });
 
     it('should generate new client ID via clean slate to prevent operation conflicts', async () => {
@@ -560,6 +551,7 @@ describe('EncryptionPasswordChangeService', () => {
       // Verify clean slate was created (which generates new client ID)
       expect(mockCleanSlateService.createCleanSlate).toHaveBeenCalledWith(
         'ENCRYPTION_CHANGE',
+        'PASSWORD_CHANGED',
       );
     });
   });

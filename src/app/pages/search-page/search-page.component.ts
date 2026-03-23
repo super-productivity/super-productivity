@@ -19,7 +19,7 @@ import { TagService } from '../../features/tag/tag.service';
 import { Task } from '../../features/tasks/task.model';
 import { SearchItem } from './search-page.model';
 import { NavigateToTaskService } from '../../core-ui/navigate-to-task/navigate-to-task.service';
-import { AsyncPipe } from '@angular/common';
+import { AsyncPipe, NgClass } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { MatIconButton } from '@angular/material/button';
 import { MatInput } from '@angular/material/input';
@@ -28,6 +28,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { TagComponent } from '../../features/tag/tag/tag.component';
 import { MatList, MatListItem } from '@angular/material/list';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import { Log } from '../../core/log';
 
 const MAX_RESULTS = 50;
@@ -50,6 +52,7 @@ const MAX_RESULTS = 50;
     MatListItem,
     MatFormField,
     MatLabel,
+    NgClass,
   ],
 })
 export class SearchPageComponent implements OnInit {
@@ -57,6 +60,7 @@ export class SearchPageComponent implements OnInit {
   private _projectService = inject(ProjectService);
   private _tagService = inject(TagService);
   private _navigateToTaskService = inject(NavigateToTaskService);
+  private _matDialog = inject(MatDialog);
 
   readonly inputEl = viewChild.required<ElementRef>('inputEl');
 
@@ -102,7 +106,7 @@ export class SearchPageComponent implements OnInit {
       // If a subtask does not belong to a project, it will neither have a project nor a tag.
       // Therefore, we need to use the parent's tag.
       const parent = task.parentId ? taskMap.get(task.parentId) : undefined;
-      const tagId = parent ? parent.tagIds[0] : task.tagIds[0];
+      const tagId = parent ? parent.tagIds?.[0] : task.tagIds?.[0];
       const taskNotes = task.notes || '';
 
       return {
@@ -180,6 +184,21 @@ export class SearchPageComponent implements OnInit {
   clearSearch(): void {
     this.searchForm.setValue('');
     this.inputEl().nativeElement.focus();
+  }
+
+  async viewArchivedTaskDetails(item: SearchItem, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    let task: Task;
+    try {
+      task = await this._taskService.getByIdFromEverywhere(item.id, true);
+    } catch (e) {
+      Log.warn('Could not load archived task', e);
+      return;
+    }
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
   }
 
   trackByFn(i: number, item: SearchItem): string {

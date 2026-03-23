@@ -188,11 +188,11 @@
             </h2>
             <section class="config-section tour-syncSection">
               @let syncSettingsForm = syncSettingsService.syncSettingsForm$ | async;
-              @if (syncSettingsForm) {
+              @if (syncSettingsForm && globalSyncConfigFormCfg(); as syncCfg) {
                 <config-section
                   (save)="syncSettingsService.updateSettingsFromForm($event.config)"
                   [cfg]="syncSettingsForm"
-                  [section]="globalSyncConfigFormCfg"
+                  [section]="syncCfg"
                 ></config-section>
               }
             </section>
@@ -229,7 +229,7 @@
   >
   –
   <a
-    href="https://github.com/super-productivity/super-productivity/blob/master/CHANGELOG.md"
+    href="https://github.com/super-productivity/super-productivity/releases/latest"
     target="_blank"
     >Changelog</a
   >

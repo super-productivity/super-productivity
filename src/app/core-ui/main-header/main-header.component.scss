@@ -14,7 +14,6 @@
   display: block;
   position: relative;
   user-select: none;
-  -webkit-user-select: none; /* Safari */
   --header-nav-button-gap: var(--s-half);
   --header-button-size: 40px;
 }
@@ -68,12 +67,12 @@
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
-  padding: 4px 8px;
+  padding: var(--s-half) var(--s);
   min-height: var(--bar-height-large);
 
   @include mq(xs) {
     min-height: var(--bar-height);
-    padding: 4px 16px;
+    padding: var(--s-half) var(--s2);
   }
 
   &:has(page-title:hover) ::ng-deep .current-task-title,
@@ -210,19 +209,19 @@ page-title {
 
 .panel-btn {
   position: relative;
-  transition: all 0.2s;
+  transition: var(--transition-standard);
   overflow: visible !important;
 
   &.isActive {
     background: transparent;
 
     .mat-icon {
-      transition: all 0.2s;
+      transition: var(--transition-standard);
       transform: rotate(45deg);
     }
 
     &::after {
-      border-radius: 4px;
+      border-radius: var(--card-border-radius);
       box-shadow: 0 -2px 3px var(--separator-alpha);
       background: var(--sidenav-bg);
       content: '';
@@ -333,7 +332,7 @@ page-title {
     border-bottom-left-radius: var(--card-border-radius);
 
     @include darkTheme() {
-      border-right-color: rgba(255, 255, 255, 0.1);
+      border-right-color: var(--c-light-10);
     }
   }
 }
@@ -367,31 +366,24 @@ page-title {
   left: 50%;
   transform: translate(-50%, -50%);
 
-  // Icon sizing (increased from 10px to 15px)
+  // Icon sizing
   font-size: 15px;
   width: 15px;
   height: 15px;
   line-height: 15px;
 
-  // Colored outline using multiple text-shadows for better visibility
-  text-shadow:
-    -1px -1px 0 var(--c-bg),
-    1px -1px 0 var(--c-bg),
-    -1px 1px 0 var(--c-bg),
-    1px 1px 0 var(--c-bg),
-    -2px -2px 0 var(--c-bg),
-    2px -2px 0 var(--c-bg),
-    -2px 2px 0 var(--c-bg),
-    2px 2px 0 var(--c-bg),
-    0 -2px 0 var(--c-bg),
-    0 2px 0 var(--c-bg),
-    -2px 0 0 var(--c-bg),
-    2px 0 0 var(--c-bg);
+  // Solid circle background for clean outline
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+  border-radius: 50%;
+  padding: 3px;
 
   // Ensure it sits above sync icon
   z-index: 1;
 
-  // Fallback for Windows High Contrast Mode where text-shadow is suppressed
+  // Fallback for Windows High Contrast Mode
   @media (forced-colors: active) {
     outline: 2px solid CanvasText;
     outline-offset: -2px;
@@ -411,7 +403,7 @@ page-title {
   .focus-label {
     position: absolute;
     line-height: 1;
-    padding: 2px 4px 1px;
+    padding: var(--s-quarter) var(--s-half) 1px;
     left: 50%;
     transform: translateX(-50%);
     font-weight: bold;

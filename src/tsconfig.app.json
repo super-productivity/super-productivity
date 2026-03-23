@@ -12,6 +12,7 @@
     "**/*.spec.ts",
     "**/*.worker.ts",
     "**/__mocks__/**",
+    "**/testing/**",
     "**/test-utils.ts",
     "app/util/**/*.ts"
   ],

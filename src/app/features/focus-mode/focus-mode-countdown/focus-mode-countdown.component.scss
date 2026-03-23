@@ -42,7 +42,7 @@
 .action-msg {
   font-size: 22px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: var(--s2);
 }
 
 .go-msg {
@@ -65,7 +65,7 @@ ol {
 }
 
 .countdown-timer {
-  margin-top: 32px;
+  margin-top: var(--s4);
   line-height: 1;
   font-size: 48px;
   font-weight: 700;

@@ -4,7 +4,7 @@ export const ConditionTitleContains: IAutomationCondition = {
   id: 'titleContains',
   name: 'Title contains',
   check: async (ctx, event, value) => {
-    if (!event.task || !value) return false;
+    if (!event.task || !event.task.title || !value) return false;
     return event.task.title.toLowerCase().includes(value.toLowerCase());
   },
 };

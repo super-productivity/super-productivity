@@ -31,7 +31,12 @@
           <mat-list-item (click)="navigateToItem(item)">
             <div class="search-result-content">
               <div class="task-info">
-                <div class="task-title">{{ item?.title }}</div>
+                <div
+                  class="task-title"
+                  [ngClass]="{ 'task-archived': item.isArchiveTask }"
+                >
+                  {{ item?.title }}
+                </div>
                 <div class="task-icons">
                   @if (item.ctx) {
                     <tag
@@ -47,6 +52,15 @@
                   }
                   @if (item.isArchiveTask) {
                     <mat-icon class="archive-icon">archive</mat-icon>
+                    <button
+                      (click)="viewArchivedTaskDetails(item, $event)"
+                      [title]="T.F.WORKLOG.CMP.VIEW_TASK_DETAILS | translate"
+                      aria-label="view details"
+                      mat-icon-button
+                      class="view-details-btn"
+                    >
+                      <mat-icon>info</mat-icon>
+                    </button>
                   }
                 </div>
               </div>

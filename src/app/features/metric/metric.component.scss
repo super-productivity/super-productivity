@@ -20,7 +20,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--s);
   position: relative;
 
   h1 {
@@ -56,4 +56,13 @@ section {
 
 .metric-metrics {
   margin-top: var(--s6);
+}
+
+.heatmap-section {
+  max-width: 880px;
+  margin: var(--s4) auto 0;
+}
+
+.no-data-msg {
+  margin-top: var(--s4);
 }

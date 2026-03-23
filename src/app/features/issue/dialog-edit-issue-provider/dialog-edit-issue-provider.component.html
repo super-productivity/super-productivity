@@ -5,10 +5,14 @@
 <!--@let model = isEdit ? d.issueProvider : DEFAULT_ISSUE_PROVIDER_CFGS[issueProviderKey];-->
 
 <h1 mat-dialog-title>
-  <mat-icon
-    class="dialog-header-icon"
-    [svgIcon]="issueProviderKey | issueIcon"
-  ></mat-icon>
+  @if (issueProviderKey | issueIcon; as icon) {
+    <mat-icon
+      class="dialog-header-icon"
+      [svgIcon]="icon"
+    ></mat-icon>
+  } @else {
+    <mat-icon class="dialog-header-icon">extension</mat-icon>
+  }
   <!-- TODO improve title -->
 
   {{ isEdit ? 'Edit' : 'Setup' }} {{ title }} Config
@@ -92,12 +96,54 @@
           <p [innerHTML]="T.G.EXTENSION_INFO | translate"></p>
         </div>
       }
+      @for (btn of oauthButtons; track btn.label) {
+        <div style="margin-bottom: 16px">
+          @if (isOAuthConnected()) {
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              (click)="disconnectOAuth()"
+            >
+              <mat-icon>link_off</mat-icon>
+              {{ T.F.ISSUE.DIALOG.DISCONNECT | translate }}
+            </button>
+            <span style="margin-left: 8px; color: var(--palette-accent)">
+              <mat-icon
+                style="vertical-align: middle; font-size: 18px; width: 18px; height: 18px"
+                >check_circle</mat-icon
+              >
+              {{ T.F.ISSUE.DIALOG.CONNECTED | translate }}
+            </span>
+          } @else {
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              [disabled]="isOAuthConnecting()"
+              (click)="connectOAuth(btn.oauthConfig)"
+            >
+              <mat-icon>login</mat-icon>
+              {{ btn.label }}
+            </button>
+          }
+        </div>
+      }
       <formly-form
         [model]="model"
         (modelChange)="formlyModelChange($event)"
         [fields]="fields"
         [form]="form"
       ></formly-form>
+
+      <chip-list-input
+        (addItem)="addTag($event)"
+        (addNewItem)="addNewTag($event)"
+        (removeItem)="removeTag($event)"
+        [label]="T.F.ISSUE.DEFAULT_TAGS_LABEL | translate"
+        [model]="model.defaultTagIds || []"
+        [suggestions]="tagSuggestions()"
+      ></chip-list-input>
 
       @switch (issueProviderKey) {
         <!-- -->
@@ -125,12 +171,12 @@
           ></trello-additional-cfg>
           <!-- -->
         }
-        @case ('CLICKUP') {
-          <clickup-additional-cfg
+        @case ('NEXTCLOUD_DECK') {
+          <nextcloud-deck-additional-cfg
             [section]="configFormSection"
             [cfg]="model"
             (modelChange)="customCfgCmpSave($event)"
-          ></clickup-additional-cfg>
+          ></nextcloud-deck-additional-cfg>
           <!-- -->
         }
       }
@@ -148,6 +194,15 @@
     </button>
 
     @if (isEdit) {
+      <button
+        (click)="duplicate()"
+        color="primary"
+        mat-button
+        type="button"
+      >
+        <mat-icon>content_copy</mat-icon>
+        {{ T.G.DUPLICATE | translate }}
+      </button>
       <button
         (click)="remove()"
         color="warn"

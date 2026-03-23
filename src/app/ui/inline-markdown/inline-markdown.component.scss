@@ -50,7 +50,7 @@
 :host:has(.controls) {
   .markdown-unparsed,
   .markdown-parsed {
-    padding-bottom: 40px;
+    padding-bottom: var(--s5);
   }
 }
 

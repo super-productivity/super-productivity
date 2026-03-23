@@ -6,7 +6,7 @@ import {
   webUtils,
 } from 'electron';
 import { ElectronAPI } from './electronAPI.d';
-import { IPCEventValue } from './shared-with-frontend/ipc-events.const';
+import { IPC, IPCEventValue } from './shared-with-frontend/ipc-events.const';
 import { LocalBackupMeta } from '../src/app/imex/local-backup/local-backup.model';
 import {
   PluginManifest,
@@ -200,6 +200,14 @@ const ea: ElectronAPI = {
 
   exec: (command: string) => _send('EXEC', command),
 
+  updateTodayTasks: (tasks: any[]) => _send('TODAY_TASKS_UPDATED', tasks),
+
+  onSwitchTask: (listener: (taskId: string) => void) => {
+    // We register the listener directly without using standard 'on' method
+    // Because the standard 'on' method doesn't strip out the event arg like we need
+    ipcRenderer.on('SWITCH_TASK', (_: any, taskId: string) => listener(taskId));
+  },
+
   // Plugin API
   pluginExecNodeScript: (
     pluginId: string,
@@ -212,6 +220,18 @@ const ea: ElectronAPI = {
       manifest,
       request,
     ) as Promise<PluginNodeScriptResult>,
+
+  // Plugin OAuth
+  pluginOAuthStart: (url: string) => _send('PLUGIN_OAUTH_START', { url }),
+  onPluginOAuthCb: (
+    listener: (data: { code?: string; error?: string; state?: string }) => void,
+  ) => {
+    ipcRenderer.on(
+      IPC.PLUGIN_OAUTH_CB,
+      (_: unknown, data: { code?: string; error?: string; state?: string }) =>
+        listener(data),
+    );
+  },
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation

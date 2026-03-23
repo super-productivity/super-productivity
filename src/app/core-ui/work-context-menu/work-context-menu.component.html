@@ -50,7 +50,7 @@
 </button>
 
 <button
-  [routerLink]="[base, contextId, 'settings']"
+  (click)="openSettings()"
   mat-menu-item
 >
   <mat-icon>settings</mat-icon>

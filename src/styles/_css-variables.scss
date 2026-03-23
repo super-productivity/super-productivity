@@ -85,6 +85,7 @@
   --z-right-panel-resize-handle: 65;
   --z-right-panel-edge-handle: 66;
   --z-tour: 1001;
+  --z-onboarding-hint: 1100;
   --z-dragged-nav-item: 1002;
   --z-bg-overlay: 1;
 
@@ -137,6 +138,7 @@
   --c-light-50: rgba(255, 255, 255, 0.5);
   --c-light-60: rgba(255, 255, 255, 0.6);
   --c-light-70: rgba(255, 255, 255, 0.7);
+  --c-light-80: rgba(255, 255, 255, 0.8);
   --c-light-90: rgba(255, 255, 255, 0.9);
 
   // Legacy palette references
@@ -374,7 +376,7 @@ body {
   --transition-duration--leave: 195ms;
 
   // Background overlay
-  --c-bg-overlay: var(--c-light-60);
+  --c-bg-overlay: var(--c-light-80);
 }
 
 // -----------------------------
@@ -408,8 +410,8 @@ body.isDarkTheme {
 
   // Text colors
   --text-color: rgb(230, 230, 230);
-  --text-color-less-intense: rgba(235, 235, 235, 0.9);
-  --text-color-muted: rgba(235, 235, 235, 0.75);
+  --text-color-less-intense: rgba(235, 235, 235, 0.8);
+  --text-color-muted: rgba(235, 235, 235, 0.65);
   --text-color-more-intense: rgb(245, 245, 245);
   --text-color-most-intense: rgb(255, 255, 255);
 
@@ -498,7 +500,7 @@ body.isDarkTheme {
   --mat-sidenav-scrim-color: var(--c-dark-80);
 
   // Background overlay
-  --c-bg-overlay: var(--c-dark-60);
+  --c-bg-overlay: var(--c-dark-80);
 }
 
 /* stylelint-disable */

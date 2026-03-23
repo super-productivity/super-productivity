@@ -2,9 +2,7 @@ import { createFeature, createReducer, on } from '@ngrx/store';
 import { PlannerActions } from './planner.actions';
 import { moveItemInArray } from '../../../util/move-item-in-array';
 import { loadAllData } from '../../../root-store/meta/load-all-data.action';
-import { unique } from '../../../util/unique';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
-import { getDbDateStr } from '../../../util/get-db-date-str';
 import { Log } from '../../../core/log';
 
 export const plannerFeatureKey = 'planner';
@@ -159,37 +157,7 @@ export const plannerReducer = createReducer(
     };
   }),
 
-  on(PlannerActions.planTaskForDay, (state, { task, day, isAddToTop }) => {
-    const daysCopy = { ...state.days };
-    // filter out from other days (including the target day to handle reordering)
-    Object.keys(daysCopy).forEach((dayI) => {
-      daysCopy[dayI] = daysCopy[dayI].filter((id) => id !== task.id);
-    });
-
-    const todayStr = getDbDateStr();
-    const isPlannedForToday = day === todayStr;
-
-    return {
-      ...state,
-      days: {
-        ...daysCopy,
-        // Today's ordering is managed by TODAY_TAG.taskIds, not planner.days.
-        // This dual-system design keeps move operations (drag/drop, Ctrl+↑/↓)
-        // uniform for all tags. See: docs/ai/today-tag-architecture.md
-        ...(isPlannedForToday
-          ? {}
-          : {
-              [day]: unique(
-                isAddToTop
-                  ? [task.id, ...(daysCopy[day] || [])]
-                  : [...(daysCopy[day] || []), task.id],
-              )
-                // when moving a parent to the day, remove all sub-tasks
-                .filter((id) => !task.subTaskIds.includes(id)),
-            }),
-      },
-    };
-  }),
+  // NOTE: planTaskForDay is now handled in planner-shared.reducer.ts
 
   on(PlannerActions.updatePlannerDialogLastShown, (state, { today }) => ({
     ...state,

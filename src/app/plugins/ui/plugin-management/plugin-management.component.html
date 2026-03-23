@@ -105,6 +105,15 @@
           >
             <mat-icon>settings</mat-icon>
           </button>
+        } @else if (hasConfigHandler(plugin) && plugin.isEnabled) {
+          <button
+            mat-icon-button
+            (click)="openPluginConfig(plugin)"
+            [disabled]="isPluginLoading(plugin)"
+            [matTooltip]="T.PLUGINS.CONFIGURE | translate"
+          >
+            <mat-icon>settings</mat-icon>
+          </button>
         }
         <mat-slide-toggle
           [checked]="plugin.isEnabled"

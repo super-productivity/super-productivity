@@ -1,50 +1,64 @@
 name: PR Preview Deploy
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
-    paths-ignore:
-      - 'docs/wiki/**'
+  workflow_run:
+    workflows: ['PR Preview Build']
+    types: [completed]
+
 permissions:
+  actions: read
   contents: read
   pull-requests: write
   deployments: write
 
 jobs:
   deploy-preview:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
     continue-on-error: true
     runs-on: ubuntu-latest
     environment: preview-deployments
-    env:
-      UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
-      UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
 
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          name: pr-preview-build
+          path: dist/browser
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          node-version: 20
-          cache: 'npm'
+      - name: Get PR info
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          REPO_OWNER: ${{ github.event.workflow_run.repository.owner.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Handle fork PRs vs same-repo PRs
+          if [ "$HEAD_OWNER" != "$REPO_OWNER" ]; then
+            BRANCH="${HEAD_OWNER}:${HEAD_BRANCH}"
+          else
+            BRANCH="${HEAD_BRANCH}"
+          fi
 
-      # work around for npm installs from git+https://github.com/johannesjo/J2M.git
-      - name: Reconfigure git to use HTTP authentication
-        run: >
-          git config --global url."https://github.com/".insteadOf
-          ssh://git@github.com/
+          PR_NUMBER=$(gh pr view --repo "$REPO" "$BRANCH" --json number --jq '.number')
 
-      - name: Install npm Packages
-        run: npm i
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not determine PR number"
+            exit 1
+          fi
 
-      - name: Generate environment file
-        run: npm run env
+          # Sanitize branch name for safe use in downstream commands
+          SAFE_BRANCH=$(echo "$HEAD_BRANCH" | sed 's/[^a-zA-Z0-9._\/-]//g')
 
-      - name: Build Frontend for Web
-        run: npm run buildFrontend:prodWeb
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_branch=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Pages
         id: cloudflare-deploy
@@ -52,13 +66,13 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist/browser --project-name=super-productivity-preview --branch=${{ github.head_ref }}
+          command: pages deploy dist/browser --project-name=super-productivity-preview --branch=${{ steps.pr.outputs.head_branch }}
 
       - name: Find existing comment
         uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
         id: find-comment
         with:
-          issue-number: ${{ github.event.pull_request.number }}
+          issue-number: ${{ steps.pr.outputs.number }}
           comment-author: 'github-actions[bot]'
           body-includes: '<!-- pr-preview-comment -->'
 
@@ -66,7 +80,7 @@ jobs:
         uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
+          issue-number: ${{ steps.pr.outputs.number }}
           edit-mode: replace
           body: |
             <!-- pr-preview-comment -->
@@ -76,8 +90,8 @@ jobs:
             |--------|-----|
             | Deployed | ${{ steps.cloudflare-deploy.outputs.deployment-url }} |
 
-            **Branch:** `${{ github.head_ref }}`
-            **Commit:** ${{ github.sha }}
+            **Branch:** `${{ steps.pr.outputs.head_branch }}`
+            **Commit:** ${{ steps.pr.outputs.head_sha }}
 
             ---
             <sub>Deployed with Cloudflare Pages</sub>

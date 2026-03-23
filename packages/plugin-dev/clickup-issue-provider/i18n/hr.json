@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API ključ",
+    "API_KEY_LINK": "Nabavite osobni API ključ",
+    "TEAM_IDS": "ID-ovi radnog prostora/tima (odvojeni zarezima, prazno za sve)",
+    "USER_ID": "ID korisnika (za filtriranje prema odgovornoj osobi)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sažetak",
+    "STATUS": "Stanje",
+    "PRIORITY": "Prioritet",
+    "ASSIGNEE": "Odgovorna osoba",
+    "LABELS": "Etikete",
+    "DESCRIPTION": "Opis"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Nepoznata greška. Provjerite svoj API ključ i pokušajte ponovno."
+  }
+}

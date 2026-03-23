@@ -22,6 +22,10 @@ import { TaskArchiveService } from '../features/archive/task-archive.service';
 import { TranslateService } from '@ngx-translate/core';
 import { SyncWrapperService } from '../imex/sync/sync-wrapper.service';
 import { Injector } from '@angular/core';
+import { GlobalThemeService } from '../core/theme/global-theme.service';
+import { PluginIssueProviderRegistryService } from './issue-provider/plugin-issue-provider-registry.service';
+import { IssueSyncAdapterRegistryService } from '../features/issue/two-way-sync/issue-sync-adapter-registry.service';
+import { PluginHttpService } from './issue-provider/plugin-http.service';
 import { getDbDateStr } from '../util/get-db-date-str';
 
 /* eslint-disable @typescript-eslint/naming-convention */
@@ -95,6 +99,10 @@ describe('PluginBridgeService.setCounter()', () => {
           useValue: jasmine.createSpyObj('SyncWrapperService', ['sync']),
         },
         Injector,
+        { provide: GlobalThemeService, useValue: {} },
+        { provide: PluginIssueProviderRegistryService, useValue: {} },
+        { provide: IssueSyncAdapterRegistryService, useValue: {} },
+        { provide: PluginHttpService, useValue: {} },
       ],
     });
 

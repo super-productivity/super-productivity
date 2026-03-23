@@ -16,6 +16,8 @@ import { ActionReducer, Action } from '@ngrx/store';
 import { lwwUpdateMetaReducer } from '../../../root-store/meta/task-shared-meta-reducers/lww-update.meta-reducer';
 import { convertOpToAction } from '../../apply/operation-converter.util';
 import { ActionType, Operation, OpType, EntityType } from '../../core/operation.types';
+import { appStateFeatureKey } from '../../../root-store/app-state/app-state.reducer';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 describe('LWW Update Store Application Integration', () => {
   // Feature names matching actual NgRx feature names
@@ -65,6 +67,7 @@ describe('LWW Update Store Application Integration', () => {
     [TASKS_FEATURE]: TaskState;
     [PROJECTS_FEATURE]: ProjectState;
     [TAGS_FEATURE]: TagState;
+    [appStateFeatureKey]: { todayStr: string; startOfNextDayDiffMs: number };
   }
 
   const createLwwUpdateOperation = (
@@ -107,6 +110,7 @@ describe('LWW Update Store Application Integration', () => {
     [TASKS_FEATURE]: createTaskState(tasks),
     [PROJECTS_FEATURE]: createProjectState(projects),
     [TAGS_FEATURE]: createTagState(tags),
+    [appStateFeatureKey]: { todayStr: getDbDateStr(), startOfNextDayDiffMs: 0 },
   });
 
   /**
@@ -164,8 +168,13 @@ describe('LWW Update Store Application Integration', () => {
         Action
       >;
 
+      // Include mock tasks so filterOrphanedTaskIdsFromEntityData doesn't remove them
       const initialState = createMockRootState(
-        {},
+        {
+          task1: { id: 'task1', title: 'T1', notes: '', done: false, modified: 1000 },
+          task2: { id: 'task2', title: 'T2', notes: '', done: false, modified: 1000 },
+          task3: { id: 'task3', title: 'T3', notes: '', done: false, modified: 1000 },
+        },
         {
           project1: {
             id: 'project1',
@@ -197,8 +206,11 @@ describe('LWW Update Store Application Integration', () => {
         Action
       >;
 
+      // Include mock task so filterOrphanedTaskIdsFromEntityData doesn't remove it
       const initialState = createMockRootState(
-        {},
+        {
+          task1: { id: 'task1', title: 'T1', notes: '', done: false, modified: 1000 },
+        },
         {},
         {
           tag1: {

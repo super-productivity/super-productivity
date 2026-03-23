@@ -8,7 +8,7 @@
 .impact-stars:focus-visible {
   outline: 2px solid var(--c-accent, #6aa9ff);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--card-border-radius);
 }
 .impact-stars.is-disabled {
   opacity: 0.5;
@@ -36,7 +36,7 @@
   font-size: 28px;
   width: 28px;
   height: 28px;
-  transition: all 0.2s ease;
+  transition: var(--transition-standard);
 }
 .impact-stars__star.is-active mat-icon {
   font-variation-settings:

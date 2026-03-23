@@ -95,6 +95,6 @@ export class DialogGetAndEnterAuthCodeComponent implements OnDestroy {
   }
 
   close(token?: string): void {
-    this._matDialogRef.close(token);
+    this._matDialogRef.close(token?.trim());
   }
 }

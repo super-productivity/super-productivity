@@ -46,12 +46,6 @@ import {
   mockEncryptBatch,
   mockDecryptBatch,
 } from '../helpers/mock-encryption.helper';
-import {
-  ENCRYPT_FN,
-  DECRYPT_FN,
-  ENCRYPT_BATCH_FN,
-  DECRYPT_BATCH_FN,
-} from '../../encryption/encryption.token';
 import { TranslateService } from '@ngx-translate/core';
 import { SuperSyncStatusService } from '../../sync/super-sync-status.service';
 import { ServerMigrationService } from '../../sync/server-migration.service';
@@ -371,11 +365,6 @@ describe('Service Logic Integration', () => {
         SchemaMigrationService,
         RemoteOpsProcessingService,
         provideMockStore(),
-        // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
-        { provide: ENCRYPT_FN, useValue: mockEncrypt },
-        { provide: DECRYPT_FN, useValue: mockDecrypt },
-        { provide: ENCRYPT_BATCH_FN, useValue: mockEncryptBatch },
-        { provide: DECRYPT_BATCH_FN, useValue: mockDecryptBatch },
         { provide: ConflictResolutionService, useValue: conflictServiceSpy },
         { provide: OperationApplierService, useValue: applierSpy },
         { provide: SuperSyncStatusService, useValue: superSyncStatusSpy },
@@ -422,6 +411,13 @@ describe('Service Logic Integration', () => {
 
     syncService = TestBed.inject(OperationLogSyncService);
     opLogStore = TestBed.inject(OperationLogStoreService);
+
+    // Use fast mock encryption instead of real Argon2id (saves ~500ms per test)
+    const encryptionService = TestBed.inject(OperationEncryptionService);
+    spyOn(encryptionService as any, '_encrypt').and.callFake(mockEncrypt);
+    spyOn(encryptionService as any, '_decrypt').and.callFake(mockDecrypt);
+    spyOn(encryptionService as any, '_encryptBatch').and.callFake(mockEncryptBatch);
+    spyOn(encryptionService as any, '_decryptBatch').and.callFake(mockDecryptBatch);
 
     mockProvider = new MockOperationSyncProvider();
 
@@ -581,13 +577,14 @@ describe('Service Logic Integration', () => {
      * 4. Client B comes online and uploads its ops to server
      * 5. Client A downloads B's ops
      *
-     * Expected: B's ops should be FILTERED (not applied) because they were created
-     * without knowledge of the SYNC_IMPORT (CONCURRENT vector clocks)
+     * Expected: B's ops should be KEPT because the import has no knowledge of
+     * client-b at all (independent timeline). The import was created in complete
+     * ignorance of client-b, so it can't claim to supersede client-b's ops.
      *
-     * This test verifies the vector clock-based filtering works correctly at the
+     * This test verifies the unknown-client exception works correctly at the
      * integration level (through the full sync service flow).
      */
-    it('should filter CONCURRENT ops from offline client after SYNC_IMPORT', async (): Promise<void> => {
+    it('should keep CONCURRENT ops from unknown client after SYNC_IMPORT', async (): Promise<void> => {
       // 1. Store already has a SYNC_IMPORT from a previous sync (Client A imported)
       const importOp: Operation = {
         id: 'import-op-1',
@@ -646,19 +643,12 @@ describe('Service Logic Integration', () => {
       // 4. Download and process remote ops
       await syncService.downloadRemoteOps(mockProvider);
 
-      // 5. EXPECTED: Both ops should be filtered - NOT passed to applier
-      // Because they have CONCURRENT vector clocks with the SYNC_IMPORT
-      if (applierSpy.applyOperations.calls.count() > 0) {
-        const appliedOps = applierSpy.applyOperations.calls.mostRecent().args[0];
-        // Neither offline op should be applied
-        expect(
-          appliedOps.find((op: Operation) => op.id === 'offline-op-1'),
-        ).toBeUndefined();
-        expect(
-          appliedOps.find((op: Operation) => op.id === 'offline-op-2'),
-        ).toBeUndefined();
-      }
-      // If applyOperations wasn't called at all, that's also correct (no ops to apply)
+      // 5. EXPECTED: Both ops should be KEPT - import has no knowledge of client-b
+      // (independent timeline, unknown client exception)
+      expect(applierSpy.applyOperations.calls.count()).toBeGreaterThan(0);
+      const appliedOps = applierSpy.applyOperations.calls.mostRecent().args[0];
+      expect(appliedOps.find((op: Operation) => op.id === 'offline-op-1')).toBeDefined();
+      expect(appliedOps.find((op: Operation) => op.id === 'offline-op-2')).toBeDefined();
     });
 
     /**
@@ -724,9 +714,12 @@ describe('Service Logic Integration', () => {
      * This tests the key advantage of vector clocks over UUIDv7:
      * Even if client B's clock is ahead (ops have future timestamps), vector clocks
      * correctly identify that B had no knowledge of the import.
+     *
+     * Note: The import clock includes client-b so the unknown-client exception
+     * does not apply — this tests filtering of a KNOWN client's CONCURRENT ops.
      */
     it('should filter offline ops even when client clock was ahead (clock drift)', async (): Promise<void> => {
-      // 1. Store has SYNC_IMPORT
+      // 1. Store has SYNC_IMPORT (import knows about client-b from prior communication)
       const importOp: Operation = {
         id: 'import-clock-drift',
         clientId: 'client-a',
@@ -735,7 +728,8 @@ describe('Service Logic Integration', () => {
         entityType: 'ALL',
         entityId: 'import-drift',
         payload: { appDataComplete: {} },
-        vectorClock: { clientA: 5 },
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        vectorClock: { clientA: 5, 'client-b': 1 },
         timestamp: Date.now() - 3600000, // Import was 1 hour ago
         schemaVersion: 1,
       };

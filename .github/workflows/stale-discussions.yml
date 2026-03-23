@@ -18,6 +18,9 @@ name: Close Stale Discussions
         default: true
         type: boolean
 
+permissions:
+  discussions: write
+
 jobs:
   close-stale-discussions:
     runs-on: ubuntu-latest

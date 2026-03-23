@@ -62,6 +62,8 @@ export class TaskPage extends BasePage {
     await doneBtn.waitFor({ state: 'visible', timeout: 5000 });
     await doneBtn.click();
 
+    // Wait for the done animation delay (200ms) and state change to settle
+    await this.page.waitForTimeout(300);
     await waitForAngularStability(this.page);
   }
 

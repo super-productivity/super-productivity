@@ -1,0 +1,4 @@
+- prevent duplicate unsigned exe files in GitHub Releases
+- prevent stale progress bar events from overriding stopped icon
+- consolidate three time tracking dialogs into shared component
+- replace hardcoded z-index, media queries, and spacing with design tokens

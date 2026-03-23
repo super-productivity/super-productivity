@@ -3,12 +3,14 @@ import { MatButtonModule, MatIconButton } from '@angular/material/button';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FocusModeService } from '../focus-mode.service';
-import { MsToClockStringPipe } from '../../../ui/duration/ms-to-clock-string.pipe';
+import { FocusModeMode } from '../focus-mode.model';
+import { MsToMinuteClockStringPipe } from '../../../ui/duration/ms-to-minute-clock-string.pipe';
 import { Store } from '@ngrx/store';
 import {
   completeBreak,
   exitBreakToPlanning,
   pauseFocusSession,
+  resetCycles,
   skipBreak,
   unPauseFocusSession,
 } from '../store/focus-mode.actions';
@@ -28,7 +30,7 @@ import { TaskService } from '../../tasks/task.service';
     MatIconButton,
     MatProgressSpinnerModule,
     MatTooltip,
-    MsToClockStringPipe,
+    MsToMinuteClockStringPipe,
     MatIcon,
     TranslatePipe,
     TaskTrackingInfoComponent,
@@ -61,6 +63,9 @@ export class FocusModeBreakComponent {
   );
 
   readonly isBreakPaused = computed(() => this.focusModeService.isSessionPaused());
+  readonly isPomodoro = computed(
+    () => this.focusModeService.mode() === FocusModeMode.Pomodoro,
+  );
 
   skipBreak(): void {
     this._store.dispatch(skipBreak({ pausedTaskId: this._pausedTaskId() }));
@@ -84,6 +89,10 @@ export class FocusModeBreakComponent {
 
   resumeBreak(): void {
     this._store.dispatch(unPauseFocusSession());
+  }
+
+  resetCycles(): void {
+    this._store.dispatch(resetCycles());
   }
 
   exitToPlanning(): void {

@@ -227,7 +227,7 @@ describe('RemoteOpsProcessingService', () => {
     // Default migration: return op as is
     schemaMigrationServiceSpy.migrateOperation.and.callFake((op) => op);
     // Default validation: valid
-    validateStateServiceSpy.validateAndRepair.and.returnValue({
+    validateStateServiceSpy.validateAndRepair.and.resolveTo({
       isValid: true,
       wasRepaired: false,
     } as any);

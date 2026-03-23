@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { Subject } from 'rxjs';
 import { WrappedProviderService } from './wrapped-provider.service';
 import { SyncProviderManager } from './provider-manager.service';
 import { FileBasedSyncAdapterService } from './file-based/file-based-sync-adapter.service';
@@ -9,6 +10,7 @@ describe('WrappedProviderService', () => {
   let service: WrappedProviderService;
   let mockProviderManager: jasmine.SpyObj<SyncProviderManager>;
   let mockFileBasedAdapter: jasmine.SpyObj<FileBasedSyncAdapterService>;
+  let providerConfigChanged$: Subject<void>;
 
   const createMockProvider = (
     id: SyncProviderId,
@@ -39,9 +41,13 @@ describe('WrappedProviderService', () => {
   });
 
   beforeEach(() => {
-    mockProviderManager = jasmine.createSpyObj('SyncProviderManager', [
-      'getEncryptAndCompressCfg',
-    ]);
+    providerConfigChanged$ = new Subject<void>();
+
+    mockProviderManager = jasmine.createSpyObj(
+      'SyncProviderManager',
+      ['getEncryptAndCompressCfg'],
+      { providerConfigChanged$ },
+    );
     mockProviderManager.getEncryptAndCompressCfg.and.returnValue({
       isEncrypt: true,
       isCompress: true,
@@ -162,6 +168,27 @@ describe('WrappedProviderService', () => {
       service.clearCache();
 
       // Next call should create a new adapter
+      const result2 = await service.getOperationSyncCapable(dropboxProvider);
+      expect(result2).toBe(mockAdapter2);
+      expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('auto-invalidation on config change', () => {
+    it('should auto-clear cache when providerConfigChanged$ emits', async () => {
+      const dropboxProvider = createMockProvider(SyncProviderId.Dropbox, false);
+      const mockAdapter1 = createMockSyncCapableAdapter();
+      const mockAdapter2 = createMockSyncCapableAdapter();
+      mockFileBasedAdapter.createAdapter.and.returnValues(mockAdapter1, mockAdapter2);
+
+      // First call - creates and caches adapter1
+      const result1 = await service.getOperationSyncCapable(dropboxProvider);
+      expect(result1).toBe(mockAdapter1);
+
+      // Simulate config change
+      providerConfigChanged$.next();
+
+      // Next call should create a new adapter (cache was auto-cleared)
       const result2 = await service.getOperationSyncCapable(dropboxProvider);
       expect(result2).toBe(mockAdapter2);
       expect(mockFileBasedAdapter.createAdapter).toHaveBeenCalledTimes(2);

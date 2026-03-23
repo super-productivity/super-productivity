@@ -1,0 +1,48 @@
+@use '../../../../styles/_globals.scss' as *;
+@use '../../tasks/task/task.component.mixins' as *;
+
+:host {
+  display: block;
+}
+
+:host > div {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  padding-top: var(--s-quarter);
+  padding-bottom: var(--s-quarter);
+  border: 1px solid var(--separator-color);
+  border-radius: var(--task-border-radius);
+  opacity: 0.9;
+  cursor: pointer;
+  min-height: var(--planner-item-height);
+
+  border-color: var(--extra-border-color);
+
+  &:hover {
+    border-color: var(--c-primary);
+  }
+
+  mat-icon {
+    margin-left: var(--s);
+    margin-right: var(--s);
+    opacity: 0.8;
+    font-size: var(--planner-item-ico-size);
+    height: var(--planner-item-ico-size);
+    width: var(--planner-item-ico-size);
+    min-width: var(--planner-item-ico-size);
+    max-width: var(--planner-item-ico-size);
+  }
+}
+
+.title {
+  font-size: var(--planner-font-size-mobile);
+  flex-shrink: 1;
+  min-width: 0;
+  @include truncateText();
+
+  @include mq(xs) {
+    font-size: var(--planner-font-size);
+  }
+}

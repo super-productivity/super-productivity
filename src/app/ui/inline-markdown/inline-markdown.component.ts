@@ -30,6 +30,7 @@ import { ClipboardImageService } from '../../core/clipboard-image/clipboard-imag
 import { TaskAttachmentService } from '../../features/tasks/task-attachment/task-attachment.service';
 import { ResolveClipboardImagesDirective } from '../../core/clipboard-image/resolve-clipboard-images.directive';
 import { ClipboardPasteHandlerService } from '../../core/clipboard-image/clipboard-paste-handler.service';
+import { handleListKeydown } from './markdown-toolbar.util';
 
 const HIDE_OVERFLOW_TIMEOUT_DURATION = 300;
 
@@ -56,6 +57,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   private _taskAttachmentService = inject(TaskAttachmentService);
   private _clipboardPasteHandler = inject(ClipboardPasteHandlerService);
   private _currentPastePlaceholder: string | null = null;
+  private _isFullscreenDialogOpen = false;
   private _resolveGeneration = 0;
 
   readonly isLock = input<boolean>(false);
@@ -161,7 +163,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
       window.clearTimeout(this._hideOverFlowTimeout);
     }
 
-    if (this.isShowEdit()) {
+    if (this.isShowEdit() && !this._isFullscreenDialogOpen) {
       const textareaEl = this.textareaEl();
       if (textareaEl) {
         const currentValue = textareaEl.nativeElement.value;
@@ -182,6 +184,32 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     if ((ev.key === 'Enter' && ev.ctrlKey) || ev.code === 'Escape') {
       this.untoggleShowEdit();
       this.keyboardUnToggle.emit(ev);
+      return;
+    }
+
+    const textarea = this.textareaEl()?.nativeElement;
+    if (!textarea) {
+      return;
+    }
+    if (ev.type !== 'keydown') {
+      return;
+    }
+    const result = handleListKeydown(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      ev.key,
+      ev.shiftKey,
+      ev.ctrlKey,
+      ev.metaKey,
+    );
+    if (result) {
+      ev.preventDefault();
+      textarea.value = result.text;
+      textarea.setSelectionRange(result.selectionStart, result.selectionEnd);
+      this.modelCopy.set(result.text);
+      this.resizeTextareaToFit();
+      this.changed.emit(result.text);
     }
   }
 
@@ -224,6 +252,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   untoggleShowEdit(): void {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
     if (!this.isLock()) {
       this.resizeParsedToFit();
       this.isShowEdit.set(false);
@@ -256,18 +287,23 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   openFullScreen(): void {
+    this._isFullscreenDialogOpen = true;
+    // Read directly from textarea since modelCopy may be stale (one-way ngModel binding)
+    const textareaEl = this.textareaEl();
+    const currentContent = textareaEl ? textareaEl.nativeElement.value : this.modelCopy();
     const dialogRef = this._matDialog.open(DialogFullscreenMarkdownComponent, {
       minWidth: '100vw',
       height: '100vh',
       restoreFocus: true,
       autoFocus: 'textarea',
       data: {
-        content: this.modelCopy(),
+        content: currentContent,
         taskId: this.taskId(),
       },
     });
 
     dialogRef.afterClosed().subscribe((res) => {
+      this._isFullscreenDialogOpen = false;
       // This resets the task note to its default text
       if (res?.action === 'DELETE') {
         this.modelCopy.set('');
@@ -308,6 +344,9 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
   }
 
   setBlur(ev: Event): void {
+    if (this._isFullscreenDialogOpen) {
+      return;
+    }
     this.blurred.emit(ev);
   }
 

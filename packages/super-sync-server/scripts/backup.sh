@@ -21,7 +21,7 @@
 #   2. Configure: rclone config (follow prompts for B2/S3)
 #   3. Set RCLONE_REMOTE below
 
-set -e
+set -eo pipefail
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -55,13 +55,25 @@ echo "    Date: $DATE"
 echo "    Output: $BACKUP_FILE"
 echo ""
 
-# Step 1: Create PostgreSQL dump
-echo "==> Creating database dump..."
+# Step 1: Create full PostgreSQL dump
+echo "==> Creating full database dump..."
 docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" | gzip > "$BACKUP_FILE"
 
 # Get file size
 SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
-echo "    Backup size: $SIZE"
+echo "    Full backup size: $SIZE"
+
+# Step 1b: Create minimal accounts-only dump (users + passkeys)
+# This is tiny and sufficient for disaster recovery when clients still have data.
+# Recovery: restore accounts, wipe sync data, let clients re-upload.
+ACCOUNTS_FILE="$BACKUP_DIR/supersync_accounts_$DATE.sql.gz"
+echo ""
+echo "==> Creating accounts-only dump (users + passkeys)..."
+docker exec "$DB_CONTAINER" pg_dump -U "$DB_USER" "$DB_NAME" \
+    --table=users --table=passkeys | gzip > "$ACCOUNTS_FILE"
+
+ACCOUNTS_SIZE=$(du -h "$ACCOUNTS_FILE" | cut -f1)
+echo "    Accounts backup size: $ACCOUNTS_SIZE"
 
 # Step 2: Upload to remote (if enabled)
 if [ "$UPLOAD" = true ]; then
@@ -73,6 +85,7 @@ if [ "$UPLOAD" = true ]; then
         echo ""
         echo "==> Uploading to $RCLONE_REMOTE..."
         rclone copy "$BACKUP_FILE" "$RCLONE_REMOTE/"
+        rclone copy "$ACCOUNTS_FILE" "$RCLONE_REMOTE/"
         echo "    Upload complete"
     else
         echo ""
@@ -84,13 +97,15 @@ fi
 # Step 3: Clean up old backups
 echo ""
 echo "==> Cleaning up backups older than $RETENTION_DAYS days..."
-DELETED=$(find "$BACKUP_DIR" -name "supersync_*.sql.gz" -mtime +"$RETENTION_DAYS" -delete -print | wc -l)
+DELETED=$(find "$BACKUP_DIR" \( -name "supersync_*.sql.gz" -o -name "supersync_accounts_*.sql.gz" \) -mtime +"$RETENTION_DAYS" -delete -print | wc -l)
 echo "    Deleted $DELETED old backup(s)"
 
 # List current backups
 echo ""
 echo "==> Current backups:"
-ls -lh "$BACKUP_DIR"/supersync_*.sql.gz 2>/dev/null | tail -5 || echo "    (none)"
+ls -lh "$BACKUP_DIR"/supersync_*.sql.gz "$BACKUP_DIR"/supersync_accounts_*.sql.gz 2>/dev/null | tail -10 || echo "    (none)"
 
 echo ""
-echo "==> Backup complete: $BACKUP_FILE"
+echo "==> Backup complete:"
+echo "    Full:     $BACKUP_FILE"
+echo "    Accounts: $ACCOUNTS_FILE"

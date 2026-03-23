@@ -1,5 +1,9 @@
 # E2E Encryption Architecture Diagrams
 
+> **Status: Archived — Reference Only**
+>
+> Comparative analysis of encryption approaches. Password-based encryption was chosen and implemented December 2025.
+
 This document provides visual architecture diagrams comparing the current password-based encryption, the proposed device-key approach, and the recommended improvements.
 
 ---

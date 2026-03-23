@@ -16,6 +16,8 @@ import { MsToMinuteClockStringPipe } from '../../ui/duration/ms-to-minute-clock-
 import { MatIcon } from '@angular/material/icon';
 import { InlineInputComponent } from '../../ui/inline-input/inline-input.component';
 import { FullPageSpinnerComponent } from '../../ui/full-page-spinner/full-page-spinner.component';
+import { MatDialog } from '@angular/material/dialog';
+import { DialogViewArchivedTaskComponent } from '../tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 
 @Component({
   selector: 'quick-history',
@@ -40,6 +42,7 @@ export class QuickHistoryComponent {
   readonly worklogService = inject(WorklogService);
   readonly simpleCounterService = inject(SimpleCounterService);
   private readonly _taskService = inject(TaskService);
+  private readonly _matDialog = inject(MatDialog);
 
   visibility: boolean[] = [];
   T: typeof T = T;
@@ -76,5 +79,12 @@ export class QuickHistoryComponent {
 
   trackByLogEntry(i: number, logEntry: WorklogDataForDay): string {
     return logEntry.task.id;
+  }
+
+  viewTaskDetails(task: Task): void {
+    this._matDialog.open(DialogViewArchivedTaskComponent, {
+      restoreFocus: true,
+      data: { task },
+    });
   }
 }

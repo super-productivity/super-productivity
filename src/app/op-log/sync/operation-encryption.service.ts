@@ -1,10 +1,5 @@
-import { inject, Injectable } from '@angular/core';
-import {
-  ENCRYPT_FN,
-  DECRYPT_FN,
-  ENCRYPT_BATCH_FN,
-  DECRYPT_BATCH_FN,
-} from '../encryption/encryption.token';
+import { Injectable } from '@angular/core';
+import { encrypt, decrypt, encryptBatch, decryptBatch } from '../encryption/encryption';
 import { SyncOperation } from '../sync-providers/provider.interface';
 import { DecryptError } from '../core/errors/sync-errors';
 
@@ -21,10 +16,11 @@ import { DecryptError } from '../core/errors/sync-errors';
   providedIn: 'root',
 })
 export class OperationEncryptionService {
-  private readonly _encrypt = inject(ENCRYPT_FN);
-  private readonly _decrypt = inject(DECRYPT_FN);
-  private readonly _encryptBatch = inject(ENCRYPT_BATCH_FN);
-  private readonly _decryptBatch = inject(DECRYPT_BATCH_FN);
+  // Exposed as properties so tests can spy on them without DI tokens
+  private _encrypt = encrypt;
+  private _decrypt = decrypt;
+  private _encryptBatch = encryptBatch;
+  private _decryptBatch = decryptBatch;
 
   /**
    * Encrypts the payload of a SyncOperation.

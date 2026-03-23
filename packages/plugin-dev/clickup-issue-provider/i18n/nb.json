@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API-nøkkel",
+    "API_KEY_LINK": "Få din personlige API-nøkkel",
+    "TEAM_IDS": "Arbeidsområde-/team-IDer (kommaseparert, tom for alle)",
+    "USER_ID": "Bruker-ID (for filtrering etter tildelt)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Sammendrag",
+    "STATUS": "Status",
+    "PRIORITY": "Prioritet",
+    "ASSIGNEE": "Oppdragsgiver",
+    "LABELS": "Etiketter",
+    "DESCRIPTION": "Beskrivelse"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Ukjent feil. Sjekk API-nøkkelen og prøv igjen."
+  }
+}

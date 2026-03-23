@@ -101,6 +101,7 @@ describe('FocusMode Bug #6064: Without break timer reset on break start', () => 
               lastCompletedDuration: null,
               isOverlayShown: false,
               _isResumingBreak: false,
+              _isOvertimeEnabled: false,
             },
           },
         }),

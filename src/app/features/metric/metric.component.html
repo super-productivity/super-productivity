@@ -67,12 +67,12 @@
     </section>
   }
 
-  <section style="max-width: 880px; margin: auto; margin-top: 32px">
+  <section class="heatmap-section">
     <activity-heatmap></activity-heatmap>
   </section>
 
   @if (!metricService.hasData()) {
-    <p style="margin-top: 32px">
+    <p class="no-data-msg">
       {{ T.F.METRIC.CMP.NO_ADDITIONAL_DATA_YET | translate }}
     </p>
   }

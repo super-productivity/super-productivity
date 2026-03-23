@@ -5,7 +5,6 @@ export const IS_ELECTRON = navigator.userAgent.toLowerCase().indexOf(' electron/
 export const IS_WEB_BROWSER = !IS_ELECTRON && !IS_ANDROID_WEB_VIEW;
 
 export const TRACKING_INTERVAL = 1000;
-export const TIME_TRACKING_TO_DB_INTERVAL = 15000;
 
 export const DRAG_DELAY_FOR_TOUCH = 500;
 
@@ -45,6 +44,7 @@ export enum BodyClass {
 
   isAndroidKeyboardShown = 'isAndroidKeyboardShown',
   isAndroidKeyboardHidden = 'isAndroidKeyboardHidden',
+  isFullScreen = 'isFullScreen',
   isAddTaskBarOpen = 'isAddTaskBarOpen',
 
   // iOS-specific classes

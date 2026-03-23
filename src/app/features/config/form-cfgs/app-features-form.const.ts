@@ -78,11 +78,27 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
       },
     },
     {
+      key: 'isSearchEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.SEARCH,
+        icon: 'search',
+      },
+    },
+    {
       key: 'isDonatePageEnabled',
       type: 'slide-toggle',
       templateOptions: {
         label: T.GCF.APP_FEATURES.DONATE_PAGE,
         icon: 'favorite',
+      },
+    },
+    {
+      key: 'isFinishDayEnabled',
+      type: 'slide-toggle',
+      templateOptions: {
+        label: T.GCF.APP_FEATURES.FINISH_DAY,
+        icon: 'done_all',
       },
     },
     {
@@ -100,6 +116,15 @@ export const APP_FEATURES_FORM_CFG: ConfigFormSection<AppFeaturesConfig> = {
         label: T.GCF.APP_FEATURES.USER_PROFILES,
         description: T.GCF.APP_FEATURES.USER_PROFILES_HINT,
         icon: 'account_circle',
+      },
+    },
+    {
+      hideExpression: (m: AppFeaturesConfig) => !m.isEnableUserProfiles,
+      type: 'tpl',
+      templateOptions: {
+        tag: 'div',
+        text: T.GCF.APP_FEATURES.USER_PROFILES_WARNING,
+        class: 'sync-warning',
       },
     },
   ],

@@ -41,6 +41,8 @@ import { TaskViewCustomizerService } from '../../task-view-customizer/task-view-
 import { TaskLog } from '../../../core/log';
 import { ScheduleExternalDragService } from '../../schedule/schedule-week/schedule-external-drag.service';
 import { DEFAULT_OPTIONS } from '../../task-view-customizer/types';
+import { IS_TOUCH_PRIMARY } from '../../../util/is-mouse-primary';
+import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
 
 export type TaskListId = 'PARENT' | 'SUB';
 export type ListModelId = DropListModelSource | string;
@@ -75,6 +77,8 @@ export class TaskListComponent implements OnDestroy, AfterViewInit {
   private _taskViewCustomizerService = inject(TaskViewCustomizerService);
   private _scheduleExternalDragService = inject(ScheduleExternalDragService);
   dropListService = inject(DropListService);
+  protected readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
+  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
 
   tasks = input<TaskWithSubTasks[]>([]);
   isHideDone = input(false);

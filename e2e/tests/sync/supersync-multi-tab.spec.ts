@@ -63,7 +63,7 @@ test.describe('@supersync Multi-Tab Same Account', () => {
       sharedContext = await browser.newContext({
         storageState: undefined,
         viewport: { width: 1920, height: 1080 },
-        // Set PLAYWRIGHT user agent to skip the Shepherd tour dialog
+        // Set PLAYWRIGHT user agent for test identification and to skip onboarding
         userAgent: 'PLAYWRIGHT MULTI-TAB-TEST',
       });
 

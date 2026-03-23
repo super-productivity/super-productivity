@@ -1,0 +1,32 @@
+<div
+  class="onboarding-backdrop"
+  [class.exit-animation]="selectedPreset()"
+>
+  <div class="onboarding-container">
+    <h1>{{ 'ONBOARDING.TITLE' | translate }}</h1>
+    <p class="subtitle">{{ 'ONBOARDING.SUBTITLE' | translate }}</p>
+    <div class="presets-grid">
+      @for (preset of presets; track preset.id) {
+        <button
+          class="preset-card"
+          [class.selected]="selectedPreset()?.id === preset.id"
+          [class.not-selected]="selectedPreset() && selectedPreset()?.id !== preset.id"
+          (click)="selectPreset(preset)"
+        >
+          <div class="icon-wrapper">
+            <mat-icon class="preset-icon">{{ preset.icon }}</mat-icon>
+            <mat-icon class="check-icon">check_circle</mat-icon>
+          </div>
+          <div class="card-text">
+            <h2>{{ preset.titleKey | translate }}</h2>
+            <p>{{ preset.descriptionKey | translate }}</p>
+          </div>
+        </button>
+      }
+    </div>
+    <p class="footer-hint">
+      <mat-icon class="lock-icon">lock</mat-icon>
+      {{ 'ONBOARDING.PRIVACY_HINT' | translate }}
+    </p>
+  </div>
+</div>

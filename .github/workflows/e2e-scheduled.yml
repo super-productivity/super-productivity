@@ -14,6 +14,8 @@ on:
       - 'e2e/tests/**'
       - 'docker-compose.yaml'
       - 'docker-compose.supersync.yaml'
+      - 'packages/super-sync-server/**'
+      - 'packages/shared-schema/**'
 
 permissions:
   contents: read
@@ -48,7 +50,7 @@ jobs:
           test -f .tmp/angular-dist/browser/assets/bundled-plugins/api-test-plugin/manifest.json || (echo "Plugin assets missing from build" && exit 1)
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -74,7 +76,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -84,7 +86,7 @@ jobs:
 
       - name: Upload E2E Results on Failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: e2e-results-regular-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
@@ -110,7 +112,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -141,7 +143,7 @@ jobs:
 
       - name: Upload E2E Results on Failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: e2e-results-webdav-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
@@ -149,14 +151,14 @@ jobs:
 
   # Job 3: SuperSync E2E tests (sharded)
   e2e-supersync:
-    name: E2E Tests (SuperSync ${{ matrix.shard }}/2)
+    name: E2E Tests (SuperSync ${{ matrix.shard }}/4)
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     env:
       UNSPLASH_KEY: ${{ secrets.UNSPLASH_KEY }}
       UNSPLASH_CLIENT_ID: ${{ secrets.UNSPLASH_CLIENT_ID }}
@@ -171,7 +173,7 @@ jobs:
         uses: ./.github/actions/setup-e2e
 
       - name: Download Build Artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
         with:
           name: e2e-build-${{ github.run_id }}
           path: .tmp/angular-dist
@@ -188,7 +190,7 @@ jobs:
           echo "✓ SuperSync server ready!"
 
       - name: Run SuperSync E2E Tests
-        run: npm run e2e:all -- --grep "@supersync" --shard=${{ matrix.shard }}/2
+        run: npm run e2e:all -- --grep "@supersync" --shard=${{ matrix.shard }}/4
 
       - name: Stop Docker Services
         if: always()
@@ -203,8 +205,31 @@ jobs:
 
       - name: Upload E2E Results on Failure
         if: ${{ failure() }}
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: e2e-results-supersync-${{ matrix.shard }}-${{ github.run_id }}
           path: .tmp/e2e-test-results/**/*.*
           retention-days: 30
+
+  # Job 4: SuperSync Server Unit Tests (runs in parallel with build, no artifact needed)
+  supersync-server-tests:
+    name: SuperSync Server Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: 22
+          cache: 'npm'
+      - name: Reconfigure git to use HTTP authentication
+        run: >
+          git config --global url."https://github.com/".insteadOf
+          ssh://git@github.com/
+      - name: Install npm Packages
+        run: npm i
+      - name: Run SuperSync Server Tests
+        run: cd packages/super-sync-server && npm test

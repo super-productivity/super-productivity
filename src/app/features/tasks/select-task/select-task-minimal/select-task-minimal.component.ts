@@ -110,7 +110,7 @@ export class SelectTaskMinimalComponent
         const filtered =
           search.length > 0
             ? tasks
-                .filter((task) => task.title.toLowerCase().includes(search))
+                .filter((task) => task.title?.toLowerCase().includes(search))
                 .slice(0, 10) // Limit to 10 suggestions
             : [];
         return filtered;

@@ -126,13 +126,19 @@ export const reCalcTimeEstimateForParentIfParent = (
   );
 };
 
-export const updateDoneOnForTask = (upd: Update<Task>, state: TaskState): TaskState => {
+export const updateDoneOnForTask = (
+  upd: Update<Task>,
+  state: TaskState,
+  todayStr: string,
+): TaskState => {
   const task = state.entities[upd.id] as Task;
   const isToDone = upd.changes.isDone === true;
   const isToUnDone = upd.changes.isDone === false;
   if (isToDone || isToUnDone) {
     const changes = {
-      ...(isToDone ? { doneOn: Date.now(), dueDay: undefined } : {}),
+      ...(isToDone
+        ? { doneOn: Date.now(), dueDay: todayStr, dueWithTime: undefined }
+        : {}),
       ...(isToUnDone ? { doneOn: undefined } : {}),
     };
     return taskAdapter.updateOne(

@@ -8,7 +8,11 @@ import { TaskSharedActions } from '../root-store/meta/task-shared.actions';
 import { PlannerActions } from '../features/planner/store/planner.actions';
 import { Task, TaskCopy } from '../features/tasks/task.model';
 import { PluginHooks } from './plugin-api.model';
-import { selectTaskById } from '../features/tasks/store/task.selectors';
+import {
+  selectCurrentTask,
+  selectTaskById,
+} from '../features/tasks/store/task.selectors';
+import { setCurrentTask, unsetCurrentTask } from '../features/tasks/store/task.actions';
 
 describe('PluginHooksEffects', () => {
   let effects: PluginHooksEffects;
@@ -206,6 +210,34 @@ describe('PluginHooksEffects', () => {
             taskId: mockTask.id,
             changes: { dueDay: newDay },
           }),
+        );
+        done();
+      });
+    });
+  });
+
+  describe('onCurrentTaskChange$', () => {
+    it('should dispatch CURRENT_TASK_CHANGE hook with the full task object on setCurrentTask', (done) => {
+      store.overrideSelector(selectCurrentTask, mockTask);
+      actions$ = of(setCurrentTask({ id: mockTask.id }));
+
+      effects.onCurrentTaskChange$.subscribe(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.CURRENT_TASK_CHANGE,
+          mockTask,
+        );
+        done();
+      });
+    });
+
+    it('should dispatch CURRENT_TASK_CHANGE hook with null on unsetCurrentTask', (done) => {
+      store.overrideSelector(selectCurrentTask, null);
+      actions$ = of(unsetCurrentTask());
+
+      effects.onCurrentTaskChange$.subscribe(() => {
+        expect(pluginServiceMock.dispatchHook).toHaveBeenCalledWith(
+          PluginHooks.CURRENT_TASK_CHANGE,
+          null,
         );
         done();
       });

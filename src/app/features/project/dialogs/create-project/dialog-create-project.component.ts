@@ -25,7 +25,6 @@ import {
   loadFromSessionStorage,
   saveToSessionStorage,
 } from '../../../../core/persistence/local-storage';
-import { GithubCfg } from '../../../issue/providers/github/github.model';
 import { GiteaCfg } from '../../../issue/providers/gitea/gitea.model';
 import { RedmineCfg } from '../../../issue/providers/redmine/redmine.model';
 import { T } from '../../../../t.const';
@@ -67,7 +66,6 @@ export class DialogCreateProjectComponent implements OnInit, OnDestroy {
     theme: { ...DEFAULT_PROJECT.theme, primary: getRandomWorkContextColor() },
   };
   jiraCfg?: JiraCfg;
-  githubCfg?: GithubCfg;
   gitlabCfg?: GitlabCfg;
   caldavCfg?: CaldavCfg;
   openProjectCfg?: OpenProjectCfg;

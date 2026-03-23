@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'">
+    <title>Authorization Complete</title>
+  </head>
+  <body>
+    <p>Authorization complete. You can close this window.</p>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var code = params.get('code');
+        var error = params.get('error');
+        var state = params.get('state');
+        if (window.opener) {
+          window.opener.postMessage(
+            { type: 'SP_OAUTH_CALLBACK', code: code, error: error, state: state },
+            window.location.origin,
+          );
+        }
+        window.close();
+      })();
+    </script>
+  </body>
+</html>

@@ -6,6 +6,7 @@ import {
   distinctUntilChanged,
   exhaustMap,
   filter,
+  first,
   map,
   pairwise,
   shareReplay,
@@ -142,16 +143,16 @@ export class SyncEffects {
               ),
             ),
 
-            // initial after starting app
+            // initial after starting app — wait for provider to actually be ready
             this._initialPwaUpdateCheckService.afterInitialUpdateCheck$.pipe(
-              concatMap(() => this._syncWrapperService.isEnabledAndReady$),
-              take(1),
+              concatMap(() =>
+                this._syncWrapperService.isEnabledAndReady$.pipe(
+                  filter((v) => v),
+                  first(),
+                ),
+              ),
               withLatestFrom(this._syncWrapperService.syncProviderId$),
-              switchMap(([isEnabledAndReady, providerId]) => {
-                if (!isEnabledAndReady) {
-                  this._syncTriggerService.setInitialSyncDone(true);
-                  return EMPTY;
-                }
+              switchMap(([_, providerId]) => {
                 // SuperSync can be delayed - data is already local, just needs upload/download
                 // Other providers (Dropbox, WebDAV, LocalFile) need sync first to download data
                 if (providerId === SyncProviderId.SuperSync) {
@@ -176,7 +177,10 @@ export class SyncEffects {
         exhaustMap(([trigger, isOnline]) => {
           if (!isOnline) {
             // this._snackService.open({msg: T.F.DROPBOX.S.OFFLINE, type: 'ERROR'});
-            if (trigger === SYNC_INITIAL_SYNC_TRIGGER) {
+            if (
+              trigger === SYNC_INITIAL_SYNC_TRIGGER ||
+              trigger === 'SYNC_AFTER_ENABLE'
+            ) {
               this._syncTriggerService.setInitialSyncDone(true);
             }
             // we need to return something
@@ -185,7 +189,10 @@ export class SyncEffects {
           return this._syncWrapperService
             .sync()
             .then(() => {
-              if (trigger === SYNC_INITIAL_SYNC_TRIGGER) {
+              if (
+                trigger === SYNC_INITIAL_SYNC_TRIGGER ||
+                trigger === 'SYNC_AFTER_ENABLE'
+              ) {
                 this._syncTriggerService.setInitialSyncDone(true);
               }
             })

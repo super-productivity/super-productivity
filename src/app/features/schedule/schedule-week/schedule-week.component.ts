@@ -32,6 +32,7 @@ import { parseDbDateStr } from '../../../util/parse-db-date-str';
 import { formatMonthDay } from '../../../util/format-month-day.util';
 import { ScheduleWeekDragService } from './schedule-week-drag.service';
 import { calculatePlaceholderForGridMove } from './schedule-week-placeholder.util';
+import { formatScheduleDragPreviewLabel } from './format-schedule-drag-preview-label.util';
 import { truncate } from '../../../util/truncate';
 
 const D_HOURS = 24;
@@ -94,11 +95,14 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
 
   times = computed(() => {
     const uses24Hour = this._dateTimeFormatService.is24HourFormat();
-    const formatter = new Intl.DateTimeFormat(this._dateTimeFormatService.currentLocale, {
-      hour: uses24Hour ? '2-digit' : 'numeric',
-      minute: '2-digit',
-      hour12: !uses24Hour,
-    });
+    const formatter = new Intl.DateTimeFormat(
+      this._dateTimeFormatService.currentLocale(),
+      {
+        hour: uses24Hour ? '2-digit' : 'numeric',
+        minute: '2-digit',
+        hour12: !uses24Hour,
+      },
+    );
 
     return this.rowsByNr.map((_, hourIndex) => {
       const date = new Date(2000, 0, 1, hourIndex, 0, 0);
@@ -168,7 +172,11 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
     if (ctx.kind === 'time') {
-      return this._dateTimeFormatService.formatTime(ctx.timestamp);
+      return formatScheduleDragPreviewLabel({
+        startTimestamp: ctx.timestamp,
+        durationInHours: currentDraggedEvent?.timeLeftInHours,
+        formatTime: (timestamp) => this._dateTimeFormatService.formatTime(timestamp),
+      });
     }
     if (ctx.kind === 'shift-column') {
       const dateLabel = this._formatDateLabel(ctx.day);
@@ -338,7 +346,7 @@ export class ScheduleWeekComponent implements OnInit, AfterViewInit, OnDestroy {
     if (Number.isNaN(date.getTime())) {
       return dayStr;
     }
-    return formatMonthDay(date, this._dateTimeFormatService.currentLocale);
+    return formatMonthDay(date, this._dateTimeFormatService.currentLocale());
   }
 
   // Public methods for external preview control (used by schedule-day-panel)

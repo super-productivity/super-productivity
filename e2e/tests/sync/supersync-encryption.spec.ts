@@ -114,59 +114,30 @@ test.describe('@supersync SuperSync Encryption', () => {
       });
 
       // The sync already happened during setupSuperSync with wrong password
-      // A decrypt error dialog should appear - wait for it and close it
+      // A decrypt error dialog should appear — this IS the error UI
       const decryptErrorDialog = clientC.page.locator('dialog-handle-decrypt-error');
 
       // Wait for the decrypt error dialog to appear (it may take a moment after sync fails)
-      const decryptErrorAppeared = await decryptErrorDialog
-        .waitFor({ state: 'visible', timeout: 10000 })
-        .then(() => true)
-        .catch(() => false);
+      await decryptErrorDialog.waitFor({ state: 'visible', timeout: 15000 });
+      console.log('Decrypt error dialog appeared — wrong password detected');
 
-      if (decryptErrorAppeared) {
-        console.log('Decrypt error dialog appeared - closing it');
-        // Close the dialog by clicking cancel or pressing Escape
-        const cancelBtn = decryptErrorDialog
-          .locator('button')
-          .filter({ hasText: /cancel/i });
-        const cancelVisible = await cancelBtn.isVisible().catch(() => false);
-        if (cancelVisible) {
-          await cancelBtn.click();
-        } else {
-          await clientC.page.keyboard.press('Escape');
-        }
-        await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 5000 });
-      } else {
-        console.log(
-          'No decrypt error dialog appeared - checking for other error indicators',
-        );
-        // The error might be shown via snackbar instead of dialog
-        // Just proceed to verify error state
-      }
-
-      // Verify Client C DOES NOT have the task
+      // Verify Client C DOES NOT have the task (while dialog is open)
       await expect(
         clientC.page.locator(`task:has-text("${secretTaskName}")`),
       ).not.toBeVisible();
 
-      // Verify Error UI - always assert error occurred
-      // Silent decryption failure is unacceptable - wrong password MUST produce visible error
-      // Use retry logic since error indicators may take a moment to appear under load
-      await expect(async () => {
-        const hasError = await clientC.sync.hasSyncError();
-        // App uses snack-custom component, not simple-snack-bar
-        const snackbar = clientC.page.locator(
-          'snack-custom:has-text("decrypt"), ' +
-            'snack-custom:has-text("password"), ' +
-            '.mat-mdc-snack-bar-container:has-text("decrypt"), ' +
-            '.mat-mdc-snack-bar-container:has-text("password")',
-        );
-        const snackbarVisible = await snackbar
-          .first()
-          .isVisible()
-          .catch(() => false);
-        expect(hasError || snackbarVisible).toBe(true);
-      }).toPass({ timeout: 10000, intervals: [500, 1000, 2000] });
+      // The decrypt error dialog itself IS the error indicator.
+      // Verify it contains the expected error heading.
+      await expect(
+        decryptErrorDialog.locator('h2:has-text("Decryption Failed")'),
+      ).toBeVisible();
+
+      // Close the dialog
+      const cancelBtn = decryptErrorDialog
+        .locator('button')
+        .filter({ hasText: /cancel/i });
+      await cancelBtn.click();
+      await decryptErrorDialog.waitFor({ state: 'hidden', timeout: 5000 });
     } finally {
       if (clientA) await closeClient(clientA);
       if (clientC) await closeClient(clientC);

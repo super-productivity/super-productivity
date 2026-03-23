@@ -15,7 +15,6 @@ import { Log } from '../../core/log';
 @Component({
   selector: 'formly-translated-template',
   templateUrl: './formly-translated-template.component.html',
-  styleUrls: ['./formly-translated-template.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FormlyTranslatedTemplateComponent

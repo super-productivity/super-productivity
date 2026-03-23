@@ -2,3 +2,11 @@
 @use './task.component.mixins' as *;
 @use './task-base';
 @use './task-controls';
+
+:host.isDragReady:not(.cdk-drag-placeholder) {
+  background: var(--bg-lighter);
+  box-shadow: var(--whiteframe-shadow-4dp);
+  transition:
+    background 150ms ease-out,
+    box-shadow 150ms ease-out;
+}

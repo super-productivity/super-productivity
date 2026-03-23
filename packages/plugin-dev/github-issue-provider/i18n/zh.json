@@ -1,0 +1,23 @@
+{
+  "CFG": {
+    "REPO": "用户名/存储库名称",
+    "TOKEN": "访问令牌",
+    "FILTER_USERNAME": "用户名（例如，筛选出您自己的更改）",
+    "BACKLOG_QUERY": "Backlog query (default: \"sort:updated state:open assignee:@me\")",
+    "HOW_TO_GET_TOKEN": "How to get a token"
+  },
+  "DISPLAY": {
+    "SUMMARY": "摘要",
+    "STATE": "状态",
+    "ASSIGNEE": "负责人",
+    "LABELS": "标签",
+    "MILESTONE": "Milestone",
+    "CREATOR": "Created by",
+    "DESCRIPTION": "描述"
+  },
+  "FORM_HELP": "<p>在这里，您可以将 SuperProductivity 配置为在每日规划视图的任务创建看板中列出特定存储库的未结 GitHub 问题。它们将列为建议，并提供指向问题的链接以及有关它的更多信息。</p> <p>此外，您还可以自动导入所有未结问题。</p><p>为了通过使用限制并访问，您可以提供一个访问令牌。 <a href='https://docs.github.com/en/free-pro-team@latest/developers/apps/scopes-for-oauth-apps '>可以在此处找到有关其范围的更多信息</a>。",
+  "ERRORS": {
+    "CONFIG_ERROR": "GitHub: 映射数据时出错。您的存储库名称是否正确？",
+    "ERR_UNKNOWN": "GitHub: 未知错误 {{statusCode}} {{errorMsg}}。API 速率限制超出？"
+  }
+}

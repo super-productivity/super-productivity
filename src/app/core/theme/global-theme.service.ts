@@ -18,7 +18,7 @@ import { DOCUMENT } from '@angular/common';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ChromeExtensionInterfaceService } from '../chrome-extension-interface/chrome-extension-interface.service';
-import { ThemeService as NgChartThemeService } from 'ng2-charts';
+
 import { GlobalConfigService } from '../../features/config/global-config.service';
 import { WorkContextThemeCfg } from '../../features/work-context/work-context.model';
 import { WorkContextService } from '../../features/work-context/work-context.service';
@@ -26,13 +26,14 @@ import { combineLatest, fromEvent, Observable, of } from 'rxjs';
 import { IS_FIREFOX } from '../../util/is-firefox';
 import { ImexViewService } from '../../imex/imex-meta/imex-view.service';
 import { IS_MOUSE_PRIMARY, IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
-import { ChartConfiguration } from 'chart.js';
+import { ipcEnterFullScreen$, ipcLeaveFullScreen$ } from '../ipc-events';
+
 import { IS_ANDROID_WEB_VIEW } from '../../util/is-android-web-view';
 import { androidInterface } from '../../features/android/android-interface';
 import { HttpClient } from '@angular/common/http';
 import { CapacitorPlatformService } from '../platform/capacitor-platform.service';
 import { Keyboard, KeyboardInfo } from '@capacitor/keyboard';
-import { PluginListenerHandle } from '@capacitor/core';
+import { PluginListenerHandle, registerPlugin } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SafeArea } from 'capacitor-plugin-safe-area';
 import { FlexibleConnectedPositionStrategy } from '@angular/cdk/overlay';
@@ -40,6 +41,12 @@ import { LS } from '../persistence/storage-keys.const';
 import { CustomThemeService } from './custom-theme.service';
 import { Log } from '../log';
 import { LayoutService } from '../../core-ui/layout/layout.service';
+
+interface NavigationBarPlugin {
+  setColor(options: { color: string; style: 'LIGHT' | 'DARK' }): Promise<void>;
+}
+
+const NavigationBar = registerPlugin<NavigationBarPlugin>('NavigationBar');
 
 export type DarkModeCfg = 'dark' | 'light' | 'system';
 
@@ -53,7 +60,7 @@ export class GlobalThemeService {
   private _matIconRegistry = inject(MatIconRegistry);
   private readonly _registeredPluginIcons = new Set<string>();
   private _domSanitizer = inject(DomSanitizer);
-  private _chartThemeService = inject(NgChartThemeService);
+
   private _chromeExtensionInterfaceService = inject(ChromeExtensionInterfaceService);
   private _imexMetaService = inject(ImexViewService);
   private _http = inject(HttpClient);
@@ -127,7 +134,9 @@ export class GlobalThemeService {
 
   private _setDarkTheme(isDarkTheme: boolean): void {
     this._materialCssVarsService.setDarkTheme(isDarkTheme);
-    this._setChartTheme(isDarkTheme);
+    this._setChartTheme(isDarkTheme).catch((err) => {
+      Log.warn('Failed to set chart theme', err);
+    });
     // this._materialCssVarsService.setDarkTheme(true);
     // this._materialCssVarsService.setDarkTheme(false);
   }
@@ -178,6 +187,7 @@ export class GlobalThemeService {
       ['next_week', 'assets/icons/next-week.svg'],
       ['habit', 'assets/icons/habit.svg'],
       ['azure_devops', 'assets/icons/azure_devops.svg'],
+      ['nextcloud_deck', 'assets/icons/nextcloud_deck.svg'],
     ];
 
     // todo test if can be removed with airplane mode and wifi without internet
@@ -223,6 +233,10 @@ export class GlobalThemeService {
       this._domSanitizer.bypassSecurityTrustResourceUrl(url),
     );
     this._registeredPluginIcons.add(iconName);
+  }
+
+  hasPluginIcon(iconName: string): boolean {
+    return this._registeredPluginIcons.has(iconName);
   }
 
   registerSvgIconFromContent(iconName: string, svgContent: string): void {
@@ -275,6 +289,12 @@ export class GlobalThemeService {
       this.document.body.classList.add(BodyClass.isElectron);
       this.document.body.classList.add(BodyClass.isAdvancedFeatures);
       this.document.body.classList.remove(BodyClass.isNoAdvancedFeatures);
+      ipcEnterFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.add(BodyClass.isFullScreen);
+      });
+      ipcLeaveFullScreen$.pipe(takeUntilDestroyed(this._destroyRef)).subscribe(() => {
+        this.document.body.classList.remove(BodyClass.isFullScreen);
+      });
     } else {
       this.document.body.classList.add(BodyClass.isWeb);
       this._chromeExtensionInterfaceService.onReady$.pipe(take(1)).subscribe(() => {
@@ -384,12 +404,13 @@ export class GlobalThemeService {
     }
   }
 
-  private _setChartTheme(isDarkTheme: boolean): void {
-    const overrides: ChartConfiguration['options'] = isDarkTheme
+  private async _setChartTheme(isDarkTheme: boolean): Promise<void> {
+    const { ThemeService } = await import('ng2-charts');
+
+    const chartThemeService = this._environmentInjector.get(ThemeService);
+
+    const overrides: import('chart.js').ChartConfiguration['options'] = isDarkTheme
       ? {
-          // legend: {
-          //   labels: { fontColor: 'white' },
-          // },
           scales: {
             x: {
               ticks: {
@@ -413,7 +434,7 @@ export class GlobalThemeService {
       : {
           scales: {},
         };
-    this._chartThemeService.setColorschemesOptions(overrides);
+    chartThemeService.setColorschemesOptions(overrides);
   }
 
   private _setupCustomThemeEffect(): void {
@@ -573,11 +594,16 @@ export class GlobalThemeService {
         Log.warn('Failed to set status bar style', err);
       });
       if (this._platformService.isAndroid()) {
-        StatusBar.setBackgroundColor({ color: isDark ? '#131314' : '#f8f8f7' }).catch(
-          (err) => {
-            Log.warn('Failed to set status bar background color', err);
-          },
-        );
+        const bgColor = isDark ? '#131314' : '#f8f8f7';
+        StatusBar.setBackgroundColor({ color: bgColor }).catch((err) => {
+          Log.warn('Failed to set status bar background color', err);
+        });
+        NavigationBar.setColor({
+          color: bgColor,
+          style: isDark ? 'DARK' : 'LIGHT',
+        }).catch((err) => {
+          Log.warn('Failed to set navigation bar color', err);
+        });
       }
     });
   }

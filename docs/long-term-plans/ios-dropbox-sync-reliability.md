@@ -1,6 +1,7 @@
 # iOS Dropbox Sync Reliability
 
-**Status:** Investigation complete, fixes pending
+> **Status: Investigation Complete — Fixes Pending**
+
 **Issue:** [#6333](https://github.com/super-productivity/super-productivity/issues/6333)
 **Severity:** High — Dropbox sync is completely broken for some iOS users
 

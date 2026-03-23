@@ -35,7 +35,7 @@ import {
   LEGACY_NO_LIST_TAG_ID,
 } from '../../features/project/project.const';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { isToday } from '../../util/is-today.util';
+import { isTodayWithOffset } from '../../util/is-today.util';
 import { LanguageCode } from '../../core/locale.constants';
 import {
   initialPluginUserDataState,
@@ -371,6 +371,9 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
   }
 
   // Fix TODAY_TAG tasks
+  const startOfNextDayDiffMs =
+    (data.globalConfig?.misc?.startOfNextDay || 0) * 60 * 60 * 1000;
+  const todayStr = getDbDateStr(new Date(Date.now() - startOfNextDayDiffMs));
   const todayTag = data.tag?.entities?.[TODAY_TAG.id];
   if (todayTag?.taskIds) {
     const idsToRemove: string[] = [];
@@ -378,11 +381,11 @@ function _migration3PlannerAndInbox(data: Record<string, any>): Record<string, a
       const task = data.task?.entities?.[taskId];
       if (task && !task.dueDay) {
         if (task.dueWithTime) {
-          if (!isToday(task.dueWithTime)) {
+          if (!isTodayWithOffset(task.dueWithTime, todayStr, startOfNextDayDiffMs)) {
             idsToRemove.push(taskId);
           }
         } else {
-          task.dueDay = getDbDateStr();
+          task.dueDay = todayStr;
         }
       }
     }

@@ -30,7 +30,7 @@ import { getDateTimeFromClockString } from '../../util/get-date-time-from-clock-
 import { remindOptionToMilliseconds } from '../tasks/util/remind-option-to-milliseconds';
 import { getNewestPossibleDueDate } from './store/get-newest-possible-due-date.util';
 import { getDbDateStr } from '../../util/get-db-date-str';
-import { isToday } from '../../util/is-today.util';
+import { DateService } from '../../core/date/date.service';
 import { TODAY_TAG } from '../tag/tag.const';
 import {
   selectAllTaskRepeatCfgs,
@@ -50,6 +50,7 @@ export class TaskRepeatCfgService {
   private _matDialog = inject(MatDialog);
   private _taskService = inject(TaskService);
   private _workContextService = inject(WorkContextService);
+  private _dateService = inject(DateService);
 
   taskRepeatCfgs$: Observable<TaskRepeatCfg[]> = this._store$.pipe(
     select(selectAllTaskRepeatCfgs),
@@ -227,6 +228,26 @@ export class TaskRepeatCfgService {
     if (taskRepeatCfg.deletedInstanceDates?.includes(targetDateStr)) {
       return [];
     }
+    // If skipOverdue is enabled, silently skip instances that are in the past (before today).
+    // We still dispatch updateTaskRepeatCfg to advance lastTaskCreationDay so that the same
+    // overdue date is not re-evaluated on every subsequent app open (which would stall progress
+    // permanently for non-daily or every-N-day schedules where today may not be a scheduled day).
+    if (
+      taskRepeatCfg.skipOverdue &&
+      targetDateStr < getDbDateStr(new Date(targetDayDate))
+    ) {
+      return [
+        updateTaskRepeatCfg({
+          taskRepeatCfg: {
+            id: taskRepeatCfg.id,
+            changes: {
+              lastTaskCreation: targetCreated.getTime(),
+              lastTaskCreationDay: targetDateStr,
+            },
+          },
+        }),
+      ];
+    }
 
     const { task, isAddToBottom } = this._getTaskRepeatTemplate(
       taskRepeatCfg,
@@ -285,7 +306,7 @@ export class TaskRepeatCfgService {
           remindAt: remindOptionToMilliseconds(dateTime, taskRepeatCfg.remindAt),
           isMoveToBacklog: false,
           // Only keep in today list if scheduled for today (#5594)
-          isSkipAutoRemoveFromToday: isToday(dateTime),
+          isSkipAutoRemoveFromToday: this._dateService.isToday(dateTime),
         }),
       );
     }

@@ -14,6 +14,21 @@
   min-height: -webkit-fill-available;
 }
 
+// Native mobile: body has safe area padding that pushes content down,
+// so the container must be shorter than 100vh to stay within the visible viewport.
+// Without this, bottom items (like Settings) in the sidebar are clipped off-screen.
+:host-context(body.isNativeMobile) .app-container {
+  height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
+  min-height: calc(100vh - var(--safe-area-top) - var(--safe-area-bottom));
+}
+
+// When keyboard is visible or bottom nav is present, body only has top padding
+:host-context(body.isNativeMobile.isKeyboardVisible) .app-container,
+:host-context(body.isNativeMobile.hasMobileBottomNav) .app-container {
+  height: calc(100vh - var(--safe-area-top));
+  min-height: calc(100vh - var(--safe-area-top));
+}
+
 .main-content {
   flex: 1;
   display: flex;
@@ -44,8 +59,7 @@
       top: auto !important;
       left: auto !important;
       bottom: auto !important;
-      height: 100vh !important;
-      min-height: -webkit-fill-available !important;
+      height: 100% !important;
       z-index: auto !important;
     }
   }
@@ -156,7 +170,7 @@ mat-sidenav {
   border-right-color: var(--sidebar-border-color);
 }
 
-@media (min-width: 800px) {
+@include mq(component) {
   button.mat-mdc-menu-item {
     width: 600px;
   }
@@ -164,10 +178,7 @@ mat-sidenav {
 
 .bg-image {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   pointer-events: none;
   width: 100%;
   height: 100%;
@@ -176,6 +187,48 @@ mat-sidenav {
   background-attachment: fixed;
 }
 
-.skip-sync-btn {
-  margin-top: 16px;
+// App entrance animation after onboarding preset selection
+@keyframes entrance-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes entrance-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-entrance {
+  // Side nav slides in from left (desktop only)
+  magic-side-nav {
+    animation: entrance-slide-left 450ms ease-out 50ms backwards;
+  }
+
+  // Main content area fades + slides up as a whole
+  .main-content {
+    animation: entrance-slide-up 450ms ease-out 150ms backwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entrance {
+    magic-side-nav,
+    .main-content {
+      animation: none;
+    }
+  }
 }

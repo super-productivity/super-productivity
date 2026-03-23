@@ -28,3 +28,17 @@
     }
   </div>
 </div>
+
+@if (overdueDeadlineTasks()?.length) {
+  <div class="deadlines">
+    <div class="section-title">
+      <mat-icon>flag</mat-icon>
+    </div>
+
+    <div class="deadline-items">
+      @for (task of overdueDeadlineTasks(); track task.id) {
+        <planner-deadline-task [task]="task"></planner-deadline-task>
+      }
+    </div>
+  </div>
+}

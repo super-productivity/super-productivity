@@ -1,7 +1,9 @@
 @use '../../../../styles/_globals.scss' as *;
 
 .form-wrapper {
-  overflow: hidden;
+  // overflow:hidden here caused the browser's focus-scrolling to reset the
+  // parent config-page scroll position when any form control received focus.
+  overflow: visible;
   padding: var(--s2) var(--s2) var(--s) !important;
 
   config-form {

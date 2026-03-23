@@ -2,14 +2,21 @@ import { Injectable, inject } from '@angular/core';
 import { createEffect, ofType } from '@ngrx/effects';
 import { setCurrentTask } from '../../../tasks/store/task.actions';
 import { TaskSharedActions } from '../../../../root-store/meta/task-shared.actions';
-import { concatMap, filter, map, take, tap, withLatestFrom } from 'rxjs/operators';
+import {
+  concatMap,
+  filter,
+  map,
+  switchMap,
+  take,
+  tap,
+  withLatestFrom,
+} from 'rxjs/operators';
 import { select, Store } from '@ngrx/store';
 import { OPEN_PROJECT_TYPE } from '../../issue.const';
 import { MatDialog } from '@angular/material/dialog';
 import { Task, TaskCopy } from '../../../tasks/task.model';
 import { OpenProjectCfg, OpenProjectTransitionOption } from './open-project.model';
-import { EMPTY, Observable, of, timer } from 'rxjs';
-import { DialogOpenProjectTrackTimeComponent } from './open-project-view-components/dialog-open-project-track-time/dialog-open-project-track-time.component';
+import { EMPTY, from, Observable, of, timer } from 'rxjs';
 import { OpenProjectApiService } from './open-project-api.service';
 import { TaskService } from '../../../tasks/task.service';
 import { selectCurrentTaskParentOrCurrent } from 'src/app/features/tasks/store/task.selectors';
@@ -19,10 +26,14 @@ import { SnackService } from 'src/app/core/snack/snack.service';
 import { OpenProjectWorkPackage } from './open-project-issue.model';
 import { IssueService } from 'src/app/features/issue/issue.service';
 import { T } from 'src/app/t.const';
-import { DialogOpenProjectTransitionComponent } from './open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component';
 import { IssueProviderService } from '../../issue-provider.service';
 import { assertTruthy } from '../../../../util/assert-truthy';
 import { LOCAL_ACTIONS } from '../../../../util/local-actions.token';
+import { parseOpenProjectDuration } from './open-project-view-components/parse-open-project-duration.util';
+import { formatOpenProjectWorkPackageSubjectForSnack } from './format-open-project-work-package-subject.util';
+import { msToIsoDuration } from '../../../../util/ms-to-iso-duration';
+import { getDbDateStr } from 'src/app/util/get-db-date-str';
+import { TrackTimeSubmitParams } from '../../shared/dialog-track-time/track-time-dialog.model';
 
 @Injectable()
 export class OpenProjectEffects {
@@ -163,12 +174,49 @@ export class OpenProjectEffects {
     this._openProjectApiService
       .getById$(workPackageId, openProjectCfg)
       .pipe(take(1))
-      .subscribe((workPackage) => {
-        this._matDialog.open(DialogOpenProjectTrackTimeComponent, {
+      .subscribe(async (workPackage) => {
+        const { DialogTrackTimeComponent } =
+          await import('../../shared/dialog-track-time/dialog-track-time.component');
+        const timeLogged = parseOpenProjectDuration(workPackage.spentTime);
+        this._matDialog.open(DialogTrackTimeComponent, {
           restoreFocus: true,
           data: {
-            workPackage,
             task,
+            issueIcon: 'open_project',
+            issueLabel: `${workPackage.id} ${workPackage.subject}`,
+            issueUrl: workPackage.url,
+            timeLogged,
+            activities$: this._openProjectApiService.getActivitiesForTrackTime$(
+              workPackage.id,
+              openProjectCfg,
+            ),
+            defaultTime: openProjectCfg.timeTrackingDialogDefaultTime,
+            configTimeKey: 'timeTrackingDialogDefaultTime',
+            onSubmit: (params: TrackTimeSubmitParams) =>
+              this._openProjectApiService.trackTime$({
+                workPackage,
+                spentOn: getDbDateStr(params.started),
+                hours: msToIsoDuration(params.timeSpent),
+                comment: params.comment,
+                activityId: params.activityId ?? 1,
+                cfg: openProjectCfg,
+              }),
+            successMsg: T.F.OPEN_PROJECT.S.POST_TIME_SUCCESS,
+            successTranslateParams: {
+              issueTitle: formatOpenProjectWorkPackageSubjectForSnack(workPackage),
+            },
+            t: {
+              title: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.TITLE,
+              submitFor: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.SUBMIT_TIME_FOR,
+              currentlyLogged: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.CURRENTLY_LOGGED,
+              submit: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.POST_TIME,
+              timeSpent: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.TIME_SPENT,
+              timeSpentTooltip: T.F.JIRA.DIALOG_WORKLOG.TIME_SPENT_TOOLTIP,
+              started: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.STARTED,
+              invalidDate: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.INVALID_DATE,
+              comment: T.G.COMMENT,
+              activity: T.F.OPEN_PROJECT.DIALOG_TRACK_TIME.ACTIVITY,
+            },
           },
         });
       });
@@ -261,15 +309,17 @@ export class OpenProjectEffects {
     localState: IssueLocalState,
     task: Task,
   ): Observable<unknown> {
-    return this._matDialog
-      .open(DialogOpenProjectTransitionComponent, {
-        restoreFocus: true,
-        data: {
-          issue,
-          localState,
-          task,
-        },
-      })
-      .afterClosed();
+    return from(
+      import('./open-project-view-components/dialog-openproject-transition/dialog-open-project-transition.component'),
+    ).pipe(
+      switchMap(({ DialogOpenProjectTransitionComponent }) =>
+        this._matDialog
+          .open(DialogOpenProjectTransitionComponent, {
+            restoreFocus: true,
+            data: { issue, localState, task },
+          })
+          .afterClosed(),
+      ),
+    );
   }
 }

@@ -1,26 +1,10 @@
-.controls {
-  flex-grow: 0 !important;
-  margin-top: auto;
+:host {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  //gap: 16px;
+  flex-direction: column;
+  height: 100%;
 
-  //border-top: 1px solid;
-  //border-bottom: 1px solid;
-
-  //border-color: var(--extra-border-color);
-  //background: var(--bg-lighter);
-}
-
-.start-date {
-  font-size: 20px;
-}
-
-.day-selector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  planner-plan-view {
+    flex: 1;
+    min-height: 0;
+  }
 }

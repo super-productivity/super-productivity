@@ -147,7 +147,7 @@
   cursor: grab; // Indicate it can be dragged
   z-index: var(--z-right-panel-edge-handle);
   box-shadow: var(--whiteframe-shadow-2dp);
-  transition: all 0.2s ease;
+  transition: var(--transition-standard);
   color: var(--text-color);
   border: none;
 

@@ -1,5 +1,9 @@
 # Publish notes
 
+> **Related macOS docs:**
+> - [mac-app-store-code-signing-guide.md](./mac-app-store-code-signing-guide.md) -- Code signing setup and troubleshooting
+> - [update-mac-certificates.md](./update-mac-certificates.md) -- Annual certificate renewal
+
 Look for AppDataForScreenshots.json
 
 ## Mac Store Screenshots
@@ -158,7 +162,7 @@ After a release build completes:
 2. **Verify signature** on Windows using PowerShell:
 
 ```powershell
-Get-AuthenticodeSignature ".\Super Productivity Setup-x64.exe" | Format-List
+Get-AuthenticodeSignature ".\Super-Productivity-Setup-x64.exe" | Format-List
 ```
 
 3. **Check output** shows:

@@ -11,6 +11,9 @@ import {
   type TestUser,
 } from '../../utils/supersync-helpers';
 
+/** Default encryption password used by setupSuperSync's mandatory encryption dialog */
+const ENCRYPTION_PASSWORD = 'e2e-default-encryption-pw';
+
 /**
  * Reset user's sync data on the server (keeps account active).
  * This simulates what happens when clicking "Reset Account (Clear Data)" button.
@@ -87,9 +90,15 @@ test.describe('@supersync SuperSync Account Reset', () => {
       await waitForTask(clientA.page, task2);
       console.log('[Reset] Client A synced initial tasks');
 
-      // 2. Create second client and verify it receives the tasks
+      // 2. Create second client and verify it receives the tasks.
+      // Must use explicit encryption config so Client B enters the password dialog
+      // instead of the enable-encryption dialog (which would wipe Client A's data).
       clientB = await createSimulatedClient(browser, appUrl, 'B', testRunId);
-      await clientB.sync.setupSuperSync(syncConfig);
+      await clientB.sync.setupSuperSync({
+        ...syncConfig,
+        isEncryptionEnabled: true,
+        password: ENCRYPTION_PASSWORD,
+      });
       await clientB.sync.syncAndWait();
       await waitForTask(clientB.page, task1);
       await waitForTask(clientB.page, task2);
@@ -171,14 +180,20 @@ test.describe('@supersync SuperSync Account Reset', () => {
       expect(taskExists).toBe(true);
       console.log('[Resync] Client retained local data after reset');
 
-      // 5. Create another client to verify data was re-synced to server
+      // 5. Create another client to verify data was re-synced to server.
+      // Must use explicit encryption config so the verify client enters the password dialog
+      // instead of the enable-encryption dialog (which would wipe server data).
       const clientVerify = await createSimulatedClient(
         browser,
         appUrl,
         'Verify',
         testRunId,
       );
-      await clientVerify.sync.setupSuperSync(syncConfig);
+      await clientVerify.sync.setupSuperSync({
+        ...syncConfig,
+        isEncryptionEnabled: true,
+        password: ENCRYPTION_PASSWORD,
+      });
       await clientVerify.sync.syncAndWait();
 
       // New client should receive the re-synced task

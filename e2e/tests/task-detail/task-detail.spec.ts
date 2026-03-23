@@ -24,7 +24,7 @@ test.describe('Task detail', () => {
     await addAndOpenIncompleteTask(workViewPage, page);
 
     await page.getByText(/task/).first().hover();
-    await page.getByRole('button', { name: 'Toggle completion status' }).click();
+    await page.getByRole('checkbox', { name: 'Toggle completion status' }).click();
   };
 
   const findDateInfo = (page: Page, infoPrefix: string): Locator =>

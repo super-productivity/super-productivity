@@ -1,12 +1,33 @@
 import { IssueProvider } from '../issue.model';
 
+const SECRET_KEY_PATTERNS = /token|secret|key|password|apikey|api_key/i;
+
+const _hasPluginConfig = (
+  issueProvider: IssueProvider,
+): issueProvider is IssueProvider & { pluginConfig: Record<string, unknown> } => {
+  return !!(issueProvider as { pluginConfig?: unknown }).pluginConfig;
+};
+
+const _getSafePluginConfigString = (
+  pluginConfig: Record<string, unknown>,
+): string | undefined => {
+  const safeEntries = Object.entries(pluginConfig).filter(
+    ([k]) => !SECRET_KEY_PATTERNS.test(k),
+  );
+  return safeEntries.find(([, v]) => typeof v === 'string' && v.length > 0)?.[1] as
+    | string
+    | undefined;
+};
+
 export const getIssueProviderTooltip = (issueProvider: IssueProvider): string => {
+  if (_hasPluginConfig(issueProvider)) {
+    const cfgStr = _getSafePluginConfigString(issueProvider.pluginConfig);
+    return cfgStr || issueProvider.issueProviderKey;
+  }
   const v = (() => {
     switch (issueProvider.issueProviderKey) {
       case 'JIRA':
         return issueProvider.host;
-      case 'GITHUB':
-        return issueProvider.repo;
       case 'GITLAB':
         return issueProvider.project;
       case 'GITEA':
@@ -21,6 +42,10 @@ export const getIssueProviderTooltip = (issueProvider: IssueProvider): string =>
         return issueProvider.projectId;
       case 'TRELLO':
         return issueProvider.boardName || issueProvider.boardId;
+      case 'NEXTCLOUD_DECK':
+        return issueProvider.selectedBoardTitle
+          ? `Deck: ${issueProvider.selectedBoardTitle}`
+          : undefined;
       case 'AZURE_DEVOPS':
         return issueProvider.project || undefined;
       default:
@@ -55,6 +80,12 @@ const getRepoInitials = (repo: string | null): string | undefined => {
 export const getIssueProviderInitials = (
   issueProvider: IssueProvider,
 ): string | undefined | null => {
+  if (_hasPluginConfig(issueProvider)) {
+    const firstStr = _getSafePluginConfigString(issueProvider.pluginConfig);
+    return firstStr?.includes('/')
+      ? getRepoInitials(firstStr)
+      : firstStr?.substring(0, 2)?.toUpperCase();
+  }
   switch (issueProvider.issueProviderKey) {
     case 'JIRA':
       return issueProvider.host
@@ -82,8 +113,6 @@ export const getIssueProviderInitials = (
     case 'OPEN_PROJECT':
       return issueProvider.projectId?.substring(0, 2).toUpperCase();
 
-    case 'GITHUB':
-      return getRepoInitials(issueProvider.repo);
     case 'GITLAB':
       return getRepoInitials(issueProvider.project);
     case 'GITEA':
@@ -92,6 +121,8 @@ export const getIssueProviderInitials = (
       return (issueProvider.boardName || issueProvider.boardId)
         ?.substring(0, 2)
         ?.toUpperCase();
+    case 'NEXTCLOUD_DECK':
+      return issueProvider.selectedBoardTitle?.substring(0, 2)?.toUpperCase();
     case 'AZURE_DEVOPS':
       return issueProvider.project?.substring(0, 2)?.toUpperCase() || 'AD';
   }

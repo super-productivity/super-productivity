@@ -11,7 +11,7 @@ describe('ScheduledDateGroupPipe', () => {
 
   beforeEach(() => {
     mockDateTimeFormatService = jasmine.createSpyObj('DateTimeFormatService', [], {
-      currentLocale: 'en-US',
+      currentLocale: () => 'en-US',
     });
     mockTranslateService = jasmine.createSpyObj('TranslateService', ['instant']);
     mockTranslateService.instant.and.callFake((key: string) => {
@@ -77,7 +77,7 @@ describe('ScheduledDateGroupPipe', () => {
   it('should respect configured locale for weekday names', () => {
     // Change locale to German
     Object.defineProperty(mockDateTimeFormatService, 'currentLocale', {
-      get: () => 'de-DE',
+      get: () => () => 'de-DE',
     });
 
     // Wednesday in German is "Mi" (Mittwoch)

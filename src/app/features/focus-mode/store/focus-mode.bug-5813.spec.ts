@@ -2,15 +2,13 @@
  * Integration tests for GitHub issue #5813
  * https://github.com/super-productivity/super-productivity/issues/5813
  *
- * Bug: New Pomodoro Timer doesn't work if you change the time tracking interval
+ * Bug: Pomodoro Timer broke when the (now-removed) trackingInterval setting
+ * was set to a high value.
  *
- * Root cause: FocusModeService was using GlobalTrackingIntervalService.tick$
- * which emits at the configured trackingInterval (up to 100 seconds).
- * When users set a high tracking interval to reduce disk writes,
- * the Pomodoro timer would only update every N seconds instead of every second.
- *
- * Fix: FocusModeService now uses its own interval(1000) independent of
- * the global tracking interval.
+ * Fix: FocusModeService uses its own interval(1000) independent of
+ * the global tracking interval. The trackingInterval config setting has
+ * since been removed entirely, but these tests remain valuable to verify
+ * the timer handles infrequent ticks correctly.
  *
  * These tests verify:
  * 1. The reducer correctly calculates elapsed time based on Date.now() - startedAt
@@ -85,7 +83,7 @@ describe('FocusMode Bug #5813: Timer works with high tracking interval', () => {
 
       expect(state.timer.isRunning).toBe(true);
 
-      // Simulate 15 seconds passing with NO ticks (simulating 100s tracking interval)
+      // Simulate 15 seconds passing with NO ticks
       jasmine.clock().tick(15000);
 
       // Now dispatch a single tick - session should be detected as complete
@@ -98,7 +96,7 @@ describe('FocusMode Bug #5813: Timer works with high tracking interval', () => {
     });
   });
 
-  describe('Scenario: User with 100s tracking interval', () => {
+  describe('Scenario: Infrequent ticks (100s apart)', () => {
     it('should complete a 25-minute Pomodoro even if ticks are 100 seconds apart', () => {
       const twentyFiveMinutes = 25 * 60 * 1000;
 
@@ -111,7 +109,7 @@ describe('FocusMode Bug #5813: Timer works with high tracking interval', () => {
       expect(state.timer.isRunning).toBe(true);
       expect(state.timer.duration).toBe(twentyFiveMinutes);
 
-      // Simulate ticks every 100 seconds (worst case: trackingInterval = 100000)
+      // Simulate ticks every 100 seconds
       const tickInterval = 100 * 1000; // 100 seconds
       let elapsedTime = 0;
 

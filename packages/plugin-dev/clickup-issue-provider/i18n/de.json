@@ -1,0 +1,19 @@
+{
+  "CFG": {
+    "API_KEY": "API-Schlüssel",
+    "API_KEY_LINK": "Persönlichen API-Schlüssel erhalten",
+    "TEAM_IDS": "Workspace-/Team-IDs (kommagetrennt, leer für alle)",
+    "USER_ID": "Benutzer-ID (zum Filtern nach Bearbeiter)"
+  },
+  "DISPLAY": {
+    "SUMMARY": "Zusammenfassung",
+    "STATUS": "Status",
+    "PRIORITY": "Priorität",
+    "ASSIGNEE": "Bearbeiter",
+    "LABELS": "Labels",
+    "DESCRIPTION": "Beschreibung"
+  },
+  "ERRORS": {
+    "ERR_UNKNOWN": "ClickUp: Unbekannter Fehler. Überprüfen Sie Ihren API-Schlüssel und versuchen Sie es erneut."
+  }
+}

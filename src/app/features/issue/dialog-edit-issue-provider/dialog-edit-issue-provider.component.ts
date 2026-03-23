@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -14,6 +15,7 @@ import {
   IssueProvider,
   IssueProviderKey,
   IssueProviderTypeMap,
+  BuiltInIssueProviderKey,
 } from '../issue.model';
 import {
   DEFAULT_ISSUE_PROVIDER_CFGS,
@@ -23,7 +25,10 @@ import {
   ISSUE_PROVIDER_HUMANIZED,
 } from '../issue.const';
 import { FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ConfigFormSection } from '../../config/global-config.model';
+import {
+  ConfigFormSection,
+  LimitedFormlyFieldConfig,
+} from '../../config/global-config.model';
 import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confirm.component';
 import { IssueProviderActions } from '../store/issue-provider.actions';
 import { NgClass } from '@angular/common';
@@ -39,17 +44,25 @@ import { JiraAdditionalCfgComponent } from '../providers/jira/jira-view-componen
 import { HelpSectionComponent } from '../../../ui/help-section/help-section.component';
 import { TranslatePipe } from '@ngx-translate/core';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
-import { FormlyModule } from '@ngx-formly/core';
+import { FormlyFieldConfig, FormlyModule } from '@ngx-formly/core';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { IS_ANDROID_WEB_VIEW } from '../../../util/is-android-web-view';
 import { devError } from '../../../util/dev-error';
 import { IssueLog } from '../../../core/log';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginBridgeService } from '../../../plugins/plugin-bridge.service';
+import { PluginHttpService } from '../../../plugins/issue-provider/plugin-http.service';
 import { TrelloAdditionalCfgComponent } from '../providers/trello/trello-view-components/trello_cfg/trello_additional_cfg.component';
-import { ClickUpAdditionalCfgComponent } from '../providers/clickup/clickup-view-components/clickup-cfg/clickup-additional-cfg.component';
+// ClickUp is now a plugin — no built-in config component needed
+import { NextcloudDeckAdditionalCfgComponent } from '../providers/nextcloud-deck/nextcloud-deck-additional-cfg.component';
 import { TaskService } from '../../tasks/task.service';
 import { firstValueFrom } from 'rxjs';
 import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions';
+import { ISSUE_PROVIDER_COMMON_FORM_FIELDS } from '../common-issue-form-stuff.const';
+import { TagService } from '../../tag/tag.service';
+import { ChipListInputComponent } from '../../../ui/chip-list-input/chip-list-input.component';
+import { unique } from '../../../util/unique';
 
 @Component({
   selector: 'dialog-edit-issue-provider',
@@ -71,7 +84,8 @@ import { TaskSharedActions } from '../../../root-store/meta/task-shared.actions'
     MatIcon,
     MatDialogTitle,
     TrelloAdditionalCfgComponent, // added for custom trello board loading support
-    ClickUpAdditionalCfgComponent, // added for custom clickup workspace selection
+    NextcloudDeckAdditionalCfgComponent,
+    ChipListInputComponent,
   ],
   templateUrl: './dialog-edit-issue-provider.component.html',
   styleUrl: './dialog-edit-issue-provider.component.scss',
@@ -84,32 +98,59 @@ export class DialogEditIssueProviderComponent {
     issueProvider?: IssueProvider;
     issueProviderKey?: IssueProviderKey;
     calendarContextInfoTarget?: CalendarContextInfoTarget;
+    isDuplicate?: boolean;
   }>(MAT_DIALOG_DATA);
 
   isConnectionWorks = signal(false);
+  isOAuthConnected = signal(false);
+  isOAuthConnecting = signal(false);
   form = new FormGroup({});
+
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _pluginBridge = inject(PluginBridgeService);
+  private _pluginHttp = inject(PluginHttpService);
 
   issueProviderKey: IssueProviderKey = (this.d.issueProvider?.issueProviderKey ||
     this.d.issueProviderKey) as IssueProviderKey;
   issueProvider?: IssueProvider = this.d.issueProvider;
-  isEdit: boolean = !!this.issueProvider;
+  isEdit: boolean = !!this.issueProvider && !this.d.isDuplicate;
 
   model: Partial<IssueProvider> = this.isEdit
     ? { ...this.issueProvider }
-    : ({
-        ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
-        ...DEFAULT_ISSUE_PROVIDER_CFGS[this.issueProviderKey],
-        id: nanoid(),
-        isEnabled: true,
-        issueProviderKey: this.issueProviderKey,
-      } as IssueProviderTypeMap<IssueProviderKey>);
+    : this.d.isDuplicate && this.issueProvider
+      ? { ...this.issueProvider, id: nanoid(), migratedFromProjectId: undefined }
+      : ({
+          ...ISSUE_PROVIDER_DEFAULT_COMMON_CFG,
+          ...(this._pluginRegistry.hasProvider(this.issueProviderKey)
+            ? {
+                pluginId:
+                  this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId ??
+                  this.issueProviderKey.replace('plugin:', ''),
+                pluginConfig: this._getDefaultPluginConfig(),
+                isAutoAddToBacklog:
+                  this._pluginRegistry.getProvider(this.issueProviderKey)
+                    ?.defaultAutoAddToBacklog ?? false,
+              }
+            : DEFAULT_ISSUE_PROVIDER_CFGS[
+                this.issueProviderKey as BuiltInIssueProviderKey
+              ]),
+          id: nanoid(),
+          isEnabled: true,
+          issueProviderKey: this.issueProviderKey,
+        } as IssueProviderTypeMap<IssueProviderKey>);
 
-  configFormSection: ConfigFormSection<IssueIntegrationCfg> =
-    ISSUE_PROVIDER_FORM_CFGS_MAP[this.issueProviderKey];
+  title: string = this._pluginRegistry.hasProvider(this.issueProviderKey)
+    ? this._pluginRegistry.getName(this.issueProviderKey) || this.issueProviderKey
+    : ISSUE_PROVIDER_HUMANIZED[this.issueProviderKey as BuiltInIssueProviderKey];
 
-  fields = this.configFormSection.items;
+  configFormSection: ConfigFormSection<IssueIntegrationCfg> | undefined =
+    this._pluginRegistry.hasProvider(this.issueProviderKey)
+      ? this._getPluginFormSection()
+      : ISSUE_PROVIDER_FORM_CFGS_MAP[this.issueProviderKey as BuiltInIssueProviderKey];
 
-  title: string = ISSUE_PROVIDER_HUMANIZED[this.issueProviderKey];
+  fields = this.configFormSection?.items ?? [];
+
+  oauthButtons = this._getOAuthButtons();
 
   private _matDialogRef: MatDialogRef<DialogEditIssueProviderComponent> =
     inject(MatDialogRef);
@@ -119,6 +160,37 @@ export class DialogEditIssueProviderComponent {
   private _issueService = inject(IssueService);
   private _snackService = inject(SnackService);
   private _taskService = inject(TaskService);
+  private _tagService = inject(TagService);
+
+  tagSuggestions = toSignal(this._tagService.tagsNoMyDayAndNoList$, { initialValue: [] });
+
+  addTag(id: string): void {
+    this.model = {
+      ...this.model,
+      defaultTagIds: unique([...(this.model.defaultTagIds || []), id]),
+    };
+  }
+
+  addNewTag(title: string): void {
+    const id = this._tagService.addTag({ title });
+    this.model = {
+      ...this.model,
+      defaultTagIds: unique([...(this.model.defaultTagIds || []), id]),
+    };
+  }
+
+  removeTag(id: string): void {
+    this.model = {
+      ...this.model,
+      defaultTagIds: (this.model.defaultTagIds || []).filter((tagId) => tagId !== id),
+    };
+  }
+
+  constructor() {
+    this._initOAuthAndOptions().catch((err) => {
+      console.error('[DialogEditIssueProvider] OAuth init failed', err);
+    });
+  }
 
   submit(isSkipClose = false): void {
     if (this.form.valid) {
@@ -148,15 +220,25 @@ export class DialogEditIssueProviderComponent {
     this._matDialogRef.close();
   }
 
+  duplicate(): void {
+    const providerData = structuredClone(this.model) as IssueProvider;
+    this._matDialogRef.close();
+    this._matDialog.open(DialogEditIssueProviderComponent, {
+      restoreFocus: true,
+      data: {
+        issueProvider: providerData,
+        isDuplicate: true,
+      },
+    });
+  }
+
   formlyModelChange(model: Partial<IssueProvider>): void {
     this.updateModel(model);
   }
 
   customCfgCmpSave(cfgUpdates: IssueIntegrationCfg): void {
     IssueLog.log('customCfgCmpSave()', cfgUpdates);
-    console.log('Dialog received config update:', cfgUpdates);
     this.updateModel(cfgUpdates);
-    console.log('Dialog model after update:', this.model);
   }
 
   updateModel(model: Partial<IssueProvider>): void {
@@ -190,19 +272,19 @@ export class DialogEditIssueProviderComponent {
       if (isSuccess) {
         this._snackService.open({
           type: 'SUCCESS',
-          msg: 'Connection works!',
+          msg: T.F.ISSUE.S.CONNECTION_SUCCESS,
         });
       } else {
         this._snackService.open({
           type: 'ERROR',
-          msg: 'Connection failed',
+          msg: T.F.ISSUE.S.CONNECTION_FAILED,
         });
       }
     } catch (error) {
       this.isConnectionWorks.set(false);
       this._snackService.open({
         type: 'ERROR',
-        msg: 'Connection failed',
+        msg: T.F.ISSUE.S.CONNECTION_FAILED,
       });
     }
   }
@@ -214,13 +296,7 @@ export class DialogEditIssueProviderComponent {
         data: {
           cancelTxt: T.G.CANCEL,
           okTxt: T.G.DELETE,
-          message:
-            // TODO translate
-            'Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!',
-          // message: T.F.TIME_TRACKING.D_IDLE.SIMPLE_COUNTER_CONFIRM_TXT,
-          // translateParams: {
-          //   nr: 2,
-          // },
+          message: T.F.ISSUE.DIALOG.DELETE_CONFIRM,
         },
       })
       .afterClosed()
@@ -255,8 +331,285 @@ export class DialogEditIssueProviderComponent {
     this.isConnectionWorks.set(false);
   }
 
+  async connectOAuth(oauthConfig: {
+    authUrl: string;
+    tokenUrl: string;
+    clientId: string;
+    clientSecret?: string;
+    scopes: string[];
+  }): Promise<void> {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    if (!pluginId) {
+      return;
+    }
+    this.isOAuthConnecting.set(true);
+    try {
+      await this._pluginBridge.startOAuthFlow(pluginId, oauthConfig);
+      this.isOAuthConnected.set(true);
+      this._snackService.open({
+        type: 'SUCCESS',
+        msg: T.F.ISSUE.S.OAUTH_CONNECTED,
+      });
+      await this._loadDynamicOptions();
+    } catch (e) {
+      this._snackService.open({
+        type: 'ERROR',
+        msg: T.F.ISSUE.S.OAUTH_FAILED,
+      });
+    } finally {
+      this.isOAuthConnecting.set(false);
+    }
+  }
+
+  async disconnectOAuth(): Promise<void> {
+    const pluginId = this._pluginRegistry.getProvider(this.issueProviderKey)?.pluginId;
+    if (!pluginId) {
+      return;
+    }
+    await this._pluginBridge.clearOAuthTokens(pluginId);
+    this.isOAuthConnected.set(false);
+  }
+
   protected readonly ICAL_TYPE = ICAL_TYPE;
   protected readonly IS_ANDROID_WEB_VIEW = IS_ANDROID_WEB_VIEW;
   protected readonly IS_ELECTRON = IS_ELECTRON;
   protected readonly IS_WEB_EXTENSION_REQUIRED_FOR_JIRA = IS_WEB_BROWSER;
+
+  private async _loadDynamicOptions(): Promise<void> {
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    if (!provider) {
+      return;
+    }
+    const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+    const dynamicFields = configFields.filter((f) => typeof f.loadOptions === 'function');
+    if (!dynamicFields.length) {
+      return;
+    }
+
+    const pluginConfig = (this.model as Record<string, unknown>)['pluginConfig'] ?? {};
+    const http = this._pluginHttp.createHttpHelper(() =>
+      provider.definition.getHeaders(pluginConfig as Record<string, unknown>),
+    );
+
+    for (const field of dynamicFields) {
+      try {
+        const options = await field.loadOptions!(
+          pluginConfig as Record<string, unknown>,
+          http,
+        );
+        const formlyField = this._findFormlyField(
+          this.fields as FormlyFieldConfig[],
+          'pluginConfig.' + field.key,
+        );
+        if (formlyField?.templateOptions) {
+          formlyField.templateOptions.options = options;
+        } else if (formlyField?.props) {
+          formlyField.props.options = options;
+        }
+      } catch (e) {
+        console.error(
+          `[DialogEditIssueProvider] loadOptions failed for field '${field.key}':`,
+          e,
+        );
+        this._snackService.open({
+          type: 'ERROR',
+          msg: T.F.ISSUE.S.LOAD_OPTIONS_FAILED,
+          translateParams: { fieldKey: field.key },
+        });
+      }
+    }
+    // Trigger formly refresh
+    this.fields = [...this.fields];
+  }
+
+  private _findFormlyField(
+    fields: FormlyFieldConfig[],
+    key: string,
+  ): FormlyFieldConfig | undefined {
+    for (const f of fields) {
+      if (f.key === key) {
+        return f;
+      }
+      if (f.fieldGroup) {
+        const found = this._findFormlyField(f.fieldGroup, key);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private _getDefaultPluginConfig(): Record<string, unknown> {
+    if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
+      return {};
+    }
+    const fieldMappings = this._pluginRegistry.getFieldMappings(this.issueProviderKey);
+    if (!fieldMappings?.length) {
+      return {};
+    }
+    const twoWaySync: Record<string, string> = {};
+    for (const m of fieldMappings) {
+      twoWaySync[m.taskField] = m.defaultDirection;
+    }
+    return { twoWaySync };
+  }
+
+  private _getPluginFormSection(): ConfigFormSection<IssueIntegrationCfg> | undefined {
+    const pluginKey = this.issueProviderKey;
+    const configFields = this._pluginRegistry.getConfigFields(pluginKey);
+    const fieldMappings = this._pluginRegistry.getFieldMappings(pluginKey);
+    if (!configFields?.length && !fieldMappings?.length) {
+      return undefined;
+    }
+
+    const regularFields = configFields.filter(
+      (f) => !f.advanced && f.type !== 'oauthButton',
+    );
+    const advancedFields = configFields.filter(
+      (f) => f.advanced && f.type !== 'oauthButton',
+    );
+
+    const items = regularFields.map((f) =>
+      this._mapPluginConfigField(f),
+    ) as LimitedFormlyFieldConfig<IssueIntegrationCfg>[];
+
+    items.push({
+      type: 'collapsible' as any,
+      props: { label: T.F.ISSUE.DIALOG.ADVANCED_CONFIG },
+      fieldGroup: [
+        ...(ISSUE_PROVIDER_COMMON_FORM_FIELDS as any[]),
+        ...advancedFields.map((f) => this._mapPluginConfigField(f)),
+      ],
+    } as any);
+
+    if (fieldMappings?.length) {
+      items.push(this._buildTwoWaySyncSection(pluginKey, fieldMappings) as any);
+    }
+
+    return {
+      title: this.title,
+      key: 'EMPTY' as ConfigFormSection<IssueIntegrationCfg>['key'],
+      items,
+    };
+  }
+
+  private _mapPluginConfigField(f: {
+    key: string;
+    type: string;
+    label: string;
+    required?: boolean;
+    description?: string;
+    url?: string;
+    pattern?: string;
+    options?: { value: string; label: string }[];
+  }): unknown {
+    if (f.type === 'link') {
+      return {
+        type: 'link',
+        props: { url: f.url ?? f.key, txt: f.label },
+      };
+    }
+    const formlyType =
+      f.type === 'checkbox'
+        ? 'checkbox'
+        : f.type === 'select'
+          ? 'select'
+          : f.type === 'textarea'
+            ? 'textarea'
+            : 'input';
+    return {
+      key: ('pluginConfig.' + f.key) as keyof IssueIntegrationCfg,
+      type: formlyType,
+      templateOptions: {
+        label: f.label,
+        required: f.required ?? false,
+        ...(f.description ? { description: f.description } : {}),
+        ...(f.type === 'password' ? { type: 'password' } : {}),
+        ...(f.type === 'select' ? { options: f.options } : {}),
+        ...(f.pattern ? { pattern: f.pattern } : {}),
+      },
+    };
+  }
+
+  private _buildTwoWaySyncSection(
+    pluginKey: IssueProviderKey,
+    fieldMappings: { taskField: string; issueField: string; defaultDirection: string }[],
+  ): unknown {
+    const syncDirectionOptions = [
+      { value: 'off', label: T.F.ISSUE.TWO_WAY_SYNC.OFF },
+      { value: 'pullOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PULL_ONLY },
+      { value: 'pushOnly', label: T.F.ISSUE.TWO_WAY_SYNC.PUSH_ONLY },
+      { value: 'both', label: T.F.ISSUE.TWO_WAY_SYNC.BOTH },
+    ];
+    const TASK_FIELD_LABELS: Record<string, string> = {
+      isDone: T.F.ISSUE.TWO_WAY_SYNC.STATUS,
+      title: T.F.ISSUE.TWO_WAY_SYNC.TITLE,
+      notes: T.F.ISSUE.TWO_WAY_SYNC.NOTES,
+      dueDay: T.F.ISSUE.TWO_WAY_SYNC.DUE_DAY,
+      dueWithTime: T.F.ISSUE.TWO_WAY_SYNC.DUE_WITH_TIME,
+      timeEstimate: T.F.ISSUE.TWO_WAY_SYNC.TIME_ESTIMATE,
+    };
+    const syncFields: any[] = fieldMappings.map((m) => ({
+      key: ('pluginConfig.twoWaySync.' + m.taskField) as keyof IssueIntegrationCfg,
+      type: 'select' as const,
+      props: {
+        label: TASK_FIELD_LABELS[m.taskField] ?? m.taskField,
+        options: syncDirectionOptions,
+      },
+    }));
+    const provider = this._pluginRegistry.getProvider(pluginKey);
+    if (provider?.definition.createIssue) {
+      syncFields.push({
+        key: 'pluginConfig.isAutoCreateIssues',
+        type: 'checkbox',
+        expressions: {
+          // eslint-disable-next-line @typescript-eslint/naming-convention
+          'props.disabled': '!model.defaultProjectId',
+        },
+        props: {
+          label: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES,
+          description: T.F.ISSUE.TWO_WAY_SYNC.AUTO_CREATE_ISSUES_DESCRIPTION,
+        },
+      });
+    }
+    return {
+      type: 'collapsible',
+      props: { label: T.F.ISSUE.TWO_WAY_SYNC.SECTION },
+      fieldGroup: syncFields,
+    };
+  }
+
+  private _getOAuthButtons(): {
+    label: string;
+    oauthConfig: {
+      authUrl: string;
+      tokenUrl: string;
+      clientId: string;
+      clientSecret?: string;
+      scopes: string[];
+    };
+  }[] {
+    if (!this._pluginRegistry.hasProvider(this.issueProviderKey)) {
+      return [];
+    }
+    const configFields = this._pluginRegistry.getConfigFields(this.issueProviderKey);
+    return configFields
+      .filter((f) => f.type === 'oauthButton' && f.oauthConfig)
+      .map((f) => ({ label: f.label, oauthConfig: f.oauthConfig! }));
+  }
+
+  private async _initOAuthAndOptions(): Promise<void> {
+    const provider = this._pluginRegistry.getProvider(this.issueProviderKey);
+    if (!provider) {
+      return;
+    }
+    const hasTokens = await this._pluginBridge.restoreAndCheckOAuthTokens(
+      provider.pluginId,
+    );
+    this.isOAuthConnected.set(hasTokens);
+    if (hasTokens) {
+      await this._loadDynamicOptions();
+    }
+  }
 }

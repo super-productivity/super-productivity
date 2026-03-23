@@ -194,6 +194,12 @@ export interface ElectronAPI {
     focusModeMode?: string,
   );
 
+  updateTodayTasks(
+    tasks: { id: string; title: string; timeEstimate: number; timeSpent: number }[],
+  ): void;
+
+  onSwitchTask(listener: (taskId: string) => void): void;
+
   exec(command: string): void;
 
   pluginExecNodeScript(
@@ -201,4 +207,10 @@ export interface ElectronAPI {
     manifest: PluginManifest,
     request: PluginNodeScriptRequest,
   ): Promise<PluginNodeScriptResult>;
+
+  // Plugin OAuth
+  pluginOAuthStart(url: string): void;
+  onPluginOAuthCb(
+    listener: (data: { code?: string; error?: string; state?: string }) => void,
+  ): void;
 }

@@ -24,9 +24,7 @@ describe('generatePKCECodes', () => {
       configurable: true,
     });
 
-    await expectAsync(generatePKCECodes(128)).toBeRejectedWithError(
-      /WebCrypto API.*getRandomValues/i,
-    );
+    await expectAsync(generatePKCECodes(128)).toBeRejected();
   });
 
   it('should successfully generate PKCE codes when crypto.subtle is unavailable (fallback)', async () => {

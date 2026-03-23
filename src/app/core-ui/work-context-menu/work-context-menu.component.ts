@@ -27,11 +27,12 @@ import { ShareService, ShareSupport } from '../../core/share/share.service';
 import { Store } from '@ngrx/store';
 import { TaskSharedActions } from '../../root-store/meta/task-shared.actions';
 import { TaskWithSubTasks } from '../../features/tasks/task.model';
+import { firstValueFrom } from 'rxjs';
+import type { WorkContextSettingsDialogData } from '../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component';
 
 @Component({
   selector: 'work-context-menu',
   templateUrl: './work-context-menu.component.html',
-  styleUrls: ['./work-context-menu.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterLink, RouterModule, MatMenuItem, TranslatePipe, MatIcon],
   standalone: true,
@@ -97,6 +98,9 @@ export class WorkContextMenuComponent implements OnInit {
 
   async deleteProject(): Promise<void> {
     const project = await this._projectService.getByIdOnce$(this.contextId).toPromise();
+    if (!project) {
+      return;
+    }
     const isConfirmed = await this._matDialog
       .open(DialogConfirmComponent, {
         restoreFocus: true,
@@ -221,6 +225,33 @@ export class WorkContextMenuComponent implements OnInit {
     }
 
     this._snackService.open(T.GLOBAL_SNACK.UNPLANNED_TODAY_TASKS);
+  }
+
+  async openSettings(): Promise<void> {
+    try {
+      const entity = this.isForProject
+        ? await firstValueFrom(this._projectService.getByIdOnce$(this.contextId))
+        : await firstValueFrom(
+            this._tagService.getTagById$(this.contextId).pipe(first()),
+          );
+
+      const { DialogWorkContextSettingsComponent } =
+        await import('../../features/work-context/dialog-work-context-settings/dialog-work-context-settings.component');
+      this._matDialog.open(DialogWorkContextSettingsComponent, {
+        restoreFocus: true,
+        backdropClass: 'cdk-overlay-transparent-backdrop',
+        data: {
+          isProject: this.isForProject,
+          entity,
+        } as WorkContextSettingsDialogData,
+      });
+    } catch (err) {
+      this._snackService.open({
+        msg: T.GLOBAL_SNACK.OPEN_SETTINGS_ERROR,
+        type: 'ERROR',
+      });
+      console.error(err);
+    }
   }
 
   private _setShareSupport(support: ShareSupport): void {

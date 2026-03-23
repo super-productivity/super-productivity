@@ -1,6 +1,6 @@
 # Plan: Server-Side Entity Versioning (Optimistic Concurrency Control)
 
-> **STATUS: PROPOSED**
+> **Status: Planned**
 >
 > Long-term architectural change to eliminate vector clock pruning as a source of sync conflicts.
 

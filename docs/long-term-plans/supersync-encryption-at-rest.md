@@ -1,5 +1,7 @@
 # SuperSync Encryption at Rest Implementation Plan
 
+> **Status: Planned**
+
 ## Overview
 
 Implement full database encryption at rest for SuperSync using LUKS volume encryption to protect against database compromise and meet GDPR compliance requirements.
