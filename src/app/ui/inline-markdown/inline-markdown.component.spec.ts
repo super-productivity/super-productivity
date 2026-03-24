@@ -93,7 +93,7 @@ describe('InlineMarkdownComponent', () => {
       expect(component.changed.emit).toHaveBeenCalledWith('Hello _world_');
     });
 
-    it('should insert ** at cursor and pace cursor between pairs of ** when pressing Ctrl + B with no selection', () => {
+    it('should insert ** at cursor and place cursor between pairs of ** when pressing Ctrl + B with no selection', () => {
       mockTextareaEl.nativeElement.selectionStart = 5;
       mockTextareaEl.nativeElement.selectionEnd = 5;
       const ev = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true });

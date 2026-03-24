@@ -472,7 +472,7 @@ export class InlineMarkdownComponent implements OnInit, OnDestroy {
     let newValue: string;
     let newCursorPos: number;
 
-    // Case 1: No selection - > Insert markers and place cursor between them
+    // Case 1: No selection -> Insert markers and place cursor between them
     // For example: **<cursor>**
     if (selectedText.length === 0) {
       newValue = value.substring(0, start) + marker + marker + value.substring(end);
