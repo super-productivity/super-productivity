@@ -39,8 +39,9 @@ export class SwipeBlockComponent implements OnDestroy {
   private _isLockPanLeft = false;
   private _isLockPanRight = false;
   private _isActionTriggered = false;
+  private _strikethroughY = 0;
 
-  readonly blockLeftEl = viewChild<ElementRef>('blockLeftEl');
+  readonly strikethroughEl = viewChild<ElementRef>('strikethroughEl');
   readonly blockRightEl = viewChild<ElementRef>('blockRightEl');
   readonly innerWrapperEl = viewChild<ElementRef>('innerWrapperEl');
 
@@ -76,20 +77,21 @@ export class SwipeBlockComponent implements OnDestroy {
     this._showPanHelper();
     this.isPreventPointerEventsWhilePanning.set(true);
     this._cachedWidth = this._elementRef.nativeElement.offsetWidth;
+
+    // Calculate touch Y position relative to component for strikethrough
+    const rect = this._elementRef.nativeElement.getBoundingClientRect();
+    this._strikethroughY = ev.clientY - rect.top;
   }
 
   onPanEnd(): void {
     if (!IS_TOUCH_PRIMARY || (!this._isLockPanLeft && !this._isLockPanRight)) {
       return;
     }
-    const blockLeftElRef = this.blockLeftEl();
     const blockRightElRef = this.blockRightEl();
+    const strikethroughElRef = this.strikethroughEl();
     const hideDelay = this._snapBackHideDelayMs;
 
     this.isPreventPointerEventsWhilePanning.set(false);
-    if (blockLeftElRef) {
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transition');
-    }
     if (blockRightElRef) {
       this._renderer.removeStyle(blockRightElRef.nativeElement, 'transition');
     }
@@ -112,15 +114,36 @@ export class SwipeBlockComponent implements OnDestroy {
           this._resetAfterPan(hideDelay);
         }, 100);
       } else if (this._isLockPanRight) {
-        if (blockLeftElRef) {
-          this._renderer.setStyle(blockLeftElRef.nativeElement, 'transform', `scaleX(1)`);
+        // Strikethrough completion animation
+        if (strikethroughElRef) {
+          this._renderer.setStyle(
+            strikethroughElRef.nativeElement,
+            'transition',
+            'width 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms ease',
+          );
+          this._renderer.setStyle(
+            strikethroughElRef.nativeElement,
+            'width',
+            `calc(100% - var(--s4))`,
+          );
+          this._renderer.addClass(strikethroughElRef.nativeElement, 'isCompleting');
         }
         this._currentPanTimeout = window.setTimeout(() => {
           this.swipeRight.emit();
           this._resetAfterPan(hideDelay);
-        }, 100);
+        }, 200);
       }
     } else {
+      // Abort: retract strikethrough with animation
+      if (this._isLockPanRight && strikethroughElRef) {
+        this._renderer.setStyle(
+          strikethroughElRef.nativeElement,
+          'transition',
+          'width 200ms cubic-bezier(0.4, 0, 1, 1), opacity 150ms ease',
+        );
+        this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', '0');
+        this._renderer.setStyle(strikethroughElRef.nativeElement, 'opacity', '0');
+      }
       this._resetAfterPan(hideDelay);
     }
   }
@@ -134,9 +157,9 @@ export class SwipeBlockComponent implements OnDestroy {
       return;
     }
     const innerWrapperElRef = this.innerWrapperEl();
-    const blockLeftElRef = this.blockLeftEl();
     const blockRightElRef = this.blockRightEl();
-    if (!innerWrapperElRef || !blockLeftElRef || !blockRightElRef) {
+    const strikethroughElRef = this.strikethroughEl();
+    if (!innerWrapperElRef) {
       return;
     }
 
@@ -146,34 +169,63 @@ export class SwipeBlockComponent implements OnDestroy {
     this._isLockPanRight = isPanningRight;
     this._isLockPanLeft = isPanningLeft;
 
-    const targetRef = isPanningRight ? blockLeftElRef : blockRightElRef;
-
     this.isPreventPointerEventsWhilePanning.set(true);
 
-    this._renderer.setStyle(blockLeftElRef.nativeElement, 'width', '0');
-    this._renderer.setStyle(blockRightElRef.nativeElement, 'width', '0');
-    this._renderer.removeClass(blockLeftElRef.nativeElement, 'isActive');
-    this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
+    if (isPanningRight && strikethroughElRef) {
+      // Strikethrough mode for right swipe
+      const width = Math.abs(ev.deltaX);
+      let scale = (width / (this._cachedWidth || 1)) * PAN_SCALE_FACTOR;
+      scale = Math.min(1, Math.max(0, scale));
 
-    if (targetRef && ev.deltaX !== 0) {
+      if (scale > 0.5) {
+        this._isActionTriggered = true;
+        this._renderer.addClass(strikethroughElRef.nativeElement, 'isTriggered');
+      } else {
+        this._isActionTriggered = false;
+        this._renderer.removeClass(strikethroughElRef.nativeElement, 'isTriggered');
+      }
+
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', `${width}px`);
+      this._renderer.setStyle(
+        strikethroughElRef.nativeElement,
+        'top',
+        `${this._strikethroughY}px`,
+      );
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'transition', 'none');
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'opacity', '1');
+
+      // Clear right block
+      if (blockRightElRef) {
+        this._renderer.setStyle(blockRightElRef.nativeElement, 'width', '0');
+        this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
+      }
+    } else if (isPanningLeft && blockRightElRef) {
+      // Existing behavior for left swipe
       let scale = (Math.abs(ev.deltaX) / (this._cachedWidth || 1)) * PAN_SCALE_FACTOR;
       scale = Math.min(1, Math.max(0, scale));
 
       if (scale > 0.5) {
         this._isActionTriggered = true;
-        this._renderer.addClass(targetRef.nativeElement, 'isActive');
+        this._renderer.addClass(blockRightElRef.nativeElement, 'isActive');
       } else {
         this._isActionTriggered = false;
+        this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
       }
 
       const moveBy = Math.abs(ev.deltaX);
-      this._renderer.setStyle(targetRef.nativeElement, 'width', `${moveBy}px`);
-      this._renderer.setStyle(targetRef.nativeElement, 'transition', `none`);
+      this._renderer.setStyle(blockRightElRef.nativeElement, 'width', `${moveBy}px`);
+      this._renderer.setStyle(blockRightElRef.nativeElement, 'transition', 'none');
       this._renderer.setStyle(
         innerWrapperElRef.nativeElement,
         'transform',
         `translateX(${ev.deltaX}px)`,
       );
+
+      // Clear strikethrough
+      if (strikethroughElRef) {
+        this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', '0');
+        this._renderer.removeClass(strikethroughElRef.nativeElement, 'isTriggered');
+      }
     }
   }
 
@@ -205,25 +257,32 @@ export class SwipeBlockComponent implements OnDestroy {
       window.clearTimeout(this._currentPanTimeout);
       this._currentPanTimeout = undefined;
     }
-    const blockLeftElRef = this.blockLeftEl();
     const blockRightElRef = this.blockRightEl();
     const innerWrapperElRef = this.innerWrapperEl();
+    const strikethroughElRef = this.strikethroughEl();
     this.isPreventPointerEventsWhilePanning.set(false);
     this._isActionTriggered = false;
     this._isLockPanLeft = false;
     this._isLockPanRight = false;
-    if (blockLeftElRef) {
-      this._renderer.removeClass(blockLeftElRef.nativeElement, 'isActive');
-      this._renderer.setStyle(blockLeftElRef.nativeElement, 'width', '0');
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transition');
-      this._renderer.removeStyle(blockLeftElRef.nativeElement, 'transform');
+
+    // Reset strikethrough
+    if (strikethroughElRef) {
+      this._renderer.removeClass(strikethroughElRef.nativeElement, 'isTriggered');
+      this._renderer.removeClass(strikethroughElRef.nativeElement, 'isCompleting');
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', '0');
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'opacity', '1');
+      this._renderer.removeStyle(strikethroughElRef.nativeElement, 'transition');
+      this._renderer.removeStyle(strikethroughElRef.nativeElement, 'top');
     }
+
+    // Reset right block
     if (blockRightElRef) {
       this._renderer.removeClass(blockRightElRef.nativeElement, 'isActive');
       this._renderer.setStyle(blockRightElRef.nativeElement, 'width', '0');
       this._renderer.removeStyle(blockRightElRef.nativeElement, 'transition');
       this._renderer.removeStyle(blockRightElRef.nativeElement, 'transform');
     }
+
     if (innerWrapperElRef) {
       this._renderer.setStyle(innerWrapperElRef.nativeElement, 'transform', ``);
     }

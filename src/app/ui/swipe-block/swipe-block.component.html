@@ -1,14 +1,8 @@
 @if (IS_TOUCH_PRIMARY && isPanHelperVisible()) {
   <div
-    #blockLeftEl
-    class="block-left bg-400"
-  >
-    @if (isDone()) {
-      <mat-icon>undo</mat-icon>
-    } @else {
-      <mat-icon>check</mat-icon>
-    }
-  </div>
+    #strikethroughEl
+    class="strikethrough-line"
+  ></div>
   <div
     #blockRightEl
     class="block-right bg-400"
