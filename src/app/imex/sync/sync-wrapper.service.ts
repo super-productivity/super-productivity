@@ -8,7 +8,6 @@ import {
   map,
   shareReplay,
   switchMap,
-  take,
   timeout,
 } from 'rxjs/operators';
 import { toObservable } from '@angular/core/rxjs-interop';
@@ -309,7 +308,7 @@ export class SyncWrapperService {
    * Called after a successful SuperSync sync cycle.
    */
   async connectWebSocket(): Promise<void> {
-    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    const providerId = await firstValueFrom(this.syncProviderId$);
     if (providerId !== SyncProviderId.SuperSync) {
       return;
     }
@@ -344,7 +343,7 @@ export class SyncWrapperService {
   }
 
   private async _sync(): Promise<SyncStatus | 'HANDLED_ERROR'> {
-    const providerId = await this.syncProviderId$.pipe(take(1)).toPromise();
+    const providerId = await firstValueFrom(this.syncProviderId$);
     if (!providerId) {
       throw new Error('No Sync Provider for sync()');
     }

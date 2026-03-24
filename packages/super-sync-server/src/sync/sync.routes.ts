@@ -35,8 +35,7 @@ const createValidationErrorResponse = (
 };
 
 // Validation constants
-const CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
-const MAX_CLIENT_ID_LENGTH = 255;
+import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from './sync.const';
 
 // Two-stage protection against zip bombs:
 // 1. Pre-check: Reject compressed data > limit (typical ratio ~10:1)

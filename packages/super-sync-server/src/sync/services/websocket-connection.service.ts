@@ -26,7 +26,10 @@ export class WebSocketConnectionService {
   /** Debounce notifications: max 1 per 100ms per user (latest-seq-wins) */
   private static readonly NOTIFY_DEBOUNCE_MS = 100;
 
-  private pendingNotifications = new Map<number, ReturnType<typeof setTimeout>>();
+  private pendingNotifications = new Map<
+    number,
+    { timer: ReturnType<typeof setTimeout>; excludeClientIds: Set<string> }
+  >();
 
   addConnection(userId: number, clientId: string, ws: WebSocket): void {
     if (!this.connections.has(userId)) {
@@ -110,24 +113,35 @@ export class WebSocketConnectionService {
     const userSet = this.connections.get(userId);
     if (!userSet || userSet.size === 0) return;
 
-    // Cancel any pending notification for this user
     const pending = this.pendingNotifications.get(userId);
     if (pending) {
-      clearTimeout(pending);
+      // Accumulate excluded client IDs across debounced calls
+      clearTimeout(pending.timer);
+      pending.excludeClientIds.add(excludeClientId);
+      const timer = setTimeout(() => {
+        const entry = this.pendingNotifications.get(userId);
+        this.pendingNotifications.delete(userId);
+        if (entry) {
+          this._sendNewOpsNotification(userId, entry.excludeClientIds, latestSeq);
+        }
+      }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
+      pending.timer = timer;
+    } else {
+      const excludeClientIds = new Set([excludeClientId]);
+      const timer = setTimeout(() => {
+        const entry = this.pendingNotifications.get(userId);
+        this.pendingNotifications.delete(userId);
+        if (entry) {
+          this._sendNewOpsNotification(userId, entry.excludeClientIds, latestSeq);
+        }
+      }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
+      this.pendingNotifications.set(userId, { timer, excludeClientIds });
     }
-
-    // Debounce: latest-seq-wins strategy
-    const timer = setTimeout(() => {
-      this.pendingNotifications.delete(userId);
-      this._sendNewOpsNotification(userId, excludeClientId, latestSeq);
-    }, WebSocketConnectionService.NOTIFY_DEBOUNCE_MS);
-
-    this.pendingNotifications.set(userId, timer);
   }
 
   private _sendNewOpsNotification(
     userId: number,
-    excludeClientId: string,
+    excludeClientIds: Set<string>,
     latestSeq: number,
   ): void {
     const userSet = this.connections.get(userId);
@@ -136,13 +150,12 @@ export class WebSocketConnectionService {
     const message = {
       type: 'new_ops',
       latestSeq,
-      fromClientId: excludeClientId,
       timestamp: Date.now(),
     };
 
     let notified = 0;
     for (const client of userSet) {
-      if (client.clientId !== excludeClientId) {
+      if (!excludeClientIds.has(client.clientId)) {
         if (this._sendMessage(client.ws, message)) {
           notified++;
         }
@@ -207,8 +220,8 @@ export class WebSocketConnectionService {
       this.heartbeatInterval = null;
     }
     // Clear pending notifications
-    for (const timer of this.pendingNotifications.values()) {
-      clearTimeout(timer);
+    for (const entry of this.pendingNotifications.values()) {
+      clearTimeout(entry.timer);
     }
     this.pendingNotifications.clear();
   }

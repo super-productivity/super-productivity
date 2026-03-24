@@ -64,12 +64,18 @@ export class WsTriggeredDownloadService implements OnDestroy {
     try {
       const rawProvider = this._providerManager.getActiveProvider();
       if (!rawProvider) {
+        SyncLog.log(
+          'WsTriggeredDownloadService: No active provider, skipping WS download',
+        );
         return;
       }
 
       const syncCapableProvider =
         await this._wrappedProvider.getOperationSyncCapable(rawProvider);
       if (!syncCapableProvider) {
+        SyncLog.log(
+          'WsTriggeredDownloadService: Provider not operation-sync capable, skipping',
+        );
         return;
       }
 

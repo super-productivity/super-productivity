@@ -2,10 +2,7 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { verifyToken } from '../auth';
 import { getWsConnectionService } from './services/websocket-connection.service';
 import { Logger } from '../logger';
-
-// Validation constants (same as sync.routes.ts)
-const CLIENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
-const MAX_CLIENT_ID_LENGTH = 255;
+import { CLIENT_ID_REGEX, MAX_CLIENT_ID_LENGTH } from './sync.const';
 
 export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.get(

@@ -204,7 +204,12 @@ export class SuperSyncWebSocketService implements OnDestroy {
     this._reconnectTimer = setTimeout(() => {
       this._reconnectTimer = null;
       if (this._currentParams && !this._isIntentionalClose) {
-        this._connect(this._currentParams.baseUrl, this._currentParams.accessToken);
+        this._connect(this._currentParams.baseUrl, this._currentParams.accessToken).catch(
+          (err) => {
+            SyncLog.warn('SuperSyncWebSocketService: Reconnect attempt failed', err);
+            this._scheduleReconnect();
+          },
+        );
       }
     }, delay);
   }
