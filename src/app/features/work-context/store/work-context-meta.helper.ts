@@ -25,8 +25,14 @@ export const moveItemAfterAnchor = (
 
   const anchorIndex = listWithoutItem.indexOf(afterItemId);
   if (anchorIndex === -1) {
-    // Anchor not found - append to end as fallback
-    // This handles the case where the anchor was deleted concurrently
+    // Anchor not found (concurrently deleted).
+    if (currentList.includes(itemId)) {
+      // Item already in list — preserve current position (no-op).
+      // Appending to end would silently corrupt task ordering on remote clients.
+      return currentList;
+    }
+    // Item is new to this list (cross-list move) — append to end as fallback
+    // to prevent the item from being silently dropped.
     return [...listWithoutItem, itemId];
   }
 
