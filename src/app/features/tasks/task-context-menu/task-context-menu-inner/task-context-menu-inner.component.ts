@@ -290,20 +290,20 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           });
         }
 
-        // Hide the default CDK backdrop (shows as a weird rectangle)
+        // Style the CDK backdrop as a full-screen scrim
         const cdkBackdrop = boundingBox.parentElement?.querySelector(
           '.cdk-overlay-backdrop',
         ) as HTMLElement | null;
         if (cdkBackdrop) {
-          cdkBackdrop.style.display = 'none';
+          cdkBackdrop.style.position = 'fixed';
+          cdkBackdrop.style.inset = '0';
+          cdkBackdrop.style.backgroundColor = 'rgba(0, 0, 0, 0)';
+          cdkBackdrop.style.opacity = '1';
+          cdkBackdrop.style.transition = 'background-color 200ms ease-out';
+          requestAnimationFrame(() => {
+            cdkBackdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
+          });
         }
-
-        // Add scrim backdrop
-        boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0)';
-        boundingBox.style.transition = 'background-color 200ms ease-out';
-        requestAnimationFrame(() => {
-          boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
-        });
       });
 
       // Highlight the source task briefly
