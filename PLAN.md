@@ -12,55 +12,48 @@ Integration tokens (GitHub, Jira, GitLab, WebDAV, etc.) are stored in plaintext 
 
 Anyone with filesystem access can extract these tokens.
 
-## Proposed Solution: Transparent OS-Level Encryption via Electron `safeStorage`
+## Proposed Solution: Transparent Per-Platform Encryption
 
-Use **Electron's `safeStorage` API** to encrypt sensitive values using the OS credential store (macOS Keychain, Windows DPAPI, Linux libsecret/kwallet). This is **completely transparent to the user** — no master password needed, no prompts, no extra steps.
+Encrypt sensitive values using platform-native mechanisms — **completely transparent to the user**. No master password, no prompts, no extra steps.
 
-For **Web/PWA**: IndexedDB is already origin-sandboxed by the browser. The main threat (filesystem access to `~/.config/superProductivity`) only applies to Electron.
-
-For **Mobile/Capacitor**: Defer to a future phase using platform-specific secure storage plugins.
+| Platform | Mechanism | User Action Required |
+|----------|-----------|---------------------|
+| **Electron (Desktop)** | `safeStorage` API → macOS Keychain / Windows DPAPI / Linux libsecret | None |
+| **Android** | `EncryptedSharedPreferences` via Android Keystore (AES256-GCM) | None |
+| **iOS** | iOS Keychain via Capacitor Secure Storage plugin | None |
+| **Web/PWA** | Simple obfuscation (base64 + XOR) — defense against casual inspection | None |
 
 ## Architecture Overview
 
 ```
-                          ELECTRON (Desktop)
-                          ==================
-Token entered by user
-        │
-        ▼
-  ┌─────────────────┐     IPC invoke          ┌─────────────────────┐
-  │  Frontend        │ ──────────────────────► │  Main Process       │
-  │  (renderer)      │   "SAFE_STORAGE_ENCRYPT"│  safeStorage API    │
-  │                  │ ◄────────────────────── │  (OS keychain)      │
-  └─────────────────┘     encrypted string     └─────────────────────┘
-        │
-        ▼
-  Store encrypted value in NgRx → IndexedDB → backups → sync
-        │
-        ▼  (on API call)
-  ┌─────────────────┐     IPC invoke          ┌─────────────────────┐
-  │  Frontend        │ ──────────────────────► │  Main Process       │
-  │  needs token     │   "SAFE_STORAGE_DECRYPT"│  safeStorage API    │
-  │                  │ ◄────────────────────── │  (OS keychain)      │
-  └─────────────────┘     plaintext token      └─────────────────────┘
-
-
-                       WEB / PWA (No change needed)
-                       ============================
-  Browser origin-sandbox protects IndexedDB.
-  No filesystem exposure like Electron's userData folder.
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │                      SecretEncryptionService                        │
+  │              (single Angular service, platform-adaptive)            │
+  │                                                                     │
+  │   encrypt(plaintext) → "enc:<base64>"                              │
+  │   decrypt("enc:<base64>") → plaintext                              │
+  │   decrypt("not-prefixed") → passthrough (backwards compat)         │
+  └─────────────┬──────────────┬──────────────┬────────────────────────┘
+                │              │              │
+       ┌────────▼────┐  ┌─────▼──────┐  ┌───▼──────────┐  ┌──────────┐
+       │  Electron    │  │  Android   │  │  iOS         │  │  Web     │
+       │  safeStorage │  │  Encrypted │  │  Keychain    │  │  XOR     │
+       │  (IPC)       │  │  SharedPref│  │  (Capacitor) │  │  obfusc. │
+       └──────────────┘  └────────────┘  └──────────────┘  └──────────┘
 ```
 
-## Why `safeStorage` Over a Master Password
+All platforms use the **same `enc:` prefix convention** so encrypted values are interchangeable in the codebase. The service auto-detects the platform and uses the appropriate backend.
 
-| Aspect | Master Password | `safeStorage` |
-|--------|----------------|---------------|
+## Why Platform-Native Over a Master Password
+
+| Aspect | Master Password | Platform-Native |
+|--------|----------------|-----------------|
 | User friction | Must enter password every launch | Zero — fully transparent |
-| Security backing | Custom Argon2id | OS-managed (Keychain/DPAPI/libsecret) |
+| Security backing | Custom Argon2id | OS-managed (Keychain/DPAPI/Keystore) |
 | Forgotten password | Data loss risk | OS handles credential lifecycle |
-| Implementation complexity | High (UI, migration, startup flow) | Low (IPC + service wrapper) |
-| Cross-device sync | Each device needs the password | Each device encrypts independently |
-| Platform coverage | All platforms | Electron only (Web is already safe) |
+| Implementation complexity | High (UI, migration, startup) | Moderate (per-platform adapter) |
+| Android | Same complexity | Already have `EncryptedSharedPreferences` |
+| Web | Same as native | Simple obfuscation (sufficient for origin-sandboxed storage) |
 
 ## Implementation Steps
 
@@ -124,52 +117,193 @@ safeStorageEncrypt(plaintext: string): Promise<string | null>;
 safeStorageDecrypt(encryptedBase64: string): Promise<string | null>;
 ```
 
-### Step 4: Create Frontend `SecretEncryptionService`
+### Step 4: Add Android Native Bridge Methods
+
+**Existing infrastructure:** Android already has `EncryptedSharedPreferences` with AES256-GCM (`BackgroundSyncCredentialStore.kt`). We extend this pattern to expose encrypt/decrypt to the WebView.
+
+**File:** `android/.../webview/JavaScriptInterface.kt` (modify)
+
+Add two new `@JavascriptInterface` methods:
+
+```kotlin
+@JavascriptInterface
+fun secureEncrypt(requestId: String, plaintext: String) {
+    callJavaScriptFunction("window.SUPAndroid.secureEncryptCallback('$requestId', " +
+        "'${encryptViaKeystore(plaintext)}')")
+}
+
+@JavascriptInterface
+fun secureDecrypt(requestId: String, encryptedBase64: String) {
+    callJavaScriptFunction("window.SUPAndroid.secureDecryptCallback('$requestId', " +
+        "'${decryptViaKeystore(encryptedBase64)}')")
+}
+```
+
+**File:** `android/.../service/SecureStorageHelper.kt` (new)
+
+Reuse the existing `MasterKey` / `EncryptedSharedPreferences` pattern from `BackgroundSyncCredentialStore.kt`, but expose generic encrypt/decrypt:
+
+```kotlin
+object SecureStorageHelper {
+    fun encrypt(context: Context, plaintext: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        // Use or create a dedicated key for token encryption
+        val key = getOrCreateKey(keyStore, "sp_token_key")
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val iv = cipher.iv
+        val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+        // Concatenate IV + ciphertext, base64 encode
+        return Base64.encodeToString(iv + encrypted, Base64.NO_WRAP)
+    }
+
+    fun decrypt(context: Context, encryptedBase64: String): String {
+        val data = Base64.decode(encryptedBase64, Base64.NO_WRAP)
+        val iv = data.sliceArray(0 until 12)
+        val ciphertext = data.sliceArray(12 until data.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val key = keyStore.getKey("sp_token_key", null) as SecretKey
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+        return String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+    }
+}
+```
+
+**Key points:**
+- Uses Android Keystore directly (hardware-backed on most devices)
+- Key material never leaves the secure element
+- Same pattern as existing `BackgroundSyncCredentialStore` but generic
+- Callback-based to match existing `JavaScriptInterface` patterns (`saveToDb`, `loadFromDb`)
+
+### Step 5: Add Android Frontend Bridge
+
+**File:** `src/app/features/android/android-interface.ts` (modify)
+
+Add wrapped Promise methods following the existing pattern (like `saveToDbWrapped`):
+
+```typescript
+secureEncryptWrapped(plaintext: string): Promise<string>;
+secureDecryptWrapped(encryptedBase64: string): Promise<string>;
+```
+
+### Step 6: iOS Secure Storage (Capacitor Plugin)
+
+**Option A (recommended):** Use `@capacitor-community/secure-storage` plugin:
+
+```bash
+npm install @capacitor-community/secure-storage
+npx cap sync ios
+```
+
+This provides iOS Keychain integration via a simple API:
+```typescript
+import { SecureStorage } from '@capacitor-community/secure-storage';
+await SecureStorage.set({ key: 'token_key', value: plaintext });
+const { value } = await SecureStorage.get({ key: 'token_key' });
+```
+
+**Option B (simpler for encrypt/decrypt only):** Since we need encrypt/decrypt rather than key-value storage, we can add a small native Swift plugin that wraps CommonCrypto with a Keychain-stored key, similar to the Android approach.
+
+**Recommended:** Option A for simplicity. Store the encrypted representation as the value, retrieve on demand. The plugin handles Keychain key management internally.
+
+### Step 7: Web Obfuscation
+
+**File:** `src/app/core/encryption/web-obfuscation.ts` (new)
+
+For Web/PWA, IndexedDB is already origin-sandboxed. The main risk is browser extensions or devtools inspection. A simple obfuscation prevents casual reading without pretending to be real security:
+
+```typescript
+/**
+ * Simple XOR obfuscation for web platform.
+ * NOT cryptographically secure — just prevents casual plaintext exposure
+ * in devtools / IndexedDB viewers. Real protection comes from browser
+ * origin sandboxing.
+ */
+const OBFUSCATION_KEY = 'sp-web-token-obfuscation-v1';
+
+export function obfuscate(plaintext: string): string {
+  const bytes = new TextEncoder().encode(plaintext);
+  const keyBytes = new TextEncoder().encode(OBFUSCATION_KEY);
+  const result = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    result[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+  }
+  return btoa(String.fromCharCode(...result));
+}
+
+export function deobfuscate(encoded: string): string {
+  const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+  const keyBytes = new TextEncoder().encode(OBFUSCATION_KEY);
+  const result = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) {
+    result[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+  }
+  return new TextDecoder().decode(result);
+}
+```
+
+### Step 8: Create Unified Frontend `SecretEncryptionService`
 
 **File:** `src/app/core/encryption/secret-encryption.service.ts` (new)
 
-A thin Angular service that wraps the IPC calls, with a **decrypted-value cache** so we only call IPC once per token per session:
+A single Angular service that auto-detects the platform and routes to the appropriate backend. Includes an in-memory **decryption cache** to minimize IPC/bridge round-trips:
 
 ```typescript
 @Injectable({ providedIn: 'root' })
 export class SecretEncryptionService {
-  // In-memory cache: encrypted base64 → plaintext
   private _decryptCache = new Map<string, string>();
 
-  /** Returns true if OS-level encryption is available (Electron + keyring present) */
-  isAvailable(): boolean {
-    return IS_ELECTRON && typeof window.ea?.safeStorageEncrypt === 'function';
-  }
-
-  /** Encrypt a secret. Returns original value if not in Electron. */
+  /** Encrypt a secret using the platform-appropriate mechanism */
   async encrypt(plaintext: string): Promise<string> {
-    if (!this.isAvailable() || !plaintext) return plaintext;
-    const encrypted = await window.ea.safeStorageEncrypt(plaintext);
-    if (!encrypted) return plaintext; // encryption unavailable, no regression
-    return `enc:${encrypted}`; // prefix to distinguish from plaintext
+    if (!plaintext) return plaintext;
+
+    let encrypted: string | null = null;
+
+    if (IS_ELECTRON) {
+      encrypted = await window.ea.safeStorageEncrypt(plaintext);
+    } else if (IS_ANDROID_WEB_VIEW) {
+      encrypted = await androidInterface.secureEncryptWrapped(plaintext);
+    } else if (isNativePlatform() && isIOS()) {
+      encrypted = await capacitorSecureEncrypt(plaintext);
+    } else {
+      // Web: simple obfuscation
+      encrypted = obfuscate(plaintext);
+    }
+
+    if (!encrypted) return plaintext; // platform encryption unavailable
+    return `enc:${encrypted}`;
   }
 
-  /** Decrypt a secret. Returns original value if not encrypted. */
+  /** Decrypt a secret. Passes through non-encrypted values. */
   async decrypt(value: string): Promise<string> {
-    if (!value?.startsWith('enc:')) return value; // not encrypted, return as-is
-    const encryptedBase64 = value.slice(4);
+    if (!value?.startsWith('enc:')) return value;
+    const payload = value.slice(4);
 
-    // Check cache first
-    const cached = this._decryptCache.get(encryptedBase64);
+    const cached = this._decryptCache.get(payload);
     if (cached) return cached;
 
-    const plaintext = await window.ea.safeStorageDecrypt(encryptedBase64);
+    let plaintext: string | null = null;
+
+    if (IS_ELECTRON) {
+      plaintext = await window.ea.safeStorageDecrypt(payload);
+    } else if (IS_ANDROID_WEB_VIEW) {
+      plaintext = await androidInterface.secureDecryptWrapped(payload);
+    } else if (isNativePlatform() && isIOS()) {
+      plaintext = await capacitorSecureDecrypt(payload);
+    } else {
+      plaintext = deobfuscate(payload);
+    }
+
     if (plaintext === null) throw new Error('Failed to decrypt secret');
-    this._decryptCache.set(encryptedBase64, plaintext);
+    this._decryptCache.set(payload, plaintext);
     return plaintext;
   }
 
-  /** Check if a value is encrypted */
   isEncrypted(value: string): boolean {
     return value?.startsWith('enc:') ?? false;
   }
 
-  /** Clear the in-memory cache */
   clearCache(): void {
     this._decryptCache.clear();
   }
@@ -177,11 +311,12 @@ export class SecretEncryptionService {
 ```
 
 **Design notes:**
-- The `enc:` prefix makes encrypted values self-describing. This enables gradual migration — old plaintext values continue working, new values get encrypted.
-- The cache avoids repeated IPC round-trips for the same token during a session.
-- On Web/PWA, `isAvailable()` returns false and all values pass through unchanged.
+- The `enc:` prefix makes encrypted values self-describing across all platforms
+- Backwards compatible — old plaintext values pass through `decrypt()` unchanged
+- Cache avoids repeated IPC/bridge round-trips for the same token
+- Platform detection uses existing constants (`IS_ELECTRON`, `IS_ANDROID_WEB_VIEW`, etc.)
 
-### Step 5: Define Sensitive Field Registry
+### Step 9: Define Sensitive Field Registry
 
 **File:** `src/app/core/encryption/sensitive-fields.const.ts` (new)
 
@@ -210,9 +345,9 @@ export const SENSITIVE_SYNC_FIELDS = {
 };
 ```
 
-### Step 6: Integrate at Config Boundaries
+### Step 10: Integrate at Config Boundaries
 
-#### 6a. Issue Provider Config — Encrypt on Save
+#### 10a. Issue Provider Config — Encrypt on Save
 
 **File:** `src/app/features/issue/store/issue-provider.effects.ts` (or the relevant save path)
 
@@ -229,7 +364,7 @@ for (const field of SENSITIVE_PROVIDER_FIELDS[provider.issueProviderKey] ?? []) 
 
 This happens **once** at save time. The encrypted value is what persists.
 
-#### 6b. Issue Provider API Services — Decrypt on Use
+#### 10b. Issue Provider API Services — Decrypt on Use
 
 **Files:** Each provider's API service where tokens are read from config.
 
@@ -242,7 +377,7 @@ headers: { 'PRIVATE-TOKEN': token }
 
 Similarly for Jira (`jira-api.service.ts`), Gitea, etc.
 
-#### 6c. Plugin OAuth Token Store
+#### 10c. Plugin OAuth Token Store
 
 **File:** `src/app/plugins/oauth/plugin-oauth-token-store.ts` (modify)
 
@@ -259,13 +394,13 @@ export const loadOAuthTokens = async (key: string): Promise<string | null> => {
 };
 ```
 
-#### 6d. Sync Credential Store
+#### 10d. Sync Credential Store
 
 **File:** `src/app/op-log/sync-providers/credential-store.service.ts` (modify)
 
 Encrypt sensitive fields in `_save()` and decrypt in `load()`.
 
-### Step 7: Encrypt Backup Data
+### Step 11: Encrypt Backup Data
 
 **File:** `electron/backup.ts` (modify)
 
@@ -299,7 +434,7 @@ function loadBackupData(backupPath: string): string {
 }
 ```
 
-### Step 8: Migration — Encrypt Existing Plaintext Tokens
+### Step 12: Migration — Encrypt Existing Plaintext Tokens
 
 **File:** `src/app/core/encryption/secret-migration.service.ts` (new)
 
@@ -313,7 +448,7 @@ On first run after this feature ships (detected by absence of `enc:` prefix on t
 
 This migration runs automatically and silently. The `enc:` prefix means it's idempotent — already-encrypted values are skipped.
 
-### Step 9: Register in Electron Main
+### Step 13: Register in Electron Main
 
 **File:** `electron/main.ts` (modify)
 
@@ -325,7 +460,9 @@ Call `initSafeStorage()` during app initialization, alongside existing `initBack
 | File | Purpose |
 |------|---------|
 | `electron/safe-storage.ts` | IPC handlers for `safeStorage.encryptString/decryptString` |
-| `src/app/core/encryption/secret-encryption.service.ts` | Frontend service wrapping IPC calls + cache |
+| `android/.../service/SecureStorageHelper.kt` | Android Keystore encrypt/decrypt helper |
+| `src/app/core/encryption/secret-encryption.service.ts` | Unified frontend service (platform-adaptive) + cache |
+| `src/app/core/encryption/web-obfuscation.ts` | Simple XOR obfuscation for Web/PWA |
 | `src/app/core/encryption/sensitive-fields.const.ts` | Registry of sensitive field names |
 | `src/app/core/encryption/secret-migration.service.ts` | One-time migration of existing plaintext tokens |
 
@@ -334,13 +471,16 @@ Call `initSafeStorage()` during app initialization, alongside existing `initBack
 |------|--------|
 | `electron/shared-with-frontend/ipc-events.const.ts` | Add `SAFE_STORAGE_ENCRYPT/DECRYPT` events |
 | `electron/preload.ts` | Expose `safeStorageEncrypt/Decrypt` on `window.ea` |
-| `electron/electronAPI.d.ts` | Type definitions for new methods |
+| `electron/electronAPI.d.ts` | Type definitions for new Electron methods |
 | `electron/main.ts` | Call `initSafeStorage()` |
 | `electron/backup.ts` | Encrypt/decrypt backup files |
+| `android/.../webview/JavaScriptInterface.kt` | Add `secureEncrypt/Decrypt` bridge methods |
+| `src/app/features/android/android-interface.ts` | Add `secureEncryptWrapped/DecryptWrapped` |
 | `src/app/features/issue/providers/*/\*-api.service.ts` | Decrypt tokens before API calls |
 | `src/app/features/issue/store/issue-provider.effects.ts` | Encrypt tokens on save |
 | `src/app/plugins/oauth/plugin-oauth-token-store.ts` | Wrap with encryption |
 | `src/app/op-log/sync-providers/credential-store.service.ts` | Wrap with encryption |
+| `package.json` | Add `@capacitor-community/secure-storage` (for iOS) |
 
 ## Security Properties
 
@@ -352,20 +492,18 @@ Call `initSafeStorage()` during app initialization, alongside existing `initBack
 6. **Sync-safe** — encrypted tokens are just strings; sync works unchanged
 7. **Web/PWA safe** — browser sandbox already protects IndexedDB; no filesystem exposure
 
-## Limitations & Future Work
+## Limitations & Notes
 
-- **Linux without keyring**: Falls back to plaintext. Could show a one-time warning suggesting the user install `gnome-keyring` or `kwallet`.
-- **Web/PWA**: No additional protection (already origin-sandboxed). Could add optional master password in a future phase for paranoid users.
-- **Mobile**: Not addressed in this phase. Future work: add `@capacitor-community/secure-storage` for Android Keystore / iOS Keychain integration.
-- **Cross-device encrypted tokens**: If a user syncs encrypted tokens to another Electron device, that device's `safeStorage` can't decrypt them (different OS key). Tokens would need to be re-entered on each device. This matches how the existing `sup-plugin-oauth` and `sup-sync` stores already work (local-only, not synced). For tokens in the synced store (issue providers), we need to either:
-  - (a) Only encrypt in local-only stores, not in the synced NgRx state, OR
-  - (b) Encrypt in the synced state but store the encryption key in `safeStorage` so each device can access it
-
-  **Recommended: Option (a)** — Move sensitive fields out of the synced state into a local-only credential store (similar to how `sup-sync` and `sup-plugin-oauth` already work). This is a cleaner architectural separation: non-sensitive config syncs, credentials stay local.
+- **Linux without keyring**: `safeStorage` returns `isEncryptionAvailable() === false`. Falls back to plaintext (no regression). Could show a one-time warning suggesting `gnome-keyring` or `kwallet`.
+- **Web obfuscation is NOT security**: It prevents casual inspection in devtools/IndexedDB viewers, but anyone who reads the source can reverse it. This is acceptable because browser origin-sandboxing is the real protection on web — there's no `~/.config/` folder to steal.
+- **Cross-device encrypted tokens**: Each device encrypts with its own platform key. Synced encrypted tokens can't be decrypted on a different device. **Recommended solution: Option (a)** — encrypt only in local-only stores (like `sup-sync` and `sup-plugin-oauth` already do), not in the synced NgRx state. Non-sensitive config syncs, credentials stay local per-device.
+- **Android Keystore reset**: Factory reset or certain OS updates can invalidate Android Keystore keys. Handle gracefully — if decryption fails, clear the encrypted value and prompt re-entry (same UX as token expiration).
 
 ## Testing Strategy
 
-1. **Unit tests** for `SecretEncryptionService` — encrypt/decrypt round-trip, `enc:` prefix handling, cache behavior, graceful fallback when not in Electron
-2. **Unit tests** for migration service — encrypts only plaintext values, skips already-encrypted
-3. **E2E test** (Electron) — configure an integration, verify token is encrypted in backup file, restart app, verify integration still works
-4. **Manual testing** — verify on macOS, Windows, and Linux (with and without keyring)
+1. **Unit tests** for `SecretEncryptionService` — encrypt/decrypt round-trip, `enc:` prefix handling, cache behavior, passthrough for non-encrypted values
+2. **Unit tests** for web obfuscation — round-trip, handles unicode, handles empty strings
+3. **Unit tests** for migration service — encrypts only plaintext values, skips already-encrypted
+4. **E2E test** (Electron) — configure an integration, verify token is encrypted in backup file, restart app, verify integration still works
+5. **Android instrumented test** — verify `SecureStorageHelper` encrypt/decrypt round-trip with Android Keystore
+6. **Manual testing** — verify on macOS, Windows, Linux (with/without keyring), Android, iOS, and Web
