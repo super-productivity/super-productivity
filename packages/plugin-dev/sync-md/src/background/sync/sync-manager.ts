@@ -14,6 +14,15 @@ let spToMdDebounceTimer: number | null = null;
 let isWindowFocused = document.hasFocus();
 let pendingMdToSpSync: LocalUserCfg | null = null;
 
+/**
+ * Timestamp of the last MD→SP sync completion.
+ * Used to suppress SP hooks that fire as a side-effect of the MD→SP batch update,
+ * preventing a sync oscillation loop (MD→SP creates tasks → SP hook fires → SP→MD
+ * writes file → file watcher detects → MD→SP again → ...).
+ */
+let lastMdToSpSyncTimestamp = 0;
+const SP_HOOK_COOLDOWN_MS = 2000;
+
 export const initSyncManager = (config: LocalUserCfg): void => {
   // Stop any existing file watcher
   stopFileWatcher();
@@ -118,6 +127,17 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
   pendingMdToSpSync = null;
   mdToSpDebounceTimer = null;
 
+  // Cancel any pending SP→MD debounce to prevent it from firing during/after this sync
+  if (spToMdDebounceTimer) {
+    window.clearTimeout(spToMdDebounceTimer);
+    spToMdDebounceTimer = null;
+    console.log('[sync-md] Cancelled pending SP→MD debounce timer');
+  }
+
+  // Stop file watcher during the entire MD→SP sync to prevent re-triggering
+  // when SP→MD writes the file back (for verification/ID assignment)
+  stopFileWatcher();
+
   try {
     const content = await readTasksFile(config.filePath);
     if (content) {
@@ -126,6 +146,9 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
 
       try {
         await mdToSp(content, projectId);
+
+        // Mark the time so SP hooks from this batch update are suppressed
+        lastMdToSpSyncTimestamp = Date.now();
 
         // Show success notification (optional, can be removed if too noisy)
         PluginAPI.showSnack({
@@ -137,27 +160,16 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
         const verificationResult = await verifySyncState(config);
         logSyncVerification(verificationResult, 'MD to SP sync (file change)');
 
-        // If there are still differences, trigger SP→MD sync
+        // If there are still differences, trigger SP→MD sync to assign IDs
         if (!verificationResult.isInSync) {
           console.log(
             '[sync-md] MD to SP sync incomplete, triggering SP to MD sync to resolve remaining differences',
           );
 
-          stopFileWatcher();
+          await spToMd(config);
 
-          try {
-            await spToMd(config);
-
-            const finalVerification = await verifySyncState(config);
-            logSyncVerification(
-              finalVerification,
-              'SP to MD sync (resolving differences)',
-            );
-          } finally {
-            startFileWatcher(config.filePath, () => {
-              handleFileChange(config);
-            });
-          }
+          const finalVerification = await verifySyncState(config);
+          logSyncVerification(finalVerification, 'SP to MD sync (resolving differences)');
         }
       } catch (syncError) {
         console.error('[sync-md] Sync failed:', syncError);
@@ -179,6 +191,10 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
       type: 'ERROR',
     });
   } finally {
+    // Re-enable file watcher after all sync operations are complete
+    startFileWatcher(config.filePath, () => {
+      handleFileChange(config);
+    });
     syncInProgress = false;
   }
 };
@@ -194,6 +210,15 @@ const setupSpHooks = (config: LocalUserCfg): void => {
 };
 
 const handleSpChange = (config: LocalUserCfg): void => {
+  // Suppress SP hooks that fire as a side-effect of a recent MD→SP sync.
+  // Without this, the batch update from MD→SP triggers ANY_TASK_UPDATE,
+  // which would start an SP→MD sync, write the file, and the file watcher
+  // would detect the change, creating a sync oscillation loop.
+  if (Date.now() - lastMdToSpSyncTimestamp < SP_HOOK_COOLDOWN_MS) {
+    console.log('[sync-md] SP change suppressed - within cooldown after MD→SP sync');
+    return;
+  }
+
   if (spToMdDebounceTimer) {
     window.clearTimeout(spToMdDebounceTimer);
   }
