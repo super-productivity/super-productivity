@@ -181,6 +181,7 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
   private _isOpenedFromKeyboard = false;
   private _touchMenuTimeout: ReturnType<typeof setTimeout> | undefined;
   private _touchMenuRafId: number | undefined;
+  private _scrimRafId: number | undefined;
 
   // TODO: Skipped for migration because:
   //  Accessor inputs cannot be migrated as they are too complex.
@@ -208,6 +209,9 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
     }
     if (this._touchMenuRafId !== undefined) {
       cancelAnimationFrame(this._touchMenuRafId);
+    }
+    if (this._scrimRafId !== undefined) {
+      cancelAnimationFrame(this._scrimRafId);
     }
   }
 
@@ -245,24 +249,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         if (!boundingBox) {
           return;
         }
-        // Remove the CDK backdrop – we use the bounding box as the scrim instead
-        const cdkBackdrop = boundingBox.parentElement?.querySelector(
-          '.cdk-overlay-backdrop',
-        ) as HTMLElement | null;
-        if (cdkBackdrop) {
-          cdkBackdrop.remove();
-        }
-
         boundingBox.style.position = 'fixed';
         boundingBox.style.inset = '0';
-        boundingBox.style.width = '100vw';
-        boundingBox.style.height = '100vh';
         boundingBox.style.display = 'flex';
         boundingBox.style.justifyContent = 'center';
         boundingBox.style.alignItems = 'flex-end';
         boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0)';
         boundingBox.style.transition = 'background-color 200ms ease-out';
-        requestAnimationFrame(() => {
+        this._scrimRafId = requestAnimationFrame(() => {
           boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
         });
 
@@ -274,17 +268,18 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           pane.style.justifyContent = 'center';
         }
 
-        boundingBox.addEventListener(
-          'click',
-          (e: Event) => {
-            if (e.target === boundingBox || e.target === pane) {
-              this.contextMenuTrigger()?.closeMenu();
-            }
-          },
-          { once: true },
-        );
-
         const menuPanel = boundingBox.querySelector('.mat-mdc-menu-panel') as HTMLElement;
+
+        boundingBox.addEventListener('click', (e: Event) => {
+          if (
+            e.target === boundingBox ||
+            e.target === pane ||
+            (menuPanel && !menuPanel.contains(e.target as Node))
+          ) {
+            this.contextMenuTrigger()?.closeMenu();
+          }
+        });
+
         if (menuPanel) {
           menuPanel.style.maxWidth = '300px';
           menuPanel.style.width = '100%';
