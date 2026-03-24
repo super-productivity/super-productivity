@@ -30,6 +30,7 @@ export class SwipeBlockComponent implements OnDestroy {
   readonly canSwipe = input<boolean>(true);
   readonly excludeSelector = input<string>('');
   readonly swipeRight = output<void>();
+  readonly swipeRightTriggered = output<boolean>();
   readonly swipeLeft = output<void>();
 
   readonly IS_TOUCH_PRIMARY = IS_TOUCH_PRIMARY;
@@ -39,7 +40,6 @@ export class SwipeBlockComponent implements OnDestroy {
   private _isLockPanLeft = false;
   private _isLockPanRight = false;
   private _isActionTriggered = false;
-  private _strikethroughY = 0;
 
   readonly strikethroughEl = viewChild<ElementRef>('strikethroughEl');
   readonly blockRightEl = viewChild<ElementRef>('blockRightEl');
@@ -77,10 +77,6 @@ export class SwipeBlockComponent implements OnDestroy {
     this._showPanHelper();
     this.isPreventPointerEventsWhilePanning.set(true);
     this._cachedWidth = this._elementRef.nativeElement.offsetWidth;
-
-    // Calculate touch Y position relative to component for strikethrough
-    const rect = this._elementRef.nativeElement.getBoundingClientRect();
-    this._strikethroughY = ev.clientY - rect.top;
   }
 
   onPanEnd(): void {
@@ -178,19 +174,20 @@ export class SwipeBlockComponent implements OnDestroy {
       scale = Math.min(1, Math.max(0, scale));
 
       if (scale > 0.5) {
-        this._isActionTriggered = true;
+        if (!this._isActionTriggered) {
+          this._isActionTriggered = true;
+          this.swipeRightTriggered.emit(true);
+        }
         this._renderer.addClass(strikethroughElRef.nativeElement, 'isTriggered');
       } else {
-        this._isActionTriggered = false;
+        if (this._isActionTriggered) {
+          this._isActionTriggered = false;
+          this.swipeRightTriggered.emit(false);
+        }
         this._renderer.removeClass(strikethroughElRef.nativeElement, 'isTriggered');
       }
 
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', `${width}px`);
-      this._renderer.setStyle(
-        strikethroughElRef.nativeElement,
-        'top',
-        `${this._strikethroughY}px`,
-      );
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'transition', 'none');
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'opacity', '1');
 
@@ -272,7 +269,6 @@ export class SwipeBlockComponent implements OnDestroy {
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', '0');
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'opacity', '1');
       this._renderer.removeStyle(strikethroughElRef.nativeElement, 'transition');
-      this._renderer.removeStyle(strikethroughElRef.nativeElement, 'top');
     }
 
     // Reset right block

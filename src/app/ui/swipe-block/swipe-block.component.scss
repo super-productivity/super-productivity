@@ -24,12 +24,10 @@
   opacity: 1;
 
   &.isTriggered {
-    background: var(--c-accent);
     height: 2.5px;
   }
 
   &.isCompleting {
-    background: var(--c-accent);
     height: 2.5px;
     animation: strikethrough-pulse 180ms ease-out;
   }

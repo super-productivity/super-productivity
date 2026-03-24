@@ -692,6 +692,12 @@ export class TaskComponent implements OnDestroy, AfterViewInit {
     this.toggleTaskDone();
   }
 
+  onSwipeRightTriggered(isTriggered: boolean): void {
+    if (!this.task().isDone) {
+      this.showDoneAnimation.set(isTriggered);
+    }
+  }
+
   toggleTaskDone(): void {
     window.clearTimeout(this._doneAnimationTimeout);
     this.focusNext(true, true);

@@ -168,6 +168,12 @@ export class PlannerTaskComponent implements OnInit, OnDestroy, AfterViewInit {
     this._touchListenerCleanups.forEach((fn) => fn());
   }
 
+  onSwipeRightTriggered(isTriggered: boolean): void {
+    if (!this.task.isDone) {
+      this.showDoneAnimation.set(isTriggered);
+    }
+  }
+
   toggleTaskDone(): void {
     window.clearTimeout(this._doneAnimationTimeout);
     this._doneAnimationTimeout = this._taskService.toggleDoneWithAnimation(

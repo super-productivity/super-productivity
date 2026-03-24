@@ -4,6 +4,7 @@
   [canSwipe]="!taskTitleEditEl?.isEditing()"
   [excludeSelector]="'done-toggle'"
   (swipeRight)="toggleTaskDone()"
+  (swipeRightTriggered)="onSwipeRightTriggered($event)"
   (swipeLeft)="openContextMenu()"
 >
   <div class="inner-wrapper">
