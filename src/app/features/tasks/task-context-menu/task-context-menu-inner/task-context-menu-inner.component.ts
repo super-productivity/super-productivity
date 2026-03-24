@@ -278,15 +278,28 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           menuPanel.style.maxHeight = '80vh';
           // Disable Angular Material's built-in menu animation to prevent conflicts
           menuPanel.style.animation = 'none';
-          menuPanel.style.transform = 'translateY(100%)';
+          menuPanel.style.transform = 'translateY(24px)';
+          menuPanel.style.opacity = '0';
           // Force reflow so the browser registers the initial position
           menuPanel.getBoundingClientRect();
-          menuPanel.style.transition = 'transform 200ms ease-out';
+          menuPanel.style.transition =
+            'transform 250ms cubic-bezier(0.2, 0, 0, 1), opacity 150ms ease-out';
           this._touchMenuRafId = requestAnimationFrame(() => {
             menuPanel.style.transform = 'translateY(0)';
+            menuPanel.style.opacity = '1';
           });
         }
+
+        // Add scrim backdrop
+        boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0)';
+        boundingBox.style.transition = 'background-color 200ms ease-out';
+        requestAnimationFrame(() => {
+          boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
+        });
       });
+
+      // Highlight the source task briefly
+      this._highlightSourceTask();
     }
   }
 
@@ -682,6 +695,26 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
 
   trackByProjectId(i: number, project: Project): string {
     return project.id;
+  }
+
+  private _highlightSourceTask(): void {
+    const taskEl = document.querySelector(`#t-${this.task.id}`) as HTMLElement;
+    if (!taskEl) {
+      return;
+    }
+    taskEl.style.transition = 'box-shadow 200ms ease-out';
+    taskEl.style.boxShadow = 'inset 0 0 0 2px var(--primary)';
+    taskEl.style.zIndex = '1';
+    const cleanup = (): void => {
+      taskEl.style.transition = 'box-shadow 300ms ease-out';
+      taskEl.style.boxShadow = '';
+      setTimeout(() => {
+        taskEl.style.zIndex = '';
+        taskEl.style.transition = '';
+      }, 300);
+    };
+    // Clean up when the menu closes
+    this.contextMenu()?.closed.pipe(first()).subscribe(cleanup);
   }
 
   private async _getTaskWithSubtasks(): Promise<TaskWithSubTasks> {
