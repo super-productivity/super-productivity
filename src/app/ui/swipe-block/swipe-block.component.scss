@@ -25,29 +25,30 @@
 
   &.isTriggered {
     background: var(--c-accent);
-    height: 3px;
-    box-shadow: 0 0 6px 1px var(--c-accent);
+    height: 2.5px;
   }
 
   &.isCompleting {
     background: var(--c-accent);
-    height: 3.5px;
-    box-shadow: 0 0 12px 2px var(--c-accent);
-    animation: strikethrough-pulse 200ms ease-out;
+    height: 2.5px;
+    animation: strikethrough-pulse 180ms ease-out;
   }
 }
 
 @keyframes strikethrough-pulse {
   0% {
     transform: translateY(-50%) scaleY(1);
+    opacity: 1;
   }
 
   50% {
-    transform: translateY(-50%) scaleY(2.5);
+    transform: translateY(-50%) scaleY(1.6);
+    opacity: 0.8;
   }
 
   100% {
     transform: translateY(-50%) scaleY(1);
+    opacity: 1;
   }
 }
 
