@@ -10,7 +10,15 @@ const MAX_CLIENT_ID_LENGTH = 255;
 export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.get(
     '/ws',
-    { websocket: true },
+    {
+      websocket: true,
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute',
+        },
+      },
+    },
     async (
       socket,
       req: FastifyRequest<{
