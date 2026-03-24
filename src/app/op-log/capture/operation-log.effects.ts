@@ -11,7 +11,12 @@ import {
 import { uuidv7 } from '../../util/uuid-v7';
 import { devError } from '../../util/dev-error';
 import { incrementVectorClock } from '../../core/util/vector-clock';
-import { MultiEntityPayload, Operation, ActionType } from '../core/operation.types';
+import {
+  MultiEntityPayload,
+  Operation,
+  ActionType,
+  OpType,
+} from '../core/operation.types';
 import { OperationLogCompactionService } from '../persistence/operation-log-compaction.service';
 import { OpLog } from '../../core/log';
 import { SnackService } from '../../core/snack/snack.service';
@@ -26,7 +31,7 @@ import {
 import { CURRENT_SCHEMA_VERSION } from '../persistence/schema-migration.service';
 import { OperationCaptureService } from './operation-capture.service';
 import { ImmediateUploadService } from '../sync/immediate-upload.service';
-import { getDeferredActions } from './operation-capture.meta-reducer';
+import { getDeferredActions, isDeferredAction } from './operation-capture.meta-reducer';
 import { ClientIdService } from '../../core/util/client-id.service';
 import { SuperSyncStatusService } from '../sync/super-sync-status.service';
 
@@ -69,30 +74,31 @@ export class OperationLogEffects {
    * Filters out:
    * 1. Non-persistent actions (actions without PersistentActionMeta)
    * 2. Remote actions (actions replayed from sync, marked with isRemote: true)
+   * 3. Deferred actions (buffered during sync, processed later by processDeferredActions)
    *
-   * Note: We intentionally do NOT filter by `isApplyingRemoteOps()` here.
-   * The meta-reducer handles sync timing by BUFFERING actions during sync
-   * (not enqueueing them). If an action reaches this effect and was enqueued,
-   * it means the meta-reducer determined it should be processed.
-   *
-   * Previously there was a filter here that caused a race condition:
-   * 1. Meta-reducer enqueues action (isApplyingRemoteOps = false)
-   * 2. Before effect runs, sync starts (isApplyingRemoteOps = true)
-   * 3. Effect filters out action, but it's already in queue
-   * 4. flushPendingWrites() times out waiting for queue to drain
+   * Note: We do NOT filter by `isApplyingRemoteOps()` here because of a race
+   * condition: the meta-reducer may enqueue an action before sync starts, but
+   * the effect processes it after sync starts. Filtering by isApplyingRemoteOps
+   * would skip the action while its queue entry remains, causing flushPendingWrites
+   * to time out. Instead, we use isDeferredAction() which precisely identifies
+   * actions that were buffered (not enqueued) by the meta-reducer.
    */
   persistOperation$ = createEffect(
     () =>
       this.actions$.pipe(
         filter((action) => isPersistentAction(action)),
         filter((action) => !(action as PersistentAction).meta.isRemote),
+        filter((action) => !isDeferredAction(action as PersistentAction)),
         // Use concatMap for sequential processing to maintain FIFO queue order
         concatMap((action) => this.writeOperation(action as PersistentAction)),
       ),
     { dispatch: false },
   );
 
-  private async writeOperation(action: PersistentAction): Promise<void> {
+  private async writeOperation(
+    action: PersistentAction,
+    skipDequeue = false,
+  ): Promise<void> {
     // Always read from ClientIdService (which has its own in-memory cache).
     // Do NOT cache locally — BackupService.generateNewClientId() updates the
     // service cache, and a local cache here would go stale after backup import.
@@ -119,7 +125,9 @@ export class OperationLogEffects {
       );
     if (!isBulkAllOperation && !hasValidEntityId && !hasValidEntityIds) {
       // IMPORTANT: Dequeue first to prevent queue from getting stuck
-      this.operationCaptureService.dequeue();
+      if (!skipDequeue) {
+        this.operationCaptureService.dequeue();
+      }
       devError(
         `[OperationLogEffects] Action ${action.type} has invalid entityId/entityIds (${action.meta.entityId}) - skipping persistence`,
       );
@@ -163,7 +171,9 @@ export class OperationLogEffects {
         // Get entity changes from the FIFO queue (for TIME_TRACKING and TASK time sync)
         // For most actions, this returns empty array since action payloads are sufficient.
         // IMPORTANT: This MUST happen inside the lock to prevent race with flushPendingWrites.
-        const entityChanges = this.operationCaptureService.dequeue();
+        // Deferred actions skip dequeue because the meta-reducer buffers them without
+        // enqueueing — there's no matching queue entry to dequeue.
+        const entityChanges = skipDequeue ? [] : this.operationCaptureService.dequeue();
 
         // Create multi-entity payload with action payload and computed changes
         const multiEntityPayload: MultiEntityPayload = {
@@ -422,13 +432,21 @@ export class OperationLogEffects {
    * Called by OperationApplierService after sync operations are applied.
    */
   async processDeferredActions(): Promise<void> {
-    const deferredActions = getDeferredActions();
-    if (deferredActions.length === 0) {
+    const rawDeferredActions = getDeferredActions();
+    if (rawDeferredActions.length === 0) {
       return;
     }
 
+    // Collapse move operations: for each entity (entityType:entityId), only the
+    // last move matters since it represents the final ordering state. This prevents
+    // redundant operations from being synced when users reorder during sync.
+    const deferredActions = this._collapseDeferredMoves(rawDeferredActions);
+
     OpLog.normal(
-      `OperationLogEffects: Processing ${deferredActions.length} deferred action(s) from sync window`,
+      `OperationLogEffects: Processing ${deferredActions.length} deferred action(s) from sync window` +
+        (deferredActions.length < rawDeferredActions.length
+          ? ` (collapsed ${rawDeferredActions.length - deferredActions.length} redundant move ops)`
+          : ''),
     );
 
     const MAX_RETRIES = 3;
@@ -441,7 +459,8 @@ export class OperationLogEffects {
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-          await this.writeOperation(action);
+          // skipDequeue=true: deferred actions were buffered, not enqueued
+          await this.writeOperation(action, true);
           success = true;
           break;
         } catch (e) {
@@ -482,5 +501,37 @@ export class OperationLogEffects {
         },
       });
     }
+  }
+
+  /**
+   * Collapses consecutive move operations targeting the same entity.
+   *
+   * When a user rapidly reorders tasks during sync, multiple move ops for the
+   * same entity get buffered. Only the last move per entity matters since the
+   * reducer already applied all of them — the final state reflects only the
+   * last move's result. Persisting intermediate moves wastes sync bandwidth
+   * and can cause unnecessary conflicts.
+   *
+   * Non-move actions are preserved in order. Move actions are keyed by
+   * entityType:entityId and only the last one per key is kept.
+   */
+  private _collapseDeferredMoves(actions: PersistentAction[]): PersistentAction[] {
+    // Track the last index of each move-per-entity so we can preserve order
+    const lastMoveIndex = new Map<string, number>();
+    for (let i = 0; i < actions.length; i++) {
+      const action = actions[i];
+      if (action.meta.opType === OpType.Move && action.meta.entityId) {
+        lastMoveIndex.set(`${action.meta.entityType}:${action.meta.entityId}`, i);
+      }
+    }
+
+    // Keep non-move actions and only the last move per entity
+    return actions.filter((action, index) => {
+      if (action.meta.opType !== OpType.Move || !action.meta.entityId) {
+        return true;
+      }
+      const key = `${action.meta.entityType}:${action.meta.entityId}`;
+      return lastMoveIndex.get(key) === index;
+    });
   }
 }

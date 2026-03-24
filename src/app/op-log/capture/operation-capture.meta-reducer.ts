@@ -80,6 +80,25 @@ let isApplyingRemoteOps = false;
 let deferredActions: PersistentAction[] = [];
 
 /**
+ * Tracks actions that were deferred (buffered) during sync replay.
+ * The effect uses this to skip deferred actions — they will be processed
+ * later by processDeferredActions() with fresh vector clocks.
+ *
+ * Without this, deferred actions would be double-written: once by the effect
+ * (which sees them on the Actions observable) and again by processDeferredActions().
+ * The effect's dequeue() would also desync the queue since nothing was enqueued.
+ */
+const deferredActionSet = new WeakSet<PersistentAction>();
+
+/**
+ * Checks whether an action was deferred (buffered for post-sync processing).
+ * Used by the effect to skip deferred actions in the normal persistence path.
+ */
+export const isDeferredAction = (action: PersistentAction): boolean => {
+  return deferredActionSet.has(action);
+};
+
+/**
  * Sets the service instance for the meta-reducer.
  * Must be called during app initialization before any persistent actions are dispatched.
  */
@@ -140,6 +159,7 @@ export const bufferDeferredAction = (action: PersistentAction): void => {
   }
 
   deferredActions.push(action);
+  deferredActionSet.add(action);
 
   // Soft warning at 10 items
   if (deferredActions.length > MAX_DEFERRED_ACTIONS_WARNING) {
