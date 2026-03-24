@@ -77,4 +77,35 @@ describe('ActionExecutor', () => {
       expect.stringContaining('Action createTask failed'),
     );
   });
+
+  it('should execute deleteTask last regardless of position in actions array', async () => {
+    const executionOrder: string[] = [];
+    const mockActionImpl = (type: string) => ({
+      execute: vi.fn().mockImplementation(async () => {
+        executionOrder.push(type);
+      }),
+    });
+
+    const addTagImpl = mockActionImpl('addTag');
+    const deleteTaskImpl = mockActionImpl('deleteTask');
+    const displaySnackImpl = mockActionImpl('displaySnack');
+
+    (mockRegistry.getAction as any).mockImplementation((type: string) => {
+      if (type === 'addTag') return addTagImpl;
+      if (type === 'deleteTask') return deleteTaskImpl;
+      if (type === 'displaySnack') return displaySnackImpl;
+      return undefined;
+    });
+
+    const actions: Action[] = [
+      { type: 'deleteTask', value: '' },
+      { type: 'addTag', value: 'urgent' },
+      { type: 'displaySnack', value: 'Done' },
+    ];
+    const event = { type: 'taskCompleted' } as TaskEvent;
+
+    await executor.executeAll(actions, event);
+
+    expect(executionOrder).toEqual(['addTag', 'displaySnack', 'deleteTask']);
+  });
 });

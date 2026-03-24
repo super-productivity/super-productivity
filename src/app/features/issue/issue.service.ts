@@ -538,14 +538,20 @@ export class IssueService {
         result.notes = defaultNote;
       }
 
+      // Merge with any tagIds already set by the provider's issue service adapter
+      const providerTagIds = (
+        (additionalFromProviderIssueService as Partial<TaskCopy>).tagIds || []
+      ).filter((id) => id !== TODAY_TAG.id);
+
       if (
         this._workContextService.activeWorkContextType === WorkContextType.PROJECT &&
         !isForceDefaultProject
       ) {
         result.projectId =
           defaultProjectId || this._workContextService.activeWorkContextId;
-        if (defaultTagIds.length) {
-          result.tagIds = [...defaultTagIds];
+        const mergedTags = unique([...providerTagIds, ...defaultTagIds]);
+        if (mergedTags.length) {
+          result.tagIds = mergedTags;
         }
         return result;
       } else {
@@ -554,7 +560,7 @@ export class IssueService {
           this._workContextService.activeWorkContextId !== TODAY_TAG.id
             ? [this._workContextService.activeWorkContextId]
             : [];
-        result.tagIds = unique([...contextTagIds, ...defaultTagIds]);
+        result.tagIds = unique([...contextTagIds, ...providerTagIds, ...defaultTagIds]);
         result.projectId = defaultProjectId || undefined;
         return result;
       }

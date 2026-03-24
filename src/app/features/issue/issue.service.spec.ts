@@ -300,4 +300,195 @@ describe('IssueService', () => {
       expect(taskServiceSpy.moveToCurrentWorkContext).toHaveBeenCalled();
     });
   });
+
+  describe('addTaskFromIssue - getTaskDefaults', () => {
+    const jiraIssue = { id: 'JIRA-1', title: 'Test Jira Issue' };
+
+    function setupForNewTask(): void {
+      // No existing task found
+      taskServiceSpy.checkForTaskWithIssueEverywhere.and.resolveTo(null);
+      taskServiceSpy.add.and.returnValue('new-task-id');
+
+      // Mock getAddTaskData
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+      });
+    }
+
+    it('should filter out TODAY_TAG.id from defaultTagIds', async () => {
+      setupForNewTask();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['tag-1', TODAY_TAG.id, 'tag-2'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(['tag-1', 'tag-2']);
+    });
+
+    it('should set defaultNote when provider adapter does not set notes', async () => {
+      setupForNewTask();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: [],
+          defaultNote: 'Default note text',
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.notes).toBe('Default note text');
+    });
+
+    it('should NOT override notes when provider adapter already sets notes', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        notes: 'Provider-set notes',
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: [],
+          defaultNote: 'Default note text',
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.notes).toBe('Provider-set notes');
+    });
+
+    it('should merge provider adapter tagIds with default tagIds', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        tagIds: ['adapter-tag-1'],
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: 'proj-1',
+          defaultTagIds: ['default-tag-1'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.PROJECT,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'proj-1',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(
+        jasmine.arrayContaining(['adapter-tag-1', 'default-tag-1']),
+      );
+    });
+
+    it('should include context tag when in TAG work context', async () => {
+      setupForNewTask();
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: undefined,
+          defaultTagIds: ['default-tag-1'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.TAG,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'my-tag-context',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      expect(taskData.tagIds).toEqual(
+        jasmine.arrayContaining(['my-tag-context', 'default-tag-1']),
+      );
+    });
+
+    it('should deduplicate tagIds', async () => {
+      setupForNewTask();
+      (service.ISSUE_SERVICE_MAP['JIRA'] as any).getAddTaskData = () => ({
+        title: 'Test Jira Issue',
+        tagIds: ['shared-tag'],
+      });
+      issueProviderServiceSpy.getCfgOnce$.and.returnValue(
+        of({
+          defaultProjectId: undefined,
+          defaultTagIds: ['shared-tag'],
+        } as any),
+      );
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextType', {
+        get: () => WorkContextType.TAG,
+      });
+      Object.defineProperty(workContextServiceSpy, 'activeWorkContextId', {
+        get: () => 'shared-tag',
+      });
+
+      await service.addTaskFromIssue({
+        issueDataReduced: jiraIssue as any,
+        issueProviderId: 'jira-provider-1',
+        issueProviderKey: 'JIRA',
+      });
+
+      const addCall = taskServiceSpy.add.calls.mostRecent();
+      const taskData = addCall.args[2] as Partial<Task>;
+      const tagIds = taskData.tagIds as string[];
+      const uniqueTagIds = [...new Set(tagIds)];
+      expect(tagIds.length).toBe(uniqueTagIds.length);
+    });
+  });
 });

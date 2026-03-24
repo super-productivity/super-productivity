@@ -182,12 +182,15 @@ export const createWindow = async ({
 
   // Deny unnecessary permissions (webcam, microphone, geolocation, etc.)
   // The app only needs notifications for desktop reminders
+  const allowedPermissions = ['notifications'];
   mainWin.webContents.session.setPermissionRequestHandler(
     (_webContents, permission, callback) => {
-      const allowedPermissions = ['notifications'];
       callback(allowedPermissions.includes(permission));
     },
   );
+  mainWin.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+    return allowedPermissions.includes(permission);
+  });
 
   mainWindowState.manage(mainWin);
 

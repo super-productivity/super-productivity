@@ -12,7 +12,11 @@ export class ActionExecutor {
   ) {}
 
   async executeAll(actions: Action[], event: TaskEvent) {
-    for (const action of actions) {
+    // Execute deleteTask last so other actions can still operate on the task
+    const sorted = [...actions].sort((a, b) =>
+      a.type === 'deleteTask' ? 1 : b.type === 'deleteTask' ? -1 : 0,
+    );
+    for (const action of sorted) {
       await this.executeAction(action, event);
     }
   }
