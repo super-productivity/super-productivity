@@ -245,11 +245,26 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
         if (!boundingBox) {
           return;
         }
+        // Remove the CDK backdrop – we use the bounding box as the scrim instead
+        const cdkBackdrop = boundingBox.parentElement?.querySelector(
+          '.cdk-overlay-backdrop',
+        ) as HTMLElement | null;
+        if (cdkBackdrop) {
+          cdkBackdrop.remove();
+        }
+
         boundingBox.style.position = 'fixed';
         boundingBox.style.inset = '0';
+        boundingBox.style.width = '100vw';
+        boundingBox.style.height = '100vh';
         boundingBox.style.display = 'flex';
         boundingBox.style.justifyContent = 'center';
         boundingBox.style.alignItems = 'flex-end';
+        boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0)';
+        boundingBox.style.transition = 'background-color 200ms ease-out';
+        requestAnimationFrame(() => {
+          boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
+        });
 
         const pane = boundingBox.querySelector('.cdk-overlay-pane') as HTMLElement;
         if (pane) {
@@ -287,21 +302,6 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           this._touchMenuRafId = requestAnimationFrame(() => {
             menuPanel.style.transform = 'translateY(0)';
             menuPanel.style.opacity = '1';
-          });
-        }
-
-        // Style the CDK backdrop as a full-screen scrim
-        const cdkBackdrop = boundingBox.parentElement?.querySelector(
-          '.cdk-overlay-backdrop',
-        ) as HTMLElement | null;
-        if (cdkBackdrop) {
-          cdkBackdrop.style.position = 'fixed';
-          cdkBackdrop.style.inset = '0';
-          cdkBackdrop.style.backgroundColor = 'rgba(0, 0, 0, 0)';
-          cdkBackdrop.style.opacity = '1';
-          cdkBackdrop.style.transition = 'background-color 200ms ease-out';
-          requestAnimationFrame(() => {
-            cdkBackdrop.style.backgroundColor = 'rgba(0, 0, 0, 0.32)';
           });
         }
       });
