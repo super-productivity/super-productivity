@@ -290,6 +290,14 @@ export class TaskContextMenuInnerComponent implements AfterViewInit, OnDestroy {
           });
         }
 
+        // Hide the default CDK backdrop (shows as a weird rectangle)
+        const cdkBackdrop = boundingBox.parentElement?.querySelector(
+          '.cdk-overlay-backdrop',
+        ) as HTMLElement | null;
+        if (cdkBackdrop) {
+          cdkBackdrop.style.display = 'none';
+        }
+
         // Add scrim backdrop
         boundingBox.style.backgroundColor = 'rgba(0, 0, 0, 0)';
         boundingBox.style.transition = 'background-color 200ms ease-out';
