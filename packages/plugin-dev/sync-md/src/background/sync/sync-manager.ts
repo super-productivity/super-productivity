@@ -9,8 +9,8 @@ import { logSyncVerification, verifySyncState } from './verify-sync';
 import { log } from '../../shared/logger';
 
 let syncInProgress = false;
-let mdToSpDebounceTimer: number | null = null;
-let spToMdDebounceTimer: number | null = null;
+let mdToSpDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let spToMdDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isWindowFocused = document.hasFocus();
 let pendingMdToSpSync: LocalUserCfg | null = null;
 
@@ -20,10 +20,24 @@ let pendingMdToSpSync: LocalUserCfg | null = null;
  * preventing a sync oscillation loop (MD→SP creates tasks → SP hook fires → SP→MD
  * writes file → file watcher detects → MD→SP again → ...).
  */
-let lastMdToSpSyncTimestamp = 0;
 const SP_HOOK_COOLDOWN_MS = 2000;
+// Initialize to a value that ensures the cooldown is expired at startup
+let lastMdToSpSyncTimestamp = -SP_HOOK_COOLDOWN_MS;
 
 export const initSyncManager = (config: LocalUserCfg): void => {
+  // Reset all internal state for a clean start
+  syncInProgress = false;
+  lastMdToSpSyncTimestamp = -SP_HOOK_COOLDOWN_MS;
+  if (mdToSpDebounceTimer) {
+    clearTimeout(mdToSpDebounceTimer);
+    mdToSpDebounceTimer = null;
+  }
+  if (spToMdDebounceTimer) {
+    clearTimeout(spToMdDebounceTimer);
+    spToMdDebounceTimer = null;
+  }
+  pendingMdToSpSync = null;
+
   // Stop any existing file watcher
   stopFileWatcher();
 
@@ -92,7 +106,7 @@ const performInitialSync = async (config: LocalUserCfg): Promise<void> => {
 const handleFileChange = (config: LocalUserCfg): void => {
   if (mdToSpDebounceTimer) {
     console.log('[sync-md] Clearing existing MD to SP debounce timer');
-    window.clearTimeout(mdToSpDebounceTimer);
+    clearTimeout(mdToSpDebounceTimer);
   }
 
   // If window is focused, sync immediately without debounce
@@ -110,7 +124,7 @@ const handleFileChange = (config: LocalUserCfg): void => {
     `[sync-md] file change & window:unfocused => debouncing for ${SYNC_DEBOUNCE_MS_MD_TO_SP}ms (10 seconds)`,
   );
 
-  mdToSpDebounceTimer = window.setTimeout(() => {
+  mdToSpDebounceTimer = setTimeout(() => {
     console.log('[sync-md] MD to SP debounce timer fired, executing sync');
     handleMdToSpSync(config);
   }, SYNC_DEBOUNCE_MS_MD_TO_SP);
@@ -129,7 +143,7 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
 
   // Cancel any pending SP→MD debounce to prevent it from firing during/after this sync
   if (spToMdDebounceTimer) {
-    window.clearTimeout(spToMdDebounceTimer);
+    clearTimeout(spToMdDebounceTimer);
     spToMdDebounceTimer = null;
     console.log('[sync-md] Cancelled pending SP→MD debounce timer');
   }
@@ -137,6 +151,10 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
   // Stop file watcher during the entire MD→SP sync to prevent re-triggering
   // when SP→MD writes the file back (for verification/ID assignment)
   stopFileWatcher();
+
+  // Mark the time early so SP hooks triggered by the batch update are suppressed,
+  // even if the sync fails partway through
+  lastMdToSpSyncTimestamp = Date.now();
 
   try {
     const content = await readTasksFile(config.filePath);
@@ -146,9 +164,6 @@ const handleMdToSpSync = async (config: LocalUserCfg): Promise<void> => {
 
       try {
         await mdToSp(content, projectId);
-
-        // Mark the time so SP hooks from this batch update are suppressed
-        lastMdToSpSyncTimestamp = Date.now();
 
         // Show success notification (optional, can be removed if too noisy)
         PluginAPI.showSnack({
@@ -220,7 +235,7 @@ const handleSpChange = (config: LocalUserCfg): void => {
   }
 
   if (spToMdDebounceTimer) {
-    window.clearTimeout(spToMdDebounceTimer);
+    clearTimeout(spToMdDebounceTimer);
   }
 
   console.log(
@@ -228,8 +243,15 @@ const handleSpChange = (config: LocalUserCfg): void => {
   );
 
   // For SP changes, we always use the short debounce since the user is actively using SP
-  spToMdDebounceTimer = window.setTimeout(async () => {
+  spToMdDebounceTimer = setTimeout(async () => {
     if (syncInProgress) return;
+    // Re-check cooldown at timer fire time — the timer may have been set before
+    // an MD→SP sync started, and the cooldown prevents the resulting SP hook
+    // from triggering a redundant SP→MD sync
+    if (Date.now() - lastMdToSpSyncTimestamp < SP_HOOK_COOLDOWN_MS) {
+      console.log('[sync-md] SP→MD debounce fired but within cooldown — skipping');
+      return;
+    }
     syncInProgress = true;
 
     console.log('[sync-md] Starting SP to MD sync (disabling file watcher)');
@@ -272,7 +294,7 @@ const setupWindowFocusTracking = (): void => {
       console.log(
         '[sync-md] Window gained focus, triggering pending MD to SP sync immediately',
       );
-      window.clearTimeout(mdToSpDebounceTimer);
+      clearTimeout(mdToSpDebounceTimer);
       mdToSpDebounceTimer = null;
 
       // Trigger the sync immediately with the stored config
