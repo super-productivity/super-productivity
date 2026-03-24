@@ -8,6 +8,7 @@ import {
   deleteOAuthTokens,
 } from './plugin-oauth-token-store';
 import { IS_ELECTRON } from '../../app.constants';
+import { IS_NATIVE_PLATFORM } from '../../util/is-native-platform';
 import { PluginLog } from '../../core/log';
 
 /**
@@ -88,6 +89,12 @@ export class PluginOAuthBridgeService {
   private _openOAuthWindow(url: string): void {
     if (IS_ELECTRON) {
       window.ea.pluginOAuthStart(url);
+    } else if (IS_NATIVE_PLATFORM) {
+      // On mobile, Google blocks OAuth in embedded WebViews (Error 400: invalid_request).
+      // Use Capacitor Browser to open the system browser instead.
+      import('@capacitor/browser').then(({ Browser }) =>
+        Browser.open({ url, presentationStyle: 'popover' }),
+      );
     } else {
       const popup = window.open(url, '_blank', 'width=600,height=700');
       if (!popup) {

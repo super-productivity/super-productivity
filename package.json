@@ -144,6 +144,7 @@
     "@ctrl/tinycolor": "4.1.0"
   },
   "dependencies": {
+    "@capacitor/browser": "^7.0.4",
     "@capacitor/ios": "^7.4.4",
     "@capacitor/keyboard": "^7.0.4",
     "@capacitor/status-bar": "^7.0.4",
@@ -155,8 +156,8 @@
     "electron-log": "^5.4.3",
     "electron-window-state": "^5.0.3",
     "hash-wasm": "^4.12.0",
-    "node-fetch": "^2.7.0",
     "https-proxy-agent": "^7.0.0",
+    "node-fetch": "^2.7.0",
     "uuidv7": "^1.1.0"
   },
   "devDependencies": {
