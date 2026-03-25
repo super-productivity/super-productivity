@@ -85,12 +85,10 @@ export class WsTriggeredDownloadService implements OnDestroy {
 
       const result = await this._syncService.downloadRemoteOps(syncCapableProvider);
 
-      SyncLog.log(
-        `WsTriggeredDownloadService: Download complete. newOps=${result.newOpsCount}`,
-      );
+      SyncLog.log(`WsTriggeredDownloadService: Download complete. kind=${result.kind}`);
 
-      // Mark as in-sync after successful WS-triggered download
-      if (result.newOpsCount >= 0 && !result.serverMigrationHandled) {
+      // Mark as in-sync after successful download (not for server migration or cancel)
+      if (result.kind !== 'server_migration_handled' && result.kind !== 'cancelled') {
         this._providerManager.setSyncStatus('IN_SYNC');
       }
     } catch (err) {
