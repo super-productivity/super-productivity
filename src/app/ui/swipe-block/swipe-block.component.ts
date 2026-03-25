@@ -17,8 +17,8 @@ import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 /** Scale factor so the swipe block reaches full width at 50% pan distance */
 const PAN_SCALE_FACTOR = 2;
 
-/** Left offset for the strikethrough line in px */
-const STRIKETHROUGH_LEFT_PX = 8;
+/** Left offset for the strikethrough line in px (right of the checkmark) */
+const STRIKETHROUGH_LEFT_PX = 48;
 
 /** Right margin so the strikethrough doesn't reach the edge */
 const STRIKETHROUGH_RIGHT_PX = 40;
