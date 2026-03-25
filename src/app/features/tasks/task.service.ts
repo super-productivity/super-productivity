@@ -468,6 +468,25 @@ export class TaskService {
   }
 
   update(id: string, changedFields: Partial<Task>): void {
+    const task = this._taskEntities()[id];
+    if (
+      task &&
+      task.parentId &&
+      typeof changedFields.title === 'string' &&
+      !task.title.trim().length &&
+      !changedFields.title.trim().length
+    ) {
+      this._store.dispatch(
+        TaskSharedActions.deleteTask({
+          task: {
+            ...task,
+            subTasks: [],
+          },
+        }),
+      );
+      return;
+    }
+
     this._store.dispatch(
       TaskSharedActions.updateTask({
         task: { id, changes: changedFields },
@@ -746,6 +765,13 @@ export class TaskService {
   }
 
   addSubTaskTo(parentId: string, additional: Partial<Task> = {}): string {
+    if (!additional.title?.trim().length) {
+      const existingDraftId = this._findEmptySubTaskDraftId(parentId);
+      if (existingDraftId) {
+        return existingDraftId;
+      }
+    }
+
     const task = this.createNewTaskWithDefaults({
       title: additional.title || '',
       additional: { dueDay: additional.dueDay || undefined, ...additional },
@@ -762,6 +788,15 @@ export class TaskService {
     this._focusNewlyCreatedTask(task.id, !task.title?.trim().length);
 
     return task.id;
+  }
+
+  private _findEmptySubTaskDraftId(parentId: string): string | null {
+    for (const task of Object.values(this._taskEntities())) {
+      if (task?.parentId === parentId && !task.title.trim().length) {
+        return task.id;
+      }
+    }
+    return null;
   }
 
   private _focusNewlyCreatedTask(taskId: string, shouldStartEditing: boolean): void {
