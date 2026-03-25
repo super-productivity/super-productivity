@@ -17,6 +17,12 @@ import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 /** Scale factor so the swipe block reaches full width at 50% pan distance */
 const PAN_SCALE_FACTOR = 2;
 
+/** Left offset for the strikethrough line in px */
+const STRIKETHROUGH_LEFT_PX = 40;
+
+/** Right margin so the strikethrough doesn't reach the edge */
+const STRIKETHROUGH_RIGHT_PX = 40;
+
 @Component({
   selector: 'swipe-block',
   templateUrl: './swipe-block.component.html',
@@ -40,6 +46,7 @@ export class SwipeBlockComponent implements OnDestroy {
   private _isLockPanLeft = false;
   private _isLockPanRight = false;
   private _isActionTriggered = false;
+  private _isStrikethroughPositioned = false;
 
   readonly strikethroughEl = viewChild<ElementRef>('strikethroughEl');
   readonly blockRightEl = viewChild<ElementRef>('blockRightEl');
@@ -77,7 +84,7 @@ export class SwipeBlockComponent implements OnDestroy {
     this._showPanHelper();
     this.isPreventPointerEventsWhilePanning.set(true);
     this._cachedWidth = this._elementRef.nativeElement.offsetWidth;
-    this._positionStrikethroughY();
+    this._isStrikethroughPositioned = false;
   }
 
   onPanEnd(): void {
@@ -121,7 +128,7 @@ export class SwipeBlockComponent implements OnDestroy {
           this._renderer.setStyle(
             strikethroughElRef.nativeElement,
             'width',
-            `calc(100% - var(--s4))`,
+            `calc(100% - ${STRIKETHROUGH_LEFT_PX + STRIKETHROUGH_RIGHT_PX}px)`,
           );
           this._renderer.addClass(strikethroughElRef.nativeElement, 'isCompleting');
         }
@@ -169,8 +176,15 @@ export class SwipeBlockComponent implements OnDestroy {
     this.isPreventPointerEventsWhilePanning.set(true);
 
     if (isPanningRight && strikethroughElRef) {
+      if (!this._isStrikethroughPositioned) {
+        this._positionStrikethroughY();
+        this._isStrikethroughPositioned = true;
+      }
+
       // Strikethrough mode for right swipe
-      const width = Math.abs(ev.deltaX);
+      const maxWidth =
+        (this._cachedWidth || 0) - STRIKETHROUGH_LEFT_PX - STRIKETHROUGH_RIGHT_PX;
+      const width = Math.min(Math.abs(ev.deltaX), maxWidth);
       let scale = (width / (this._cachedWidth || 1)) * PAN_SCALE_FACTOR;
       scale = Math.min(1, Math.max(0, scale));
 
