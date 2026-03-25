@@ -18,7 +18,7 @@ import { IS_TOUCH_PRIMARY } from '../../util/is-mouse-primary';
 const PAN_SCALE_FACTOR = 2;
 
 /** Left offset for the strikethrough line in px */
-const STRIKETHROUGH_LEFT_PX = 40;
+const STRIKETHROUGH_LEFT_PX = 8;
 
 /** Right margin so the strikethrough doesn't reach the edge */
 const STRIKETHROUGH_RIGHT_PX = 40;
@@ -247,12 +247,12 @@ export class SwipeBlockComponent implements OnDestroy {
       return;
     }
     const hostEl: HTMLElement = this._elementRef.nativeElement;
-    const firstLine = hostEl.querySelector('.first-line') as HTMLElement | null;
-    if (firstLine) {
+    const taskTitle = hostEl.querySelector('.task-title') as HTMLElement | null;
+    if (taskTitle) {
       const hostRect = hostEl.getBoundingClientRect();
-      const lineRect = firstLine.getBoundingClientRect();
-      const halfHeight = lineRect.height / 2;
-      const centerY = lineRect.top - hostRect.top + halfHeight;
+      const titleRect = taskTitle.getBoundingClientRect();
+      const halfHeight = titleRect.height / 2;
+      const centerY = titleRect.top - hostRect.top + halfHeight;
       this._renderer.setStyle(strikethroughElRef.nativeElement, 'top', `${centerY}px`);
     }
   }
