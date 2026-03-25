@@ -77,6 +77,7 @@ export class SwipeBlockComponent implements OnDestroy {
     this._showPanHelper();
     this.isPreventPointerEventsWhilePanning.set(true);
     this._cachedWidth = this._elementRef.nativeElement.offsetWidth;
+    this._positionStrikethroughY();
   }
 
   onPanEnd(): void {
@@ -223,6 +224,22 @@ export class SwipeBlockComponent implements OnDestroy {
         this._renderer.setStyle(strikethroughElRef.nativeElement, 'width', '0');
         this._renderer.removeClass(strikethroughElRef.nativeElement, 'isTriggered');
       }
+    }
+  }
+
+  private _positionStrikethroughY(): void {
+    const strikethroughElRef = this.strikethroughEl();
+    if (!strikethroughElRef) {
+      return;
+    }
+    const hostEl: HTMLElement = this._elementRef.nativeElement;
+    const firstLine = hostEl.querySelector('.first-line') as HTMLElement | null;
+    if (firstLine) {
+      const hostRect = hostEl.getBoundingClientRect();
+      const lineRect = firstLine.getBoundingClientRect();
+      const halfHeight = lineRect.height / 2;
+      const centerY = lineRect.top - hostRect.top + halfHeight;
+      this._renderer.setStyle(strikethroughElRef.nativeElement, 'top', `${centerY}px`);
     }
   }
 
