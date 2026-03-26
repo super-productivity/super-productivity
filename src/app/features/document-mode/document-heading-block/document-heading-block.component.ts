@@ -70,22 +70,16 @@ import { sanitizeBlockHtml } from '../sanitize-block-html';
       h1 {
         font-size: 1.875em;
         line-height: 1.3;
-        margin-top: var(--s2);
-        margin-bottom: var(--s);
       }
 
       h2 {
         font-size: 1.5em;
         line-height: 1.35;
-        margin-top: var(--s);
-        margin-bottom: var(--s-half);
       }
 
       h3 {
         font-size: 1.25em;
         line-height: 1.4;
-        margin-top: var(--s);
-        margin-bottom: var(--s-half);
       }
 
       h1:empty:focus::before,

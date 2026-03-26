@@ -45,6 +45,7 @@ interface SlashMenuItem {
   template: `
     <div
       class="document"
+      [class.is-empty-document]="blocks().length === 0"
       cdkDropList
       (cdkDropListDropped)="onDrop($event)"
       (click)="onDocumentClick($event)"
@@ -53,13 +54,30 @@ interface SlashMenuItem {
         <div
           class="block-row"
           [class.is-last-task]="isLastTaskInSequence(i)"
-          [class.before-heading]="blocks()[i + 1]?.type === 'heading'"
-          [class.after-heading]="blocks()[i - 1]?.type === 'heading'"
-          [class.before-divider]="blocks()[i + 1]?.type === 'divider'"
+          [class.before-h1]="
+            blocks()[i + 1]?.type === 'heading' && $any(blocks()[i + 1]).level === 1
+          "
+          [class.before-h2]="
+            blocks()[i + 1]?.type === 'heading' && $any(blocks()[i + 1]).level === 2
+          "
+          [class.before-h3]="
+            blocks()[i + 1]?.type === 'heading' && $any(blocks()[i + 1]).level === 3
+          "
+          [class.after-h1]="
+            blocks()[i - 1]?.type === 'heading' && $any(blocks()[i - 1]).level === 1
+          "
+          [class.after-h2]="
+            blocks()[i - 1]?.type === 'heading' && $any(blocks()[i - 1]).level === 2
+          "
+          [class.after-h3]="
+            blocks()[i - 1]?.type === 'heading' && $any(blocks()[i - 1]).level === 3
+          "
+          [class.is-divider]="block.type === 'divider'"
           [class.is-task-group]="
             block.type === 'task' && blocks()[i + 1]?.type === 'task'
           "
           [attr.data-block-id]="block.id"
+          (click)="$event.stopPropagation()"
           cdkDrag
         >
           <div
@@ -177,9 +195,13 @@ interface SlashMenuItem {
         max-width: 720px;
         margin: 0 auto;
         padding: var(--s4) var(--s2) var(--s4) 60px;
-        cursor: text;
+        cursor: default;
         font-weight: 500;
         color: var(--text-color-most-intense);
+      }
+
+      .document.is-empty-document {
+        cursor: text;
       }
 
       .block-row {
@@ -190,20 +212,6 @@ interface SlashMenuItem {
       }
 
       /* Context-aware spacing */
-      .block-row.before-heading {
-        margin-bottom: var(--s);
-      }
-
-      .block-row.before-divider ::ng-deep h1,
-      .block-row.before-divider ::ng-deep h2,
-      .block-row.before-divider ::ng-deep h3 {
-        margin-bottom: 0;
-      }
-
-      .block-row.is-task-group {
-        margin-bottom: var(--s);
-      }
-
       .gutter {
         display: flex;
         align-items: center;
@@ -257,13 +265,41 @@ interface SlashMenuItem {
         height: 20px;
       }
 
-      .block-row.is-last-task {
-        margin-bottom: var(--s2);
-      }
-
       .block-content {
         flex: 1;
         min-width: 0;
+      }
+
+      .block-row.before-h1 > .block-content {
+        padding-bottom: var(--s2);
+      }
+
+      .block-row.before-h2 > .block-content,
+      .block-row.before-h3 > .block-content {
+        padding-bottom: var(--s);
+      }
+
+      .block-row.is-task-group > .block-content {
+        padding-bottom: var(--s);
+      }
+
+      .block-row.after-h1 > .block-content {
+        padding-top: var(--s);
+      }
+
+      .block-row.after-h2 > .block-content,
+      .block-row.after-h3 > .block-content {
+        padding-top: var(--s-half);
+      }
+
+      .block-row.is-divider.after-h1 > .block-content,
+      .block-row.is-divider.after-h2 > .block-content,
+      .block-row.is-divider.after-h3 > .block-content {
+        padding-top: 0;
+      }
+
+      .block-row.is-last-task > .block-content {
+        padding-bottom: var(--s2);
       }
 
       /* CDK Drag */
@@ -468,20 +504,18 @@ export class DocumentViewComponent {
 
   onDocumentClick(ev: MouseEvent): void {
     const currentBlocks = this.blocks();
-    const lastBlock = currentBlocks[currentBlocks.length - 1];
-
-    if (lastBlock?.type === 'text') {
-      setTimeout(() => this._focusBlock(lastBlock.id));
-    } else {
-      this._documentModeService.createTextBlock('');
-      setTimeout(() => {
-        const updatedBlocks = this.blocks();
-        const newLast = updatedBlocks[updatedBlocks.length - 1];
-        if (newLast) {
-          this._focusBlock(newLast.id);
-        }
-      });
+    if (currentBlocks.length > 0) {
+      return;
     }
+
+    this._documentModeService.createTextBlock('');
+    setTimeout(() => {
+      const updatedBlocks = this.blocks();
+      const newLast = updatedBlocks[updatedBlocks.length - 1];
+      if (newLast) {
+        this._focusBlock(newLast.id);
+      }
+    });
   }
 
   onDrop(event: CdkDragDrop<DocumentBlock[]>): void {
