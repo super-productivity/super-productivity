@@ -46,15 +46,15 @@ export const wsRoutes = async (fastify: FastifyInstance): Promise<void> => {
           return;
         }
 
-        const user = await verifyToken(token);
-        if (!user) {
-          Logger.warn('[ws] Connection rejected: invalid token');
+        const result = await verifyToken(token);
+        if (!result.valid) {
+          Logger.warn(`[ws] Connection rejected: ${result.reason}`);
           socket.close(4003, 'Invalid token');
           return;
         }
 
         const wsService = getWsConnectionService();
-        wsService.addConnection(user.userId, clientId, socket);
+        wsService.addConnection(result.userId, clientId, socket);
       } catch (err) {
         Logger.error('[ws] Unexpected error in WebSocket handler:', err);
         try {
