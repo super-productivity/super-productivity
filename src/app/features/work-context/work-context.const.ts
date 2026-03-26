@@ -46,6 +46,8 @@ export const WORK_CONTEXT_DEFAULT_COMMON: WorkContextCommon = {
   icon: null,
   id: '',
   title: '',
+  documentBlocks: [],
+  isDocumentMode: false,
 };
 
 export const HUES = [

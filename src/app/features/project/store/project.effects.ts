@@ -103,6 +103,12 @@ export class ProjectEffects {
     () =>
       this._actions$.pipe(
         ofType(updateProject.type),
+        filter(({ project }: { project: { changes?: Record<string, unknown> } }) => {
+          if (!project.changes) return true;
+          const keys = Object.keys(project.changes);
+          const docKeys = new Set(['documentBlocks', 'isDocumentMode']);
+          return keys.some((k) => !docKeys.has(k));
+        }),
         tap(() => {
           this._snackService.open({
             type: 'SUCCESS',

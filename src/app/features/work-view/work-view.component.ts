@@ -85,6 +85,7 @@ import { RepeatCfgPreviewComponent } from '../task-repeat-cfg/repeat-cfg-preview
 import { recordSearchNavDebug } from '../../util/search-nav-debug';
 import { dragDelayForTouch } from '../../util/input-intent';
 import { DateService } from '../../core/date/date.service';
+import { DocumentViewComponent } from '../document-mode/document-view/document-view.component';
 
 @Component({
   selector: 'work-view',
@@ -118,6 +119,7 @@ import { DateService } from '../../core/date/date.service';
     FinishDayBtnComponent,
     ScheduledDateGroupPipe,
     RepeatCfgPreviewComponent,
+    DocumentViewComponent,
   ],
 })
 export class WorkViewComponent implements OnInit, OnDestroy {
@@ -140,6 +142,15 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _destroyRef = inject(DestroyRef);
   private _dateService = inject(DateService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
+
+  isDocumentMode = toSignal(
+    this.workContextService.activeWorkContext$.pipe(map((ctx) => !!ctx.isDocumentMode)),
+    { initialValue: false },
+  );
+
+  isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
+    initialValue: false,
+  });
 
   isFinishDayEnabled = computed(
     () => this._globalConfigService.appFeatures().isFinishDayEnabled,

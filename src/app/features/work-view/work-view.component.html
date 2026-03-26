@@ -10,365 +10,373 @@
       class="today"
       cdkScrollable
     >
-      <header class="work-view-header">
-        @if (estimateRemainingToday() || workingToday()) {
-          <div
-            @fade
-            class="status-bar"
-          >
+      @if (!(isDocumentMode() && isProjectContext())) {
+        <header class="work-view-header">
+          @if (estimateRemainingToday() || workingToday()) {
             <div
-              class="item"
-              matTooltip="{{ T.WW.TODAY_REMAINING | translate }} ~{{
-                todayRemainingInProject() | msToString
-              }}"
-              [matTooltipDisabled]="
-                !(workContextService.isActiveWorkContextProject$ | async)
-              "
-              matTooltipPosition="above"
+              @fade
+              class="status-bar"
             >
-              <span class="label">{{ T.WW.ESTIMATE_REMAINING | translate }}</span>
-              <span class="no-wrap">
-                ~<strong class="time-val">{{
-                  estimateRemainingToday() | msToString
-                }}</strong>
-                <mat-icon style="margin-left: 2px">hourglass_empty</mat-icon>
-              </span>
-            </div>
-            <div class="item">
-              <span class="label">{{ T.WW.WORKING_TODAY | translate }}</span>
-              <span class="no-wrap">
-                <strong class="time-val">{{ workingToday() | msToString }}</strong>
-                @if (
-                  workContextService.workingTodayArchived$ | async;
-                  as workingTodayArchived
-                ) {
-                  <span [matTooltip]="T.WW.WORKING_TODAY_ARCHIVED | translate"
-                    >(+{{ workingTodayArchived | msToString }})</span
-                  >
-                }
-                <mat-icon>timelapse</mat-icon>
-              </span>
-            </div>
-            @if (isShowTimeWorkedWithoutBreak) {
-              <div class="item hide-xs">
-                <span class="label">{{ T.WW.WITHOUT_BREAK | translate }} </span>
-                <span class="no-wrap">
-                  <strong class="time-val">{{
-                    takeABreakService.timeWorkingWithoutABreak$ | async | msToString
-                  }}</strong
-                  ><mat-icon>timer</mat-icon>
-                </span>
-                <div
-                  [matTooltip]="T.WW.RESET_BREAK_TIMER | translate"
-                  class="take-a-break-reset-btn"
-                >
-                  <button
-                    (click)="resetBreakTimer()"
-                    color="lighter"
-                    mat-mini-fab
-                  >
-                    <mat-icon>timer_off</mat-icon>
-                  </button>
-                </div>
-              </div>
-            }
-          </div>
-        }
-      </header>
-
-      <div class="task-list-wrapper">
-        @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
-          <div
-            @expandFade
-            class="add-more-or-finish"
-          >
-            <div class="no-tasks-illu-wrapper">
-              <div class="inline-block-container">
-                <img
-                  class="show-light-only"
-                  src="assets/illu/horizon.svg"
-                  alt=""
-                />
-                <img
-                  class="show-dark-only"
-                  src="assets/illu/horizon-dark.svg"
-                  alt=""
-                />
-              </div>
-              <h2 class="no-tasks-label">
-                @if (hasDoneTasks() || (workContextService.doneTodayArchived$ | async)) {
-                  {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
-                } @else {
-                  {{ T.WW.NO_PLANNED_TASKS | translate }}
-                }
-              </h2>
-            </div>
-
-            @if (!overdueTasks().length) {
-              <div class="btn-wrapper">
-                <button
-                  (click)="layoutService.showAddTaskBar()"
-                  color=""
-                  mat-stroked-button
-                  tabindex="1"
-                >
-                  <mat-icon>playlist_add</mat-icon>
-                  {{ T.WW.ADD_MORE | translate }}
-                </button>
-              </div>
-            }
-          </div>
-        }
-        @if (customizedUndoneTasks(); as customized) {
-          @if (customized.grouped) {
-            @for (group of customized.grouped | keyvalue; track group.key) {
-              <collapsible
-                [title]="group.key | scheduledDateGroup"
-                [isIconBefore]="true"
-                [isExpanded]="true"
-                [isGroup]="true"
+              <div
+                class="item"
+                matTooltip="{{ T.WW.TODAY_REMAINING | translate }} ~{{
+                  todayRemainingInProject() | msToString
+                }}"
+                [matTooltipDisabled]="
+                  !(workContextService.isActiveWorkContextProject$ | async)
+                "
+                matTooltipPosition="above"
               >
-                <task-list
-                  [tasks]="group.value"
-                  listId="PARENT"
-                  listModelId="UNDONE"
-                ></task-list>
-              </collapsible>
-            }
-          } @else if (sections().length && !customizerService.isCustomized()) {
-            @let bySection = undoneTasksBySection();
-            <div
-              class="sections-wrapper"
-              cdkDropList
-              [cdkDropListEnterPredicate]="acceptSectionDragOnly"
-              (cdkDropListDropped)="dropSection($event)"
-            >
-              <div class="no-section">
-                <task-list
-                  [tasks]="bySection.noSection"
-                  [listId]="'PARENT'"
-                  [listModelId]="'UNDONE'"
-                  [noTasksMsg]="
-                    undoneTasks().length
-                      ? (T.WW.NO_TASKS_IN_MAIN_LIST | translate)
-                      : undefined
-                  "
-                ></task-list>
+                <span class="label">{{ T.WW.ESTIMATE_REMAINING | translate }}</span>
+                <span class="no-wrap">
+                  ~<strong class="time-val">{{
+                    estimateRemainingToday() | msToString
+                  }}</strong>
+                  <mat-icon style="margin-left: 2px">hourglass_empty</mat-icon>
+                </span>
               </div>
-              @for (section of sections(); track section.id) {
-                <div
-                  class="section-container"
-                  cdkDrag
-                  [cdkDragData]="section"
-                  [cdkDragStartDelay]="dragDelayForTouch()"
-                  [cdkDragLockAxis]="'y'"
-                >
-                  <collapsible
-                    [title]="section.title"
-                    [isIconBefore]="true"
-                    [isExpanded]="true"
-                    [isTitleDragHandle]="true"
+              <div class="item">
+                <span class="label">{{ T.WW.WORKING_TODAY | translate }}</span>
+                <span class="no-wrap">
+                  <strong class="time-val">{{ workingToday() | msToString }}</strong>
+                  @if (
+                    workContextService.workingTodayArchived$ | async;
+                    as workingTodayArchived
+                  ) {
+                    <span [matTooltip]="T.WW.WORKING_TODAY_ARCHIVED | translate"
+                      >(+{{ workingTodayArchived | msToString }})</span
+                    >
+                  }
+                  <mat-icon>timelapse</mat-icon>
+                </span>
+              </div>
+              @if (isShowTimeWorkedWithoutBreak) {
+                <div class="item hide-xs">
+                  <span class="label">{{ T.WW.WITHOUT_BREAK | translate }} </span>
+                  <span class="no-wrap">
+                    <strong class="time-val">{{
+                      takeABreakService.timeWorkingWithoutABreak$ | async | msToString
+                    }}</strong
+                    ><mat-icon>timer</mat-icon>
+                  </span>
+                  <div
+                    [matTooltip]="T.WW.RESET_BREAK_TIMER | translate"
+                    class="take-a-break-reset-btn"
                   >
-                    <ng-container actions>
-                      <button
-                        mat-icon-button
-                        [matMenuTriggerFor]="sectionMenu"
-                        [attr.aria-label]="T.WW.SECTION_OPTIONS | translate"
-                        (click)="$event.stopPropagation()"
-                      >
-                        <mat-icon>more_vert</mat-icon>
-                      </button>
-                      <mat-menu #sectionMenu="matMenu">
-                        <button
-                          mat-menu-item
-                          (click)="editSection(section.id, section.title)"
-                        >
-                          <mat-icon>edit</mat-icon>
-                          {{ T.G.EDIT | translate }}
-                        </button>
-                        <button
-                          mat-menu-item
-                          (click)="deleteSection(section.id)"
-                        >
-                          <mat-icon>delete</mat-icon>
-                          {{ T.G.DELETE | translate }}
-                        </button>
-                      </mat-menu>
-                    </ng-container>
-
-                    <task-list
-                      [tasks]="bySection.dict[section.id]"
-                      [listId]="'PARENT'"
-                      [listModelId]="section.id"
-                    ></task-list>
-                  </collapsible>
+                    <button
+                      (click)="resetBreakTimer()"
+                      color="lighter"
+                      mat-mini-fab
+                    >
+                      <mat-icon>timer_off</mat-icon>
+                    </button>
+                  </div>
                 </div>
               }
             </div>
-          } @else {
-            <task-list
-              class="tour-undoneList"
-              [tasks]="customized.list"
-              listId="PARENT"
-              listModelId="UNDONE"
-            ></task-list>
           }
-        }
+        </header>
+      }
 
-        @if (isShowOverduePanel()) {
-          <section
-            class="overdue-tasks"
-            @expandFade
-          >
-            <!-- OVERDUE Outline -->
-            <collapsible
-              [title]="(T.G.OVERDUE | translate) + ' (' + overdueTasks().length + ')'"
-              [isExpanded]="!isOverdueHidden()"
-              (isExpandedChange)="isOverdueHidden.set(!$event)"
-              [isIconBefore]="true"
-              [isGroup]="true"
+      @if (isDocumentMode() && isProjectContext()) {
+        <document-view></document-view>
+      } @else {
+        <div class="task-list-wrapper">
+          @if (!(workContextService.isHasTasksToWorkOn$ | async)) {
+            <div
+              @expandFade
+              class="add-more-or-finish"
             >
-              <div class="overdue-btn-wrapper">
-                <button
-                  mat-stroked-button
-                  color="primary"
-                  tabindex="1"
-                  (click)="addAllOverdueToMyDay()"
-                >
-                  <mat-icon>wb_sunny</mat-icon>
-                  {{ T.F.TASK.CMP.ADD_TO_MY_DAY | translate }}
-                </button>
-                <!--                <button-->
-                <!--                  mat-stroked-button-->
-                <!--                  color="primary"-->
-                <!--                  tabindex="1"-->
-                <!--                >-->
-                <!--                  <mat-icon>edit_calendar</mat-icon>-->
-                <!--                  {{ T.F.PLANNER.D.ADD_PLANNED.RE_PLAN_ALL | translate }}-->
-                <!--                </button>-->
+              <div class="no-tasks-illu-wrapper">
+                <div class="inline-block-container">
+                  <img
+                    class="show-light-only"
+                    src="assets/illu/horizon.svg"
+                    alt=""
+                  />
+                  <img
+                    class="show-dark-only"
+                    src="assets/illu/horizon-dark.svg"
+                    alt=""
+                  />
+                </div>
+                <h2 class="no-tasks-label">
+                  @if (
+                    hasDoneTasks() || (workContextService.doneTodayArchived$ | async)
+                  ) {
+                    {{ T.WW.NO_PLANNED_TASK_ALL_DONE | translate }}
+                  } @else {
+                    {{ T.WW.NO_PLANNED_TASKS | translate }}
+                  }
+                </h2>
               </div>
 
-              <div>
-                <task-list
-                  [tasks]="overdueTasks()"
-                  [isSortingDisabled]="true"
-                  listId="PARENT"
-                  listModelId="OVERDUE"
-                ></task-list>
-              </div>
-            </collapsible>
-          </section>
-        }
-
-        @if (laterTodayTasks().length > 0 && isOnTodayList()) {
-          <div
-            @expand
-            class="collapsible-section"
-          >
-            <collapsible
-              [title]="
-                (T.WW.LATER_TODAY | translate) +
-                ' (' +
-                (laterTodayTasks()?.length || 0) +
-                ')'
-              "
-              [isExpanded]="!isLaterTodayHidden()"
-              (isExpandedChange)="isLaterTodayHidden.set(!$event)"
-              [isIconBefore]="true"
-              [isGroup]="true"
-            >
-              <task-list
-                [tasks]="laterTodayTasks()"
-                [isSortingDisabled]="true"
-                listId="PARENT"
-                listModelId="LATER_TODAY"
-              ></task-list>
-            </collapsible>
-          </div>
-        }
-
-        @if (hasDoneTasks()) {
-          @let nrOfDoneArchived =
-            doneTasks()?.length === 0
-              ? (workContextService.doneTodayArchived$ | async)
-              : 0;
-          <div
-            @expand
-            class="collapsible-section"
-          >
-            <collapsible
-              [title]="
-                (T.WW.DONE_TASKS | translate) +
-                ' (' +
-                (doneTasks()?.length || 0) +
-                (nrOfDoneArchived ? ' + ' + nrOfDoneArchived : '') +
-                ')'
-              "
-              [isExpanded]="!isDoneHidden()"
-              (isExpandedChange)="isDoneHidden.set(!$event)"
-              [isIconBefore]="true"
-              [isGroup]="true"
-            >
-              <task-list
-                class="tour-doneList"
-                [noTasksMsg]="
-                  (nrOfDoneArchived ? T.WW.DONE_TASKS_IN_ARCHIVE : T.WW.NO_DONE_TASKS)
-                    | translate
-                "
-                [tasks]="doneTasks()"
-                listId="PARENT"
-                listModelId="DONE"
-              ></task-list>
-              <div class="finish-day-button-wrapper">
-                @if (hasDoneTasks() && (!isOnTodayList() || !isFinishDayEnabled())) {
+              @if (!overdueTasks().length) {
+                <div class="btn-wrapper">
                   <button
-                    class="e2e-move-done-to-archive"
+                    (click)="layoutService.showAddTaskBar()"
+                    color=""
                     mat-stroked-button
-                    (click)="moveDoneToArchive()"
                     tabindex="1"
                   >
-                    <mat-icon>done_all</mat-icon>
-                    {{ T.WW.MOVE_DONE_TO_ARCHIVE | translate }}
+                    <mat-icon>playlist_add</mat-icon>
+                    {{ T.WW.ADD_MORE | translate }}
                   </button>
+                </div>
+              }
+            </div>
+          }
+          @if (customizedUndoneTasks(); as customized) {
+            @if (customized.grouped) {
+              @for (group of customized.grouped | keyvalue; track group.key) {
+                <collapsible
+                  [title]="group.key | scheduledDateGroup"
+                  [isIconBefore]="true"
+                  [isExpanded]="true"
+                  [isGroup]="true"
+                >
+                  <task-list
+                    [tasks]="group.value"
+                    listId="PARENT"
+                    listModelId="UNDONE"
+                  ></task-list>
+                </collapsible>
+              }
+            } @else if (sections().length && !customizerService.isCustomized()) {
+              @let bySection = undoneTasksBySection();
+              <div
+                class="sections-wrapper"
+                cdkDropList
+                [cdkDropListEnterPredicate]="acceptSectionDragOnly"
+                (cdkDropListDropped)="dropSection($event)"
+              >
+                <div class="no-section">
+                  <task-list
+                    [tasks]="bySection.noSection"
+                    [listId]="'PARENT'"
+                    [listModelId]="'UNDONE'"
+                    [noTasksMsg]="
+                      undoneTasks().length
+                        ? (T.WW.NO_TASKS_IN_MAIN_LIST | translate)
+                        : undefined
+                    "
+                  ></task-list>
+                </div>
+                @for (section of sections(); track section.id) {
+                  <div
+                    class="section-container"
+                    cdkDrag
+                    [cdkDragData]="section"
+                    [cdkDragStartDelay]="dragDelayForTouch()"
+                    [cdkDragLockAxis]="'y'"
+                  >
+                    <collapsible
+                      [title]="section.title"
+                      [isIconBefore]="true"
+                      [isExpanded]="true"
+                      [isTitleDragHandle]="true"
+                    >
+                      <ng-container actions>
+                        <button
+                          mat-icon-button
+                          [matMenuTriggerFor]="sectionMenu"
+                          [attr.aria-label]="T.WW.SECTION_OPTIONS | translate"
+                          (click)="$event.stopPropagation()"
+                        >
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #sectionMenu="matMenu">
+                          <button
+                            mat-menu-item
+                            (click)="editSection(section.id, section.title)"
+                          >
+                            <mat-icon>edit</mat-icon>
+                            {{ T.G.EDIT | translate }}
+                          </button>
+                          <button
+                            mat-menu-item
+                            (click)="deleteSection(section.id)"
+                          >
+                            <mat-icon>delete</mat-icon>
+                            {{ T.G.DELETE | translate }}
+                          </button>
+                        </mat-menu>
+                      </ng-container>
+
+                      <task-list
+                        [tasks]="bySection.dict[section.id]"
+                        [listId]="'PARENT'"
+                        [listModelId]="section.id"
+                      ></task-list>
+                    </collapsible>
+                  </div>
                 }
               </div>
-            </collapsible>
-          </div>
-        }
+            } @else {
+              <task-list
+                class="tour-undoneList"
+                [tasks]="customized.list"
+                listId="PARENT"
+                listModelId="UNDONE"
+              ></task-list>
+            }
+          }
 
-        @if (isShowRepeatCfgsPanel()) {
-          <div
-            @expand
-            class="collapsible-section"
-          >
-            <collapsible
-              [title]="
-                (T.WW.RECURRING_TASKS | translate) +
-                ' (' +
-                repeatCfgsForContext().length +
-                ')'
-              "
-              [isExpanded]="!isRepeatCfgsHidden()"
-              (isExpandedChange)="isRepeatCfgsHidden.set(!$event)"
-              [isIconBefore]="true"
-              [isGroup]="true"
+          @if (isShowOverduePanel()) {
+            <section
+              class="overdue-tasks"
+              @expandFade
             >
-              <div class="repeat-cfg-list">
-                @for (repeatCfg of repeatCfgsForContext(); track repeatCfg.id) {
-                  <repeat-cfg-preview [repeatCfg]="repeatCfg"></repeat-cfg-preview>
-                }
-              </div>
-            </collapsible>
-          </div>
-        }
+              <!-- OVERDUE Outline -->
+              <collapsible
+                [title]="(T.G.OVERDUE | translate) + ' (' + overdueTasks().length + ')'"
+                [isExpanded]="!isOverdueHidden()"
+                (isExpandedChange)="isOverdueHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <div class="overdue-btn-wrapper">
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    tabindex="1"
+                    (click)="addAllOverdueToMyDay()"
+                  >
+                    <mat-icon>wb_sunny</mat-icon>
+                    {{ T.F.TASK.CMP.ADD_TO_MY_DAY | translate }}
+                  </button>
+                  <!--                <button-->
+                  <!--                  mat-stroked-button-->
+                  <!--                  color="primary"-->
+                  <!--                  tabindex="1"-->
+                  <!--                >-->
+                  <!--                  <mat-icon>edit_calendar</mat-icon>-->
+                  <!--                  {{ T.F.PLANNER.D.ADD_PLANNED.RE_PLAN_ALL | translate }}-->
+                  <!--                </button>-->
+                </div>
 
-        @if (isOnTodayList() && isFinishDayEnabled()) {
-          <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
-        }
-      </div>
+                <div>
+                  <task-list
+                    [tasks]="overdueTasks()"
+                    [isSortingDisabled]="true"
+                    listId="PARENT"
+                    listModelId="OVERDUE"
+                  ></task-list>
+                </div>
+              </collapsible>
+            </section>
+          }
+
+          @if (laterTodayTasks().length > 0 && isOnTodayList()) {
+            <div
+              @expand
+              class="collapsible-section"
+            >
+              <collapsible
+                [title]="
+                  (T.WW.LATER_TODAY | translate) +
+                  ' (' +
+                  (laterTodayTasks()?.length || 0) +
+                  ')'
+                "
+                [isExpanded]="!isLaterTodayHidden()"
+                (isExpandedChange)="isLaterTodayHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <task-list
+                  [tasks]="laterTodayTasks()"
+                  [isSortingDisabled]="true"
+                  listId="PARENT"
+                  listModelId="LATER_TODAY"
+                ></task-list>
+              </collapsible>
+            </div>
+          }
+
+          @if (hasDoneTasks()) {
+            @let nrOfDoneArchived =
+              doneTasks()?.length === 0
+                ? (workContextService.doneTodayArchived$ | async)
+                : 0;
+            <div
+              @expand
+              class="collapsible-section"
+            >
+              <collapsible
+                [title]="
+                  (T.WW.DONE_TASKS | translate) +
+                  ' (' +
+                  (doneTasks()?.length || 0) +
+                  (nrOfDoneArchived ? ' + ' + nrOfDoneArchived : '') +
+                  ')'
+                "
+                [isExpanded]="!isDoneHidden()"
+                (isExpandedChange)="isDoneHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <task-list
+                  class="tour-doneList"
+                  [noTasksMsg]="
+                    (nrOfDoneArchived ? T.WW.DONE_TASKS_IN_ARCHIVE : T.WW.NO_DONE_TASKS)
+                      | translate
+                  "
+                  [tasks]="doneTasks()"
+                  listId="PARENT"
+                  listModelId="DONE"
+                ></task-list>
+                <div class="finish-day-button-wrapper">
+                  @if (hasDoneTasks() && (!isOnTodayList() || !isFinishDayEnabled())) {
+                    <button
+                      class="e2e-move-done-to-archive"
+                      mat-stroked-button
+                      (click)="moveDoneToArchive()"
+                      tabindex="1"
+                    >
+                      <mat-icon>done_all</mat-icon>
+                      {{ T.WW.MOVE_DONE_TO_ARCHIVE | translate }}
+                    </button>
+                  }
+                </div>
+              </collapsible>
+            </div>
+          }
+
+          @if (isShowRepeatCfgsPanel()) {
+            <div
+              @expand
+              class="collapsible-section"
+            >
+              <collapsible
+                [title]="
+                  (T.WW.RECURRING_TASKS | translate) +
+                  ' (' +
+                  repeatCfgsForContext().length +
+                  ')'
+                "
+                [isExpanded]="!isRepeatCfgsHidden()"
+                (isExpandedChange)="isRepeatCfgsHidden.set(!$event)"
+                [isIconBefore]="true"
+                [isGroup]="true"
+              >
+                <div class="repeat-cfg-list">
+                  @for (repeatCfg of repeatCfgsForContext(); track repeatCfg.id) {
+                    <repeat-cfg-preview [repeatCfg]="repeatCfg"></repeat-cfg-preview>
+                  }
+                </div>
+              </collapsible>
+            </div>
+          }
+
+          @if (isOnTodayList() && isFinishDayEnabled()) {
+            <finish-day-btn [hasDoneTasks]="hasDoneTasks()"></finish-day-btn>
+          }
+        </div>
+      }
     </div>
 
-    @if (isShowBacklog()) {
+    @if (isShowBacklog() && !(isDocumentMode() && isProjectContext())) {
       <div
         #splitBottomEl
         [style.user-focus]="splitInputPos === 100 ? 'none' : ''"
