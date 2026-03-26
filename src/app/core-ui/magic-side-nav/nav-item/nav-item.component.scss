@@ -70,7 +70,7 @@
 }
 
 :host:hover .task-count {
-  display: none !important;
+  display: flex !important;
 }
 
 @media (hover: none) {
@@ -79,7 +79,7 @@
     visibility: visible;
   }
   .task-count {
-    display: none !important;
+    display: flex !important;
   }
 }
 
@@ -90,16 +90,12 @@
   line-height: 1;
   text-align: center;
   font-size: 10px;
-  right: 16px;
+  right: 48px; // keep space for 3 dots
   display: flex;
   align-items: center;
   color: var(--text-color-muted);
   // avoid affecting drag handle
   pointer-events: none;
-
-  @include mq(xs, max) {
-    display: none;
-  }
 }
 
 // Active state visuals - ensure they override Angular Material styles
