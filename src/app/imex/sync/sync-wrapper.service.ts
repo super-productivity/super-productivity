@@ -313,7 +313,9 @@ export class SyncWrapperService {
       return;
     }
 
-    const provider = this._providerManager.getProviderById(SyncProviderId.SuperSync);
+    const provider = await this._providerManager.getProviderById(
+      SyncProviderId.SuperSync,
+    );
     if (!provider) {
       SyncLog.warn(
         'SyncWrapperService: No SuperSync provider found for WebSocket connection',
