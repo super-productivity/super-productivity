@@ -71,6 +71,7 @@ export class ShortSyntaxEffects {
           })),
         );
       }),
+      filter(({ task }) => !!task),
       withLatestFrom(
         this._tagService.tagsNoMyDayAndNoList$,
         this._projectService.list$,
