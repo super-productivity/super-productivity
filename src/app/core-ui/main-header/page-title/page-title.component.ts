@@ -74,7 +74,7 @@ import { DocumentModeService } from '../../../features/document-mode/document-mo
 
               <task-view-customizer-panel #customizerPanel></task-view-customizer-panel>
             }
-            @if (isProjectContext()) {
+            @if (isProjectContext() && isDocumentModeEnabled()) {
               <button
                 class="doc-mode-btn"
                 mat-icon-button
@@ -209,6 +209,9 @@ export class PageTitleComponent {
   isProjectContext = toSignal(this._workContextService.isActiveWorkContextProject$, {
     initialValue: false,
   });
+  isDocumentModeEnabled = computed(
+    () => this._configService.appFeatures().isDocumentModeEnabled,
+  );
 
   // Single source for the current URL path — all route-derived signals compute off this.
   // Query and fragment are stripped so end-anchored matchers work for e.g. `/config#plugins`.
