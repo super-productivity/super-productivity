@@ -202,6 +202,19 @@ interface SlashMenuItem {
 
       .document.is-empty-document {
         cursor: text;
+        min-height: 200px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+
+      .document.is-empty-document::before {
+        content: 'Start typing, or press / for commands';
+        color: var(--text-color-muted);
+        opacity: 0.4;
+        font-size: 16px;
+        pointer-events: none;
+        padding-top: var(--s2);
       }
 
       .block-row {
@@ -209,6 +222,18 @@ interface SlashMenuItem {
         align-items: center;
         position: relative;
         cursor: auto;
+        animation: block-enter 200ms ease-out;
+      }
+
+      @keyframes block-enter {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
       }
 
       /* Context-aware spacing */
@@ -312,6 +337,24 @@ interface SlashMenuItem {
 
       .cdk-drag-placeholder {
         opacity: 0;
+        position: relative;
+        height: 4px !important;
+        min-height: 0 !important;
+        overflow: hidden;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      .cdk-drag-placeholder::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        border-radius: 2px;
+        background: var(--palette-primary-500);
+        opacity: 1;
       }
 
       .cdk-drag-animating {
