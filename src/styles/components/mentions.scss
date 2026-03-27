@@ -8,7 +8,8 @@
   color: var(--text-color) !important;
 }
 
+// Text must contrast with --c-primary (project themes can use very light primaries).
 .mention-active > a {
   background: var(--c-primary) !important;
-  color: var(--text-color-most-intense) !important;
+  color: var(--c-contrast) !important;
 }
