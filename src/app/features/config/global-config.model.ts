@@ -27,6 +27,7 @@ export type MiscConfig = Readonly<{
   isConfirmBeforeExit: boolean;
   isConfirmBeforeExitWithoutFinishDay: boolean;
   isMinimizeToTray: boolean;
+  isLocalRestApiEnabled?: boolean;
   startOfNextDay: number;
   isDisableAnimations: boolean;
   // optional because it was added later

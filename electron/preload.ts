@@ -13,6 +13,10 @@ import {
   PluginNodeScriptRequest,
   PluginNodeScriptResult,
 } from '../packages/plugin-api/src/types';
+import {
+  LocalRestApiRequestPayload,
+  LocalRestApiResponsePayload,
+} from './shared-with-frontend/local-rest-api.model';
 
 const _send: (channel: IPCEventValue, ...args: unknown[]) => void = (channel, ...args) =>
   ipcRenderer.send(channel, ...args);
@@ -233,6 +237,14 @@ const ea: ElectronAPI = {
         listener(data),
     );
   },
+
+  onLocalRestApiRequest: (listener: (payload: LocalRestApiRequestPayload) => void) => {
+    ipcRenderer.on(IPC.LOCAL_REST_API_REQUEST, (_event, payload) =>
+      listener(payload as LocalRestApiRequestPayload),
+    );
+  },
+  sendLocalRestApiResponse: (payload: LocalRestApiResponsePayload) =>
+    _send(IPC.LOCAL_REST_API_RESPONSE, payload),
 };
 
 // Expose ea to window for ipc-event.ts using contextBridge for context isolation
