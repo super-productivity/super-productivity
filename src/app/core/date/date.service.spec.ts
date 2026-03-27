@@ -68,4 +68,57 @@ describe('DateService', () => {
       expect(service.isToday(endOfDay)).toBe(true);
     });
   });
+
+  describe('todayStr', () => {
+    afterEach(() => {
+      jasmine.clock().uninstall();
+    });
+
+    it('without args should match the calendar day when offset is 0', () => {
+      jasmine.clock().install();
+      const fixed = new Date(2026, 2, 27, 2, 30, 0);
+      jasmine.clock().mockDate(fixed);
+      service.setStartOfNextDayDiff(0);
+      expect(service.todayStr()).toBe('2026-03-27');
+    });
+
+    it('without args should keep the previous calendar day until start-of-next-day hour', () => {
+      jasmine.clock().install();
+      const fixed = new Date(2026, 2, 27, 2, 30, 0);
+      jasmine.clock().mockDate(fixed);
+      service.setStartOfNextDayDiff(3);
+      expect(service.todayStr()).toBe('2026-03-26');
+    });
+
+    it('without args should use the new calendar day from start-of-next-day hour onward', () => {
+      jasmine.clock().install();
+      const fixed = new Date(2026, 2, 27, 3, 0, 0);
+      jasmine.clock().mockDate(fixed);
+      service.setStartOfNextDayDiff(3);
+      expect(service.todayStr()).toBe('2026-03-27');
+    });
+
+    it('with explicit date should not apply start-of-next-day offset', () => {
+      service.setStartOfNextDayDiff(3);
+      const d = new Date(2026, 2, 27, 2, 30, 0);
+      expect(service.todayStr(d)).toBe('2026-03-27');
+    });
+  });
+
+  describe('setStartOfNextDayDiff', () => {
+    it('should clamp negative values to 0', () => {
+      service.setStartOfNextDayDiff(-5);
+      expect(service.getStartOfNextDayDiffMs()).toBe(0);
+    });
+
+    it('should clamp values above 23 to 23 hours', () => {
+      service.setStartOfNextDayDiff(99);
+      expect(service.getStartOfNextDayDiffMs()).toBe(23 * 60 * 60 * 1000);
+    });
+
+    it('should treat undefined as 0', () => {
+      service.setStartOfNextDayDiff(undefined as unknown as number);
+      expect(service.getStartOfNextDayDiffMs()).toBe(0);
+    });
+  });
 });

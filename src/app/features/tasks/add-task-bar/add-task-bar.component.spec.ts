@@ -23,6 +23,8 @@ import { PlannerActions } from '../../planner/store/planner.actions';
 import { TaskCopy } from '../task.model';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 import { DEFAULT_LOCALE } from 'src/app/core/locale.constants';
+import { DateService } from '../../../core/date/date.service';
+import { getDbDateStr } from '../../../util/get-db-date-str';
 
 type ProjectServiceSignals = {
   list$: Observable<Project[]>;
@@ -55,6 +57,7 @@ describe('AddTaskBarComponent', () => {
   let mockMatDialog: jasmine.SpyObj<MatDialog>;
   let mockSnackService: jasmine.SpyObj<SnackService>;
   let mockAddTaskBarIssueSearchService: jasmine.SpyObj<AddTaskBarIssueSearchService>;
+  let mockDateService: jasmine.SpyObj<DateService>;
 
   // Mock data
   const mockProjects: Project[] = [
@@ -196,6 +199,10 @@ describe('AddTaskBarComponent', () => {
       'AddTaskBarIssueSearchService',
       ['getFilteredIssueSuggestions$', 'addTaskFromExistingTaskOrIssue'],
     );
+    mockDateService = jasmine.createSpyObj('DateService', ['todayStr'], {
+      startOfNextDayDiff: 0,
+    });
+    mockDateService.todayStr.and.callFake(() => getDbDateStr(new Date()));
     // Setup method returns
     mockAddTaskBarIssueSearchService.getFilteredIssueSuggestions$.and.returnValue(of([]));
 
@@ -207,6 +214,7 @@ describe('AddTaskBarComponent', () => {
         { provide: ProjectService, useValue: mockProjectService },
         { provide: TagService, useValue: mockTagService },
         { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+        { provide: DateService, useValue: mockDateService },
         { provide: GlobalConfigService, useValue: mockGlobalConfigService },
         { provide: Store, useValue: mockStore },
         { provide: MatDialog, useValue: mockMatDialog },
@@ -285,6 +293,17 @@ describe('AddTaskBarComponent', () => {
   });
 
   describe('defaultProject$ observable', () => {
+    it('should use logical today for the default date in TODAY context', () => {
+      mockDateService.todayStr.and.returnValue('2024-05-19');
+      (
+        mockWorkContextService.activeWorkContext$ as BehaviorSubject<WorkContext | null>
+      ).next(mockTagWorkContext);
+
+      fixture.detectChanges();
+
+      expect(component.stateService.state().date).toBe('2024-05-19');
+    });
+
     it('should return current project when in project work context', async () => {
       // Set project work context
       (
@@ -491,6 +510,7 @@ describe('AddTaskBarComponent', () => {
           { provide: TagService, useValue: mockTagService },
           { provide: GlobalConfigService, useValue: mockGlobalConfigService },
           { provide: DateTimeFormatService, useValue: mockDateTimeFormatService },
+          { provide: DateService, useValue: mockDateService },
           { provide: Store, useValue: mockStore },
           { provide: MatDialog, useValue: mockMatDialog },
           { provide: SnackService, useValue: mockSnackService },
