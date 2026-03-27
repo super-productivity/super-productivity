@@ -15,6 +15,7 @@ import { DocumentTaskBlockComponent } from '../document-task-block/document-task
 import { DocumentTextBlockComponent } from '../document-text-block/document-text-block.component';
 import { DocumentHeadingBlockComponent } from '../document-heading-block/document-heading-block.component';
 import { DocumentDividerBlockComponent } from '../document-divider-block/document-divider-block.component';
+import { DocumentMarkdownBlockComponent } from '../document-markdown-block/document-markdown-block.component';
 import { MatIcon } from '@angular/material/icon';
 import { CdkDragDrop, CdkDrag, CdkDropList, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { TaskService } from '../../tasks/task.service';
@@ -37,6 +38,7 @@ interface SlashMenuItem {
     DocumentTextBlockComponent,
     DocumentHeadingBlockComponent,
     DocumentDividerBlockComponent,
+    DocumentMarkdownBlockComponent,
     MatIcon,
     CdkDropList,
     CdkDrag,
@@ -149,6 +151,12 @@ interface SlashMenuItem {
                   (navigateUp)="onNavigateUp(block.id)"
                   (navigateDown)="onNavigateDown(block.id)"
                 ></document-divider-block>
+              }
+              @case ('markdown') {
+                <document-markdown-block
+                  [block]="$any(block)"
+                  (contentChanged)="onContentChanged(block.id, $event)"
+                ></document-markdown-block>
               }
             }
           </div>
@@ -450,6 +458,9 @@ export class DocumentViewComponent {
   @ViewChildren(DocumentDividerBlockComponent)
   dividerBlocks!: QueryList<DocumentDividerBlockComponent>;
 
+  @ViewChildren(DocumentMarkdownBlockComponent)
+  markdownBlocks!: QueryList<DocumentMarkdownBlockComponent>;
+
   private _workContextService = inject(WorkContextService);
   private _documentModeService = inject(DocumentModeService);
   private _taskService = inject(TaskService);
@@ -474,12 +485,14 @@ export class DocumentViewComponent {
     { label: 'Heading 1', icon: 'title', action: 'h1' },
     { label: 'Heading 2', icon: 'text_fields', action: 'h2' },
     { label: 'Heading 3', icon: 'short_text', action: 'h3' },
+    { label: 'Note', icon: 'description', action: 'markdown' },
     { label: 'Divider', icon: 'horizontal_rule', action: 'divider' },
   ];
 
   private readonly _turnIntoItems: SlashMenuItem[] = [
     { label: 'Task', icon: 'check_circle_outline', action: 'turn-task' },
     { label: 'Paragraph', icon: 'segment', action: 'turn-text' },
+    { label: 'Note', icon: 'description', action: 'turn-markdown' },
     { label: 'Heading 1', icon: 'title', action: 'turn-h1' },
     { label: 'Heading 2', icon: 'text_fields', action: 'turn-h2' },
     { label: 'Heading 3', icon: 'short_text', action: 'turn-h3' },
@@ -802,6 +815,7 @@ export class DocumentViewComponent {
         case 'h2':
         case 'h3':
         case 'task':
+        case 'markdown':
           this._convertBlock(blockId, action);
           setTimeout(() => this._focusBlock(blockId));
           return;
@@ -838,6 +852,9 @@ export class DocumentViewComponent {
         this._documentModeService.createTaskBlock(taskId, blockId);
         break;
       }
+      case 'markdown':
+        this._documentModeService.createMarkdownBlock('', blockId);
+        break;
     }
     setTimeout(() => this._focusBlockAfter(blockId));
   }
@@ -850,6 +867,8 @@ export class DocumentViewComponent {
         return 'title';
       case 'divider':
         return 'horizontal_rule';
+      case 'markdown':
+        return 'description';
       default:
         return 'segment';
     }
@@ -1003,6 +1022,8 @@ export class DocumentViewComponent {
       this.taskBlocks?.find((c) => c.block().id === blockId)?.focus(position);
     } else if (block.type === 'divider') {
       this.dividerBlocks?.find((c) => c.block().id === blockId)?.focus();
+    } else if (block.type === 'markdown') {
+      this.markdownBlocks?.find((c) => c.block().id === blockId)?.focus();
     }
   }
 
@@ -1018,6 +1039,8 @@ export class DocumentViewComponent {
       this.taskBlocks?.find((c) => c.block().id === blockId)?.focusAtOffset(offset);
     } else if (block.type === 'divider') {
       this.dividerBlocks?.find((c) => c.block().id === blockId)?.focus();
+    } else if (block.type === 'markdown') {
+      this.markdownBlocks?.find((c) => c.block().id === blockId)?.focus();
     }
   }
 }
