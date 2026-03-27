@@ -122,25 +122,18 @@ export class IssueTwoWaySyncEffects {
         }),
         concatMap(({ taskId, changes }) =>
           this._taskService.getByIdOnce$(taskId).pipe(
-            map((fullTask) => ({
-              fullTask,
-              changes,
-            })),
-          ),
-        ),
-        filter(({ fullTask }) => {
-          if (
-            !fullTask ||
-            !fullTask.issueType ||
-            !fullTask.issueProviderId ||
-            !fullTask.issueId
-          ) {
-            return false;
-          }
-          return this._adapterRegistry.has(fullTask.issueType);
-        }),
-        concatMap(({ fullTask, changes }) =>
-          this._pushChanges$(fullTask, changes).pipe(
+            filter((fullTask): fullTask is Task => {
+              if (
+                !fullTask ||
+                !fullTask.issueType ||
+                !fullTask.issueProviderId ||
+                !fullTask.issueId
+              ) {
+                return false;
+              }
+              return this._adapterRegistry.has(fullTask.issueType);
+            }),
+            concatMap((fullTask) => this._pushChanges$(fullTask, changes)),
             catchError((err) => {
               IssueLog.err('Two-way sync push failed', err);
               this._snackService.open({
@@ -163,8 +156,14 @@ export class IssueTwoWaySyncEffects {
         filter(
           ({ task }) => !!task.issueId && !!task.issueType && !!task.issueProviderId,
         ),
-        filter(({ task }) => this._adapterRegistry.has(task.issueType!)),
-        concatMap(({ task }) => this._deleteRemoteIssue$(task)),
+        concatMap(({ task }) =>
+          this._deleteRemoteIssue$(task).pipe(
+            catchError((err) => {
+              IssueLog.err('Delete remote issue effect failed', err);
+              return EMPTY;
+            }),
+          ),
+        ),
       ),
     { dispatch: false },
   );
