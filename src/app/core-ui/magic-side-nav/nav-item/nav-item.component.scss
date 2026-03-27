@@ -69,8 +69,10 @@
   font-weight: normal;
 }
 
-:host:hover .task-count {
-  display: flex !important;
+@media (hover: hover) {
+  :host:hover .task-count {
+    display: none !important;
+  }
 }
 
 @media (hover: none) {
@@ -79,6 +81,7 @@
     visibility: visible;
   }
   .task-count {
+    right: 48px !important;
     display: flex !important;
   }
 }
@@ -90,7 +93,7 @@
   line-height: 1;
   text-align: center;
   font-size: 10px;
-  right: 48px; // keep space for 3 dots
+  right: 16px; 
   display: flex;
   align-items: center;
   color: var(--text-color-muted);
