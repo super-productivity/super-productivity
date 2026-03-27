@@ -334,6 +334,14 @@ export interface OAuthFlowConfig {
    * non-confidential (e.g., Google installed-app credentials per RFC 8252).
    */
   clientSecret?: string;
+  /**
+   * Client ID for native mobile platforms (Android/iOS).
+   * Mobile OAuth client types authenticate via app signing (package name + SHA-1
+   * on Android, bundle ID on iOS) and have no client secret. When set, this
+   * overrides `clientId` on native platforms and `clientSecret` is omitted.
+   * PKCE is used as the sole proof mechanism.
+   */
+  mobileClientId?: string;
   scopes: string[];
   /** Additional query parameters to append to the authorization URL (e.g. access_type, prompt). */
   extraAuthParams?: Record<string, string>;

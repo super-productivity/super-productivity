@@ -40,9 +40,25 @@ export class PluginOAuthBridgeService {
     // getRedirectUri() starts a server — avoid leaking it if config is invalid.
     this._pluginOAuthService.validateOAuthConfig(config);
 
+    // On native mobile platforms, use the mobile-specific client ID (which
+    // authenticates via app signing, not a client secret). This keeps the
+    // solution generic for any OAuth provider requiring platform-specific IDs.
+    const effectiveClientId =
+      IS_NATIVE_PLATFORM && config.mobileClientId
+        ? config.mobileClientId
+        : config.clientId;
+    const effectiveClientSecret =
+      IS_NATIVE_PLATFORM && config.mobileClientId ? undefined : config.clientSecret;
+
+    const effectiveConfig: OAuthFlowConfig = {
+      ...config,
+      clientId: effectiveClientId,
+      clientSecret: effectiveClientSecret,
+    };
+
     const redirectUri = await this._pluginOAuthService.getRedirectUri();
     const { url, codeVerifier, state } = await this._pluginOAuthService.buildAuthUrl(
-      config,
+      effectiveConfig,
       redirectUri,
     );
 
@@ -51,19 +67,19 @@ export class PluginOAuthBridgeService {
     const code = await this._pluginOAuthService.waitForRedirectCode(pluginId, state);
 
     const tokens = await this._pluginOAuthService.exchangeCodeForTokens({
-      tokenUrl: config.tokenUrl,
-      clientId: config.clientId,
+      tokenUrl: effectiveConfig.tokenUrl,
+      clientId: effectiveClientId,
       code,
       codeVerifier,
       redirectUri,
-      clientSecret: config.clientSecret,
+      clientSecret: effectiveClientSecret,
     });
 
     this._pluginOAuthService.storeTokens(pluginId, {
       ...tokens,
-      tokenUrl: config.tokenUrl,
-      clientId: config.clientId,
-      clientSecret: config.clientSecret,
+      tokenUrl: effectiveConfig.tokenUrl,
+      clientId: effectiveClientId,
+      clientSecret: effectiveClientSecret,
     });
 
     await this._persistOAuthTokens(pluginId);

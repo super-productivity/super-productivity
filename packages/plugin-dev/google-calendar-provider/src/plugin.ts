@@ -32,6 +32,10 @@ const CLIENT_ID =
 // redirect URI restrictions are the actual security mechanisms.
 // Do not rotate or revoke — this value is intentionally committed.
 const CLIENT_SECRET = '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';
+// Android OAuth client ID — authenticates via package name + SHA-1 signing key.
+// No client secret needed; PKCE is the sole proof mechanism.
+// TODO: Replace with real Android client ID from Google Cloud Console.
+const MOBILE_CLIENT_ID = '';
 
 interface GoogleCalendarConfig {
   calendarId?: string;
@@ -72,8 +76,7 @@ const formatYMD = (d: Date): string =>
 const asCfg = (config: Record<string, unknown>): GoogleCalendarConfig =>
   config as unknown as GoogleCalendarConfig;
 
-const getCalendarId = (cfg: GoogleCalendarConfig): string =>
-  cfg.calendarId || 'primary';
+const getCalendarId = (cfg: GoogleCalendarConfig): string => cfg.calendarId || 'primary';
 
 const eventUrl = (calendarId: string, eventId?: string): string => {
   const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`;
@@ -113,19 +116,16 @@ const fetchEvents = async (
     now.getTime() + syncRangeWeeks * 7 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const response = await http.get<GoogleCalendarListResponse>(
-    eventUrl(calendarId),
-    {
-      params: {
-        ...(opts?.query ? { q: opts.query } : {}),
-        timeMin,
-        timeMax,
-        singleEvents: 'true',
-        orderBy: 'startTime',
-        maxResults: opts?.maxResults ?? '50',
-      },
+  const response = await http.get<GoogleCalendarListResponse>(eventUrl(calendarId), {
+    params: {
+      ...(opts?.query ? { q: opts.query } : {}),
+      timeMin,
+      timeMax,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: opts?.maxResults ?? '50',
     },
-  );
+  });
 
   return (response.items || [])
     .filter((e) => e.status !== 'cancelled')
@@ -143,6 +143,7 @@ PluginAPI.registerIssueProvider({
         tokenUrl: GOOGLE_TOKEN_URL,
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
+        mobileClientId: MOBILE_CLIENT_ID || undefined,
         scopes: [CALENDAR_EVENTS_SCOPE, CALENDAR_READONLY_SCOPE],
         extraAuthParams: { access_type: 'offline', prompt: 'consent' },
       },
@@ -200,9 +201,7 @@ PluginAPI.registerIssueProvider({
     http: PluginHttp,
   ): Promise<PluginIssue> {
     const calendarId = getCalendarId(asCfg(config));
-    const event = await http.get<GoogleCalendarEvent>(
-      eventUrl(calendarId, issueId),
-    );
+    const event = await http.get<GoogleCalendarEvent>(eventUrl(calendarId, issueId));
 
     return {
       id: event.id,
@@ -235,7 +234,9 @@ PluginAPI.registerIssueProvider({
   ): Promise<boolean> {
     const calendarId = getCalendarId(asCfg(config));
     try {
-      await http.get(`${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}`);
+      await http.get(
+        `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}`,
+      );
       return true;
     } catch {
       return false;
@@ -425,14 +426,11 @@ PluginAPI.registerIssueProvider({
     const tmrw = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const tomorrow = formatYMD(tmrw);
 
-    const event = await http.post<GoogleCalendarEvent>(
-      eventUrl(calendarId),
-      {
-        summary: title,
-        start: { date: today },
-        end: { date: tomorrow },
-      },
-    );
+    const event = await http.post<GoogleCalendarEvent>(eventUrl(calendarId), {
+      summary: title,
+      start: { date: today },
+      end: { date: tomorrow },
+    });
 
     return {
       issueId: event.id,
