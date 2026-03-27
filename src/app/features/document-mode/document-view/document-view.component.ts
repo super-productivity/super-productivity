@@ -485,14 +485,14 @@ export class DocumentViewComponent {
     { label: 'Heading 1', icon: 'title', action: 'h1' },
     { label: 'Heading 2', icon: 'text_fields', action: 'h2' },
     { label: 'Heading 3', icon: 'short_text', action: 'h3' },
-    { label: 'Markdown', icon: 'description', action: 'markdown' },
+    { label: 'Note', icon: 'description', action: 'markdown' },
     { label: 'Divider', icon: 'horizontal_rule', action: 'divider' },
   ];
 
   private readonly _turnIntoItems: SlashMenuItem[] = [
     { label: 'Task', icon: 'check_circle_outline', action: 'turn-task' },
     { label: 'Paragraph', icon: 'segment', action: 'turn-text' },
-    { label: 'Markdown', icon: 'description', action: 'turn-markdown' },
+    { label: 'Note', icon: 'description', action: 'turn-markdown' },
     { label: 'Heading 1', icon: 'title', action: 'turn-h1' },
     { label: 'Heading 2', icon: 'text_fields', action: 'turn-h2' },
     { label: 'Heading 3', icon: 'short_text', action: 'turn-h3' },

@@ -10,7 +10,7 @@ import { InlineMarkdownComponent } from '../../../ui/inline-markdown/inline-mark
     <inline-markdown
       [model]="block().content"
       [isShowControls]="true"
-      [placeholderTxt]="'Write markdown...'"
+      [placeholderTxt]="'Write a note...'"
       (changed)="contentChanged.emit($event)"
     ></inline-markdown>
   `,
