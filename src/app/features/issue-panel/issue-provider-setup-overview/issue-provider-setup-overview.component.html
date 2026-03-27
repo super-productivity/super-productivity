@@ -5,7 +5,7 @@
     (click)="openSetupDialog('ICAL', 'GOOGLE')"
   >
     <mat-icon>calendar_month</mat-icon>
-    <span>Google Calendar Ical</span>
+    <span>Google Calendar (iCal)</span>
   </button>
   <button
     mat-raised-button
@@ -19,7 +19,7 @@
     (click)="openSetupDialog('ICAL', 'OTHER')"
   >
     <mat-icon>calendar_month</mat-icon>
-    <span>iCal Other</span>
+    <span>Other (iCal)</span>
   </button>
   @for (provider of pluginCalendarProviders; track provider.pluginId) {
     <button

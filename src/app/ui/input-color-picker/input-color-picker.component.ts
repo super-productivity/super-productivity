@@ -67,11 +67,18 @@ export class InputColorPickerComponent {
     if (!rect) return;
 
     const panelWidth = 196;
+    const panelHeight = 160;
+    const gap = 4;
+
     const spaceRight = window.innerWidth - rect.left;
     const left =
       spaceRight >= panelWidth ? rect.left : window.innerWidth - panelWidth - 8;
 
-    this.panelTop = `${rect.bottom + 4}px`;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow >= panelHeight + gap ? rect.bottom + gap : rect.top - panelHeight - gap;
+
+    this.panelTop = `${top}px`;
     this.panelLeft = `${left}px`;
   }
 }

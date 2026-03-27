@@ -4,10 +4,16 @@ import { IPC } from './shared-with-frontend/ipc-events.const';
 import { log } from 'electron-log/main';
 
 const LOOPBACK_HOST = '127.0.0.1';
+const OAUTH_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 let loopbackServer: Server | null = null;
+let oauthTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const cleanupServer = (): void => {
+  if (oauthTimeoutId) {
+    clearTimeout(oauthTimeoutId);
+    oauthTimeoutId = null;
+  }
   if (loopbackServer) {
     loopbackServer.close();
     loopbackServer = null;
@@ -67,6 +73,10 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
         const addr = server.address();
         if (addr && typeof addr !== 'string') {
           loopbackServer = server;
+          oauthTimeoutId = setTimeout(() => {
+            log('Plugin OAuth: Timeout – closing abandoned loopback server');
+            cleanupServer();
+          }, OAUTH_TIMEOUT_MS);
           log(`Plugin OAuth: Loopback server listening on port ${addr.port}`);
           resolve({ port: addr.port });
         } else {
@@ -105,16 +115,12 @@ export const initPluginOAuth = (mainWin: BrowserWindow): void => {
       return;
     }
 
-    // shell.openExternal returns Promise<void> at runtime despite outdated types
-    const result: unknown = shell.openExternal(url);
-    if (result && typeof (result as Record<string, unknown>).catch === 'function') {
-      (result as Promise<void>).catch((err: unknown) => {
-        log('Plugin OAuth: Failed to open system browser:', err);
-        mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
-          error: 'failed_to_open_browser',
-        });
-        cleanupServer();
+    shell.openExternal(url).catch((err: unknown) => {
+      log('Plugin OAuth: Failed to open system browser:', err);
+      mainWin.webContents.send(IPC.PLUGIN_OAUTH_CB, {
+        error: 'failed_to_open_browser',
       });
-    }
+      cleanupServer();
+    });
   });
 };
