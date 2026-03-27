@@ -18,6 +18,7 @@ import {
   resetWsConnectionService,
 } from './sync/services/websocket-connection.service';
 import { testRoutes } from './test-routes';
+import { seedUsers } from './seed-users';
 
 // HTML escape to prevent XSS in generated HTML
 const escapeHtml = (unsafe: string): string => {
@@ -197,6 +198,9 @@ export const createServer = (
 
       // Start cleanup jobs
       startCleanupJobs();
+
+      // Seed users from SEED_USERS env var (if set)
+      await seedUsers();
 
       // Start WebSocket heartbeat
       getWsConnectionService().startHeartbeat();

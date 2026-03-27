@@ -1,12 +1,9 @@
 # ---- Builder stage ----
-FROM node:22-alpine AS builder
+FROM node:22.22-alpine AS builder
 
 WORKDIR /repo
 
 RUN apk add --no-cache openssl libc6-compat
-
-# Upgrade npm to match lockfile version (npm 11)
-RUN npm install -g npm@11
 
 # Root package + lock (for workspace install)
 COPY package.json package-lock.json ./
@@ -14,7 +11,7 @@ COPY packages/shared-schema/package.json ./packages/shared-schema/
 COPY packages/super-sync-server/package.json ./packages/super-sync-server/
 
 # Install ALL dependencies for the monorepo
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts
 
 # Copy source code
 COPY packages/shared-schema/ ./packages/shared-schema/
