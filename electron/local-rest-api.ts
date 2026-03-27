@@ -15,7 +15,8 @@ import {
 } from './shared-with-frontend/local-rest-api.model';
 
 const JSON_HEADERS = {
-  'content-type': 'application/json; charset=utf-8',
+  /* eslint-disable-next-line @typescript-eslint/naming-convention */
+  'Content-Type': 'application/json; charset=utf-8',
 };
 
 let server: Server | null = null;
@@ -38,7 +39,8 @@ const writeJson = (
   const responseJson = JSON.stringify(body);
   res.writeHead(status, {
     ...JSON_HEADERS,
-    'content-length': Buffer.byteLength(responseJson),
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Content-Length': Buffer.byteLength(responseJson),
   });
   res.end(responseJson);
 };

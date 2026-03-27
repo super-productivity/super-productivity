@@ -18,7 +18,6 @@ describe('LocalRestApiHandlerService', () => {
   let projectServiceMock: jasmine.SpyObj<ProjectService>;
   let tagServiceMock: jasmine.SpyObj<TagService>;
   let requestHandler: ((payload: LocalRestApiRequestPayload) => void) | null = null;
-  let responseSent: LocalRestApiResponsePayload | null = null;
   let responsePromiseResolve: ((response: LocalRestApiResponsePayload) => void) | null =
     null;
 
@@ -46,13 +45,12 @@ describe('LocalRestApiHandlerService', () => {
     subTasks,
   });
 
-  const mockElectronApi = () => {
+  const mockElectronApi = (): void => {
     (window as any).ea = {
       onLocalRestApiRequest: (handler: (payload: LocalRestApiRequestPayload) => void) => {
         requestHandler = handler;
       },
       sendLocalRestApiResponse: (response: LocalRestApiResponsePayload) => {
-        responseSent = response;
         if (responsePromiseResolve) {
           responsePromiseResolve(response);
         }
@@ -78,7 +76,6 @@ describe('LocalRestApiHandlerService', () => {
   const sendRequestAndWait = async (
     request: LocalRestApiRequestPayload,
   ): Promise<LocalRestApiResponsePayload> => {
-    responseSent = null;
     const responsePromise = new Promise<LocalRestApiResponsePayload>((resolve) => {
       responsePromiseResolve = resolve;
     });
@@ -87,7 +84,6 @@ describe('LocalRestApiHandlerService', () => {
   };
 
   beforeEach(() => {
-    responseSent = null;
     requestHandler = null;
     responsePromiseResolve = null;
 
@@ -273,11 +269,11 @@ describe('LocalRestApiHandlerService', () => {
       });
 
       it('should return archived tasks when source=archived', async () => {
-        const archivedTask = createMockTask('archived-1', { isDone: true });
+        const archivedTask = createMockTask('archivedTask1', { isDone: true });
         (taskArchiveServiceMock as any).load.and.returnValue(
           Promise.resolve({
-            ids: ['archived-1'],
-            entities: { 'archived-1': archivedTask },
+            ids: ['archivedTask1'],
+            entities: { archivedTask1: archivedTask },
           } as TaskArchive),
         );
 
@@ -293,7 +289,7 @@ describe('LocalRestApiHandlerService', () => {
         (taskServiceMock as any).getAllTasksEverywhere.and.returnValue(
           Promise.resolve([
             createMockTask('task-1'),
-            createMockTask('archived-1', { isDone: true }),
+            createMockTask('archivedTask1', { isDone: true }),
           ]),
         );
 
@@ -504,7 +500,7 @@ describe('LocalRestApiHandlerService', () => {
 
     describe('POST /tasks/:id/restore', () => {
       it('should restore an archived task', async () => {
-        const archivedTask = createMockTask('archived-1', { isDone: true });
+        const archivedTask = createMockTask('archivedTask1', { isDone: true });
         (taskArchiveServiceMock as any).hasTask.and.returnValue(Promise.resolve(true));
         (taskArchiveServiceMock as any).getById.and.returnValue(
           Promise.resolve(archivedTask),
@@ -517,7 +513,7 @@ describe('LocalRestApiHandlerService', () => {
         });
 
         const response = await sendRequestAndWait(
-          createRequest('POST', '/tasks/archived-1/restore'),
+          createRequest('POST', '/tasks/archivedTask1/restore'),
         );
 
         expect(response.body.ok).toBe(true);
