@@ -143,9 +143,14 @@ export class WorkViewComponent implements OnInit, OnDestroy {
   private _dateService = inject(DateService);
   protected readonly dragDelayForTouch = dragDelayForTouch;
 
-  isDocumentMode = toSignal(
+  private _isDocumentModeForContext = toSignal(
     this.workContextService.activeWorkContext$.pipe(map((ctx) => !!ctx.isDocumentMode)),
     { initialValue: false },
+  );
+  isDocumentMode = computed(
+    () =>
+      this._isDocumentModeForContext() &&
+      this._globalConfigService.appFeatures().isDocumentModeEnabled,
   );
 
   isProjectContext = toSignal(this.workContextService.isActiveWorkContextProject$, {
