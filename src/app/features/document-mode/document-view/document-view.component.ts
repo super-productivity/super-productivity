@@ -305,7 +305,8 @@ interface SlashMenuItem {
       }
 
       .block-row.is-task-group > .block-content {
-        padding-bottom: var(--s);
+        padding-top: var(--s-half);
+        padding-bottom: var(--s-half);
       }
 
       .block-row.after-h1 > .block-content {
@@ -324,7 +325,8 @@ interface SlashMenuItem {
       }
 
       .block-row.is-last-task > .block-content {
-        padding-bottom: var(--s2);
+        padding-top: var(--s-half);
+        padding-bottom: var(--s);
       }
 
       /* CDK Drag */
