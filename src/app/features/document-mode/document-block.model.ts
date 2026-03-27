@@ -1,4 +1,4 @@
-export type DocumentBlockType = 'task' | 'text' | 'heading' | 'divider' | 'markdown';
+export type DocumentBlockType = 'task' | 'text' | 'heading' | 'divider';
 
 export interface DocumentBlockBase {
   id: string;
@@ -27,17 +27,7 @@ export interface DividerBlock extends DocumentBlockBase {
   type: 'divider';
 }
 
-export interface MarkdownBlock extends DocumentBlockBase {
-  type: 'markdown';
-  content: string;
-}
-
-export type DocumentBlock =
-  | TaskBlock
-  | TextBlock
-  | HeadingBlock
-  | DividerBlock
-  | MarkdownBlock;
+export type DocumentBlock = TaskBlock | TextBlock | HeadingBlock | DividerBlock;
 
 export interface DocumentBlocksDelta {
   changedBlocks: DocumentBlock[];
@@ -58,8 +48,6 @@ const blocksEqual = (a: DocumentBlock, b: DocumentBlock): boolean => {
       );
     case 'divider':
       return true;
-    case 'markdown':
-      return a.content === (b as MarkdownBlock).content;
   }
 };
 

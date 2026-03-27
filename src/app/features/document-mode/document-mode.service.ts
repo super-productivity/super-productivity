@@ -9,7 +9,6 @@ import {
   DocumentBlock,
   HeadingBlock,
   HeadingLevel,
-  MarkdownBlock,
   TaskBlock,
   TextBlock,
 } from './document-block.model';
@@ -217,11 +216,6 @@ export class DocumentModeService implements OnDestroy {
     this.addBlock(block, afterBlockId);
   }
 
-  createMarkdownBlock(content: string = '', afterBlockId?: string): void {
-    const block: MarkdownBlock = { id: uuidv7(), type: 'markdown', content };
-    this.addBlock(block, afterBlockId);
-  }
-
   createDividerBlock(afterBlockId?: string): string {
     const block: DividerBlock = { id: uuidv7(), type: 'divider' };
     this.addBlock(block, afterBlockId);
@@ -329,8 +323,8 @@ export class DocumentModeService implements OnDestroy {
 
     const block = blocks[idx];
     let content = '';
-    if (block.type === 'text' || block.type === 'heading' || block.type === 'markdown') {
-      content = (block as TextBlock | HeadingBlock | MarkdownBlock).content;
+    if (block.type === 'text' || block.type === 'heading') {
+      content = (block as TextBlock | HeadingBlock).content;
     }
 
     let newBlock: DocumentBlock;
@@ -358,9 +352,6 @@ export class DocumentModeService implements OnDestroy {
         newBlock = { id: block.id, type: 'task', taskId };
         break;
       }
-      case 'markdown':
-        newBlock = { id: block.id, type: 'markdown', content };
-        break;
       case 'divider':
         newBlock = { id: block.id, type: 'divider' };
         break;
@@ -399,12 +390,6 @@ export class DocumentModeService implements OnDestroy {
       };
     } else if (block.type === 'divider') {
       newBlock = { id: uuidv7(), type: 'divider' };
-    } else if (block.type === 'markdown') {
-      newBlock = {
-        id: uuidv7(),
-        type: 'markdown',
-        content: (block as MarkdownBlock).content,
-      };
     } else {
       newBlock = {
         id: uuidv7(),
