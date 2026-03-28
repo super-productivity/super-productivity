@@ -11,15 +11,12 @@ import { IssueService } from '../../issue/issue.service';
 import { MatIcon } from '@angular/material/icon';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { MatDialog } from '@angular/material/dialog';
 import { TranslatePipe } from '@ngx-translate/core';
 import { T } from '../../../t.const';
 import { HiddenCalendarEventsService } from '../../calendar-integration/hidden-calendar-events.service';
 import { SnackService } from '../../../core/snack/snack.service';
-import {
-  CalendarEventEditDialogComponent,
-  CalendarEventEditDialogData,
-} from '../../calendar-integration/calendar-event-edit-dialog/calendar-event-edit-dialog.component';
+import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { isPluginIssueProvider } from '../../issue/issue.model';
 
 @Component({
   selector: 'planner-calendar-event',
@@ -31,9 +28,9 @@ import {
 export class PlannerCalendarEventComponent {
   T = T;
   private _issueService = inject(IssueService);
-  private _matDialog = inject(MatDialog);
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _snackService = inject(SnackService);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
 
   readonly calendarEvent = input.required<ScheduleFromCalendarEvent>();
   isBeingSubmitted = false;
@@ -53,12 +50,17 @@ export class PlannerCalendarEventComponent {
     this.menuTrigger().openMenu();
   }
 
-  editEvent(): void {
-    this._matDialog.open(CalendarEventEditDialogComponent, {
-      data: {
-        calendarEvent: this.calendarEvent(),
-      } as CalendarEventEditDialogData,
-    });
+  openEventLink(): void {
+    const calEv = this.calendarEvent();
+    if (calEv.issueProviderKey && isPluginIssueProvider(calEv.issueProviderKey as any)) {
+      const provider = this._pluginRegistry.getProvider(calEv.issueProviderKey);
+      if (provider?.definition.getIssueLink) {
+        const link = provider.definition.getIssueLink(calEv.id, {});
+        if (link) {
+          window.open(link, '_blank');
+        }
+      }
+    }
   }
 
   createAsTask(): void {

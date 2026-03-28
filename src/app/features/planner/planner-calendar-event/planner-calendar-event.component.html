@@ -17,9 +17,9 @@
 <mat-menu #contextMenu="matMenu">
   <button
     mat-menu-item
-    (click)="editEvent()"
+    (click)="openEventLink()"
   >
-    <mat-icon>edit</mat-icon>
+    <mat-icon>open_in_new</mat-icon>
     {{ T.F.CALENDARS.CONTEXT_MENU.EDIT_EVENT | translate }}
   </button>
   <button
