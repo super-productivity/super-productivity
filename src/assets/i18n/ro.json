@@ -20,7 +20,7 @@
     "SHOW_NOTES": "Notițe proiect"
   },
   "CONFIRM": {
-    "AUTO_FIX": "Datele tare par să fie corupte (\"{{validityError}}\"). Dorești să încerci să le repari automat? Acest lucru poate rezulta în pierderi de date parțiale.",
+    "AUTO_FIX": "Datele tale par să fie corupte (\"{{validityError}}\"). Dorești să încerci să le repari automat? Acest lucru poate rezulta în pierderi de date parțiale.",
     "RELOAD_AFTER_IDB_ERROR": "Eroare bază de date - Aplicația se va reporni\n\nSuper Productivity nu poate salva datele! Acest lucru este de obiecei cauzat de:\n• Spațiu insuficient pe disc (cel mai frecvent)\n• Actualizare de aplicație în fundal\n• Pentru utilizatorii variantei Snap pe Linux: rulează 'snap set core experimental.refresh-app-awareness=true'\n\nSchimbările tale recente ar putea să nu fie salvate. Te rog eliberează spațiu pe disc dacă nu este suficient disponibil. Aplicația se va reporni după ce închizi acest dialog.",
     "RESTORE_FILE_BACKUP": "Se pare că NU există DATE, dar există backup-uri disponibile la \"{{dir}}\". Vrei să restaurezi ultimul backup din {{from}}?",
     "RESTORE_FILE_BACKUP_ANDROID": "Se pare că NU există DATE, dar există un backup disponibil. Vrei să îl restaurezi?",
@@ -182,12 +182,12 @@
         "TXT": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!",
         "TXT_MULTIPLE": {
           "OTHER": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sunt restante)",
-          "ONE": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sunt restante)"
+          "ONE": "<strong>{{title}}</strong> începe la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este restant)"
         },
         "TXT_PAST": "<strong>{{title}}</strong> started at <strong>{{start}}</strong>!",
         "TXT_PAST_MULTIPLE": {
           "OTHER": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alte evenimente sunt restante)",
-          "ONE": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este restante)"
+          "ONE": "<strong>{{title}}</strong> a început la <strong>{{start}}</strong>!<br> (și {{nrOfOtherBanners}} alt eveniment este restant)"
         }
       },
       "EVENT_STRINGS": {
@@ -229,7 +229,7 @@
     },
     "FINISH_DAY_BEFORE_EXIT": {
       "C": {
-        "FINISH_DAY_BEFORE_EXIT": "Sunt {{nr}} sarcini terminate în lista ta de astăzi care nu au fost mutate încă în arhivă. Ești sigur că vrei să părăsești aplicația fără a-ți încheia ziua?"
+        "FINISH_DAY_BEFORE_EXIT": "Sunt {{nr}} sarcini terminate în lista ta de azi care nu au fost mutate încă în arhivă. Ești sigur că vrei să părăsești aplicația fără a-ți încheia ziua?"
       }
     },
     "FOCUS_MODE": {
@@ -264,7 +264,7 @@
       "LONG_BREAK_TITLE": "Pauză lungă - Ciclu {{cycle}}",
       "ON": "activat",
       "OPEN_ISSUE_IN_BROWSER": "Deschide problema în navigatorul web",
-      "PAUSE_BREAK": "Întremână pauza",
+      "PAUSE_BREAK": "Întrerupe pauza",
       "PAUSE_SESSION": "Întrerupe sesiunea",
       "PAUSE_TRACKING": "Întrerupe urmărirea",
       "PAUSE_TRACKING_FOR_CURRENT_TASK": "Întrerupe urmărirea pentru sarcina curentă",
@@ -1472,9 +1472,9 @@
         "DEADLINES_TODAY": "{{count}} sarcin(i) cu termen azi neplanificate încă"
       },
       "CMP": {
-        "ADD_SUB_TASK": "Add subtask",
-        "ADD_TO_MY_DAY": "Add to Astăzi",
-        "ADD_TO_PROJECT": "Add to a project",
+        "ADD_SUB_TASK": "Adaugă subsarcină",
+        "ADD_TO_MY_DAY": "Adaugă în lista de azi",
+        "ADD_TO_PROJECT": "Adaugă la un proiect",
         "CONVERT_TO_PARENT_TASK": "Convert to parent task",
         "DELETE": "Delete task",
         "DELETE_REPEAT_INSTANCE": "Delete recurring task instance",
@@ -1490,7 +1490,7 @@
         "OPEN_ATTACH": "Attach file or link",
         "OPEN_ISSUE": "Open in browser",
         "OPEN_TIME": "Time tracking",
-        "REMOVE_FROM_MY_DAY": "Remove from Astăzi",
+        "REMOVE_FROM_MY_DAY": "Elimină din lista de azi",
         "SCHEDULE": "Schedule task",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide additional info",
@@ -1518,13 +1518,13 @@
         "OK": "Delete"
       },
       "D_REMINDER_VIEW": {
-        "ADD_ALL_TO_TODAY": "Add all to Astăzi",
-        "ADD_TO_TODAY": "Add to Astăzi",
-        "COMPLETE": "Complete",
-        "COMPLETE_ALL": "Complete all",
-        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Astăzi)",
-        "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Astăzi)",
-        "DONE": "Done",
+        "ADD_ALL_TO_TODAY": "Adaugă toate în lista de azi",
+        "ADD_TO_TODAY": "Adaugă în lista de azi",
+        "COMPLETE": "Finalizează",
+        "COMPLETE_ALL": "Finalizează toate",
+        "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Înlătură toate mementourile (păstrează în lista de azi)",
+        "DISMISS_REMINDER_KEEP_TODAY": "Înlătură memento (păstrează în lista de azi)",
+        "DONE": "Realizat",
         "DUE_TASK": "Reminder for planned task",
         "DUE_TASKS": "Reminder for planned tasks",
         "RESCHEDULE_EDIT": "Edit (reschedule)",
@@ -1585,7 +1585,7 @@
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
         "DELETED": "Deleted task \"{{title}}\"",
-        "FOUND_MOVE_FROM_BACKLOG": "Moved task <strong>\"{{title}}\"</strong> from backlog to the Astăzi task list",
+        "FOUND_MOVE_FROM_BACKLOG": "Sarcina <strong>\"{{title}}\"</strong> a fost mutată din lista de sarcini restante în lista de sarcini pentru azi",
         "FOUND_MOVE_FROM_OTHER_LIST": "Added task <strong>\"{{title}}\"</strong> from <strong>{{contextTitle}}</strong> to current list",
         "FOUND_RESTORE_FROM_ARCHIVE": "Restored task <strong>\"{{title}}\"</strong> related to issue from archive",
         "GO_TO_TASK": "Go to Task",
@@ -1700,7 +1700,7 @@
         "REMIND_AT": "Amintește-te la",
         "REMIND_AT_PLACEHOLDER": "Alege când să-mi fie amintit",
         "REMOVE_FOR_DATE": "Elimină pentru {{date}}",
-        "REMOVE_INSTANCE": "Elimină astăzi",
+        "REMOVE_INSTANCE": "Elimină pentru azi",
         "REPEAT_CYCLE": "Ciclu de repetare",
         "REPEAT_EVERY": "Repetă la fiecare",
         "SATURDAY": "Sâmbătă",
@@ -1810,17 +1810,17 @@
     },
     "WORKLOG": {
       "CMP": {
-        "DAYS_WORKED": "Days, worked:",
-        "MONTH_WORKED": "Month worked:",
-        "REPEATING_TASK": "Recurring task",
-        "RESTORE_TASK_FROM_ARCHIVE": "Restore task from archive",
+        "DAYS_WORKED": "Zile, lucrate:",
+        "MONTH_WORKED": "Luni, lucrate:",
+        "REPEATING_TASK": "Sarcină recurentă",
+        "RESTORE_TASK_FROM_ARCHIVE": "Restaurează sarcina din arhivă",
         "TASKS": "Sarcini",
-        "TOTAL_TIME": "Time spent total:",
-        "WEEK_NR": "Week {{nr}}",
-        "WORKED": "Worked",
+        "TOTAL_TIME": "Timp total petrecut:",
+        "WEEK_NR": "Săptămâna {{nr}}",
+        "WORKED": "Lucrate",
         "VIEW_TASK_DETAILS": "Vezi detalii sarcină"
       },
-      "D_CONFIRM_RESTORE": "Are you sure you want to move the task <strong>\"{{title}}\"</strong> into your Astăzi task list?",
+      "D_CONFIRM_RESTORE": "Ești sigur că vrei să muți sarcina <strong>\"{{title}}\"</strong> în lista ta de sarcini pentru azi?",
       "D_EXPORT_TITLE": "Worklog Export {{start}}–{{end}}",
       "D_EXPORT_TITLE_SINGLE": "Worklog Export {{day}}",
       "EXPORT": {
@@ -1926,7 +1926,7 @@
     "HIDE": "Ascunde",
     "ICON_INP_DESCRIPTION": "Toate emoji-urile UTF-8 sunt de asemenea suportate!",
     "INBOX_PROJECT_TITLE": "Intrări",
-    "MINUTES": "{{m}} miunte",
+    "MINUTES": "{{m}} minute",
     "MOVE_BACKWARD": "Mută înapoi",
     "MOVE_FORWARD": "Mută înainte",
     "NEXT": "Următorul",
@@ -2061,7 +2061,7 @@
       "MOVE_TASK_TO_TOP": "Move task to the top of the list",
       "MOVE_TASK_UP": "Move task up in the list",
       "MOVE_TO_BACKLOG": "Move task to task backlog",
-      "MOVE_TO_REGULARS_TASKS": "Move task to Astăzi's task list",
+      "MOVE_TO_REGULARS_TASKS": "Mută sarcina în lista de sarcini pentru azi",
       "OPEN_PROJECT_NOTES": "Show/hide notes",
       "PLUGIN_SHORTCUTS": "Plugin Shortcuts",
       "SAVE_NOTE": "Save note",
@@ -2642,7 +2642,7 @@
     "READY_TO_WORK": "Ready to work!",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time estimated:",
-    "TODAY_REMAINING": "Rămas pentru astăzi:",
+    "TODAY_REMAINING": "Rămas pentru azi:",
     "WITHOUT_BREAK": "Fără pauză:",
     "WORKING_TODAY": "Working today:",
     "WORKING_TODAY_ARCHIVED": "Time worked today on archived tasks",
