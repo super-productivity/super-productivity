@@ -2149,6 +2149,7 @@
       "TIME_LOCALE_IT_IT": "Italian: 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_JA_JP": "Japanese: 24-hour, YYYY/MM/DD",
       "TIME_LOCALE_KO_KR": "Korean: 12-hour AM/PM, YYYY. MM. DD",
+      "TIME_LOCALE_PL_PL": "Polish: 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_PT_BR": "Portuguese (Brazil): 24-hour, DD/MM/YYYY",
       "TIME_LOCALE_RO_MD": "Romanian (Moldova): 24-hour, DD.MM.YYYY",
       "TIME_LOCALE_RO_RO": "Romanian: 24-hour, DD.MM.YYYY",

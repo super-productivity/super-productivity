@@ -85,6 +85,7 @@ export const LANGUAGE_SELECTION_FORM_FORM: ConfigFormSection<LocalizationConfig>
           { label: T.GCF.LANG.TIME_LOCALE_JA_JP, value: DateTimeLocales.ja_jp },
           { label: T.GCF.LANG.TIME_LOCALE_KO_KR, value: DateTimeLocales.ko_kr },
           { label: T.GCF.LANG.TIME_LOCALE_UK_UA, value: DateTimeLocales.uk_ua },
+          { label: T.GCF.LANG.TIME_LOCALE_PL_PL, value: DateTimeLocales.pl_pl },
           { label: T.GCF.LANG.TIME_LOCALE_CS_CZ, value: DateTimeLocales.cs_cz },
           { label: T.GCF.LANG.TIME_LOCALE_SK_SK, value: DateTimeLocales.sk_sk },
           { label: T.GCF.LANG.TIME_LOCALE_RO_RO, value: DateTimeLocales.ro_ro },
