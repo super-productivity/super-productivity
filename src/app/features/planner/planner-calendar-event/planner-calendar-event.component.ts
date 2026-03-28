@@ -4,7 +4,6 @@ import {
   HostBinding,
   inject,
   input,
-  output,
 } from '@angular/core';
 import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
 import { IssueService } from '../../issue/issue.service';
@@ -28,7 +27,6 @@ export class PlannerCalendarEventComponent {
   private _calendarIntegrationService = inject(CalendarIntegrationService);
 
   readonly calendarEvent = input.required<ScheduleFromCalendarEvent>();
-  readonly hidden = output<void>();
   isBeingSubmitted = false;
 
   @HostBinding('class.isBeingSubmitted')
@@ -58,6 +56,5 @@ export class PlannerCalendarEventComponent {
 
   hide(): void {
     this._calendarIntegrationService.skipCalendarEvent(this.calendarEvent());
-    this.hidden.emit();
   }
 }
