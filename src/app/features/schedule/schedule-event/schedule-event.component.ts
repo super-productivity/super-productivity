@@ -38,6 +38,7 @@ import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-con
 import { IssueService } from '../../issue/issue.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
+import { IS_ELECTRON } from '../../../app.constants';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
@@ -321,7 +322,11 @@ export class ScheduleEventComponent {
   openCalendarEventInBrowser(): void {
     const url = this.calendarEventUrl();
     if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (IS_ELECTRON) {
+        window.ea.openExternalUrl(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     }
   }
 

@@ -13,6 +13,7 @@ import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { CalendarIntegrationService } from '../../calendar-integration/calendar-integration.service';
 import { T } from '../../../t.const';
 import { TranslatePipe } from '@ngx-translate/core';
+import { IS_ELECTRON } from '../../../app.constants';
 
 @Component({
   selector: 'planner-calendar-event',
@@ -37,7 +38,11 @@ export class PlannerCalendarEventComponent {
   openInBrowser(): void {
     const url = this.calendarEvent().url;
     if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (IS_ELECTRON) {
+        window.ea.openExternalUrl(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     }
   }
 
