@@ -17,7 +17,7 @@
     "NO_TASKS": "Obecnie nie ma żadnych zadań w Twoim rejestrze zadań"
   },
   "BN": {
-    "SHOW_ISSUE_PANEL": "Pokaż panel problemów",
+    "SHOW_ISSUE_PANEL": "Pokaż panel zgłoszeń",
     "SHOW_NOTES": "Pokaż notatki projektu"
   },
   "CONFIRM": {
@@ -145,7 +145,7 @@
       "S": {
         "CALENDAR_NOT_FOUND": "CalDav: nie znaleziono kalendarza „{{calendarName}}”",
         "CALENDAR_READ_ONLY": "CalDav: kalendarz „{{calendarName}}” jest tylko do odczytu",
-        "ISSUE_NOT_FOUND": "CalDav: zadania do wykonania „{{issueId}}” wygląda na usunięte z serwera."
+        "ISSUE_NOT_FOUND": "CalDav: zadanie „{{issueId}}” wygląda na usunięte z serwera."
       }
     },
     "CALENDARS": {
@@ -232,7 +232,7 @@
       "LONG_BREAK_TITLE": "Długa przerwa - cykl {{cycle}}",
       "ON": "nad zadaniem",
       "OVERTIME_MSG": "Czas minął — zrób przerwę, gdy będziesz gotów",
-      "OPEN_ISSUE_IN_BROWSER": "Otwórz problem w przeglądarce",
+      "OPEN_ISSUE_IN_BROWSER": "Otwórz zgłoszenie w przeglądarce",
       "PAUSE_BREAK": "Wstrzymaj odmierzanie przerwy",
       "PAUSE_SESSION": "Wstrzymaj sesję",
       "PAUSE_TRACKING": "Wstrzymaj śledzenie",
@@ -337,8 +337,8 @@
     "ISSUE": {
       "CROSS_ORIGIN_BROWSER_WARNING": "Ta integracja prawdopodobnie nie będzie działać w Twojej przeglądarce. Pobierz wersję Super Productivity na komputer lub Androida!",
       "DEFAULT": {
-        "ISSUE_STR": "Wydanie",
-        "ISSUES_STR": "Kwestie"
+        "ISSUE_STR": "zgłoszenie",
+        "ISSUES_STR": "zgłoszenia"
       },
       "DEFAULT_NOTE_LABEL": "Default note for imported tasks",
       "DEFAULT_PROJECT_DESCRIPTION": "Projekt przypisany do zadań utworzonych ze spraw.",
@@ -701,7 +701,7 @@
         "ENABLE_PARSE": "Włącz markdown parse"
       },
       "NOTES_CMP": {
-        "ADD_BTN": "Dodaj new Note",
+        "ADD_BTN": "Dodaj nową notatkę",
         "DROP_TO_ADD": "Upuść tutaj, aby dodać nową notatkę",
         "NO_NOTES": "Obecnie nie ma żadnych notatek"
       },
@@ -719,7 +719,7 @@
         "IN_PROGRESS": "Status uruchamiania zadania",
         "OPEN": "Status wstrzymania zadania",
         "PROGRESS_ON_SAVE": "Domyślny postęp przy zapisie",
-        "SELECT_ISSUE_FOR_TRANSITIONS": "Wybierz zagadnienie, aby załadować dostępne przejścia",
+        "SELECT_ISSUE_FOR_TRANSITIONS": "Wybierz zgłoszenie, aby załadować dostępne przejścia",
         "TRANSITION": "Zarządzanie przejściami"
       },
       "DIALOG_TRACK_TIME": {
@@ -1468,15 +1468,15 @@
         "DEADLINE_OVERDUE": "Po terminie!",
         "DUE": "Zaplanowane na",
         "FROM_PARENT": "(od rodzica)",
-        "ISSUE": "Link do zgłoszenia",
+        "ISSUE": "Link zgłoszenia",
         "LOCAL_ATTACHMENTS": "Lokalne załączniki",
-        "NOTES": "Description",
+        "NOTES": "Note",
         "PARENT": "Parent",
         "REMINDER": "Przypomnienie",
-        "REPEAT": "Repeat",
+        "REPEAT": "Powtarzanie",
         "SCHEDULE_TASK": "Schedule Task",
         "SUB_TASKS": "Podzadania ({{nr}})",
-        "TIME": "Time",
+        "TIME": "Duration",
         "TITLE_PLACEHOLDER": "Wprowadź tytuł"
       },
       "B": {
@@ -1503,7 +1503,7 @@
         "MOVE_TO_REGULAR": "Move to today's list",
         "MOVE_TO_TOP": "Przejście na górę listy",
         "OPEN_ATTACH": "Dodaj plik lub link",
-        "OPEN_ISSUE": "Otwórz in browser",
+        "OPEN_ISSUE": "Otwórz w przeglądarce",
         "OPEN_TIME": "Time Tracking",
         "REMOVE_DEADLINE": "Usuń termin",
         "REMOVE_FROM_MY_DAY": "Remove from My Day",
@@ -1517,7 +1517,7 @@
         "TRACK_TIME": "Start tracking time",
         "TRACK_TIME_STOP": "Pause tracking time",
         "UNSCHEDULE_TASK": "Anuluj harmonogram zadania",
-        "UPDATE_ISSUE_DATA": "Update issue data"
+        "UPDATE_ISSUE_DATA": "Zaktualizuj dane zgłoszenia"
       },
       "D_CONFIRM_DELETE": {
         "MSG": "Czy na pewno chcesz usunąć zadanie \"{{title}}\"?",
@@ -1967,7 +1967,7 @@
       "FOCUS_MODE": "Tryb skupienia",
       "HABITS": "Nawyki",
       "HELP": "Włącz lub wyłącz konkretne funkcje aplikacji w całym interfejsie użytkownika.",
-      "ISSUES_PANEL": "Panel problemów",
+      "ISSUES_PANEL": "Panel zgłoszeń",
       "PLANNER": "Planer",
       "PROJECT_NOTES": "Notatki projektowe",
       "SCHEDULE": "Harmonogram",
@@ -2102,7 +2102,7 @@
       "TASK_UNSCHEDULE": "Usuń harmonogram zadania",
       "TITLE": "Skróty klawiszowe",
       "TOGGLE_BACKLOG": "Pokaż/Ukryj Zadanie Backlogu",
-      "TOGGLE_ISSUE_PANEL": "Pokaż/ukryj panel problemów",
+      "TOGGLE_ISSUE_PANEL": "Pokaż/ukryj panel zgłoszeń",
       "TOGGLE_PLAY": "Start/Stop Zadania",
       "TOGGLE_SIDE_NAV": "Wyróżnij panel boczny",
       "TOGGLE_TASK_VIEW_CUSTOMIZER_PANEL": "Przełącz panel filtrów/grup/sortowania",
@@ -2166,7 +2166,7 @@
       "DARK_MODE": "Tryb ciemny",
       "DARK_MODE_ARIA_LABEL": "Wybór trybu ciemnego",
       "DARK_MODE_DARK": "Ciemny",
-      "DARK_MODE_LIGHT": "Światło",
+      "DARK_MODE_LIGHT": "Jasny",
       "DARK_MODE_SYSTEM": "System",
       "DEFAULT_START_PAGE": "Domyślna strona startowa",
       "FIRST_DAY_OF_WEEK": "Pierwszy dzień tygodnia",
@@ -2390,7 +2390,7 @@
     "TASK_LIST": "Lista zadań",
     "TASKS": "Żądania",
     "TOGGLE_SHOW_BOOKMARKS": "Pokaż/ukryj zakładki",
-    "TOGGLE_SHOW_ISSUE_PANEL": "Pokaż/Ukryj panel problemów",
+    "TOGGLE_SHOW_ISSUE_PANEL": "Pokaż/Ukryj panel zgłoszeń",
     "TOGGLE_SHOW_NOTES": "Pokaż/Ukryj Notatki Projektu",
     "TOGGLE_TRACK_TIME": "Start/Stop zliczania czasu",
     "TRIGGER_SYNC": "Ręczne wyzwalanie synchronizacji",
