@@ -8,6 +8,8 @@ import { getCalendarEventIdCandidates } from './get-calendar-event-id-candidates
   providedIn: 'root',
 })
 export class HiddenCalendarEventsService {
+  private static readonly _MAX_HIDDEN_EVENT_IDS = 500;
+
   readonly hiddenEventIds$ = new BehaviorSubject<string[]>(this._loadFromStorage());
 
   hideEvent(calEv: CalendarIntegrationEvent): void {
@@ -18,7 +20,12 @@ export class HiddenCalendarEventsService {
       return;
     }
     const current = this.hiddenEventIds$.getValue();
-    const updated = [...current, ...idsToAdd.filter((id) => !current.includes(id))];
+    let updated = [...current, ...idsToAdd.filter((id) => !current.includes(id))];
+    if (updated.length > HiddenCalendarEventsService._MAX_HIDDEN_EVENT_IDS) {
+      updated = updated.slice(
+        updated.length - HiddenCalendarEventsService._MAX_HIDDEN_EVENT_IDS,
+      );
+    }
     this.hiddenEventIds$.next(updated);
     this._saveToStorage(updated);
   }

@@ -15,6 +15,27 @@ const BLOCKED_HOSTNAMES = new Set([
   'metadata.google.internal',
 ]);
 
+// Cloud metadata endpoints that must ALWAYS be blocked, even when allowPrivateNetwork is true
+const ALLOWED_HTTP_METHODS = new Set([
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS',
+  'PROPFIND',
+  'REPORT',
+  'MKCALENDAR',
+  'PROPPATCH',
+]);
+
+const CLOUD_METADATA_HOSTNAMES = new Set([
+  '169.254.169.254', // AWS/Azure instance metadata
+  'metadata.google.internal', // GCP instance metadata
+  'fd00:ec2::254', // AWS IMDSv2 IPv6
+]);
+
 const isPrivateIp = (hostname: string): boolean => {
   // IPv4 private ranges
   if (
@@ -83,6 +104,10 @@ export class PluginHttpService {
     getHeaders: () => Record<string, string> | Promise<Record<string, string>>,
     allowPrivateNetwork: boolean,
   ): Promise<T> {
+    const upperMethod = method.toUpperCase();
+    if (!ALLOWED_HTTP_METHODS.has(upperMethod)) {
+      throw new Error(`[PluginHttp] HTTP method not allowed: ${method}`);
+    }
     this._validateUrl(url, allowPrivateNetwork);
 
     const authHeaders = await Promise.resolve(getHeaders());
@@ -103,7 +128,7 @@ export class PluginHttpService {
     const responseType = options?.responseType === 'text' ? 'text' : 'json';
 
     const obs$ = this._http
-      .request(method, url, {
+      .request(upperMethod, url, {
         body,
         headers: new HttpHeaders(mergedHeaders),
         params,
@@ -124,9 +149,17 @@ export class PluginHttpService {
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new Error(`[PluginHttp] Unsupported URL scheme: ${parsed.protocol}`);
     }
+    // Strip brackets from IPv6 addresses (URL.hostname may include them)
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
+
+    // Always block cloud metadata endpoints (SSRF protection), even when allowPrivateNetwork is true
+    if (CLOUD_METADATA_HOSTNAMES.has(hostname.toLowerCase())) {
+      throw new Error(
+        `[PluginHttp] Requests to cloud metadata endpoints are not allowed: ${hostname}`,
+      );
+    }
+
     if (!allowPrivateNetwork) {
-      // Strip brackets from IPv6 addresses (URL.hostname may include them)
-      const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
       if (BLOCKED_HOSTNAMES.has(hostname) || isPrivateIp(hostname)) {
         throw new Error(
           `[PluginHttp] Requests to private/local networks are not allowed: ${hostname}`,

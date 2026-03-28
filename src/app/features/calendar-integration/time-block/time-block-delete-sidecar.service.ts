@@ -10,7 +10,7 @@ export class TimeBlockDeleteSidecarService {
   private _pendingTaskIds: string[] = [];
 
   set(taskIds: string[]): void {
-    this._pendingTaskIds = taskIds;
+    this._pendingTaskIds.push(...taskIds);
   }
 
   consume(): string[] {

@@ -480,7 +480,7 @@ export class DialogEditIssueProviderComponent {
     const pluginConfig = (model as { pluginConfig?: Record<string, unknown> })
       .pluginConfig;
     if (!pluginConfig) return model;
-    // Deep-clone pluginConfig to avoid mutating store state
+    // Shallow-clone pluginConfig to avoid mutating store state
     const migrated = { ...pluginConfig };
     // Migrate old single-calendar calendarId to multi-calendar config shape
     if (

@@ -8,6 +8,7 @@ import { GlobalConfigState } from '../src/app/features/config/global-config.mode
 import {
   LOCAL_REST_API_HOST,
   LOCAL_REST_API_MAX_BODY_BYTES,
+  LOCAL_REST_API_MAX_CONCURRENT_REQUESTS,
   LOCAL_REST_API_PORT,
   LOCAL_REST_API_TIMEOUT_MS,
   LocalRestApiRequestPayload,
@@ -126,6 +127,17 @@ const handleHttpRequest = async (
       error: {
         code: 'FORBIDDEN',
         message: 'Invalid Host header',
+      },
+    });
+    return;
+  }
+
+  if (pendingRequests.size >= LOCAL_REST_API_MAX_CONCURRENT_REQUESTS) {
+    writeJson(res, 429, {
+      ok: false,
+      error: {
+        code: 'TOO_MANY_REQUESTS',
+        message: `Too many concurrent requests (limit: ${LOCAL_REST_API_MAX_CONCURRENT_REQUESTS})`,
       },
     });
     return;

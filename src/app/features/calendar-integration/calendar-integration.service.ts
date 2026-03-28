@@ -374,7 +374,12 @@ export class CalendarIntegrationService {
         // filter out cached past entries
         .map((provider) => ({
           ...provider,
-          items: provider.items.filter((item) => item.start + item.duration >= now),
+          items: provider.items
+            .filter((item) => item.start + item.duration >= now)
+            // Backfill issueProviderKey for events cached before it became required
+            .map((item) =>
+              item.issueProviderKey ? item : { ...item, issueProviderKey: 'ICAL' },
+            ),
         }))
     );
   }

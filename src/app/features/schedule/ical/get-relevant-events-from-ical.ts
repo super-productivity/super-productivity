@@ -166,7 +166,12 @@ const generateGoogleCalendarEventUrl = (
   try {
     const cleanId = eventId.replace(/@(group\.calendar\.)?google\.com.*$/, '');
     const raw = `${cleanId} ${calendarEmail}`;
-    const eid = btoa(String.fromCharCode(...new TextEncoder().encode(raw)));
+    const bytes = new TextEncoder().encode(raw);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const eid = btoa(binary);
     return `https://calendar.google.com/calendar/event?eid=${eid}`;
   } catch {
     return undefined;
