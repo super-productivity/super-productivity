@@ -921,6 +921,52 @@ describe('createBlockerBlocks()', () => {
         getDateTimeFromClockString('11:00', 29 * 24 * 60 * 60 * 1000),
       );
     });
+
+    it('should show repeat projections for future dates even if the weekday matches today', () => {
+      if (maybeSkipTimezoneDependent('should show repeat projections for future dates')) {
+        pending('Skipping timezone-dependent test');
+        return;
+      }
+      const now = 0;
+      const oneWeekFromNow = 7 * 24 * 60 * 60 * 1000;
+
+      const fakeRepeatTaskCfgs: TaskRepeatCfg[] = [
+        {
+          ...DUMMY_REPEATABLE_TASK,
+          id: 'R_FUTURE',
+          title: 'Future Task',
+          startTime: '10:00',
+          defaultEstimate: hours(1),
+          monday: true,
+          tuesday: true,
+          wednesday: true,
+          thursday: true,
+          friday: true,
+          saturday: true,
+          sunday: true,
+        },
+      ];
+
+      const r = createSortedBlockerBlocks(
+        [],
+        fakeRepeatTaskCfgs,
+        [],
+        undefined,
+        undefined,
+        oneWeekFromNow,
+        14,
+        now,
+      );
+
+      const futureBlock = r.find((block) =>
+        block.entries.some((e) => e.type === BlockedBlockType.ScheduledRepeatProjection),
+      );
+
+      expect(futureBlock).toBeDefined();
+      expect(futureBlock?.start).toEqual(
+        getDateTimeFromClockString('10:00', oneWeekFromNow),
+      );
+    });
   });
 
   describe('icalEventMap', () => {

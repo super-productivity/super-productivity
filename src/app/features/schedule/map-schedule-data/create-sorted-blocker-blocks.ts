@@ -21,6 +21,7 @@ export const createSortedBlockerBlocks = (
   lunchBreakCfg?: ScheduleLunchBreakCfg,
   now: number = Date.now(),
   nrOfDays: number = PROJECTION_DAYS,
+  realNow?: number,
 ): BlockedBlock[] => {
   if (typeof now !== 'number') {
     throw new Error('No valid now given');
@@ -32,6 +33,7 @@ export const createSortedBlockerBlocks = (
       now,
       nrOfDays,
       scheduledTaskRepeatCfgs,
+      realNow,
     ),
     ...createBlockerBlocksForWorkStartEnd(now, nrOfDays, workStartEndCfg),
     ...createBlockerBlocksForLunchBreak(now, nrOfDays, lunchBreakCfg),
@@ -56,10 +58,11 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   now: number,
   nrOfDays: number,
   scheduledTaskRepeatCfgs: TaskRepeatCfg[],
+  realNow?: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
-
-  let i: number = 1;
+  const referenceTime = realNow ?? now;
+  let i: number = referenceTime === now ? 1 : 0;
   while (i < nrOfDays) {
     // Calculate proper day start instead of adding 24-hour increments
     const nowDate = new Date(now);
