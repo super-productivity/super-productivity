@@ -331,9 +331,12 @@ export class IssueTwoWaySyncEffects {
   }
 
   private _deleteRemoteIssue$(info: DeletedTaskIssueInfo | Task): Observable<unknown> {
-    const issueType = info.issueType!;
-    const issueProviderId = info.issueProviderId!;
-    const issueId = info.issueId!;
+    if (!info.issueType || !info.issueProviderId || !info.issueId) {
+      return EMPTY;
+    }
+    const issueType = info.issueType;
+    const issueProviderId = info.issueProviderId;
+    const issueId = info.issueId;
     const adapter = this._adapterRegistry.get(issueType);
     if (!adapter?.deleteIssue) {
       return EMPTY;
@@ -364,13 +367,18 @@ export class IssueTwoWaySyncEffects {
   }
 
   private _pushChanges$(task: Task, changes: Partial<Task>): Observable<unknown> {
+    if (!task.issueType || !task.issueProviderId || !task.issueId) {
+      return EMPTY;
+    }
     const issueType = task.issueType as IssueProviderKey;
+    const issueProviderId = task.issueProviderId;
+    const issueId = task.issueId;
     const adapter = this._adapterRegistry.get(issueType);
     if (!adapter) {
       return EMPTY;
     }
 
-    return this._issueProviderService.getCfgOnce$(task.issueProviderId!, issueType).pipe(
+    return this._issueProviderService.getCfgOnce$(issueProviderId, issueType).pipe(
       concatMap(async (cfg) => {
         const fieldMappings = adapter.getFieldMappings();
         const syncConfig = adapter.getSyncConfig(cfg);
@@ -387,7 +395,7 @@ export class IssueTwoWaySyncEffects {
           return;
         }
 
-        const freshIssue = await adapter.fetchIssue(task.issueId!, cfg);
+        const freshIssue = await adapter.fetchIssue(issueId, cfg);
         const freshValues = adapter.extractSyncValues(freshIssue);
         const lastSyncedValues = task.issueLastSyncedValues ?? {};
 
@@ -403,9 +411,9 @@ export class IssueTwoWaySyncEffects {
           }
         }
 
-        const parsed = parseInt(task.issueId!, 10);
+        const parsed = parseInt(issueId, 10);
         const issueNumber = Number.isNaN(parsed) ? undefined : parsed;
-        const ctx = { issueId: task.issueId!, issueNumber };
+        const ctx = { issueId, issueNumber };
 
         const decisions = computePushDecisions(
           taskFieldChanges,
@@ -425,7 +433,7 @@ export class IssueTwoWaySyncEffects {
 
         const didPush = Object.keys(toPush).length > 0;
         if (didPush) {
-          await adapter.pushChanges(task.issueId!, toPush, cfg);
+          await adapter.pushChanges(issueId, toPush, cfg);
         }
 
         // Update lastSyncedValues for ALL tracked fields from the fresh issue,
@@ -445,7 +453,7 @@ export class IssueTwoWaySyncEffects {
         // providers that don't implement getIssueLastUpdated.
         let issueLastUpdated = Date.now();
         if (didPush && adapter.getIssueLastUpdated) {
-          const postPushIssue = await adapter.fetchIssue(task.issueId!, cfg);
+          const postPushIssue = await adapter.fetchIssue(issueId, cfg);
           issueLastUpdated = adapter.getIssueLastUpdated(postPushIssue);
         }
 

@@ -91,33 +91,49 @@
 
 @if (se().type === SVEType.CalendarEvent) {
   <div
-    [matMenuTriggerFor]="calContextMenu"
-    #calMenuTrigger="matMenuTrigger"
-    class="cal-menu-trigger"
+    class="calendar-menu-anchor"
+    #calendarMenuTrigger="matMenuTrigger"
+    [matMenuTriggerFor]="calMenu"
   ></div>
-  <mat-menu #calContextMenu="matMenu">
+  <mat-menu #calMenu="matMenu">
+    @if (calendarEventUrl()) {
+      <button
+        mat-menu-item
+        (click)="openCalendarEventInBrowser()"
+      >
+        <mat-icon>open_in_new</mat-icon>
+        <span>{{ T.G.OPEN_IN_BROWSER | translate }}</span>
+      </button>
+    }
     @if (isCalendarEventFromPlugin()) {
       <button
         mat-menu-item
         (click)="openCalendarEventLink()"
       >
         <mat-icon>open_in_new</mat-icon>
-        {{ T.F.CALENDARS.CONTEXT_MENU.OPEN_IN_CALENDAR | translate }}
+        <span>{{ T.F.CALENDARS.CONTEXT_MENU.OPEN_IN_CALENDAR | translate }}</span>
       </button>
     }
     <button
       mat-menu-item
-      (click)="createCalendarEventAsTask()"
+      (click)="addCalendarEventAsTask()"
     >
       <mat-icon>add</mat-icon>
-      {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+      <span>{{ T.F.CALENDARS.BANNER.ADD_AS_TASK | translate }}</span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="hideCalendarEvent()"
+    >
+      <mat-icon>visibility_off</mat-icon>
+      <span>{{ T.G.HIDE | translate }}</span>
     </button>
     <button
       mat-menu-item
       (click)="hideCalendarEventForever()"
     >
-      <mat-icon>visibility_off</mat-icon>
-      {{ T.F.CALENDARS.CONTEXT_MENU.HIDE_FOREVER | translate }}
+      <mat-icon>block</mat-icon>
+      <span>{{ T.F.CALENDARS.CONTEXT_MENU.HIDE_FOREVER | translate }}</span>
     </button>
   </mat-menu>
 }

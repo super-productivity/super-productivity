@@ -5,15 +5,16 @@ import {
   HostBinding,
   inject,
   input,
-  viewChild,
 } from '@angular/core';
 import { ScheduleFromCalendarEvent } from '../../schedule/schedule.model';
 import { MatIcon } from '@angular/material/icon';
 import { MsToStringPipe } from '../../../ui/duration/ms-to-string.pipe';
 import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
-import { TranslatePipe } from '@ngx-translate/core';
-import { T } from '../../../t.const';
+import { CalendarIntegrationService } from '../../calendar-integration/calendar-integration.service';
 import { CalendarEventActionsService } from '../../calendar-integration/calendar-event-actions.service';
+import { T } from '../../../t.const';
+import { TranslatePipe } from '@ngx-translate/core';
+import { IS_ELECTRON } from '../../../app.constants';
 
 @Component({
   selector: 'planner-calendar-event',
@@ -23,41 +24,47 @@ import { CalendarEventActionsService } from '../../calendar-integration/calendar
   imports: [MatIcon, MsToStringPipe, MatMenu, MatMenuItem, MatMenuTrigger, TranslatePipe],
 })
 export class PlannerCalendarEventComponent {
-  T = T;
+  readonly T: typeof T = T;
   private _calEventActions = inject(CalendarEventActionsService);
+  private _calendarIntegrationService = inject(CalendarIntegrationService);
 
   readonly calendarEvent = input.required<ScheduleFromCalendarEvent>();
   isBeingSubmitted = false;
-
-  @HostBinding('attr.title') title = '';
 
   @HostBinding('class.isBeingSubmitted')
   get isBeingSubmittedG(): boolean {
     return this.isBeingSubmitted;
   }
 
-  readonly menuTrigger = viewChild.required(MatMenuTrigger);
-
   readonly isPluginEvent = computed(() =>
     this._calEventActions.isPluginEvent(this.calendarEvent()),
   );
 
-  openMenu(event: MouseEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    this.menuTrigger().openMenu();
+  openInBrowser(): void {
+    const url = this.calendarEvent().url;
+    if (url) {
+      if (IS_ELECTRON) {
+        window.ea.openExternalUrl(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
   }
 
   async openEventLink(): Promise<void> {
     await this._calEventActions.openEventLink(this.calendarEvent());
   }
 
-  createAsTask(): void {
+  addAsTask(): void {
     if (this.isBeingSubmitted) {
       return;
     }
     this.isBeingSubmitted = true;
     this._calEventActions.createAsTask(this.calendarEvent());
+  }
+
+  hide(): void {
+    this._calendarIntegrationService.skipCalendarEvent(this.calendarEvent());
   }
 
   hideForever(): void {

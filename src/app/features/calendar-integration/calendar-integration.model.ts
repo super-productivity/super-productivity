@@ -20,4 +20,9 @@ export interface CalendarIntegrationEvent {
    * Used to determine if event supports CRUD operations (plugin providers) vs read-only (iCal).
    */
   issueProviderKey?: string;
+  /**
+   * URL linking to the original calendar event (e.g. Google Calendar, Outlook web).
+   * Extracted from the iCal URL property.
+   */
+  url?: string;
 }

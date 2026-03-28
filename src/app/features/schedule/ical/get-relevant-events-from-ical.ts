@@ -270,6 +270,7 @@ const getForRecurring = (
   try {
     const title: string = vevent.getFirstPropertyValue('summary') as string;
     const description = vevent.getFirstPropertyValue('description');
+    const url = getSafeVEventUrl(vevent);
     const start = vevent.getFirstPropertyValue('dtstart');
 
     // Handle missing or invalid dtstart for recurring events
@@ -326,6 +327,7 @@ const getForRecurring = (
           calProviderId,
           description: (description as string) || undefined,
           ...(isAllDay && { isAllDay }),
+          ...(url && { url }),
         });
       } else if (nextTimestamp > endTimeStamp) {
         break;
@@ -371,6 +373,18 @@ const getForRecurring = (
   }
 };
 
+const getSafeVEventUrl = (vevent: ICalVEvent): string | undefined => {
+  const raw = vevent.getFirstPropertyValue('url');
+  if (typeof raw !== 'string') {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return undefined;
+};
+
 interface ConvertOptions {
   overrideId?: string;
   legacyIds?: string[];
@@ -392,6 +406,8 @@ const convertVEventToCalendarIntegrationEvent = (
   const duration = calculateEventDuration(vevent, start);
   const isAllDay = isAllDayEvent(vevent);
 
+  const url = getSafeVEventUrl(vevent);
+
   return {
     id: options?.overrideId || String(vevent.getFirstPropertyValue('uid')),
     title: (vevent.getFirstPropertyValue('summary') as string) || '',
@@ -401,6 +417,7 @@ const convertVEventToCalendarIntegrationEvent = (
     calProviderId,
     legacyIds: options?.legacyIds,
     ...(isAllDay && { isAllDay }),
+    ...(url && { url }),
   };
 };
 

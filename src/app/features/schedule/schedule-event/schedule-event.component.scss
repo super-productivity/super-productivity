@@ -212,6 +212,11 @@
   pointer-events: none;
 }
 
+.calendar-menu-anchor {
+  position: absolute;
+  pointer-events: auto;
+}
+
 .ico-wrapper {
   position: relative;
   margin: var(--s) 0 0 6px;

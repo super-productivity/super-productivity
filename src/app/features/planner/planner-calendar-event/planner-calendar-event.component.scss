@@ -23,7 +23,7 @@
     border-color: var(--c-accent);
     color: var(--c-accent);
 
-    mat-icon.more {
+    mat-icon.add {
       display: block;
     }
 
@@ -42,26 +42,19 @@
     min-width: var(--planner-item-ico-size);
     max-width: var(--planner-item-ico-size);
 
-    &.more {
+    &.add {
       display: none;
     }
   }
 }
 
-.event-content {
+.event-trigger {
   display: flex;
   align-items: center;
   flex: 1;
   min-width: 0;
   padding-top: var(--s-quarter);
   padding-bottom: var(--s-quarter);
-}
-
-.menu-trigger {
-  position: absolute;
-  width: 0;
-  height: 0;
-  visibility: hidden;
 }
 
 .title {
