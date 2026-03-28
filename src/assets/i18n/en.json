@@ -169,7 +169,7 @@
       },
       "CONTEXT_MENU": {
         "CREATE_TASK": "Create as task",
-        "EDIT_EVENT": "Open in calendar",
+        "OPEN_IN_CALENDAR": "Open in calendar",
         "HIDE_FOREVER": "Hide forever"
       },
       "S": {

@@ -121,7 +121,7 @@ export class CalendarIntegrationService {
         map((itemsForProvider: CalendarIntegrationEvent[]) => ({
           itemsForProvider: itemsForProvider.map((ev) => ({
             ...ev,
-            issueProviderKey: 'ICAL' as string,
+            issueProviderKey: 'ICAL',
           })),
           providerId: calProvider.id,
           didError: false,
