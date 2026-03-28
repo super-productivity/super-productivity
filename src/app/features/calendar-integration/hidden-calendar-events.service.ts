@@ -23,19 +23,6 @@ export class HiddenCalendarEventsService {
     this._saveToStorage(updated);
   }
 
-  unhideEvent(eventId: string): void {
-    const current = this.hiddenEventIds$.getValue();
-    const updated = current.filter((id) => id !== eventId);
-    this.hiddenEventIds$.next(updated);
-    this._saveToStorage(updated);
-  }
-
-  isHidden(calEv: CalendarIntegrationEvent): boolean {
-    const hiddenIds = this.hiddenEventIds$.getValue();
-    const candidates = getCalendarEventIdCandidates(calEv);
-    return candidates.some((id) => id != null && hiddenIds.includes(id));
-  }
-
   private _loadFromStorage(): string[] {
     try {
       const stored = localStorage.getItem(LS.HIDDEN_CALENDAR_EVENT_IDS);

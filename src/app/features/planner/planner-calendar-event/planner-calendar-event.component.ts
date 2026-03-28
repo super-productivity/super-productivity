@@ -16,7 +16,10 @@ import { T } from '../../../t.const';
 import { HiddenCalendarEventsService } from '../../calendar-integration/hidden-calendar-events.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { isPluginIssueProvider } from '../../issue/issue.model';
+import { IssueProviderPluginType, isPluginIssueProvider } from '../../issue/issue.model';
+import { Store } from '@ngrx/store';
+import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'planner-calendar-event',
@@ -31,6 +34,7 @@ export class PlannerCalendarEventComponent {
   private _hiddenEventsService = inject(HiddenCalendarEventsService);
   private _snackService = inject(SnackService);
   private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _store = inject(Store);
 
   readonly calendarEvent = input.required<ScheduleFromCalendarEvent>();
   isBeingSubmitted = false;
@@ -50,16 +54,26 @@ export class PlannerCalendarEventComponent {
     this.menuTrigger().openMenu();
   }
 
-  openEventLink(): void {
+  isPluginEvent(): boolean {
+    const key = this.calendarEvent().issueProviderKey;
+    return !!key && isPluginIssueProvider(key as any);
+  }
+
+  async openEventLink(): Promise<void> {
     const calEv = this.calendarEvent();
-    if (calEv.issueProviderKey && isPluginIssueProvider(calEv.issueProviderKey as any)) {
-      const provider = this._pluginRegistry.getProvider(calEv.issueProviderKey);
-      if (provider?.definition.getIssueLink) {
-        const link = provider.definition.getIssueLink(calEv.id, {});
-        if (link) {
-          window.open(link, '_blank');
-        }
-      }
+    if (!this.isPluginEvent()) {
+      return;
+    }
+    const provider = this._pluginRegistry.getProvider(calEv.issueProviderKey!);
+    if (!provider?.definition.getIssueLink) {
+      return;
+    }
+    const cfg = (await firstValueFrom(
+      this._store.select(selectIssueProviderById(calEv.calProviderId, null)),
+    )) as IssueProviderPluginType;
+    const link = provider.definition.getIssueLink(calEv.id, cfg.pluginConfig);
+    if (link) {
+      window.open(link, '_blank');
     }
   }
 

@@ -40,7 +40,9 @@ import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
 import { HiddenCalendarEventsService } from '../../calendar-integration/hidden-calendar-events.service';
 import { SnackService } from '../../../core/snack/snack.service';
 import { PluginIssueProviderRegistryService } from '../../../plugins/issue-provider/plugin-issue-provider-registry.service';
-import { isPluginIssueProvider } from '../../issue/issue.model';
+import { IssueProviderPluginType, isPluginIssueProvider } from '../../issue/issue.model';
+import { selectIssueProviderById } from '../../issue/store/issue-provider.selectors';
+import { firstValueFrom } from 'rxjs';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
@@ -312,18 +314,30 @@ export class ScheduleEventComponent {
     }
   }
 
-  openCalendarEventLink(): void {
+  isCalendarEventFromPlugin(): boolean {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return false;
+    const data = evt.data as ScheduleFromCalendarEvent;
+    return !!data.issueProviderKey && isPluginIssueProvider(data.issueProviderKey as any);
+  }
+
+  async openCalendarEventLink(): Promise<void> {
     const evt = this.se();
     if (evt.type !== SVEType.CalendarEvent) return;
     const data = evt.data as ScheduleFromCalendarEvent;
-    if (data.issueProviderKey && isPluginIssueProvider(data.issueProviderKey as any)) {
-      const provider = this._pluginRegistry.getProvider(data.issueProviderKey);
-      if (provider?.definition.getIssueLink) {
-        const link = provider.definition.getIssueLink(data.id, {});
-        if (link) {
-          window.open(link, '_blank');
-        }
-      }
+    if (!data.issueProviderKey || !isPluginIssueProvider(data.issueProviderKey as any)) {
+      return;
+    }
+    const provider = this._pluginRegistry.getProvider(data.issueProviderKey);
+    if (!provider?.definition.getIssueLink) {
+      return;
+    }
+    const cfg = (await firstValueFrom(
+      this._store.select(selectIssueProviderById(data.calProviderId, null)),
+    )) as IssueProviderPluginType;
+    const link = provider.definition.getIssueLink(data.id, cfg.pluginConfig);
+    if (link) {
+      window.open(link, '_blank');
     }
   }
 

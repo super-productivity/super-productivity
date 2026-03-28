@@ -96,13 +96,15 @@
     class="cal-menu-trigger"
   ></div>
   <mat-menu #calContextMenu="matMenu">
-    <button
-      mat-menu-item
-      (click)="openCalendarEventLink()"
-    >
-      <mat-icon>open_in_new</mat-icon>
-      {{ T.F.CALENDARS.CONTEXT_MENU.EDIT_EVENT | translate }}
-    </button>
+    @if (isCalendarEventFromPlugin()) {
+      <button
+        mat-menu-item
+        (click)="openCalendarEventLink()"
+      >
+        <mat-icon>open_in_new</mat-icon>
+        {{ T.F.CALENDARS.CONTEXT_MENU.EDIT_EVENT | translate }}
+      </button>
+    }
     <button
       mat-menu-item
       (click)="createCalendarEventAsTask()"
