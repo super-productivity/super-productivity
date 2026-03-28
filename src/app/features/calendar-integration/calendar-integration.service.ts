@@ -15,6 +15,7 @@ import {
   combineLatest,
   defer,
   forkJoin,
+  from,
   merge,
   Observable,
   of,
@@ -36,7 +37,11 @@ import {
 } from '../schedule/schedule.model';
 import { getDbDateStr } from '../../util/get-db-date-str';
 import { selectCalendarProviders } from '../issue/store/issue-provider.selectors';
-import { IssueProviderCalendar } from '../issue/issue.model';
+import {
+  IssueProviderCalendar,
+  IssueProviderPluginType,
+  isPluginIssueProvider,
+} from '../issue/issue.model';
 import { CalendarProviderCfg } from '../issue/providers/calendar/calendar.model';
 import { CORS_SKIP_EXTRA_HEADERS, IS_WEB_BROWSER } from '../../app.constants';
 import { Log } from '../../core/log';
@@ -46,8 +51,14 @@ import {
   matchesAnyCalendarEventId,
 } from './get-calendar-event-id-candidates';
 import { getEffectiveCheckInterval } from '../issue/providers/calendar/calendar.const';
+import { PluginIssueProviderRegistryService } from '../../plugins/issue-provider/plugin-issue-provider-registry.service';
+import { PluginHttpService } from '../../plugins/issue-provider/plugin-http.service';
+import { selectEnabledIssueProviders } from '../issue/store/issue-provider.selectors';
+import { PluginSearchResult } from '../../plugins/issue-provider/plugin-issue-provider.model';
+import { HiddenCalendarEventsService } from './hidden-calendar-events.service';
 
 const ONE_MONTHS = 60 * 60 * 1000 * 24 * 31;
+const PLUGIN_CALENDAR_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 @Injectable({
   providedIn: 'root',
@@ -56,79 +67,124 @@ export class CalendarIntegrationService {
   private _http = inject(HttpClient);
   private _snackService = inject(SnackService);
   private _store = inject(Store);
+  private _pluginRegistry = inject(PluginIssueProviderRegistryService);
+  private _pluginHttp = inject(PluginHttpService);
+  private _hiddenEventsService = inject(HiddenCalendarEventsService);
 
   icalEvents$: Observable<ScheduleCalendarMapEntry[]> = merge(
     // NOTE: we're using this rather than startWith since we want to use the freshest available cached value
     defer(() => of(this._getCalProviderFromCache())),
-    this._store.select(selectCalendarProviders).pipe(
-      distinctUntilChanged(fastArrayCompare),
-      switchMap((calendarProviders) => {
-        if (!calendarProviders?.length) {
+    combineLatest([
+      this._store
+        .select(selectCalendarProviders)
+        .pipe(distinctUntilChanged(fastArrayCompare)),
+      this._store.select(selectEnabledIssueProviders).pipe(
+        map((providers) =>
+          providers.filter(
+            (p): p is IssueProviderPluginType =>
+              isPluginIssueProvider(p.issueProviderKey) &&
+              this._pluginRegistry.getUseAgendaView(p.issueProviderKey),
+          ),
+        ),
+        distinctUntilChanged(fastArrayCompare),
+      ),
+    ]).pipe(
+      switchMap(([icalProviders, pluginCalProviders]) => {
+        if (!icalProviders?.length && !pluginCalProviders?.length) {
           return of([]) as Observable<ScheduleCalendarMapEntry[]>;
         }
-        // Calculate the minimum refresh interval from all enabled providers
-        const minInterval = this._getMinRefreshInterval(calendarProviders);
-        // Use timer to periodically refresh calendar data
+        const minInterval = this._getCombinedRefreshInterval(
+          icalProviders,
+          pluginCalProviders,
+        );
         return timer(0, minInterval).pipe(
-          switchMap(() => this._fetchAllProviders(calendarProviders)),
+          switchMap(() => this._fetchAllCombined(icalProviders, pluginCalProviders)),
         );
       }),
     ),
   ).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
-  private _fetchAllProviders(
-    calendarProviders: IssueProviderCalendar[],
+  private _fetchAllCombined(
+    icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
   ): Observable<ScheduleCalendarMapEntry[]> {
-    return forkJoin(
-      calendarProviders.map((calProvider) => {
-        if (!calProvider.isEnabled) {
+    const icalFetches = icalProviders.map((calProvider) => {
+      if (!calProvider.isEnabled) {
+        return of({
+          itemsForProvider: [] as CalendarIntegrationEvent[],
+          providerId: calProvider.id,
+          didError: false,
+        });
+      }
+      return this.requestEventsForSchedule$(calProvider, true).pipe(
+        first(),
+        map((itemsForProvider: CalendarIntegrationEvent[]) => ({
+          itemsForProvider: itemsForProvider.map((ev) => ({
+            ...ev,
+            issueProviderKey: 'ICAL' as string,
+          })),
+          providerId: calProvider.id,
+          didError: false,
+        })),
+        catchError(() =>
+          of({
+            itemsForProvider: [] as CalendarIntegrationEvent[],
+            providerId: calProvider.id,
+            didError: true,
+          }),
+        ),
+      );
+    });
+
+    const pluginFetches = pluginCalProviders.map((pluginProvider) =>
+      from(this._fetchPluginCalendarEvents(pluginProvider)).pipe(
+        map((itemsForProvider) => ({
+          itemsForProvider,
+          providerId: pluginProvider.id,
+          didError: false,
+        })),
+        catchError((err) => {
+          Log.warn('Failed to fetch plugin calendar events', err);
           return of({
             itemsForProvider: [] as CalendarIntegrationEvent[],
-            calProvider,
-            didError: false,
+            providerId: pluginProvider.id,
+            didError: true,
           });
-        }
+        }),
+      ),
+    );
 
-        return this.requestEventsForSchedule$(calProvider, true).pipe(
-          first(),
-          map((itemsForProvider: CalendarIntegrationEvent[]) => ({
-            itemsForProvider,
-            calProvider,
-            didError: false,
-          })),
-          catchError(() =>
-            of({
-              itemsForProvider: [] as CalendarIntegrationEvent[],
-              calProvider,
-              didError: true,
-            }),
-          ),
-        );
-      }),
-    ).pipe(
+    const allFetches = [...icalFetches, ...pluginFetches];
+    if (!allFetches.length) {
+      return of([]);
+    }
+
+    return forkJoin(allFetches).pipe(
       switchMap((resultForProviders) =>
         combineLatest([
           this._store
             .select(selectAllCalendarTaskEventIds)
             .pipe(distinctUntilChanged(fastArrayCompare)),
           this.skippedEventIds$.pipe(distinctUntilChanged(fastArrayCompare)),
+          this._hiddenEventsService.hiddenEventIds$.pipe(
+            distinctUntilChanged(fastArrayCompare),
+          ),
         ]).pipe(
-          map(([allCalendarTaskEventIds, skippedEventIds]) => {
+          map(([allCalendarTaskEventIds, skippedEventIds, hiddenEventIds]) => {
             const cachedByProviderId = this._groupCachedEventsByProvider(
               this._getCalProviderFromCache(),
             );
             return resultForProviders.map(
-              ({ itemsForProvider, calProvider, didError }) => {
-                // Fall back to cached data when the live fetch errored so offline mode keeps showing events.
+              ({ itemsForProvider, providerId, didError }) => {
                 const sourceItems: ScheduleFromCalendarEvent[] = didError
-                  ? (cachedByProviderId.get(calProvider.id) ?? [])
+                  ? (cachedByProviderId.get(providerId) ?? [])
                   : (itemsForProvider as ScheduleFromCalendarEvent[]);
                 return {
-                  // filter out items already added as tasks
                   items: sourceItems.filter(
                     (calEv) =>
                       !matchesAnyCalendarEventId(calEv, allCalendarTaskEventIds) &&
-                      !matchesAnyCalendarEventId(calEv, skippedEventIds),
+                      !matchesAnyCalendarEventId(calEv, skippedEventIds) &&
+                      !matchesAnyCalendarEventId(calEv, hiddenEventIds),
                   ),
                 } as ScheduleCalendarMapEntry;
               },
@@ -142,27 +198,57 @@ export class CalendarIntegrationService {
     );
   }
 
-  /**
-   * Calculate the minimum refresh interval from all enabled providers.
-   * Uses getEffectiveCheckInterval which returns 5 min for file:// URLs.
-   */
-  private _getMinRefreshInterval(calendarProviders: IssueProviderCalendar[]): number {
-    const enabledProviders = calendarProviders.filter((p) => p.isEnabled && p.icalUrl);
-    if (!enabledProviders.length) {
-      return 2 * 60 * 60 * 1000; // Default 2 hours
+  private async _fetchPluginCalendarEvents(
+    pluginProvider: IssueProviderPluginType,
+  ): Promise<CalendarIntegrationEvent[]> {
+    const provider = this._pluginRegistry.getProvider(pluginProvider.issueProviderKey);
+    if (!provider?.definition.getNewIssuesForBacklog) {
+      return [];
     }
-    return Math.min(...enabledProviders.map((p) => getEffectiveCheckInterval(p)));
+
+    const http = this._pluginHttp.createHttpHelper(() =>
+      Promise.resolve(provider.definition.getHeaders(pluginProvider.pluginConfig)),
+    );
+    const results: PluginSearchResult[] =
+      await provider.definition.getNewIssuesForBacklog(pluginProvider.pluginConfig, http);
+
+    return results
+      .filter((r) => r.start != null)
+      .map((r) => ({
+        id: r.id,
+        calProviderId: pluginProvider.id,
+        title: r.title,
+        description: r.description,
+        start: r.start!,
+        duration: r.duration ?? 0,
+        isAllDay: r.isAllDay,
+        issueProviderKey: pluginProvider.issueProviderKey,
+      }));
+  }
+
+  private _getCombinedRefreshInterval(
+    icalProviders: IssueProviderCalendar[],
+    pluginCalProviders: IssueProviderPluginType[],
+  ): number {
+    const intervals: number[] = [];
+    const enabledIcal = icalProviders.filter((p) => p.isEnabled && p.icalUrl);
+    if (enabledIcal.length) {
+      intervals.push(...enabledIcal.map((p) => getEffectiveCheckInterval(p)));
+    }
+    if (pluginCalProviders.length) {
+      intervals.push(
+        ...pluginCalProviders.map((p) => {
+          const reg = this._pluginRegistry.getProvider(p.issueProviderKey);
+          return reg?.pollIntervalMs ?? PLUGIN_CALENDAR_POLL_INTERVAL;
+        }),
+      );
+    }
+    return intervals.length ? Math.min(...intervals) : 2 * 60 * 60 * 1000;
   }
 
   public readonly skippedEventIds$ = new BehaviorSubject<string[]>([]);
 
   constructor() {
-    // Log.log(
-    //   localStorage.getItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY),
-    //   localStorage.getItem(LS.CALENDER_EVENTS_SKIPPED_TODAY),
-    //   localStorage.getItem(LS.CAL_EVENTS_CACHE),
-    // );
-
     if (localStorage.getItem(LS.CALENDER_EVENTS_LAST_SKIP_DAY) === getDbDateStr()) {
       try {
         const skippedEvIds = JSON.parse(
@@ -220,8 +306,6 @@ export class CalendarIntegrationService {
     end = getEndOfDayTimestamp(),
     isForwardError = false,
   ): Observable<CalendarIntegrationEvent[]> {
-    // Log.log('REQUEST EVENTS', calProvider, start, end);
-
     // allow calendars to be disabled for web apps if CORS will fail to prevent errors
     if (calProvider.isDisabledForWebApp && IS_WEB_BROWSER) {
       return of([]);

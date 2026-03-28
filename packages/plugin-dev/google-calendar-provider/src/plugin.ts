@@ -95,12 +95,25 @@ const mapEventToSearchResult = (event: GoogleCalendarEvent): PluginSearchResult 
   const startDateMs = event.start?.date
     ? new Date(event.start.date + 'T00:00:00').getTime()
     : undefined;
+  const endDateTimeMs = event.end?.dateTime
+    ? new Date(event.end.dateTime).getTime()
+    : undefined;
+  const isAllDay = !event.start?.dateTime && !!event.start?.date;
+  const duration =
+    startDateTimeMs && endDateTimeMs
+      ? endDateTimeMs - startDateTimeMs
+      : isAllDay
+        ? 24 * 60 * 60 * 1000
+        : 0;
   return {
     id: event.id,
     title: event.summary || '(No title)',
     status: event.status,
     start: startDateTimeMs ?? startDateMs,
     dueWithTime: startDateTimeMs,
+    duration,
+    isAllDay,
+    description: event.description,
   };
 };
 

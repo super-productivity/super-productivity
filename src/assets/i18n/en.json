@@ -167,8 +167,26 @@
         "EVENT_STR": "event",
         "EVENTS_STR": "events"
       },
+      "CONTEXT_MENU": {
+        "CREATE_TASK": "Create as task",
+        "EDIT_EVENT": "Edit event",
+        "HIDE_FOREVER": "Hide forever"
+      },
+      "EDIT_DIALOG": {
+        "ALL_DAY": "All day",
+        "DELETE_EVENT": "Delete event",
+        "DESCRIPTION": "Description",
+        "DURATION": "Duration",
+        "EVENT_DETAILS": "Event details",
+        "SAVE": "Save",
+        "START": "Start",
+        "TITLE": "Title"
+      },
       "S": {
-        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}"
+        "CAL_PROVIDER_ERROR": "Calendar Provider Error: {{errTxt}}",
+        "EVENT_DELETED": "Calendar event deleted",
+        "EVENT_HIDDEN": "Calendar event hidden permanently",
+        "EVENT_UPDATED": "Calendar event updated"
       }
     },
     "CLIPBOARD_IMAGE": {

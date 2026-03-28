@@ -15,4 +15,9 @@ export interface CalendarIntegrationEvent {
    * when event ID format changes (e.g., recurring event instances).
    */
   legacyIds?: string[];
+  /**
+   * The issue provider key for this event's provider (e.g., 'ICAL' or 'plugin:google-calendar-provider').
+   * Used to determine if event supports CRUD operations (plugin providers) vs read-only (iCal).
+   */
+  issueProviderKey?: string;
 }

@@ -36,12 +36,27 @@ import { TaskContextMenuComponent } from '../../tasks/task-context-menu/task-con
 import { IssueService } from '../../issue/issue.service';
 import { DateTimeFormatService } from '../../../core/date-time-format/date-time-format.service';
 import { FH } from '../schedule.const';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { HiddenCalendarEventsService } from '../../calendar-integration/hidden-calendar-events.service';
+import { SnackService } from '../../../core/snack/snack.service';
+import {
+  CalendarEventEditDialogComponent,
+  CalendarEventEditDialogData,
+} from '../../calendar-integration/calendar-event-edit-dialog/calendar-event-edit-dialog.component';
 
 const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'schedule-event',
-  imports: [MatIcon, TranslateModule, TaskContextMenuComponent, RenderLinksPipe],
+  imports: [
+    MatIcon,
+    TranslateModule,
+    TaskContextMenuComponent,
+    RenderLinksPipe,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+  ],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -72,6 +87,8 @@ export class ScheduleEventComponent {
   private _issueService = inject(IssueService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskService = inject(TaskService);
+  private _hiddenEventsService = inject(HiddenCalendarEventsService);
+  private _snackService = inject(SnackService);
   readonly titleHasLinks = computed(() => {
     const t = this.title();
     return !!t && hasLinkHints(t);
@@ -85,6 +102,8 @@ export class ScheduleEventComponent {
   readonly taskContextMenu = viewChild('taskContextMenu', {
     read: TaskContextMenuComponent,
   });
+
+  readonly calMenuTrigger = viewChild('calMenuTrigger', { read: MatMenuTrigger });
 
   protected readonly SVEType = SVEType;
   private _isBeingSubmitted = false;
@@ -290,19 +309,38 @@ export class ScheduleEventComponent {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      if (this._isBeingSubmitted) {
-        return;
-      }
-      this._isBeingSubmitted = true;
-
-      const data = evt.data as ScheduleFromCalendarEvent;
-      this._issueService.addTaskFromIssue({
-        issueDataReduced: data,
-        issueProviderId: data.calProviderId,
-        issueProviderKey: 'ICAL',
-        isForceDefaultProject: true,
-      });
+      this.calMenuTrigger()?.openMenu();
     }
+  }
+
+  editCalendarEvent(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    const data = evt.data as ScheduleFromCalendarEvent;
+    this._matDialog.open(CalendarEventEditDialogComponent, {
+      data: { calendarEvent: data } as CalendarEventEditDialogData,
+    });
+  }
+
+  createCalendarEventAsTask(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent || this._isBeingSubmitted) return;
+    this._isBeingSubmitted = true;
+    const data = evt.data as ScheduleFromCalendarEvent;
+    this._issueService.addTaskFromIssue({
+      issueDataReduced: data,
+      issueProviderId: data.calProviderId,
+      issueProviderKey: (data.issueProviderKey as any) || 'ICAL',
+      isForceDefaultProject: true,
+    });
+  }
+
+  hideCalendarEventForever(): void {
+    const evt = this.se();
+    if (evt.type !== SVEType.CalendarEvent) return;
+    const data = evt.data as ScheduleFromCalendarEvent;
+    this._hiddenEventsService.hideEvent(data);
+    this._snackService.open({ type: 'SUCCESS', msg: T.F.CALENDARS.S.EVENT_HIDDEN });
   }
 
   onContextMenu(ev: MouseEvent | TouchEvent): void {

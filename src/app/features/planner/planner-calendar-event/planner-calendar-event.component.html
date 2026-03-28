@@ -1,9 +1,39 @@
-<mat-icon class="default">{{ calendarEvent().icon || 'event' }}</mat-icon>
-<mat-icon class="add">add</mat-icon>
-<div class="title">
-  {{ calendarEvent().title }}
-  <!--   {{event.start|date:'HH:mm'}} – {{(event.start + event.duration)|date:'HH:mm'}}-->
+<div
+  class="event-content"
+  (click)="openMenu($event)"
+>
+  <mat-icon class="default">{{ calendarEvent().icon || 'event' }}</mat-icon>
+  <mat-icon class="more">more_vert</mat-icon>
+  <div class="title">{{ calendarEvent().title }}</div>
+  <div class="planner-time-remaining-shared">
+    {{ calendarEvent().duration | msToString }}
+  </div>
 </div>
-<div class="planner-time-remaining-shared">
-  {{ calendarEvent().duration | msToString }}
-</div>
+
+<div
+  [matMenuTriggerFor]="contextMenu"
+  class="menu-trigger"
+></div>
+<mat-menu #contextMenu="matMenu">
+  <button
+    mat-menu-item
+    (click)="editEvent()"
+  >
+    <mat-icon>edit</mat-icon>
+    {{ T.F.CALENDARS.CONTEXT_MENU.EDIT_EVENT | translate }}
+  </button>
+  <button
+    mat-menu-item
+    (click)="createAsTask()"
+  >
+    <mat-icon>add</mat-icon>
+    {{ T.F.CALENDARS.CONTEXT_MENU.CREATE_TASK | translate }}
+  </button>
+  <button
+    mat-menu-item
+    (click)="hideForever()"
+  >
+    <mat-icon>visibility_off</mat-icon>
+    {{ T.F.CALENDARS.CONTEXT_MENU.HIDE_FOREVER | translate }}
+  </button>
+</mat-menu>

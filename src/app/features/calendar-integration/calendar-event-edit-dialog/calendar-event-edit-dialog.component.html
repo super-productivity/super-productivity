@@ -1,0 +1,98 @@
+<h2 mat-dialog-title>
+  <mat-icon>event</mat-icon>
+  {{ T.F.CALENDARS.EDIT_DIALOG.EVENT_DETAILS | translate }}
+</h2>
+
+<mat-dialog-content>
+  @if (isEditMode()) {
+    <mat-form-field>
+      <mat-label>{{ T.F.CALENDARS.EDIT_DIALOG.TITLE | translate }}</mat-label>
+      <input
+        matInput
+        [(ngModel)]="title"
+      />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>{{ T.F.CALENDARS.EDIT_DIALOG.DESCRIPTION | translate }}</mat-label>
+      <textarea
+        matInput
+        [(ngModel)]="description"
+        rows="4"
+      ></textarea>
+    </mat-form-field>
+  } @else {
+    <h3 class="event-title">{{ calendarEvent.title }}</h3>
+
+    <table class="event-details-table">
+      <tr>
+        <td>{{ T.F.CALENDARS.EDIT_DIALOG.START | translate }}</td>
+        <td>
+          @if (calendarEvent.isAllDay) {
+            {{ calendarEvent.start | localeDate: 'mediumDate' }}
+            ({{ T.F.CALENDARS.EDIT_DIALOG.ALL_DAY | translate }})
+          } @else {
+            {{ calendarEvent.start | localeDate: 'medium' }}
+          }
+        </td>
+      </tr>
+      @if (!calendarEvent.isAllDay && calendarEvent.duration) {
+        <tr>
+          <td>{{ T.F.CALENDARS.EDIT_DIALOG.DURATION | translate }}</td>
+          <td>{{ calendarEvent.duration | msToString }}</td>
+        </tr>
+      }
+      @if (calendarEvent.description) {
+        <tr>
+          <td>{{ T.F.CALENDARS.EDIT_DIALOG.DESCRIPTION | translate }}</td>
+          <td class="description-cell">{{ calendarEvent.description }}</td>
+        </tr>
+      }
+    </table>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (isEditable && isEditMode()) {
+    <button
+      mat-button
+      color="warn"
+      [disabled]="isDeleting()"
+      (click)="deleteEvent()"
+    >
+      <mat-icon>delete</mat-icon>
+      {{ T.F.CALENDARS.EDIT_DIALOG.DELETE_EVENT | translate }}
+    </button>
+    <span style="flex: 1"></span>
+    <button
+      mat-button
+      (click)="toggleEditMode()"
+    >
+      {{ T.G.CANCEL | translate }}
+    </button>
+    <button
+      mat-flat-button
+      color="primary"
+      [disabled]="isSaving()"
+      (click)="save()"
+    >
+      {{ T.F.CALENDARS.EDIT_DIALOG.SAVE | translate }}
+    </button>
+  } @else {
+    @if (isEditable) {
+      <button
+        mat-button
+        (click)="toggleEditMode()"
+      >
+        <mat-icon>edit</mat-icon>
+        {{ T.G.EDIT | translate }}
+      </button>
+    }
+    <button
+      mat-button
+      (click)="close()"
+    >
+      {{ T.G.CLOSE | translate }}
+    </button>
+  }
+</mat-dialog-actions>

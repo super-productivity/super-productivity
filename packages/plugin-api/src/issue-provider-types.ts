@@ -13,6 +13,12 @@ export interface PluginSearchResult {
   /** Precise due-with-time timestamp (ms) for timed events. When set, the task is
    *  created with dueWithTime instead of dueDay on initial import. */
   dueWithTime?: number;
+  /** Event duration in milliseconds - used for calendar display */
+  duration?: number;
+  /** True if this is an all-day event */
+  isAllDay?: boolean;
+  /** Event description / body text */
+  description?: string;
 }
 
 export interface PluginIssue {
