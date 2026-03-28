@@ -6,13 +6,17 @@ import { getDiffInWeeks } from '../../../util/get-diff-in-weeks';
 import { dateStrToUtcDate } from '../../../util/date-str-to-utc-date';
 import { getEffectiveLastTaskCreationDay } from './get-effective-last-task-creation-day.util';
 import { getEffectiveRepeatStartDate } from './get-effective-repeat-start-date.util';
+import { Log } from '../../../core/log';
 
 export const getNextRepeatOccurrence = (
   taskRepeatCfg: TaskRepeatCfg,
   fromDate: Date = new Date(),
 ): Date | null => {
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
-    throw new Error('Invalid repeatEvery value given');
+    Log.warn(
+      `Invalid repeatEvery value "${taskRepeatCfg.repeatEvery}" for TaskRepeatCfg "${taskRepeatCfg.id}"`,
+    );
+    return null;
   }
 
   const checkDate = new Date(fromDate);
