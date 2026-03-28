@@ -5,7 +5,10 @@ import {
 } from '@angular/common/http/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
 import { CalendarIntegrationService } from './calendar-integration.service';
-import { selectCalendarProviders } from '../issue/store/issue-provider.selectors';
+import {
+  selectCalendarProviders,
+  selectEnabledIssueProviders,
+} from '../issue/store/issue-provider.selectors';
 import { selectAllCalendarTaskEventIds } from '../tasks/store/task.selectors';
 import { IssueProviderCalendar } from '../issue/issue.model';
 import {
@@ -75,6 +78,7 @@ END:VCALENDAR`;
         provideMockStore({
           selectors: [
             { selector: selectCalendarProviders, value: [] },
+            { selector: selectEnabledIssueProviders, value: [] },
             { selector: selectAllCalendarTaskEventIds, value: [] },
           ],
         }),
@@ -418,7 +422,10 @@ END:VCALENDAR`;
         });
 
         // Access private method via any cast for testing
-        const interval = (service as any)._getMinRefreshInterval([disabledProvider]);
+        const interval = (service as any)._getCombinedRefreshInterval(
+          [disabledProvider],
+          [],
+        );
 
         expect(interval).toBe(2 * 60 * 60 * 1000); // Default 2 hours
       });
@@ -436,6 +443,7 @@ END:VCALENDAR`;
             provideMockStore({
               selectors: [
                 { selector: selectCalendarProviders, value: [] },
+                { selector: selectEnabledIssueProviders, value: [] },
                 { selector: selectAllCalendarTaskEventIds, value: [] },
               ],
             }),
@@ -645,9 +653,9 @@ END:VCALENDAR`;
     }));
   });
 
-  describe('_getMinRefreshInterval', () => {
+  describe('_getCombinedRefreshInterval', () => {
     it('should return default interval for empty provider list', () => {
-      const interval = (service as any)._getMinRefreshInterval([]);
+      const interval = (service as any)._getCombinedRefreshInterval([], []);
       expect(interval).toBe(2 * 60 * 60 * 1000);
     });
 
@@ -664,7 +672,10 @@ END:VCALENDAR`;
         checkUpdatesEvery: 30 * 60 * 1000, // 30 minutes
       });
 
-      const interval = (service as any)._getMinRefreshInterval([provider1, provider2]);
+      const interval = (service as any)._getCombinedRefreshInterval(
+        [provider1, provider2],
+        [],
+      );
       expect(interval).toBe(30 * 60 * 1000);
     });
 
@@ -681,10 +692,10 @@ END:VCALENDAR`;
         checkUpdatesEvery: 10 * 60 * 1000, // 10 minutes - shorter but disabled
       });
 
-      const interval = (service as any)._getMinRefreshInterval([
-        enabledProvider,
-        disabledProvider,
-      ]);
+      const interval = (service as any)._getCombinedRefreshInterval(
+        [enabledProvider, disabledProvider],
+        [],
+      );
       expect(interval).toBe(60 * 60 * 1000);
     });
 
@@ -703,10 +714,10 @@ END:VCALENDAR`;
         checkUpdatesEvery: 10 * 60 * 1000,
       });
 
-      const interval = (service as any)._getMinRefreshInterval([
-        providerWithUrl,
-        providerWithoutUrl,
-      ]);
+      const interval = (service as any)._getCombinedRefreshInterval(
+        [providerWithUrl, providerWithoutUrl],
+        [],
+      );
       expect(interval).toBe(60 * 60 * 1000);
     });
 
@@ -717,7 +728,7 @@ END:VCALENDAR`;
         checkUpdatesEvery: 2 * 60 * 60 * 1000, // Configured as 2 hours
       });
 
-      const interval = (service as any)._getMinRefreshInterval([fileProvider]);
+      const interval = (service as any)._getCombinedRefreshInterval([fileProvider], []);
       expect(interval).toBe(LOCAL_FILE_CHECK_INTERVAL); // Should be 5 minutes
     });
   });
@@ -742,6 +753,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -772,6 +784,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -798,6 +811,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -821,6 +835,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: ['test-event-1'] },
             ],
           }),
@@ -990,6 +1005,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -1184,6 +1200,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -1206,6 +1223,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -1237,6 +1255,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
@@ -1311,7 +1330,7 @@ END:VCALENDAR`;
         icalUrl: undefined as unknown as string,
       });
 
-      const interval = (service as any)._getMinRefreshInterval([provider]);
+      const interval = (service as any)._getCombinedRefreshInterval([provider], []);
       expect(interval).toBe(2 * 60 * 60 * 1000); // Default interval
     });
 
@@ -1320,7 +1339,7 @@ END:VCALENDAR`;
         icalUrl: null as unknown as string,
       });
 
-      const interval = (service as any)._getMinRefreshInterval([provider]);
+      const interval = (service as any)._getCombinedRefreshInterval([provider], []);
       expect(interval).toBe(2 * 60 * 60 * 1000); // Default interval
     });
 
@@ -1389,6 +1408,7 @@ END:VCALENDAR`;
           provideMockStore({
             selectors: [
               { selector: selectCalendarProviders, value: [] },
+              { selector: selectEnabledIssueProviders, value: [] },
               { selector: selectAllCalendarTaskEventIds, value: [] },
             ],
           }),
