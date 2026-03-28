@@ -339,6 +339,28 @@ describe('LocalRestApiHandlerService', () => {
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(400);
       });
+
+      it('should strip disallowed fields from the body', async () => {
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(createMockTask('new-task-id')),
+        });
+
+        await sendRequestAndWait(
+          createRequest('POST', '/tasks', {
+            body: {
+              title: 'New Task',
+              notes: 'allowed',
+              id: 'injected-id',
+              subTaskIds: ['injected'],
+              parentId: 'injected-parent',
+            },
+          }),
+        );
+
+        expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          notes: 'allowed',
+        });
+      });
     });
 
     describe('GET /tasks/:id', () => {
@@ -407,6 +429,28 @@ describe('LocalRestApiHandlerService', () => {
 
         expect(response.body.ok).toBe(false);
         expect(response.status).toBe(400);
+      });
+
+      it('should strip disallowed fields from PATCH body', async () => {
+        const mockTask = createMockTask('task-1');
+        Object.defineProperty(taskServiceMock, 'getByIdOnce$', {
+          get: () => (_id: string) => of(mockTask),
+        });
+
+        await sendRequestAndWait(
+          createRequest('PATCH', '/tasks/task-1', {
+            body: {
+              title: 'Updated',
+              id: 'injected-id',
+              subTaskIds: ['injected'],
+              parentId: 'injected-parent',
+            },
+          }),
+        );
+
+        expect(taskServiceMock.update).toHaveBeenCalledWith('task-1', {
+          title: 'Updated',
+        });
       });
     });
 

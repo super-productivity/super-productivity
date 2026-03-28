@@ -9,9 +9,34 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
+import { IS_ELECTRON } from '../../app.constants';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Only these fields may be set via the REST API to prevent state corruption. */
+const ALLOWED_TASK_FIELDS = new Set<string>([
+  'title',
+  'notes',
+  'isDone',
+  'timeEstimate',
+  'timeSpent',
+  'projectId',
+  'tagIds',
+  'dueDay',
+  'dueWithTime',
+  'plannedAt',
+]);
+
+const pickAllowedFields = (body: Record<string, unknown>): Partial<Task> => {
+  const result: Record<string, unknown> = {};
+  for (const key of Object.keys(body)) {
+    if (ALLOWED_TASK_FIELDS.has(key)) {
+      result[key] = body[key];
+    }
+  }
+  return result as Partial<Task>;
+};
 
 const getQueryParam = (
   query: Record<string, string | string[]>,
@@ -77,7 +102,7 @@ export class LocalRestApiHandlerService {
   private _isInitialized = false;
 
   init(): void {
-    if (this._isInitialized) {
+    if (this._isInitialized || !IS_ELECTRON) {
       return;
     }
     this._isInitialized = true;
@@ -222,7 +247,11 @@ export class LocalRestApiHandlerService {
     const projectId = getQueryParam(query, 'projectId');
     const tagId = getQueryParam(query, 'tagId');
     const includeDone = getQueryParamAsBoolean(query, 'includeDone', false);
-    const source = (getQueryParam(query, 'source') as TaskSource) || 'active';
+    const VALID_SOURCES: TaskSource[] = ['active', 'archived', 'all'];
+    const rawSource = getQueryParam(query, 'source') || 'active';
+    const source: TaskSource = VALID_SOURCES.includes(rawSource as TaskSource)
+      ? (rawSource as TaskSource)
+      : 'active';
 
     let tasks: Task[];
 
@@ -271,9 +300,8 @@ export class LocalRestApiHandlerService {
     }
 
     const title = body.title.trim();
-    const additionalFields = { ...body };
-    delete additionalFields.title;
-    const taskId = this._taskService.add(title, false, additionalFields as Partial<Task>);
+    const additionalFields = pickAllowedFields(body);
+    const taskId = this._taskService.add(title, false, additionalFields);
     const createdTask = await this._getTaskById(taskId);
 
     return createSuccessResponse(requestId, 201, createdTask);
@@ -311,7 +339,7 @@ export class LocalRestApiHandlerService {
           return createErrorResponse(requestId, 404, 'TASK_NOT_FOUND', 'Task not found');
         }
 
-        this._taskService.update(taskId, body as Partial<Task>);
+        this._taskService.update(taskId, pickAllowedFields(body));
         return createSuccessResponse(requestId, 200, await this._getTaskById(taskId));
       }
 
