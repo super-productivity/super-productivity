@@ -74,27 +74,21 @@ describe('getNextRepeatOccurrence()', () => {
       expect(result).toBeTruthy();
     });
 
-    it('should throw error if repeatEvery is not a positive integer', () => {
+    it('should return null if repeatEvery is not a positive integer', () => {
       const cfg1 = dummyRepeatable('ID1', {
         repeatEvery: 0,
       });
-      expect(() => getNextRepeatOccurrence(cfg1, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg1, new Date())).toBeNull();
 
       const cfg2 = dummyRepeatable('ID1', {
         repeatEvery: -1,
       });
-      expect(() => getNextRepeatOccurrence(cfg2, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg2, new Date())).toBeNull();
 
       const cfg3 = dummyRepeatable('ID1', {
         repeatEvery: 1.5,
       });
-      expect(() => getNextRepeatOccurrence(cfg3, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNextRepeatOccurrence(cfg3, new Date())).toBeNull();
     });
   });
 

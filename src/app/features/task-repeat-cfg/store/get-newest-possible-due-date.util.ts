@@ -15,7 +15,7 @@ export const getNewestPossibleDueDate = (
   // return new Date();
 
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
-    throw new Error('Invalid repeatEvery value given');
+    return null;
   }
 
   const checkDate = new Date(today);

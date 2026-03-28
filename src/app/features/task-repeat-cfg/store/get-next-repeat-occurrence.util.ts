@@ -12,7 +12,7 @@ export const getNextRepeatOccurrence = (
   fromDate: Date = new Date(),
 ): Date | null => {
   if (!Number.isInteger(taskRepeatCfg.repeatEvery) || taskRepeatCfg.repeatEvery < 1) {
-    throw new Error('Invalid repeatEvery value given');
+    return null;
   }
 
   const checkDate = new Date(fromDate);

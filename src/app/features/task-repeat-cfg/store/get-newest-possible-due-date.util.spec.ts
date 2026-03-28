@@ -77,27 +77,21 @@ describe('getNewestPossibleDueDate()', () => {
       expect(result).toBeTruthy();
     });
 
-    it('should throw error if repeatEvery is not a positive integer', () => {
+    it('should return null if repeatEvery is not a positive integer', () => {
       const cfg1 = dummyRepeatable('ID1', {
         repeatEvery: 0,
       });
-      expect(() => getNewestPossibleDueDate(cfg1, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg1, new Date())).toBeNull();
 
       const cfg2 = dummyRepeatable('ID1', {
         repeatEvery: -1,
       });
-      expect(() => getNewestPossibleDueDate(cfg2, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg2, new Date())).toBeNull();
 
       const cfg3 = dummyRepeatable('ID1', {
         repeatEvery: 1.5,
       });
-      expect(() => getNewestPossibleDueDate(cfg3, new Date())).toThrowError(
-        'Invalid repeatEvery value given',
-      );
+      expect(getNewestPossibleDueDate(cfg3, new Date())).toBeNull();
     });
   });
 
