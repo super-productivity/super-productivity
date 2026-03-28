@@ -107,10 +107,10 @@
       "V": {
         "ADD_NEW_BOARD": "Adaugă o nouă tablă",
         "CONFIRM_DELETE": "Ești sigur că vrei să ștergi această tablă?",
-        "CREATE_NEW_TAGS_BTN": "Creează etichete",
-        "CREATE_NEW_TAGS_MSG": "{{nr}} noi etichete trebuie create pentru ca această tablă să funcționeze",
         "CREATE_NEW_TAG_BTN": "Creează etichetă",
         "CREATE_NEW_TAG_MSG": "O nouă etichetă trebuie creată pentru ca această tablă să funcționeze",
+        "CREATE_NEW_TAGS_BTN": "Creează etichete",
+        "CREATE_NEW_TAGS_MSG": "{{nr}} noi etichete trebuie create pentru ca această tablă să funcționeze",
         "EDIT_BOARD": "Editează tablă",
         "NO_PANELS_BTN": "Configurează tabla",
         "NO_PANELS_MSG": "Această tablă nu are panouri configurate. Adaugă câteva panouri."
@@ -380,9 +380,9 @@
         "WORKLOG": "Worklog"
       },
       "S": {
-        "AUTO_CREATE_FAILED": "Auto-create issue failed: {{errorMsg}}",
-        "CONNECTION_FAILED": "Connection failed",
-        "CONNECTION_SUCCESS": "Connection works!",
+        "AUTO_CREATE_FAILED": "Crearea automată a problemei a eșuat: {{errorMsg}}",
+        "CONNECTION_FAILED": "Conexiune eșuată",
+        "CONNECTION_SUCCESS": "Conexiunea funcționează!",
         "ERR_GENERIC": "{{issueProviderName}} Error: {{errTxt}}",
         "ERR_NETWORK": "{{issueProviderName}}: Request failed because of a client side network error",
         "ERR_NOT_CONFIGURED": "{{issueProviderName}}: Not properly configured",
@@ -391,7 +391,7 @@
         "ISSUE_NO_UPDATE_REQUIRED": "{{issueProviderName}}: No update required",
         "ISSUE_UPDATE_MULTIPLE": "{{issueProviderName}}: Updated data for {{nr}} {{issuesStr}}",
         "ISSUE_UPDATE_SINGLE": "{{issueProviderName}}: Updated data for \"{{issueTitle}}\"",
-        "PLUGIN_NOT_INSTALLED": "Required plugin \"{{pluginName}}\" is not installed.",
+        "PLUGIN_NOT_INSTALLED": "Plugin-ul necesar \"{{pluginName}}\" nu este instalat.",
         "POLLING_BACKLOG": "{{issueProviderName}}: Polling for new {{issuesStr}}",
         "POLLING_CHANGES": "{{issueProviderName}}: Polling Changes for {{issuesStr}}",
         "DELETE_REMOTE_FAILED": "Failed to delete remote issue",
@@ -401,27 +401,27 @@
         "OAUTH_FAILED": "Authentication failed.",
         "REMOTE_ISSUE_DELETED": "Remote issue was deleted. Delete linked task \"{{taskTitle}}\"?",
         "REMOTE_ISSUE_DELETED_WITH_TIME": "Remote issue was deleted but task \"{{taskTitle}}\" has tracked time. Delete anyway?",
-        "TWO_WAY_SYNC_PUSH_FAILED": "Two-way sync push failed: {{errorMsg}}"
+        "TWO_WAY_SYNC_PUSH_FAILED": "Trimiterea sincronizării bidirecționale a eșuat: {{errorMsg}}"
       },
       "TWO_WAY_SYNC": {
-        "AUTO_CREATE_ISSUES": "Auto-create issues for new tasks",
-        "AUTO_CREATE_ISSUES_DESCRIPTION": "Automatically creates an issue when you add a new top-level task to the default project. Requires a default project to be set.",
-        "BOTH": "Both (bidirectional)",
+        "AUTO_CREATE_ISSUES": "Creează automat probleme pentru sarcini noi",
+        "AUTO_CREATE_ISSUES_DESCRIPTION": "Creează automat o problemă când adăugați o sarcină nouă de nivel superior la proiectul implicit. Necesită un proiect implicit setat.",
+        "BOTH": "Ambele (bidirecțional)",
         "DUE_DAY": "Due Day",
         "DUE_WITH_TIME": "Due Date/Time",
-        "NOTES": "Notes / Description sync direction",
-        "OFF": "Off",
-        "PULL_ONLY": "Pull only",
-        "PUSH_ONLY": "Push only",
-        "SECTION": "Two-Way Sync (experimental)",
-        "STATUS": "Status sync direction",
+        "NOTES": "Direcție sincronizare note / descriere",
+        "OFF": "Dezactivat",
+        "PULL_ONLY": "Doar preluare",
+        "PUSH_ONLY": "Doar trimitere",
+        "SECTION": "Sincronizare bidirecțională (experimental)",
+        "STATUS": "Direcție sincronizare status",
         "TIME_ESTIMATE": "Time Estimate",
-        "TITLE": "Title sync direction"
+        "TITLE": "Direcție sincronizare titlu"
       },
       "DIALOG": {
-        "ADVANCED_CONFIG": "Advanced Config",
+        "ADVANCED_CONFIG": "Configurare avansată",
         "CONNECTED": "Connected",
-        "DELETE_CONFIRM": "Are you sure you want to delete this issue provider? Deleting it means that <strong>all previously imported issue tasks will loose their reference</strong>. This cannot be undone!",
+        "DELETE_CONFIRM": "Sigur doriți să ștergeți acest furnizor de probleme? Ștergerea înseamnă că <strong>toate sarcinile de probleme importate anterior vor pierde referința</strong>. Aceasta nu poate fi anulată!",
         "DISCONNECT": "Disconnect"
       }
     },
@@ -648,29 +648,29 @@
     },
     "NEXTCLOUD_DECK": {
       "FORM": {
-        "BASE_URL": "Nextcloud Base URL",
-        "FILTER_BY_ASSIGNEE": "Only import cards assigned to me",
-        "IS_TRANSITION_ISSUES_ENABLED": "Sync completion status and title back to Nextcloud Deck",
-        "PASSWORD": "Your Nextcloud app password",
-        "POLL_INTERVAL_MINUTES": "Poll interval (minutes)",
-        "TITLE_TEMPLATE": "Task title template",
-        "TITLE_TEMPLATE_DESCRIPTION": "Variables: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Example: [{BOARD}: {COLUMN}] {CARD_TITLE}. Leave empty for card title only.",
-        "USERNAME": "Your Nextcloud username"
+        "BASE_URL": "URL de bază Nextcloud",
+        "FILTER_BY_ASSIGNEE": "Importă doar cardurile atribuite mie",
+        "IS_TRANSITION_ISSUES_ENABLED": "Sincronizează starea de finalizare și titlul înapoi în Nextcloud Deck",
+        "PASSWORD": "Parola dvs. de aplicație Nextcloud",
+        "POLL_INTERVAL_MINUTES": "Interval de interogare (minute)",
+        "TITLE_TEMPLATE": "Șablon titlu sarcină",
+        "TITLE_TEMPLATE_DESCRIPTION": "Variabile: {CARD_TITLE}, {BOARD}, {COLUMN}, {ID}, {LABELS}. Exemplu: [{BOARD}: {COLUMN}] {CARD_TITLE}. Lăsați gol pentru doar titlul cardului.",
+        "USERNAME": "Numele dvs. de utilizator Nextcloud"
       },
       "FORM_SECTION": {
-        "HELP": "Configure your Nextcloud Deck integration to import cards as tasks. Use an app password for authentication."
+        "HELP": "Configurați integrarea Nextcloud Deck pentru a importa carduri ca sarcini. Utilizați o parolă de aplicație pentru autentificare."
       },
       "ISSUE_CONTENT": {
-        "ASSIGNED_USERS": "Assigned Users",
-        "DECK_DESCRIPTION": "Deck Description",
-        "LABELS": "Labels",
-        "STACK": "Stack"
+        "ASSIGNED_USERS": "Utilizatori atribuiți",
+        "DECK_DESCRIPTION": "Descriere Deck",
+        "LABELS": "Etichete",
+        "STACK": "Stivă"
       },
       "S": {
-        "BOARD_NOT_FOUND": "Nextcloud Deck: Board not found",
-        "CARD_NOT_FOUND": "Nextcloud Deck: Card \"{{issueId}}\" seems to be deleted on server.",
-        "ERR_CREDENTIALS_MISSING": "Enter Nextcloud URL, username, and password first.",
-        "ERR_LOAD_BOARDS": "Failed to load Deck boards. Check your credentials."
+        "BOARD_NOT_FOUND": "Nextcloud Deck: Tablou negăsit",
+        "CARD_NOT_FOUND": "Nextcloud Deck: Cardul \"{{issueId}}\" pare să fi fost șters de pe server.",
+        "ERR_CREDENTIALS_MISSING": "Introduceți mai întâi URL-ul Nextcloud, numele de utilizator și parola.",
+        "ERR_LOAD_BOARDS": "Încărcarea tablourilor Deck a eșuat. Verificați credențialele."
       }
     },
     "NOTE": {
@@ -866,7 +866,7 @@
       "TOOLTIP_VISIBILITY": "Show/hide projects"
     },
     "QUICK_HISTORY": {
-      "NO_DATA": "No work tracked yet this year. Complete tasks to see your history here.",
+      "NO_DATA": "No data for current year",
       "PAGE_TITLE": "Quick History",
       "WEEK_TITLE": "Week {{nr}} ({{timeSpent}})"
     },
@@ -1036,13 +1036,13 @@
         "VECTOR_COMPARISON_LOCAL_LESS": "Local < Remote"
       },
       "D_DATA_REPAIR_CONFIRM": {
-        "MSG": "Your data appears to be damaged. Would you like to attempt automatic repair? This may result in minor data loss.",
-        "TITLE": "Data Damage Detected"
+        "MSG": "Datele dvs. par deteriorate. Doriți să încercați repararea automată? Aceasta poate duce la pierderea minoră de date.",
+        "TITLE": "Deteriorare date detectată"
       },
       "D_DATA_REPAIRED": {
-        "MSG": "Your data required automatic repair ({{count}} issues fixed). This should not normally happen. If this occurs repeatedly, please report it.",
-        "TITLE": "Data Repair Executed",
-        "UNKNOWN_ERROR": "Unknown Sync Error: {{err}}"
+        "MSG": "Datele dvs. au necesitat reparare automată ({{count}} probleme remediate). Acest lucru nu ar trebui să se întâmple în mod normal. Dacă se repetă, vă rugăm să raportați.",
+        "TITLE": "Reparare date executată",
+        "UNKNOWN_ERROR": "Eroare necunoscută de sincronizare: {{err}}"
       },
       "D_DECRYPT_ERROR": {
         "BTN_OVER_WRITE_REMOTE": "Use This Password & Overwrite Remote",
@@ -1054,27 +1054,27 @@
         "TITLE": "Decryption Failed"
       },
       "D_ENTER_PASSWORD": {
-        "BTN_FORCE_OVERWRITE": "Use Local Data",
+        "BTN_FORCE_OVERWRITE": "Force Overwrite Server",
         "BTN_SAVE_AND_SYNC": "Save & Sync",
-        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data encrypted with this password. Continue?",
-        "FORCE_OVERWRITE_INFO": "If you prefer to keep your local data, you can overwrite the server instead.",
+        "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Continue?",
+        "FORCE_OVERWRITE_INFO": "If you don’t know the old password, you can overwrite the server with your local data and a new password.",
         "FORCE_OVERWRITE_TITLE": "Overwrite Server Data?",
         "MESSAGE": "The sync server contains encrypted data, but no encryption password is configured on this device. Please enter your encryption password to decrypt and sync your data.",
         "PASSWORD_LABEL": "Encryption Password",
         "TITLE": "Encryption Password Required"
       },
       "D_FRESH_CLIENT_CONFIRM": {
-        "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and overwrite your local data with it?",
+        "MESSAGE": "This appears to be a fresh installation. Remote data with {{count}} changes was found. Do you want to download and apply this data?",
         "OK": "Download Remote Data",
         "TITLE": "Initial Sync"
       },
       "D_INCOMPLETE_SYNC": {
         "BTN_CLOSE_APP": "Close App",
         "BTN_DOWNLOAD_BACKUP": "Download Local Backup",
-        "BTN_FORCE_DOWNLOAD": "Force Download Remote",
+        "BTN_FORCE_DOWNLOAD": "Forțează descărcarea de la distanță",
         "BTN_FORCE_UPLOAD": "Force Upload Local",
-        "INCOHERENT_P1": "The date of your remote data is from the future",
-        "INCOHERENT_P2": "You should check the time configured on your systems!",
+        "INCOHERENT_P1": "Data datelor de la distanță este din viitor",
+        "INCOHERENT_P2": "Ar trebui să verificați ora configurată pe sistemele dvs.!",
         "P1": "The remote sync data is incoherent!",
         "P2": "Affected model:",
         "T3": "You have 2 Options:",
@@ -1087,8 +1087,8 @@
         "TITLE": "Configure Sync"
       },
       "D_LOCAL_DATA_REPLACE_CONFIRM": {
-        "MESSAGE": "You have {{count}} unsynced local changes that will be replaced by remote data. Do you want to continue?",
-        "TITLE": "Replace Local Data?"
+        "MESSAGE": "Aveți {{count}} modificări locale nesincronizate care vor fi înlocuite cu datele de la distanță. Doriți să continuați?",
+        "TITLE": "Înlocuiți datele locale?"
       },
       "D_PERMISSION": {
         "DISABLE_SYNC": "Disable sync",
@@ -1098,42 +1098,42 @@
       },
       "D_RESTORE": {
         "BTN_RESTORE": "Restore",
-        "CONFIRM_MSG": "Are you absolutely sure you want to restore to <strong>{{timestamp}}</strong>?<br><br>This will <strong>completely replace</strong> all your current data and <strong>cannot be undone</strong>.",
-        "CONFIRM_TITLE": "Confirm Restore",
-        "ERROR_LOADING": "Failed to load restore points",
-        "ERROR_RESTORE": "Failed to restore data",
-        "INTRO": "Select a point in time to restore your data to:",
-        "LOADING": "Loading restore points...",
-        "NO_POINTS": "No restore points available. Restore points are created when you sync or import data.",
-        "TITLE": "Restore from History",
-        "TYPE_BACKUP_IMPORT": "Backup restore",
-        "TYPE_REPAIR": "Auto-repair",
-        "TYPE_SYNC_IMPORT": "Full sync import",
-        "WARNING": "This will replace ALL your current data with the selected backup. This action cannot be undone!"
+        "CONFIRM_MSG": "Sunteți absolut sigur că doriți să restaurați la <strong>{{timestamp}}</strong>?<br><br>Aceasta va <strong>înlocui complet</strong> toate datele actuale și <strong>nu poate fi anulată</strong>.",
+        "CONFIRM_TITLE": "Confirmați restaurarea",
+        "ERROR_LOADING": "Încărcarea punctelor de restaurare a eșuat",
+        "ERROR_RESTORE": "Restaurarea datelor a eșuat",
+        "INTRO": "Selectați un moment în timp pentru a restaura datele:",
+        "LOADING": "Se încarcă punctele de restaurare...",
+        "NO_POINTS": "Nu sunt disponibile puncte de restaurare. Punctele de restaurare sunt create la sincronizare sau importul datelor.",
+        "TITLE": "Restaurare din istoric",
+        "TYPE_BACKUP_IMPORT": "Restaurare backup",
+        "TYPE_REPAIR": "Reparare automată",
+        "TYPE_SYNC_IMPORT": "Import complet sincronizare",
+        "WARNING": "Aceasta va înlocui TOATE datele actuale cu backup-ul selectat. Această acțiune nu poate fi anulată!"
       },
       "D_SERVER_MIGRATION_CONFIRM": {
-        "CONFIRM": "Upload Local Data",
-        "MESSAGE": "This sync server already contains data. Would you like to upload your local data to merge with it? If you skip this, some of your local changes may not sync.",
-        "SKIP": "Skip",
-        "TITLE": "Server Already Has Data"
+        "CONFIRM": "Încarcă datele locale",
+        "MESSAGE": "Acest server de sincronizare conține deja date. Doriți să încărcați datele locale pentru a le îmbina? Dacă omiteți, unele modificări locale s-ar putea să nu se sincronizeze.",
+        "SKIP": "Omite",
+        "TITLE": "Serverul conține deja date"
       },
       "D_SYNC_IMPORT_CONFLICT": {
-        "FILTERED_CHANGES": "Affected changes",
-        "IMPORT_DATE": "Import date",
-        "MSG_INCOMING": "Your data was fully replaced on another device. You have {{filteredOpCount}} local changes that may not carry over.",
-        "MSG_INCOMING_NO_OPS": "Your data was fully replaced on another device. This device will sync to the new state.",
-        "MSG_LOCAL_FILTERS": "Your local data was imported/restored, but the server has {{filteredOpCount}} changes from other devices that cannot be automatically merged.",
-        "REASON_BACKUP_RESTORE": "Reason: A backup was restored on another device.",
-        "REASON_FILE_IMPORT": "Reason: A data file was imported on another device.",
-        "REASON_FORCE_UPLOAD": "Reason: Another device force-uploaded its local data.",
-        "REASON_PASSWORD_CHANGED": "Reason: The encryption password was changed on another device.",
-        "REASON_REPAIR": "Reason: An automatic data repair was performed.",
-        "REASON_SERVER_MIGRATION": "Reason: Data was migrated to a new sync server.",
-        "REASON_UNKNOWN": "Reason: A full state replacement was performed.",
-        "RECOMMEND_SERVER": "Recommended: Accept the server data to stay in sync with the other device.",
-        "TITLE": "Sync Conflict Detected",
-        "USE_LOCAL": "Use My Data",
-        "USE_REMOTE": "Use Server Data"
+        "FILTERED_CHANGES": "Modificări afectate",
+        "IMPORT_DATE": "Data importului",
+        "MSG_INCOMING": "Datele dvs. au fost complet înlocuite pe alt dispozitiv. Aveți {{filteredOpCount}} modificări locale care s-ar putea pierde.",
+        "MSG_INCOMING_NO_OPS": "Datele dvs. au fost complet înlocuite pe alt dispozitiv. Acest dispozitiv se va sincroniza cu starea nouă.",
+        "MSG_LOCAL_FILTERS": "Datele locale au fost importate/restaurate, dar serverul are {{filteredOpCount}} modificări de la alte dispozitive care nu pot fi îmbinate automat.",
+        "REASON_BACKUP_RESTORE": "Motiv: Un backup a fost restaurat pe alt dispozitiv.",
+        "REASON_FILE_IMPORT": "Motiv: Un fișier de date a fost importat pe alt dispozitiv.",
+        "REASON_FORCE_UPLOAD": "Motiv: Alt dispozitiv a forțat încărcarea datelor locale.",
+        "REASON_PASSWORD_CHANGED": "Motiv: Parola de criptare a fost schimbată pe alt dispozitiv.",
+        "REASON_REPAIR": "Motiv: A fost efectuată o reparare automată a datelor.",
+        "REASON_SERVER_MIGRATION": "Motiv: Datele au fost migrate pe un nou server de sincronizare.",
+        "REASON_UNKNOWN": "Motiv: A fost efectuată o înlocuire completă a stării.",
+        "RECOMMEND_SERVER": "Recomandat: Acceptați datele serverului pentru a rămâne sincronizat cu celălalt dispozitiv.",
+        "TITLE": "Conflict de sincronizare detectat",
+        "USE_LOCAL": "Folosește datele mele",
+        "USE_REMOTE": "Folosește datele serverului"
       },
       "FORM": {
         "BTN_CHANGE_PASSWORD": "Change Password",
@@ -1210,15 +1210,15 @@
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "Local file sync stores data in a folder on your device. <strong>Important:</strong> Do not use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices - they can cause conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
         "PASSWORD_SET_INFO": "🔒 Encryption password is set.",
         "SUPER_SYNC": {
           "ACCESS_TOKEN_DESCRIPTION": "Paste the token you copied from the server login page",
-        "BTN_CHANGE_PASSWORD": "Change Password",
-        "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
+          "BTN_CHANGE_PASSWORD": "Change Password",
+          "BTN_DISABLE_ENCRYPTION": "Disable Encryption",
           "BTN_ENABLE_ENCRYPTION": "Enable Encryption",
           "BTN_FORCE_OVERWRITE": "Force Overwrite Server",
           "BTN_GET_TOKEN": "Open Server & Get Token",
@@ -1247,8 +1247,8 @@
           "ENABLE_ENCRYPTION_TITLE": "Enable Encryption?",
           "ENABLE_ENCRYPTION_WARNING": "WARNING: This will permanently delete ALL unencrypted sync data on the server. This is necessary because encrypted operations cannot be mixed with unencrypted ones. If you forget your encryption password, your data cannot be recovered.",
           "ENABLE_ENCRYPTION_WHAT_HAPPENS": "What will happen:",
-          "ENCRYPTION_ENCOURAGED": "Encryption is required for SuperSync. Please enable encryption to protect your data.",
-          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync password-encrypts your data before it leaves your device</strong>, making misuse or leaks of your private data almost impossible.",
+          "ENCRYPTION_ENCOURAGED": "Criptarea este necesară pentru SuperSync. Vă rugăm să activați criptarea pentru a vă proteja datele.",
+          "ENCRYPTION_SETUP_INTRO": "<strong>SuperSync criptează cu parolă datele dvs. înainte de a părăsi dispozitivul</strong>, făcând utilizarea abuzivă sau scurgerile de date private aproape imposibile.",
           "ENCRYPTION_WARNING": "WARNING: If you forget your encryption password, your data cannot be recovered. This password is separate from your login password. You must use the same password on all devices.",
           "FORCE_OVERWRITE_CONFIRM": "This will <strong>delete all data on the server</strong> and upload your local data with the new password. Unsynced local changes may be lost. Are you sure you want to continue?",
           "FORCE_OVERWRITE_INFO": "If you can't sync because you don't know the current encryption password, you can overwrite the server with your local data and a new password.",
@@ -1266,10 +1266,10 @@
           "PASSWORDS_DONT_MATCH": "Passwords do not match",
           "REMOVE_ENCRYPTION_WARNING": "Removing encryption will delete all server data and re-upload your data without encryption. All devices will need to reconfigure.",
           "SERVER_URL_DESCRIPTION": "Leave as-is for the official server, or enter a custom server URL",
-          "SETUP_DISABLE_SUPERSYNC_BTN": "Disable SuperSync",
-          "SETUP_ENCRYPTION_BTN": "Set Password",
-          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Use the same password on all devices. A forgotten password can be reset by overwriting remote data.",
-          "SETUP_ENCRYPTION_TITLE": "SuperSync: Set Password"
+          "SETUP_DISABLE_SUPERSYNC_BTN": "Dezactivează SuperSync",
+          "SETUP_ENCRYPTION_BTN": "Setează parola",
+          "SETUP_ENCRYPTION_PASSWORD_WARNING": "Folosiți aceeași parolă pe toate dispozitivele. O parolă uitată poate fi resetată prin suprascrierea datelor de la distanță.",
+          "SETUP_ENCRYPTION_TITLE": "SuperSync: Setare parolă"
         },
         "TITLE": "Sync",
         "WEB_DAV": {
@@ -1277,7 +1277,7 @@
           "CONDITIONAL_HEADER_WARNING_TITLE": "Reduced Sync Safety",
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> Allow Super Productivity to make CORS requests to your WebDAV server. This can have negative security implications! For Nextcloud, please refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information. One approach to make this work on mobile is allowing \"https://app.super-productivity.com\" via the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> WebDAV implementations differ wildly. Super Productivity is known to work well with Nextcloud, <strong>but it may not work with your provider</strong>. Test thoroughly before relying on it.",
+          "INFO": "WebDAV implementations differ wildly unfortunately. Super Productivity is known to work well with Nextcloud, <strong>but it may not work with your provider</strong>.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
@@ -1290,25 +1290,25 @@
       },
       "S": {
         "ALREADY_IN_SYNC": "Already in sync",
-        "ARCHIVE_OPERATION_FAILED": "Archive operation failed. Some cleanup may not have completed.",
-        "AUTH_SETUP_FAILED": "Failed to set up authentication. If you're using the web app, make sure you're accessing it over HTTPS. Otherwise, please try the stable version or report this as a bug.",
-        "AUTH_TOKEN_REJECTED": "Sync token was rejected by the server: {{reason}}. Please get a new token.",
+        "ARCHIVE_OPERATION_FAILED": "Operațiunea de arhivare a eșuat. Este posibil ca unele curățări să nu fi fost finalizate.",
+        "AUTH_SETUP_FAILED": "Configurarea autentificării a eșuat. Dacă folosiți aplicația web, asigurați-vă că o accesați prin HTTPS. Altfel, încercați versiunea stabilă sau raportați problema.",
+        "AUTH_TOKEN_REJECTED": "Tokenul de sincronizare a fost respins de server: {{reason}}. Vă rugăm să obțineți un token nou.",
         "BTN_CONFIGURE": "Configure",
         "BTN_FORCE_OVERWRITE": "Force Overwrite",
-        "CHANGE_PASSWORD_FAILED": "Failed to change password: {{message}}",
+        "CHANGE_PASSWORD_FAILED": "Schimbarea parolei a eșuat: {{message}}",
         "CLOCK_DRIFT_WARNING": "Your device clock appears to be off by {{minutes}} minutes. This may cause sync issues.",
         "COMPACTION_FAILED": "Database cleanup failed. App may slow down.",
         "CONFLICT_DIALOG_TIMEOUT": "Sync conflict dialog timed out and was cancelled. Sync will retry on next trigger.",
         "CONFLICT_RESOLUTION_FAILED": "Sync conflict resolution failed. Please reload.",
-        "DATA_REPAIRED": "Data automatically repaired ({{count}} issues fixed)",
+        "DATA_REPAIRED": "Date reparate automat ({{count}} probleme remediate)",
         "DECRYPTION_FAILED": "Failed to decrypt synced data. Please check your encryption password.",
         "DEFERRED_ACTION_FAILED": "Some changes made during sync could not be saved. Please reload to recover.",
         "DIALOG_RESULT_ERROR": "An error occurred while processing the sync dialog. Please try again.",
-        "DISABLE_ENCRYPTION_FAILED": "Failed to disable encryption: {{message}}",
-        "ENABLE_ENCRYPTION_FAILED": "Failed to enable encryption: {{message}}",
+        "DISABLE_ENCRYPTION_FAILED": "Dezactivarea criptării a eșuat: {{message}}",
+        "ENABLE_ENCRYPTION_FAILED": "Activarea criptării a eșuat: {{message}}",
         "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Encryption was disabled on another device. Your sync settings have been updated.",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
-        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Encryption is required for SuperSync. Please set an encryption password to continue syncing.",
+        "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Criptarea este necesară pentru SuperSync. Vă rugăm să setați o parolă de criptare pentru a continua sincronizarea.",
         "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis may be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
         "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have many archived tasks. Your data was NOT synced!\n\nPlease contact support for assistance.",
@@ -1317,30 +1317,30 @@
         "ERROR_PERMISSION_SNAP": "File access denied. Run 'snap connect super-productivity:home' or use a path inside ~/snap/super-productivity/common/",
         "ERROR_UNABLE_TO_READ_REMOTE_DATA": "Error while syncing. Unable to read remote data. Maybe you enabled encryption and your local password does not match the one used to encrypt the remote data?",
         "FINISH_DAY_SYNC_ERROR": "Sync error while finishing day. Please try again.",
-        "FRESH_CLIENT_SYNC_CANCELLED": "Initial sync cancelled. Remote data was not applied.",
+        "FRESH_CLIENT_SYNC_CANCELLED": "Sincronizare inițială anulată. Datele de la distanță nu au fost aplicate.",
         "HYDRATION_FAILED": "Failed to load data. Please reload the app.",
         "IMPORTING": "Importing data",
-        "INCOMPLETE_CFG": "Sync credentials are missing. Please configure sync.",
+        "INCOMPLETE_CFG": "Authentication for sync failed. Please check your config!",
         "INCOMPLETE_OP_SYNC": "Sync incomplete: {{count}} operation file(s) failed to download",
         "INITIAL_SYNC_ERROR": "Initial Sync failed",
         "INTEGRITY_CHECK_FAILED": "Data integrity issue detected. Auto-repair attempted. If you experience issues, please reload the app.",
-        "INVALID_AUTH_CODE": "The authorization code was rejected. Please try authenticating again and make sure to copy the code exactly.",
+        "INVALID_AUTH_CODE": "Codul de autorizare a fost respins. Vă rugăm să încercați din nou autentificarea și asigurați-vă că copiați codul exact.",
         "INVALID_OPERATION_PAYLOAD": "Invalid operation detected. Changes may not be saved - please reload.",
-        "LOCAL_CHANGES_DISCARDED": "{{count}} local change(s) discarded - item(s) were deleted on another device",
-        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} unsaved local change(s) discarded - sync downloaded newer data",
-        "LOCAL_DATA_REPLACE_CANCELLED": "Sync cancelled. Your local data has been preserved.",
-        "LOCK_TIMEOUT_ERROR": "Sync timed out waiting for a previous operation to finish. Please try again.",
-        "LWW_CONFLICTS_AUTO_RESOLVED": "Sync conflicts auto-resolved: {{localWins}} local win(s), {{remoteWins}} remote win(s)",
+        "LOCAL_CHANGES_DISCARDED": "{{count}} modificare(ări) locale ignorate — elementele au fost șterse pe alt dispozitiv",
+        "LOCAL_CHANGES_DISCARDED_SNAPSHOT": "{{count}} modificare(ări) locale nesalvate ignorate — sincronizarea a descărcat date mai noi",
+        "LOCAL_DATA_REPLACE_CANCELLED": "Sincronizare anulată. Datele locale au fost păstrate.",
+        "LOCK_TIMEOUT_ERROR": "Sincronizarea a expirat așteptând finalizarea unei operațiuni anterioare. Vă rugăm să încercați din nou.",
+        "LWW_CONFLICTS_AUTO_RESOLVED": "Conflicte de sincronizare rezolvate automat: {{localWins}} câștig(uri) local(e), {{remoteWins}} câștig(uri) de la distanță",
         "MIGRATION_FAILED": "Some sync data could not be migrated and was skipped. This may indicate data corruption or a bug.",
         "NEWER_VERSION_AVAILABLE": "Some changes are from a newer app version. Consider updating for full compatibility.",
         "OPERATION_PERMANENTLY_FAILED": "Some sync operations failed and could not be applied. Data may be incomplete.",
-        "OVERWRITE_SERVER_FAILED": "Failed to overwrite server data: {{message}}",
+        "OVERWRITE_SERVER_FAILED": "Suprascrierea datelor serverului a eșuat: {{message}}",
         "PARTIAL_APPLY_FAILURE": "Some sync operations failed to apply. Data has been validated.",
         "PERSIST_FAILED": "Failed to save changes. State may be inconsistent - please reload.",
         "REMOTE_DATA_TOO_OLD": "Remote data is too old to be processed. Please update your remote app.",
         "REPLAY_LOCAL_OPS_FAILED": "Failed to replay local operations after import. Some recent changes may be lost. Data has been validated.",
-        "RESTORE_ERROR": "Failed to restore data",
-        "RESTORE_SUCCESS": "Data restored successfully",
+        "RESTORE_ERROR": "Restaurarea datelor a eșuat",
+        "RESTORE_SUCCESS": "Date restaurate cu succes",
         "SERVER_MIGRATION_VALIDATION_FAILED": "Could not migrate data to server - local data validation failed. Please try importing a backup.",
         "STORAGE_QUOTA_EXCEEDED": "Sync server storage is full. Your changes are NOT syncing! Please archive old tasks or upgrade your plan.",
         "STORAGE_RECOVERED_AFTER_COMPACTION": "Storage was running low. Old data cleaned up successfully.",
@@ -1405,7 +1405,7 @@
         "TITLE": "Basic Settings"
       },
       "S": {
-        "ARCHIVE_CLEANUP_FAILED": "Failed to clean up archived data for deleted tag",
+        "ARCHIVE_CLEANUP_FAILED": "Curățarea datelor arhivate pentru eticheta ștearsă a eșuat",
         "UPDATED": "Tag settings were updated"
       },
       "TTL": {
@@ -1438,12 +1438,12 @@
         "ESTIMATE_BUTTON": "Estimate",
         "PLACEHOLDER_CREATE": "A task title #tag @16:00",
         "PLACEHOLDER_SEARCH": "Add existing task or issues...",
-        "REPEAT_BUTTON": "Repeat",
+        "REPEAT_BUTTON": "Repetare",
         "SEARCH_INFO_TEXT": "Search and add issues and tasks from archive and other projects",
         "TAGS_BUTTON": "Tags",
         "TODAY": "Today",
-        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Toggle adding task to backlog / today's list",
-        "TOGGLE_ADD_TOP_OR_BOTTOM": "Toggle adding task to top & bottom of list",
+        "TOGGLE_ADD_TO_BACKLOG_TODAY": "Comută adăugarea sarcinii la backlog / lista de azi",
+        "TOGGLE_ADD_TOP_OR_BOTTOM": "Comută adăugarea sarcinii sus / jos în listă",
         "TOMORROW": "Tomorrow",
         "TOOLTIP_ADD_TASK": "Add task",
         "TOOLTIP_ADD_TO_BACKLOG": "Add to backlog",
@@ -1452,7 +1452,7 @@
         "TOOLTIP_ADD_TO_TOP": "Add to top (Ctrl+1)",
         "TOOLTIP_CLEAR_DATE": "Clear date",
         "TOOLTIP_CLEAR_ESTIMATE": "Clear estimate",
-        "TOOLTIP_CLEAR_REPEAT": "Clear repeat setting",
+        "TOOLTIP_CLEAR_REPEAT": "Șterge setarea de repetare",
         "TOOLTIP_CLEAR_TAGS": "Clear tags",
         "TOOLTIP_DISABLE_SEARCH": "Disable issue search (Ctrl+2)",
         "TOOLTIP_ENABLE_SEARCH": "Enable issue search (Ctrl+2)"
@@ -1461,14 +1461,14 @@
         "ADD_ATTACHMENT": "Attachments",
         "ADD_SUB_TASK": "Add subtask",
         "ATTACHMENTS": "Attachments ({{nr}})",
-        "COMPLETED_ON": "Completed on",
-        "CREATED_ON": "Created on",
-        "DEADLINE": "Deadline",
-        "DEADLINE_DUE_BY": "Due by",
-        "DEADLINE_OVERDUE": "Overdue!",
+        "COMPLETED_ON": "Finalizat la",
+        "CREATED_ON": "Creat la",
+        "DEADLINE": "Termen limită",
+        "DEADLINE_DUE_BY": "Termen limită",
+        "DEADLINE_OVERDUE": "Întârziat!",
         "DUE": "Planned for",
-        "FROM_PARENT": "(from parent)",
-        "ISSUE": "Issue Link",
+        "FROM_PARENT": "(de la părinte)",
+        "ISSUE": "Link problemă",
         "LOCAL_ATTACHMENTS": "Local attachments",
         "NOTES": "Note",
         "PARENT": "Parent",
@@ -1480,9 +1480,9 @@
         "TITLE_PLACEHOLDER": "Enter a title"
       },
       "B": {
-        "ADD_ALL_TO_TODAY": "Add all to today",
+        "ADD_ALL_TO_TODAY": "Adaugă tot la azi",
         "ADD_HALF_HOUR": "Add 1/2 hour",
-        "DEADLINES_TODAY": "{{count}} task(s) due today not yet planned",
+        "DEADLINES_TODAY": "{{count}} sarcin(i) cu termen azi neplanificate încă",
         "ESTIMATE_EXCEEDED": "Time estimate exceeded for \"{{title}}\""
       },
       "CMP": {
@@ -1494,7 +1494,7 @@
         "DELETE_REPEAT_INSTANCE": "Delete recurring task instance",
         "DROP_ATTACHMENT": "Drop here to attach to \"{{title}}\"",
         "DUPLICATE": "Duplicate",
-        "EDIT_DEADLINE": "Edit deadline",
+        "EDIT_DEADLINE": "Editează termen limită",
         "EDIT_SCHEDULED": "Reschedule",
         "FOCUS_SESSION": "Start focus session",
         "MARK_DONE": "Mark as completed",
@@ -1505,10 +1505,10 @@
         "OPEN_ATTACH": "Attach file or link",
         "OPEN_ISSUE": "Open in browser",
         "OPEN_TIME": "Time tracking",
-        "REMOVE_DEADLINE": "Remove deadline",
+        "REMOVE_DEADLINE": "Șterge termen limită",
         "REMOVE_FROM_MY_DAY": "Elimină din lista de azi",
         "SCHEDULE": "Schedule task",
-        "SET_DEADLINE": "Set deadline",
+        "SET_DEADLINE": "Setează termen limită",
         "TOGGLE_ATTACHMENTS": "Show/hide attachments",
         "TOGGLE_DETAIL_PANEL": "Show/hide additional info",
         "TOGGLE_DONE": "Toggle completion status",
@@ -1520,7 +1520,7 @@
         "UPDATE_ISSUE_DATA": "Update issue data"
       },
       "D_CONFIRM_DELETE": {
-        "MSG": "Are you sure you want to delete the task \"{{title}}\"?",
+        "MSG": "Sigur doriți să ștergeți sarcina \"{{title}}\"?",
         "OK": "Delete"
       },
       "D_CONFIRM_SHORT_SYNTAX_NEW_TAG": {
@@ -1532,43 +1532,43 @@
         "OK": "Create tags"
       },
       "D_DEADLINE": {
-        "ADD_TIME": "Add time",
-        "QA_NEXT_MONTH": "Next month",
-        "QA_NEXT_WEEK": "Next week",
-        "QA_TODAY": "Today",
-        "QA_TOMORROW": "Tomorrow",
-        "REMIND_AT": "Remind at",
-        "REMOVE_DEADLINE": "Remove deadline",
-        "RO_1H": "1 hour before",
-        "RO_5M": "5 minutes before",
-        "RO_10M": "10 minutes before",
-        "RO_15M": "15 minutes before",
-        "RO_30M": "30 minutes before",
-        "RO_AT_DEADLINE": "At deadline",
-        "RO_NEVER": "Never",
-        "SET_DEADLINE": "Set deadline"
+        "ADD_TIME": "Adaugă ora",
+        "QA_NEXT_MONTH": "Luna viitoare",
+        "QA_NEXT_WEEK": "Săptămâna viitoare",
+        "QA_TODAY": "Azi",
+        "QA_TOMORROW": "Mâine",
+        "REMIND_AT": "Amintește la",
+        "REMOVE_DEADLINE": "Șterge termen limită",
+        "RO_1H": "Cu 1 oră înainte",
+        "RO_5M": "Cu 5 minute înainte",
+        "RO_10M": "Cu 10 minute înainte",
+        "RO_15M": "Cu 15 minute înainte",
+        "RO_30M": "Cu 30 minute înainte",
+        "RO_AT_DEADLINE": "La termen",
+        "RO_NEVER": "Niciodată",
+        "SET_DEADLINE": "Setează termen limită"
       },
       "D_REMINDER_VIEW": {
         "ADD_ALL_TO_TODAY": "Add all to Today",
         "ADD_TO_TODAY": "Add to Today",
-        "CLEAR_ALL_REMINDERS": "Clear all reminders",
-        "CLEAR_REMINDER": "Clear reminder",
+        "CLEAR_ALL_REMINDERS": "Șterge toate memento-urile",
+        "CLEAR_REMINDER": "Șterge memento",
         "COMPLETE": "Complete",
         "COMPLETE_ALL": "Complete all",
-        "DEADLINE_REMINDER": "Deadline Reminder",
-        "DEADLINE_SECTION": "Deadlines",
+        "DEADLINE_REMINDER": "Memento termen limită",
+        "DEADLINE_SECTION": "Termene limită",
         "DISMISS_ALL_REMINDERS_KEEP_TODAY": "Dismiss All Reminders (Keep in Today)",
         "DISMISS_REMINDER_KEEP_TODAY": "Dismiss Reminder (Keep in Today)",
         "DONE": "Done",
-        "DUE_SECTION": "Planned",
-        "DUE_TASK": "Planned task reminder",
-        "DUE_TASKS": "Planned tasks reminder",
+        "DUE_SECTION": "Planificate",
+        "DUE_TASK": "Reminder for planned task",
+        "DUE_TASKS": "Reminder for planned tasks",
         "RESCHEDULE_EDIT": "Edit (reschedule)",
         "RESCHEDULE_UNTIL_TOMORROW": "Reschedule for tomorrow",
         "SNOOZE": "Snooze",
         "SNOOZE_ALL": "Snooze all",
         "START": "Start",
-        "TASK_REMINDERS": "Task Reminders",
+        "TASK_REMINDERS": "Memento-uri sarcini",
         "UNSCHEDULE": "Unschedule",
         "UNSCHEDULE_ALL": "Unschedule all"
       },
@@ -1615,8 +1615,8 @@
       "S": {
         "CANNOT_ASSIGN_PROJECT_FOR_REPEATABLE_TASK": "Cannot assign a project via short syntax for recurring tasks!",
         "CREATED_FOR_PROJECT": "Created task \"{{taskTitle}}\" for project \"{{projectTitle}}\"",
-        "DEADLINE_REMOVED": "Deadline removed",
-        "DEADLINE_SET": "Deadline set for {{date}}",
+        "DEADLINE_REMOVED": "Termen limită eliminat",
+        "DEADLINE_SET": "Termen limită setat pentru {{date}}",
         "DELETED": "Deleted task \"{{title}}\"",
         "FOUND_MOVE_FROM_BACKLOG": "Moved task <strong>\"{{title}}\"</strong> from backlog to the Today task list",
         "FOUND_MOVE_FROM_OTHER_LIST": "Added task <strong>\"{{title}}\"</strong> from <strong>{{contextTitle}}</strong> to current list",
@@ -1672,7 +1672,7 @@
       },
       "D_CONFIRM_UPDATE_INSTANCES": {
         "CANCEL": "Only future tasks",
-        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or only update future tasks?",
+        "MSG": "There are {{tasksNr}} instances created for this recurring task. Do you want to update all of them with the new defaults or just future tasks?",
         "OK": "Update all instances"
       },
       "D_SKIP_INSTANCE": {
@@ -1684,9 +1684,9 @@
         "ADVANCED_CFG": "Advanced configuration",
         "EDIT": "Edit Recurring Task Config",
         "HEATMAP_LABEL": "Activity",
-        "TAG_LABEL": "Tags",
-        "TIME_SPENT_THIS_MONTH": "This month",
-        "TIME_SPENT_THIS_WEEK": "This week",
+        "TAG_LABEL": "Tags to add",
+        "TIME_SPENT_THIS_MONTH": "Luna aceasta",
+        "TIME_SPENT_THIS_WEEK": "Săptămâna aceasta",
         "TIME_SPENT_TOTAL": "Total"
       },
       "F": {
@@ -1706,8 +1706,8 @@
         "Q_DAILY": "Every day",
         "Q_MONDAY_TO_FRIDAY": "Every Monday through Friday",
         "Q_MONTHLY_CURRENT_DATE": "Every month on the day {{dateDayStr}}",
-        "Q_MONTHLY_FIRST_DAY": "Every month on the first day",
-        "Q_MONTHLY_LAST_DAY": "Every month on the last day",
+        "Q_MONTHLY_FIRST_DAY": "În fiecare lună în prima zi",
+        "Q_MONTHLY_LAST_DAY": "În fiecare lună în ultima zi",
         "Q_WEEKLY_CURRENT_WEEKDAY": "Every week on {{weekdayStr}}",
         "Q_YEARLY_CURRENT_DATE": "Every year on the {{dayAndMonthStr}}",
         "QUICK_SETTING": "Recurring Config",
@@ -1719,8 +1719,8 @@
         "REPEAT_EVERY": "Recur every",
         "SATURDAY": "Saturday",
         "SCHEDULE_TYPE_LABEL": "Schedule type",
-        "SKIP_OVERDUE": "Skip overdue instances",
-        "SKIP_OVERDUE_DESCRIPTION": "When enabled, if the app is opened after missing a scheduled occurrence (e.g. a weekly task where today is not a scheduled day), the missed instance will be silently skipped instead of being created as an overdue task",
+        "SKIP_OVERDUE": "Omite instanțele întârziate",
+        "SKIP_OVERDUE_DESCRIPTION": "Când este activat, dacă aplicația este deschisă după ce a fost omisă o apariție programată (de ex. o sarcină săptămânală în care azi nu este o zi programată), instanța ratată va fi omisă silențios în loc să fie creată ca sarcină întârziată",
         "START_DATE": "Start date",
         "START_TIME": "Scheduled start time",
         "START_TIME_DESCRIPTION": "E.g. 15:00. Leave blank for an all day task",
@@ -1730,7 +1730,7 @@
         "TUESDAY": "Tuesday",
         "WEDNESDAY": "Wednesday"
       },
-      "SNACK_REPEAT_DIALOG_FAIL": "Could not open repeat config dialog. You can configure it from the task menu."
+      "SNACK_REPEAT_DIALOG_FAIL": "Nu s-a putut deschide dialogul de configurare repetare. Puteți configura din meniul sarcinii."
     },
     "TASK_VIEW": {
       "CUSTOMIZER": {
@@ -1760,14 +1760,14 @@
         "GROUP_SCHEDULED_DATE": "Scheduled Date",
         "GROUP_TAG": "Tag",
         "RESET_ALL": "Reset All",
-        "SAVE_SORT": "Save as default",
+        "SAVE_SORT": "Salvează ca implicit",
         "SCHEDULED_NEXT_MONTH": "Next Month",
         "SCHEDULED_NEXT_WEEK": "Next Week",
         "SCHEDULED_THIS_MONTH": "This Month",
         "SCHEDULED_THIS_WEEK": "This Week",
         "SCHEDULED_TODAY": "Astăzi",
         "SCHEDULED_TOMORROW": "Mâine",
-        "SORT": "Sort",
+        "SORT": "Sortare",
         "SORT_CREATION_DATE": "Creation Date",
         "SORT_DEADLINE": "Deadline",
         "SORT_DEFAULT": "Default",
@@ -1791,18 +1791,18 @@
         "MSG_WITHOUT_TIME": "You have not been tracking time"
       },
       "D_ARCHIVE_COMPRESS": {
-        "BTN_COMPRESS": "Compress Archive",
-        "CONFIRM_MSG": "Are you sure you want to compress the archive? This will permanently delete the data listed above!",
-        "CONFIRM_TITLE": "Confirm Archive Compression",
-        "ESTIMATED_SAVINGS": "Estimated space savings",
-        "INTRO": "This will compress your archived tasks by removing old data. This operation is synced across all devices.",
-        "ISSUE_FIELDS_TO_CLEAR": "Issue fields to clear",
-        "LOADING": "Analyzing archive...",
-        "NO_DATA": "No data to compress. Your archive is already optimized.",
-        "NOTES_TO_CLEAR": "Task notes to clear (older than 1 year)",
-        "SUBTASKS_TO_DELETE": "Subtasks to delete (time merged to parent)",
-        "TITLE": "Compress Archive",
-        "WARNING": "This operation cannot be undone. Make sure you have a backup before proceeding!"
+        "BTN_COMPRESS": "Comprimă arhiva",
+        "CONFIRM_MSG": "Sigur doriți să comprimați arhiva? Aceasta va șterge permanent datele listate mai sus!",
+        "CONFIRM_TITLE": "Confirmați comprimarea arhivei",
+        "ESTIMATED_SAVINGS": "Economie estimată de spațiu",
+        "INTRO": "Aceasta va comprima sarcinile arhivate prin eliminarea datelor vechi. Această operațiune este sincronizată pe toate dispozitivele.",
+        "ISSUE_FIELDS_TO_CLEAR": "Câmpuri de probleme de curățat",
+        "LOADING": "Se analizează arhiva...",
+        "NO_DATA": "Nu sunt date de comprimat. Arhiva dvs. este deja optimizată.",
+        "NOTES_TO_CLEAR": "Note de sarcini de curățat (mai vechi de 1 an)",
+        "SUBTASKS_TO_DELETE": "Sub-sarcini de șters (timp îmbinat la părinte)",
+        "TITLE": "Comprimă arhiva",
+        "WARNING": "Această operațiune nu poate fi anulată. Asigurați-vă că aveți un backup înainte de a continua!"
       },
       "D_IDLE": {
         "ADD_ENTRY": "Add entry for tracking",
@@ -1890,7 +1890,7 @@
     }
   },
   "FILE_IMEX": {
-    "BTN_COMPRESS_ARCHIVE": "Compress Archive",
+    "BTN_COMPRESS_ARCHIVE": "Comprimă arhiva",
     "DIALOG_CONFIRM_URL_IMPORT": {
       "INITIATED_MSG": "An automatic data import has been initiated.",
       "SOURCE_URL_DOMAIN": "Source Domain",
@@ -2210,7 +2210,7 @@
     },
     "SCHEDULE": {
       "HELP": "The schedule feature provides you with a quick overview over how your planned tasks play out over time. You can find it in the left hand menu under <a href='#/schedule'>'Schedule'</a>. ",
-            "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
+      "L_IS_LUNCH_BREAK_ENABLED": "Enable lunch break",
       "L_IS_WORK_START_END_ENABLED": "Limit unscheduled task flow to specific work times",
       "L_LUNCH_BREAK_END": "Lunch break end",
       "L_LUNCH_BREAK_START": "Lunch break start",
@@ -2412,9 +2412,9 @@
     "SUCCESS": "Migration done! Restarting app now..."
   },
   "NOTIFICATION": {
-    "EXACT_ALARM_DENIED": "Exact alarm permission denied. Reminders may be delayed by up to 15 minutes.",
-    "TASK_ALREADY_COMPLETED": "Task already completed",
-    "TASK_MARKED_DONE": "Task marked as done"
+    "EXACT_ALARM_DENIED": "Permisiunea de alarmă exactă a fost refuzată. Mementourile pot fi întârziate cu până la 15 minute.",
+    "TASK_ALREADY_COMPLETED": "Sarcină deja finalizată",
+    "TASK_MARKED_DONE": "Sarcină marcată ca finalizată"
   },
   "ONBOARDING": {
     "TITLE": "Cum vrei să folosești Super Productivity?",
@@ -2501,7 +2501,7 @@
     "CODE_TOO_LARGE": "Plugin code is too large (max {{maxSize}}MB)",
     "CONFIGURATION": "Configuration",
     "CONFIGURE": "Configure",
-    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "This plugin provides issue integration that is currently in use ({{count}} issue provider(s)). Disabling it will temporarily break issue syncing for those providers until the plugin is re-enabled. Are you sure you want to disable \"{{name}}\"?",
+    "CONFIRM_DISABLE_WITH_ISSUE_PROVIDERS": "Acest plugin oferă integrare de probleme care este în uz ({{count}} furnizor(i) de probleme). Dezactivarea va întrerupe temporar sincronizarea problemelor pentru acei furnizori până la reactivarea pluginului. Sigur doriți să dezactivați \"{{name}}\"?",
     "CONFIRM_REMOVE": "Are you sure you want to remove the plugin \"{{name}}\"?",
     "ELECTRON_API_NOT_AVAILABLE": "Electron API is not available",
     "ERROR": "Error",
@@ -2605,8 +2605,8 @@
   "SCHEDULE": {
     "LAST": "Last:",
     "NEXT": "Next",
-    "NO_DEADLINES": "There are currently no tasks with deadlines. You can set a deadline via the task's context menu or detail panel.",
-    "NO_REPEATABLE_TASKS": "No recurring tasks yet. To create one, open a task's side panel and choose \"Recur\".",
+    "NO_DEADLINES": "Momentan nu există sarcini cu termene limită. Puteți seta un termen prin meniul contextual al sarcinii sau panoul de detalii.",
+    "NO_REPEATABLE_TASKS": "There are currently no recurring tasks. You can schedule a task by choosing \"Recur\" in the task's side panel. To open the side panel, click on the rightmost icon that appears when hovering over a task (or just tap on the task on mobile).",
     "NO_SCHEDULED": "There are currently no scheduled tasks of this type. You can schedule a task by choosing \"Schedule Task\" in the task's context menu. To open it, right-click (long press on mobile) on a task.",
     "NO_SCHEDULED_FOR_DAY": "No tasks planned for specific days yet. Right-click a task and choose \"Schedule\" to plan it for a day.",
     "NO_SCHEDULED_WITH_TIME": "No tasks scheduled with a start time yet. Right-click a task and choose \"Schedule\" to set a specific time.",
@@ -2614,8 +2614,8 @@
     "REPEATED_TASKS": "Recurring Tasks",
     "SCHEDULED_TASKS": "Scheduled Tasks",
     "SCHEDULED_TASKS_WITH_TIME": "Scheduled Tasks with Start Time",
-    "START_TASK": "Start task and remove reminder",
-    "TASKS_WITH_DEADLINES": "Tasks with Deadlines"
+    "START_TASK": "Pornește sarcina și elimină memento-ul",
+    "TASKS_WITH_DEADLINES": "Sarcini cu termene limită"
   },
   "THEMES": {
     "amber": "amber",
@@ -2675,7 +2675,7 @@
     "NO_DONE_TASKS": "There are currently no completed tasks",
     "NO_PLANNED_TASK_ALL_DONE": "all tasks completed",
     "NO_PLANNED_TASKS": "No tasks planned",
-    "RECURRING_TASKS": "Recurring Tasks",
+    "RECURRING_TASKS": "Sarcini recurente",
     "RESET_BREAK_TIMER": "Reset without break timer",
     "TIME_ESTIMATED": "Time estimated:",
     "TODAY_REMAINING": "Today remaining:",
