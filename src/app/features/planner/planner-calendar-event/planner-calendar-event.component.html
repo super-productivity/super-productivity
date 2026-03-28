@@ -1,21 +1,39 @@
-<mat-icon class="default">{{ calendarEvent().icon || 'event' }}</mat-icon>
-<mat-icon class="add">add</mat-icon>
-<div class="title">
-  {{ calendarEvent().title }}
-  <!--   {{event.start|date:'HH:mm'}} – {{(event.start + event.duration)|date:'HH:mm'}}-->
+<div
+  class="event-trigger"
+  [matMenuTriggerFor]="calMenu"
+>
+  <mat-icon class="default">{{ calendarEvent().icon || 'event' }}</mat-icon>
+  <mat-icon class="add">add</mat-icon>
+  <div class="title">
+    {{ calendarEvent().title }}
+  </div>
+  <div class="planner-time-remaining-shared">
+    {{ calendarEvent().duration | msToString }}
+  </div>
 </div>
-@if (calendarEvent().url) {
-  <a
-    class="calendar-link"
-    [href]="calendarEvent().url"
-    target="_blank"
-    rel="noopener noreferrer"
-    title="Open in calendar"
-    (click)="$event.stopPropagation()"
+
+<mat-menu #calMenu="matMenu">
+  @if (calendarEvent().url) {
+    <button
+      mat-menu-item
+      (click)="openInBrowser()"
+    >
+      <mat-icon>open_in_new</mat-icon>
+      <span>{{ T.G.OPEN_IN_BROWSER | translate }}</span>
+    </button>
+  }
+  <button
+    mat-menu-item
+    (click)="addAsTask()"
   >
-    <mat-icon inline="true">open_in_new</mat-icon>
-  </a>
-}
-<div class="planner-time-remaining-shared">
-  {{ calendarEvent().duration | msToString }}
-</div>
+    <mat-icon>add</mat-icon>
+    <span>{{ T.F.CALENDARS.BANNER.ADD_AS_TASK | translate }}</span>
+  </button>
+  <button
+    mat-menu-item
+    (click)="hide()"
+  >
+    <mat-icon>visibility_off</mat-icon>
+    <span>{{ T.G.HIDE | translate }}</span>
+  </button>
+</mat-menu>

@@ -1943,6 +1943,7 @@
     "NO_CON": "You are currently offline. Please reconnect to the internet.",
     "NONE": "None",
     "OK": "Ok",
+    "OPEN_IN_BROWSER": "Open in browser",
     "OVERDUE": "Overdue",
     "PASSWORD_STRENGTH_FAIR": "Fair",
     "PASSWORD_STRENGTH_STRONG": "Strong",

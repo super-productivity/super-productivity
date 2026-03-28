@@ -12,6 +12,8 @@ import { hasLinkHints, RenderLinksPipe } from '../../../ui/pipes/render-links.pi
 import { CdkDrag } from '@angular/cdk/drag-drop';
 import { ScheduleEvent, ScheduleFromCalendarEvent } from '../schedule.model';
 import { MatIcon } from '@angular/material/icon';
+import { MatMenu, MatMenuItem, MatMenuTrigger } from '@angular/material/menu';
+import { CalendarIntegrationService } from '../../calendar-integration/calendar-integration.service';
 import { delay, first } from 'rxjs/operators';
 import { Store } from '@ngrx/store';
 import { selectProjectById } from '../../project/store/project.selectors';
@@ -41,7 +43,15 @@ const FIVE_MINUTES_IN_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'schedule-event',
-  imports: [MatIcon, TranslateModule, TaskContextMenuComponent, RenderLinksPipe],
+  imports: [
+    MatIcon,
+    TranslateModule,
+    TaskContextMenuComponent,
+    RenderLinksPipe,
+    MatMenu,
+    MatMenuItem,
+    MatMenuTrigger,
+  ],
   templateUrl: './schedule-event.component.html',
   styleUrl: './schedule-event.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -72,6 +82,12 @@ export class ScheduleEventComponent {
   private _issueService = inject(IssueService);
   private _dateTimeFormatService = inject(DateTimeFormatService);
   private _taskService = inject(TaskService);
+  private _calendarIntegrationService = inject(CalendarIntegrationService);
+
+  readonly calendarMenuTrigger = viewChild('calendarMenuTrigger', {
+    read: MatMenuTrigger,
+  });
+
   readonly titleHasLinks = computed(() => {
     const t = this.title();
     return !!t && hasLinkHints(t);
@@ -298,19 +314,34 @@ export class ScheduleEventComponent {
         },
       });
     } else if (evt.type === SVEType.CalendarEvent) {
-      if (this._isBeingSubmitted) {
-        return;
-      }
-      this._isBeingSubmitted = true;
-
-      const data = evt.data as ScheduleFromCalendarEvent;
-      this._issueService.addTaskFromIssue({
-        issueDataReduced: data,
-        issueProviderId: data.calProviderId,
-        issueProviderKey: 'ICAL',
-        isForceDefaultProject: true,
-      });
+      this.calendarMenuTrigger()?.openMenu();
     }
+  }
+
+  openCalendarEventInBrowser(): void {
+    const url = this.calendarEventUrl();
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  addCalendarEventAsTask(): void {
+    if (this._isBeingSubmitted) {
+      return;
+    }
+    this._isBeingSubmitted = true;
+    const data = this.se().data as ScheduleFromCalendarEvent;
+    this._issueService.addTaskFromIssue({
+      issueDataReduced: data,
+      issueProviderId: data.calProviderId,
+      issueProviderKey: 'ICAL',
+      isForceDefaultProject: true,
+    });
+  }
+
+  hideCalendarEvent(): void {
+    const data = this.se().data as ScheduleFromCalendarEvent;
+    this._calendarIntegrationService.skipCalendarEvent(data);
   }
 
   onContextMenu(ev: MouseEvent | TouchEvent): void {

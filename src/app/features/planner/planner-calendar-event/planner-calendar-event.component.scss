@@ -6,8 +6,6 @@
   display: flex;
   align-items: center;
   flex-direction: row;
-  padding-top: var(--s-quarter);
-  padding-bottom: var(--s-quarter);
   border: 1px solid var(--separator-color);
   border-radius: var(--task-border-radius);
   opacity: 0.9;
@@ -24,7 +22,6 @@
   &:hover {
     border-color: var(--c-accent);
     color: var(--c-accent);
-    //outline: 1px solid var(--c-accent);
 
     mat-icon.add {
       display: block;
@@ -51,6 +48,15 @@
   }
 }
 
+.event-trigger {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--s-quarter);
+  padding-bottom: var(--s-quarter);
+}
+
 .title {
   flex-shrink: 1;
   min-width: 0;
@@ -59,28 +65,5 @@
 
   @include mq(xs) {
     font-size: var(--planner-font-size);
-  }
-}
-
-.calendar-link {
-  display: flex;
-  align-items: center;
-  margin-left: auto;
-  margin-right: var(--s-half);
-  color: inherit;
-  opacity: 0.6;
-
-  &:hover {
-    opacity: 1;
-    color: var(--c-accent);
-  }
-
-  mat-icon {
-    margin: 0;
-    font-size: 16px;
-    height: 16px;
-    width: 16px;
-    min-width: 16px;
-    max-width: 16px;
   }
 }

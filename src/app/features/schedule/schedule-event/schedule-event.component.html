@@ -44,17 +44,6 @@
     @case ('CAL_PROJECTION') {
       <mat-icon>{{ $any(se().data)?.icon || 'event' }}</mat-icon>
       <mat-icon>add</mat-icon>
-      @if (calendarEventUrl()) {
-        <a
-          class="calendar-link"
-          [href]="calendarEventUrl()"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open in calendar"
-        >
-          <mat-icon inline="true">open_in_new</mat-icon>
-        </a>
-      }
     }
     <!--- --->
     @default {}
@@ -98,6 +87,39 @@
     #taskContextMenu
     [task]="task()"
   ></task-context-menu>
+}
+
+@if (se().type === SVEType.CalendarEvent) {
+  <div
+    class="calendar-menu-anchor"
+    #calendarMenuTrigger="matMenuTrigger"
+    [matMenuTriggerFor]="calMenu"
+  ></div>
+  <mat-menu #calMenu="matMenu">
+    @if (calendarEventUrl()) {
+      <button
+        mat-menu-item
+        (click)="openCalendarEventInBrowser()"
+      >
+        <mat-icon>open_in_new</mat-icon>
+        <span>{{ T.G.OPEN_IN_BROWSER | translate }}</span>
+      </button>
+    }
+    <button
+      mat-menu-item
+      (click)="addCalendarEventAsTask()"
+    >
+      <mat-icon>add</mat-icon>
+      <span>{{ T.F.CALENDARS.BANNER.ADD_AS_TASK | translate }}</span>
+    </button>
+    <button
+      mat-menu-item
+      (click)="hideCalendarEvent()"
+    >
+      <mat-icon>visibility_off</mat-icon>
+      <span>{{ T.G.HIDE | translate }}</span>
+    </button>
+  </mat-menu>
 }
 
 @if (isResizable()) {
