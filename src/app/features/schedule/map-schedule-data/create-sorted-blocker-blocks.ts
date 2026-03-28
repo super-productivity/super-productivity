@@ -11,6 +11,7 @@ import {
   ScheduleWorkStartEndCfg,
 } from '../schedule.model';
 import { selectTaskRepeatCfgsForExactDay } from '../../task-repeat-cfg/store/task-repeat-cfg.selectors';
+import { isSameDay } from '../../../util/is-same-day';
 const PROJECTION_DAYS: number = 30;
 
 export const createSortedBlockerBlocks = (
@@ -61,8 +62,8 @@ const createBlockerBlocksForScheduledRepeatProjections = (
   realNow?: number,
 ): BlockedBlock[] => {
   const blockedBlocks: BlockedBlock[] = [];
-  const referenceTime = realNow ?? now;
-  let i: number = referenceTime === now ? 1 : 0;
+  const isViewingCurrentDay = realNow === undefined || isSameDay(realNow, now);
+  let i: number = isViewingCurrentDay ? 1 : 0;
   while (i < nrOfDays) {
     // Calculate proper day start instead of adding 24-hour increments
     const nowDate = new Date(now);

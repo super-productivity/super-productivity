@@ -958,14 +958,10 @@ describe('createBlockerBlocks()', () => {
         now,
       );
 
-      const futureBlock = r.find((block) =>
-        block.entries.some((e) => e.type === BlockedBlockType.ScheduledRepeatProjection),
-      );
-
-      expect(futureBlock).toBeDefined();
-      expect(futureBlock?.start).toEqual(
-        getDateTimeFromClockString('10:00', oneWeekFromNow),
-      );
+      // The first block should be a projection for day 0 (the viewed date),
+      // which is the exact scenario the bug was about: day 0 was being skipped.
+      expect(r[0].entries[0].type).toBe(BlockedBlockType.ScheduledRepeatProjection);
+      expect(r[0].start).toEqual(getDateTimeFromClockString('10:00', oneWeekFromNow));
     });
   });
 

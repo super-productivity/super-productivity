@@ -1079,12 +1079,16 @@ describe('mapToScheduleDays()', () => {
   });
 
   it('should show recurring tasks for future weeks even if they match current day of week', () => {
+    if (maybeSkipTimezoneDependent('should show recurring tasks for future weeks')) {
+      pending('Skipping timezone-dependent test');
+      return;
+    }
     const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
     const futureThursdayTs = N + oneWeekInMs;
     const futureThursdayStr = getDbDateStr(futureThursdayTs);
 
     const r = mapToScheduleDays(
-      N,
+      futureThursdayTs,
       [futureThursdayStr],
       [],
       [],
@@ -1095,7 +1099,7 @@ describe('mapToScheduleDays()', () => {
       {},
       undefined,
       undefined,
-      futureThursdayTs,
+      N,
     );
 
     expect(r[0].entries.length).toBe(1);
