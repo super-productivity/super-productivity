@@ -77,6 +77,14 @@ export class ScheduleEventComponent {
     return !!t && hasLinkHints(t);
   });
 
+  readonly calendarEventUrl = computed<string | undefined>(() => {
+    const evt = this.se();
+    if (evt.type === SVEType.CalendarEvent) {
+      return (evt.data as ScheduleFromCalendarEvent)?.url;
+    }
+    return undefined;
+  });
+
   readonly T: typeof T = T;
   readonly isDragPreview = input<boolean>(false);
   readonly isMonthView = input<boolean>(false);

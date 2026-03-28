@@ -15,4 +15,9 @@ export interface CalendarIntegrationEvent {
    * when event ID format changes (e.g., recurring event instances).
    */
   legacyIds?: string[];
+  /**
+   * URL linking to the original calendar event (e.g. Google Calendar, Outlook web).
+   * Extracted from the iCal URL property.
+   */
+  url?: string;
 }

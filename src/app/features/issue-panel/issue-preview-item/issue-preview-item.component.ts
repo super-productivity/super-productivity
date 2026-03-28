@@ -6,7 +6,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { MatIconButton } from '@angular/material/button';
+import { MatIconAnchor, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { SearchResultItem } from '../../issue/issue.model';
 import { isIssueDone } from '../../issue/mapping-helper/is-issue-done';
@@ -15,7 +15,7 @@ import { ICAL_TYPE } from '../../issue/issue.const';
 
 @Component({
   selector: 'issue-preview-item',
-  imports: [MatIconButton, MatIcon],
+  imports: [MatIconButton, MatIconAnchor, MatIcon],
   templateUrl: './issue-preview-item.component.html',
   styleUrl: './issue-preview-item.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

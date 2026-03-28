@@ -44,6 +44,17 @@
     @case ('CAL_PROJECTION') {
       <mat-icon>{{ $any(se().data)?.icon || 'event' }}</mat-icon>
       <mat-icon>add</mat-icon>
+      @if (calendarEventUrl()) {
+        <a
+          class="calendar-link"
+          [href]="calendarEventUrl()"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open in calendar"
+        >
+          <mat-icon inline="true">open_in_new</mat-icon>
+        </a>
+      }
     }
     <!--- --->
     @default {}

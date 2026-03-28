@@ -61,3 +61,26 @@
     font-size: var(--planner-font-size);
   }
 }
+
+.calendar-link {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: var(--s-half);
+  color: inherit;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+    color: var(--c-accent);
+  }
+
+  mat-icon {
+    margin: 0;
+    font-size: 16px;
+    height: 16px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+  }
+}

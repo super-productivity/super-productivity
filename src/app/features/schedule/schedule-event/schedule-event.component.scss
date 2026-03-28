@@ -245,6 +245,28 @@
       display: block;
     }
   }
+
+  .calendar-link {
+    display: none;
+    pointer-events: auto;
+    position: relative;
+    z-index: 4;
+    color: inherit;
+
+    mat-icon {
+      font-size: 12px;
+      height: 12px;
+      min-width: 12px;
+    }
+
+    &:hover {
+      color: var(--c-accent);
+    }
+  }
+
+  :host:hover & .calendar-link {
+    display: block;
+  }
 }
 
 .ico {

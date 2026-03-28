@@ -270,6 +270,7 @@ const getForRecurring = (
   try {
     const title: string = vevent.getFirstPropertyValue('summary') as string;
     const description = vevent.getFirstPropertyValue('description');
+    const url = (vevent.getFirstPropertyValue('url') as string) || undefined;
     const start = vevent.getFirstPropertyValue('dtstart');
 
     // Handle missing or invalid dtstart for recurring events
@@ -326,6 +327,7 @@ const getForRecurring = (
           calProviderId,
           description: (description as string) || undefined,
           ...(isAllDay && { isAllDay }),
+          ...(url && { url }),
         });
       } else if (nextTimestamp > endTimeStamp) {
         break;
@@ -392,6 +394,8 @@ const convertVEventToCalendarIntegrationEvent = (
   const duration = calculateEventDuration(vevent, start);
   const isAllDay = isAllDayEvent(vevent);
 
+  const url = (vevent.getFirstPropertyValue('url') as string) || undefined;
+
   return {
     id: options?.overrideId || String(vevent.getFirstPropertyValue('uid')),
     title: (vevent.getFirstPropertyValue('summary') as string) || '',
@@ -401,6 +405,7 @@ const convertVEventToCalendarIntegrationEvent = (
     calProviderId,
     legacyIds: options?.legacyIds,
     ...(isAllDay && { isAllDay }),
+    ...(url && { url }),
   };
 };
 
