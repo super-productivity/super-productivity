@@ -9,7 +9,6 @@ import {
   LocalRestApiRequestPayload,
   LocalRestApiResponsePayload,
 } from '../../../../electron/shared-with-frontend/local-rest-api.model';
-import { IS_ELECTRON } from '../../app.constants';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -102,7 +101,7 @@ export class LocalRestApiHandlerService {
   private _isInitialized = false;
 
   init(): void {
-    if (this._isInitialized || !IS_ELECTRON) {
+    if (this._isInitialized || !window.ea?.onLocalRestApiRequest) {
       return;
     }
     this._isInitialized = true;

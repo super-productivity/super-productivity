@@ -358,6 +358,7 @@ describe('LocalRestApiHandlerService', () => {
         );
 
         expect(taskServiceMock.add).toHaveBeenCalledWith('New Task', false, {
+          title: 'New Task',
           notes: 'allowed',
         });
       });
