@@ -301,7 +301,7 @@
         "FILTER": "Filtru personalizat",
         "FILTER_DESCRIPTION": "Vezi https://docs.gitlab.com/ee/api/issues.html#list-issues. Mai multe pot fi combinate cu &",
         "FILTER_USER": "Filtrează după numele de utilizator",
-        "GITLAB_BASE_URL": "URL de bază personalizat GitLab(opțional)",
+        "GITLAB_BASE_URL": "URL de bază personalizat GitLab (opțional)",
         "PROJECT": "nume utilizator/proiect",
         "PROJECT_HINT": "ex: super-productivity/super-productivity",
         "SCOPE": "Domeniu de aplicare",
@@ -371,7 +371,7 @@
         "RELATED": "Înrudite",
         "START": "Începe",
         "STATUS": "Stare",
-        "STORY_POINTS": "Puncte de poveste",
+        "STORY_POINTS": "Story Points",
         "SUB_TASKS": "Subsarcini",
         "SUMMARY": "Sumar",
         "TIME_SPENT": "Timp petrecut",
@@ -415,7 +415,7 @@
         "PUSH_ONLY": "Doar trimitere",
         "SECTION": "Sincronizare bidirecțională (experimental)",
         "STATUS": "Direcție sincronizare status",
-        "TIME_ESTIMATE": "Estimat de timp",
+        "TIME_ESTIMATE": "Estimare de timp",
         "TITLE": "Direcție sincronizare titlu"
       },
       "DIALOG": {
@@ -678,11 +678,11 @@
         "TOOLBAR": {
           "BOLD": "Aldin",
           "BULLET_LIST": "Listă cu marcatori",
-          "CODE_BLOCK": "Block de cod",
+          "CODE_BLOCK": "Bloc de cod",
           "HEADING_1": "Titlu 1",
           "HEADING_2": "Titlu 2",
           "HEADING_3": "Titlu 3",
-          "INLINE_CODE": "Code în linie",
+          "INLINE_CODE": "Cod în linie",
           "INSERT_IMAGE": "Inserează imagine",
           "INSERT_LINK": "Inserează legătură",
           "INSERT_TABLE": "Inserează tabel",
@@ -793,7 +793,7 @@
         "NO_SCHEDULED_ITEMS": "Niciun element programat"
       },
       "S": {
-        "REMOVED_PLAN_DATE": "Șterge data planificată pentru sarcina \"{{taskTitle}}\"",
+        "REMOVED_PLAN_DATE": "Data planificată a fost ștearsă pentru sarcina \"{{taskTitle}}\"",
         "TASK_ALREADY_PLANNED": "Sarcina este deja planificată pentru {{date}}",
         "TASK_PLANNED_FOR": "Sarcina a fost planificată pentru <strong>{{date}}</strong>{{extra}}"
       }
@@ -960,7 +960,7 @@
         "ADD_NEW": "Adaugă un contor simplu sau un obicei",
         "HELP": "De aici poți configura butoane simple care vor apărea în colțul din dreapta sus. Acestea pot fi fie cronometre, fie contoare simple care sunt incrementate prin apăsarea pe ele. Prin activarea 'Urmărește seriile' le poți folosi pentru urmărirea obiceiurilor.",
         "L_COUNTDOWN_DURATION": "Durata numărătorii inverse",
-        "L_DAILY_GOAL": "Obiectiv zilnic pentru p serie reușită",
+        "L_DAILY_GOAL": "Obiectiv zilnic pentru o serie reușită",
         "L_ICON": "Pictogramă",
         "L_ICON_ON": "Pictogramă când este activat",
         "L_IS_ENABLED": "Activat",
@@ -1483,7 +1483,7 @@
         "ADD_ALL_TO_TODAY": "Adaugă tot pentru azi",
         "ADD_HALF_HOUR": "Adaugă 1/2 oră",
         "DEADLINES_TODAY": "{{count}} sarcin(i) cu termen azi neplanificate încă",
-        "ESTIMATE_EXCEEDED": "Estimatul de timp a fost depășit pentru \"{{title}}\""
+        "ESTIMATE_EXCEEDED": "Estimarea de timp a fost depășită pentru \"{{title}}\""
       },
       "CMP": {
         "ADD_SUB_TASK": "Adaugă subsarcină",
@@ -2635,7 +2635,7 @@
     "purple": "mov",
     "SCHEDULED_TASKS_WITH_TIME": "Sarcini planificate cu oră de început",
     "SELECT_THEME": "Alege temă",
-    "teal": "rață",
+    "teal": "turcoaz",
     "yellow": "galben"
   },
   "USER_PROFILES": {
