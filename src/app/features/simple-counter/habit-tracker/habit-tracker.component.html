@@ -40,8 +40,8 @@
       <div class="header-spacer"></div>
       @for (day of days(); track day) {
         <div class="day-header">
-          <div class="day-name">{{ parseDateLocal(day) | date: 'EEE' }}</div>
-          <div class="day-date">{{ parseDateLocal(day) | date: 'dd' }}</div>
+          <div class="day-name">{{ parseDateLocal(day) | localeDate: 'EEE' }}</div>
+          <div class="day-date">{{ parseDateLocal(day) | localeDate: 'dd' }}</div>
         </div>
       }
     </div>
