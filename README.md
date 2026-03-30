@@ -102,7 +102,7 @@ If you need some help, [this article on dev.to is the best place to start](https
 
 If you prefer, there is also a (long) [YouTube video available](https://www.youtube.com/watch?v=VoF2_RSdNXA).
 
-There is another older – the app looks and feels much better now ;) – [article](https://dev.to/super-productivity/super-productivity-how-to-grow-fond-of-time-tracking-and-task-management-22ee) on how I personally might use the app - and still [another one](https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk) on how I implement the 'eat the frog' prioritizing scheme in the app.
+There is another [article](https://dev.to/johannesjo/the-prioritising-scheme-how-to-eat-the-frog-with-super-productivity-mlk) on how I implement the 'eat the frog' prioritizing scheme in the app.
 
 [If you have further questions, please refer to the discussions page](https://github.com/super-productivity/super-productivity/discussions).
 
@@ -226,18 +226,19 @@ flatpak run com.super_productivity.SuperProductivity
 #### AUR - Arch Linux
 
 - With AUR helpers
-    ```bash
-    paru -S superproductivity-bin
-    # or
-    yay -S superproductivity-bin
-    ```
+
+  ```bash
+  paru -S superproductivity-bin
+  # or
+  yay -S superproductivity-bin
+  ```
 
 - Without AUR helpers
-    ```bash
-    git clone https://aur.archlinux.org/superproductivity-bin.git
-    cd superproductivity-bin
-    makepkg -si
-    ```
+  ```bash
+  git clone https://aur.archlinux.org/superproductivity-bin.git
+  cd superproductivity-bin
+  makepkg -si
+  ```
 
 #### AppImage
 
