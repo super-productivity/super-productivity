@@ -172,7 +172,7 @@
     "@angular/cli": "^21.2.3",
     "@angular/common": "^21.2.5",
     "@angular/compiler": "^21.2.5",
-    "@angular/compiler-cli": "^21.2.5",
+    "@angular/compiler-cli": "^21.2.6",
     "@angular/core": "^21.2.5",
     "@angular/forms": "^21.2.5",
     "@angular/language-service": "^21.2.5",
