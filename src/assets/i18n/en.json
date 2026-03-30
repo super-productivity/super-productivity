@@ -53,7 +53,7 @@
     },
     "SET_UP_SYNC": {
       "TITLE": "Set up Sync",
-      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Dropbox, WebDAV, or local file sync\n4. Follow the setup instructions"
+      "NOTES": "Keep your data safe and accessible across devices.\n\n**How to set up:**\n1. Open **Settings** (gear icon in the sidebar)\n2. Go to **Sync**\n3. Choose a provider: Super Sync, Dropbox, WebDAV Nextcloud, or local file sync\n4. Follow the setup instructions"
     },
     "GO_FURTHER": {
       "TITLE": "Go further",
@@ -1228,7 +1228,7 @@
         "L_SYNC_INTERVAL": "Sync interval",
         "L_SYNC_PROVIDER": "Sync provider",
         "LOCAL_FILE": {
-          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use WebDAV, Dropbox, or SuperSync instead.",
+          "INFO_TEXT": "<strong>Warning:</strong> Do <strong>not</strong> use file syncing tools like Syncthing, Resilio, or similar to sync this folder between devices — they <strong>will</strong> cause data corruption and conflicts. For multi-device sync, use WebDAV Nextcloud, Dropbox, or SuperSync instead.",
           "L_SYNC_FILE_PATH_PERMISSION_VALIDATION": "Needs file access permission",
           "L_SYNC_FOLDER_PATH": "Sync folder path"
         },
@@ -1295,13 +1295,13 @@
           "CONDITIONAL_HEADER_WARNING_TITLE": "Reduced Sync Safety",
           "CORS_INFO": "<strong>Making it work in a web browser:</strong> Allow Super Productivity to make CORS requests to your WebDAV server. This can have negative security implications! For Nextcloud, please refer to <a href='https://github.com/nextcloud/server/issues/3131'>this GitHub thread</a> for more information. One approach to make this work on mobile is allowing \"https://app.super-productivity.com\" via the Nextcloud app <a href='https://apps.nextcloud.com/apps/webapppassword'>webapppassword<a>. Use at your own risk!</p>",
           "D_SYNC_FOLDER_PATH": "Path relative to the WebDAV server root where sync files will be stored (e.g. '/super-productivity' or '/'). This is NOT your server's internal directory path.",
-          "INFO": "<strong>Warning:</strong> WebDAV implementations differ wildly. Super Productivity is known to work well with Nextcloud, <strong>but it may not work with your provider</strong>. Test thoroughly before relying on it.",
+          "INFO": "<strong>Note:</strong> This feature is designed for and tested with Nextcloud. Other WebDAV providers are <strong>not officially supported</strong> and may not work.",
           "L_BASE_URL": "Base URL",
           "L_PASSWORD": "Password",
           "L_SYNC_FOLDER_PATH": "Sync Folder Path",
           "L_TEST_CONNECTION": "Test Connection",
           "L_USER_NAME": "Username",
-          "S_FILL_ALL_FIELDS": "Please fill in all WebDAV fields first",
+          "S_FILL_ALL_FIELDS": "Please fill in all WebDAV Nextcloud fields first",
           "S_TEST_FAIL": "Connection test failed: {{error}} - Target URL: {{url}}",
           "S_TEST_SUCCESS": "Connection test successful! Target URL: {{url}}"
         }
@@ -1327,7 +1327,7 @@
         "ENCRYPTION_DISABLED_ON_OTHER_DEVICE": "Encryption was disabled on another device. Your sync settings have been updated.",
         "ENCRYPTION_PASSWORD_REQUIRED": "Encrypted data received but no encryption password is configured. Please set your encryption password in sync settings.",
         "ENCRYPTION_REQUIRED_FOR_SUPERSYNC": "Encryption is required for SuperSync. Please set an encryption password to continue syncing.",
-        "ERROR_CORS": "WebDAV Sync Error: Network request failed.\n\nThis may be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
+        "ERROR_CORS": "WebDAV Nextcloud Sync Error: Network request failed.\n\nThis may be a CORS issue. Please ensure:\n• Your WebDAV server allows Cross-Origin requests\n• The server URL is correct and accessible\n• You have a working internet connection",
         "ERROR_DATA_IS_CURRENTLY_WRITTEN": "Remote Data is currently being written",
         "ERROR_PAYLOAD_TOO_LARGE": "Sync Error: Your data is too large to upload.\n\nThis happens when you have many archived tasks. Your data was NOT synced!\n\nPlease contact support for assistance.",
         "ERROR_PERMISSION": "File access denied. Please check your filesystem permissions.",
@@ -2361,8 +2361,8 @@
     "JIRA_LOAD_ISSUE": "Jira: Load issue data...",
     "SYNC": "Syncing data...",
     "UNKNOWN": "Loading remote data",
-    "WEB_DAV_DOWNLOAD": "WebDAV: Downloading data...",
-    "WEB_DAV_UPLOAD": "WebDAV: Uploading data..."
+    "WEB_DAV_DOWNLOAD": "WebDAV Nextcloud: Downloading data...",
+    "WEB_DAV_UPLOAD": "WebDAV Nextcloud: Uploading data..."
   },
   "MH": {
     "ADD_NEW_TASK": "Add new Task",

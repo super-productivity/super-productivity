@@ -132,7 +132,7 @@ export const SYNC_FORM: ConfigFormSection<SyncConfig> = {
         options: [
           { label: 'SuperSync (Beta)', value: SyncProviderId.SuperSync },
           { label: SyncProviderId.Dropbox, value: SyncProviderId.Dropbox },
-          { label: 'WebDAV (experimental)', value: SyncProviderId.WebDAV },
+          { label: 'WebDAV Nextcloud (experimental)', value: SyncProviderId.WebDAV },
           ...(IS_ELECTRON || IS_ANDROID_WEB_VIEW
             ? [
                 {
