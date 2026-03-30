@@ -22,8 +22,7 @@ import { DialogConfirmComponent } from '../../../ui/dialog-confirm/dialog-confir
 import { EMPTY_SIMPLE_COUNTER } from '../simple-counter.const';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { moveItemInArray } from '../../../util/move-item-in-array';
-import { DRAG_DELAY_FOR_TOUCH } from '../../../app.constants';
-import { isTouchActive } from '../../../util/input-intent';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { LocaleDatePipe } from 'src/app/ui/pipes/locale-date.pipe';
 import { DateTimeFormatService } from 'src/app/core/date-time-format/date-time-format.service';
 
@@ -57,8 +56,7 @@ export class HabitTrackerComponent {
 
   T = T;
   SimpleCounterType = SimpleCounterType;
-  DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly isTouchActive = isTouchActive;
+  dragDelayForTouch = dragDelayForTouch;
 
   dayOffset = signal(0);
 

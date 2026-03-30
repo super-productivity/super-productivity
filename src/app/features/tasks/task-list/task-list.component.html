@@ -37,7 +37,7 @@
       [isBacklog]="isBacklog()"
       [task]="task"
       cdkDrag
-      [cdkDragStartDelay]="isTouchActive() ? DRAG_DELAY_FOR_TOUCH : 0"
+      [cdkDragStartDelay]="dragDelayForTouch()"
       [cdkDragLockAxis]="isXs() ? 'y' : ''"
       [cdkDragDisabled]="listModelId() === 'LATER_TODAY'"
       [cdkDragData]="task"

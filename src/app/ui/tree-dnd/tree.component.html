@@ -51,7 +51,7 @@
     class="item"
     cdkDrag
     [cdkDragData]="node.id"
-    [cdkDragStartDelay]="isTouchActive() ? DRAG_DELAY_FOR_TOUCH : 0"
+    [cdkDragStartDelay]="dragDelayForTouch()"
     cdkDragLockAxis="y"
     [ngClass]="{
       'is-folder': folder,

@@ -21,8 +21,8 @@ import { MatIcon } from '@angular/material/icon';
 import { NoteComponent } from '../note/note.component';
 import { AsyncPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
-import { DRAG_DELAY_FOR_TOUCH, HISTORY_STATE } from '../../../app.constants';
-import { isTouchActive } from '../../../util/input-intent';
+import { HISTORY_STATE } from '../../../app.constants';
+import { dragDelayForTouch } from '../../../util/input-intent';
 import { LayoutService } from 'src/app/core-ui/layout/layout.service';
 import { IS_MOBILE } from 'src/app/util/is-mobile';
 
@@ -116,6 +116,5 @@ export class NotesComponent implements OnInit {
     });
   }
 
-  protected readonly DRAG_DELAY_FOR_TOUCH = DRAG_DELAY_FOR_TOUCH;
-  protected readonly isTouchActive = isTouchActive;
+  protected readonly dragDelayForTouch = dragDelayForTouch;
 }
