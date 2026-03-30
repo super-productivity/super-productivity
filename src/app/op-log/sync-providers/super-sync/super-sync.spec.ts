@@ -225,6 +225,41 @@ describe('SuperSyncProvider', () => {
     });
   });
 
+  describe('getWebSocketParams', () => {
+    it('should return null when access token is missing', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({ baseUrl: 'https://sync.example.com' } as SuperSyncPrivateCfg),
+      );
+
+      expect(await provider.getWebSocketParams()).toBeNull();
+    });
+
+    it('should return sanitized params using the configured base URL', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({
+          baseUrl: 'https://sync.example.com/',
+          accessToken: 'token\u200b123',
+        } as SuperSyncPrivateCfg),
+      );
+
+      await expectAsync(provider.getWebSocketParams()).toBeResolvedTo({
+        baseUrl: 'https://sync.example.com',
+        accessToken: 'token123',
+      });
+    });
+
+    it('should fall back to the default base URL when none is configured', async () => {
+      mockPrivateCfgStore.load.and.returnValue(
+        Promise.resolve({ accessToken: 'test-access-token' } as SuperSyncPrivateCfg),
+      );
+
+      await expectAsync(provider.getWebSocketParams()).toBeResolvedTo({
+        baseUrl: SUPER_SYNC_DEFAULT_BASE_URL,
+        accessToken: 'test-access-token',
+      });
+    });
+  });
+
   describe('uploadOps', () => {
     it('should upload operations successfully', async () => {
       mockPrivateCfgStore.load.and.returnValue(Promise.resolve(testConfig));
