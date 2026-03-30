@@ -161,7 +161,8 @@ export const createServer = (
       await fastifyServer.register(websocket);
 
       // Health Check - verifies database connectivity
-      fastifyServer.get('/health', async (_, reply) => {
+      // Exempt from rate limiting (Kubernetes probes hit this every 5-15s)
+      fastifyServer.get('/health', { config: { rateLimit: false } }, async (_, reply) => {
         try {
           // Simple query to verify DB is responsive
           await prisma.$queryRaw`SELECT 1`;
