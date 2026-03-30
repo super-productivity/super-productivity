@@ -307,10 +307,12 @@ export class StartupService {
               if (granted) {
                 Log.log('Persistent store granted');
               }
-              // NOTE: we never show this warning for native mobile apps, because persistence is always granted
-              // Also suppress during active onboarding to avoid confusing first-time users
+              // NOTE: we never show this warning for native mobile apps or Electron,
+              // because persistence is managed by the OS and not subject to browser eviction.
+              // Also suppress during active onboarding to avoid confusing first-time users.
               else if (
                 !this._platformService.isNative &&
+                !IS_ELECTRON &&
                 !OnboardingHintService.isOnboardingInProgress()
               ) {
                 const msg = T.GLOBAL_SNACK.PERSISTENCE_DISALLOWED;
